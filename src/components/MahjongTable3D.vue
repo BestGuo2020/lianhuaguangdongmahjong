@@ -37,6 +37,7 @@ const staticResources = []
 const dynamicResources = []
 const faceMaterials = new Map()
 const PLAY_AREA_OFFSET_Z = -.5
+const DICE_SIZE = .5
 
 function own(resource) {
   staticResources.push(resource)
@@ -94,7 +95,7 @@ function addDice() {
   })))
   // BoxGeometry 面顺序：右、左、上、下、前、后。
   const faceMaterials = [materials[1], materials[4], materials[0], materials[5], materials[2], materials[3]]
-  const geometry = own(new RoundedBoxGeometry(1.02, 1.02, 1.02, 6, .16))
+  const geometry = own(new RoundedBoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE, 6, .08))
   diceGroup = new THREE.Group()
   for (let index = 0; index < 2; index += 1) {
     const die = new THREE.Mesh(geometry, faceMaterials)
@@ -133,12 +134,12 @@ function animateDice(time) {
   const travel = 1 - (1 - progress) ** 2
   diceGroup.children.forEach((die, index) => {
     const side = index === 0 ? -1 : 1
-    die.position.x = side * (1.15 + .35 * travel)
+    die.position.x = side * (.58 + .22 * travel)
     die.position.z = 5.2 - 4.1 * travel + side * .12
-    const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 3.2
+    const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
     const bounceProgress = Math.max(0, (progress - .82) / .18)
-    const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .3 * (1 - bounceProgress) : 0
-    die.position.y = .55 + arc + bounce
+    const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0
+    die.position.y = .28 + arc + bounce
     const settleStart = .72
     if (progress < settleStart) {
       die.quaternion.copy(rollingDiceQuaternion(index, progress))
