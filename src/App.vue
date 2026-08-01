@@ -1,10 +1,10 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
 import RulesPanel from './components/RulesPanel.vue'
-import { isHorse, tileName } from './game/tiles'
+import { isHorse } from './game/tiles'
 import { useGame } from './game/useGame'
 import { useAudio } from './game/useAudio'
 
@@ -31,9 +31,15 @@ watch(result, (value) => {
   resultVisible.value = Boolean(value)
 })
 
-watch([userCurrentWaits, userTingOptions], ([currentWaits, options]) => {
-  waitsOpen.value = Boolean(currentWaits || options.length)
+watch(userDiscardWaits, (value) => {
+  waitsOpen.value = Boolean(value)
 })
+
+watch(isUserTurn, (value) => {
+  if (!value) waitsOpen.value = false
+})
+
+const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value ? userCurrentWaits.value : null))
 </script>
 
 <template>
@@ -114,34 +120,22 @@ watch([userCurrentWaits, userTingOptions], ([currentWaits, options]) => {
 
           <div v-if="isUserTurn" class="turn-timer"><span>{{ turnSeconds }}</span><small>秒</small></div>
 
-          <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
-              <div v-if="(userCurrentWaits || userTingOptions.length) && waitsOpen" class="waiting-tip">
-                <template v-if="userDiscardWaits?.any || (!isUserTurn && userCurrentWaits?.any)">
-                  <strong>听任意</strong>
-                  <span>牌墙剩余 {{ (userDiscardWaits || userCurrentWaits).remaining }} 张</span>
-                </template>
-                <template v-else-if="userDiscardWaits || (!isUserTurn && userCurrentWaits)">
-                  <span class="waiting-title">{{ userDiscardWaits ? `打出 ${tileName(userDiscardWaits.discard)}，听` : '当前听牌' }}</span>
-                  <div class="waiting-tiles">
-                    <div v-for="item in (userDiscardWaits || userCurrentWaits).tiles" :key="item.tile">
-                      <MahjongTile :tile="item.tile" small disabled />
-                      <small>余 {{ item.remaining }}</small>
-                    </div>
-                  </div>
-                  <span class="waiting-total">共剩 {{ (userDiscardWaits || userCurrentWaits).remaining }} 张</span>
-                </template>
-                <template v-else>
-                  <strong class="waiting-heading">听牌提示</strong>
-                  <div class="waiting-options">
-                    <div v-for="option in userTingOptions" :key="option.discard">
-                      <span>打 {{ tileName(option.discard) }}</span><b>→</b>
-                      <span v-if="option.any">听任意</span>
-                      <span v-else>{{ option.tiles.map(item => tileName(item.tile)).join('、') }}</span>
-                      <small>余 {{ option.remaining }} 张</small>
-                    </div>
-                  </div>
-                </template>
+          <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
+            <template v-if="activeWaits.any">
+              <strong>听任意</strong>
+              <em>{{ activeWaits.remaining }}张</em>
+            </template>
+            <template v-else>
+              <div class="waiting-tiles">
+                <div v-for="item in activeWaits.tiles" :key="item.tile">
+                  <MahjongTile :tile="item.tile" small disabled />
+                  <small>{{ item.remaining }}张</small>
+                </div>
               </div>
+            </template>
+          </div>
+
+          <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
               <button
                 v-if="userCurrentWaits || userTingOptions.length"
                 class="action waiting-action"

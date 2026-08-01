@@ -389,7 +389,7 @@ function addConcealedHand(group, playerIndex) {
   const revealedHand = props.revealHands ? sortTiles(props.players[playerIndex].hand) : []
   // 牌面按每位玩家自身视角从左到右排列；副露固定在右手边，因此邻近副露的是字牌。
   const reverseRevealedFaces = position === 'top' || position === 'right' || melds.length > 0
-  const exposedTiles = melds.reduce((count, meld) => count + meld.tiles.length, 0)
+  const exposedTiles = melds.reduce((count, meld) => count + (meld.added ? 3 : meld.tiles.length), 0)
   const exposedSpan = exposedTiles * gap + Math.max(0, melds.length - 1) * .18
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
@@ -508,9 +508,11 @@ function addMelds(group, playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
   melds.forEach((meld) => {
-    const sourceTileIndex = meldSourceTileIndex(meld, playerIndex)
-    meld.tiles.forEach((tileName, tileIndex) => {
-      const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === meld.tiles.length - 1)
+    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
+    let sourcePlacement = null
+    laidTiles.forEach((tileName, tileIndex) => {
+      const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
       const pointsToSource = tileIndex === sourceTileIndex
       const tile = concealed ? makeFaceDownTile() : makeFaceTile(tileName)
       const tileSpan = pointsToSource ? 1.025 : .725
@@ -522,9 +524,22 @@ function addMelds(group, playerIndex) {
       )
       tile.position.set(transform.x, .28, transform.z)
       tile.rotation.y = transform.rotation + (pointsToSource ? Math.PI / 2 : 0)
+      if (pointsToSource) {
+        sourcePlacement = {
+          x: transform.x,
+          z: transform.z,
+          rotation: tile.rotation.y,
+        }
+      }
       group.add(tile)
       trackOffset += tileSpan
     })
+    if (meld.added && sourcePlacement) {
+      const addedTile = makeFaceTile(meld.tile)
+      addedTile.position.set(sourcePlacement.x, .75, sourcePlacement.z)
+      addedTile.rotation.y = sourcePlacement.rotation
+      group.add(addedTile)
+    }
     trackOffset += .18
   })
 }

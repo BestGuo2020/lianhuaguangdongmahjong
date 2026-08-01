@@ -299,13 +299,16 @@ button { font: inherit; }
 .waiting-action { border-color: #e1bd55; background: radial-gradient(circle at 42% 30%, #9b7831, #493516 68%, #171006); }
 .waiting-action.active { box-shadow: 0 0 0 2px rgba(255,221,106,.22), 0 0 22px rgba(255,204,72,.5); }
 .waiting-action b { font-family: sans-serif; }
-.waiting-tip { position: absolute; right: 0; bottom: 64px; display: flex; min-width: 190px; max-width: min(520px, 78vw); padding: 11px 13px; border: 1px solid rgba(225,189,85,.65); border-radius: 9px; background: rgba(7,24,17,.96); color: #f2df9f; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+.waiting-tip { position: absolute; z-index: 46; bottom: clamp(120px, 17vh, 165px); left: 50%; display: flex; min-width: 190px; max-width: min(620px, 82vw); padding: 11px 13px; border: 1px solid rgba(225,189,85,.65); border-radius: 9px; background: rgba(7,24,17,.96); transform: translateX(-50%); color: #f2df9f; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+.compact-waiting-tip { min-width: 0; align-items: center; justify-content: center; padding: 8px 10px; }
+.compact-waiting-tip > em { margin-left: 9px; padding: 4px 8px; border-radius: 4px; background: #28b8c7; color: #f4ffff; font-size: 13px; font-style: normal; font-weight: 800; white-space: nowrap; }
 .waiting-tip > strong { font: 900 23px "Noto Serif SC", serif; }
 .waiting-tip > span { align-self: center; margin-left: 10px; color: #c9b978; white-space: nowrap; }
 .waiting-title { margin: 0 10px 0 0 !important; }
 .waiting-tiles { display: flex; gap: 7px; overflow-x: auto; padding: 2px 2px 5px; }
 .waiting-tiles > div { display: grid; flex: 0 0 auto; justify-items: center; gap: 3px; }
-.waiting-tiles small { color: #d7c687; font-size: 11px; white-space: nowrap; }
+.waiting-tiles .mahjong-tile.small { --tile-width: clamp(42px, 3.25vw, 60px); }
+.waiting-tiles small { min-width: 30px; padding: 3px 5px; border-radius: 3px; background: #28b8c7; color: #f4ffff; font-size: 11px; font-weight: 800; text-align: center; white-space: nowrap; }
 .waiting-total { margin-left: 11px !important; }
 .waiting-heading { flex: 0 0 auto; align-self: flex-start; margin: 5px 12px 0 0; font-size: 16px !important; white-space: nowrap; }
 .waiting-options { display: grid; gap: 5px; max-height: 150px; overflow-y: auto; }
@@ -547,6 +550,7 @@ button { font: inherit; }
   .user-identity span { font-size: 13px; }
   /* 横向矮窗口中，功能区与计时器并排放在手牌上方，避免被牌面完全遮住。 */
   .action-bar { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
+  .waiting-tip { bottom: 60px; }
   .action { min-width: 48px; height: 42px; padding: 4px 8px; }
   .action b { font-size: 16px; }
   .action span { font-size: 9px; }

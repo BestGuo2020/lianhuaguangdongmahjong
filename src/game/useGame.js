@@ -26,6 +26,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
   const openingStage = ref(null)
   const diceValues = ref([1, 1])
+  const userDrewThisTurn = ref(false)
   const timers = new Set()
   let countdownHandle = null
   let openingSequence = 0
@@ -34,9 +35,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const isUserTurn = computed(() => currentPlayer.value === 0 && phase.value === 'discard')
   const userCanHu = computed(() => Boolean(user.value)
     && isUserTurn.value
+    && userDrewThisTurn.value
     && isWinningHand(user.value.hand, structuralMeldCount(user.value)))
   const userKongs = computed(() => {
-    if (!user.value || !isUserTurn.value) return []
+    if (!user.value || !isUserTurn.value || !userDrewThisTurn.value) return []
     const concealed = concealedKongs(user.value.hand)
     const added = user.value.melds
       .filter((meld) => meld.type === 'peng' && user.value.hand.includes(meld.tile))
@@ -44,11 +46,22 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return [...new Set([...concealed, ...added])]
   })
   const wallCount = computed(() => wall.value.length)
+  function visibleRemainingCount(tile) {
+    let visible = matchingCount(user.value?.hand ?? [], tile)
+    players.forEach((player) => {
+      visible += matchingCount(player.discards, tile)
+      player.melds.forEach((meld) => {
+        visible += matchingCount(meld.tiles ?? [], tile)
+      })
+    })
+    return Math.max(0, 4 - visible)
+  }
   function makeWaitInfo(waits, discard = null) {
     if (!waits.length) return null
     const tiles = waits.map((tile) => ({
       tile,
-      remaining: wall.value.filter((item) => item === tile).length,
+      // 只按玩家可见信息计算：自己手牌、弃牌与公开副露；不窥视对手暗手牌。
+      remaining: visibleRemainingCount(tile),
     }))
     const allTiles = TILE_TYPES.filter((tile) => tile !== 'red')
     return {
@@ -159,6 +172,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     result.value = null
     actionPrompt.value = null
     pendingKong.value = null
+    userDrewThisTurn.value = false
     selectedIndex.value = -1
     lastDiscard.value = null
     phase.value = 'dealing'
@@ -256,6 +270,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (phase.value === 'settled') return
     if (!wall.value.length) return endDraw()
     currentPlayer.value = playerIndex
+    userDrewThisTurn.value = false
     phase.value = 'drawing'
     selectedIndex.value = -1
     actionPrompt.value = null
@@ -263,6 +278,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (!drawn || phase.value === 'settled') return
 
     if (playerIndex === 0) {
+      userDrewThisTurn.value = !options.skipDraw
       phase.value = 'discard'
       startCountdown()
       return
@@ -317,6 +333,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.hand = sortTiles(player.hand)
     player.drawnTileIndex = -1
     player.discards.push(tile)
+    if (playerIndex === 0) userDrewThisTurn.value = false
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     playSound('dapai.mp3', 0.8)
     later(() => playSound(tileAudioFile(tile)), 80)
@@ -386,7 +403,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (isGang) {
       player.hand = removeMatches(player.hand, tile, 3)
       player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
-      announce(`${player.name} 杠`, 'gold')
+      announce(`杠`, 'gold')
       playSound('gang.mp3')
       currentPlayer.value = playerIndex
       if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
@@ -442,6 +459,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     user.value.melds.push({ type: 'peng', tile: prompt.tile, from: prompt.from, tiles: [prompt.tile, prompt.tile, prompt.tile] })
     actionPrompt.value = null
     currentPlayer.value = 0
+    userDrewThisTurn.value = false
     phase.value = 'discard'
     selectedIndex.value = -1
     startCountdown()
@@ -458,7 +476,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     user.value.melds.push({ type: 'gang', tile: prompt.tile, from: prompt.from, tiles: Array(4).fill(prompt.tile) })
     actionPrompt.value = null
     currentPlayer.value = 0
-    announce('杠 · 尾牌补摸', 'gold')
+    userDrewThisTurn.value = false
+    announce('杠', 'gold')
     playSound('gang.mp3')
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
@@ -480,6 +499,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.melds[meldIndex] = {
       ...player.melds[meldIndex],
       type: 'gang',
+      added: true,
       tile,
       tiles: [tile, tile, tile, tile],
     }
@@ -519,6 +539,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function userGang(tile = userKongs.value[0]) {
     if (!tile || !isUserTurn.value) return
+    userDrewThisTurn.value = false
     window.clearInterval(countdownHandle)
     const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
     if (meldIndex >= 0) requestAddedKong(0, meldIndex, tile)
@@ -537,6 +558,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'settled'
     openingStage.value = null
     currentPlayer.value = -1
+    userDrewThisTurn.value = false
     actionPrompt.value = null
     const winner = players[winnerIndex]
     playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
@@ -560,6 +582,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'settled'
     openingStage.value = null
     currentPlayer.value = -1
+    userDrewThisTurn.value = false
     actionPrompt.value = null
     result.value = { draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }
   }
