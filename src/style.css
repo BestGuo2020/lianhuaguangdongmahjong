@@ -260,6 +260,14 @@ button { font: inherit; }
 .announcement { position: absolute; z-index: 40; top: 34%; left: 50%; transform: translate(-50%, -50%); padding: 4px 37px; background: linear-gradient(90deg, transparent, rgba(10,11,8,.86) 20%, rgba(10,11,8,.86) 80%, transparent); pointer-events: none; }
 .announcement span { display: block; min-width: 140px; color: #f3d47c; font: 900 clamp(20px, 2.7vw, 40px) "Noto Serif SC", serif; letter-spacing: .12em; text-align: center; text-shadow: 0 2px 4px #000, 0 0 14px rgba(240,188,67,.45); }
 .announcement.red span { color: #ffdb91; text-shadow: 0 2px 4px #000, 0 0 14px #b82429; }
+.opening-overlay { position: absolute; z-index: 42; top: 43%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; }
+.start-cue { display: grid; place-items: center; min-width: 330px; padding: 22px 55px 25px; background: radial-gradient(ellipse, rgba(8,20,14,.94), rgba(8,14,11,.72) 58%, transparent 72%); text-align: center; }
+.start-cue span { color: #c7aa67; font: 700 15px "Noto Serif SC", serif; letter-spacing: .48em; text-indent: .48em; }
+.start-cue strong { color: #ffe29a; font: 900 clamp(38px,5vw,72px) "Noto Serif SC",serif; letter-spacing: .14em; text-indent: .14em; text-shadow: 0 3px 4px #000, 0 0 22px rgba(239,190,67,.72); white-space: nowrap; }
+.start-cue i { width: 220px; height: 2px; margin-top: 9px; background: linear-gradient(90deg, transparent, #e8c46c, transparent); box-shadow: 0 0 10px #d7a83e; }
+.opening-cue-enter-active { animation: opening-cue-in .3s ease-out; }
+.opening-cue-leave-active { transition: opacity .2s, filter .2s; }
+.opening-cue-leave-to { opacity: 0; filter: blur(4px); }
 
 .user-area { position: absolute; z-index: 15; left: 9%; right: 9%; bottom: 8px; min-height: clamp(107px, 17vh, 160px); }
 .user-identity { position: absolute; z-index: 3; left: -7.5%; bottom: 25px; display: flex; align-items: center; gap: 9px; min-width: 142px; padding: 7px 12px 7px 7px; border: 1px solid rgba(215,181,94,.38); border-radius: 30px 10px 10px 30px; background: linear-gradient(90deg, rgba(5,18,13,.94), rgba(5,18,13,.75)); box-shadow: 0 6px 18px rgba(0,0,0,.4); opacity: .95; pointer-events: none; user-select: none; }
@@ -272,17 +280,38 @@ button { font: inherit; }
 .user-meld { display: flex; gap: 1px; padding: 2px; border-radius: 3px; background: rgba(0,0,0,.2); }
 .hand-rack { position: absolute; right: 0; bottom: 9px; left: 0; display: flex; align-items: flex-end; justify-content: center; gap: clamp(1px, .2vw, 4px); min-height: 88px; padding: 10px 14px 5px; border: 0; border-radius: 5px 5px 20px 20px; transform-origin: 50% 100%; }
 .hand-rack.has-melds { justify-content: flex-start; padding-right: 42%; padding-left: 11%; }
+.hand-rack.dealing .mahjong-tile { animation: deal-to-user .23s cubic-bezier(.2,.85,.3,1) both; }
 .hand-rack::after { content: ""; position: absolute; right: 4%; bottom: -13px; left: 4%; height: 5px; border-radius: 50%; background: rgba(0,0,0,.38); filter: blur(3px); }
-.hand-rack.playable {}
+.hand-rack.playable { content: ""; }
+@keyframes deal-to-user {
+  from { opacity: .2; transform: translate(38vw, -34vh) scale(.7) rotate(8deg); }
+  to { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); }
+}
 .turn-timer { position: absolute; z-index: 31; right: 10%; bottom: 114px; display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid rgba(231,190,82,.78); border-radius: 18px; background: rgba(9,25,18,.9); color: #ffe078; box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px rgba(230,184,66,.18); text-shadow: 0 2px 5px #000; }
 .turn-timer span { font: 800 clamp(34px, 3.2vw, 50px) Georgia, serif; line-height: .9; }.turn-timer small { font-size: clamp(13px, 1vw, 17px); font-weight: 700; }
 
-.action-bar { position: absolute; z-index: 30; right: 11%; bottom: clamp(116px, 17vh, 164px); display: flex; gap: 9px; align-items: center; }
+.action-bar { position: absolute; z-index: 45; right: 11%; bottom: clamp(116px, 17vh, 164px); display: flex; gap: 9px; align-items: center; }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid #ae8840; border-radius: 50%; background: radial-gradient(circle at 42% 33%, #806433, #2e2519 69%, #0f0d0a); color: #f5df9c; box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
 .action b { display: block; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 .action.hu { border-color: #c94e45; background: radial-gradient(circle at 40% 30%, #a13c36, #511c1b 65%, #180908); color: #ffdda0; }
 .action.pass, .discard-action { border-radius: 25px; border-color: #52675c; background: rgba(7,19,14,.85); color: #c6d0c9; }
+.waiting-action { border-color: #e1bd55; background: radial-gradient(circle at 42% 30%, #9b7831, #493516 68%, #171006); }
+.waiting-action.active { box-shadow: 0 0 0 2px rgba(255,221,106,.22), 0 0 22px rgba(255,204,72,.5); }
+.waiting-action b { font-family: sans-serif; }
+.waiting-tip { position: absolute; right: 0; bottom: 64px; display: flex; min-width: 190px; max-width: min(520px, 78vw); padding: 11px 13px; border: 1px solid rgba(225,189,85,.65); border-radius: 9px; background: rgba(7,24,17,.96); color: #f2df9f; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+.waiting-tip > strong { font: 900 23px "Noto Serif SC", serif; }
+.waiting-tip > span { align-self: center; margin-left: 10px; color: #c9b978; white-space: nowrap; }
+.waiting-title { margin: 0 10px 0 0 !important; }
+.waiting-tiles { display: flex; gap: 7px; overflow-x: auto; padding: 2px 2px 5px; }
+.waiting-tiles > div { display: grid; flex: 0 0 auto; justify-items: center; gap: 3px; }
+.waiting-tiles small { color: #d7c687; font-size: 11px; white-space: nowrap; }
+.waiting-total { margin-left: 11px !important; }
+.waiting-heading { flex: 0 0 auto; align-self: flex-start; margin: 5px 12px 0 0; font-size: 16px !important; white-space: nowrap; }
+.waiting-options { display: grid; gap: 5px; max-height: 150px; overflow-y: auto; }
+.waiting-options > div { display: flex; align-items: center; gap: 7px; color: #e7dab0; white-space: nowrap; }
+.waiting-options b { color: #d8a93d; }
+.waiting-options small { color: #9fb2a8; }
 
 .lobby { position: absolute; z-index: 50; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 46%, rgba(25,87,58,.12), transparent 36%), linear-gradient(rgba(4,18,13,.89), rgba(4,22,16,.93)); text-align: center; }
 .lobby::before, .lobby::after { content: ""; position: absolute; top: 10%; bottom: 10%; width: 18%; border: 1px solid rgba(194,159,80,.07); border-radius: 50%; }
@@ -343,6 +372,7 @@ button { font: inherit; }
 @keyframes discard-from-bottom { from { opacity: .2; transform: translate(-50%, 520%) scale(.72) rotateX(-18deg); } to { opacity: 1; transform: translate(-50%, 60%) scale(1); } }
 @keyframes discard-from-left { from { opacity: .2; transform: translate(-430%, -50%) rotate(90deg) scale(.72); } to { opacity: 1; transform: translate(-180%, -50%) rotate(90deg) scale(1); } }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
+@keyframes opening-cue-in { from { opacity: 0; transform: translate(-50%, -44%) scale(.82); filter: blur(5px); } }
 @keyframes result-in { from { transform: translateY(18px) scale(.94); opacity: 0; } }
 
 /* 强透视桌面：按参考视频的上窄下宽镜头重构整张牌桌 */
@@ -515,7 +545,8 @@ button { font: inherit; }
   .user-identity .avatar { width: 42px; height: 42px; font-size: 18px; }
   .user-identity strong { font-size: 14px; }
   .user-identity span { font-size: 13px; }
-  .action-bar { right: 8%; bottom: 82px; gap: 6px; }
+  /* 横向矮窗口中，功能区与计时器并排放在手牌上方，避免被牌面完全遮住。 */
+  .action-bar { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
   .action { min-width: 48px; height: 42px; padding: 4px 8px; }
   .action b { font-size: 16px; }
   .action span { font-size: 9px; }

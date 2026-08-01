@@ -79,16 +79,29 @@ export function isWinningHand(tiles, exposedMeldCount = 0) {
   return false
 }
 
+export function waitingTiles(tiles, exposedMeldCount = 0) {
+  return STANDARD_TILES.filter((tile) => isWinningHand([...tiles, tile], exposedMeldCount))
+}
+
 export function matchingCount(tiles, tile) {
   return tiles.filter((item) => item === tile).length
 }
 
 export function concealedKongs(tiles) {
-  return TILE_TYPES.filter((tile) => tile !== 'red' && matchingCount(tiles, tile) === 4)
+  return TILE_TYPES.filter((tile) => tile !== 'red' && tile !== 'white' && matchingCount(tiles, tile) === 4)
 }
 
 export function canRobKong(tiles, kongTile, exposedMeldCount = 0) {
   return isWinningHand([...tiles, kongTile], exposedMeldCount)
+}
+
+export function meldSourceTileIndex(meld, playerIndex) {
+  if (!['peng', 'gang'].includes(meld.type) || !Number.isInteger(meld.from)) return -1
+  const relativeSource = (meld.from - playerIndex + 4) % 4
+  if (relativeSource === 1) return 0
+  if (relativeSource === 2) return Math.min(1, meld.tiles.length - 1)
+  if (relativeSource === 3) return meld.tiles.length - 1
+  return -1
 }
 
 export function drawHorses(wall, amount = 8) {

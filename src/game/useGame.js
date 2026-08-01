@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
-import { concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand } from './rules'
+import { concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 
 const PLAYER_SEED = [
@@ -9,7 +9,7 @@ const PLAYER_SEED = [
   { name: '东山少爷', avatar: '少', score: 1000 },
 ]
 
-export function useGame() {
+export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} } = {}) {
   const phase = ref('lobby')
   const players = reactive([])
   const wall = ref([])
@@ -23,12 +23,18 @@ export function useGame() {
   const result = ref(null)
   const round = ref(1)
   const dealer = ref(0)
+  const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
+  const openingStage = ref(null)
+  const diceValues = ref([1, 1])
   const timers = new Set()
   let countdownHandle = null
+  let openingSequence = 0
 
   const user = computed(() => players[0])
   const isUserTurn = computed(() => currentPlayer.value === 0 && phase.value === 'discard')
-  const userCanHu = computed(() => Boolean(user.value) && isUserTurn.value && isWinningHand(user.value.hand, structuralMeldCount(user.value)))
+  const userCanHu = computed(() => Boolean(user.value)
+    && isUserTurn.value
+    && isWinningHand(user.value.hand, structuralMeldCount(user.value)))
   const userKongs = computed(() => {
     if (!user.value || !isUserTurn.value) return []
     const concealed = concealedKongs(user.value.hand)
@@ -38,6 +44,44 @@ export function useGame() {
     return [...new Set([...concealed, ...added])]
   })
   const wallCount = computed(() => wall.value.length)
+  function makeWaitInfo(waits, discard = null) {
+    if (!waits.length) return null
+    const tiles = waits.map((tile) => ({
+      tile,
+      remaining: wall.value.filter((item) => item === tile).length,
+    }))
+    const allTiles = TILE_TYPES.filter((tile) => tile !== 'red')
+    return {
+      discard,
+      tiles,
+      any: waits.length === allTiles.length,
+      remaining: tiles.reduce((total, item) => total + item.remaining, 0),
+    }
+  }
+  function discardWaitInfo(handIndex) {
+    const handAfterDiscard = user.value.hand.filter((_, index) => index !== handIndex)
+    const waits = waitingTiles(handAfterDiscard, structuralMeldCount(user.value))
+    return makeWaitInfo(waits, user.value.hand[handIndex])
+  }
+  const userCurrentWaits = computed(() => {
+    if (!user.value || ['lobby', 'dealing', 'settled'].includes(phase.value)) return null
+    return makeWaitInfo(waitingTiles(user.value.hand, structuralMeldCount(user.value)))
+  })
+  const userTingOptions = computed(() => {
+    if (!user.value || !isUserTurn.value) return []
+    const seen = new Set()
+    return user.value.hand.flatMap((tile, index) => {
+      if (seen.has(tile)) return []
+      seen.add(tile)
+      const info = discardWaitInfo(index)
+      return info ? [info] : []
+    })
+  })
+  const userDiscardWaits = computed(() => {
+    if (selectedIndex.value < 0) return null
+    const selectedTile = user.value?.hand[selectedIndex.value]
+    return userTingOptions.value.find((option) => option.discard === selectedTile) ?? null
+  })
 
   function structuralMeldCount(player) {
     return player.melds.filter((meld) => meld.type !== 'flower').length
@@ -53,6 +97,7 @@ export function useGame() {
   }
 
   function clearTimers() {
+    openingSequence += 1
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
     window.clearInterval(countdownHandle)
@@ -67,8 +112,10 @@ export function useGame() {
   }
 
   function resetPlayers() {
+    const previousScores = players.map((player) => player.score)
     players.splice(0, players.length, ...PLAYER_SEED.map((player, index) => ({
       ...player,
+      score: previousScores[index] ?? player.score,
       seat: index,
       hand: [],
       discards: [],
@@ -86,22 +133,27 @@ export function useGame() {
   function dealOne(player) {
     const tile = takeTile(false)
     if (!tile) return
+    receiveDealtTile(player, tile)
+  }
+
+  function receiveDealtTile(player, tile) {
     if (tile === 'red') {
       player.redCount += 1
       player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
       const replacement = takeTile(true)
-      if (replacement === 'red') {
-        wall.value.push(replacement)
-        return dealOne(player)
-      }
-      if (replacement) player.hand.push(replacement)
+      if (replacement) receiveDealtTile(player, replacement)
     } else {
       player.hand.push(tile)
     }
   }
 
-  function startGame() {
+  function wait(delay) {
+    return new Promise((resolve) => later(resolve, delay))
+  }
+
+  async function startGame() {
     clearTimers()
+    const sequence = openingSequence
     resetPlayers()
     wall.value = shuffle(createWall())
     result.value = null
@@ -110,13 +162,53 @@ export function useGame() {
     selectedIndex.value = -1
     lastDiscard.value = null
     phase.value = 'dealing'
+    dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
+    openingStage.value = 'start'
 
-    for (let draw = 0; draw < 13; draw += 1) players.forEach(dealOne)
+    await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
+    if (sequence !== openingSequence) return
+    diceValues.value = [
+      Math.floor(Math.random() * 6) + 1,
+      Math.floor(Math.random() * 6) + 1,
+    ]
+    openingStage.value = 'dice'
+    await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
+    if (sequence !== openingSequence) return
+
+    openingStage.value = 'deal'
+    const dealSoundDone = playSoundAndWait('deal.mp3', 0.72)
+    const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
+    const dealBatch = async (playerIndex, count) => {
+      for (let tileIndex = 0; tileIndex < count; tileIndex += 1) dealOne(players[playerIndex])
+      dealAnimation.value = {
+        playerIndex,
+        count,
+        serial: dealAnimation.value.serial + 1,
+      }
+      await wait(count === 4 ? 260 : 150)
+    }
+
+    for (let batch = 0; batch < 3; batch += 1) {
+      for (const playerIndex of seatOrder) {
+        await dealBatch(playerIndex, 4)
+        if (sequence !== openingSequence) return
+      }
+    }
+    for (const playerIndex of seatOrder) {
+      await dealBatch(playerIndex, 1)
+      if (sequence !== openingSequence) return
+    }
+    await dealSoundDone
+    if (sequence !== openingSequence) return
+
+    phase.value = 'opening'
+    openingStage.value = null
+    dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
     players.forEach((player) => { player.hand = sortTiles(player.hand) })
     const fourRedWinner = players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return endGame(fourRedWinner, { fourRed: true })
     announce('东风局 · 开牌')
-    later(() => beginTurn(dealer.value), 900)
+    later(() => beginTurn(dealer.value), 650)
   }
 
   function startCountdown() {
@@ -133,7 +225,7 @@ export function useGame() {
     }, 1000)
   }
 
-  function drawFor(playerIndex, fromTail = false) {
+  async function drawFor(playerIndex, fromTail = false) {
     const player = players[playerIndex]
     const tile = takeTile(fromTail)
     if (!tile) {
@@ -143,27 +235,31 @@ export function useGame() {
     if (tile === 'red') {
       player.redCount += 1
       player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-      announce(`${player.name} 红中开杠`, 'red')
+      announce(`杠`, 'red')
       if (player.redCount >= 4) {
         endGame(playerIndex, { fourRed: true })
         return false
       }
+      // 红中先完成亮杠与报杠音效，再从牌墙尾补摸，避免两个动画挤在一起。
+      await playSoundAndWait('gang.mp3')
+      if (phase.value === 'settled') return false
       return drawFor(playerIndex, true)
     }
     // 保留刚摸到的牌在最右端，出牌前不要混入已整理的手牌。
     player.hand = [...player.hand, tile]
     player.drawnTileIndex = player.hand.length - 1
+    playSound('give.mp3', 0.7)
     return true
   }
 
-  function beginTurn(playerIndex, options = {}) {
+  async function beginTurn(playerIndex, options = {}) {
     if (phase.value === 'settled') return
     if (!wall.value.length) return endDraw()
     currentPlayer.value = playerIndex
     phase.value = 'drawing'
     selectedIndex.value = -1
     actionPrompt.value = null
-    const drawn = options.skipDraw ? true : drawFor(playerIndex, options.fromTail)
+    const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
     if (!drawn || phase.value === 'settled') return
 
     if (playerIndex === 0) {
@@ -192,7 +288,7 @@ export function useGame() {
     return scored[0]?.index ?? 0
   }
 
-  function playAI(playerIndex) {
+  async function playAI(playerIndex) {
     if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
     const player = players[playerIndex]
     if (isWinningHand(player.hand, structuralMeldCount(player))) return endGame(playerIndex)
@@ -200,19 +296,14 @@ export function useGame() {
     const added = player.melds.findIndex((meld) => meld.type === 'peng' && player.hand.includes(meld.tile))
     if (added >= 0) {
       const tile = player.melds[added].tile
-      if (canRobKong(user.value.hand, tile, structuralMeldCount(user.value))) {
-        pendingKong.value = { playerIndex, meldIndex: added, tile }
-        actionPrompt.value = { type: 'rob', tile, from: playerIndex }
-        phase.value = 'prompt'
-        return
-      }
-      return completeAddedKong(playerIndex, added, tile)
+      return requestAddedKong(playerIndex, added, tile)
     }
 
     const concealed = concealedKongs(player.hand)
     if (concealed.length) {
-      performConcealedKong(playerIndex, concealed[0])
-      announce(`${player.name} 暗杠`, 'gold')
+      await performConcealedKong(playerIndex, concealed[0])
+      if (phase.value === 'settled') return
+      announce(`杠`, 'gold')
       return later(() => playAI(playerIndex), 550)
     }
 
@@ -227,30 +318,51 @@ export function useGame() {
     player.drawnTileIndex = -1
     player.discards.push(tile)
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
+    playSound('dapai.mp3', 0.8)
+    later(() => playSound(tileAudioFile(tile)), 80)
     phase.value = 'checking'
     window.clearInterval(countdownHandle)
 
-    if (playerIndex !== 0) {
-      const count = matchingCount(user.value.hand, tile)
-      if (count >= 2 && tile !== 'white' && tile !== 'red') {
-        actionPrompt.value = { type: 'claim', tile, from: playerIndex, canGang: count >= 3 }
-        phase.value = 'prompt'
-        return
-      }
-    } else {
-      const claimant = findAIClaim(tile)
-      if (claimant >= 0) return later(() => aiClaim(claimant, tile), 500)
-    }
+    const claimants = findClaims(playerIndex, tile)
+    if (claimants.length) return offerNextClaim(claimants, tile, playerIndex)
     later(() => beginTurn((playerIndex + 1) % 4), 450)
   }
 
-  function findAIClaim(tile) {
-    if (tile === 'white' || tile === 'red') return -1
-    for (let step = 1; step < 4; step += 1) {
-      const index = step
-      if (matchingCount(players[index].hand, tile) >= 2) return index
+  function seatDistance(from, to) {
+    return (to - from + players.length) % players.length
+  }
+
+  function tileAudioFile(tile) {
+    const suited = /^([mps])([1-9])$/.exec(tile)
+    if (suited) return `${suited[2]}${suited[1]}.mp3`
+    const honorIndex = { east: 1, south: 2, west: 3, north: 4, red: 5, green: 6, white: 7 }
+    return honorIndex[tile] ? `${honorIndex[tile]}z.mp3` : null
+  }
+
+  function findClaims(from, tile) {
+    if (tile === 'white' || tile === 'red') return []
+    return players
+      .map((player, playerIndex) => ({
+        playerIndex,
+        count: matchingCount(player.hand, tile),
+        distance: seatDistance(from, playerIndex),
+      }))
+      .filter(({ playerIndex, count }) => playerIndex !== from && count >= 2)
+      .sort((a, b) => a.distance - b.distance)
+      .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
+  }
+
+  function offerNextClaim(claimants, tile, from) {
+    const [claimant, ...remainingClaims] = claimants
+    if (!claimant) return later(() => beginTurn((from + 1) % 4), 450)
+    if (claimant.playerIndex === 0) {
+      actionPrompt.value = {
+        type: 'claim', tile, from, canGang: claimant.canGang, remainingClaims,
+      }
+      phase.value = 'prompt'
+    } else {
+      later(() => aiClaim(claimant.playerIndex, tile), 500)
     }
-    return -1
   }
 
   function removeMatches(hand, tile, amount) {
@@ -264,7 +376,7 @@ export function useGame() {
     if (pile[pile.length - 1] === tile) pile.pop()
   }
 
-  function aiClaim(playerIndex, tile) {
+  async function aiClaim(playerIndex, tile) {
     if (phase.value === 'settled') return
     const player = players[playerIndex]
     player.drawnTileIndex = -1
@@ -273,14 +385,16 @@ export function useGame() {
     removeLastDiscard(from, tile)
     if (isGang) {
       player.hand = removeMatches(player.hand, tile, 3)
-      player.melds.push({ type: 'gang', tile, tiles: [tile, tile, tile, tile] })
+      player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
       announce(`${player.name} 杠`, 'gold')
+      playSound('gang.mp3')
       currentPlayer.value = playerIndex
-      if (drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
+      if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
     } else {
       player.hand = removeMatches(player.hand, tile, 2)
-      player.melds.push({ type: 'peng', tile, tiles: [tile, tile, tile] })
-      announce(`${player.name} 碰`, 'gold')
+      player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
+      announce(`碰`, 'gold')
+      playSound('peng.mp3')
       currentPlayer.value = playerIndex
       phase.value = 'thinking'
       later(() => discardTile(playerIndex, chooseAIDiscard(player)), 650)
@@ -291,6 +405,7 @@ export function useGame() {
     if (!isUserTurn.value) return
     if (selectedIndex.value === index) return userDiscard()
     selectedIndex.value = index
+    playSound('click.mp3', 0.65)
   }
 
   function userDiscard() {
@@ -304,12 +419,18 @@ export function useGame() {
     const prompt = actionPrompt.value
     actionPrompt.value = null
     if (!prompt) return
+    playSound('click.mp3', 0.65)
     if (prompt.type === 'rob') {
       const kong = pendingKong.value
       pendingKong.value = null
+      const nextRobber = kong.remainingRobbers?.[0]
+      if (nextRobber !== undefined) {
+        announce(`${players[nextRobber].name} 抢杠胡`, 'red')
+        return later(() => endGame(nextRobber, { robbedKong: true }), 450)
+      }
       return completeAddedKong(kong.playerIndex, kong.meldIndex, kong.tile)
     }
-    beginTurn((prompt.from + 1) % 4)
+    offerNextClaim(prompt.remainingClaims ?? [], prompt.tile, prompt.from)
   }
 
   function userPeng() {
@@ -318,13 +439,14 @@ export function useGame() {
     removeLastDiscard(prompt.from, prompt.tile)
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 2)
     user.value.drawnTileIndex = -1
-    user.value.melds.push({ type: 'peng', tile: prompt.tile, tiles: [prompt.tile, prompt.tile, prompt.tile] })
+    user.value.melds.push({ type: 'peng', tile: prompt.tile, from: prompt.from, tiles: [prompt.tile, prompt.tile, prompt.tile] })
     actionPrompt.value = null
     currentPlayer.value = 0
     phase.value = 'discard'
     selectedIndex.value = -1
     startCountdown()
     announce('碰', 'gold')
+    playSound('peng.mp3')
   }
 
   function userGangFromDiscard() {
@@ -333,40 +455,75 @@ export function useGame() {
     removeLastDiscard(prompt.from, prompt.tile)
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 3)
     user.value.drawnTileIndex = -1
-    user.value.melds.push({ type: 'gang', tile: prompt.tile, tiles: Array(4).fill(prompt.tile) })
+    user.value.melds.push({ type: 'gang', tile: prompt.tile, from: prompt.from, tiles: Array(4).fill(prompt.tile) })
     actionPrompt.value = null
     currentPlayer.value = 0
     announce('杠 · 尾牌补摸', 'gold')
+    playSound('gang.mp3')
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
 
-  function performConcealedKong(playerIndex, tile) {
+  async function performConcealedKong(playerIndex, tile) {
     const player = players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 4)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
+    playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
-    else if (drawFor(playerIndex, true)) phase.value = 'thinking'
+    else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
   }
 
-  function completeAddedKong(playerIndex, meldIndex, tile) {
+  async function completeAddedKong(playerIndex, meldIndex, tile) {
     const player = players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 1)
     player.drawnTileIndex = -1
-    player.melds[meldIndex] = { type: 'gang', tile, tiles: [tile, tile, tile, tile] }
-    announce(`${player.name} 补杠`, 'gold')
+    player.melds[meldIndex] = {
+      ...player.melds[meldIndex],
+      type: 'gang',
+      tile,
+      tiles: [tile, tile, tile, tile],
+    }
+    announce(`杠`, 'gold')
+    playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
-    else if (drawFor(playerIndex, true)) later(() => playAI(playerIndex), 500)
+    else if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 500)
+  }
+
+  function findRobbers(kongPlayerIndex, tile) {
+    return players
+      .map((player, playerIndex) => ({
+        playerIndex,
+        distance: seatDistance(kongPlayerIndex, playerIndex),
+        canRob: playerIndex !== kongPlayerIndex
+          && canRobKong(player.hand, tile, structuralMeldCount(player)),
+      }))
+      .filter(({ canRob }) => canRob)
+      .sort((a, b) => a.distance - b.distance)
+      .map(({ playerIndex }) => playerIndex)
+  }
+
+  function requestAddedKong(playerIndex, meldIndex, tile) {
+    const [robberIndex, ...remainingRobbers] = findRobbers(playerIndex, tile)
+    if (robberIndex === undefined) return completeAddedKong(playerIndex, meldIndex, tile)
+
+    pendingKong.value = { playerIndex, meldIndex, tile, remainingRobbers }
+    if (robberIndex === 0) {
+      actionPrompt.value = { type: 'rob', tile, from: playerIndex }
+      phase.value = 'prompt'
+      return
+    }
+
+    announce(`${players[robberIndex].name} 抢杠胡`, 'red')
+    later(() => endGame(robberIndex, { robbedKong: true }), 450)
   }
 
   function userGang(tile = userKongs.value[0]) {
     if (!tile || !isUserTurn.value) return
     window.clearInterval(countdownHandle)
     const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
-    if (meldIndex >= 0) completeAddedKong(0, meldIndex, tile)
+    if (meldIndex >= 0) requestAddedKong(0, meldIndex, tile)
     else {
       performConcealedKong(0, tile)
-      announce('暗杠 · 尾牌补摸', 'gold')
     }
   }
 
@@ -378,9 +535,11 @@ export function useGame() {
   function endGame(winnerIndex, options = {}) {
     clearTimers()
     phase.value = 'settled'
+    openingStage.value = null
     currentPlayer.value = -1
     actionPrompt.value = null
     const winner = players[winnerIndex]
+    playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     const { horses, hits } = drawHorses(wall.value, 8)
     const score = scoreHand({
       dealer: winnerIndex === dealer.value,
@@ -399,12 +558,16 @@ export function useGame() {
   function endDraw() {
     clearTimers()
     phase.value = 'settled'
+    openingStage.value = null
     currentPlayer.value = -1
     actionPrompt.value = null
     result.value = { draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }
   }
 
   function nextRound() {
+    if (result.value && !result.value.draw && result.value.winnerIndex !== dealer.value) {
+      dealer.value = result.value.winnerIndex
+    }
     round.value += 1
     startGame()
   }
@@ -414,6 +577,7 @@ export function useGame() {
   return {
     phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, result, round, dealer, user, isUserTurn, userCanHu,
+    dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
     userGang, userHu, nextRound, tileName,
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRobKong, drawHorses, isWinningHand, scoreHand } from './rules'
+import { canRobKong, concealedKongs, drawHorses, isWinningHand, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
 
 describe('莲花广麻胡牌规则', () => {
   it('识别标准自摸牌型', () => {
@@ -30,6 +30,34 @@ describe('莲花广麻胡牌规则', () => {
   it('有一组副露时按十一张牌判断', () => {
     expect(isWinningHand(['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east'], 1)).toBe(true)
   })
+
+  it('一组副露且三张白板补齐牌型时可以胡牌', () => {
+    expect(isWinningHand([
+      'm4', 'm6', 'p3', 'p5', 'p8',
+      's4', 's5', 's6',
+      'white', 'white', 'white',
+    ], 1)).toBe(true)
+  })
+
+  it('列出听牌时可胡的牌', () => {
+    expect(waitingTiles([
+      'm1', 'm2', 'm3',
+      'm4', 'm5', 'm6',
+      'p2', 'p3', 'p4',
+      's7', 's7', 's7',
+      'east',
+    ])).toContain('east')
+  })
+
+  it('打出多余五筒后提示三筒和六筒', () => {
+    const hand = ['m2', 'm2', 'm5', 'm6', 'm7', 'p1', 'p2', 'p3', 'p4', 'p5', 's2', 's3', 's4']
+    expect(waitingTiles(hand)).toEqual(expect.arrayContaining(['p3', 'p6']))
+  })
+
+  it('白板作为癞子不能开暗杠', () => {
+    expect(concealedKongs(['white', 'white', 'white', 'white', 'm1'])).toEqual([])
+    expect(concealedKongs(['m1', 'm1', 'm1', 'm1', 'white'])).toEqual(['m1'])
+  })
 })
 
 describe('买马与计分', () => {
@@ -45,5 +73,21 @@ describe('买马与计分', () => {
     const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
     expect(score.multiplier).toBe(64)
     expect(score.points).toBe(640)
+  })
+})
+
+describe('副露来源指向', () => {
+  const peng = (from) => ({ type: 'peng', from, tiles: ['p3', 'p3', 'p3'] })
+
+  it('四个座位均按右侧、对家、左侧来源映射到首张、中间和末张', () => {
+    for (let playerIndex = 0; playerIndex < 4; playerIndex += 1) {
+      expect(meldSourceTileIndex(peng((playerIndex + 1) % 4), playerIndex)).toBe(0)
+      expect(meldSourceTileIndex(peng((playerIndex + 2) % 4), playerIndex)).toBe(1)
+      expect(meldSourceTileIndex(peng((playerIndex + 3) % 4), playerIndex)).toBe(2)
+    }
+  })
+
+  it('右侧玩家碰顶部玩家的牌时横置靠顶部的第一张', () => {
+    expect(meldSourceTileIndex(peng(2), 1)).toBe(0)
   })
 })

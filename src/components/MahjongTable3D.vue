@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
+import { meldSourceTileIndex } from '../game/rules'
 
 const props = defineProps({
   players: { type: Array, default: () => [] },
@@ -10,6 +11,9 @@ const props = defineProps({
   lastDiscard: { type: Object, default: null },
   wallCount: { type: Number, default: 0 },
   revealHands: Boolean,
+  dealAnimation: { type: Object, default: () => ({ playerIndex: -1, count: 0, serial: 0 }) },
+  openingStage: { type: String, default: null },
+  diceValues: { type: Array, default: () => [1, 1] },
 })
 
 const canvas = ref(null)
@@ -20,6 +24,9 @@ let resizeObserver
 let animationFrame
 let destroyed = false
 let dynamicGroups = []
+let dealTweens = []
+let diceGroup
+let diceStartedAt = 0
 const staticResources = []
 const dynamicResources = []
 const faceMaterials = new Map()
@@ -41,6 +48,99 @@ function loadImage(url) {
     image.onload = () => resolve(image)
     image.onerror = reject
     image.src = url
+  })
+}
+
+function makeDiceTexture(value) {
+  const surface = document.createElement('canvas')
+  surface.width = 192
+  surface.height = 192
+  const ctx = surface.getContext('2d')
+  const gradient = ctx.createLinearGradient(0, 0, 192, 192)
+  gradient.addColorStop(0, '#fffef5')
+  gradient.addColorStop(1, '#d9d9cd')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 192, 192)
+  const positions = {
+    1: [[96, 96]],
+    2: [[55, 55], [137, 137]],
+    3: [[52, 52], [96, 96], [140, 140]],
+    4: [[54, 54], [138, 54], [54, 138], [138, 138]],
+    5: [[52, 52], [140, 52], [96, 96], [52, 140], [140, 140]],
+    6: [[55, 45], [137, 45], [55, 96], [137, 96], [55, 147], [137, 147]],
+  }
+  ctx.fillStyle = value === 1 ? '#b42629' : '#17251f'
+  positions[value].forEach(([x, y]) => {
+    ctx.beginPath()
+    ctx.arc(x, y, 17, 0, Math.PI * 2)
+    ctx.fill()
+  })
+  const texture = own(new THREE.CanvasTexture(surface))
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function addDice() {
+  const materials = Array.from({ length: 6 }, (_, index) => own(new THREE.MeshStandardMaterial({
+    map: makeDiceTexture(index + 1),
+    roughness: .5,
+    metalness: 0,
+  })))
+  // BoxGeometry 面顺序：右、左、上、下、前、后。
+  const faceMaterials = [materials[1], materials[4], materials[0], materials[5], materials[2], materials[3]]
+  const geometry = own(new RoundedBoxGeometry(1.02, 1.02, 1.02, 6, .16))
+  diceGroup = new THREE.Group()
+  for (let index = 0; index < 2; index += 1) {
+    const die = new THREE.Mesh(geometry, faceMaterials)
+    die.castShadow = true
+    die.receiveShadow = true
+    diceGroup.add(die)
+  }
+  diceGroup.visible = props.openingStage === 'dice'
+  if (diceGroup.visible) diceStartedAt = performance.now()
+  scene.add(diceGroup)
+}
+
+function settledDiceQuaternion(value) {
+  const rotations = {
+    1: [0, 0, 0],
+    2: [0, 0, Math.PI / 2],
+    3: [-Math.PI / 2, 0, 0],
+    4: [Math.PI / 2, 0, 0],
+    5: [0, 0, -Math.PI / 2],
+    6: [Math.PI, 0, 0],
+  }
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotations[value]))
+}
+
+function rollingDiceQuaternion(index, progress) {
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    progress * Math.PI * (index === 0 ? 9 : 8),
+    progress * Math.PI * (index === 0 ? 7 : -9),
+    progress * Math.PI * (index === 0 ? -5 : 6),
+  ))
+}
+
+function animateDice(time) {
+  if (!diceGroup?.visible) return
+  const progress = Math.min(1, Math.max(0, (time - diceStartedAt) / 1050))
+  const travel = 1 - (1 - progress) ** 2
+  diceGroup.children.forEach((die, index) => {
+    const side = index === 0 ? -1 : 1
+    die.position.x = side * (1.15 + .35 * travel)
+    die.position.z = 5.2 - 4.1 * travel + side * .12
+    const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 3.2
+    const bounceProgress = Math.max(0, (progress - .82) / .18)
+    const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .3 * (1 - bounceProgress) : 0
+    die.position.y = .55 + arc + bounce
+    const settleStart = .72
+    if (progress < settleStart) {
+      die.quaternion.copy(rollingDiceQuaternion(index, progress))
+    } else {
+      const from = rollingDiceQuaternion(index, settleStart)
+      const target = settledDiceQuaternion(props.diceValues[index] || 1)
+      die.quaternion.copy(from).slerp(target, (progress - settleStart) / (1 - settleStart))
+    }
   })
 }
 
@@ -225,6 +325,7 @@ function addTable() {
 function clearDynamicScene() {
   dynamicGroups.forEach((group) => scene.remove(group))
   dynamicGroups = []
+  dealTweens = []
   dynamicResources.splice(0).forEach((resource) => resource.dispose?.())
 }
 
@@ -278,7 +379,7 @@ function makeFaceDownTile() {
 function addConcealedHand(group, playerIndex) {
   if (playerIndex === 0) return
   const position = ['bottom', 'right', 'top', 'left'][playerIndex]
-  const total = Math.min(props.players[playerIndex]?.hand.length || 13, 14)
+  const total = Math.min(props.players[playerIndex]?.hand.length ?? 0, 14)
   const gap = .725
   const drawnTileIndex = props.players[playerIndex]?.drawnTileIndex ?? -1
   const layoutDrawnTileIndex = props.revealHands ? -1 : drawnTileIndex
@@ -333,6 +434,18 @@ function addConcealedHand(group, playerIndex) {
       }
       tile.position.set(position === 'left' ? -9.15 : 9.15, tileY, z)
     }
+    const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
+    if (props.dealAnimation.playerIndex === playerIndex && index >= animatedFromIndex) {
+      const target = tile.position.clone()
+      tile.position.set(0, 3.4, .5)
+      dealTweens.push({
+        tile,
+        origin: new THREE.Vector3(0, 3.4, .5),
+        target,
+        startedAt: performance.now(),
+        duration: props.dealAnimation.count === 4 ? 230 : 125,
+      })
+    }
     group.add(tile)
   }
   if (props.currentPlayer === playerIndex) {
@@ -380,18 +493,37 @@ function meldTransform(playerIndex, trackOffset) {
   return { x: -7.78, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
 }
 
+function alignMeldBottom(transform, playerIndex, pointsToSource) {
+  if (!pointsToSource) return transform
+  // 牌面尺寸为 .72 x 1.02；横置后朝玩家方向缩短 .30，中心外移一半即可底边对齐。
+  const edgeCompensation = .15
+  if (playerIndex === 0) transform.z += edgeCompensation
+  else if (playerIndex === 1) transform.x += edgeCompensation
+  else if (playerIndex === 2) transform.z -= edgeCompensation
+  else transform.x -= edgeCompensation
+  return transform
+}
+
 function addMelds(group, playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
   melds.forEach((meld) => {
+    const sourceTileIndex = meldSourceTileIndex(meld, playerIndex)
     meld.tiles.forEach((tileName, tileIndex) => {
       const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === meld.tiles.length - 1)
+      const pointsToSource = tileIndex === sourceTileIndex
       const tile = concealed ? makeFaceDownTile() : makeFaceTile(tileName)
-      const transform = meldTransform(playerIndex, trackOffset)
+      const tileSpan = pointsToSource ? 1.025 : .725
+      const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const transform = alignMeldBottom(
+        meldTransform(playerIndex, centerOffset),
+        playerIndex,
+        pointsToSource,
+      )
       tile.position.set(transform.x, .28, transform.z)
-      tile.rotation.y = transform.rotation
+      tile.rotation.y = transform.rotation + (pointsToSource ? Math.PI / 2 : 0)
       group.add(tile)
-      trackOffset += .725
+      trackOffset += tileSpan
     })
     trackOffset += .18
   })
@@ -424,6 +556,13 @@ function resize() {
 
 function render(time = 0) {
   if (!renderer) return
+  animateDice(time)
+  dealTweens = dealTweens.filter((tween) => {
+    const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
+    const eased = 1 - (1 - progress) ** 3
+    tween.tile.position.lerpVectors(tween.origin, tween.target, eased)
+    return progress < 1
+  })
   camera.position.x = Math.sin(time * .00035) * .035
   camera.lookAt(0, 0, -.25)
   renderer.render(scene, camera)
@@ -454,6 +593,7 @@ onMounted(async () => {
   const rimLight = new THREE.DirectionalLight(0x55c889, 2.2)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
+  addDice()
 
   const tileImages = await Promise.all(TILE_TYPES.map(async (tile) => [
     tile,
@@ -474,10 +614,22 @@ watch(
     player.hand.length,
     player.drawnTileIndex,
     player.discards.join(','),
-    player.melds.map((meld) => `${meld.type}:${meld.tiles.join(',')}`).join('|'),
-  ]).flat().concat(props.currentPlayer, props.lastDiscard?.id, props.wallCount, props.revealHands),
+    player.melds.map((meld) => `${meld.type}:${meld.from ?? '-'}:${meld.tiles.join(',')}`).join('|'),
+  ]).flat().concat(
+    props.currentPlayer,
+    props.lastDiscard?.id,
+    props.wallCount,
+    props.revealHands,
+    props.dealAnimation.serial,
+  ),
   rebuildTableTiles,
 )
+
+watch(() => props.openingStage, (stage) => {
+  if (!diceGroup) return
+  diceGroup.visible = stage === 'dice'
+  if (diceGroup.visible) diceStartedAt = performance.now()
+})
 
 onBeforeUnmount(() => {
   destroyed = true

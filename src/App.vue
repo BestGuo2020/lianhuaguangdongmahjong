@@ -4,24 +4,35 @@ import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
 import RulesPanel from './components/RulesPanel.vue'
-import { isHorse } from './game/tiles'
+import { isHorse, tileName } from './game/tiles'
 import { useGame } from './game/useGame'
+import { useAudio } from './game/useAudio'
 
 const rulesOpen = ref(false)
-const soundOn = ref(true)
 const resultVisible = ref(true)
+const waitsOpen = ref(false)
+const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
   actionPrompt, announcement, result, round, dealer, user, isUserTurn, userCanHu,
-  userKongs, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
+  userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
   userGang, userHu, nextRound,
-} = useGame()
+} = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+
+function startGameWithAudio() {
+  startBgm()
+  startGame()
+}
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
+})
+
+watch([userCurrentWaits, userTingOptions], ([currentWaits, options]) => {
+  waitsOpen.value = Boolean(currentWaits || options.length)
 })
 </script>
 
@@ -53,6 +64,9 @@ watch(result, (value) => {
             :last-discard="lastDiscard"
             :wall-count="wallCount"
             :reveal-hands="Boolean(result)"
+            :deal-animation="dealAnimation"
+            :opening-stage="openingStage"
+            :dice-values="diceValues"
           />
           <PlayerSeat
             v-for="(player, index) in players.slice(1)"
@@ -71,13 +85,21 @@ watch(result, (value) => {
             </div>
           </Transition>
 
+          <Transition name="opening-cue" mode="out-in">
+            <div v-if="openingStage === 'start'" key="start" class="opening-overlay start-cue">
+              <span>东风局 · 第 {{ round }} 局</span>
+              <strong>对局开始</strong>
+              <i></i>
+            </div>
+          </Transition>
+
           <section class="user-area">
             <div class="user-identity" :class="{ active: currentPlayer === 0 }">
               <span v-if="dealer === 0" class="dealer-badge">庄</span>
               <div class="avatar">莲</div>
               <div><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
-            <div class="hand-rack" :class="{ playable: isUserTurn, 'has-melds': user.melds.length }">
+            <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
               <MahjongTile
                 v-for="(tile, index) in user.hand"
                 :key="`${tile}-${index}`"
@@ -92,8 +114,42 @@ watch(result, (value) => {
 
           <div v-if="isUserTurn" class="turn-timer"><span>{{ turnSeconds }}</span><small>秒</small></div>
 
-          <Transition name="actions">
-            <div v-if="actionPrompt || isUserTurn" class="action-bar">
+          <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
+              <div v-if="(userCurrentWaits || userTingOptions.length) && waitsOpen" class="waiting-tip">
+                <template v-if="userDiscardWaits?.any || (!isUserTurn && userCurrentWaits?.any)">
+                  <strong>听任意</strong>
+                  <span>牌墙剩余 {{ (userDiscardWaits || userCurrentWaits).remaining }} 张</span>
+                </template>
+                <template v-else-if="userDiscardWaits || (!isUserTurn && userCurrentWaits)">
+                  <span class="waiting-title">{{ userDiscardWaits ? `打出 ${tileName(userDiscardWaits.discard)}，听` : '当前听牌' }}</span>
+                  <div class="waiting-tiles">
+                    <div v-for="item in (userDiscardWaits || userCurrentWaits).tiles" :key="item.tile">
+                      <MahjongTile :tile="item.tile" small disabled />
+                      <small>余 {{ item.remaining }}</small>
+                    </div>
+                  </div>
+                  <span class="waiting-total">共剩 {{ (userDiscardWaits || userCurrentWaits).remaining }} 张</span>
+                </template>
+                <template v-else>
+                  <strong class="waiting-heading">听牌提示</strong>
+                  <div class="waiting-options">
+                    <div v-for="option in userTingOptions" :key="option.discard">
+                      <span>打 {{ tileName(option.discard) }}</span><b>→</b>
+                      <span v-if="option.any">听任意</span>
+                      <span v-else>{{ option.tiles.map(item => tileName(item.tile)).join('、') }}</span>
+                      <small>余 {{ option.remaining }} 张</small>
+                    </div>
+                  </div>
+                </template>
+              </div>
+              <button
+                v-if="userCurrentWaits || userTingOptions.length"
+                class="action waiting-action"
+                :class="{ active: waitsOpen }"
+                aria-label="查看听牌提示"
+                :aria-expanded="waitsOpen"
+                @click="waitsOpen = !waitsOpen"
+              ><b>💡</b><span>听牌</span></button>
               <template v-if="actionPrompt?.type === 'claim'">
                 <button class="action primary" @click="userPeng"><b>碰</b><span>{{ actionPrompt.tile }}</span></button>
                 <button v-if="actionPrompt.canGang" class="action primary" @click="userGangFromDiscard"><b>杠</b><span>尾牌补摸</span></button>
@@ -108,8 +164,7 @@ watch(result, (value) => {
                 <button v-if="userCanHu" class="action hu" @click="userHu"><b>胡</b><span>自摸</span></button>
                 <button class="action discard-action" :disabled="selectedIndex < 0" @click="userDiscard"><b>出牌</b></button>
               </template>
-            </div>
-          </Transition>
+          </div>
         </template>
 
         <section v-if="phase === 'lobby'" class="lobby">
@@ -118,7 +173,7 @@ watch(result, (value) => {
           <h1>莲花<span>广麻</span></h1>
           <p class="subtitle">一桌岭南风雅 · 一局人情冷暖</p>
           <div class="lobby-rules"><span>白板癞子</span><i></i><span>红中开杠</span><i></i><span>自摸买马</span></div>
-          <button class="start-button" @click="startGame"><b>开始对局</b><span>四人单机 · 即开即玩</span></button>
+          <button class="start-button" @click="startGameWithAudio"><b>开始对局</b><span>四人单机 · 即开即玩</span></button>
           <button class="text-button" @click="rulesOpen = true">先看玩法说明 →</button>
         </section>
 
