@@ -204,19 +204,19 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
                 aria-label="查看听牌提示"
                 :aria-expanded="waitsOpen"
                 @click="waitsOpen = !waitsOpen"
-              ><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /><span>听牌</span></button>
+              ><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
               <template v-if="actionPrompt?.type === 'claim'">
                 <button class="action primary" @click="userPeng"><b>碰</b></button>
                 <button v-if="actionPrompt.canGang" class="action primary" @click="userGangFromDiscard"><b>杠</b></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else-if="actionPrompt?.type === 'rob'">
-                <button class="action hu" @click="userHu"><b>胡</b><span>抢杠</span></button>
+                <button class="action hu" @click="userHu"><b>胡</b></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else>
                 <button v-if="userKongs.length" class="action primary" @click="userGang()"><b>杠</b></button>
-                <button v-if="userCanHu" class="action hu" @click="userHu"><b>胡</b><span>自摸</span></button>
+                <button v-if="userCanHu" class="action hu" @click="userHu"><b>胡</b></button>
               </template>
           </div>
         </template>

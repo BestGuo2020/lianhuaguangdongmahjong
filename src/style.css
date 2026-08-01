@@ -341,11 +341,13 @@ button { font: inherit; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 .action.hu { border-color: #c94e45; background: radial-gradient(circle at 40% 30%, #a13c36, #511c1b 65%, #180908); color: #ffdda0; }
 .action.pass, .discard-action { border-radius: 25px; border-color: #52675c; background: rgba(7,19,14,.85); color: #c6d0c9; }
-.waiting-action { border-color: #e1bd55; background: radial-gradient(circle at 42% 30%, #9b7831, #493516 68%, #171006); }
-.waiting-action.active { box-shadow: 0 0 0 2px rgba(255,221,106,.22), 0 0 22px rgba(255,204,72,.5); }
+.waiting-action { min-width: 54px; width: 54px; height: 60px; padding: 2px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.waiting-action:hover { transform: translateY(-3px); background: transparent; filter: brightness(1.12); }
+.waiting-action.active { box-shadow: none; }
 .waiting-action b { font-family: sans-serif; }
-.waiting-action .action-icon { display: block; width: clamp(20px, 1.8vw, 28px); height: clamp(20px, 1.8vw, 28px); object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.38)); }
-.waiting-action.active .action-icon { filter: brightness(1.16) drop-shadow(0 0 6px rgba(90,190,255,.72)); }
+.waiting-action .action-icon { display: block; width: clamp(42px, 4vw, 54px); height: clamp(42px, 4vw, 54px); object-fit: contain; filter: drop-shadow(0 4px 5px rgba(0,0,0,.48)); }
+.waiting-action span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.waiting-action.active .action-icon { filter: brightness(1.18) drop-shadow(0 0 9px rgba(239,190,75,.88)); }
 .waiting-tip { position: absolute; z-index: 46; bottom: clamp(120px, 17vh, 165px); left: 50%; display: flex; min-width: 190px; max-width: min(620px, 82vw); padding: 11px 13px; border: 1px solid rgba(225,189,85,.65); border-radius: 9px; background: rgba(7,24,17,.96); transform: translateX(-50%); color: #f2df9f; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
 .compact-waiting-tip { min-width: 0; align-items: center; justify-content: center; padding: 8px 10px; }
 .compact-waiting-tip > em { margin-left: 9px; padding: 4px 8px; border-radius: 4px; background: #28b8c7; color: #f4ffff; font-size: 13px; font-style: normal; font-weight: 800; white-space: nowrap; }
@@ -679,6 +681,8 @@ button { font: inherit; }
   .waiting-tiles .mahjong-tile.small { --tile-width: clamp(27px, 4.4vh, 34px); }
   .waiting-tiles small { min-width: 24px; padding: 2px 4px; font-size: 9px; }
   .action { min-width: 48px; height: 42px; padding: 4px 8px; }
+  .waiting-action { width: 48px; height: 52px; padding: 0; }
+  .waiting-action .action-icon { width: 46px; height: 46px; }
   .action b { font-size: 16px; }
   .action span { font-size: 9px; }
   .turn-timer { right: 9%; bottom: 132px; min-width: 67px; padding: 6px 9px 5px; border-radius: 14px; }
@@ -749,6 +753,7 @@ button { font: inherit; }
   .mahjong-tile { --tile-width: min(6.6vw, 38px); }.mahjong-tile.small { --tile-width: min(4.7vw, 25px); }
   .hand-rack { gap: 0; padding-right: 2px; padding-left: 2px; }
   .action-bar { right: 3%; bottom: 113px; }.action { min-width: 50px; height: 46px; padding: 4px 9px; }.action b { font-size: 15px; }
+  .waiting-action { width: 50px; height: 54px; padding: 0; }
   .turn-timer { right: 8%; bottom: 174px; min-width: 72px; padding: 7px 10px 6px; }
   .lobby-rules { gap: 7px; font-size: 11px; }
 }
