@@ -145,6 +145,11 @@ button { font: inherit; }
 .top-bar nav { display: flex; gap: 8px; }
 .top-bar button { width: clamp(34px, 2.8vw, 44px); height: clamp(34px, 2.8vw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25vw, 20px); cursor: pointer; }
 .top-bar button:hover { background: rgba(215,174,83,.18); border-color: #b99549; }
+.top-bar .icon-button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; }
+.top-bar .icon-button:hover { border: 0; background: transparent; }
+.icon-button img { display: block; width: 86%; height: 86%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.42)); transition: transform .18s ease, filter .18s ease; }
+.icon-button:hover img { transform: translateY(-1px) scale(1.07); filter: brightness(1.08) drop-shadow(0 3px 5px rgba(0,0,0,.48)); }
+.icon-button:active img { transform: scale(.94); }
 
 .mahjong-tile {
   --tile-width: clamp(36px, 3.7vw, 57px);
@@ -339,6 +344,8 @@ button { font: inherit; }
 .waiting-action { border-color: #e1bd55; background: radial-gradient(circle at 42% 30%, #9b7831, #493516 68%, #171006); }
 .waiting-action.active { box-shadow: 0 0 0 2px rgba(255,221,106,.22), 0 0 22px rgba(255,204,72,.5); }
 .waiting-action b { font-family: sans-serif; }
+.waiting-action .action-icon { display: block; width: clamp(20px, 1.8vw, 28px); height: clamp(20px, 1.8vw, 28px); object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.38)); }
+.waiting-action.active .action-icon { filter: brightness(1.16) drop-shadow(0 0 6px rgba(90,190,255,.72)); }
 .waiting-tip { position: absolute; z-index: 46; bottom: clamp(120px, 17vh, 165px); left: 50%; display: flex; min-width: 190px; max-width: min(620px, 82vw); padding: 11px 13px; border: 1px solid rgba(225,189,85,.65); border-radius: 9px; background: rgba(7,24,17,.96); transform: translateX(-50%); color: #f2df9f; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
 .compact-waiting-tip { min-width: 0; align-items: center; justify-content: center; padding: 8px 10px; }
 .compact-waiting-tip > em { margin-left: 9px; padding: 4px 8px; border-radius: 4px; background: #28b8c7; color: #f4ffff; font-size: 13px; font-style: normal; font-weight: 800; white-space: nowrap; }
@@ -648,6 +655,7 @@ button { font: inherit; }
   .round-info { padding: 3px 13px; }
   .top-bar nav { gap: 5px; }
   .top-bar button { width: 28px; height: 28px; font-size: 13px; }
+  .top-bar .icon-button img { width: 88%; height: 88%; }
   .seat-top .avatar-wrap { transform: scale(.76) translate(-90px, -15px); transform-origin: top center; }
   .seat-left .avatar-wrap { transform: scale(.76); transform-origin: left center; }
   .seat-right .avatar-wrap { transform: scale(.76); transform-origin: right center; }

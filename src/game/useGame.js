@@ -496,13 +496,15 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     playSound('click.mp3', 0.65)
     if (prompt.type === 'rob') {
       const kong = pendingKong.value
-      pendingKong.value = null
+      if (!kong) return
       const nextRobber = kong.remainingRobbers?.[0]
       if (nextRobber !== undefined) {
+        pendingKong.value = null
         announce(`${players[nextRobber].name} 抢杠胡`, 'red')
         return later(() => endGame(nextRobber, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex }), 450)
       }
-      return completeAddedKong(kong.playerIndex, kong.meldIndex, kong.tile)
+      pendingKong.value = null
+      return settleAddedKong(kong.playerIndex)
     }
     offerNextClaim(prompt.remainingClaims ?? [], prompt.tile, prompt.from)
   }
@@ -555,7 +557,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
   }
 
-  async function completeAddedKong(playerIndex, meldIndex, tile) {
+  function declareAddedKong(playerIndex, meldIndex, tile) {
     const player = players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 1)
     player.drawnTileIndex = -1
@@ -563,12 +565,20 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       ...player.melds[meldIndex],
       type: 'gang',
       added: true,
+      pending: true,
       tile,
       tiles: [tile, tile, tile, tile],
     }
-    applyKongScore(players, playerIndex, 'added')
+    phase.value = 'kong'
     announce(`杠`, 'gold')
     playSound('gang.mp3')
+  }
+
+  async function settleAddedKong(playerIndex) {
+    const player = players[playerIndex]
+    const meld = player.melds.find((item) => item.type === 'gang' && item.added && item.pending)
+    if (meld) meld.pending = false
+    applyKongScore(players, playerIndex, 'added')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 500)
   }
@@ -588,18 +598,27 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function requestAddedKong(playerIndex, meldIndex, tile) {
     const [robberIndex, ...remainingRobbers] = findRobbers(playerIndex, tile)
-    if (robberIndex === undefined) return completeAddedKong(playerIndex, meldIndex, tile)
+    declareAddedKong(playerIndex, meldIndex, tile)
+    if (robberIndex === undefined) return later(() => settleAddedKong(playerIndex), 650)
 
     pendingKong.value = { playerIndex, meldIndex, tile, remainingRobbers }
+    later(() => offerRobKong(robberIndex), 650)
+  }
+
+  function offerRobKong(robberIndex) {
+    const kong = pendingKong.value
+    if (!kong || phase.value === 'settled') return
     if (robberIndex === 0) {
-      actionPrompt.value = { type: 'rob', tile, from: playerIndex }
+      actionPrompt.value = { type: 'rob', tile: kong.tile, from: kong.playerIndex }
       phase.value = 'prompt'
+      announce('可抢杠胡', 'red')
       startPromptCountdown()
       return
     }
 
     announce(`${players[robberIndex].name} 抢杠胡`, 'red')
-    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: playerIndex }), 450)
+    pendingKong.value = null
+    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex }), 450)
   }
 
   function userGang(tile = userKongs.value[0]) {
@@ -615,9 +634,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function userHu() {
     if (actionPrompt.value?.type === 'rob') {
+      const kongPlayerIndex = pendingKong.value?.playerIndex ?? actionPrompt.value.from
+      pendingKong.value = null
       return endGame(0, {
         robbedKong: true,
-        robbedKongPlayerIndex: pendingKong.value?.playerIndex ?? actionPrompt.value.from,
+        robbedKongPlayerIndex: kongPlayerIndex,
       })
     }
     if (userCanHu.value) endGame(0)
@@ -630,6 +651,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     currentPlayer.value = -1
     userDrewThisTurn.value = false
     actionPrompt.value = null
+    pendingKong.value = null
     const winner = players[winnerIndex]
     const scoresBefore = players.map((player) => player.score)
     playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')

@@ -1,4 +1,6 @@
 img/
+!public/img/
+!public/img/*.png
 
 # Logs
 logs

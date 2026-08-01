@@ -11,6 +11,7 @@ import { useAudio } from './game/useAudio'
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref('east')
+const imageBase = `${import.meta.env.BASE_URL}img/`
 const waitsOpen = ref(false)
 const requiresLandscape = ref(false)
 const orientationMessage = ref('')
@@ -104,8 +105,12 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
           <div class="brand-mini"><span>莲花广麻</span></div>
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
           <nav>
-            <button :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">{{ soundOn ? '◖))' : '◖×' }}</button>
-            <button aria-label="查看规则" @click="rulesOpen = true">规</button>
+            <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
+              <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
+            </button>
+            <button class="icon-button" aria-label="查看规则" @click="rulesOpen = true">
+              <img :src="`${imageBase}manual.png`" alt="" />
+            </button>
           </nav>
         </header>
 
@@ -199,14 +204,14 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
                 aria-label="查看听牌提示"
                 :aria-expanded="waitsOpen"
                 @click="waitsOpen = !waitsOpen"
-              ><b>💡</b><span>听牌</span></button>
+              ><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /><span>听牌</span></button>
               <template v-if="actionPrompt?.type === 'claim'">
                 <button class="action primary" @click="userPeng"><b>碰</b></button>
                 <button v-if="actionPrompt.canGang" class="action primary" @click="userGangFromDiscard"><b>杠</b></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else-if="actionPrompt?.type === 'rob'">
-                <button class="action hu" @click="userHu"><b>胡</b></button>
+                <button class="action hu" @click="userHu"><b>胡</b><span>抢杠</span></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else>
