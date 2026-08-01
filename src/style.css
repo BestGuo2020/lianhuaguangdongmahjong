@@ -303,7 +303,6 @@ button { font: inherit; }
 .announcement { position: absolute; z-index: 40; top: 34%; left: 50%; transform: translate(-50%, -50%); padding: 4px 37px; background: linear-gradient(90deg, transparent, rgba(10,11,8,.86) 20%, rgba(10,11,8,.86) 80%, transparent); pointer-events: none; }
 .announcement span { display: block; min-width: 140px; color: #f3d47c; font: 900 clamp(20px, 2.7vw, 40px) "Noto Serif SC", serif; letter-spacing: .12em; text-align: center; text-shadow: 0 2px 4px #000, 0 0 14px rgba(240,188,67,.45); }
 .announcement.red span { color: #ffdb91; text-shadow: 0 2px 4px #000, 0 0 14px #b82429; }
-.hand-rack.reveal-opponent .mahjong-tile { animation: user-hand-fall .52s cubic-bezier(.2,.8,.2,1) both; transform-origin: 50% 100%; }
 .win-burst-leave-active { transition: opacity .22s, filter .22s; }.win-burst-leave-to { opacity: 0; filter: brightness(2) blur(5px); }
 .opening-overlay { position: absolute; z-index: 42; top: 43%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; }
 .start-cue { display: grid; place-items: center; min-width: 330px; padding: 22px 55px 25px; background: radial-gradient(ellipse, rgba(8,20,14,.94), rgba(8,14,11,.72) 58%, transparent 72%); text-align: center; }
@@ -461,7 +460,6 @@ button { font: inherit; }
 @keyframes discard-from-bottom { from { opacity: .2; transform: translate(-50%, 520%) scale(.72) rotateX(-18deg); } to { opacity: 1; transform: translate(-50%, 60%) scale(1); } }
 @keyframes discard-from-left { from { opacity: .2; transform: translate(-430%, -50%) rotate(90deg) scale(.72); } to { opacity: 1; transform: translate(-180%, -50%) rotate(90deg) scale(1); } }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
-@keyframes user-hand-fall { from { transform: perspective(300px) rotateX(-38deg) translateY(-7px); } to { transform: perspective(300px) rotateX(0) translateY(0); } }
 @keyframes opening-cue-in { from { opacity: 0; transform: translate(-50%, -44%) scale(.82); filter: blur(5px); } }
 @keyframes result-in { from { transform: translateY(18px) scale(.94); opacity: 0; } }
 @keyframes ranking-slide { from { opacity: 0; transform: translateX(45px) scale(.97); } }

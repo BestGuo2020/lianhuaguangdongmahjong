@@ -30,7 +30,6 @@ let animationFrame
 let destroyed = false
 let dynamicGroups = []
 let dealTweens = []
-let revealTweens = []
 let winEffectAnimation = null
 let diceGroup
 let diceStartedAt = 0
@@ -391,7 +390,6 @@ function clearDynamicScene() {
   dynamicGroups.forEach((group) => scene.remove(group))
   dynamicGroups = []
   dealTweens = []
-  revealTweens = []
   winEffectAnimation = null
   dynamicResources.splice(0).forEach((resource) => resource.dispose?.())
 }
@@ -517,18 +515,6 @@ function addConcealedHand(group, playerIndex) {
         target,
         startedAt: performance.now(),
         duration: props.dealAnimation.count === 4 ? 230 : 125,
-      })
-    }
-    if (props.revealHands && playerIndex !== props.winnerIndex) {
-      const targetY = tile.position.y
-      tile.position.y = targetY + .32
-      tile.rotation.x = -Math.PI / 2
-      revealTweens.push({
-        tile,
-        startY: tile.position.y,
-        targetY,
-        startedAt: performance.now() + index * 24,
-        duration: 520,
       })
     }
     group.add(tile)
@@ -826,13 +812,6 @@ function render(time = 0) {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
     const eased = 1 - (1 - progress) ** 3
     tween.tile.position.lerpVectors(tween.origin, tween.target, eased)
-    return progress < 1
-  })
-  revealTweens = revealTweens.filter((tween) => {
-    const progress = Math.max(0, Math.min(1, (time - tween.startedAt) / tween.duration))
-    const eased = 1 - (1 - progress) ** 3
-    tween.tile.position.y = THREE.MathUtils.lerp(tween.startY, tween.targetY, eased)
-    tween.tile.rotation.x = THREE.MathUtils.lerp(-Math.PI / 2, 0, eased)
     return progress < 1
   })
   if (winEffectAnimation) {

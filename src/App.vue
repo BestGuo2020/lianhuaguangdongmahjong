@@ -175,7 +175,7 @@ const displayedUserHand = computed(() => {
               <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
               <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
-            <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length, 'reveal-opponent': revealHands && winningPlayerIndex !== 0 }">
+            <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
               <MahjongTile
                 v-for="(tile, index) in displayedUserHand"
                 :key="`${tile}-${index}`"
