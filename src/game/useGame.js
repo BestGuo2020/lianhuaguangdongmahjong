@@ -240,6 +240,25 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }, 1000)
   }
 
+  function startPromptCountdown() {
+    window.clearInterval(countdownHandle)
+    turnSeconds.value = 12
+    const prompt = actionPrompt.value
+    countdownHandle = window.setInterval(() => {
+      if (phase.value !== 'prompt' || actionPrompt.value !== prompt) {
+        window.clearInterval(countdownHandle)
+        countdownHandle = null
+        return
+      }
+      turnSeconds.value -= 1
+      if (turnSeconds.value <= 0) {
+        window.clearInterval(countdownHandle)
+        countdownHandle = null
+        userPass()
+      }
+    }, 1000)
+  }
+
   async function drawFor(playerIndex, fromTail = false) {
     const player = players[playerIndex]
     const tile = takeTile(fromTail)
@@ -378,6 +397,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         type: 'claim', tile, from, canGang: claimant.canGang, remainingClaims,
       }
       phase.value = 'prompt'
+      startPromptCountdown()
     } else {
       later(() => aiClaim(claimant.playerIndex, tile), 500)
     }
@@ -435,6 +455,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function userPass() {
     const prompt = actionPrompt.value
+    window.clearInterval(countdownHandle)
+    countdownHandle = null
     actionPrompt.value = null
     if (!prompt) return
     playSound('click.mp3', 0.65)
@@ -454,6 +476,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function userPeng() {
     const prompt = actionPrompt.value
     if (prompt?.type !== 'claim') return
+    window.clearInterval(countdownHandle)
+    countdownHandle = null
     removeLastDiscard(prompt.from, prompt.tile)
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 2)
     user.value.drawnTileIndex = -1
@@ -471,6 +495,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function userGangFromDiscard() {
     const prompt = actionPrompt.value
     if (prompt?.type !== 'claim' || !prompt.canGang) return
+    window.clearInterval(countdownHandle)
+    countdownHandle = null
     removeLastDiscard(prompt.from, prompt.tile)
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 3)
     user.value.drawnTileIndex = -1
@@ -531,6 +557,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (robberIndex === 0) {
       actionPrompt.value = { type: 'rob', tile, from: playerIndex }
       phase.value = 'prompt'
+      startPromptCountdown()
       return
     }
 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
@@ -11,7 +11,49 @@ import { useAudio } from './game/useAudio'
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const waitsOpen = ref(false)
+const requiresLandscape = ref(false)
+const orientationMessage = ref('')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
+
+function updateOrientationGate() {
+  const isPortrait = window.matchMedia('(orientation: portrait)').matches
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+  const isMobileViewport = Math.min(window.innerWidth, window.innerHeight) <= 1024
+  requiresLandscape.value = isPortrait && isTouchDevice && isMobileViewport
+
+  if (!requiresLandscape.value) orientationMessage.value = ''
+}
+
+async function enterLandscapeFullscreen() {
+  orientationMessage.value = ''
+
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    }
+
+    if (screen.orientation?.lock) {
+      await screen.orientation.lock('landscape')
+    }
+  } catch (error) {
+    orientationMessage.value = '当前浏览器无法自动旋转，请将手机横置后继续'
+  } finally {
+    updateOrientationGate()
+  }
+}
+
+onMounted(() => {
+  updateOrientationGate()
+  window.addEventListener('resize', updateOrientationGate)
+  window.addEventListener('orientationchange', updateOrientationGate)
+  screen.orientation?.addEventListener?.('change', updateOrientationGate)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateOrientationGate)
+  window.removeEventListener('orientationchange', updateOrientationGate)
+  screen.orientation?.removeEventListener?.('change', updateOrientationGate)
+})
 
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
@@ -43,6 +85,16 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
 </script>
 
 <template>
+  <div v-if="requiresLandscape" class="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
+    <div class="orientation-card">
+      <div class="phone-rotate-icon" aria-hidden="true"><span></span></div>
+      <p class="eyebrow">LANDSCAPE MODE</p>
+      <h2 id="orientation-title">请横屏游玩</h2>
+      <p>为了完整显示牌桌，请进入全屏并将手机旋转为横屏。</p>
+      <button type="button" @click="enterLandscapeFullscreen">进入全屏横屏</button>
+      <small v-if="orientationMessage" role="status">{{ orientationMessage }}</small>
+    </div>
+  </div>
   <main class="game-app">
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">
@@ -118,7 +170,9 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
             </div>
           </section>
 
-          <div v-if="isUserTurn" class="turn-timer"><span>{{ turnSeconds }}</span><small>秒</small></div>
+          <div v-if="isUserTurn || actionPrompt" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }">
+            <span>{{ turnSeconds }}</span>
+          </div>
 
           <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
             <template v-if="activeWaits.any">

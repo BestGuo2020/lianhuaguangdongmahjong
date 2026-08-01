@@ -12,6 +12,44 @@ body {
 }
 button { font: inherit; }
 
+.orientation-gate {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(38, 117, 82, .34), transparent 38%),
+    #030706;
+  text-align: center;
+}
+
+.orientation-card {
+  width: min(360px, 100%);
+  padding: 30px 24px 26px;
+  border: 1px solid rgba(222, 190, 117, .38);
+  border-radius: 16px;
+  background: rgba(10, 35, 27, .94);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, .48), inset 0 0 35px rgba(255, 214, 121, .04);
+}
+
+.orientation-card .eyebrow { margin: 18px 0 5px; color: #b99c62; font-size: 10px; letter-spacing: .28em; }
+.orientation-card h2 { margin: 0; color: #f7dda0; font: 700 28px Georgia, "Microsoft YaHei", serif; }
+.orientation-card > p:not(.eyebrow) { margin: 12px auto 20px; color: #c8c3b3; font-size: 14px; line-height: 1.7; }
+.orientation-card button { width: 100%; padding: 12px 16px; border: 1px solid #d1ad61; border-radius: 999px; color: #142019; background: linear-gradient(180deg, #f2d589, #bd9143); font-weight: 700; cursor: pointer; }
+.orientation-card small { display: block; margin-top: 13px; color: #e2b66c; line-height: 1.5; }
+
+.phone-rotate-icon { position: relative; width: 78px; height: 52px; margin: 2px auto 0; border: 3px solid #e7cc8b; border-radius: 10px; animation: phone-rotate 1.8s ease-in-out infinite; }
+.phone-rotate-icon::before { content: ""; position: absolute; top: 50%; left: 5px; width: 4px; height: 4px; border-radius: 50%; background: #e7cc8b; transform: translateY(-50%); }
+.phone-rotate-icon span { position: absolute; top: -14px; right: -17px; width: 25px; height: 25px; border-top: 2px solid #b99c62; border-right: 2px solid #b99c62; border-radius: 50%; }
+.phone-rotate-icon span::after { content: ""; position: absolute; right: -3px; bottom: 1px; border: 4px solid transparent; border-top-color: #b99c62; transform: rotate(-35deg); }
+
+@keyframes phone-rotate {
+  0%, 28% { transform: rotate(90deg); }
+  58%, 100% { transform: rotate(0); }
+}
+
 .game-app {
   position: absolute;
   top: 50%;
@@ -289,6 +327,8 @@ button { font: inherit; }
 }
 .turn-timer { position: absolute; z-index: 31; right: 10%; bottom: 114px; display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid rgba(231,190,82,.78); border-radius: 18px; background: rgba(9,25,18,.9); color: #ffe078; box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px rgba(230,184,66,.18); text-shadow: 0 2px 5px #000; }
 .turn-timer span { font: 800 clamp(34px, 3.2vw, 50px) Georgia, serif; line-height: .9; }.turn-timer small { font-size: clamp(13px, 1vw, 17px); font-weight: 700; }
+.turn-timer.prompt-timer { border-color: rgba(238, 181, 90, .72); box-shadow: 0 0 18px rgba(213, 148, 52, .24); }
+.turn-timer.prompt-timer small { white-space: nowrap; }
 
 .action-bar { position: absolute; z-index: 45; right: 11%; bottom: clamp(116px, 17vh, 164px); display: flex; gap: 9px; align-items: center; }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid #ae8840; border-radius: 50%; background: radial-gradient(circle at 42% 33%, #806433, #2e2519 69%, #0f0d0a); color: #f5df9c; box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
