@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
-import { addedKongTileOffset } from '../game/tableLayout'
+import { addedKongTileOffset, pointFromSeat } from '../game/tableLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
 
 const props = defineProps({
@@ -19,6 +19,7 @@ const props = defineProps({
   dealAnimation: { type: Object, default: () => ({ playerIndex: -1, count: 0, serial: 0 }) },
   openingStage: { type: String, default: null },
   diceValues: { type: Array, default: () => [1, 1] },
+  dealerIndex: { type: Number, default: 0 },
 })
 
 const canvas = ref(null)
@@ -134,8 +135,13 @@ function animateDice(time) {
   const travel = 1 - (1 - progress) ** 2
   diceGroup.children.forEach((die, index) => {
     const side = index === 0 ? -1 : 1
-    die.position.x = side * (.58 + .22 * travel)
-    die.position.z = 5.2 - 4.1 * travel + side * .12
+    const throwPoint = pointFromSeat(
+      props.dealerIndex,
+      side * (.58 + .22 * travel),
+      5.2 - 4.1 * travel + side * .12,
+    )
+    die.position.x = throwPoint.x
+    die.position.z = throwPoint.z
     const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
     const bounceProgress = Math.max(0, (progress - .82) / .18)
     const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0

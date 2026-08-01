@@ -143,6 +143,7 @@ const displayedUserHand = computed(() => {
             :deal-animation="dealAnimation"
             :opening-stage="openingStage"
             :dice-values="diceValues"
+            :dealer-index="dealer"
           />
           <PlayerSeat
             v-for="(player, index) in players.slice(1)"
