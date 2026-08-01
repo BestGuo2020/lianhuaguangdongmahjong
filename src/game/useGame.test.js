@@ -1,6 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useGame } from './useGame'
 
+describe('opening deal sound', () => {
+  it('plays once per four-tile batch and skips single-tile batches', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', {
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
+      setInterval: globalThis.setInterval,
+      clearInterval: globalThis.clearInterval,
+    })
+    const playSound = vi.fn()
+    const playSoundAndWait = vi.fn(async () => {})
+    const game = useGame({ playSound, playSoundAndWait })
+
+    const startPromise = game.startGame('east')
+    await vi.advanceTimersByTimeAsync(7000)
+    await startPromise
+
+    const dealCalls = playSound.mock.calls.filter(([name]) => name === 'deal.mp3')
+    expect(dealCalls).toHaveLength(12)
+    expect(dealCalls.every(([, volume]) => volume === 0.72)).toBe(true)
+    expect(playSoundAndWait).not.toHaveBeenCalledWith('deal.mp3', expect.anything())
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+})
+
 function player(hand = []) {
   return {
     name: '测试玩家',

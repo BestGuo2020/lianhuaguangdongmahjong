@@ -240,9 +240,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (sequence !== openingSequence) return
 
     openingStage.value = 'deal'
-    const dealSoundDone = playSoundAndWait('deal.mp3', 0.72)
     const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
     const dealBatch = async (playerIndex, count) => {
+      if (count === 4) playSound('deal.mp3', 0.72)
       for (let tileIndex = 0; tileIndex < count; tileIndex += 1) dealOne(players[playerIndex])
       dealAnimation.value = {
         playerIndex,
@@ -262,9 +262,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       await dealBatch(playerIndex, 1)
       if (sequence !== openingSequence) return
     }
-    await dealSoundDone
-    if (sequence !== openingSequence) return
-
     phase.value = 'opening'
     openingStage.value = null
     dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
