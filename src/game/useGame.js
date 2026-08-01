@@ -1,6 +1,14 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
+import {
+  prefersReducedMotion,
+  REDUCED_WIN_EFFECT_DURATION,
+  REDUCED_WIN_REVEAL_DURATION,
+  WIN_EFFECT_DURATION,
+  WIN_EFFECT_SOUND_DELAY,
+  WIN_REVEAL_DURATION,
+} from './winEffect'
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const PLAYER_SEED = [
@@ -36,6 +44,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const pendingKong = ref(null)
   const announcement = ref(null)
   const result = ref(null)
+  const winEffect = ref(null)
+  const winPresentation = ref(null)
+  const revealHands = ref(false)
+  const winningPlayerIndex = ref(-1)
   const round = ref(1)
   const dealer = ref(0)
   const matchType = ref('east')
@@ -204,6 +216,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     resetPlayers()
     wall.value = shuffle(createWall())
     result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
     actionPrompt.value = null
     pendingKong.value = null
     userDrewThisTurn.value = false
@@ -501,7 +517,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       if (nextRobber !== undefined) {
         pendingKong.value = null
         announce(`${players[nextRobber].name} 抢杠胡`, 'red')
-        return later(() => endGame(nextRobber, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex }), 450)
+        return later(() => endGame(nextRobber, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), 450)
       }
       pendingKong.value = null
       return settleAddedKong(kong.playerIndex)
@@ -618,7 +634,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
     announce(`${players[robberIndex].name} 抢杠胡`, 'red')
     pendingKong.value = null
-    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex }), 450)
+    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), 450)
   }
 
   function userGang(tile = userKongs.value[0]) {
@@ -639,22 +655,59 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       return endGame(0, {
         robbedKong: true,
         robbedKongPlayerIndex: kongPlayerIndex,
+        winTile: actionPrompt.value?.tile,
       })
     }
     if (userCanHu.value) endGame(0)
   }
 
   function endGame(winnerIndex, options = {}) {
+    if (['win-effect', 'revealing', 'settled', 'finished'].includes(phase.value)) return
     clearTimers()
-    phase.value = 'settled'
+    phase.value = 'win-effect'
     openingStage.value = null
     currentPlayer.value = -1
     userDrewThisTurn.value = false
     actionPrompt.value = null
     pendingKong.value = null
     const winner = players[winnerIndex]
-    const scoresBefore = players.map((player) => player.score)
+    winningPlayerIndex.value = winnerIndex
+    const winTile = options.winTile
+      ?? winner.hand[winner.drawnTileIndex]
+      ?? winner.hand[winner.hand.length - 1]
+    const sourceIndex = options.robbedKong
+      ? -1
+      : (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
+    winPresentation.value = {
+      winnerIndex,
+      tile: winTile,
+      sourceIndex,
+      robbedKong: Boolean(options.robbedKong),
+    }
+    const reducedMotion = prefersReducedMotion()
+    const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
+    const revealDuration = reducedMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
+    winEffect.value = {
+      winnerIndex,
+      tile: winTile,
+      duration: effectDuration,
+      reducedMotion,
+      id: Date.now(),
+    }
     playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+    if (!reducedMotion) later(() => playSound('hu_effect_sound.mp3', 0.72), WIN_EFFECT_SOUND_DELAY)
+    announcement.value = null
+    later(() => {
+      winEffect.value = null
+      revealHands.value = true
+      phase.value = 'revealing'
+      later(() => finalizeWin(winnerIndex, options), revealDuration)
+    }, effectDuration)
+  }
+
+  function finalizeWin(winnerIndex, options) {
+    const winner = players[winnerIndex]
+    const scoresBefore = players.map((player) => player.score)
     const { horses, hits } = drawHorses(wall.value, 8)
     const score = scoreHand({
       dealer: winnerIndex === dealer.value,
@@ -670,7 +723,37 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       options.robbedKong ? options.robbedKongPlayerIndex : null,
     )
     result.value = makeRoundResult({ winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }, scoresBefore)
-    announcement.value = null
+    phase.value = 'settled'
+  }
+
+  function debugPreviewWin(winnerIndex = 0, { robbedKong = false } = {}) {
+    if (!import.meta.env.DEV) return
+    clearTimers()
+    if (players.length !== 4) resetPlayers()
+    const baseHand = ['m1', 'm1', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east']
+    players.forEach((player, index) => {
+      const hand = [...baseHand]
+      if (index === winnerIndex && !robbedKong) hand.push('east')
+      player.hand.splice(0, player.hand.length, ...hand)
+      player.discards.splice(0)
+      player.melds.splice(0)
+      player.score = 1000
+      player.drawnTileIndex = index === winnerIndex && !robbedKong ? hand.length - 1 : -1
+    })
+    wall.value = shuffle(createWall())
+    lastDiscard.value = null
+    result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
+    matchFinished.value = false
+    phase.value = 'discard'
+    endGame(winnerIndex, {
+      robbedKong,
+      robbedKongPlayerIndex: robbedKong ? (winnerIndex + 3) % 4 : null,
+      winTile: 'east',
+    })
   }
 
   function endDraw() {
@@ -680,6 +763,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     currentPlayer.value = -1
     userDrewThisTurn.value = false
     actionPrompt.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = true
+    winningPlayerIndex.value = -1
     const scoresBefore = players.map((player) => player.score)
     result.value = makeRoundResult({ draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }, scoresBefore)
   }
@@ -730,6 +817,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     clearTimers()
     phase.value = 'lobby'
     result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
     matchFinished.value = false
     players.splice(0, players.length)
   }
@@ -738,10 +829,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   return {
     phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-    actionPrompt, announcement, result, round, dealer, user, isUserTurn, userCanHu,
+    actionPrompt, announcement, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+    round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
-    userGang, userHu, nextRound, returnToLobby, tileName,
+    userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
   }
 }

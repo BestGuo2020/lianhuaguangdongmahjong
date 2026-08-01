@@ -7,12 +7,15 @@ import RulesPanel from './components/RulesPanel.vue'
 import { isHorse } from './game/tiles'
 import { useGame } from './game/useGame'
 import { useAudio } from './game/useAudio'
+import { splitWinningTile } from './game/winEffect'
 
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref('east')
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const waitsOpen = ref(false)
+const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
+const winEffectLabSeats = ['本家', '下家', '对家', '上家']
 const requiresLandscape = ref(false)
 const orientationMessage = ref('')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
@@ -59,10 +62,11 @@ onUnmounted(() => {
 
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-  actionPrompt, announcement, result, round, dealer, user, isUserTurn, userCanHu,
+  actionPrompt, announcement, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+  round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, nextRound, returnToLobby,
+  userGang, userHu, nextRound, returnToLobby, debugPreviewWin,
 } = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
 function startGameWithAudio() {
@@ -85,6 +89,10 @@ watch(isUserTurn, (value) => {
 })
 
 const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value ? userCurrentWaits.value : null))
+const displayedUserHand = computed(() => {
+  if (winPresentation.value?.winnerIndex !== 0) return user.value.hand
+  return splitWinningTile(user.value.hand, winPresentation.value).hand
+})
 </script>
 
 <template>
@@ -128,7 +136,10 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
             :current-player="currentPlayer"
             :last-discard="lastDiscard"
             :wall-count="wallCount"
-            :reveal-hands="Boolean(result)"
+            :reveal-hands="revealHands"
+            :winner-index="winningPlayerIndex"
+            :win-effect="winEffect"
+            :win-presentation="winPresentation"
             :deal-animation="dealAnimation"
             :opening-stage="openingStage"
             :dice-values="diceValues"
@@ -164,9 +175,9 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
               <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
               <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
-            <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
+            <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length, 'reveal-opponent': revealHands && winningPlayerIndex !== 0 }">
               <MahjongTile
-                v-for="(tile, index) in user.hand"
+                v-for="(tile, index) in displayedUserHand"
                 :key="`${tile}-${index}`"
                 :tile="tile"
                 :selected="selectedIndex === index"
@@ -289,6 +300,14 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
           </div>
         </Transition>
         <button v-if="result && !resultVisible && !matchFinished" class="result-reopen" @click="resultVisible = true">查看结算</button>
+        <aside v-if="winEffectLab" class="win-effect-lab" aria-label="胡牌特效测试面板">
+          <strong>胡牌特效测试</strong>
+          <div v-for="(seat, index) in winEffectLabSeats" :key="seat">
+            <span>{{ seat }}</span>
+            <button :data-testid="`win-self-${index}`" @click="debugPreviewWin(index)">自摸</button>
+            <button :data-testid="`win-rob-${index}`" @click="debugPreviewWin(index, { robbedKong: true })">抢杠胡</button>
+          </div>
+        </aside>
       </div>
     </div>
     <RulesPanel :open="rulesOpen" @close="rulesOpen = false" />

@@ -5,6 +5,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
 import { addedKongTileOffset } from '../game/tableLayout'
+import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
 
 const props = defineProps({
   players: { type: Array, default: () => [] },
@@ -12,6 +13,9 @@ const props = defineProps({
   lastDiscard: { type: Object, default: null },
   wallCount: { type: Number, default: 0 },
   revealHands: Boolean,
+  winnerIndex: { type: Number, default: -1 },
+  winEffect: { type: Object, default: null },
+  winPresentation: { type: Object, default: null },
   dealAnimation: { type: Object, default: () => ({ playerIndex: -1, count: 0, serial: 0 }) },
   openingStage: { type: String, default: null },
   diceValues: { type: Array, default: () => [1, 1] },
@@ -26,6 +30,8 @@ let animationFrame
 let destroyed = false
 let dynamicGroups = []
 let dealTweens = []
+let revealTweens = []
+let winEffectAnimation = null
 let diceGroup
 let diceStartedAt = 0
 const staticResources = []
@@ -385,6 +391,8 @@ function clearDynamicScene() {
   dynamicGroups.forEach((group) => scene.remove(group))
   dynamicGroups = []
   dealTweens = []
+  revealTweens = []
+  winEffectAnimation = null
   dynamicResources.splice(0).forEach((resource) => resource.dispose?.())
 }
 
@@ -438,14 +446,19 @@ function makeFaceDownTile() {
 function addConcealedHand(group, playerIndex) {
   if (playerIndex === 0) return
   const position = ['bottom', 'right', 'top', 'left'][playerIndex]
-  const total = Math.min(props.players[playerIndex]?.hand.length ?? 0, 14)
+  const rawHand = props.players[playerIndex]?.hand ?? []
+  const presentation = props.winPresentation?.winnerIndex === playerIndex
+    ? props.winPresentation
+    : null
+  const displayedHand = splitWinningTile(rawHand, presentation).hand
+  const total = Math.min(displayedHand.length, 14)
   const gap = .725
   const drawnTileIndex = props.players[playerIndex]?.drawnTileIndex ?? -1
   const layoutDrawnTileIndex = props.revealHands ? -1 : drawnTileIndex
   const drawnGap = .28
   const arrangedTotal = layoutDrawnTileIndex >= 0 ? total - 1 : total
   const melds = props.players[playerIndex]?.melds || []
-  const revealedHand = props.revealHands ? sortTiles(props.players[playerIndex].hand) : []
+  const revealedHand = props.revealHands ? sortTiles(displayedHand) : []
   // 牌面按每位玩家自身视角从左到右排列；副露固定在右手边，因此邻近副露的是字牌。
   const reverseRevealedFaces = position === 'top' || position === 'right' || melds.length > 0
   const exposedSpan = melds.reduce((span, meld, meldIndex) => {
@@ -506,6 +519,18 @@ function addConcealedHand(group, playerIndex) {
         duration: props.dealAnimation.count === 4 ? 230 : 125,
       })
     }
+    if (props.revealHands && playerIndex !== props.winnerIndex) {
+      const targetY = tile.position.y
+      tile.position.y = targetY + .32
+      tile.rotation.x = -Math.PI / 2
+      revealTweens.push({
+        tile,
+        startY: tile.position.y,
+        targetY,
+        startedAt: performance.now() + index * 24,
+        duration: 520,
+      })
+    }
     group.add(tile)
   }
   if (props.currentPlayer === playerIndex) {
@@ -513,6 +538,160 @@ function addConcealedHand(group, playerIndex) {
     if (position === 'top') glow.position.set(0, 1.4, -7.2)
     else glow.position.set(position === 'left' ? -8.6 : 8.6, 1.4, 0)
     group.add(glow)
+  }
+}
+
+function winEffectAnchor(playerIndex) {
+  const layout = winDisplayLayout(playerIndex)
+  return new THREE.Vector3(layout.x, layout.y, layout.z)
+}
+
+function cameraAlignedPoint(point, planeY) {
+  const direction = point.clone().sub(camera.position).normalize()
+  const distance = (planeY - camera.position.y) / direction.y
+  return camera.position.clone().addScaledVector(direction, distance)
+}
+
+function addWinningDisplayTile() {
+  if (!props.revealHands || !props.winPresentation?.tile) return
+  const layout = winDisplayLayout(props.winPresentation.winnerIndex)
+  const group = new THREE.Group()
+  const tile = makeFaceTile(props.winPresentation.tile)
+  tile.position.set(layout.x, layout.y, layout.z + PLAY_AREA_OFFSET_Z)
+  tile.rotation.y = layout.rotation
+  group.add(tile)
+  scene.add(group)
+  dynamicGroups.push(group)
+}
+
+function addWinEffect() {
+  if (!props.winEffect?.tile) return
+  const anchor = winEffectAnchor(props.winEffect.winnerIndex)
+  anchor.z += PLAY_AREA_OFFSET_Z
+  const faceCenter = anchor.clone().setY(anchor.y + .25)
+  const burstAnchor = cameraAlignedPoint(faceCenter, .38)
+  const lightAnchor = cameraAlignedPoint(faceCenter, -.1)
+  const outward = new THREE.Vector3(anchor.x, 0, anchor.z - PLAY_AREA_OFFSET_Z).normalize()
+  const group = new THREE.Group()
+
+  const beamMaterial = ownDynamic(new THREE.MeshBasicMaterial({
+    color: 0xffe59a,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }))
+  const beam = new THREE.Mesh(
+    ownDynamic(new THREE.CylinderGeometry(.055, .18, 8.5, 16, 1, true)),
+    beamMaterial,
+  )
+  beam.position.set(anchor.x, 4.45, anchor.z)
+  beam.rotation.z = outward.x * .07
+  beam.rotation.x = -outward.z * .07
+  beam.scale.y = .04
+  group.add(beam)
+
+  const tangent = new THREE.Vector3(-outward.z, 0, outward.x)
+  const streakStarts = [
+    burstAnchor.clone().addScaledVector(tangent, 3.4).addScaledVector(outward, -.8).setY(4.8),
+    burstAnchor.clone().addScaledVector(tangent, -3.4).addScaledVector(outward, -.8).setY(4.8),
+    burstAnchor.clone().addScaledVector(outward, -3.2).setY(5.4),
+  ]
+  const streaks = streakStarts.map((start, index) => {
+    const direction = faceCenter.clone().sub(start)
+    const length = direction.length()
+    const material = ownDynamic(beamMaterial.clone())
+    material.opacity = 0
+    const streak = new THREE.Mesh(
+      ownDynamic(new THREE.CylinderGeometry(.018 + index * .008, .055, length, 8, 1, true)),
+      material,
+    )
+    streak.position.copy(start).add(faceCenter).multiplyScalar(.5)
+    streak.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
+    group.add(streak)
+    return streak
+  })
+
+  const ringMaterial = ownDynamic(new THREE.MeshBasicMaterial({
+    color: 0xffd76a,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }))
+  const rings = [0, 1, 2].map((index) => {
+    const ring = new THREE.Mesh(ownDynamic(new THREE.TorusGeometry(.64 + index * .18, .025, 8, 48)), ringMaterial.clone())
+    ownDynamic(ring.material)
+    ring.position.copy(burstAnchor).setY(.38 + index * .025)
+    ring.rotation.x = Math.PI / 2
+    ring.scale.setScalar(.18)
+    group.add(ring)
+    return ring
+  })
+
+  const particleMaterial = ownDynamic(new THREE.MeshBasicMaterial({
+    color: 0xffdf72,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }))
+  const particles = Array.from({ length: 14 }, (_, index) => {
+    const angle = index / 14 * Math.PI * 2 + (index % 3) * .12
+    const particle = new THREE.Mesh(ownDynamic(new THREE.SphereGeometry(.035 + index % 3 * .012, 8, 8)), particleMaterial.clone())
+    ownDynamic(particle.material)
+    particle.scale.set(.7, .18, 1.8)
+    particle.rotation.y = angle
+    particle.position.copy(burstAnchor).setY(.48)
+    group.add(particle)
+    return {
+      mesh: particle,
+      velocity: new THREE.Vector3(Math.cos(angle) * (1.2 + index % 4 * .22), .55 + index % 5 * .17, Math.sin(angle) * (1.2 + index % 3 * .28)),
+    }
+  })
+
+  const winningTile = makeFaceTile(props.winEffect.tile)
+  winningTile.position.copy(anchor).addScaledVector(outward, 1.08)
+  winningTile.position.y = anchor.y
+  winningTile.rotation.y = winDisplayLayout(props.winEffect.winnerIndex).rotation
+  group.add(winningTile)
+
+  const flareCanvas = document.createElement('canvas')
+  flareCanvas.width = 64
+  flareCanvas.height = 64
+  const flareContext = flareCanvas.getContext('2d')
+  const flareGradient = flareContext.createRadialGradient(32, 32, 0, 32, 32, 31)
+  flareGradient.addColorStop(0, 'rgba(255,255,235,1)')
+  flareGradient.addColorStop(.18, 'rgba(255,224,125,.95)')
+  flareGradient.addColorStop(.52, 'rgba(255,188,55,.38)')
+  flareGradient.addColorStop(1, 'rgba(255,170,30,0)')
+  flareContext.fillStyle = flareGradient
+  flareContext.fillRect(0, 0, 64, 64)
+  const flareTexture = ownDynamic(new THREE.CanvasTexture(flareCanvas))
+  flareTexture.colorSpace = THREE.SRGBColorSpace
+  const flareMaterial = ownDynamic(new THREE.SpriteMaterial({
+    map: flareTexture,
+    color: 0xffdf82,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }))
+  const flare = new THREE.Sprite(flareMaterial)
+  flare.position.copy(faceCenter).setY(anchor.y + .58)
+  flare.scale.setScalar(.45)
+  group.add(flare)
+
+  const light = new THREE.PointLight(0xffc447, 0, 5.5, 2)
+  light.position.copy(lightAnchor).setY(1.15)
+  group.add(light)
+  scene.add(group)
+  dynamicGroups.push(group)
+  winEffectAnimation = {
+    startedAt: performance.now(), anchor, burstAnchor, outward, beam, streaks, rings, particles, winningTile, flare, light,
+    seatRotation: winningTile.rotation.y,
+    duration: props.winEffect.duration ?? WIN_EFFECT_DURATION,
+    reducedMotion: Boolean(props.winEffect.reducedMotion),
   }
 }
 
@@ -623,6 +802,8 @@ function rebuildTableTiles() {
     scene.add(group)
     dynamicGroups.push(group)
   }
+  addWinEffect()
+  addWinningDisplayTile()
 }
 
 function resize() {
@@ -637,6 +818,9 @@ function resize() {
 
 function render(time = 0) {
   if (!renderer) return
+  let cameraShakeX = 0
+  let cameraShakeZ = 0
+  let exposure = 1.08
   animateDice(time)
   dealTweens = dealTweens.filter((tween) => {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
@@ -644,7 +828,61 @@ function render(time = 0) {
     tween.tile.position.lerpVectors(tween.origin, tween.target, eased)
     return progress < 1
   })
-  camera.position.x = Math.sin(time * .00035) * .035
+  revealTweens = revealTweens.filter((tween) => {
+    const progress = Math.max(0, Math.min(1, (time - tween.startedAt) / tween.duration))
+    const eased = 1 - (1 - progress) ** 3
+    tween.tile.position.y = THREE.MathUtils.lerp(tween.startY, tween.targetY, eased)
+    tween.tile.rotation.x = THREE.MathUtils.lerp(-Math.PI / 2, 0, eased)
+    return progress < 1
+  })
+  if (winEffectAnimation) {
+    const effect = winEffectAnimation
+    const progress = Math.max(0, Math.min(1, (time - effect.startedAt) / effect.duration))
+    const beamIn = THREE.MathUtils.smoothstep(progress, .1, .2)
+    const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .72, .9)
+    effect.beam.material.opacity = beamIn * beamOut * .52
+    effect.beam.scale.y = THREE.MathUtils.lerp(.04, 1, beamIn)
+    effect.light.intensity = beamIn * beamOut * 4.5
+
+    const burst = THREE.MathUtils.smoothstep(progress, .22, .34)
+    const burstFade = 1 - THREE.MathUtils.smoothstep(progress, .66, .82)
+    effect.flare.material.opacity = burst * burstFade * .92
+    effect.flare.scale.setScalar(THREE.MathUtils.lerp(.35, .82, burst) * (1 - burst * .12))
+    effect.streaks.forEach((streak, index) => {
+      streak.material.opacity = burst * burstFade * (.42 - index * .06)
+      streak.scale.x = streak.scale.z = THREE.MathUtils.lerp(.35, 1.25, burst)
+    })
+    effect.rings.forEach((ring, index) => {
+      ring.material.opacity = burst * burstFade * (.9 - index * .2)
+      ring.scale.setScalar(THREE.MathUtils.lerp(.18, 1.65 + index * .24, burst))
+      ring.rotation.z = progress * (index ? -4.2 : 5.1)
+    })
+    effect.particles.forEach(({ mesh, velocity }, index) => {
+      const particleProgress = Math.max(0, Math.min(1, (progress - .28 - index * .003) / .38))
+      mesh.material.opacity = Math.sin(particleProgress * Math.PI) * .95
+      mesh.position.copy(effect.burstAnchor).addScaledVector(velocity, particleProgress)
+      mesh.position.y += Math.sin(particleProgress * Math.PI) * .3
+    })
+
+    const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .34)
+    const travel = THREE.MathUtils.lerp(1.08, 0, approach)
+    effect.winningTile.position.copy(effect.anchor).addScaledVector(effect.outward, travel)
+    effect.winningTile.position.y = effect.anchor.y
+    effect.winningTile.rotation.set(0, effect.seatRotation, 0)
+    effect.winningTile.scale.setScalar(1)
+
+    const impactProgress = Math.max(0, Math.min(1, (progress - .22) / .22))
+    const impact = Math.sin(impactProgress * Math.PI) * (1 - THREE.MathUtils.smoothstep(progress, .44, .58))
+    const dim = .74 + THREE.MathUtils.smoothstep(progress, .66, .94) * .34
+    exposure = dim + impact * .72
+    if (!effect.reducedMotion) {
+      cameraShakeX = Math.sin(time * .075) * impact * .075
+      cameraShakeZ = Math.cos(time * .061) * impact * .055
+    }
+  }
+  renderer.toneMappingExposure = exposure
+  camera.position.x = Math.sin(time * .00035) * .035 + cameraShakeX
+  camera.position.z = 11.8 + cameraShakeZ
   camera.lookAt(0, 0, -.25)
   renderer.render(scene, camera)
   animationFrame = requestAnimationFrame(render)
@@ -706,6 +944,11 @@ watch(
     props.lastDiscard?.id,
     props.wallCount,
     props.revealHands,
+    props.winnerIndex,
+    props.winEffect?.id,
+    props.winPresentation?.winnerIndex,
+    props.winPresentation?.tile,
+    props.winPresentation?.robbedKong,
     props.dealAnimation.serial,
   ),
   rebuildTableTiles,

@@ -303,6 +303,8 @@ button { font: inherit; }
 .announcement { position: absolute; z-index: 40; top: 34%; left: 50%; transform: translate(-50%, -50%); padding: 4px 37px; background: linear-gradient(90deg, transparent, rgba(10,11,8,.86) 20%, rgba(10,11,8,.86) 80%, transparent); pointer-events: none; }
 .announcement span { display: block; min-width: 140px; color: #f3d47c; font: 900 clamp(20px, 2.7vw, 40px) "Noto Serif SC", serif; letter-spacing: .12em; text-align: center; text-shadow: 0 2px 4px #000, 0 0 14px rgba(240,188,67,.45); }
 .announcement.red span { color: #ffdb91; text-shadow: 0 2px 4px #000, 0 0 14px #b82429; }
+.hand-rack.reveal-opponent .mahjong-tile { animation: user-hand-fall .52s cubic-bezier(.2,.8,.2,1) both; transform-origin: 50% 100%; }
+.win-burst-leave-active { transition: opacity .22s, filter .22s; }.win-burst-leave-to { opacity: 0; filter: brightness(2) blur(5px); }
 .opening-overlay { position: absolute; z-index: 42; top: 43%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; }
 .start-cue { display: grid; place-items: center; min-width: 330px; padding: 22px 55px 25px; background: radial-gradient(ellipse, rgba(8,20,14,.94), rgba(8,14,11,.72) 58%, transparent 72%); text-align: center; }
 .start-cue span { color: #c7aa67; font: 700 15px "Noto Serif SC", serif; letter-spacing: .48em; text-indent: .48em; }
@@ -415,6 +417,10 @@ button { font: inherit; }
 .result-actions button { min-width: 170px; padding: 13px 20px; border: 1px solid #d3aa57; border-radius: 5px; background: #b88b3e; color: #122019; font-size: clamp(16px, 1.25vw, 20px); font-weight: 800; cursor: pointer; }
 .result-actions button.secondary { border-color: rgba(213,184,112,.5); background: rgba(8,28,20,.88); color: #e5d5ad; }
 .result-reopen { position: absolute; z-index: 92; right: 4%; bottom: 5%; padding: 12px 22px; border: 2px solid #d0a64d; border-radius: 24px; background: rgba(7,25,18,.92); color: #f3d27c; font-size: clamp(15px, 1.2vw, 19px); font-weight: 800; box-shadow: 0 7px 22px rgba(0,0,0,.55); cursor: pointer; }
+.win-effect-lab { position: fixed; z-index: 150; top: 12px; left: 12px; display: grid; gap: 5px; width: 230px; padding: 10px; border: 1px solid #bd974c; border-radius: 7px; background: rgba(4,16,12,.94); color: #f3dfad; font-size: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.win-effect-lab > strong { margin-bottom: 3px; text-align: center; }
+.win-effect-lab > div { display: grid; grid-template-columns: 42px 1fr 1fr; align-items: center; gap: 5px; }
+.win-effect-lab button { padding: 4px 5px; border: 1px solid rgba(214,178,91,.5); border-radius: 4px; background: #17372c; color: #f4dfac; cursor: pointer; }
 
 .round-settlement { background: radial-gradient(circle at 50% 45%, rgba(28,63,92,.3), transparent 55%), rgba(1,5,10,.82); }
 .settlement-card { width: min(760px, 94%); max-height: 94%; padding-top: 31px; overflow: hidden auto; }
@@ -455,6 +461,7 @@ button { font: inherit; }
 @keyframes discard-from-bottom { from { opacity: .2; transform: translate(-50%, 520%) scale(.72) rotateX(-18deg); } to { opacity: 1; transform: translate(-50%, 60%) scale(1); } }
 @keyframes discard-from-left { from { opacity: .2; transform: translate(-430%, -50%) rotate(90deg) scale(.72); } to { opacity: 1; transform: translate(-180%, -50%) rotate(90deg) scale(1); } }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
+@keyframes user-hand-fall { from { transform: perspective(300px) rotateX(-38deg) translateY(-7px); } to { transform: perspective(300px) rotateX(0) translateY(0); } }
 @keyframes opening-cue-in { from { opacity: 0; transform: translate(-50%, -44%) scale(.82); filter: blur(5px); } }
 @keyframes result-in { from { transform: translateY(18px) scale(.94); opacity: 0; } }
 @keyframes ranking-slide { from { opacity: 0; transform: translateX(45px) scale(.97); } }
