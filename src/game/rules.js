@@ -2,7 +2,7 @@ import { TILE_TYPES, isHorse } from './tiles'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
 const WINNING_DRAW_TILES = [...STANDARD_TILES, 'white']
-export const BASE_SCORE = 10
+export const BASE_SCORE = 100
 
 export function applyKongScore(players, kongPlayerIndex, type, fromIndex = null) {
   const payers = type === 'discard'

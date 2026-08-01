@@ -5,6 +5,7 @@ import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
 import RulesPanel from './components/RulesPanel.vue'
 import { isHorse } from './game/tiles'
+import { BASE_SCORE } from './game/rules'
 import { useGame } from './game/useGame'
 import { useAudio } from './game/useAudio'
 import { splitWinningTile } from './game/winEffect'
@@ -110,7 +111,7 @@ const displayedUserHand = computed(() => {
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">
         <header class="top-bar">
-          <div class="brand-mini"><span>莲花广麻</span></div>
+          <div class="brand-mini"><span v-if="!players.length">莲花广麻</span></div>
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
           <nav>
             <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
@@ -121,7 +122,6 @@ const displayedUserHand = computed(() => {
             </button>
           </nav>
         </header>
-
         <div class="table-depth" aria-hidden="true">
           <i class="table-edge edge-top"></i>
           <i class="table-edge edge-right"></i>
@@ -310,6 +310,7 @@ const displayedUserHand = computed(() => {
           </div>
         </aside>
       </div>
+      <div v-if="players.length" class="base-score-badge">底分{{ BASE_SCORE }}分</div>
     </div>
     <RulesPanel :open="rulesOpen" @close="rulesOpen = false" />
   </main>

@@ -1,4 +1,6 @@
 <script setup>
+import { BASE_SCORE } from '../game/rules'
+
 defineProps({ open: Boolean })
 defineEmits(['close'])
 
@@ -28,7 +30,7 @@ const rules = [
           <div><h3>{{ rule[0] }}</h3><p>{{ rule[1] }}</p></div>
         </article>
       </div>
-      <div class="rule-note">基础分 10 分 · 总分 = 底分 × 倍数 + 中马数 × 底分</div>
+      <div class="rule-note">基础分 {{ BASE_SCORE }} 分 · 总分 = 底分 × 倍数 + 中马数 × 底分</div>
     </aside>
   </Transition>
 </template>

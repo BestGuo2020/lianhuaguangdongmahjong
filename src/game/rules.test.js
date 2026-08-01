@@ -77,8 +77,8 @@ describe('买马与计分', () => {
   it('倍数累乘后，中马按张数乘底分加算', () => {
     const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
     expect(score.multiplier).toBe(16)
-    expect(score.horsePoints).toBe(20)
-    expect(score.points).toBe(180)
+    expect(score.horsePoints).toBe(200)
+    expect(score.points).toBe(1800)
   })
 })
 
@@ -88,19 +88,19 @@ describe('开杠与抢杠计分', () => {
   it('暗杠由其余三家各支付底分两倍', () => {
     const players = scores()
     applyKongScore(players, 0, 'concealed')
-    expect(players.map((player) => player.score)).toEqual([1060, 980, 980, 980])
+    expect(players.map((player) => player.score)).toEqual([1600, 800, 800, 800])
   })
 
   it('明杠只由被杠者支付底分', () => {
     const players = scores()
     applyKongScore(players, 0, 'discard', 2)
-    expect(players.map((player) => player.score)).toEqual([1010, 1000, 990, 1000])
+    expect(players.map((player) => player.score)).toEqual([1100, 1000, 900, 1000])
   })
 
   it('补杠由其余三家各支付底分', () => {
     const players = scores()
     applyKongScore(players, 0, 'added')
-    expect(players.map((player) => player.score)).toEqual([1030, 990, 990, 990])
+    expect(players.map((player) => player.score)).toEqual([1300, 900, 900, 900])
   })
 
   it('抢杠胡只由补杠者支付胡牌分', () => {

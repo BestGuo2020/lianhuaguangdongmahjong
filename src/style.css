@@ -141,6 +141,7 @@ button { font: inherit; }
 
 .brand-mini { display: flex; align-items: center; gap: 8px; color: #d9c491; letter-spacing: .12em; }
 .brand-mini i { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #a9823c; border-radius: 50%; font: 700 14px "Noto Serif SC", serif; font-style: normal; }
+.base-score-badge { position: absolute; z-index: 60; top: 12px; left: 16px; padding: 6px 12px; border: 1px solid rgba(217,180,92,.48); border-radius: 999px; background: rgba(5,18,13,.82); color: #f1cc70; font-size: clamp(12px,1vw,16px); font-weight: 800; letter-spacing: .08em; box-shadow: 0 4px 14px rgba(0,0,0,.34); pointer-events: none; }
 .round-info { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 19px; border: 1px solid rgba(208,183,110,.2); border-radius: 99px; background: rgba(0,0,0,.18); letter-spacing: .12em; }
 .top-bar nav { display: flex; gap: 8px; }
 .top-bar button { width: clamp(34px, 2.8vw, 44px); height: clamp(34px, 2.8vw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25vw, 20px); cursor: pointer; }
