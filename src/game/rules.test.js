@@ -54,6 +54,11 @@ describe('莲花广麻胡牌规则', () => {
     expect(waitingTiles(hand)).toEqual(expect.arrayContaining(['p3', 'p6']))
   })
 
+  it('癞子可补顺子前端，并列出截图手牌的全部听口', () => {
+    const hand = ['m7', 'm7', 'p8', 'p9', 's3', 's3', 'north', 'north', 'white', 'white']
+    expect(waitingTiles(hand, 1)).toEqual(expect.arrayContaining(['m7', 'p7', 's3', 'north', 'white']))
+  })
+
   it('白板作为癞子不能开暗杠', () => {
     expect(concealedKongs(['white', 'white', 'white', 'white', 'm1'])).toEqual([])
     expect(concealedKongs(['m1', 'm1', 'm1', 'm1', 'white'])).toEqual(['m1'])
@@ -69,10 +74,11 @@ describe('买马与计分', () => {
     expect(wall).toEqual(['p7'])
   })
 
-  it('庄家、无癞子、四红中和买马番数累乘', () => {
+  it('倍数累乘后，中马按张数乘底分加算', () => {
     const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
-    expect(score.multiplier).toBe(64)
-    expect(score.points).toBe(640)
+    expect(score.multiplier).toBe(16)
+    expect(score.horsePoints).toBe(20)
+    expect(score.points).toBe(180)
   })
 })
 

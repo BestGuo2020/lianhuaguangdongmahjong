@@ -1,6 +1,7 @@
 import { TILE_TYPES, isHorse } from './tiles'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
+const WINNING_DRAW_TILES = [...STANDARD_TILES, 'white']
 
 function countsFor(tiles) {
   const counts = new Map()
@@ -42,17 +43,22 @@ function canMakeMelds(counts, jokers, needed, memo = new Map()) {
   }
 
   const match = /^([mps])([1-9])$/.exec(tile)
-  if (match && Number(match[2]) <= 7) {
-    const sequence = [tile, `${match[1]}${Number(match[2]) + 1}`, `${match[1]}${Number(match[2]) + 2}`]
-    let missing = 0
-    let next = new Map(counts)
-    sequence.forEach((item) => {
-      if ((next.get(item) || 0) > 0) next = consume(next, item, 1)
-      else missing += 1
-    })
-    if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
-      memo.set(signature, true)
-      return true
+  if (match) {
+    const rank = Number(match[2])
+    const firstRank = Math.max(1, rank - 2)
+    const lastRank = Math.min(7, rank)
+    for (let start = firstRank; start <= lastRank; start += 1) {
+      const sequence = Array.from({ length: 3 }, (_, index) => `${match[1]}${start + index}`)
+      let missing = 0
+      let next = new Map(counts)
+      sequence.forEach((item) => {
+        if ((next.get(item) || 0) > 0) next = consume(next, item, 1)
+        else missing += 1
+      })
+      if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
+        memo.set(signature, true)
+        return true
+      }
     }
   }
 
@@ -80,7 +86,7 @@ export function isWinningHand(tiles, exposedMeldCount = 0) {
 }
 
 export function waitingTiles(tiles, exposedMeldCount = 0) {
-  return STANDARD_TILES.filter((tile) => isWinningHand([...tiles, tile], exposedMeldCount))
+  return WINNING_DRAW_TILES.filter((tile) => isWinningHand([...tiles, tile], exposedMeldCount))
 }
 
 export function matchingCount(tiles, tile) {
@@ -115,10 +121,9 @@ export function scoreHand({ dealer = false, noJoker = false, fourRed = false, ho
   if (dealer) { multiplier *= 2; details.push({ label: '庄家', multiplier: 2 }) }
   if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }
   if (fourRed) { multiplier *= 4; details.push({ label: '四红中', multiplier: 4 }) }
+  const horsePoints = horseHits * 10
   if (horseHits > 0) {
-    const horseMultiplier = 2 ** horseHits
-    multiplier *= horseMultiplier
-    details.push({ label: `中马 ${horseHits} 张`, multiplier: horseMultiplier })
+    details.push({ label: `中马 ${horseHits} 张`, points: horsePoints })
   }
-  return { multiplier, points: multiplier * 10, details }
+  return { multiplier, horsePoints, points: multiplier * 10 + horsePoints, details }
 }

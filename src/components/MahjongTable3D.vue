@@ -390,8 +390,15 @@ function addConcealedHand(group, playerIndex) {
   const revealedHand = props.revealHands ? sortTiles(props.players[playerIndex].hand) : []
   // 牌面按每位玩家自身视角从左到右排列；副露固定在右手边，因此邻近副露的是字牌。
   const reverseRevealedFaces = position === 'top' || position === 'right' || melds.length > 0
-  const exposedTiles = melds.reduce((count, meld) => count + (meld.added ? 3 : meld.tiles.length), 0)
-  const exposedSpan = exposedTiles * gap + Math.max(0, melds.length - 1) * .18
+  const exposedSpan = melds.reduce((span, meld, meldIndex) => {
+    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
+    const meldSpan = laidTiles.reduce(
+      (width, _, tileIndex) => width + (tileIndex === sourceTileIndex ? 1.025 : gap),
+      0,
+    )
+    return span + meldSpan + (meldIndex > 0 ? .18 : 0)
+  }, 0)
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
     const tile = props.revealHands

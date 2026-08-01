@@ -230,7 +230,9 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
               <h2>{{ result.winner }}</h2>
               <div v-if="!result.draw" class="score-total"><span>总倍数</span><strong>×{{ result.multiplier }}</strong><em>+{{ result.points * 3 }} 分</em></div>
               <div v-if="result.details?.length" class="score-details">
-                <span v-for="detail in result.details" :key="detail.label">{{ detail.label }} <b>×{{ detail.multiplier }}</b></span>
+                <span v-for="detail in result.details" :key="detail.label">
+                  {{ detail.label }} <b>{{ detail.points != null ? `+${detail.points} 分` : `×${detail.multiplier}` }}</b>
+                </span>
               </div>
               <div v-if="result.horses?.length" class="horse-area">
                 <div>
