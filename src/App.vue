@@ -102,8 +102,8 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
           <section class="user-area">
             <div class="user-identity" :class="{ active: currentPlayer === 0 }">
               <span v-if="dealer === 0" class="dealer-badge">庄</span>
-              <div class="avatar">莲</div>
-              <div><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
+              <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
+              <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
             <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
               <MahjongTile

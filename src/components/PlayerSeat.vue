@@ -15,7 +15,7 @@ defineProps({
   <section class="player-seat" :class="[`seat-${position}`, { active }]">
     <div class="avatar-wrap">
       <span v-if="dealer" class="dealer-badge">庄</span>
-      <div class="avatar">{{ player.avatar }}</div>
+      <img class="avatar" :src="player.avatar" :alt="`${player.name}头像`" />
       <div class="player-info">
         <strong>{{ player.name }}</strong>
         <span>{{ player.score }}</span>

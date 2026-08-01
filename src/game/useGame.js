@@ -2,11 +2,12 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 
+const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const PLAYER_SEED = [
-  { name: '莲花', avatar: '莲', score: 1000 },
-  { name: '南粤阿乐', avatar: '乐', score: 1000 },
-  { name: '西关十三姨', avatar: '姨', score: 1000 },
-  { name: '东山少爷', avatar: '少', score: 1000 },
+  { name: '莲花', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
+  { name: '南粤阿乐', avatar: `${AVATAR_BASE}ah-lok.svg`, score: 1000 },
+  { name: '西关十三姨', avatar: `${AVATAR_BASE}shisan.svg`, score: 1000 },
+  { name: '东山少爷', avatar: `${AVATAR_BASE}young-master.svg`, score: 1000 },
 ]
 
 export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} } = {}) {

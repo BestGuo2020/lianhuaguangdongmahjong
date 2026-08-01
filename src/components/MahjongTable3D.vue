@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
+import { addedKongTileOffset } from '../game/tableLayout'
 
 const props = defineProps({
   players: { type: Array, default: () => [] },
@@ -536,7 +537,13 @@ function addMelds(group, playerIndex) {
     })
     if (meld.added && sourcePlacement) {
       const addedTile = makeFaceTile(meld.tile)
-      addedTile.position.set(sourcePlacement.x, .75, sourcePlacement.z)
+      // 补杠牌与原横牌同样横摆，平放在它靠牌桌中心的一侧，形成 T/L 形。
+      const addedOffset = addedKongTileOffset(playerIndex)
+      addedTile.position.set(
+        sourcePlacement.x + addedOffset.x,
+        .28,
+        sourcePlacement.z + addedOffset.z,
+      )
       addedTile.rotation.y = sourcePlacement.rotation
       group.add(addedTile)
     }

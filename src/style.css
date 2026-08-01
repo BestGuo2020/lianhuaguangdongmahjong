@@ -511,7 +511,12 @@ button { font: inherit; }
 .felt-table.has-three-scene::before,
 .felt-table.has-three-scene::after { opacity: 0; }
 .felt-table.has-three-scene .table-depth { opacity: 0; }
-.has-three-scene .seat-top { top: 4.5%; }
+.has-three-scene .seat-top {
+  top: 7.5%;
+  right: auto;
+  left: calc(50% + clamp(220px, 22vw, 420px));
+  transform: translateX(-50%);
+}
 .has-three-scene .seat-left { top: 35%; left: 2.7%; }
 .has-three-scene .seat-right { top: 35%; right: 2.7%; }
 .has-three-scene .seat-top .avatar-wrap { width: clamp(180px, 16vw, 245px); }
@@ -526,6 +531,42 @@ button { font: inherit; }
 .has-three-scene .discard-left { top: 35%; left: 34%; }
 .has-three-scene .discard-right { top: 35%; right: 34%; }
 .has-three-scene .last-discard { top: 45%; }
+
+/* 玩家信息统一为头像、昵称、积分的竖向卡片。 */
+.avatar-wrap,
+.user-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: clamp(76px, 7vw, 104px);
+  min-width: 0;
+  padding: 6px 7px 7px;
+  border: 1px solid rgba(214, 179, 88, .44);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(8, 20, 16, .94), rgba(5, 13, 10, .82));
+  box-shadow: 0 7px 20px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.035);
+  text-align: center;
+}
+.seat-top .avatar-wrap,
+.has-three-scene .seat-top .avatar-wrap { width: clamp(76px, 7vw, 104px); }
+.avatar-wrap .avatar,
+.user-identity .avatar {
+  display: block;
+  width: clamp(52px, 5.1vw, 76px);
+  height: clamp(52px, 5.1vw, 76px);
+  border: 2px solid #d4aa58;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #263c31;
+  box-shadow: 0 0 0 2px rgba(23,13,5,.75), 0 4px 10px rgba(0,0,0,.48);
+}
+.player-info { width: 100%; align-items: center; gap: 0; line-height: 1.25; }
+.player-info strong { max-width: 100%; font-size: clamp(12px, 1vw, 16px); }
+.player-info span { font-size: clamp(12px, .95vw, 15px); }
+.avatar-wrap .turn-dot,
+.user-identity.active::after { right: auto; bottom: -5px; left: 50%; transform: translateX(-50%); }
+.user-identity.active::after { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #f4c45b; box-shadow: 0 0 9px #ffd569; animation: pulse 1s infinite; }
 
 @media (max-height: 620px) {
   .top-bar { height: 34px; padding: 0 10px; font-size: 12px; }
@@ -544,7 +585,7 @@ button { font: inherit; }
   .hand-rack .mahjong-tile { --tile-width: clamp(32px, 4.25vw, 38px); }
   .hand-rack .mahjong-tile.drawn { margin-left: 8px; }
   .user-melds { bottom: 75px; }
-  .user-identity { left: -2%; bottom: 14px; min-width: 132px; padding: 5px 9px 5px 5px; transform: scale(.76); transform-origin: left bottom; }
+  .user-identity { left: -2%; bottom: 14px; width: 72px; min-width: 0; padding: 4px; transform: scale(.76); transform-origin: left bottom; }
   .user-identity .avatar { width: 42px; height: 42px; font-size: 18px; }
   .user-identity strong { font-size: 14px; }
   .user-identity span { font-size: 13px; }
@@ -581,12 +622,13 @@ button { font: inherit; }
   .felt-table { border-radius: 4px; }
   .top-bar { height: 41px; }.brand-mini span { display: none; }
   .seat-left { left: 7px; }.seat-right { right: 7px; }
-  .seat-left .avatar-wrap, .seat-right .avatar-wrap { min-width: 105px; padding-right: 7px; }
+  .has-three-scene .seat-top { right: 2%; left: auto; transform: none; }
+  .seat-left .avatar-wrap, .seat-right .avatar-wrap { width: 68px; min-width: 0; padding: 4px; }
   .seat-left .player-info, .seat-right .player-info { display: flex; }
   .discard-left { left: 20%; }.discard-right { right: 20%; }
   .table-machine { top: 45%; }
   .discard-top { top: 25%; }.discard-bottom { bottom: 28%; }
-  .user-area { right: 1%; left: 1%; }.user-identity { left: 1%; bottom: 96px; min-width: 128px; padding-right: 9px; }.user-identity > div:last-child { display: flex; }
+  .user-area { right: 1%; left: 1%; }.user-identity { left: 1%; bottom: 96px; width: 68px; min-width: 0; padding: 4px; }.user-identity > div:last-child { display: flex; }
   .mahjong-tile { --tile-width: min(6.6vw, 38px); }.mahjong-tile.small { --tile-width: min(4.7vw, 25px); }
   .hand-rack { gap: 0; padding-right: 2px; padding-left: 2px; }
   .action-bar { right: 3%; bottom: 113px; }.action { min-width: 50px; height: 46px; padding: 4px 9px; }.action b { font-size: 15px; }

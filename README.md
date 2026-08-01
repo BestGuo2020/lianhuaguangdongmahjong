@@ -27,3 +27,7 @@ npm test
 - 胡后摸 8 张马牌，每张 1、5、9 或红中加 1 番
 
 点击手牌进行选择，再次点击同一张牌即可快速打出；也可使用右侧“出牌”按钮。超时后会自动托管出牌。
+
+## 示例头像
+
+测试头像由 [DiceBear Adventurer](https://www.dicebear.com/styles/adventurer/) 生成，原始设计作者为 Lisa Wischofsky，采用 CC BY 4.0 许可。
