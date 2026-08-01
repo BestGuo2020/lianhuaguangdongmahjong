@@ -39,6 +39,7 @@ const dynamicResources = []
 const faceMaterials = new Map()
 const PLAY_AREA_OFFSET_Z = -.5
 const DICE_SIZE = .5
+const DICE_LANDING_Y = .62
 
 function own(resource) {
   staticResources.push(resource)
@@ -138,14 +139,14 @@ function animateDice(time) {
     const throwPoint = pointFromSeat(
       props.dealerIndex,
       side * (.58 + .22 * travel),
-      5.2 - 4.1 * travel + side * .12,
+      THREE.MathUtils.lerp(5.2, .2, travel) + side * .1,
     )
     die.position.x = throwPoint.x
     die.position.z = throwPoint.z
     const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
     const bounceProgress = Math.max(0, (progress - .82) / .18)
     const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0
-    die.position.y = .28 + arc + bounce
+    die.position.y = DICE_LANDING_Y + arc + bounce
     const settleStart = .72
     if (progress < settleStart) {
       die.quaternion.copy(rollingDiceQuaternion(index, progress))
