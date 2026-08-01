@@ -296,26 +296,84 @@ function addStaticMesh(geometry, material, x, y, z) {
 }
 
 function addTable() {
-  const felt = own(new THREE.MeshStandardMaterial({ color: 0x16563d, roughness: .94, metalness: 0 }))
-  const dark = own(new THREE.MeshStandardMaterial({ color: 0x080a09, roughness: .7, metalness: .12 }))
-  const bronze = own(new THREE.MeshStandardMaterial({ color: 0x5f4728, roughness: .68, metalness: .28 }))
-  const machine = own(new THREE.MeshStandardMaterial({ color: 0x151817, roughness: .45, metalness: .3 }))
+  const jade = own(new THREE.MeshPhysicalMaterial({
+    color: 0x073124,
+    roughness: .4,
+    metalness: .04,
+    clearcoat: .72,
+    clearcoatRoughness: .2,
+    sheen: .22,
+    sheenColor: new THREE.Color(0x4f9b72),
+    sheenRoughness: .72,
+  }))
+  const darkJade = own(new THREE.MeshPhysicalMaterial({
+    color: 0x03130e,
+    roughness: .48,
+    metalness: .16,
+    clearcoat: .36,
+    clearcoatRoughness: .3,
+  }))
+  const gold = own(new THREE.MeshPhysicalMaterial({
+    color: 0xb88a38,
+    roughness: .28,
+    metalness: .88,
+    clearcoat: .3,
+    clearcoatRoughness: .2,
+  }))
+  const goldHighlight = own(new THREE.MeshPhysicalMaterial({
+    color: 0xe1b85d,
+    emissive: 0x392006,
+    emissiveIntensity: .2,
+    roughness: .22,
+    metalness: .94,
+    clearcoat: .38,
+    clearcoatRoughness: .16,
+  }))
+  const machine = own(new THREE.MeshPhysicalMaterial({
+    color: 0x071f17,
+    roughness: .3,
+    metalness: .24,
+    clearcoat: .76,
+    clearcoatRoughness: .16,
+  }))
   scene.userData.tileSide = own(new THREE.MeshStandardMaterial({ color: 0xe9ede2, roughness: .5, metalness: 0 }))
   scene.userData.faceSide = own(new THREE.MeshStandardMaterial({ color: 0x45a937, roughness: .57, metalness: 0 }))
   scene.userData.tileBottom = own(new THREE.MeshStandardMaterial({ color: 0xcfd6c9, roughness: .64, metalness: 0 }))
   scene.userData.backMaterial = own(new THREE.MeshStandardMaterial({ map: makeBackTexture(), roughness: .58, metalness: 0 }))
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
 
-  // 近端保持不动，只向对家方向延伸桌面，给远端手牌和副露留出更多纵深。
-  addStaticMesh(new THREE.BoxGeometry(21.8, .52, 17.3), dark, 0, -.36, -1.65)
-  addStaticMesh(new THREE.BoxGeometry(21, .24, 16.6), felt, 0, -.05, -1.6)
-  addStaticMesh(new THREE.BoxGeometry(21.8, .7, .48), bronze, 0, -.1, -10.2)
-  addStaticMesh(new THREE.BoxGeometry(21.8, .7, .48), bronze, 0, -.1, 7)
-  addStaticMesh(new THREE.BoxGeometry(.48, .7, 17.3), bronze, -10.65, -.1, -1.65)
-  addStaticMesh(new THREE.BoxGeometry(.48, .7, 17.3), bronze, 10.65, -.1, -1.65)
-  const machineTop = own(new THREE.MeshStandardMaterial({ map: makeMachineTexture(), roughness: .42, metalness: .12 }))
-  const machineBottom = own(new THREE.MeshStandardMaterial({ color: 0x070908, roughness: .62, metalness: .18 }))
-  const machineGeometry = own(new THREE.BoxGeometry(3.35, .28, 3.35, 2, 1, 2))
+  // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
+  addStaticMesh(new RoundedBoxGeometry(21.8, .54, 17.3, 3, .18), darkJade, 0, -.37, -1.65)
+  addStaticMesh(new RoundedBoxGeometry(21.46, .22, 16.96, 3, .13), gold, 0, -.14, -1.65)
+  addStaticMesh(new RoundedBoxGeometry(21.04, .18, 16.54, 3, .12), jade, 0, -.02, -1.62)
+
+  const railY = .1
+  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, -9.68)
+  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, 6.45)
+  addStaticMesh(new THREE.BoxGeometry(.105, .075, 16.02), goldHighlight, -10.22, railY, -1.62)
+  addStaticMesh(new THREE.BoxGeometry(.105, .075, 16.02), goldHighlight, 10.22, railY, -1.62)
+  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, -9.38)
+  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, 6.16)
+  addStaticMesh(new THREE.BoxGeometry(.045, .05, 15.5), gold, -9.92, .105, -1.61)
+  addStaticMesh(new THREE.BoxGeometry(.045, .05, 15.5), gold, 9.92, .105, -1.61)
+
+  const cornerGeometry = own(new THREE.CylinderGeometry(.24, .3, .1, 12))
+  ;[[-9.93, -9.4], [9.93, -9.4], [-9.93, 6.18], [9.93, 6.18]].forEach(([x, z]) => {
+    const stud = addStaticMesh(cornerGeometry.clone(), goldHighlight, x, .16, z)
+    stud.rotation.y = Math.PI / 4
+  })
+
+  const machineTop = own(new THREE.MeshPhysicalMaterial({
+    map: makeMachineTexture(),
+    roughness: .3,
+    metalness: .16,
+    clearcoat: .66,
+    clearcoatRoughness: .18,
+  }))
+  const machineBottom = own(new THREE.MeshPhysicalMaterial({ color: 0x020906, roughness: .46, metalness: .3, clearcoat: .24 }))
+  addStaticMesh(new RoundedBoxGeometry(3.85, .2, 3.85, 3, .22), gold, 0, .14, PLAY_AREA_OFFSET_Z)
+  addStaticMesh(new RoundedBoxGeometry(3.58, .16, 3.58, 3, .18), darkJade, 0, .25, PLAY_AREA_OFFSET_Z)
+  const machineGeometry = own(new RoundedBoxGeometry(3.35, .28, 3.35, 3, .16))
   const machineMesh = new THREE.Mesh(machineGeometry, [machine, machine, machineTop, machineBottom, machine, machine])
   machineMesh.position.set(0, .21, PLAY_AREA_OFFSET_Z)
   machineMesh.castShadow = true
@@ -424,23 +482,17 @@ function addConcealedHand(group, playerIndex) {
       tile.rotation.y = position === 'left' ? -Math.PI / 2 : Math.PI / 2
       const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
       let z
-      if (layoutDrawnTileIndex >= 0 && melds.length) {
-        const slot = index === layoutDrawnTileIndex ? 0 : index + 1
-        z = position === 'right'
-          ? -6.1 + exposedSpan + .62 + slot * gap + (index === layoutDrawnTileIndex ? 0 : drawnGap)
-          : 6.1 - exposedSpan - .62 - slot * gap - (index === layoutDrawnTileIndex ? 0 : drawnGap)
-      } else if (index === layoutDrawnTileIndex) {
+      if (index === layoutDrawnTileIndex) {
         z = position === 'right'
           ? -(arrangedTotal - 1) / 2 * gap - gap - drawnGap
           : (arrangedTotal - 1) / 2 * gap + gap + drawnGap
       } else {
-        z = !melds.length
-          ? centeredZ
-          : position === 'right'
-            ? -6.1 + exposedSpan + .62 + index * gap
-            : 6.1 - exposedSpan - .62 - index * gap
+        // 左右两家的副露使用独立轨道；暗手始终保持居中，避免副露时整排突然跳位。
+        z = centeredZ
       }
-      tile.position.set(position === 'left' ? -9.15 : 9.15, tileY, z)
+      // 下家的暗手沿桌边向上家方向收拢；明牌结算与独立副露轨道保持原位。
+      const concealedHandShift = position === 'right' && !props.revealHands ? -1.15 : 0
+      tile.position.set(position === 'left' ? -9.15 : 9.15, tileY, z + concealedHandShift)
     }
     const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
     if (props.dealAnimation.playerIndex === playerIndex && index >= animatedFromIndex) {
@@ -601,16 +653,18 @@ function render(time = 0) {
 onMounted(async () => {
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true, powerPreference: 'high-performance' })
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.08
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0x07100c, 20, 34)
+  scene.fog = new THREE.Fog(0x03100b, 20, 34)
   camera = new THREE.PerspectiveCamera(39, 1, .1, 60)
   camera.position.set(0, 15, 11.8)
-  scene.add(new THREE.HemisphereLight(0xe9f4df, 0x06100b, 2.7))
-  const keyLight = new THREE.DirectionalLight(0xffefc6, 5.2)
+  scene.add(new THREE.HemisphereLight(0xf3e4ba, 0x020b08, 2.45))
+  const keyLight = new THREE.DirectionalLight(0xffdfa0, 5.5)
   keyLight.position.set(-7, 13, 9)
   keyLight.castShadow = true
   keyLight.shadow.mapSize.set(2048, 2048)
@@ -619,9 +673,12 @@ onMounted(async () => {
   keyLight.shadow.camera.top = 10
   keyLight.shadow.camera.bottom = -10
   scene.add(keyLight)
-  const rimLight = new THREE.DirectionalLight(0x55c889, 2.2)
+  const rimLight = new THREE.DirectionalLight(0x3acb8b, 2.5)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
+  const goldFill = new THREE.PointLight(0xd8a948, 4.5, 24, 2)
+  goldFill.position.set(0, 9, -1.5)
+  scene.add(goldFill)
   addDice()
 
   const tileImages = await Promise.all(TILE_TYPES.map(async (tile) => [
