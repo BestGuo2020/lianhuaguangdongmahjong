@@ -552,6 +552,50 @@ function addWinningDisplayTile() {
   dynamicGroups.push(group)
 }
 
+function robbedKongSourceTransform(effect) {
+  if (!effect.robbedKong || effect.robbedKongPlayerIndex < 0 || effect.robbedKongMeldIndex < 0) return null
+  const playerIndex = effect.robbedKongPlayerIndex
+  const melds = props.players[playerIndex]?.melds || []
+  let trackOffset = 0
+  for (let meldIndex = 0; meldIndex < melds.length; meldIndex += 1) {
+    const meld = melds[meldIndex]
+    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
+    let sourcePlacement = null
+    laidTiles.forEach((_, tileIndex) => {
+      const pointsToSource = tileIndex === sourceTileIndex
+      const tileSpan = pointsToSource ? 1.025 : .725
+      const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const transform = alignMeldBottom(
+        meldTransform(playerIndex, centerOffset),
+        playerIndex,
+        pointsToSource,
+      )
+      if (pointsToSource) {
+        sourcePlacement = {
+          x: transform.x,
+          z: transform.z,
+          rotation: transform.rotation + Math.PI / 2,
+        }
+      }
+      trackOffset += tileSpan
+    })
+    if (meldIndex === effect.robbedKongMeldIndex && sourcePlacement) {
+      const offset = addedKongTileOffset(playerIndex)
+      return {
+        position: new THREE.Vector3(
+          sourcePlacement.x + offset.x,
+          .28,
+          sourcePlacement.z + offset.z + PLAY_AREA_OFFSET_Z,
+        ),
+        rotation: sourcePlacement.rotation,
+      }
+    }
+    trackOffset += .18
+  }
+  return null
+}
+
 function addWinEffect() {
   if (!props.winEffect?.tile) return
   const anchor = winEffectAnchor(props.winEffect.winnerIndex)
@@ -639,9 +683,13 @@ function addWinEffect() {
   })
 
   const winningTile = makeFaceTile(props.winEffect.tile)
-  winningTile.position.copy(anchor).addScaledVector(outward, 1.08)
-  winningTile.position.y = anchor.y
-  winningTile.rotation.y = winDisplayLayout(props.winEffect.winnerIndex).rotation
+  const robbedKongSource = robbedKongSourceTransform(props.winEffect)
+  const startPosition = robbedKongSource?.position
+    ?? anchor.clone().addScaledVector(outward, 1.08).setY(anchor.y)
+  const seatRotation = winDisplayLayout(props.winEffect.winnerIndex).rotation
+  const startRotation = robbedKongSource?.rotation ?? seatRotation
+  winningTile.position.copy(startPosition)
+  winningTile.rotation.y = startRotation
   group.add(winningTile)
 
   const flareCanvas = document.createElement('canvas')
@@ -677,7 +725,7 @@ function addWinEffect() {
   dynamicGroups.push(group)
   winEffectAnimation = {
     startedAt: performance.now(), anchor, burstAnchor, outward, beam, streaks, rings, particles, winningTile, flare, light,
-    seatRotation: winningTile.rotation.y,
+    startPosition, startRotation, seatRotation,
     duration: props.winEffect.duration ?? WIN_EFFECT_DURATION,
     reducedMotion: Boolean(props.winEffect.reducedMotion),
   }
@@ -846,10 +894,12 @@ function render(time = 0) {
     })
 
     const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .34)
-    const travel = THREE.MathUtils.lerp(1.08, 0, approach)
-    effect.winningTile.position.copy(effect.anchor).addScaledVector(effect.outward, travel)
-    effect.winningTile.position.y = effect.anchor.y
-    effect.winningTile.rotation.set(0, effect.seatRotation, 0)
+    effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)
+    effect.winningTile.rotation.set(
+      0,
+      THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach),
+      0,
+    )
     effect.winningTile.scale.setScalar(1)
 
     const impactProgress = Math.max(0, Math.min(1, (progress - .22) / .22))

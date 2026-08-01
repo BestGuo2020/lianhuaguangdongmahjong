@@ -95,6 +95,20 @@ describe('胡牌演出流程', () => {
       tile: 'east',
       sourceIndex: -1,
       robbedKong: true,
+      robbedKongPlayerIndex: 2,
+      robbedKongMeldIndex: 0,
+    })
+    expect(game.players[2].melds[0]).toMatchObject({
+      type: 'peng',
+      tile: 'east',
+      tiles: ['east', 'east', 'east'],
+    })
+    expect(game.players[2].melds[0]).not.toHaveProperty('added')
+    expect(game.players[2].melds[0]).not.toHaveProperty('pending')
+    expect(game.winEffect.value).toMatchObject({
+      robbedKong: true,
+      robbedKongPlayerIndex: 2,
+      robbedKongMeldIndex: 0,
     })
     expect(game.players[3].hand).toHaveLength(13)
     expect(splitWinningTile(game.players[3].hand, game.winPresentation.value).hand).toHaveLength(13)

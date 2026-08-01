@@ -658,6 +658,21 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (userCanHu.value) endGame(0)
   }
 
+  function takeRobbedKongTile(playerIndex, tile) {
+    const player = players[playerIndex]
+    const meldIndex = player?.melds.findIndex((meld) => (
+      meld.type === 'gang' && meld.added && meld.pending && meld.tile === tile
+    )) ?? -1
+    if (meldIndex < 0) return -1
+    const { added, pending, ...meld } = player.melds[meldIndex]
+    player.melds[meldIndex] = {
+      ...meld,
+      type: 'peng',
+      tiles: meld.tiles.slice(0, 3),
+    }
+    return meldIndex
+  }
+
   function endGame(winnerIndex, options = {}) {
     if (['win-effect', 'revealing', 'settled', 'finished'].includes(phase.value)) return
     clearTimers()
@@ -672,6 +687,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const winTile = options.winTile
       ?? winner.hand[winner.drawnTileIndex]
       ?? winner.hand[winner.hand.length - 1]
+    const robbedKongMeldIndex = options.robbedKong
+      ? takeRobbedKongTile(options.robbedKongPlayerIndex, winTile)
+      : -1
     const sourceIndex = options.robbedKong
       ? -1
       : (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
@@ -680,6 +698,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       tile: winTile,
       sourceIndex,
       robbedKong: Boolean(options.robbedKong),
+      robbedKongPlayerIndex: options.robbedKongPlayerIndex ?? -1,
+      robbedKongMeldIndex,
     }
     const reducedMotion = prefersReducedMotion()
     const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
@@ -687,6 +707,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     winEffect.value = {
       winnerIndex,
       tile: winTile,
+      robbedKong: Boolean(options.robbedKong),
+      robbedKongPlayerIndex: options.robbedKongPlayerIndex ?? -1,
+      robbedKongMeldIndex,
       duration: effectDuration,
       reducedMotion,
       id: Date.now(),
@@ -737,6 +760,17 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       player.score = 1000
       player.drawnTileIndex = index === winnerIndex && !robbedKong ? hand.length - 1 : -1
     })
+    const robbedKongPlayerIndex = robbedKong ? (winnerIndex + 3) % 4 : -1
+    if (robbedKong) {
+      players[robbedKongPlayerIndex].melds.push({
+        type: 'gang',
+        added: true,
+        pending: true,
+        tile: 'east',
+        from: (robbedKongPlayerIndex + 1) % 4,
+        tiles: ['east', 'east', 'east', 'east'],
+      })
+    }
     wall.value = shuffle(createWall())
     lastDiscard.value = null
     result.value = null
@@ -748,7 +782,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'discard'
     endGame(winnerIndex, {
       robbedKong,
-      robbedKongPlayerIndex: robbedKong ? (winnerIndex + 3) % 4 : null,
+      robbedKongPlayerIndex,
       winTile: 'east',
     })
   }
