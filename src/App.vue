@@ -99,7 +99,7 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">
         <header class="top-bar">
-          <div class="brand-mini"><i>莲</i><span>莲花广麻</span></div>
+          <div class="brand-mini"><span>莲花广麻</span></div>
           <div class="round-info">东风局 · 第 {{ round }} 局</div>
           <nav>
             <button :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">{{ soundOn ? '◖))' : '◖×' }}</button>
@@ -199,30 +199,27 @@ const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value 
                 @click="waitsOpen = !waitsOpen"
               ><b>💡</b><span>听牌</span></button>
               <template v-if="actionPrompt?.type === 'claim'">
-                <button class="action primary" @click="userPeng"><b>碰</b><span>{{ actionPrompt.tile }}</span></button>
-                <button v-if="actionPrompt.canGang" class="action primary" @click="userGangFromDiscard"><b>杠</b><span>尾牌补摸</span></button>
+                <button class="action primary" @click="userPeng"><b>碰</b></button>
+                <button v-if="actionPrompt.canGang" class="action primary" @click="userGangFromDiscard"><b>杠</b></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else-if="actionPrompt?.type === 'rob'">
-                <button class="action hu" @click="userHu"><b>胡</b><span>抢杠胡</span></button>
+                <button class="action hu" @click="userHu"><b>胡</b></button>
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else>
-                <button v-if="userKongs.length" class="action primary" @click="userGang()"><b>杠</b><span>尾牌补摸</span></button>
+                <button v-if="userKongs.length" class="action primary" @click="userGang()"><b>杠</b></button>
                 <button v-if="userCanHu" class="action hu" @click="userHu"><b>胡</b><span>自摸</span></button>
-                <button class="action discard-action" :disabled="selectedIndex < 0" @click="userDiscard"><b>出牌</b></button>
               </template>
           </div>
         </template>
 
         <section v-if="phase === 'lobby'" class="lobby">
-          <div class="lotus-mark"><span>莲</span></div>
-          <p class="eyebrow">LINGNAN MAHJONG CLUB</p>
+          <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
           <h1>莲花<span>广麻</span></h1>
-          <p class="subtitle">一桌岭南风雅 · 一局人情冷暖</p>
-          <div class="lobby-rules"><span>白板癞子</span><i></i><span>红中开杠</span><i></i><span>自摸买马</span></div>
-          <button class="start-button" @click="startGameWithAudio"><b>开始对局</b><span>四人单机 · 即开即玩</span></button>
-          <button class="text-button" @click="rulesOpen = true">先看玩法说明 →</button>
+          <p class="subtitle"> </p>
+          <button class="start-button" @click="startGameWithAudio"><b>开始对局</b><span>人机对局</span></button>
+          <button class="text-button" @click="rulesOpen = true">游戏规则 →</button>
         </section>
 
         <Transition name="modal">

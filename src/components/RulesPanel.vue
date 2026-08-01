@@ -18,8 +18,7 @@ const rules = [
     <aside v-if="open" class="rules-panel">
       <header>
         <div>
-          <span>莲花馆</span>
-          <h2>广麻玩法</h2>
+          <h2>莲花广麻玩法</h2>
         </div>
         <button aria-label="关闭规则" @click="$emit('close')">×</button>
       </header>

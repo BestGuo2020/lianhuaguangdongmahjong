@@ -218,7 +218,7 @@ button { font: inherit; }
 .player-seat.active .avatar-wrap { border-color: #d6ad52; box-shadow: 0 0 16px rgba(239,194,85,.2); }
 
 .seat-top { top: 49px; left: 50%; transform: translateX(-50%) perspective(700px) rotateX(-2deg); }
-.seat-top .avatar-wrap { margin: 0 auto 7px; }
+.seat-top .avatar-wrap { margin: 0 auto 7px; transform: translate(-10px, -18px); }
 .seat-right { top: 42%; right: 17px; transform: translateY(-50%) perspective(700px) rotateY(-4deg); transform-origin: right center; }
 .seat-right .avatar-wrap { margin: 0 0 8px auto; }
 .seat-left { top: 42%; left: 17px; transform: translateY(-50%) perspective(700px) rotateY(4deg); transform-origin: left center; }
@@ -615,7 +615,7 @@ button { font: inherit; }
   .round-info { padding: 3px 13px; }
   .top-bar nav { gap: 5px; }
   .top-bar button { width: 28px; height: 28px; font-size: 13px; }
-  .seat-top .avatar-wrap { transform: scale(.76); transform-origin: top center; }
+  .seat-top .avatar-wrap { transform: scale(.76) translate(-90px, -15px); transform-origin: top center; }
   .seat-left .avatar-wrap { transform: scale(.76); transform-origin: left center; }
   .seat-right .avatar-wrap { transform: scale(.76); transform-origin: right center; }
   .player-info strong { max-width: 104px; font-size: 13px; }
@@ -631,7 +631,12 @@ button { font: inherit; }
   .user-identity span { font-size: 13px; }
   /* 横向矮窗口中，功能区与计时器并排放在手牌上方，避免被牌面完全遮住。 */
   .action-bar { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
-  .waiting-tip { bottom: 60px; }
+  .waiting-tip { bottom: 60px; max-width: min(460px, 68vw); }
+  .compact-waiting-tip { padding: 5px 7px; border-radius: 7px; }
+  .waiting-tiles { gap: 4px; padding: 1px 1px 3px; }
+  .waiting-tiles > div { gap: 2px; }
+  .waiting-tiles .mahjong-tile.small { --tile-width: clamp(27px, 4.4vh, 34px); }
+  .waiting-tiles small { min-width: 24px; padding: 2px 4px; font-size: 9px; }
   .action { min-width: 48px; height: 42px; padding: 4px 8px; }
   .action b { font-size: 16px; }
   .action span { font-size: 9px; }
