@@ -374,6 +374,14 @@ button { font: inherit; }
 .text-button { margin-top: 14px; border: 0; background: transparent; color: #9aafa3; font-size: 13px; cursor: pointer; }
 .text-button:hover { color: #d3bf8d; }
 
+.match-selector { display: grid; grid-template-columns: repeat(2, minmax(145px, 1fr)); gap: 10px; width: min(390px, 86vw); margin: 0 auto 15px; }
+.match-selector button { padding: 13px 12px 11px; border: 1px solid rgba(211,174,87,.27); border-radius: 7px; background: rgba(3,18,13,.72); color: #9fb0a6; cursor: pointer; transition: .2s ease; }
+.match-selector button b, .match-selector button span { display: block; }
+.match-selector button b { margin-bottom: 4px; color: #e5d5ad; font: 800 18px "Noto Serif SC", serif; }
+.match-selector button span { font-size: 11px; letter-spacing: .05em; }
+.match-selector button.active { border-color: #d5ab54; background: linear-gradient(180deg, rgba(168,116,48,.34), rgba(18,54,39,.88)); box-shadow: 0 0 0 1px rgba(244,204,106,.16), 0 8px 24px rgba(0,0,0,.25); transform: translateY(-2px); }
+.match-selector button.active b { color: #ffe6a5; }
+
 .rules-panel { position: fixed; z-index: 100; top: 0; right: 0; bottom: 0; width: min(390px, 92vw); padding: 31px 27px; overflow: auto; border-left: 1px solid #997439; background: linear-gradient(160deg, #102b23, #071510 65%); box-shadow: -22px 0 60px rgba(0,0,0,.65); }
 .rules-panel header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 25px; padding-bottom: 17px; border-bottom: 1px solid rgba(208,172,87,.18); }
 .rules-panel header span { color: #b18d48; font-size: 9px; letter-spacing: .4em; }.rules-panel h2 { margin: 5px 0 0; font: 900 28px "Noto Serif SC", serif; color: #f0e3bf; }
@@ -390,7 +398,7 @@ button { font: inherit; }
 .result-card > p { margin: 12px 0 5px; color: #c4ab73; font-size: clamp(14px, 1.15vw, 18px); font-weight: 700; letter-spacing: .22em; }.result-card h2 { margin: 0 0 17px; color: #fff0c8; font: 900 clamp(34px, 3vw, 46px) "Noto Serif SC", serif; }
 .score-total { display: flex; align-items: baseline; justify-content: center; gap: 13px; }.score-total span { color: #a9bbb1; font-size: clamp(14px, 1.1vw, 17px); }.score-total strong { color: #f4ca62; font: 800 clamp(45px, 4vw, 60px) Georgia, serif; }.score-total em { color: #e2bd61; font-size: clamp(16px, 1.35vw, 21px); font-weight: 700; font-style: normal; }
 .score-details { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin: 13px 0 19px; }.score-details span { padding: 7px 12px; border: 1px solid rgba(202,166,83,.34); border-radius: 4px; background: rgba(255,255,255,.025); color: #c4d0c9; font-size: clamp(13px, 1vw, 16px); }.score-details b { color: #ebca79; font-size: 1.08em; }
-.horse-area { padding: 17px 14px 13px; border: 1px solid rgba(208,174,88,.2); border-radius: 5px; background: rgba(0,0,0,.2); }.horse-area > div { display: flex; align-items: flex-end; justify-content: center; gap: 5px; min-height: 102px; }
+.horse-area { padding: 17px 14px 13px; border: 1px solid rgba(208,174,88,.2); border-radius: 5px; background: rgba(0,0,0,.2); }.horse-area > div { display: flex; align-items: flex-end; justify-content: center; gap: 5px; min-height: 40px; }
 .horse-area .mahjong-tile { --tile-width: clamp(48px, 5vw, 58px); transition: transform .2s ease, filter .2s ease, box-shadow .2s ease, opacity .2s ease; }
 .horse-area .mahjong-tile:not(.horse-hit) { opacity: .58; filter: brightness(.62) saturate(.6); }
 .horse-area .mahjong-tile.horse-hit { z-index: 2; transform: translateY(-8px) scale(1.07); filter: brightness(1.2) saturate(1.12); box-shadow: 0 4px 0 #e2e5da, 0 8px 0 #5ca54b, 0 0 0 3px #f4cb63, 0 0 22px rgba(255,205,83,.9), 0 14px 13px rgba(0,0,0,.66); }
@@ -398,6 +406,29 @@ button { font: inherit; }
 .result-actions button { min-width: 170px; padding: 13px 20px; border: 1px solid #d3aa57; border-radius: 5px; background: #b88b3e; color: #122019; font-size: clamp(16px, 1.25vw, 20px); font-weight: 800; cursor: pointer; }
 .result-actions button.secondary { border-color: rgba(213,184,112,.5); background: rgba(8,28,20,.88); color: #e5d5ad; }
 .result-reopen { position: absolute; z-index: 92; right: 4%; bottom: 5%; padding: 12px 22px; border: 2px solid #d0a64d; border-radius: 24px; background: rgba(7,25,18,.92); color: #f3d27c; font-size: clamp(15px, 1.2vw, 19px); font-weight: 800; box-shadow: 0 7px 22px rgba(0,0,0,.55); cursor: pointer; }
+
+.round-settlement { background: radial-gradient(circle at 50% 45%, rgba(28,63,92,.3), transparent 55%), rgba(1,5,10,.82); }
+.settlement-card { width: min(760px, 94%); max-height: 94%; padding-top: 31px; overflow: hidden auto; }
+.settlement-card .horse-area { display: inline-block; min-width: 45%; margin-bottom: 12px; }
+.round-rankings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; width: 100%; margin-top: 5px; }
+.round-rankings article { display: grid; min-width: 0; grid-template-columns: clamp(34px, 4vw, 42px) clamp(34px, 3.8vw, 40px) minmax(0,1fr) clamp(48px, 5vw, 56px) clamp(60px, 6vw, 70px); align-items: center; gap: clamp(4px, .55vw, 7px); min-height: 58px; padding: 6px clamp(6px, .7vw, 9px); overflow: hidden; border: 1px solid rgba(135,158,185,.22); clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); background: linear-gradient(105deg, rgba(34,51,82,.94), rgba(17,29,51,.94)); text-align: left; animation: ranking-slide .55s both; }
+.round-rankings article:nth-child(2) { animation-delay: .08s; }.round-rankings article:nth-child(3) { animation-delay: .16s; }.round-rankings article:nth-child(4) { animation-delay: .24s; }
+.round-rankings article.winner { border-color: rgba(240,193,95,.7); background: linear-gradient(105deg, rgba(89,64,38,.96), rgba(26,39,58,.95)); }
+.round-rankings img { width: 42px; height: 42px; border: 1px solid #d3a75a; border-radius: 5px; object-fit: cover; }
+.round-rankings span { min-width: 0; overflow: hidden; color: #eef2f8; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.rank-number { color: #dce7f4; font: 900 31px Georgia, serif; font-style: italic; text-align: center; }.rank-number small { margin-left: 2px; font: 700 11px sans-serif; }
+.round-rankings em { min-width: 0; overflow: hidden; color: #a6b2c1; font-weight: 800; font-style: normal; text-align: right; text-overflow: ellipsis; }.round-rankings em.positive { color: #6fe576; }.round-rankings em.negative { color: #ff666c; }
+.round-rankings article > b { min-width: 0; overflow: hidden; color: #fff; font: 800 22px Georgia, serif; text-align: right; text-overflow: ellipsis; }
+
+.final-backdrop { z-index: 96; background: radial-gradient(circle at 50% 24%, rgba(99,72,37,.42), transparent 38%), rgba(2,8,12,.92); }
+.final-board { width: min(680px, 92%); max-height: 94%; padding: 28px 45px 32px; overflow: hidden auto; text-align: center; animation: final-in .7s cubic-bezier(.18,.9,.24,1.1); }
+.final-board > p { margin: 0; color: #c5a86c; font-size: 13px; letter-spacing: .22em; }.final-board > h2 { margin: 5px 0 20px; color: #ffe6ad; font: 900 40px "Noto Serif SC", serif; letter-spacing: .12em; }
+.final-rankings { display: grid; gap: 8px; }
+.final-rankings article { display: grid; grid-template-columns: 65px 56px 1fr 120px; align-items: center; gap: 14px; min-height: 69px; padding: 6px 18px 6px 10px; border: 1px solid rgba(124,153,180,.25); background: linear-gradient(90deg, rgba(34,50,78,.96), rgba(12,23,40,.95)); text-align: left; }
+.final-rankings article.rank-1 { border-color: #d8ac54; background: linear-gradient(90deg, rgba(112,76,29,.98), rgba(31,38,51,.96)); box-shadow: 0 0 24px rgba(221,171,71,.13); }.final-rankings article.self { box-shadow: inset 3px 0 #5fd9a2; }
+.final-rankings img { width: 54px; height: 54px; border: 2px solid #caa051; border-radius: 6px; object-fit: cover; }.final-rank { color: #e1e7f0; text-align: center; }.final-rank b { font: 900 38px Georgia,serif; font-style: italic; }.final-rank span { margin-left: 2px; font-size: 12px; }
+.final-name strong { color: white; font-size: 18px; }.final-name small { margin-left: 8px; padding: 2px 7px; border-radius: 9px; background: #2a8062; color: #e7fff6; }.final-rankings em { color: #ffe3a1; font: 800 27px Georgia,serif; font-style: normal; text-align: right; }
+.final-board > button { min-width: 190px; margin-top: 22px; padding: 12px 24px; border: 1px solid #d3aa57; border-radius: 5px; background: linear-gradient(180deg,#d5aa59,#aa7934); color: #122019; font-weight: 800; cursor: pointer; }
 
 .panel-enter-active, .panel-leave-active { transition: transform .35s ease; }.panel-enter-from, .panel-leave-to { transform: translateX(100%); }
 .modal-enter-active, .modal-leave-active { transition: opacity .3s ease; }.modal-enter-from, .modal-leave-to { opacity: 0; }.modal-enter-active .result-card { animation: result-in .48s cubic-bezier(.2,.9,.25,1.15); }
@@ -417,6 +448,8 @@ button { font: inherit; }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
 @keyframes opening-cue-in { from { opacity: 0; transform: translate(-50%, -44%) scale(.82); filter: blur(5px); } }
 @keyframes result-in { from { transform: translateY(18px) scale(.94); opacity: 0; } }
+@keyframes ranking-slide { from { opacity: 0; transform: translateX(45px) scale(.97); } }
+@keyframes final-in { from { opacity: 0; transform: translateY(28px) scale(.92); filter: blur(5px); } }
 
 /* 强透视桌面：按参考视频的上窄下宽镜头重构整张牌桌 */
 .wood-frame {
@@ -660,6 +693,37 @@ button { font: inherit; }
   .horse-area .mahjong-tile.horse-hit { transform: translateY(-5px) scale(1.05); }
   .result-actions { gap: 9px; margin-top: 10px; }
   .result-actions button { min-width: 145px; padding: 8px 15px; font-size: 15px; }
+  .settlement-card { width: min(850px, 96%); padding-top: 20px; }
+  .round-rankings article { min-height: 47px; grid-template-columns: 38px 32px minmax(0,1fr) 50px 62px; padding: 4px 6px; }
+  .round-rankings img { width: 32px; height: 32px; }.rank-number { font-size: 24px; }.round-rankings article > b { font-size: 17px; }
+  .final-board { width: min(620px, 92%); padding: 15px 24px 18px; }.final-board > h2 { margin: 2px 0 9px; font-size: 30px; }.final-rankings { gap: 5px; }.final-rankings article { min-width: 0; min-height: 51px; grid-template-columns: 46px 42px minmax(0,1fr) 82px; gap: 8px; padding-right: 10px; }.final-rankings img { width: 40px; height: 40px; }.final-rank b { font-size: 29px; }.final-rankings em { min-width: 0; overflow: hidden; font-size: 21px; text-overflow: ellipsis; }.final-board > button { margin-top: 10px; padding: 8px 20px; }
+}
+
+@media (max-width: 700px), (max-height: 460px) {
+  .settlement-card { width: 96%; padding-right: 16px; padding-left: 16px; }
+  .round-rankings { gap: 5px; }
+  .round-rankings article { grid-template-columns: 31px 30px minmax(0,1fr) 45px 55px; gap: 4px; padding-right: 5px; padding-left: 5px; }
+  .round-rankings img { width: 29px; height: 29px; }
+  .rank-number { font-size: 21px; }.rank-number small { font-size: 9px; }
+  .round-rankings span, .round-rankings em { font-size: 12px; }
+  .round-rankings article > b { font-size: 15px; }
+  .final-board { width: 94%; padding-right: 16px; padding-left: 16px; }
+}
+
+@media (max-height: 460px) {
+  .settlement-card { max-height: 98%; padding: 12px 14px 9px; }
+  .result-seal { top: -18px; width: 40px; height: 40px; font-size: 22px; }
+  .settlement-card > p { margin: 0; font-size: 11px; }
+  .settlement-card h2 { margin: 0 0 3px; font-size: 24px; }
+  .settlement-card .score-total strong { font-size: 31px; }
+  .settlement-card .score-details { margin: 3px 0 5px; }
+  .settlement-card .score-details span { padding: 3px 7px; font-size: 11px; }
+  .settlement-card .horse-area { margin-bottom: 5px; padding: 3px 8px; }
+  .settlement-card .horse-area > div { min-height: 42px; }
+  .settlement-card .horse-area .mahjong-tile { --tile-width: 29px; }
+  .round-rankings article { min-height: 38px; }
+  .result-actions { margin-top: 6px; }
+  .result-actions button { min-width: 128px; padding: 6px 12px; font-size: 13px; }
 }
 
 @media (max-width: 760px) and (orientation: portrait) {

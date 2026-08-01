@@ -4,11 +4,25 @@ import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const PLAYER_SEED = [
-  { name: '莲花', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
+  { name: 'BestGuo2020', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
   { name: '南粤阿乐', avatar: `${AVATAR_BASE}ah-lok.svg`, score: 1000 },
   { name: '西关十三姨', avatar: `${AVATAR_BASE}shisan.svg`, score: 1000 },
   { name: '东山少爷', avatar: `${AVATAR_BASE}young-master.svg`, score: 1000 },
 ]
+
+const MATCH_HANDS = { east: 4, hanchan: 8 }
+const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+
+export function advanceMatchState({ round, dealer, honba, matchType, result, scores, playerCount = 4 }) {
+  const dealerKeepsSeat = !result.draw && result.winnerIndex === dealer
+  const next = dealerKeepsSeat
+    ? { round, dealer, honba: honba + 1 }
+    : { round: round + 1, dealer: (dealer + 1) % playerCount, honba: 0 }
+  return {
+    ...next,
+    finished: next.round > MATCH_HANDS[matchType] || scores.some((score) => score < 0),
+  }
+}
 
 export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} } = {}) {
   const phase = ref('lobby')
@@ -24,6 +38,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const result = ref(null)
   const round = ref(1)
   const dealer = ref(0)
+  const matchType = ref('east')
+  const honba = ref(0)
+  const matchFinished = ref(false)
   const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
   const openingStage = ref(null)
   const diceValues = ref([1, 1])
@@ -47,6 +64,14 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return [...new Set([...concealed, ...added])]
   })
   const wallCount = computed(() => wall.value.length)
+  const windName = computed(() => (round.value > 4 ? '南' : '东'))
+  const handNumber = computed(() => ((round.value - 1) % 4) + 1)
+  const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
+  const matchName = computed(() => MATCH_NAMES[matchType.value])
+  const standings = computed(() => players
+    .map((player, index) => ({ ...player, playerIndex: index }))
+    .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
+    .map((player, index) => ({ ...player, rank: index + 1 })))
   function visibleRemainingCount(tile) {
     let visible = matchingCount(user.value?.hand ?? [], tile)
     players.forEach((player) => {
@@ -165,8 +190,16 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return new Promise((resolve) => later(resolve, delay))
   }
 
-  async function startGame() {
+  async function startGame(mode) {
     clearTimers()
+    if (mode && MATCH_HANDS[mode]) {
+      matchType.value = mode
+      round.value = 1
+      dealer.value = 0
+      honba.value = 0
+      matchFinished.value = false
+      players.splice(0, players.length)
+    }
     const sequence = openingSequence
     resetPlayers()
     wall.value = shuffle(createWall())
@@ -222,7 +255,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     players.forEach((player) => { player.hand = sortTiles(player.hand) })
     const fourRedWinner = players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return endGame(fourRedWinner, { fourRed: true })
-    announce('东风局 · 开牌')
+    announce(`${roundLabel.value} · 开牌`)
     later(() => beginTurn(dealer.value), 650)
   }
 
@@ -598,6 +631,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     userDrewThisTurn.value = false
     actionPrompt.value = null
     const winner = players[winnerIndex]
+    const scoresBefore = players.map((player) => player.score)
     playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     const { horses, hits } = drawHorses(wall.value, 8)
     const score = scoreHand({
@@ -613,7 +647,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       score.points,
       options.robbedKong ? options.robbedKongPlayerIndex : null,
     )
-    result.value = { winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }
+    result.value = makeRoundResult({ winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }, scoresBefore)
     announcement.value = null
   }
 
@@ -624,15 +658,58 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     currentPlayer.value = -1
     userDrewThisTurn.value = false
     actionPrompt.value = null
-    result.value = { draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }
+    const scoresBefore = players.map((player) => player.score)
+    result.value = makeRoundResult({ draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }, scoresBefore)
+  }
+
+  function makeRoundResult(base, scoresBefore) {
+    const ranking = players
+      .map((player, playerIndex) => ({ playerIndex, score: player.score }))
+      .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
+    const ranks = new Map(ranking.map((item, index) => [item.playerIndex, index + 1]))
+    return {
+      ...base,
+      roundLabel: roundLabel.value,
+      honba: honba.value,
+      scoreChanges: players.map((player, playerIndex) => ({
+        playerIndex,
+        name: player.name,
+        avatar: player.avatar,
+        score: player.score,
+        delta: player.score - scoresBefore[playerIndex],
+        rank: ranks.get(playerIndex),
+      })),
+    }
   }
 
   function nextRound() {
-    if (result.value && !result.value.draw && result.value.winnerIndex !== dealer.value) {
-      dealer.value = result.value.winnerIndex
+    if (!result.value || matchFinished.value) return
+    const next = advanceMatchState({
+      round: round.value,
+      dealer: dealer.value,
+      honba: honba.value,
+      matchType: matchType.value,
+      result: result.value,
+      scores: players.map((player) => player.score),
+      playerCount: players.length,
+    })
+    round.value = next.round
+    dealer.value = next.dealer
+    honba.value = next.honba
+    if (next.finished) {
+      matchFinished.value = true
+      phase.value = 'finished'
+      return
     }
-    round.value += 1
     startGame()
+  }
+
+  function returnToLobby() {
+    clearTimers()
+    phase.value = 'lobby'
+    result.value = null
+    matchFinished.value = false
+    players.splice(0, players.length)
   }
 
   onBeforeUnmount(clearTimers)
@@ -640,8 +717,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   return {
     phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, result, round, dealer, user, isUserTurn, userCanHu,
+    matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
-    userGang, userHu, nextRound, tileName,
+    userGang, userHu, nextRound, returnToLobby, tileName,
   }
 }
