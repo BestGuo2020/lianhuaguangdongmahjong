@@ -527,12 +527,6 @@ function addConcealedHand(group, playerIndex) {
     }
     group.add(tile)
   }
-  if (props.currentPlayer === playerIndex) {
-    const glow = new THREE.PointLight(0xf2c65d, 9, 4.5, 2)
-    if (position === 'top') glow.position.set(0, 1.4, -7.2)
-    else glow.position.set(position === 'left' ? -8.6 : 8.6, 1.4, 0)
-    group.add(glow)
-  }
 }
 
 function winEffectAnchor(playerIndex) {
