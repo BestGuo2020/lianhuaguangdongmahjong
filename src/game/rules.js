@@ -2,6 +2,30 @@ import { TILE_TYPES, isHorse } from './tiles'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
 const WINNING_DRAW_TILES = [...STANDARD_TILES, 'white']
+export const BASE_SCORE = 10
+
+export function applyKongScore(players, kongPlayerIndex, type, fromIndex = null) {
+  const payers = type === 'discard'
+    ? [fromIndex]
+    : players.map((_, index) => index).filter((index) => index !== kongPlayerIndex)
+  const payment = type === 'concealed' ? BASE_SCORE * 2 : BASE_SCORE
+  payers.forEach((payerIndex) => {
+    if (!Number.isInteger(payerIndex) || payerIndex === kongPlayerIndex) return
+    players[payerIndex].score -= payment
+    players[kongPlayerIndex].score += payment
+  })
+}
+
+export function applyWinScore(players, winnerIndex, points, payerIndex = null) {
+  const payers = Number.isInteger(payerIndex)
+    ? [payerIndex]
+    : players.map((_, index) => index).filter((index) => index !== winnerIndex)
+  payers.forEach((index) => {
+    players[index].score -= points
+    players[winnerIndex].score += points
+  })
+  return points * payers.length
+}
 
 function countsFor(tiles) {
   const counts = new Map()
@@ -121,9 +145,9 @@ export function scoreHand({ dealer = false, noJoker = false, fourRed = false, ho
   if (dealer) { multiplier *= 2; details.push({ label: '庄家', multiplier: 2 }) }
   if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }
   if (fourRed) { multiplier *= 4; details.push({ label: '四红中', multiplier: 4 }) }
-  const horsePoints = horseHits * 10
+  const horsePoints = horseHits * BASE_SCORE
   if (horseHits > 0) {
     details.push({ label: `中马 ${horseHits} 张`, points: horsePoints })
   }
-  return { multiplier, horsePoints, points: multiplier * 10 + horsePoints, details }
+  return { multiplier, horsePoints, points: multiplier * BASE_SCORE + horsePoints, details }
 }

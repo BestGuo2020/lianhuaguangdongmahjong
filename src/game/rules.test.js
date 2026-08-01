@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRobKong, concealedKongs, drawHorses, isWinningHand, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
+import { applyKongScore, applyWinScore, canRobKong, concealedKongs, drawHorses, isWinningHand, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
 
 describe('莲花广麻胡牌规则', () => {
   it('识别标准自摸牌型', () => {
@@ -79,6 +79,34 @@ describe('买马与计分', () => {
     expect(score.multiplier).toBe(16)
     expect(score.horsePoints).toBe(20)
     expect(score.points).toBe(180)
+  })
+})
+
+describe('开杠与抢杠计分', () => {
+  const scores = () => Array.from({ length: 4 }, () => ({ score: 1000 }))
+
+  it('暗杠由其余三家各支付底分两倍', () => {
+    const players = scores()
+    applyKongScore(players, 0, 'concealed')
+    expect(players.map((player) => player.score)).toEqual([1060, 980, 980, 980])
+  })
+
+  it('明杠只由被杠者支付底分', () => {
+    const players = scores()
+    applyKongScore(players, 0, 'discard', 2)
+    expect(players.map((player) => player.score)).toEqual([1010, 1000, 990, 1000])
+  })
+
+  it('补杠由其余三家各支付底分', () => {
+    const players = scores()
+    applyKongScore(players, 0, 'added')
+    expect(players.map((player) => player.score)).toEqual([1030, 990, 990, 990])
+  })
+
+  it('抢杠胡只由补杠者支付胡牌分', () => {
+    const players = scores()
+    expect(applyWinScore(players, 1, 180, 3)).toBe(180)
+    expect(players.map((player) => player.score)).toEqual([1000, 1180, 1000, 820])
   })
 })
 

@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
-import { concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
+import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
@@ -424,6 +424,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (isGang) {
       player.hand = removeMatches(player.hand, tile, 3)
       player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
+      applyKongScore(players, playerIndex, 'discard', from)
       announce(`杠`, 'gold')
       playSound('gang.mp3')
       currentPlayer.value = playerIndex
@@ -466,7 +467,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       const nextRobber = kong.remainingRobbers?.[0]
       if (nextRobber !== undefined) {
         announce(`${players[nextRobber].name} 抢杠胡`, 'red')
-        return later(() => endGame(nextRobber, { robbedKong: true }), 450)
+        return later(() => endGame(nextRobber, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex }), 450)
       }
       return completeAddedKong(kong.playerIndex, kong.meldIndex, kong.tile)
     }
@@ -501,6 +502,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 3)
     user.value.drawnTileIndex = -1
     user.value.melds.push({ type: 'gang', tile: prompt.tile, from: prompt.from, tiles: Array(4).fill(prompt.tile) })
+    applyKongScore(players, 0, 'discard', prompt.from)
     actionPrompt.value = null
     currentPlayer.value = 0
     userDrewThisTurn.value = false
@@ -514,6 +516,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.hand = removeMatches(player.hand, tile, 4)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
+    applyKongScore(players, playerIndex, 'concealed')
     playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
@@ -530,6 +533,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       tile,
       tiles: [tile, tile, tile, tile],
     }
+    applyKongScore(players, playerIndex, 'added')
     announce(`杠`, 'gold')
     playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
@@ -562,7 +566,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }
 
     announce(`${players[robberIndex].name} 抢杠胡`, 'red')
-    later(() => endGame(robberIndex, { robbedKong: true }), 450)
+    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: playerIndex }), 450)
   }
 
   function userGang(tile = userKongs.value[0]) {
@@ -577,7 +581,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function userHu() {
-    if (actionPrompt.value?.type === 'rob') return endGame(0, { robbedKong: true })
+    if (actionPrompt.value?.type === 'rob') {
+      return endGame(0, {
+        robbedKong: true,
+        robbedKongPlayerIndex: pendingKong.value?.playerIndex ?? actionPrompt.value.from,
+      })
+    }
     if (userCanHu.value) endGame(0)
   }
 
@@ -598,10 +607,13 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       horseHits: hits,
       robbedKong: Boolean(options.robbedKong),
     })
-    players.forEach((player, index) => {
-      player.score += index === winnerIndex ? score.points * 3 : -score.points
-    })
-    result.value = { winnerIndex, winner: winner.name, horses, hits, ...score, ...options }
+    const totalWon = applyWinScore(
+      players,
+      winnerIndex,
+      score.points,
+      options.robbedKong ? options.robbedKongPlayerIndex : null,
+    )
+    result.value = { winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }
     announcement.value = null
   }
 
