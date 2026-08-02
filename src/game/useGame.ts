@@ -165,7 +165,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return userTingOptions.value.find((option) => option.discard === selectedTile) ?? null
   })
 
-  function structuralMeldCount(player) {
+  function structuralMeldCount(player: GamePlayer) {
     return player.melds.filter((meld) => meld.type !== 'flower').length
   }
 
@@ -229,13 +229,13 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return fromTail ? wall.value.pop() : wall.value.shift()
   }
 
-  function dealOne(player) {
+  function dealOne(player: GamePlayer) {
     const tile = takeTile(false)
     if (!tile) return
     receiveDealtTile(player, tile)
   }
 
-  function receiveDealtTile(player, tile) {
+  function receiveDealtTile(player: GamePlayer, tile) {
     if (tile === 'red') {
       player.redCount += 1
       player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
