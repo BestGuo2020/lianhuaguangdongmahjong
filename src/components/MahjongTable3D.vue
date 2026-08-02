@@ -404,8 +404,8 @@ function addTable() {
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
   // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
   // 绿色牌背层略微内收，白色正面层形成完整外轮廓。
-  scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .34, .94, 6, .07))
-  scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .22, .95, 6, .072))
+  scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .22, .94, 6, .07))
+  scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .34, .95, 6, .072))
 
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   addStaticMesh(new RoundedBoxGeometry(21.8, .54, 17.3, 3, .18), darkJade, 0, -.37, -1.65)
@@ -470,12 +470,13 @@ function makeTableTile(topMaterial, highlighted = false) {
   const bottom = scene.userData.tileBottom
   const back = scene.userData.backMaterial
   const base = new THREE.Mesh(scene.userData.tileBaseGeometry, [green, green, green, back, green, green])
+  base.position.y = -.06
   base.castShadow = true
   base.receiveShadow = true
   tile.add(base)
 
   const cap = new THREE.Mesh(scene.userData.tileCapGeometry, [white, white, topMaterial, bottom, white, white])
-  cap.position.y = .19
+  cap.position.y = .13
   cap.castShadow = true
   cap.receiveShadow = true
   tile.add(cap)
