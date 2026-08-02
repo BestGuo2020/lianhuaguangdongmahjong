@@ -55,6 +55,8 @@ const PLAY_AREA_OFFSET_Z = -.5
 const DICE_SIZE = .5
 const DICE_LANDING_Y = .62
 const BASE_EXPOSURE = .92
+const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
+const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
 
 function own(resource) {
   staticResources.push(resource)
@@ -514,7 +516,7 @@ function addConcealedHand(group, playerIndex) {
     : null
   const displayedHand = splitWinningTile(rawHand, presentation).hand
   const total = Math.min(displayedHand.length, 14)
-  const gap = .725
+  const gap = TILE_GAP_OFFSET // 三家手牌间隙
   const drawnTileIndex = props.players[playerIndex]?.drawnTileIndex ?? -1
   const layoutDrawnTileIndex = props.revealHands ? -1 : drawnTileIndex
   const drawnGap = .28
@@ -795,13 +797,14 @@ function discardTransform(playerIndex, index) {
   const columnCount = isUserWideRow ? 11 : 6
   const rowIndex = isUserWideRow ? index - 12 : index
   const column = rowIndex % columnCount
+  const discardGap = 0.95   // 牌河行间隙
   const row = isUserWideRow ? 2 + Math.floor(rowIndex / columnCount) : Math.floor(rowIndex / columnCount)
   // 宽行沿用前两行的左侧起点，再向右扩展，避免每行中心线变化造成跳动。
-  const lateral = (column - 2.5) * .72
-  if (playerIndex === 0) return { x: lateral, z: 2.48 + row * 1.02, rotation: 0 }
-  if (playerIndex === 1) return { x: 2.64 + row * 1.02, z: -lateral, rotation: Math.PI / 2 }
-  if (playerIndex === 2) return { x: -lateral, z: -2.48 - row * 1.02, rotation: Math.PI }
-  return { x: -2.64 - row * 1.02, z: lateral, rotation: -Math.PI / 2 }
+  const lateral = (column - 2.5) * TILE_GAP_OFFSET
+  if (playerIndex === 0) return { x: lateral, z: 2.48 + row * discardGap, rotation: 0 }
+  if (playerIndex === 1) return { x: 2.64 + row * discardGap, z: -lateral, rotation: Math.PI / 2 }
+  if (playerIndex === 2) return { x: -lateral, z: -2.48 - row * discardGap, rotation: Math.PI }
+  return { x: -2.64 - row * discardGap, z: lateral, rotation: -Math.PI / 2 }
 }
 
 function addDiscards(group, playerIndex) {
@@ -812,7 +815,7 @@ function addDiscards(group, playerIndex) {
     const transform = discardTransform(playerIndex, index)
     tile.position.x = transform.x
     tile.position.z = transform.z
-    tile.position.y = highlighted ? .38 : .28
+    tile.position.y = highlighted ? .48 : .28
     tile.rotation.y = transform.rotation
     group.add(tile)
   })
@@ -828,8 +831,8 @@ function meldTransform(playerIndex, trackOffset) {
 
 function alignMeldBottom(transform, playerIndex, pointsToSource) {
   if (!pointsToSource) return transform
-  // 牌面尺寸为 .72 x 1.02；横置后朝玩家方向缩短 .30，中心外移一半即可底边对齐。
-  const edgeCompensation = .15
+  // 牌面尺寸为 .72 x 1.02；横置后朝玩家方向缩短 .135，中心外移一半即可底边对齐。
+  const edgeCompensation = .135
   if (playerIndex === 0) transform.z += edgeCompensation
   else if (playerIndex === 1) transform.x += edgeCompensation
   else if (playerIndex === 2) transform.z -= edgeCompensation
@@ -850,7 +853,7 @@ function addMelds(group, playerIndex) {
       const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
       const pointsToSource = tileIndex === sourceTileIndex
       const tile = concealed ? makeFaceDownTile() : makeFaceTile(tileName)
-      const tileSpan = pointsToSource ? 1.025 : .725
+      const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
       const centerOffset = trackOffset + (tileSpan - .725) / 2
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
@@ -878,7 +881,7 @@ function addMelds(group, playerIndex) {
     if (meld.added && sourcePlacement) {
       const addedTile = makeFaceTile(meld.tile)
       // 补杠牌与原横牌同样横摆，平放在它靠牌桌中心的一侧，形成 T/L 形。
-      const addedOffset = addedKongTileOffset(playerIndex)
+      const addedOffset = addedKongTileOffset(playerIndex, TILE_GAP_OFFSET)
       addedTile.position.set(
         sourcePlacement.x + addedOffset.x,
         .28,
