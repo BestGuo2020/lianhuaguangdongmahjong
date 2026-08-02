@@ -16,11 +16,12 @@ const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const waitsOpen = ref(false)
+const audioPreparing = ref(false)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const winEffectLabSeats = ['本家', '下家', '对家', '上家']
 const requiresLandscape = ref(false)
 const orientationMessage = ref('')
-const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
+const { soundOn, playEffect, playEffectAndWait, prepareEffects, startBgm } = useAudio()
 
 function updateOrientationGate() {
   const isPortrait = window.matchMedia('(orientation: portrait)').matches
@@ -72,9 +73,17 @@ const {
   userGang, userHu, nextRound, returnToLobby, debugPreviewWin,
 } = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
-function startGameWithAudio() {
+async function startGameWithAudio() {
+  if (audioPreparing.value) return
+  audioPreparing.value = true
+  // 保留点击手势用于解锁背景音乐，再等待短音效全部进入本地内存。
   startBgm()
-  startGame(selectedMatch.value)
+  try {
+    await prepareEffects()
+    startGame(selectedMatch.value)
+  } finally {
+    audioPreparing.value = false
+  }
 }
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
@@ -277,7 +286,10 @@ const displayedUserHand = computed(() => {
             <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>东一局 — 东四局</span></button>
             <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>东一局 — 南四局</span></button>
           </div>
-          <button class="start-button" @click="startGameWithAudio"><b>开始{{ selectedMatch === 'east' ? '东风场' : '半庄场' }}</b><span>四人对局</span></button>
+          <button class="start-button" :disabled="audioPreparing" @click="startGameWithAudio">
+            <b>{{ audioPreparing ? '正在加载音效' : `开始${selectedMatch === 'east' ? '东风场' : '半庄场'}` }}</b>
+            <span>{{ audioPreparing ? '首次加载完成后即可流畅播报' : '四人对局' }}</span>
+          </button>
           <div class="lobby-links">
             <button class="text-button" @click="rulesOpen = true">游戏规则 →</button>
             <a

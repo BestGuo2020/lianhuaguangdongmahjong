@@ -29,29 +29,45 @@ export function useAudio() {
   const bgmStarted = ref(false)
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()
+  const effectObjectUrls = new Set<string>()
   const bgm = new Audio(`${AUDIO_BASE}bg.ogg`)
   bgm.preload = 'auto'
   bgm.loop = true
   bgm.volume = 0.32
 
-  function preloadEffect(name: string) {
-    const cached = effectTemplates.get(name)
-    if (cached) return cached
-
-    const audio = new Audio(`${AUDIO_BASE}${name}`)
+  function createTemplate(src: string) {
+    const audio = new Audio(src)
     audio.preload = 'auto'
     audio.load()
-    effectTemplates.set(name, audio)
     return audio
   }
 
-  // 大厅阶段提前下载全部短音效。文件总量很小，可避免线上首次碰、杠或报牌时才请求资源。
-  EFFECT_AUDIO_FILES.forEach(preloadEffect)
+  async function preloadEffect(name: string) {
+    try {
+      const response = await fetch(`${AUDIO_BASE}${name}`, { cache: 'force-cache' })
+      if (!response.ok) throw new Error(`Failed to preload audio: ${name}`)
+      const objectUrl = URL.createObjectURL(await response.blob())
+      effectObjectUrls.add(objectUrl)
+      effectTemplates.set(name, createTemplate(objectUrl))
+    } catch {
+      // 单个资源异常时保留网络地址回退，避免阻断整局游戏。
+      effectTemplates.set(name, createTemplate(`${AUDIO_BASE}${name}`))
+    }
+  }
+
+  // 主动 fetch 才能确保移动浏览器完整下载资源；单纯 audio.preload 可能被系统忽略。
+  const effectsReady = Promise.all(EFFECT_AUDIO_FILES.map(preloadEffect)).then(() => {})
+
+  function prepareEffects() {
+    return effectsReady
+  }
 
   function playEffect(name: string, volume = 1, onFinish?: () => void): EffectAudio | null {
     if (!soundOn.value || !name) return null
-    const template = preloadEffect(name)
-    const audio = template.cloneNode(true) as EffectAudio
+    const template = effectTemplates.get(name)
+    const audio = (template
+      ? template.cloneNode(true)
+      : new Audio(`${AUDIO_BASE}${name}`)) as EffectAudio
     audio.preload = 'auto'
     audio.volume = volume
     activeEffects.add(audio)
@@ -103,7 +119,10 @@ export function useAudio() {
   onBeforeUnmount(() => {
     bgm.pause()
     stopEffects()
+    effectObjectUrls.forEach((url) => URL.revokeObjectURL(url))
+    effectObjectUrls.clear()
+    effectTemplates.clear()
   })
 
-  return { soundOn, playEffect, playEffectAndWait, startBgm }
+  return { soundOn, playEffect, playEffectAndWait, prepareEffects, startBgm }
 }
