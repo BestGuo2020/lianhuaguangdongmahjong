@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
@@ -53,6 +54,7 @@ const faceMaterials = new Map()
 const PLAY_AREA_OFFSET_Z = -.5
 const DICE_SIZE = .5
 const DICE_LANDING_Y = .62
+const BASE_EXPOSURE = .92
 
 function own(resource) {
   staticResources.push(resource)
@@ -173,43 +175,21 @@ function animateDice(time) {
 
 function makeBackTexture() {
   const surface = document.createElement('canvas')
-  surface.width = 192
-  surface.height = 256
+  surface.width = 256
+  surface.height = 352
   const ctx = surface.getContext('2d')
-  const gradient = ctx.createRadialGradient(62, 42, 8, 96, 128, 170)
-  gradient.addColorStop(0, '#66ca53')
-  gradient.addColorStop(.48, '#2d9d37')
-  gradient.addColorStop(1, '#126728')
+  const gradient = ctx.createLinearGradient(22, 8, 232, 344)
+  gradient.addColorStop(0, '#3eb34a')
+  gradient.addColorStop(.46, '#26983a')
+  gradient.addColorStop(1, '#176d2b')
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 192, 256)
-  ctx.strokeStyle = 'rgba(224,244,210,.88)'
-  ctx.lineWidth = 8
-  ctx.roundRect(12, 12, 168, 232, 14)
-  ctx.stroke()
-  ctx.strokeStyle = 'rgba(8,76,29,.32)'
-  ctx.lineWidth = 1.5
-  for (let x = -260; x < 360; x += 18) {
-    ctx.beginPath()
-    ctx.moveTo(x, 256)
-    ctx.lineTo(x + 256, 0)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x + 256, 256)
-    ctx.stroke()
-  }
-  ctx.strokeStyle = 'rgba(210,244,193,.46)'
-  ctx.lineWidth = 3
-  ctx.roundRect(23, 23, 146, 210, 9)
-  ctx.stroke()
-  ctx.save()
-  ctx.translate(96, 128)
-  ctx.rotate(Math.PI / 4)
-  ctx.strokeStyle = 'rgba(225,250,211,.34)'
-  ctx.lineWidth = 5
-  ctx.roundRect(-29, -29, 58, 58, 9)
-  ctx.stroke()
-  ctx.restore()
+  ctx.fillRect(0, 0, surface.width, surface.height)
+  const highlight = ctx.createRadialGradient(42, 35, 4, 54, 52, 86)
+  highlight.addColorStop(0, 'rgba(255,255,244,.24)')
+  highlight.addColorStop(.3, 'rgba(255,255,244,.08)')
+  highlight.addColorStop(1, 'rgba(255,255,244,0)')
+  ctx.fillStyle = highlight
+  ctx.fillRect(0, 0, surface.width, surface.height)
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
@@ -220,24 +200,39 @@ function makeFaceMaterial(tile) {
   if (faceMaterials.has(tile)) return faceMaterials.get(tile)
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const surface = document.createElement('canvas')
-  surface.width = 150
-  surface.height = 200
+  surface.width = 384
+  surface.height = 512
   const ctx = surface.getContext('2d')
-  const faceGradient = ctx.createLinearGradient(0, 0, 150, 200)
+  const faceGradient = ctx.createLinearGradient(0, 0, surface.width, surface.height)
   faceGradient.addColorStop(0, '#fffef7')
   faceGradient.addColorStop(.58, '#f3f2e8')
   faceGradient.addColorStop(1, '#e5e8dd')
   ctx.fillStyle = faceGradient
   ctx.fillRect(0, 0, surface.width, surface.height)
-  if (image) ctx.drawImage(image, 8, 8, 134, 184)
+  if (image) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(40,30,18,.24)'
+    ctx.shadowBlur = 2.4
+    ctx.shadowOffsetX = .7
+    ctx.shadowOffsetY = 1.2
+    ctx.drawImage(image, 20, 20, 344, 472)
+    ctx.restore()
+  }
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
-  const material = own(new THREE.MeshStandardMaterial({
+  const material = own(new THREE.MeshPhysicalMaterial({
     map: texture,
-    color: 0xd2d5cc,
-    roughness: .66,
+    envMap: scene.userData.tileEnvironment,
+    color: 0xf1f0e8,
+    roughness: .34,
     metalness: 0,
+    clearcoat: .76,
+    clearcoatRoughness: .17,
+    ior: 1.46,
+    specularIntensity: .5,
+    specularColor: new THREE.Color(0xfffdf4),
+    envMapIntensity: .42,
   }))
   faceMaterials.set(tile, material)
   return material
@@ -362,11 +357,55 @@ function addTable() {
     clearcoat: .76,
     clearcoatRoughness: .16,
   }))
-  scene.userData.tileSide = own(new THREE.MeshStandardMaterial({ color: 0xe9ede2, roughness: .5, metalness: 0 }))
-  scene.userData.faceSide = own(new THREE.MeshStandardMaterial({ color: 0x45a937, roughness: .57, metalness: 0 }))
-  scene.userData.tileBottom = own(new THREE.MeshStandardMaterial({ color: 0xcfd6c9, roughness: .64, metalness: 0 }))
-  scene.userData.backMaterial = own(new THREE.MeshStandardMaterial({ map: makeBackTexture(), roughness: .58, metalness: 0 }))
+  scene.userData.tileSide = own(new THREE.MeshPhysicalMaterial({
+    envMap: scene.userData.tileEnvironment,
+    color: 0xe7e7df,
+    metalness: 0,
+    roughness: .31,
+    clearcoat: .82,
+    clearcoatRoughness: .16,
+    ior: 1.46,
+    specularIntensity: .5,
+    specularColor: new THREE.Color(0xfffdf3),
+    envMapIntensity: .44,
+  }))
+  scene.userData.faceSide = own(new THREE.MeshPhysicalMaterial({
+    envMap: scene.userData.tileEnvironment,
+    color: 0x32a73a,
+    metalness: 0,
+    roughness: .3,
+    clearcoat: .68,
+    clearcoatRoughness: .18,
+    ior: 1.46,
+    specularIntensity: .62,
+    envMapIntensity: .46,
+  }))
+  scene.userData.tileBottom = own(new THREE.MeshPhysicalMaterial({
+    envMap: scene.userData.tileEnvironment,
+    color: 0xd7d9d0,
+    metalness: 0,
+    roughness: .42,
+    clearcoat: .38,
+    clearcoatRoughness: .24,
+    ior: 1.45,
+    envMapIntensity: .34,
+  }))
+  scene.userData.backMaterial = own(new THREE.MeshPhysicalMaterial({
+    map: makeBackTexture(),
+    envMap: scene.userData.tileEnvironment,
+    color: 0xf0f1eb,
+    metalness: 0,
+    roughness: .32,
+    clearcoat: .62,
+    clearcoatRoughness: .2,
+    ior: 1.46,
+    envMapIntensity: .4,
+  }))
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
+  // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
+  // 绿色牌背层略微内收，白色正面层形成完整外轮廓。
+  scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .34, .94, 6, .07))
+  scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .22, .95, 6, .072))
 
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   addStaticMesh(new RoundedBoxGeometry(21.8, .54, 17.3, 3, .18), darkJade, 0, -.37, -1.65)
@@ -416,13 +455,12 @@ function clearDynamicScene() {
 }
 
 function makeHiddenTile() {
-  const side = scene.userData.tileSide
-  const back = scene.userData.backMaterial
-  const geometry = ownDynamic(new RoundedBoxGeometry(.72, 1.12, .46, 4, .075))
-  const tile = new THREE.Mesh(geometry, [side, side, side, side, back, back])
-  tile.castShadow = true
-  tile.receiveShadow = true
-  return tile
+  // 暗手复用正面牌的固定结构，将绿色底面翻向玩家后竖直放置。
+  const wrapper = new THREE.Group()
+  const body = makeTableTile(scene.userData.tileBottom)
+  body.rotation.x = -Math.PI / 2
+  wrapper.add(body)
+  return wrapper
 }
 
 function makeTableTile(topMaterial, highlighted = false) {
@@ -430,14 +468,13 @@ function makeTableTile(topMaterial, highlighted = false) {
   const green = scene.userData.faceSide
   const white = scene.userData.tileSide
   const bottom = scene.userData.tileBottom
-  const baseGeometry = ownDynamic(new RoundedBoxGeometry(.74, .34, 1.02, 4, .09))
-  const base = new THREE.Mesh(baseGeometry, green)
+  const back = scene.userData.backMaterial
+  const base = new THREE.Mesh(scene.userData.tileBaseGeometry, [green, green, green, back, green, green])
   base.castShadow = true
   base.receiveShadow = true
   tile.add(base)
 
-  const capGeometry = ownDynamic(new RoundedBoxGeometry(.69, .22, .95, 4, .065))
-  const cap = new THREE.Mesh(capGeometry, [white, white, topMaterial, bottom, white, white])
+  const cap = new THREE.Mesh(scene.userData.tileCapGeometry, [white, white, topMaterial, bottom, white, white])
   cap.position.y = .19
   cap.castShadow = true
   cap.receiveShadow = true
@@ -459,7 +496,12 @@ function makeFaceTile(tileName, highlighted = false) {
 }
 
 function makeFaceDownTile() {
-  return makeTableTile(scene.userData.backMaterial)
+  const wrapper = new THREE.Group()
+  const body = makeTableTile(scene.userData.tileBottom)
+  body.rotation.x = Math.PI
+  body.position.y = .13
+  wrapper.add(body)
+  return wrapper
 }
 
 function addConcealedHand(group, playerIndex) {
@@ -511,7 +553,9 @@ function addConcealedHand(group, playerIndex) {
       tile.position.set(x, tileY, -7.75)
       if (props.revealHands) tile.rotation.y = Math.PI
     } else {
-      tile.rotation.y = position === 'left' ? -Math.PI / 2 : Math.PI / 2
+      tile.rotation.y = props.revealHands
+        ? (position === 'left' ? -Math.PI / 2 : Math.PI / 2)
+        : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
       const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
       let z
       if (index === layoutDrawnTileIndex) {
@@ -889,7 +933,7 @@ function render(time = 0) {
   if (!renderer) return
   let cameraShakeX = 0
   let cameraShakeZ = 0
-  let exposure = 1.08
+  let exposure = BASE_EXPOSURE
   animateDice(time)
   dealTweens = dealTweens.filter((tween) => {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
@@ -945,7 +989,7 @@ function render(time = 0) {
 
     const impactProgress = Math.max(0, Math.min(1, (progress - .22) / .22))
     const impact = Math.sin(impactProgress * Math.PI) * (1 - THREE.MathUtils.smoothstep(progress, .44, .58))
-    const dim = .74 + THREE.MathUtils.smoothstep(progress, .66, .94) * .34
+    const dim = .66 + THREE.MathUtils.smoothstep(progress, .66, .94) * .26
     exposure = dim + impact * .72
     if (!effect.reducedMotion) {
       cameraShakeX = Math.sin(time * .075) * impact * .075
@@ -964,17 +1008,24 @@ onMounted(async () => {
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true, powerPreference: 'high-performance' })
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.08
+  renderer.toneMappingExposure = BASE_EXPOSURE
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
   scene.fog = new THREE.Fog(0x03100b, 20, 34)
+  const pmremGenerator = new THREE.PMREMGenerator(renderer)
+  const roomEnvironment = new RoomEnvironment()
+  const environmentTarget = own(pmremGenerator.fromScene(roomEnvironment, .04))
+  // 环境反射只服务于麻将牌，避免墨玉桌面和金色桌边被整体提亮。
+  scene.userData.tileEnvironment = environmentTarget.texture
+  roomEnvironment.dispose()
+  pmremGenerator.dispose()
   camera = new THREE.PerspectiveCamera(39, 1, .1, 60)
   camera.position.set(0, 15, 11.8)
-  scene.add(new THREE.HemisphereLight(0xf3e4ba, 0x020b08, 2.45))
-  const keyLight = new THREE.DirectionalLight(0xffdfa0, 5.5)
+  scene.add(new THREE.HemisphereLight(0xf3e4ba, 0x020b08, 1.65))
+  const keyLight = new THREE.DirectionalLight(0xffdfa0, 3.8)
   keyLight.position.set(-7, 13, 9)
   keyLight.castShadow = true
   keyLight.shadow.mapSize.set(2048, 2048)
@@ -983,12 +1034,16 @@ onMounted(async () => {
   keyLight.shadow.camera.top = 10
   keyLight.shadow.camera.bottom = -10
   scene.add(keyLight)
-  const rimLight = new THREE.DirectionalLight(0x3acb8b, 2.5)
+  const rimLight = new THREE.DirectionalLight(0x3acb8b, 1.6)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
-  const goldFill = new THREE.PointLight(0xd8a948, 4.5, 24, 2)
+  const goldFill = new THREE.PointLight(0xd8a948, 2.8, 24, 2)
   goldFill.position.set(0, 9, -1.5)
   scene.add(goldFill)
+  const tileHighlight = new THREE.DirectionalLight(0xfff8e8, .8)
+  tileHighlight.position.set(-7, 12, 9)
+  tileHighlight.target.position.set(1, 0, -1)
+  scene.add(tileHighlight, tileHighlight.target)
   addDice()
 
   // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
