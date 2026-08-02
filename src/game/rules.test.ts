@@ -87,20 +87,36 @@ describe('开杠与抢杠计分', () => {
 
   it('暗杠由其余三家各支付底分两倍', () => {
     const players = scores()
-    applyKongScore(players, 0, 'concealed')
+    const deltas = applyKongScore(players, 0, 'concealed')
     expect(players.map((player) => player.score)).toEqual([1600, 800, 800, 800])
+    expect(deltas).toEqual([
+      { playerIndex: 0, amount: 600 },
+      { playerIndex: 1, amount: -200 },
+      { playerIndex: 2, amount: -200 },
+      { playerIndex: 3, amount: -200 },
+    ])
   })
 
   it('明杠只由被杠者支付底分', () => {
     const players = scores()
-    applyKongScore(players, 0, 'discard', 2)
+    const deltas = applyKongScore(players, 0, 'discard', 2)
     expect(players.map((player) => player.score)).toEqual([1100, 1000, 900, 1000])
+    expect(deltas).toEqual([
+      { playerIndex: 0, amount: 100 },
+      { playerIndex: 2, amount: -100 },
+    ])
   })
 
   it('补杠由其余三家各支付底分', () => {
     const players = scores()
-    applyKongScore(players, 0, 'added')
+    const deltas = applyKongScore(players, 0, 'added')
     expect(players.map((player) => player.score)).toEqual([1300, 900, 900, 900])
+    expect(deltas).toEqual([
+      { playerIndex: 0, amount: 300 },
+      { playerIndex: 1, amount: -100 },
+      { playerIndex: 2, amount: -100 },
+      { playerIndex: 3, amount: -100 },
+    ])
   })
 
   it('抢杠胡只由补杠者支付胡牌分', () => {

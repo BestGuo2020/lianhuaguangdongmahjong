@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
-import { addedKongTileOffset, pointFromSeat } from '../game/tableLayout'
+import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/tableLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/types'
 
@@ -304,10 +304,10 @@ function updateMachineTexture() {
   ctx.fillText(String(props.wallCount), 256, 262)
   ctx.fillStyle = '#c8b47e'
   ctx.font = '800 50px "Microsoft YaHei", serif'
-  ctx.fillText('西', 256, 86)
-  ctx.fillText('南', 424, 256)
-  ctx.fillText('东', 256, 426)
-  ctx.fillText('北', 86, 256)
+  ctx.fillText(windForSeat(2, props.dealerIndex), 256, 86)
+  ctx.fillText(windForSeat(1, props.dealerIndex), 424, 256)
+  ctx.fillText(windForSeat(0, props.dealerIndex), 256, 426)
+  ctx.fillText(windForSeat(3, props.dealerIndex), 86, 256)
   texture.needsUpdate = true
 }
 
@@ -1031,6 +1031,8 @@ watch(() => props.openingStage, (stage) => {
   diceGroup.visible = stage === 'dice'
   if (diceGroup.visible) diceStartedAt = performance.now()
 })
+
+watch(() => props.dealerIndex, updateMachineTexture)
 
 onBeforeUnmount(() => {
   destroyed = true

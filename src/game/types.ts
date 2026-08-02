@@ -44,6 +44,16 @@ export interface TableActionEvent {
   meldIndex: number
 }
 
+export interface ScoreDelta {
+  playerIndex: number
+  amount: number
+}
+
+export interface ScoreFlowEvent {
+  id: number
+  deltas: ScoreDelta[]
+}
+
 export interface WinPresentation {
   winnerIndex: number
   tile: TileType

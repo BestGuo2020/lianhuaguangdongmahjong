@@ -6,11 +6,13 @@ withDefaults(defineProps<{
   player: GamePlayer
   active?: boolean
   actionActive?: boolean
+  scoreDelta?: number
+  scoreFlowId?: number
   position: string
   dealer?: boolean
   renderHand?: boolean
   renderMelds?: boolean
-}>(), { active: false, actionActive: false, dealer: false, renderHand: true, renderMelds: true })
+}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true })
 </script>
 
 <template>
@@ -23,6 +25,14 @@ withDefaults(defineProps<{
         <span>{{ player.score }}</span>
       </div>
       <span v-if="active" class="turn-dot"></span>
+      <Transition name="score-flow">
+        <strong
+          v-if="scoreDelta"
+          :key="`${scoreFlowId}-${player.seat}`"
+          class="score-delta"
+          :class="scoreDelta > 0 ? 'positive' : 'negative'"
+        >{{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}</strong>
+      </Transition>
     </div>
     <div v-if="renderHand" class="opponent-hand" :class="`hand-${position}`">
       <MahjongTile

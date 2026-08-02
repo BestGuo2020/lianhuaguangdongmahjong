@@ -90,6 +90,35 @@ describe('玩家操作阶段限制', () => {
     vi.unstubAllGlobals()
   })
 
+  it('点杠同时生成一收一付的座位飘分', () => {
+    vi.stubGlobal('window', {
+      clearInterval: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setTimeout: vi.fn(() => 1),
+    })
+    const game = useGame()
+    game.players.push(
+      player(['m1', 'm1', 'm1', 'm2']),
+      player(),
+      player(),
+      player(),
+    )
+    game.players[2].discards.push('m1')
+    game.actionPrompt.value = {
+      type: 'claim', tile: 'm1', from: 2, canGang: true, remainingClaims: [],
+    }
+
+    game.userGangFromDiscard()
+
+    expect(game.scoreFlowEvent.value?.deltas).toEqual([
+      { playerIndex: 0, amount: 100 },
+      { playerIndex: 2, amount: -100 },
+    ])
+    expect(game.players.map((item) => item.score)).toEqual([1100, 1000, 900, 1000])
+    vi.unstubAllGlobals()
+  })
+
   it('补杠先把第四张牌加入副露并报杠，再处理抢杠', () => {
     const setTimeout = vi.fn(() => 1)
     vi.stubGlobal('window', {

@@ -65,7 +65,7 @@ onUnmounted(() => {
 
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-  actionPrompt, announcement, tableActionEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+  actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
@@ -89,6 +89,7 @@ const tableActionLabel = computed(() => ({
   'robbed-kong-win': '抢杠胡',
 }[tableActionEvent.value?.type ?? 'peng']))
 const tableActionIsWin = computed(() => ['self-draw', 'robbed-kong-win'].includes(tableActionEvent.value?.type ?? ''))
+const scoreDeltaFor = (playerIndex: number) => scoreFlowEvent.value?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
@@ -166,6 +167,8 @@ const displayedUserHand = computed(() => {
             :position="seatPosition[index + 1]"
             :active="currentPlayer === index + 1"
             :action-active="tableActionEvent?.actorIndex === index + 1"
+            :score-delta="scoreDeltaFor(index + 1)"
+            :score-flow-id="scoreFlowEvent?.id"
             :dealer="dealer === index + 1"
             :render-hand="false"
             :render-melds="false"
@@ -201,6 +204,14 @@ const displayedUserHand = computed(() => {
               <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
               <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
+            <Transition name="score-flow">
+              <strong
+                v-if="scoreDeltaFor(0)"
+                :key="`${scoreFlowEvent?.id}-0`"
+                class="score-delta user-score-delta"
+                :class="scoreDeltaFor(0) > 0 ? 'positive' : 'negative'"
+              >{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>
+            </Transition>
             <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
               <MahjongTile
                 v-for="(tile, index) in displayedUserHand"

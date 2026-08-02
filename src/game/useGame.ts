@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
-import type { EndGameOptions, GamePlayer, MatchType, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
+import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -65,6 +65,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const pendingKong = ref<PendingKong | null>(null)
   const announcement = ref<Announcement | null>(null)
   const tableActionEvent = ref<TableActionEvent | null>(null)
+  const scoreFlowEvent = ref<ScoreFlowEvent | null>(null)
   const result = ref<RoundResult | null>(null)
   const winEffect = ref<RoundResult | null>(null)
   const winPresentation = ref<WinPresentation | null>(null)
@@ -189,6 +190,15 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     tableActionEvent.value = event
     later(() => {
       if (tableActionEvent.value?.id === event.id) tableActionEvent.value = null
+    }, 1050)
+  }
+
+  function showScoreFlow(deltas: ScoreDelta[]) {
+    if (!deltas.length) return
+    const event: ScoreFlowEvent = { id: Date.now(), deltas }
+    scoreFlowEvent.value = event
+    later(() => {
+      if (scoreFlowEvent.value?.id === event.id) scoreFlowEvent.value = null
     }, 1050)
   }
 
@@ -499,8 +509,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (isGang) {
       player.hand = removeMatches(player.hand, tile, 3)
       player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
-      applyKongScore(players, playerIndex, 'discard', from)
+      const scoreDeltas = applyKongScore(players, playerIndex, 'discard', from)
       showTableAction('discard-gang', playerIndex, from, tile, player.melds.length - 1)
+      showScoreFlow(scoreDeltas)
       playSound('gang.mp3')
       currentPlayer.value = playerIndex
       if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
@@ -579,11 +590,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     user.value.hand = removeMatches(user.value.hand, prompt.tile, 3)
     user.value.drawnTileIndex = -1
     user.value.melds.push({ type: 'gang', tile: prompt.tile, from: prompt.from, tiles: Array(4).fill(prompt.tile) })
-    applyKongScore(players, 0, 'discard', prompt.from)
+    const scoreDeltas = applyKongScore(players, 0, 'discard', prompt.from)
     actionPrompt.value = null
     currentPlayer.value = 0
     userDrewThisTurn.value = false
     showTableAction('discard-gang', 0, prompt.from, prompt.tile, user.value.melds.length - 1)
+    showScoreFlow(scoreDeltas)
     playSound('gang.mp3')
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
@@ -593,8 +605,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.hand = removeMatches(player.hand, tile, 4)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
-    applyKongScore(players, playerIndex, 'concealed')
+    const scoreDeltas = applyKongScore(players, playerIndex, 'concealed')
     showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
+    showScoreFlow(scoreDeltas)
     playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
@@ -621,7 +634,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const player = players[playerIndex]
     const meld = player.melds.find((item) => item.type === 'gang' && item.added && item.pending)
     if (meld) meld.pending = false
-    applyKongScore(players, playerIndex, 'added')
+    const scoreDeltas = applyKongScore(players, playerIndex, 'added')
+    showScoreFlow(scoreDeltas)
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 500)
   }
@@ -896,7 +910,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   return {
     phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-    actionPrompt, announcement, tableActionEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+    actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,

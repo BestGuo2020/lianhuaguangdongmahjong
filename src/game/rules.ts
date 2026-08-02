@@ -1,5 +1,5 @@
 import { TILE_TYPES, isHorse } from './tiles'
-import type { GamePlayer, Meld, TileType } from './types'
+import type { GamePlayer, Meld, ScoreDelta, TileType } from './types'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
 const WINNING_DRAW_TILES: TileType[] = [...STANDARD_TILES, 'white']
@@ -10,11 +10,16 @@ export function applyKongScore(players: GamePlayer[], kongPlayerIndex: number, t
     ? [fromIndex]
     : players.map((_, index) => index).filter((index) => index !== kongPlayerIndex)
   const payment = type === 'concealed' ? BASE_SCORE * 2 : BASE_SCORE
-  payers.forEach((payerIndex) => {
-    if (!Number.isInteger(payerIndex) || payerIndex === kongPlayerIndex) return
+  const validPayers = payers.filter((payerIndex) => Number.isInteger(payerIndex) && payerIndex !== kongPlayerIndex) as number[]
+  validPayers.forEach((payerIndex) => {
     players[payerIndex].score -= payment
     players[kongPlayerIndex].score += payment
   })
+  const deltas: ScoreDelta[] = [
+    { playerIndex: kongPlayerIndex, amount: payment * validPayers.length },
+    ...validPayers.map((playerIndex) => ({ playerIndex, amount: -payment })),
+  ]
+  return deltas.filter(({ amount }) => amount !== 0)
 }
 
 export function applyWinScore(players: GamePlayer[], winnerIndex: number, points: number, payerIndex: number | null = null) {
