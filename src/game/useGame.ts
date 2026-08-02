@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
-import type { EndGameOptions, GamePlayer, MatchType, TileType, WinPresentation } from './types'
+import type { EndGameOptions, GamePlayer, MatchType, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -64,6 +64,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const actionPrompt = ref<ActionPrompt | null>(null)
   const pendingKong = ref<PendingKong | null>(null)
   const announcement = ref<Announcement | null>(null)
+  const tableActionEvent = ref<TableActionEvent | null>(null)
   const result = ref<RoundResult | null>(null)
   const winEffect = ref<RoundResult | null>(null)
   const winPresentation = ref<WinPresentation | null>(null)
@@ -181,6 +182,14 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => {
       if (announcement.value?.text === text) announcement.value = null
     }, 1500)
+  }
+
+  function showTableAction(type: TableActionType, actorIndex: number, sourceIndex: number | null, tile: TileType, meldIndex: number) {
+    const event: TableActionEvent = { id: Date.now(), type, actorIndex, sourceIndex, tile, meldIndex }
+    tableActionEvent.value = event
+    later(() => {
+      if (tableActionEvent.value?.id === event.id) tableActionEvent.value = null
+    }, 1050)
   }
 
   function resetPlayers() {
@@ -336,7 +345,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (tile === 'red') {
       player.redCount += 1
       player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-      announce(`杠`, 'red')
+      showTableAction('flower-gang', playerIndex, null, tile, player.melds.length - 1)
       if (player.redCount >= 4) {
         endGame(playerIndex, { fourRed: true })
         return false
@@ -406,7 +415,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (concealed.length) {
       await performConcealedKong(playerIndex, concealed[0])
       if (phase.value === 'settled') return
-      announce(`杠`, 'gold')
       return later(() => playAI(playerIndex), 550)
     }
 
@@ -492,14 +500,14 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       player.hand = removeMatches(player.hand, tile, 3)
       player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
       applyKongScore(players, playerIndex, 'discard', from)
-      announce(`杠`, 'gold')
+      showTableAction('discard-gang', playerIndex, from, tile, player.melds.length - 1)
       playSound('gang.mp3')
       currentPlayer.value = playerIndex
       if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
     } else {
       player.hand = removeMatches(player.hand, tile, 2)
       player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
-      announce(`碰`, 'gold')
+      showTableAction('peng', playerIndex, from, tile, player.melds.length - 1)
       playSound('peng.mp3')
       currentPlayer.value = playerIndex
       phase.value = 'thinking'
@@ -558,7 +566,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'discard'
     selectedIndex.value = -1
     startCountdown()
-    announce('碰', 'gold')
+    showTableAction('peng', 0, prompt.from, prompt.tile, user.value.melds.length - 1)
     playSound('peng.mp3')
   }
 
@@ -575,7 +583,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     actionPrompt.value = null
     currentPlayer.value = 0
     userDrewThisTurn.value = false
-    announce('杠', 'gold')
+    showTableAction('discard-gang', 0, prompt.from, prompt.tile, user.value.melds.length - 1)
     playSound('gang.mp3')
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
@@ -586,6 +594,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
     applyKongScore(players, playerIndex, 'concealed')
+    showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
     playSound('gang.mp3')
     if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
@@ -604,7 +613,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       tiles: [tile, tile, tile, tile],
     }
     phase.value = 'kong'
-    announce(`杠`, 'gold')
+    showTableAction('added-gang', playerIndex, null, tile, meldIndex)
     playSound('gang.mp3')
   }
 
@@ -881,7 +890,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   return {
     phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-    actionPrompt, announcement, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+    actionPrompt, announcement, tableActionEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,

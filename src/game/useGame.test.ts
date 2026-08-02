@@ -68,6 +68,10 @@ describe('玩家操作阶段限制', () => {
     expect(game.isUserTurn.value).toBe(true)
     expect(game.userCanHu.value).toBe(false)
     expect(game.userKongs.value).toEqual([])
+    expect(game.tableActionEvent.value).toMatchObject({
+      type: 'peng', actorIndex: 0, sourceIndex: 1, tile: 'm1', meldIndex: 0,
+    })
+    expect(game.announcement.value).toBeNull()
     vi.unstubAllGlobals()
   })
 
@@ -95,7 +99,10 @@ describe('玩家操作阶段限制', () => {
     expect(game.players[0].melds[0]).toMatchObject({
       type: 'gang', added: true, pending: true, tiles: ['east', 'east', 'east', 'east'],
     })
-    expect(game.announcement.value?.text).toBe('杠')
+    expect(game.tableActionEvent.value).toMatchObject({
+      type: 'added-gang', actorIndex: 0, sourceIndex: null, tile: 'east', meldIndex: 0,
+    })
+    expect(game.announcement.value).toBeNull()
     expect(game.actionPrompt.value).toBeNull()
     expect(playSound).toHaveBeenCalledWith('gang.mp3')
     expect(game.players.map((item) => item.score)).toEqual([1000, 1000, 1000, 1000])

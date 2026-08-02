@@ -6,7 +6,7 @@ import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
 import { addedKongTileOffset, pointFromSeat } from '../game/tableLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
-import type { GamePlayer, TileType, WinPresentation } from '../game/types'
+import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/types'
 
 interface TableProps {
   players?: GamePlayer[]
@@ -21,6 +21,7 @@ interface TableProps {
   openingStage?: string | null
   diceValues?: number[]
   dealerIndex?: number
+  tableActionEvent?: TableActionEvent | null
 }
 
 const props = withDefaults(defineProps<TableProps>(), {
@@ -28,6 +29,7 @@ const props = withDefaults(defineProps<TableProps>(), {
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0,
+  tableActionEvent: null,
 })
 
 const canvas = ref(null)
@@ -39,6 +41,9 @@ let animationFrame
 let destroyed = false
 let dynamicGroups = []
 let dealTweens = []
+let meldTweens = []
+let animatedTableActionId = -1
+let pendingTableActionAnimation = null
 let winEffectAnimation = null
 let diceGroup
 let diceStartedAt = 0
@@ -790,7 +795,9 @@ function alignMeldBottom(transform, playerIndex, pointsToSource) {
 function addMelds(group, playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
-  melds.forEach((meld) => {
+  melds.forEach((meld, meldIndex) => {
+    const animatesThisMeld = pendingTableActionAnimation?.actorIndex === playerIndex
+      && pendingTableActionAnimation?.meldIndex === meldIndex
     const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
     let sourcePlacement = null
@@ -815,6 +822,12 @@ function addMelds(group, playerIndex) {
         }
       }
       group.add(tile)
+      if (animatesThisMeld && pendingTableActionAnimation.type !== 'added-gang') {
+        const targetY = tile.position.y
+        tile.position.y = targetY + .72
+        tile.scale.setScalar(.78)
+        meldTweens.push({ tile, targetY, startedAt: performance.now(), duration: 430 })
+      }
       trackOffset += tileSpan
     })
     if (meld.added && sourcePlacement) {
@@ -828,6 +841,12 @@ function addMelds(group, playerIndex) {
       )
       addedTile.rotation.y = sourcePlacement.rotation
       group.add(addedTile)
+      if (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang') {
+        const targetY = addedTile.position.y
+        addedTile.position.y = targetY + .72
+        addedTile.scale.setScalar(.78)
+        meldTweens.push({ tile: addedTile, targetY, startedAt: performance.now(), duration: 430 })
+      }
     }
     trackOffset += .18
   })
@@ -837,6 +856,10 @@ function rebuildTableTiles() {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
   updateMachineTexture()
   clearDynamicScene()
+  meldTweens = []
+  pendingTableActionAnimation = props.tableActionEvent?.id !== animatedTableActionId
+    ? props.tableActionEvent
+    : null
   for (let playerIndex = 0; playerIndex < 4; playerIndex += 1) {
     const group = new THREE.Group()
     addConcealedHand(group, playerIndex)
@@ -846,6 +869,8 @@ function rebuildTableTiles() {
     scene.add(group)
     dynamicGroups.push(group)
   }
+  if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
+  pendingTableActionAnimation = null
   addWinEffect()
   addWinningDisplayTile()
 }
@@ -870,6 +895,14 @@ function render(time = 0) {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
     const eased = 1 - (1 - progress) ** 3
     tween.tile.position.lerpVectors(tween.origin, tween.target, eased)
+    return progress < 1
+  })
+  meldTweens = meldTweens.filter((tween) => {
+    const progress = Math.min(1, Math.max(0, (time - tween.startedAt) / tween.duration))
+    const settled = 1 - (1 - progress) ** 3
+    const bounce = Math.sin(progress * Math.PI) * (1 - progress) * .16
+    tween.tile.position.y = THREE.MathUtils.lerp(tween.targetY + .72, tween.targetY, settled) + bounce
+    tween.tile.scale.setScalar(THREE.MathUtils.lerp(.78, 1, settled))
     return progress < 1
   })
   if (winEffectAnimation) {
@@ -989,6 +1022,7 @@ watch(
     props.winPresentation?.tile,
     props.winPresentation?.robbedKong,
     props.dealAnimation.serial,
+    props.tableActionEvent?.id,
   ),
   rebuildTableTiles,
 )

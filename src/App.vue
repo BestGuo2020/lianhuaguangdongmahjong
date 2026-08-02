@@ -65,7 +65,7 @@ onUnmounted(() => {
 
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
-  actionPrompt, announcement, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+  actionPrompt, announcement, tableActionEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
@@ -78,6 +78,8 @@ function startGameWithAudio() {
 }
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
+const tableActionPosition = computed(() => tableActionEvent.value ? seatPosition[tableActionEvent.value.actorIndex] : 'bottom')
+const tableActionLabel = computed(() => tableActionEvent.value?.type === 'peng' ? '碰' : '杠')
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
@@ -146,6 +148,7 @@ const displayedUserHand = computed(() => {
             :opening-stage="openingStage"
             :dice-values="diceValues"
             :dealer-index="dealer"
+            :table-action-event="tableActionEvent"
           />
           <PlayerSeat
             v-for="(player, index) in players.slice(1)"
@@ -153,10 +156,21 @@ const displayedUserHand = computed(() => {
             :player="player"
             :position="seatPosition[index + 1]"
             :active="currentPlayer === index + 1"
+            :action-active="tableActionEvent?.actorIndex === index + 1"
             :dealer="dealer === index + 1"
             :render-hand="false"
             :render-melds="false"
           />
+
+          <Transition name="table-action" mode="out-in">
+            <div
+              v-if="tableActionEvent"
+              :key="tableActionEvent.id"
+              class="table-action-cue"
+              :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠' }]"
+              aria-live="polite"
+            ><span>{{ tableActionLabel }}</span></div>
+          </Transition>
 
           <Transition name="announce">
             <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone">
@@ -173,7 +187,7 @@ const displayedUserHand = computed(() => {
           </Transition>
 
           <section class="user-area">
-            <div class="user-identity" :class="{ active: currentPlayer === 0 }">
+            <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }">
               <span v-if="dealer === 0" class="dealer-badge">庄</span>
               <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
               <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>

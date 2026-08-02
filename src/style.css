@@ -304,6 +304,50 @@ button { font: inherit; }
 .announcement { position: absolute; z-index: 40; top: 34%; left: 50%; transform: translate(-50%, -50%); padding: 4px 37px; background: linear-gradient(90deg, transparent, rgba(10,11,8,.86) 20%, rgba(10,11,8,.86) 80%, transparent); pointer-events: none; }
 .announcement span { display: block; min-width: 140px; color: #f3d47c; font: 900 clamp(20px, 2.7vw, 40px) "Noto Serif SC", serif; letter-spacing: .12em; text-align: center; text-shadow: 0 2px 4px #000, 0 0 14px rgba(240,188,67,.45); }
 .announcement.red span { color: #ffdb91; text-shadow: 0 2px 4px #000, 0 0 14px #b82429; }
+
+/* 碰杠反馈绑定到行动座位；不移动弃牌，靠方向、头像和副露落位建立因果。 */
+.table-action-cue {
+  position: absolute;
+  z-index: 44;
+  display: grid;
+  place-items: center;
+  width: clamp(78px, 8vw, 126px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(35, 21, 8, .94) 0 35%, rgba(174, 119, 32, .48) 48%, transparent 72%);
+  pointer-events: none;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .55));
+}
+.table-action-cue::before,
+.table-action-cue::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 2px solid rgba(255, 216, 118, .72);
+  border-radius: 50%;
+}
+.table-action-cue::after { inset: 1%; border-width: 1px; border-color: rgba(255, 202, 77, .32); }
+.table-action-cue span {
+  color: #ffe5a1;
+  font: 900 clamp(34px, 4.3vw, 66px) "Noto Serif SC", serif;
+  line-height: 1;
+  text-shadow: 0 3px 3px #000, 0 0 17px rgba(255, 190, 49, .9);
+}
+.table-action-cue.gang { background: radial-gradient(circle, rgba(48, 14, 8, .96) 0 35%, rgba(191, 71, 29, .52) 48%, transparent 72%); }
+.action-from-top { top: 20%; left: 50%; transform: translate(-50%, -50%); }
+.action-from-right { top: 43%; right: 17%; transform: translate(50%, -50%); }
+.action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
+.action-from-left { top: 43%; left: 17%; transform: translate(-50%, -50%); }
+
+.player-seat.action-active .avatar-wrap,
+.user-identity.action-active {
+  border-color: #ffe09a;
+  box-shadow: 0 0 0 2px rgba(255, 208, 91, .45), 0 0 30px rgba(255, 178, 48, .72), inset 0 0 18px rgba(255, 205, 91, .16);
+}
+.player-seat.action-active .avatar,
+.user-identity.action-active .avatar { animation: action-avatar-impact .72s cubic-bezier(.2,.85,.25,1); }
+.player-seat.action-active .player-info strong,
+.user-identity.action-active .player-info strong { color: #fff1b8; text-shadow: 0 0 11px rgba(255, 200, 68, .9), 0 1px 3px #000; }
 .win-burst-leave-active { transition: opacity .22s, filter .22s; }.win-burst-leave-to { opacity: 0; filter: brightness(2) blur(5px); }
 .opening-overlay { position: absolute; z-index: 42; top: 43%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; }
 .start-cue { display: grid; place-items: center; min-width: 330px; padding: 22px 55px 25px; background: radial-gradient(ellipse, rgba(8,20,14,.94), rgba(8,14,11,.72) 58%, transparent 72%); text-align: center; }
@@ -448,6 +492,9 @@ button { font: inherit; }
 .panel-enter-active, .panel-leave-active { transition: transform .35s ease; }.panel-enter-from, .panel-leave-to { transform: translateX(100%); }
 .modal-enter-active, .modal-leave-active { transition: opacity .3s ease; }.modal-enter-from, .modal-leave-to { opacity: 0; }.modal-enter-active .result-card { animation: result-in .48s cubic-bezier(.2,.9,.25,1.15); }
 .announce-enter-active { animation: announce-in .35s ease-out; }.announce-leave-active { transition: opacity .25s; }.announce-leave-to { opacity: 0; }
+.table-action-enter-active { animation: table-action-in .28s cubic-bezier(.16,.84,.25,1.12); }
+.table-action-leave-active { transition: opacity .2s, filter .2s; }
+.table-action-leave-to { opacity: 0; filter: brightness(1.7) blur(3px); }
 .discard-pop-enter-active { animation-duration: .42s; animation-timing-function: cubic-bezier(.16,.84,.28,1.08); }.discard-pop-leave-active { transition: opacity .16s; }.discard-pop-leave-to { opacity: 0; }
 .from-top.discard-pop-enter-active { animation-name: discard-from-top; }
 .from-right.discard-pop-enter-active { animation-name: discard-from-right; }
@@ -461,6 +508,8 @@ button { font: inherit; }
 @keyframes discard-from-bottom { from { opacity: .2; transform: translate(-50%, 520%) scale(.72) rotateX(-18deg); } to { opacity: 1; transform: translate(-50%, 60%) scale(1); } }
 @keyframes discard-from-left { from { opacity: .2; transform: translate(-430%, -50%) rotate(90deg) scale(.72); } to { opacity: 1; transform: translate(-180%, -50%) rotate(90deg) scale(1); } }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
+@keyframes table-action-in { from { opacity: 0; scale: .55; filter: brightness(1.8) blur(4px); } 70% { scale: 1.08; } }
+@keyframes action-avatar-impact { 0% { transform: scale(.92); filter: brightness(1.7); } 42% { transform: scale(1.09); filter: brightness(1.24); } 100% { transform: scale(1); filter: brightness(1); } }
 @keyframes opening-cue-in { from { opacity: 0; transform: translate(-50%, -44%) scale(.82); filter: blur(5px); } }
 @keyframes result-in { from { transform: translateY(18px) scale(.94); opacity: 0; } }
 @keyframes ranking-slide { from { opacity: 0; transform: translateX(45px) scale(.97); } }

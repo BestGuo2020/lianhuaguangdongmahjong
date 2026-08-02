@@ -26,6 +26,17 @@ export interface GamePlayer {
   drawnTileIndex: number
 }
 
+export type TableActionType = 'peng' | 'discard-gang' | 'concealed-gang' | 'added-gang' | 'flower-gang'
+
+export interface TableActionEvent {
+  id: number
+  type: TableActionType
+  actorIndex: number
+  sourceIndex: number | null
+  tile: TileType
+  meldIndex: number
+}
+
 export interface WinPresentation {
   winnerIndex: number
   tile: TileType

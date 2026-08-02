@@ -5,15 +5,16 @@ import type { GamePlayer } from '../game/types'
 withDefaults(defineProps<{
   player: GamePlayer
   active?: boolean
+  actionActive?: boolean
   position: string
   dealer?: boolean
   renderHand?: boolean
   renderMelds?: boolean
-}>(), { active: false, dealer: false, renderHand: true, renderMelds: true })
+}>(), { active: false, actionActive: false, dealer: false, renderHand: true, renderMelds: true })
 </script>
 
 <template>
-  <section class="player-seat" :class="[`seat-${position}`, { active }]">
+  <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive }]">
     <div class="avatar-wrap">
       <span v-if="dealer" class="dealer-badge">庄</span>
       <img class="avatar" :src="player.avatar" :alt="`${player.name}头像`" />
