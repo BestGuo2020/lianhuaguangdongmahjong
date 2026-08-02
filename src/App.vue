@@ -275,8 +275,8 @@ const displayedUserHand = computed(() => {
           <h1>莲花<span>广麻</span></h1>
           <p class="subtitle">在线单机四人广东麻将</p>
           <div class="match-selector" role="radiogroup" aria-label="场次选择">
-            <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>东一局 — 东四局</span></button>
-            <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>东一局 — 南四局</span></button>
+            <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>一场4局（不含连庄）</span></button>
+            <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
           </div>
           <button class="start-button" @click="startGameWithAudio"><b>开始{{ selectedMatch === 'east' ? '东风场' : '半庄场' }}</b><span>四人对局</span></button>
           <div class="lobby-links">
