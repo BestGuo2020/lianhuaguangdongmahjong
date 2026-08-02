@@ -1,3 +1,5 @@
+import type { TileType, WinPresentation } from './types'
+
 export const WIN_EFFECT_DURATION = 2600
 export const WIN_REVEAL_DURATION = 1500
 export const WIN_EFFECT_SOUND_DELAY = 320
@@ -12,11 +14,11 @@ export const WIN_DISPLAY_LAYOUTS = Object.freeze([
   Object.freeze({ x: -3.4, y: 0.31, z: 3.9, rotation: -Math.PI / 2 }),
 ])
 
-export function winDisplayLayout(playerIndex) {
+export function winDisplayLayout(playerIndex: number) {
   return WIN_DISPLAY_LAYOUTS[playerIndex] ?? WIN_DISPLAY_LAYOUTS[0]
 }
 
-export function splitWinningTile(hand = [], presentation = null) {
+export function splitWinningTile(hand: TileType[] = [], presentation: WinPresentation | null = null) {
   const tiles = [...hand]
   if (!presentation?.tile) return { hand: tiles, displayTile: null, removedIndex: -1 }
   if (presentation.robbedKong) {

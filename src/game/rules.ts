@@ -1,10 +1,11 @@
 import { TILE_TYPES, isHorse } from './tiles'
+import type { GamePlayer, Meld, TileType } from './types'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
-const WINNING_DRAW_TILES = [...STANDARD_TILES, 'white']
+const WINNING_DRAW_TILES: TileType[] = [...STANDARD_TILES, 'white']
 export const BASE_SCORE = 100
 
-export function applyKongScore(players, kongPlayerIndex, type, fromIndex = null) {
+export function applyKongScore(players: GamePlayer[], kongPlayerIndex: number, type: 'discard' | 'concealed' | 'added', fromIndex: number | null = null) {
   const payers = type === 'discard'
     ? [fromIndex]
     : players.map((_, index) => index).filter((index) => index !== kongPlayerIndex)
@@ -16,7 +17,7 @@ export function applyKongScore(players, kongPlayerIndex, type, fromIndex = null)
   })
 }
 
-export function applyWinScore(players, winnerIndex, points, payerIndex = null) {
+export function applyWinScore(players: GamePlayer[], winnerIndex: number, points: number, payerIndex: number | null = null) {
   const payers = Number.isInteger(payerIndex)
     ? [payerIndex]
     : players.map((_, index) => index).filter((index) => index !== winnerIndex)
@@ -27,17 +28,17 @@ export function applyWinScore(players, winnerIndex, points, payerIndex = null) {
   return points * payers.length
 }
 
-function countsFor(tiles) {
-  const counts = new Map()
+function countsFor(tiles: TileType[]) {
+  const counts = new Map<TileType, number>()
   tiles.forEach((tile) => counts.set(tile, (counts.get(tile) || 0) + 1))
   return counts
 }
 
-function firstRemaining(counts) {
+function firstRemaining(counts: Map<TileType, number>) {
   return STANDARD_TILES.find((tile) => (counts.get(tile) || 0) > 0)
 }
 
-function consume(counts, tile, amount) {
+function consume(counts: Map<TileType, number>, tile: TileType, amount: number) {
   const next = new Map(counts)
   const left = (next.get(tile) || 0) - amount
   if (left > 0) next.set(tile, left)
@@ -45,7 +46,7 @@ function consume(counts, tile, amount) {
   return next
 }
 
-function canMakeMelds(counts, jokers, needed, memo = new Map()) {
+function canMakeMelds(counts: Map<TileType, number>, jokers: number, needed: number, memo = new Map<string, boolean>()) {
   const signature = `${needed}|${jokers}|${STANDARD_TILES.map((tile) => counts.get(tile) || 0).join('')}`
   if (memo.has(signature)) return memo.get(signature)
 
@@ -72,7 +73,7 @@ function canMakeMelds(counts, jokers, needed, memo = new Map()) {
     const firstRank = Math.max(1, rank - 2)
     const lastRank = Math.min(7, rank)
     for (let start = firstRank; start <= lastRank; start += 1) {
-      const sequence = Array.from({ length: 3 }, (_, index) => `${match[1]}${start + index}`)
+      const sequence = Array.from({ length: 3 }, (_, index) => `${match[1]}${start + index}` as TileType)
       let missing = 0
       let next = new Map(counts)
       sequence.forEach((item) => {
@@ -90,7 +91,7 @@ function canMakeMelds(counts, jokers, needed, memo = new Map()) {
   return false
 }
 
-export function isWinningHand(tiles, exposedMeldCount = 0) {
+export function isWinningHand(tiles: TileType[], exposedMeldCount = 0) {
   const redFiltered = tiles.filter((tile) => tile !== 'red')
   const neededMelds = 4 - exposedMeldCount
   if (redFiltered.length !== neededMelds * 3 + 2) return false
@@ -109,23 +110,23 @@ export function isWinningHand(tiles, exposedMeldCount = 0) {
   return false
 }
 
-export function waitingTiles(tiles, exposedMeldCount = 0) {
+export function waitingTiles(tiles: TileType[], exposedMeldCount = 0) {
   return WINNING_DRAW_TILES.filter((tile) => isWinningHand([...tiles, tile], exposedMeldCount))
 }
 
-export function matchingCount(tiles, tile) {
+export function matchingCount(tiles: TileType[], tile: TileType) {
   return tiles.filter((item) => item === tile).length
 }
 
-export function concealedKongs(tiles) {
+export function concealedKongs(tiles: TileType[]) {
   return TILE_TYPES.filter((tile) => tile !== 'red' && tile !== 'white' && matchingCount(tiles, tile) === 4)
 }
 
-export function canRobKong(tiles, kongTile, exposedMeldCount = 0) {
+export function canRobKong(tiles: TileType[], kongTile: TileType, exposedMeldCount = 0) {
   return isWinningHand([...tiles, kongTile], exposedMeldCount)
 }
 
-export function meldSourceTileIndex(meld, playerIndex) {
+export function meldSourceTileIndex(meld: Meld, playerIndex: number) {
   if (!['peng', 'gang'].includes(meld.type) || !Number.isInteger(meld.from)) return -1
   const relativeSource = (meld.from - playerIndex + 4) % 4
   if (relativeSource === 1) return 0
@@ -134,13 +135,15 @@ export function meldSourceTileIndex(meld, playerIndex) {
   return -1
 }
 
-export function drawHorses(wall, amount = 8) {
+export function drawHorses(wall: TileType[], amount = 8) {
   const horses = wall.splice(0, Math.min(amount, wall.length))
   return { horses, hits: horses.filter(isHorse).length }
 }
 
 export function scoreHand({ dealer = false, noJoker = false, fourRed = false, horseHits = 0, robbedKong = false }) {
-  const details = [{ label: robbedKong ? '抢杠胡' : '自摸', multiplier: 1 }]
+  const details: Array<{ label: string; multiplier?: number; points?: number }> = [
+    { label: robbedKong ? '抢杠胡' : '自摸', multiplier: 1 },
+  ]
   let multiplier = 1
   if (dealer) { multiplier *= 2; details.push({ label: '庄家', multiplier: 2 }) }
   if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }

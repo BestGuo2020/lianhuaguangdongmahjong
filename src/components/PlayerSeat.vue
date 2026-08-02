@@ -1,14 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import MahjongTile from './MahjongTile.vue'
+import type { GamePlayer } from '../game/types'
 
-defineProps({
-  player: { type: Object, required: true },
-  active: Boolean,
-  position: { type: String, required: true },
-  dealer: Boolean,
-  renderHand: { type: Boolean, default: true },
-  renderMelds: { type: Boolean, default: true },
-})
+withDefaults(defineProps<{
+  player: GamePlayer
+  active?: boolean
+  position: string
+  dealer?: boolean
+  renderHand?: boolean
+  renderMelds?: boolean
+}>(), { active: false, dealer: false, renderHand: true, renderMelds: true })
 </script>
 
 <template>

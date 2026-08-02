@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
+import type { EndGameOptions, GamePlayer, MatchType, TileType, WinPresentation } from './types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -21,7 +22,27 @@ const PLAYER_SEED = [
 const MATCH_HANDS = { east: 4, hanchan: 8 }
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 
-export function advanceMatchState({ round, dealer, honba, matchType, result, scores, playerCount = 4 }) {
+interface UseGameOptions {
+  playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+}
+
+interface ActionPrompt {
+  type: string
+  tile: TileType
+  from: number
+  canGang?: boolean
+  remainingClaims?: number[]
+}
+
+interface LastDiscard { tile: TileType; from: number; id: number }
+interface Announcement { text: string; tone: string; id: number }
+interface PendingKong { playerIndex: number; meldIndex: number; tile: TileType; remainingRobbers: number[] }
+type RoundResult = Record<string, any>
+
+export function advanceMatchState({ round, dealer, honba, matchType, result, scores, playerCount = 4 }: {
+  round: number; dealer: number; honba: number; matchType: MatchType; result: RoundResult; scores: number[]; playerCount?: number
+}) {
   const dealerKeepsSeat = !result.draw && result.winnerIndex === dealer
   const next = dealerKeepsSeat
     ? { round, dealer, honba: honba + 1 }
@@ -32,33 +53,33 @@ export function advanceMatchState({ round, dealer, honba, matchType, result, sco
   }
 }
 
-export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} } = {}) {
+export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseGameOptions = {}) {
   const phase = ref('lobby')
-  const players = reactive([])
-  const wall = ref([])
+  const players = reactive<GamePlayer[]>([])
+  const wall = ref<TileType[]>([])
   const currentPlayer = ref(-1)
   const selectedIndex = ref(-1)
   const turnSeconds = ref(12)
-  const lastDiscard = ref(null)
-  const actionPrompt = ref(null)
-  const pendingKong = ref(null)
-  const announcement = ref(null)
-  const result = ref(null)
-  const winEffect = ref(null)
-  const winPresentation = ref(null)
+  const lastDiscard = ref<LastDiscard | null>(null)
+  const actionPrompt = ref<ActionPrompt | null>(null)
+  const pendingKong = ref<PendingKong | null>(null)
+  const announcement = ref<Announcement | null>(null)
+  const result = ref<RoundResult | null>(null)
+  const winEffect = ref<RoundResult | null>(null)
+  const winPresentation = ref<WinPresentation | null>(null)
   const revealHands = ref(false)
   const winningPlayerIndex = ref(-1)
   const round = ref(1)
   const dealer = ref(0)
-  const matchType = ref('east')
+  const matchType = ref<MatchType>('east')
   const honba = ref(0)
   const matchFinished = ref(false)
   const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
   const openingStage = ref(null)
   const diceValues = ref([1, 1])
   const userDrewThisTurn = ref(false)
-  const timers = new Set()
-  let countdownHandle = null
+  const timers = new Set<number>()
+  let countdownHandle: number | null = null
   let openingSequence = 0
 
   const user = computed(() => players[0])
@@ -138,7 +159,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return player.melds.filter((meld) => meld.type !== 'flower').length
   }
 
-  function later(callback, delay = 600) {
+  function later(callback: () => void, delay = 600) {
     const id = window.setTimeout(() => {
       timers.delete(id)
       callback()
@@ -198,11 +219,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }
   }
 
-  function wait(delay) {
+  function wait(delay: number): Promise<void> {
     return new Promise((resolve) => later(resolve, delay))
   }
 
-  async function startGame(mode) {
+  async function startGame(mode?: MatchType) {
     clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       matchType.value = mode
@@ -332,7 +353,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return true
   }
 
-  async function beginTurn(playerIndex, options = {}) {
+  async function beginTurn(playerIndex: number, options: { skipDraw?: boolean; fromTail?: boolean } = {}) {
     if (phase.value === 'settled') return
     if (!wall.value.length) return endDraw()
     currentPlayer.value = playerIndex
@@ -673,7 +694,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return meldIndex
   }
 
-  function endGame(winnerIndex, options = {}) {
+  function endGame(winnerIndex: number, options: EndGameOptions = {}) {
     if (['win-effect', 'revealing', 'settled', 'finished'].includes(phase.value)) return
     clearTimers()
     phase.value = 'win-effect'
@@ -725,7 +746,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }, effectDuration)
   }
 
-  function finalizeWin(winnerIndex, options) {
+  function finalizeWin(winnerIndex: number, options: EndGameOptions) {
     const winner = players[winnerIndex]
     const scoresBefore = players.map((player) => player.score)
     const { horses, hits } = drawHorses(wall.value, 8)
@@ -750,7 +771,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (!import.meta.env.DEV) return
     clearTimers()
     if (players.length !== 4) resetPlayers()
-    const baseHand = ['m1', 'm1', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east']
+    const baseHand: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east']
     players.forEach((player, index) => {
       const hand = [...baseHand]
       if (index === winnerIndex && !robbedKong) hand.push('east')

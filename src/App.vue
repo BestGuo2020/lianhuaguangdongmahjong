@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
@@ -9,10 +9,11 @@ import { BASE_SCORE } from './game/rules'
 import { useGame } from './game/useGame'
 import { useAudio } from './game/useAudio'
 import { splitWinningTile } from './game/winEffect'
+import type { MatchType } from './game/types'
 
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
-const selectedMatch = ref('east')
+const selectedMatch = ref<MatchType>('east')
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const waitsOpen = ref(false)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
@@ -38,8 +39,9 @@ async function enterLandscapeFullscreen() {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
     }
 
-    if (screen.orientation?.lock) {
-      await screen.orientation.lock('landscape')
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> }
+    if (orientation?.lock) {
+      await orientation.lock('landscape')
     }
   } catch (error) {
     orientationMessage.value = '当前浏览器无法自动旋转，请将手机横置后继续'

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { BASE_SCORE } from '../game/rules'
 
 defineProps({ open: Boolean })

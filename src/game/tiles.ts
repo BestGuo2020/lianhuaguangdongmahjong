@@ -1,5 +1,7 @@
-export const SUITS = ['m', 'p', 's']
-export const HONORS = ['east', 'south', 'west', 'north', 'red', 'green', 'white']
+import type { HonorTile, Suit, TileType } from './types'
+
+export const SUITS: Suit[] = ['m', 'p', 's']
+export const HONORS: HonorTile[] = ['east', 'south', 'west', 'north', 'red', 'green', 'white']
 
 export const TILE_META = {
   back: { name: '牌背', col: 0, row: 0 },
@@ -15,28 +17,28 @@ export const TILE_META = {
   m9: { name: '九万', col: 4, row: 4 }, p9: { name: '九筒', col: 5, row: 4 }, s9: { name: '九条', col: 6, row: 4 },
 }
 
-export const TILE_TYPES = [
+export const TILE_TYPES: TileType[] = [
   ...SUITS.flatMap((suit) => Array.from({ length: 9 }, (_, index) => `${suit}${index + 1}`)),
   ...HONORS,
-]
+] as TileType[]
 
 const HONOR_FACE_INDEX = { east: 1, south: 2, west: 3, north: 4, red: 5, green: 6, white: 7 }
 
-export function tileFaceFile(tile) {
+export function tileFaceFile(tile: TileType) {
   const suited = /^([mps])([1-9])$/.exec(tile)
   if (suited) return `${suited[2]}${suited[1]}.png`
   return HONOR_FACE_INDEX[tile] ? `${HONOR_FACE_INDEX[tile]}z.png` : null
 }
 
-export const tileOrder = (tile) => TILE_TYPES.indexOf(tile)
-export const sortTiles = (tiles) => [...tiles].sort((a, b) => tileOrder(a) - tileOrder(b))
-export const tileName = (tile) => TILE_META[tile]?.name ?? tile
+export const tileOrder = (tile: TileType) => TILE_TYPES.indexOf(tile)
+export const sortTiles = (tiles: TileType[]) => [...tiles].sort((a, b) => tileOrder(a) - tileOrder(b))
+export const tileName = (tile: TileType) => TILE_META[tile]?.name ?? tile
 
 export function createWall() {
   return TILE_TYPES.flatMap((tile) => Array(4).fill(tile))
 }
 
-export function shuffle(items, random = Math.random) {
+export function shuffle<T>(items: T[], random = Math.random): T[] {
   const copy = [...items]
   for (let i = copy.length - 1; i > 0; i -= 1) {
     const j = Math.floor(random() * (i + 1))
@@ -45,6 +47,6 @@ export function shuffle(items, random = Math.random) {
   return copy
 }
 
-export function isHorse(tile) {
+export function isHorse(tile: TileType) {
   return tile === 'red' || /^[mps][159]$/.test(tile)
 }

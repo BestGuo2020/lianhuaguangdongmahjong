@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run"
   },
@@ -14,8 +15,11 @@
     "vue": "^3.5.40"
   },
   "devDependencies": {
+    "@types/three": "^0.185.3",
     "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^5.9.3",
     "vite": "^8.2.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.9"
   }
 }

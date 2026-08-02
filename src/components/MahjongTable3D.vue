@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
@@ -6,20 +6,28 @@ import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
 import { meldSourceTileIndex } from '../game/rules'
 import { addedKongTileOffset, pointFromSeat } from '../game/tableLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
+import type { GamePlayer, TileType, WinPresentation } from '../game/types'
 
-const props = defineProps({
-  players: { type: Array, default: () => [] },
-  currentPlayer: { type: Number, default: -1 },
-  lastDiscard: { type: Object, default: null },
-  wallCount: { type: Number, default: 0 },
-  revealHands: Boolean,
-  winnerIndex: { type: Number, default: -1 },
-  winEffect: { type: Object, default: null },
-  winPresentation: { type: Object, default: null },
-  dealAnimation: { type: Object, default: () => ({ playerIndex: -1, count: 0, serial: 0 }) },
-  openingStage: { type: String, default: null },
-  diceValues: { type: Array, default: () => [1, 1] },
-  dealerIndex: { type: Number, default: 0 },
+interface TableProps {
+  players?: GamePlayer[]
+  currentPlayer?: number
+  lastDiscard?: { tile: TileType; from: number; id: number } | null
+  wallCount?: number
+  revealHands?: boolean
+  winnerIndex?: number
+  winEffect?: Record<string, any> | null
+  winPresentation?: WinPresentation | null
+  dealAnimation?: { playerIndex: number; count: number; serial: number }
+  openingStage?: string | null
+  diceValues?: number[]
+  dealerIndex?: number
+}
+
+const props = withDefaults(defineProps<TableProps>(), {
+  players: () => [], currentPlayer: -1, lastDiscard: null, wallCount: 0,
+  revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
+  dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
+  openingStage: null, diceValues: () => [1, 1], dealerIndex: 0,
 })
 
 const canvas = ref(null)
@@ -954,7 +962,7 @@ onMounted(async () => {
     tile,
     await loadImage(`${import.meta.env.BASE_URL}tiles/${tileFaceFile(tile)}`),
   ]))
-  scene.userData.tileImages = new Map(tileImages)
+  scene.userData.tileImages = new Map<TileType, HTMLImageElement>(tileImages as Array<[TileType, HTMLImageElement]>)
   if (destroyed) return
   addTable()
   rebuildTableTiles()
@@ -965,12 +973,12 @@ onMounted(async () => {
 })
 
 watch(
-  () => props.players.map((player) => [
+  () => (props.players.map((player) => [
     player.hand.length,
     player.drawnTileIndex,
     player.discards.join(','),
     player.melds.map((meld) => `${meld.type}:${meld.from ?? '-'}:${meld.tiles.join(',')}`).join('|'),
-  ]).flat().concat(
+  ]).flat() as unknown[]).concat(
     props.currentPlayer,
     props.lastDiscard?.id,
     props.wallCount,
