@@ -58,9 +58,8 @@ export function useAudio() {
   // 主动 fetch 才能确保移动浏览器完整下载资源；单纯 audio.preload 可能被系统忽略。
   const effectsReady = Promise.all(EFFECT_AUDIO_FILES.map(preloadEffect)).then(() => {})
 
-  function prepareEffects() {
-    return effectsReady
-  }
+  // 保持预加载任务活跃，但不让网络请求阻塞牌桌首次渲染。
+  void effectsReady
 
   function playEffect(name: string, volume = 1, onFinish?: () => void): EffectAudio | null {
     if (!soundOn.value || !name) return null
@@ -124,5 +123,5 @@ export function useAudio() {
     effectTemplates.clear()
   })
 
-  return { soundOn, playEffect, playEffectAndWait, prepareEffects, startBgm }
+  return { soundOn, playEffect, playEffectAndWait, startBgm }
 }
