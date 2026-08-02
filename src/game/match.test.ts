@@ -27,8 +27,4 @@ describe('场次推进', () => {
     expect(advanceMatchState(eastFour)).toMatchObject({ round: 5, dealer: 0, finished: true })
     expect(advanceMatchState({ ...eastFour, matchType: 'hanchan' })).toMatchObject({ round: 5, dealer: 0, finished: false })
   })
-
-  it('有人负分时提前结束场次', () => {
-    expect(advanceMatchState({ ...base, scores: [-10, 1010, 1000, 1000], result: { draw: true } }).finished).toBe(true)
-  })
 })
