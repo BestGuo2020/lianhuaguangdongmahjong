@@ -66,6 +66,7 @@ export interface WinPresentation {
 export interface EndGameOptions {
   winTile?: TileType
   fourRed?: boolean
+  kongBloom?: boolean
   robbedKong?: boolean
   robbedKongPlayerIndex?: number
 }

@@ -79,7 +79,15 @@ describe('买马与计分', () => {
     const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
     expect(score.multiplier).toBe(16)
     expect(score.horsePoints).toBe(200)
-    expect(score.points).toBe(1800)
+    expect(score.points).toBe(2000)
+  })
+
+  it('杠上开花翻倍并写入计分明细', () => {
+    const score = scoreHand({ kongBloom: true })
+
+    expect(score.multiplier).toBe(2)
+    expect(score.points).toBe(200)
+    expect(score.details).toContainEqual({ label: '杠上开花', multiplier: 2 })
   })
 })
 
@@ -134,6 +142,20 @@ describe('开杠与抢杠计分', () => {
     const gamePlayers = players()
     expect(applyWinScore(gamePlayers, 1, 180, 3)).toBe(180)
     expect(gamePlayers.map((player) => player.score)).toEqual([1000, 1180, 1000, 820])
+  })
+
+  it('闲家胡牌时庄家支付双倍，其他闲家正常支付', () => {
+    const gamePlayers = players()
+
+    expect(applyWinScore(gamePlayers, 1, 100, null, 0)).toBe(400)
+    expect(gamePlayers.map((player) => player.score)).toEqual([800, 1400, 900, 900])
+  })
+
+  it('庄家胡牌时每位闲家均支付已翻倍的胡牌分', () => {
+    const gamePlayers = players()
+
+    expect(applyWinScore(gamePlayers, 0, 200, null, 0)).toBe(600)
+    expect(gamePlayers.map((player) => player.score)).toEqual([1600, 800, 800, 800])
   })
 })
 

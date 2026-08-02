@@ -22,15 +22,25 @@ export function applyKongScore(players: GamePlayer[], kongPlayerIndex: number, t
   return deltas.filter(({ amount }) => amount !== 0)
 }
 
-export function applyWinScore(players: GamePlayer[], winnerIndex: number, points: number, payerIndex: number | null = null) {
+export function applyWinScore(
+  players: GamePlayer[],
+  winnerIndex: number,
+  points: number,
+  payerIndex: number | null = null,
+  dealerIndex: number | null = null,
+) {
   const payers = Number.isInteger(payerIndex)
     ? [payerIndex]
     : players.map((_, index) => index).filter((index) => index !== winnerIndex)
+  let totalWon = 0
   payers.forEach((index) => {
-    players[index].score -= points
-    players[winnerIndex].score += points
+    // 庄家胡牌的倍数已计入 points；闲家胡牌时，庄家单独支付双倍。
+    const payment = winnerIndex !== dealerIndex && index === dealerIndex ? points * 2 : points
+    players[index].score -= payment
+    players[winnerIndex].score += payment
+    totalWon += payment
   })
-  return points * payers.length
+  return totalWon
 }
 
 function countsFor(tiles: TileType[]) {
@@ -145,7 +155,7 @@ export function drawHorses(wall: TileType[], amount = 8) {
   return { horses, hits: horses.filter(isHorse).length }
 }
 
-export function scoreHand({ dealer = false, noJoker = false, fourRed = false, horseHits = 0, robbedKong = false }) {
+export function scoreHand({ dealer = false, noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false }) {
   const details: Array<{ label: string; multiplier?: number; points?: number }> = [
     { label: robbedKong ? '抢杠胡' : '自摸', multiplier: 1 },
   ]
@@ -153,9 +163,12 @@ export function scoreHand({ dealer = false, noJoker = false, fourRed = false, ho
   if (dealer) { multiplier *= 2; details.push({ label: '庄家', multiplier: 2 }) }
   if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }
   if (fourRed) { multiplier *= 4; details.push({ label: '四红中', multiplier: 4 }) }
+  if (kongBloom) { multiplier *= 2; details.push({ label: '杠上开花', multiplier: 2 }) }
   const horsePoints = horseHits * BASE_SCORE
   if (horseHits > 0) {
     details.push({ label: `中马 ${horseHits} 张`, points: horsePoints })
   }
-  return { multiplier, horsePoints, points: multiplier * BASE_SCORE + horsePoints, details }
+  // “庄家 ×2”作用于整笔胡牌分，包括中马加分。
+  const points = multiplier * BASE_SCORE + horsePoints * (dealer ? 2 : 1)
+  return { multiplier, horsePoints, points, details }
 }

@@ -65,6 +65,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const players = reactive<GamePlayer[]>([])
   const wall = ref<TileType[]>([])
   const currentPlayer = ref(-1)
+  let kongDrawPlayerIndex = -1
   const selectedIndex = ref(-1)
   const turnSeconds = ref(12)
   const lastDiscard = ref<LastDiscard | null>(null)
@@ -354,6 +355,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   async function drawFor(playerIndex, fromTail = false) {
     const player = players[playerIndex]
+    kongDrawPlayerIndex = fromTail ? playerIndex : -1
     const tile = takeTile(fromTail)
     if (!tile) {
       endDraw()
@@ -387,6 +389,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'drawing'
     selectedIndex.value = -1
     actionPrompt.value = null
+    if (options.skipDraw) kongDrawPlayerIndex = -1
     const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
     if (!drawn || phase.value === 'settled') return
 
@@ -420,7 +423,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   async function playAI(playerIndex) {
     if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
     const player = players[playerIndex]
-    if (isWinningHand(player.hand, structuralMeldCount(player))) return endGame(playerIndex)
+    if (isWinningHand(player.hand, structuralMeldCount(player))) {
+      return endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
+    }
 
     const added = player.melds.findIndex((meld) => meld.type === 'peng' && player.hand.includes(meld.tile))
     if (added >= 0) {
@@ -444,6 +449,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (!tile) return
     player.hand = sortTiles(player.hand)
     player.drawnTileIndex = -1
+    kongDrawPlayerIndex = -1
     player.discards.push(tile)
     if (playerIndex === 0) userDrewThisTurn.value = false
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
@@ -706,7 +712,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         winTile: actionPrompt.value?.tile,
       })
     }
-    if (userCanHu.value) endGame(0)
+    if (userCanHu.value) endGame(0, { kongBloom: kongDrawPlayerIndex === 0 })
   }
 
   function takeRobbedKongTile(playerIndex, tile) {
@@ -791,6 +797,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       dealer: winnerIndex === dealer.value,
       noJoker: !winner.hand.includes('white'),
       fourRed: Boolean(options.fourRed),
+      kongBloom: Boolean(options.kongBloom),
       horseHits: hits,
       robbedKong: Boolean(options.robbedKong),
     })
@@ -799,6 +806,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       winnerIndex,
       score.points,
       options.robbedKong ? options.robbedKongPlayerIndex : null,
+      dealer.value,
     )
     result.value = makeRoundResult({ winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }, scoresBefore)
     phase.value = 'settled'
