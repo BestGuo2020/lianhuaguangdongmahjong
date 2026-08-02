@@ -35,6 +35,13 @@ interface ActionPrompt {
   remainingClaims?: number[]
 }
 
+export function resolveWinTile(winner: GamePlayer, options: EndGameOptions = {}) {
+  if (options.fourRed) return 'red' as const
+  return options.winTile
+    ?? winner.hand[winner.drawnTileIndex]
+    ?? winner.hand[winner.hand.length - 1]
+}
+
 interface LastDiscard { tile: TileType; from: number; id: number }
 interface Announcement { text: string; tone: string; id: number }
 interface PendingKong { playerIndex: number; meldIndex: number; tile: TileType; remainingRobbers: number[] }
@@ -728,13 +735,13 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     pendingKong.value = null
     const winner = players[winnerIndex]
     winningPlayerIndex.value = winnerIndex
-    const winTile = options.winTile
-      ?? winner.hand[winner.drawnTileIndex]
-      ?? winner.hand[winner.hand.length - 1]
+    // 四红中在摸到时已经亮到花杠区，不在暗手里；胡牌展示必须使用这张红中，
+    // 不能回退到此前摸到的牌或手牌末张。
+    const winTile = resolveWinTile(winner, options)
     const robbedKongMeldIndex = options.robbedKong
       ? takeRobbedKongTile(options.robbedKongPlayerIndex, winTile)
       : -1
-    const sourceIndex = options.robbedKong
+    const sourceIndex = options.robbedKong || options.fourRed
       ? -1
       : (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
     winPresentation.value = {

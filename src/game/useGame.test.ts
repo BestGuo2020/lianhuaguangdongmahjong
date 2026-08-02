@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { advanceMatchState, useGame } from './useGame'
+import { advanceMatchState, resolveWinTile, useGame } from './useGame'
 import type { GamePlayer, TileType } from './types'
 
 describe('match progression', () => {
@@ -56,6 +56,16 @@ function player(hand: TileType[] = [], seat = 0): GamePlayer {
     drawnTileIndex: -1,
   }
 }
+
+describe('四红中胡牌展示', () => {
+  it('固定使用第 4 张红中，而不是此前摸到的手牌', () => {
+    const winner = player(['m1', 'white'])
+    winner.drawnTileIndex = 1
+    winner.redCount = 4
+
+    expect(resolveWinTile(winner, { fourRed: true })).toBe('red')
+  })
+})
 
 describe('玩家操作阶段限制', () => {
   it('碰牌后即使牌型可胡且留有第四张，也只允许出牌', () => {
