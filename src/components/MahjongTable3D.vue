@@ -206,9 +206,9 @@ function makeFaceMaterial(tile) {
   surface.height = 512
   const ctx = surface.getContext('2d')
   const faceGradient = ctx.createLinearGradient(0, 0, surface.width, surface.height)
-  faceGradient.addColorStop(0, '#fffef7')
-  faceGradient.addColorStop(.58, '#f3f2e8')
-  faceGradient.addColorStop(1, '#e5e8dd')
+  faceGradient.addColorStop(0, '#e9e8df')
+  faceGradient.addColorStop(.58, '#dad9d0')
+  faceGradient.addColorStop(1, '#c9ccc2')
   ctx.fillStyle = faceGradient
   ctx.fillRect(0, 0, surface.width, surface.height)
   if (image) {
@@ -226,15 +226,15 @@ function makeFaceMaterial(tile) {
   const material = own(new THREE.MeshPhysicalMaterial({
     map: texture,
     envMap: scene.userData.tileEnvironment,
-    color: 0xf1f0e8,
-    roughness: .34,
+    color: 0xd8d7ce,
+    roughness: .4,
     metalness: 0,
-    clearcoat: .76,
-    clearcoatRoughness: .17,
+    clearcoat: .56,
+    clearcoatRoughness: .24,
     ior: 1.46,
-    specularIntensity: .5,
+    specularIntensity: .36,
     specularColor: new THREE.Color(0xfffdf4),
-    envMapIntensity: .42,
+    envMapIntensity: .3,
   }))
   faceMaterials.set(tile, material)
   return material
@@ -320,17 +320,21 @@ function addStaticMesh(geometry, material, x, y, z) {
 
 function addTable() {
   const jade = own(new THREE.MeshPhysicalMaterial({
-    color: 0x073124,
+    color: 0x0d553c,
+    emissive: 0x062b1d,
+    emissiveIntensity: .18,
     roughness: .4,
     metalness: .04,
     clearcoat: .72,
     clearcoatRoughness: .2,
     sheen: .22,
-    sheenColor: new THREE.Color(0x4f9b72),
+    sheenColor: new THREE.Color(0x72bd91),
     sheenRoughness: .72,
   }))
   const darkJade = own(new THREE.MeshPhysicalMaterial({
-    color: 0x03130e,
+    color: 0x08271c,
+    emissive: 0x03140e,
+    emissiveIntensity: .12,
     roughness: .48,
     metalness: .16,
     clearcoat: .36,
@@ -361,15 +365,15 @@ function addTable() {
   }))
   scene.userData.tileSide = own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
-    color: 0xe7e7df,
+    color: 0xc9c9c1,
     metalness: 0,
     roughness: .31,
-    clearcoat: .82,
-    clearcoatRoughness: .16,
+    clearcoat: .58,
+    clearcoatRoughness: .23,
     ior: 1.46,
-    specularIntensity: .5,
+    specularIntensity: .34,
     specularColor: new THREE.Color(0xfffdf3),
-    envMapIntensity: .44,
+    envMapIntensity: .3,
   }))
   scene.userData.faceSide = own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
@@ -384,24 +388,24 @@ function addTable() {
   }))
   scene.userData.tileBottom = own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
-    color: 0xd7d9d0,
+    color: 0xbfc1b9,
     metalness: 0,
     roughness: .42,
     clearcoat: .38,
     clearcoatRoughness: .24,
     ior: 1.45,
-    envMapIntensity: .34,
+    envMapIntensity: .25,
   }))
   scene.userData.backMaterial = own(new THREE.MeshPhysicalMaterial({
     map: makeBackTexture(),
     envMap: scene.userData.tileEnvironment,
-    color: 0xf0f1eb,
+    color: 0xd1d2cb,
     metalness: 0,
     roughness: .32,
-    clearcoat: .62,
-    clearcoatRoughness: .2,
+    clearcoat: .48,
+    clearcoatRoughness: .26,
     ior: 1.46,
-    envMapIntensity: .4,
+    envMapIntensity: .28,
   }))
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
   // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
