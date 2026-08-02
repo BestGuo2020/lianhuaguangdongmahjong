@@ -272,7 +272,7 @@ const displayedUserHand = computed(() => {
         <section v-if="phase === 'lobby'" class="lobby">
           <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
           <h1>莲花<span>广麻</span></h1>
-          <p class="subtitle"> </p>
+          <p class="subtitle">在线单机四人广东麻将</p>
           <div class="match-selector" role="radiogroup" aria-label="场次选择">
             <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>东一局 — 东四局</span></button>
             <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>东一局 — 南四局</span></button>

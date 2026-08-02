@@ -1,15 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useGame } from './useGame'
 import { splitWinningTile, WIN_DISPLAY_LAYOUTS } from './winEffect'
+import type { TileType } from './types'
 
 function installTimerWindow() {
-  const timers = []
+  const timers: Array<{ id: number; callback: () => void; delay: number }> = []
   vi.stubGlobal('window', {
     matchMedia: vi.fn(() => ({ matches: false })),
     clearInterval: vi.fn(),
     setInterval: vi.fn(() => 1),
     clearTimeout: vi.fn(),
-    setTimeout: vi.fn((callback, delay) => {
+    setTimeout: vi.fn((callback: () => void, delay: number) => {
       const id = timers.length + 1
       timers.push({ id, callback, delay })
       return id
@@ -31,11 +32,14 @@ describe('胡牌展示位', () => {
   })
 
   it('自摸从手牌中抽出胡牌张，展示区保留一张', () => {
-    const hand = ['m1', 'east', 'p2', 'east']
+    const hand: TileType[] = ['m1', 'east', 'p2', 'east']
     const split = splitWinningTile(hand, {
+      winnerIndex: 0,
       tile: 'east',
       sourceIndex: 3,
       robbedKong: false,
+      robbedKongPlayerIndex: -1,
+      robbedKongMeldIndex: -1,
     })
 
     expect(split.hand).toEqual(['m1', 'east', 'p2'])
@@ -45,11 +49,14 @@ describe('胡牌展示位', () => {
   })
 
   it('抢杠胡不删除赢家手牌，只增加外部胡牌张', () => {
-    const hand = ['m1', 'east', 'p2']
+    const hand: TileType[] = ['m1', 'east', 'p2']
     const split = splitWinningTile(hand, {
+      winnerIndex: 0,
       tile: 'east',
       sourceIndex: -1,
       robbedKong: true,
+      robbedKongPlayerIndex: 1,
+      robbedKongMeldIndex: 0,
     })
 
     expect(split.hand).toEqual(hand)

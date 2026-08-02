@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { advanceMatchState, useGame } from './useGame'
+import type { GamePlayer, TileType } from './types'
 
 describe('match progression', () => {
   it('continues the match when a player has a negative score', () => {
@@ -25,8 +26,8 @@ describe('opening deal sound', () => {
       setInterval: globalThis.setInterval,
       clearInterval: globalThis.clearInterval,
     })
-    const playSound = vi.fn()
-    const playSoundAndWait = vi.fn(async () => {})
+    const playSound = vi.fn<(name: string, volume?: number, onFinish?: () => void) => void>()
+    const playSoundAndWait = vi.fn<(name: string, volume?: number) => Promise<void>>(async () => {})
     const game = useGame({ playSound, playSoundAndWait })
 
     const startPromise = game.startGame('east')
@@ -42,10 +43,12 @@ describe('opening deal sound', () => {
   })
 })
 
-function player(hand = []) {
+function player(hand: TileType[] = [], seat = 0): GamePlayer {
   return {
     name: '测试玩家',
+    avatar: '',
     score: 1000,
+    seat,
     hand,
     discards: [],
     melds: [],
@@ -71,7 +74,7 @@ describe('玩家操作阶段限制', () => {
         's7', 's7', 's7',
         'east', 'east',
       ]),
-      player(), player(), player(),
+      player([], 1), player([], 2), player([], 3),
     )
     game.players[1].discards.push('m1')
     game.actionPrompt.value = {
@@ -100,9 +103,9 @@ describe('玩家操作阶段限制', () => {
     const game = useGame()
     game.players.push(
       player(['m1', 'm1', 'm1', 'm2']),
-      player(),
-      player(),
-      player(),
+      player([], 1),
+      player([], 2),
+      player([], 3),
     )
     game.players[2].discards.push('m1')
     game.actionPrompt.value = {
@@ -120,19 +123,19 @@ describe('玩家操作阶段限制', () => {
   })
 
   it('补杠先把第四张牌加入副露并报杠，再处理抢杠', () => {
-    const setTimeout = vi.fn(() => 1)
+    const setTimeout = vi.fn<(callback: () => void, delay?: number) => number>(() => 1)
     vi.stubGlobal('window', {
       clearInterval: vi.fn(),
       setInterval: vi.fn(() => 1),
       clearTimeout: vi.fn(),
       setTimeout,
     })
-    const playSound = vi.fn()
+    const playSound = vi.fn<(name: string, volume?: number, onFinish?: () => void) => void>()
     const game = useGame({ playSound })
     game.players.push(
       { ...player(['east', 'm1']), melds: [{ type: 'peng', tile: 'east', from: 1, tiles: ['east', 'east', 'east'] }] },
-      player(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east']),
-      player(), player(),
+      player(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east'], 1),
+      player([], 2), player([], 3),
     )
     game.currentPlayer.value = 0
     game.phase.value = 'discard'

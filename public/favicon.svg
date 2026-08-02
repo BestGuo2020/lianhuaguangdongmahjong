@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="莲花广麻">
+  <rect width="64" height="64" rx="14" fill="#0b2b20"/>
+  <path d="M32 10c5 7 7 13 6 18 5-4 10-6 16-6-1 9-5 16-12 20 4 0 8 1 12 4-6 6-13 9-22 9s-16-3-22-9c4-3 8-4 12-4-7-4-11-11-12-20 6 0 11 2 16 6-1-5 1-11 6-18Z" fill="none" stroke="#d6ad52" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="32" cy="36" r="6" fill="#d6ad52"/>
+</svg>

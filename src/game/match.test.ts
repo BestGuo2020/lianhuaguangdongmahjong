@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { advanceMatchState } from './useGame'
 
-const base = {
+type AdvanceMatchInput = Parameters<typeof advanceMatchState>[0]
+
+const base: Omit<AdvanceMatchInput, 'result'> = {
   round: 1,
   dealer: 0,
   honba: 0,

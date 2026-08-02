@@ -1,0 +1,19 @@
+{
+  "name": "莲花广麻",
+  "short_name": "莲花广麻",
+  "description": "在线单机四人广东麻将游戏",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071b14",
+  "theme_color": "#102b24",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
