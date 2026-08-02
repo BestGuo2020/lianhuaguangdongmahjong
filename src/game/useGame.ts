@@ -40,8 +40,8 @@ interface Announcement { text: string; tone: string; id: number }
 interface PendingKong { playerIndex: number; meldIndex: number; tile: TileType; remainingRobbers: number[] }
 type RoundResult = Record<string, any>
 
-export function advanceMatchState({ round, dealer, honba, matchType, result, scores, playerCount = 4 }: {
-  round: number; dealer: number; honba: number; matchType: MatchType; result: RoundResult; scores: number[]; playerCount?: number
+export function advanceMatchState({ round, dealer, honba, matchType, result, playerCount = 4 }: {
+  round: number; dealer: number; honba: number; matchType: MatchType; result: RoundResult; scores?: number[]; playerCount?: number
 }) {
   const dealerKeepsSeat = !result.draw && result.winnerIndex === dealer
   const next = dealerKeepsSeat
@@ -49,7 +49,7 @@ export function advanceMatchState({ round, dealer, honba, matchType, result, sco
     : { round: round + 1, dealer: (dealer + 1) % playerCount, honba: 0 }
   return {
     ...next,
-    finished: next.round > MATCH_HANDS[matchType] || scores.some((score) => score < 0),
+    finished: next.round > MATCH_HANDS[matchType],
   }
 }
 
@@ -867,7 +867,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       honba: honba.value,
       matchType: matchType.value,
       result: result.value,
-      scores: players.map((player) => player.score),
       playerCount: players.length,
     })
     round.value = next.round

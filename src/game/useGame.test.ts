@@ -1,5 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { useGame } from './useGame'
+import { advanceMatchState, useGame } from './useGame'
+
+describe('match progression', () => {
+  it('continues the match when a player has a negative score', () => {
+    const next = advanceMatchState({
+      round: 1,
+      dealer: 0,
+      honba: 0,
+      matchType: 'east',
+      result: { draw: false, winnerIndex: 1 },
+      scores: [-100, 2100, 1000, 1000],
+    })
+
+    expect(next).toEqual({ round: 2, dealer: 1, honba: 0, finished: false })
+  })
+})
 
 describe('opening deal sound', () => {
   it('plays once per four-tile batch and skips single-tile batches', async () => {
