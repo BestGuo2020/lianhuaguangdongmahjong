@@ -110,3 +110,34 @@ describe('玩家操作阶段限制', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('胡牌座位提示', () => {
+  function createWinPreview() {
+    vi.stubGlobal('window', {
+      clearInterval: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setTimeout: vi.fn(() => 1),
+      matchMedia: vi.fn(() => ({ matches: false })),
+    })
+    return useGame()
+  }
+
+  it('自摸提示绑定赢家座位', () => {
+    const game = createWinPreview()
+    game.debugPreviewWin(2)
+    expect(game.tableActionEvent.value).toMatchObject({
+      type: 'self-draw', actorIndex: 2, sourceIndex: null, tile: 'east', meldIndex: -1,
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('抢杠胡提示绑定赢家，并保留被抢杠玩家来源', () => {
+    const game = createWinPreview()
+    game.debugPreviewWin(1, { robbedKong: true })
+    expect(game.tableActionEvent.value).toMatchObject({
+      type: 'robbed-kong-win', actorIndex: 1, sourceIndex: 0, tile: 'east', meldIndex: -1,
+    })
+    vi.unstubAllGlobals()
+  })
+})

@@ -26,7 +26,14 @@ export interface GamePlayer {
   drawnTileIndex: number
 }
 
-export type TableActionType = 'peng' | 'discard-gang' | 'concealed-gang' | 'added-gang' | 'flower-gang'
+export type TableActionType =
+  | 'peng'
+  | 'discard-gang'
+  | 'concealed-gang'
+  | 'added-gang'
+  | 'flower-gang'
+  | 'self-draw'
+  | 'robbed-kong-win'
 
 export interface TableActionEvent {
   id: number

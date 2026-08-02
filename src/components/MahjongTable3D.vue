@@ -1022,7 +1022,6 @@ watch(
     props.winPresentation?.tile,
     props.winPresentation?.robbedKong,
     props.dealAnimation.serial,
-    props.tableActionEvent?.id,
   ),
   rebuildTableTiles,
 )

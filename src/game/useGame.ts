@@ -744,6 +744,13 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       reducedMotion,
       id: Date.now(),
     }
+    showTableAction(
+      options.robbedKong ? 'robbed-kong-win' : 'self-draw',
+      winnerIndex,
+      options.robbedKong ? (options.robbedKongPlayerIndex ?? null) : null,
+      winTile,
+      -1,
+    )
     playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     if (!reducedMotion) later(() => playSound('hu_effect_sound.mp3', 0.72), WIN_EFFECT_SOUND_DELAY)
     announcement.value = null

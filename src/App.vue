@@ -79,7 +79,16 @@ function startGameWithAudio() {
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const tableActionPosition = computed(() => tableActionEvent.value ? seatPosition[tableActionEvent.value.actorIndex] : 'bottom')
-const tableActionLabel = computed(() => tableActionEvent.value?.type === 'peng' ? '碰' : '杠')
+const tableActionLabel = computed(() => ({
+  peng: '碰',
+  'discard-gang': '杠',
+  'concealed-gang': '杠',
+  'added-gang': '杠',
+  'flower-gang': '杠',
+  'self-draw': '自摸',
+  'robbed-kong-win': '抢杠胡',
+}[tableActionEvent.value?.type ?? 'peng']))
+const tableActionIsWin = computed(() => ['self-draw', 'robbed-kong-win'].includes(tableActionEvent.value?.type ?? ''))
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
@@ -167,7 +176,7 @@ const displayedUserHand = computed(() => {
               v-if="tableActionEvent"
               :key="tableActionEvent.id"
               class="table-action-cue"
-              :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠' }]"
+              :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]"
               aria-live="polite"
             ><span>{{ tableActionLabel }}</span></div>
           </Transition>

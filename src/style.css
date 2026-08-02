@@ -334,6 +334,14 @@ button { font: inherit; }
   text-shadow: 0 3px 3px #000, 0 0 17px rgba(255, 190, 49, .9);
 }
 .table-action-cue.gang { background: radial-gradient(circle, rgba(48, 14, 8, .96) 0 35%, rgba(191, 71, 29, .52) 48%, transparent 72%); }
+.table-action-cue.win {
+  width: clamp(132px, 14vw, 220px);
+  height: clamp(76px, 8vw, 126px);
+  aspect-ratio: auto;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(48, 14, 8, .97) 0 32%, rgba(192, 76, 29, .56) 49%, transparent 73%);
+}
+.table-action-cue.win span { font-size: clamp(31px, 3.8vw, 58px); white-space: nowrap; }
 .action-from-top { top: 20%; left: 50%; transform: translate(-50%, -50%); }
 .action-from-right { top: 43%; right: 17%; transform: translate(50%, -50%); }
 .action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
@@ -706,6 +714,7 @@ button { font: inherit; }
 .user-identity.active::after { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #f4c45b; box-shadow: 0 0 9px #ffd569; animation: pulse 1s infinite; }
 
 @media (max-height: 620px) {
+  .table-action-cue.win.action-from-bottom { bottom: 38%; }
   .top-bar { height: 34px; padding: 0 10px; font-size: 12px; }
   .brand-mini { gap: 5px; }
   .brand-mini i { width: 22px; height: 22px; font-size: 12px; }
