@@ -991,18 +991,26 @@ onMounted(async () => {
   scene.add(goldFill)
   addDice()
 
-  const tileImages = await Promise.all(TILE_TYPES.map(async (tile) => [
-    tile,
-    await loadImage(`${import.meta.env.BASE_URL}tiles/${tileFaceFile(tile)}`),
-  ]))
-  scene.userData.tileImages = new Map<TileType, HTMLImageElement>(tileImages as Array<[TileType, HTMLImageElement]>)
-  if (destroyed) return
+  // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
+  scene.userData.tileImages = new Map<TileType, HTMLImageElement>()
   addTable()
   rebuildTableTiles()
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas.value)
   resize()
   render()
+
+  await Promise.all(TILE_TYPES.map(async (tile) => {
+    try {
+      const image = await loadImage(`${import.meta.env.BASE_URL}tiles/${tileFaceFile(tile)}`)
+      scene.userData.tileImages.set(tile, image)
+    } catch {
+      // 单张牌面加载失败不应阻断整个 3D 牌桌，其牌面会回退为无图案底色。
+    }
+  }))
+  if (destroyed) return
+  faceMaterials.clear()
+  rebuildTableTiles()
 })
 
 watch(
