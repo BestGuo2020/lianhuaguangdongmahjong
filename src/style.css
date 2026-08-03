@@ -621,9 +621,9 @@ button { font: inherit; }
   border-radius: 0;
   clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
   background:
-    radial-gradient(ellipse at 50% 43%, rgba(62,137,91,.22), transparent 45%),
+    radial-gradient(ellipse at 50% 43%, rgba(104,139,98,.18), transparent 45%),
     repeating-radial-gradient(circle at 48% 42%, rgba(255,255,255,.018) 0 1px, transparent 1px 5px),
-    linear-gradient(180deg, #347a57, #246847 48%, #19583d);
+    linear-gradient(180deg, #304f2e, #254223 48%, #1b351a);
   filter: drop-shadow(0 18px 0 #090b09) drop-shadow(0 28px 18px rgba(0,0,0,.78));
 }
 
@@ -659,7 +659,7 @@ button { font: inherit; }
     linear-gradient(-35deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 100% 0/50% 50%,
     linear-gradient(145deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 0 100%/50% 50%,
     linear-gradient(-145deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 100% 100%/50% 50%,
-    rgba(18,69,49,.3);
+    rgba(37,66,35,.3);
   background-repeat: no-repeat;
   box-shadow: inset 0 0 0 2px rgba(4,37,25,.7), inset 0 0 0 4px rgba(74,133,97,.12);
 }

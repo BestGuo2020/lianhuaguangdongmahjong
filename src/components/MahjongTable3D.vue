@@ -320,15 +320,15 @@ function addStaticMesh(geometry, material, x, y, z) {
 
 function addTable() {
   const jade = own(new THREE.MeshPhysicalMaterial({
-    color: 0x0d553c,
-    emissive: 0x062b1d,
-    emissiveIntensity: .18,
+    color: 0x254223,
+    emissive: 0x101d0f,
+    emissiveIntensity: .12,
     roughness: .4,
     metalness: .04,
     clearcoat: .72,
     clearcoatRoughness: .2,
     sheen: .22,
-    sheenColor: new THREE.Color(0x72bd91),
+    sheenColor: new THREE.Color(0x6f8d69),
     sheenRoughness: .72,
   }))
   const darkJade = own(new THREE.MeshPhysicalMaterial({
