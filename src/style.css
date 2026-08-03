@@ -2,6 +2,7 @@
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   color: #f8f3df;
   background: #08110e;
+  color-scheme: only light;
   font-synthesis: none;
 }
 
@@ -181,8 +182,11 @@ button { font: inherit; }
   border: 1px solid rgba(181, 187, 174, .9);
   border-radius: 8%;
   overflow: hidden;
+  -webkit-appearance: none;
   appearance: none;
-  background-color: #deddd4;
+  color-scheme: only light;
+  forced-color-adjust: none;
+  background-color: #deddd4 !important;
   background-size: 89% 89%;
   background-position: center 44%;
   background-repeat: no-repeat;

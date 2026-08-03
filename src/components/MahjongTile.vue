@@ -13,6 +13,9 @@ const props = withDefaults(defineProps<{
 }>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false })
 
 const emit = defineEmits(['choose'])
+const choose = () => {
+  if (!props.disabled) emit('choose')
+}
 const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)
 const tileStyle = computed(() => {
@@ -23,14 +26,18 @@ const tileStyle = computed(() => {
 </script>
 
 <template>
-  <button
+  <div
     class="mahjong-tile"
     :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: tile === 'white' && !hidden, red: tile === 'red' && !hidden }"
     :style="tileStyle"
+    role="button"
     :aria-label="meta.name"
-    :disabled="disabled"
-    @click="emit('choose')"
+    :aria-disabled="disabled"
+    :tabindex="disabled ? -1 : 0"
+    @click="choose"
+    @keydown.enter="choose"
+    @keydown.space.prevent="choose"
   >
     <span v-if="tile === 'white' && !hidden" class="joker-mark">癞</span>
-  </button>
+  </div>
 </template>
