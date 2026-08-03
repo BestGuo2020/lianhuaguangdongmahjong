@@ -165,10 +165,11 @@ export function scoreHand({ dealer = false, noJoker = false, fourRed = false, ko
   if (fourRed) { multiplier *= 4; details.push({ label: '四红中', multiplier: 4 }) }
   if (kongBloom) { multiplier *= 2; details.push({ label: '杠上开花', multiplier: 2 }) }
   const horsePoints = horseHits * BASE_SCORE
+  const totalMultiplier = multiplier + horseHits
   if (horseHits > 0) {
     details.push({ label: `中马 ${horseHits} 张`, points: horsePoints })
   }
-  // “庄家 ×2”作用于整笔胡牌分，包括中马加分。
-  const points = multiplier * BASE_SCORE + horsePoints * (dealer ? 2 : 1)
-  return { multiplier, horsePoints, points, details }
+  // 中马始终按张数加底分：底分 × 已知倍数 + 中马数 × 底分。
+  const points = multiplier * BASE_SCORE + horsePoints
+  return { multiplier, totalMultiplier, horsePoints, points, details }
 }

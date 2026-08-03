@@ -78,8 +78,9 @@ describe('买马与计分', () => {
   it('倍数累乘后，中马按张数乘底分加算', () => {
     const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
     expect(score.multiplier).toBe(16)
+    expect(score.totalMultiplier).toBe(18)
     expect(score.horsePoints).toBe(200)
-    expect(score.points).toBe(2000)
+    expect(score.points).toBe(1800)
   })
 
   it('杠上开花翻倍并写入计分明细', () => {
@@ -88,6 +89,14 @@ describe('买马与计分', () => {
     expect(score.multiplier).toBe(2)
     expect(score.points).toBe(200)
     expect(score.details).toContainEqual({ label: '杠上开花', multiplier: 2 })
+  })
+
+  it('总分严格按底分乘已知倍数再加中马底分', () => {
+    const score = scoreHand({ dealer: true, noJoker: true, horseHits: 3 })
+
+    expect(score.multiplier).toBe(4)
+    expect(score.totalMultiplier).toBe(7)
+    expect(score.points).toBe(700)
   })
 })
 

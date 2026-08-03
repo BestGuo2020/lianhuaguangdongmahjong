@@ -308,8 +308,8 @@ const displayedUserHand = computed(() => {
         <Transition name="modal">
           <div v-if="result && resultVisible && !matchFinished" class="result-backdrop round-settlement">
             <section class="result-card settlement-card">
-              <h2>{{ result.roundLabel }} · {{ result.draw ? '牌墙摸尽' : (result.robbedKong ? '抢杠胡' : '自摸') }}</h2>
-              <div v-if="!result.draw" class="score-total"><span>总倍数</span><strong>×{{ result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
+              <h2>{{ result.roundLabel }} · {{ result.draw ? '流局' : (result.robbedKong ? '抢杠胡' : '自摸') }}</h2>
+              <div v-if="!result.draw" class="score-total"><span>总倍数</span><strong>×{{ result.totalMultiplier ?? result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
               <div v-if="result.details?.length" class="score-details">
                 <span v-for="detail in result.details" :key="detail.label">
                   {{ detail.label }} <b>{{ detail.points != null ? `+${detail.points} 分` : `×${detail.multiplier}` }}</b>

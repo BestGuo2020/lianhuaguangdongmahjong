@@ -13,7 +13,7 @@ import {
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const PLAYER_SEED = [
-  { name: 'BestGuo2020', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
+  { name: '北冥重生', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
   { name: '南粤阿乐', avatar: `${AVATAR_BASE}ah-lok.svg`, score: 1000 },
   { name: '西关十三姨', avatar: `${AVATAR_BASE}shisan.svg`, score: 1000 },
   { name: '东山少爷', avatar: `${AVATAR_BASE}young-master.svg`, score: 1000 },
