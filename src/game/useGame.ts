@@ -541,14 +541,16 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function selectTile(index) {
     if (!isUserTurn.value) return
-    if (selectedIndex.value === index) return userDiscard()
     selectedIndex.value = index
     playSound('click.mp3', 0.65)
   }
 
-  function userDiscard() {
-    if (!isUserTurn.value || selectedIndex.value < 0) return
-    const index = selectedIndex.value
+  function clearUserSelection() {
+    selectedIndex.value = -1
+  }
+
+  function userDiscard(index = selectedIndex.value) {
+    if (!isUserTurn.value || index < 0 || index >= user.value.hand.length) return
     selectedIndex.value = -1
     discardTile(0, index)
   }
@@ -929,7 +931,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
-    userKongs, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
+    userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
     userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
   }
 }

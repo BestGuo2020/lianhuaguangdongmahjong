@@ -68,6 +68,28 @@ describe('四红中胡牌展示', () => {
 })
 
 describe('玩家操作阶段限制', () => {
+  it('选择牌不再自动出牌，显式出牌可按指定索引执行', () => {
+    vi.stubGlobal('window', {
+      clearInterval: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setTimeout: vi.fn(() => 1),
+    })
+    const game = useGame()
+    game.players.push(player(['m1', 'm2']), player([], 1), player([], 2), player([], 3))
+    game.currentPlayer.value = 0
+    game.phase.value = 'discard'
+
+    game.selectTile(0)
+    game.selectTile(0)
+    expect(game.players[0].hand).toEqual(['m1', 'm2'])
+
+    game.userDiscard(0)
+    expect(game.players[0].hand).toEqual(['m2'])
+    expect(game.players[0].discards).toEqual(['m1'])
+    vi.unstubAllGlobals()
+  })
+
   it('碰牌后即使牌型可胡且留有第四张，也只允许出牌', () => {
     vi.stubGlobal('window', {
       clearInterval: vi.fn(),

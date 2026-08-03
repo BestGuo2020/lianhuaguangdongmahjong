@@ -9,7 +9,7 @@ import { BASE_SCORE } from './game/rules'
 import { useGame } from './game/useGame'
 import { useAudio } from './game/useAudio'
 import { splitWinningTile } from './game/winEffect'
-import type { MatchType } from './game/types'
+import type { MatchType, TileType } from './game/types'
 
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
@@ -20,6 +20,10 @@ const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.
 const winEffectLabSeats = ['本家', '下家', '对家', '上家']
 const requiresLandscape = ref(false)
 const orientationMessage = ref('')
+const hoveredDiscard = ref<TileType | null>(null)
+const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
+let lastTouchTap = { index: -1, time: 0 }
+let suppressTileClickUntil = 0
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 function updateOrientationGate() {
@@ -68,7 +72,7 @@ const {
   actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
-  userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, userDiscard, userPass, userPeng, userGangFromDiscard,
+  userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
   userGang, userHu, nextRound, returnToLobby, debugPreviewWin,
 } = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
@@ -104,12 +108,95 @@ watch(isUserTurn, (value) => {
   if (!value) waitsOpen.value = false
 })
 
-const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value ? userCurrentWaits.value : null))
+const hoveredWaits = computed(() => hoveredDiscard.value
+  ? userTingOptions.value.find((option) => option.discard === hoveredDiscard.value) ?? null
+  : null)
+const activeWaits = computed(() => hoveredWaits.value || userDiscardWaits.value || (!isUserTurn.value ? userCurrentWaits.value : null))
 const tingDiscardTiles = computed(() => new Set(userTingOptions.value.map((option) => option.discard)))
 const displayedUserHand = computed(() => {
   if (winPresentation.value?.winnerIndex !== 0) return user.value.hand
   return splitWinningTile(user.value.hand, winPresentation.value).hand
 })
+
+function usesFinePointer() {
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+}
+
+function previewDesktopWaits(tile: TileType) {
+  if (!isUserTurn.value || !usesFinePointer() || !tingDiscardTiles.value.has(tile)) return
+  hoveredDiscard.value = tile
+  waitsOpen.value = true
+}
+
+function clearDesktopWaits() {
+  if (!usesFinePointer() || !hoveredDiscard.value) return
+  hoveredDiscard.value = null
+  waitsOpen.value = false
+}
+
+function beginTileGesture(index: number, event: PointerEvent) {
+  if (!['touch', 'pen'].includes(event.pointerType)) return
+  touchStarts.set(event.pointerId, {
+    index,
+    x: event.clientX,
+    y: event.clientY,
+    startedAt: performance.now(),
+  })
+  ;(event.currentTarget as HTMLElement)?.setPointerCapture?.(event.pointerId)
+}
+
+function finishTileGesture(index: number, event: PointerEvent) {
+  const start = touchStarts.get(event.pointerId)
+  touchStarts.delete(event.pointerId)
+  if (!start || start.index !== index || !isUserTurn.value) return
+  const deltaX = event.clientX - start.x
+  const deltaY = event.clientY - start.y
+  const upwardDistance = -deltaY
+  if (upwardDistance >= 28 && upwardDistance > Math.abs(deltaX) * 1.15 && performance.now() - start.startedAt < 700) {
+    suppressTileClickUntil = performance.now() + 500
+    lastTouchTap = { index: -1, time: 0 }
+    hoveredDiscard.value = null
+    waitsOpen.value = false
+    userDiscard(index)
+  }
+}
+
+function cancelTileGesture(event: PointerEvent) {
+  touchStarts.delete(event.pointerId)
+}
+
+function handleTileActivation(index: number, event?: PointerEvent) {
+  if (!isUserTurn.value) return
+  const now = performance.now()
+  if (now < suppressTileClickUntil) return
+  const pointerType = event?.pointerType
+  const isTouch = pointerType === 'touch' || pointerType === 'pen' || !usesFinePointer()
+  if (!isTouch) {
+    hoveredDiscard.value = null
+    waitsOpen.value = false
+    userDiscard(index)
+    return
+  }
+
+  if (lastTouchTap.index === index && now - lastTouchTap.time <= 360) {
+    lastTouchTap = { index: -1, time: 0 }
+    waitsOpen.value = false
+    userDiscard(index)
+    return
+  }
+
+  lastTouchTap = { index, time: now }
+  selectTile(index)
+}
+
+function clearMobileSelection(event: PointerEvent) {
+  if (usesFinePointer() || selectedIndex.value < 0 || event.pointerType === 'mouse') return
+  const target = event.target as HTMLElement
+  if (target.closest('.hand-tile-slot, .waiting-tip, .action-bar')) return
+  clearUserSelection()
+  waitsOpen.value = false
+  lastTouchTap = { index: -1, time: 0 }
+}
 </script>
 
 <template>
@@ -125,7 +212,7 @@ const displayedUserHand = computed(() => {
   </div>
   <main class="game-app">
     <div class="wood-frame">
-      <div class="felt-table" :class="{ 'has-three-scene': players.length }">
+      <div class="felt-table" :class="{ 'has-three-scene': players.length }" @pointerdown="clearMobileSelection">
         <header class="top-bar">
           <div class="brand-mini"><span v-if="!players.length">莲花广麻</span></div>
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
@@ -220,6 +307,11 @@ const displayedUserHand = computed(() => {
                 :key="`${tile}-${index}`"
                 class="hand-tile-slot"
                 :class="{ drawn: user.drawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
+                @mouseenter="previewDesktopWaits(tile)"
+                @mouseleave="clearDesktopWaits"
+                @pointerdown.stop="beginTileGesture(index, $event)"
+                @pointerup.stop="finishTileGesture(index, $event)"
+                @pointercancel="cancelTileGesture"
               >
                 <span
                   v-if="isUserTurn && tingDiscardTiles.has(tile)"
@@ -231,7 +323,7 @@ const displayedUserHand = computed(() => {
                   :selected="selectedIndex === index"
                   :drawn="user.drawnTileIndex === index"
                   :disabled="!isUserTurn"
-                  @choose="selectTile(index)"
+                  @choose="handleTileActivation(index, $event)"
                 />
               </div>
             </div>

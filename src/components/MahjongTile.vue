@@ -13,8 +13,8 @@ const props = withDefaults(defineProps<{
 }>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false })
 
 const emit = defineEmits(['choose'])
-const choose = () => {
-  if (!props.disabled) emit('choose')
+const choose = (event?: Event) => {
+  if (!props.disabled) emit('choose', event)
 }
 const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)

@@ -429,7 +429,7 @@ button { font: inherit; }
 .user-meld { display: flex; gap: 1px; padding: 2px; border-radius: 3px; background: rgba(0,0,0,.2); }
 .hand-rack { position: absolute; right: 0; bottom: 9px; left: 0; display: flex; align-items: flex-end; justify-content: center; gap: clamp(1px, .2vw, 4px); min-height: 88px; padding: 10px 14px 5px; border: 0; border-radius: 5px 5px 20px 20px; transform-origin: 50% 100%; }
 .hand-rack.has-melds { justify-content: flex-start; padding-right: 42%; padding-left: 11%; }
-.hand-tile-slot { position: relative; display: flex; flex: 0 0 auto; align-items: flex-end; }
+.hand-tile-slot { position: relative; display: flex; flex: 0 0 auto; align-items: flex-end; touch-action: none; }
 .ting-arrow {
   position: absolute;
   z-index: 4;
@@ -562,7 +562,7 @@ button { font: inherit; }
 .round-rankings article > b { min-width: 0; overflow: hidden; color: #fff; font: 800 22px Georgia, serif; text-align: right; text-overflow: ellipsis; }
 
 .final-backdrop { z-index: 96; background: radial-gradient(circle at 50% 24%, rgba(99,72,37,.42), transparent 38%), rgba(2,8,12,.92); }
-.final-board { width: min(680px, 92%); max-height: 94%; padding: 28px 45px 32px; overflow: hidden auto; text-align: center; animation: final-in .7s cubic-bezier(.18,.9,.24,1.1); }
+.final-board { width: min(680px, 92%); max-height: 100%; padding: 28px 45px 32px; overflow: hidden auto; text-align: center; animation: final-in .7s cubic-bezier(.18,.9,.24,1.1); }
 .final-board > p { margin: 0; color: #c5a86c; font-size: 13px; letter-spacing: .22em; }.final-board > h2 { margin: 5px 0 20px; color: #ffe6ad; font: 900 40px "Noto Serif SC", serif; letter-spacing: .12em; }
 .final-rankings { display: grid; gap: 8px; }
 .final-rankings article { display: grid; grid-template-columns: 65px 56px 1fr 120px; align-items: center; gap: 14px; min-height: 69px; padding: 6px 18px 6px 10px; border: 1px solid rgba(124,153,180,.25); background: linear-gradient(90deg, rgba(34,50,78,.96), rgba(12,23,40,.95)); text-align: left; }
