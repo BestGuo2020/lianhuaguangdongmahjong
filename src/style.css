@@ -12,6 +12,25 @@ body {
 }
 button { font: inherit; }
 
+/* 游戏过程以点击、拖动手势为主，避免连续操作时误选文字或拖起图片。 */
+.game-app,
+.orientation-gate {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.game-app img,
+.orientation-gate img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.game-app button,
+.orientation-gate button {
+  touch-action: manipulation;
+}
+
 .orientation-gate {
   position: fixed;
   z-index: 10000;
