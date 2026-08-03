@@ -105,6 +105,7 @@ watch(isUserTurn, (value) => {
 })
 
 const activeWaits = computed(() => userDiscardWaits.value || (!isUserTurn.value ? userCurrentWaits.value : null))
+const tingDiscardTiles = computed(() => new Set(userTingOptions.value.map((option) => option.discard)))
 const displayedUserHand = computed(() => {
   if (winPresentation.value?.winnerIndex !== 0) return user.value.hand
   return splitWinningTile(user.value.hand, winPresentation.value).hand
@@ -214,15 +215,25 @@ const displayedUserHand = computed(() => {
               >{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>
             </Transition>
             <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
-              <MahjongTile
+              <div
                 v-for="(tile, index) in displayedUserHand"
                 :key="`${tile}-${index}`"
-                :tile="tile"
-                :selected="selectedIndex === index"
-                :drawn="user.drawnTileIndex === index"
-                :disabled="!isUserTurn"
-                @choose="selectTile(index)"
-              />
+                class="hand-tile-slot"
+                :class="{ drawn: user.drawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
+              >
+                <span
+                  v-if="isUserTurn && tingDiscardTiles.has(tile)"
+                  class="ting-arrow"
+                  aria-hidden="true"
+                ></span>
+                <MahjongTile
+                  :tile="tile"
+                  :selected="selectedIndex === index"
+                  :drawn="user.drawnTileIndex === index"
+                  :disabled="!isUserTurn"
+                  @choose="selectTile(index)"
+                />
+              </div>
             </div>
           </section>
 
