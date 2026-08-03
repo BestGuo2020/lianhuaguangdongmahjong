@@ -468,8 +468,6 @@ button { font: inherit; }
 .waiting-options small { color: #9fb2a8; }
 
 .lobby { position: absolute; z-index: 50; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 46%, rgba(25,87,58,.12), transparent 36%), linear-gradient(rgba(4,18,13,.89), rgba(4,22,16,.93)); text-align: center; }
-.lobby::before, .lobby::after { content: ""; position: absolute; top: 10%; bottom: 10%; width: 18%; border: 1px solid rgba(194,159,80,.07); border-radius: 50%; }
-.lobby::before { left: 7%; transform: rotate(11deg); }.lobby::after { right: 7%; transform: rotate(-11deg); }
 .lotus-mark { position: relative; display: grid; place-items: center; width: 75px; height: 75px; margin-bottom: 18px; border: 1px solid #b88a3c; border-radius: 50% 50% 46% 46%; transform: rotate(45deg); box-shadow: 0 0 0 7px rgba(184,138,60,.06), 0 0 45px rgba(194,145,51,.13); }
 .lotus-mark::before, .lotus-mark::after { content: ""; position: absolute; inset: 11px -18px; border: 1px solid rgba(205,165,80,.45); border-radius: 50%; }.lotus-mark::before { transform: rotate(45deg); }.lotus-mark::after { transform: rotate(-45deg); }
 .lotus-mark span { transform: rotate(-45deg); color: #e4c875; font: 900 35px "Noto Serif SC", serif; }
