@@ -16,6 +16,14 @@ export type ClaimDecision = 'gang' | 'peng' | 'pass'
 /** 面对加杠时的抢杠响应 */
 export type RobKongDecision = 'win' | 'pass'
 
+/** 抢杠决策输入（供未来风险权衡扩展） */
+export interface RobKongView {
+  hand: TileType[]
+  exposedMelds: number
+  tile: TileType
+  from: number
+}
+
 /** 回合决策输入：只暴露 AI 决策需要的只读信息 */
 export interface AITurnView {
   hand: TileType[]
@@ -58,7 +66,7 @@ export function decideClaim(view: AIClaimView): ClaimDecision {
 }
 
 /** 面对加杠：当前 AI 能抢必抢；未来可按听牌风险权衡后返回 'pass'。 */
-export function decideRobKong(): RobKongDecision {
+export function decideRobKong(_view: RobKongView): RobKongDecision {
   return 'win'
 }
 

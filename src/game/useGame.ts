@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
-import { decideClaim, decideRobKong, decideTurn, chooseDiscardIndex, makeTurnView } from './ai'
 import { performDiscardGang, performPeng, removeMatches } from './actions'
 import type { ActionContext } from './actions'
+import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from './playerController'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
@@ -25,22 +25,10 @@ const PLAYER_SEED = [
 const MATCH_HANDS = { east: 4, hanchan: 8 }
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 
-// 唯一标识「哪个座位是人类玩家」：当前固定为 0 号座位。
-function isHuman(playerIndex: number) {
-  return playerIndex === 0
-}
-
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
-}
-
-interface ActionPrompt {
-  type: string
-  tile: TileType
-  from: number
-  canGang?: boolean
-  remainingClaims?: number[]
+  controllers?: PlayerController[]
 }
 
 export function resolveWinTile(winner: GamePlayer, options: EndGameOptions = {}) {
@@ -68,7 +56,7 @@ export function advanceMatchState({ round, dealer, honba, matchType, result, pla
   }
 }
 
-export function useGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseGameOptions = {}) {
+export function useGame({ playSound = () => {}, playSoundAndWait = async () => {}, controllers: optControllers }: UseGameOptions = {}) {
   const phase = ref('lobby')
   const players = reactive<GamePlayer[]>([])
   const wall = ref<TileType[]>([])
@@ -99,6 +87,41 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const timers = new Set<number>()
   let countdownHandle: number | null = null
   let openingSequence = 0
+
+  // ── 默认控制器装配（不传 controllers 时自动构建 1 人类 + 3 AI）──
+  const humanBridge: HumanBridge = {
+    isTurn: ref(false),
+    canHu: ref(false),
+    canKong: ref<TileType[]>([]),
+    actionPrompt,
+    selectedIndex,
+    drawnThisTurn: userDrewThisTurn,
+    turnSeconds,
+    activateTurn() {
+      phase.value = 'discard'
+      startCountdown()
+    },
+    activateClaim() {
+      phase.value = 'prompt'
+      startPromptCountdown()
+    },
+    activateRobKong() {
+      phase.value = 'prompt'
+      announce('可抢杠胡', 'red')
+      startPromptCountdown()
+    },
+    deactivate() {
+      window.clearInterval(countdownHandle)
+      countdownHandle = null
+    },
+  }
+  const humanController = new HumanController(humanBridge)
+  const controllers: PlayerController[] = optControllers ?? [
+    humanController,
+    new AiController(),
+    new AiController(),
+    new AiController(),
+  ]
 
   const user = computed(() => players[0])
   const isUserTurn = computed(() => currentPlayer.value === 0 && phase.value === 'discard')
@@ -192,6 +215,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     timers.clear()
     window.clearInterval(countdownHandle)
     countdownHandle = null
+    controllers.forEach((c) => c.reset?.())
   }
 
   function announce(text, tone = 'gold') {
@@ -401,35 +425,31 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
     if (!drawn || phase.value === 'settled') return
 
-    if (isHuman(playerIndex)) {
-      userDrewThisTurn.value = !options.skipDraw
-      phase.value = 'discard'
-      startCountdown()
-      return
-    }
     phase.value = 'thinking'
-    later(() => playAITurn(playerIndex), 650)
-  }
-
-  async function playAITurn(playerIndex: number) {
-    if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
     const player = players[playerIndex]
-    const decision = decideTurn(makeTurnView(
-      player,
-      structuralMeldCount(player),
-      kongDrawPlayerIndex === playerIndex,
-    ))
-    switch (decision.kind) {
+    const ctx: TurnContext = {
+      hand: player.hand,
+      melds: player.melds,
+      exposedMelds: structuralMeldCount(player),
+      kongBloom: kongDrawPlayerIndex === playerIndex,
+      skipDraw: Boolean(options.skipDraw),
+      afterKong: Boolean(options.fromTail),
+    }
+    const action = await controllers[playerIndex].requestTurn(ctx)
+    // 守卫：游戏可能已在 await 期间结束或轮次已转移
+    if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
+
+    switch (action.kind) {
       case 'win':
         return endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
       case 'added-kong':
-        return requestAddedKong(playerIndex, decision.meldIndex, player.melds[decision.meldIndex].tile)
+        return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
       case 'concealed-kong':
-        await performConcealedKong(playerIndex, decision.tile)
+        await performConcealedKong(playerIndex, action.tile, { noContinue: true })
         if (phase.value === 'settled') return
-        return later(() => playAITurn(playerIndex), 550)
+        return beginTurn(playerIndex, { fromTail: true })
       case 'discard':
-        return discardTile(playerIndex, decision.handIndex)
+        return discardTile(playerIndex, action.handIndex)
     }
   }
 
@@ -441,7 +461,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.drawnTileIndex = -1
     kongDrawPlayerIndex = -1
     player.discards.push(tile)
-    if (isHuman(playerIndex)) userDrewThisTurn.value = false
+    controllers[playerIndex].onDiscarded?.()
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     playSound('dapai.mp3', 0.8)
     later(() => playSound(tileAudioFile(tile)), 80)
@@ -477,20 +497,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
   }
 
-  function offerNextClaim(claimants, tile, from) {
-    const [claimant, ...remainingClaims] = claimants
-    if (!claimant) return later(() => beginTurn((from + 1) % 4), 450)
-    if (isHuman(claimant.playerIndex)) {
-      actionPrompt.value = {
-        type: 'claim', tile, from, canGang: claimant.canGang, remainingClaims,
-      }
-      phase.value = 'prompt'
-      startPromptCountdown()
-      return
-    }
-    later(() => executeAIClaim(claimant.playerIndex, tile, claimant.canGang, from, remainingClaims), 500)
-  }
-
   // 共享执行的上下文：把可变状态与表现副作用注入 actions.ts 的执行函数，
   // 让用户与 AI 复用同一套碰/杠物理操作。
   const tableContext: ActionContext = {
@@ -501,18 +507,40 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     playSound,
   }
 
-  async function executeAIClaim(playerIndex: number, tile: TileType, canGang: boolean, from: number, remainingClaims: number[]) {
+  async function offerNextClaim(claimants, tile, from) {
+    const [claimant, ...remainingClaims] = claimants
+    if (!claimant) return later(() => beginTurn((from + 1) % 4), 450)
+
+    const player = players[claimant.playerIndex]
+    const ctx: ClaimContext = {
+      hand: player.hand,
+      canGang: claimant.canGang,
+      tile,
+      from,
+    }
+    const action = await controllers[claimant.playerIndex].requestClaim(ctx)
+    // 守卫：游戏可能已在 await 期间结束
     if (phase.value === 'settled') return
-    const player = players[playerIndex]
-    const decision = decideClaim({ hand: player.hand, canGang })
-    if (decision === 'pass') return offerNextClaim(remainingClaims, tile, from)
-    if (decision === 'gang') {
-      performDiscardGang(tableContext, playerIndex, tile, from)
-      if (await drawFor(playerIndex, true)) later(() => playAITurn(playerIndex), 550)
-    } else {
-      performPeng(tableContext, playerIndex, tile, from)
-      phase.value = 'thinking'
-      later(() => discardTile(playerIndex, chooseDiscardIndex(player.hand, Math.random)), 650)
+
+    switch (action.kind) {
+      case 'pass':
+        return offerNextClaim(remainingClaims, tile, from)
+      case 'gang':
+        performDiscardGang(tableContext, claimant.playerIndex, tile, from)
+        if (await drawFor(claimant.playerIndex, true)) {
+          beginTurn(claimant.playerIndex, { fromTail: true })
+        }
+        return
+      case 'peng':
+        performPeng(tableContext, claimant.playerIndex, tile, from)
+        if (action.discardIndex !== undefined) {
+          // AI 单次事件：碰 + 弃牌一次跨边界完成
+          discardTile(claimant.playerIndex, action.discardIndex)
+        } else {
+          // 人类：碰后需要互动选弃牌（skipDraw 进入新回合）
+          beginTurn(claimant.playerIndex, { skipDraw: true })
+        }
+        return
     }
   }
 
@@ -527,6 +555,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function userDiscard(index = selectedIndex.value) {
+    // 控制器模式：resolve 待处理的 turn promise，由 beginTurn 的 await 继续流程
+    if (humanController.hasPendingTurn()) {
+      humanController.resolveDiscard(index)
+      return
+    }
+    // 兼容测试的同步路径（无待处理 promise 时直驱执行）
     if (!isUserTurn.value || index < 0 || index >= user.value.hand.length) return
     selectedIndex.value = -1
     discardTile(0, index)
@@ -540,6 +574,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (!prompt) return
     playSound('click.mp3', 0.65)
     if (prompt.type === 'rob') {
+      // 控制器模式（Step 5 将进一步迁移）
+      if (humanController.hasPendingRobKong()) {
+        humanController.resolveRobKongAction('pass')
+        return
+      }
       const kong = pendingKong.value
       if (!kong) return
       const nextRobber = kong.remainingRobbers?.[0]
@@ -551,10 +590,22 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       pendingKong.value = null
       return settleAddedKong(kong.playerIndex)
     }
+    // 控制器模式：resolve 待处理的 claim promise
+    if (humanController.hasPendingClaim()) {
+      humanController.resolveClaimPass()
+      return
+    }
+    // 兼容测试的同步路径
     offerNextClaim(prompt.remainingClaims ?? [], prompt.tile, prompt.from)
   }
 
   function userPeng() {
+    // 控制器模式：resolve 待处理的 claim promise
+    if (humanController.hasPendingClaim()) {
+      humanController.resolveClaimPeng()
+      return
+    }
+    // 兼容测试的同步路径
     const prompt = actionPrompt.value
     if (prompt?.type !== 'claim') return
     window.clearInterval(countdownHandle)
@@ -568,6 +619,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function userGangFromDiscard() {
+    // 控制器模式：resolve 待处理的 claim promise
+    if (humanController.hasPendingClaim()) {
+      humanController.resolveClaimGang()
+      return
+    }
+    // 兼容测试的同步路径
     const prompt = actionPrompt.value
     if (prompt?.type !== 'claim' || !prompt.canGang) return
     window.clearInterval(countdownHandle)
@@ -578,7 +635,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
 
-  async function performConcealedKong(playerIndex, tile) {
+  async function performConcealedKong(playerIndex, tile, { noContinue = false } = {}) {
     const player = players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 4)
     player.drawnTileIndex = -1
@@ -587,8 +644,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
     showScoreFlow(scoreDeltas)
     playSound('gang.mp3')
-    if (isHuman(playerIndex)) later(() => beginTurn(0, { fromTail: true }), 350)
-    else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
+    if (noContinue) return
+    // 遗留路径（测试直驱 userGang / performConcealedKong）：beginTurn 统一处理补摸+决策
+    later(() => beginTurn(playerIndex, { fromTail: true }), 350)
   }
 
   function declareAddedKong(playerIndex, meldIndex, tile) {
@@ -614,8 +672,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (meld) meld.pending = false
     const scoreDeltas = applyKongScore(players, playerIndex, 'added')
     showScoreFlow(scoreDeltas)
-    if (isHuman(playerIndex)) later(() => beginTurn(0, { fromTail: true }), 350)
-    else if (await drawFor(playerIndex, true)) later(() => playAITurn(playerIndex), 500)
+    // 统一走 beginTurn：控制器处理后续（AI 用 afterKong 延迟，人类激活 UI）
+    beginTurn(playerIndex, { fromTail: true })
   }
 
   function findRobbers(kongPlayerIndex, tile) {
@@ -640,17 +698,22 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => offerRobKong(robberIndex), 650)
   }
 
-  function offerRobKong(robberIndex) {
+  async function offerRobKong(robberIndex) {
     const kong = pendingKong.value
     if (!kong || phase.value === 'settled') return
-    if (isHuman(robberIndex)) {
-      actionPrompt.value = { type: 'rob', tile: kong.tile, from: kong.playerIndex }
-      phase.value = 'prompt'
-      announce('可抢杠胡', 'red')
-      startPromptCountdown()
-      return
+
+    const robber = players[robberIndex]
+    const ctx: RobKongContext = {
+      hand: robber.hand,
+      exposedMelds: structuralMeldCount(robber),
+      tile: kong.tile,
+      from: kong.playerIndex,
     }
-    if (decideRobKong() === 'pass') {
+    const action = await controllers[robberIndex].requestRobKong(ctx)
+    // 守卫：await 期间游戏可能已结束或 kong 已被处理
+    if (phase.value === 'settled' || pendingKong.value !== kong) return
+
+    if (action === 'pass') {
       const [nextRobber, ...rest] = kong.remainingRobbers ?? []
       if (nextRobber === undefined) return settleAddedKong(kong.playerIndex)
       pendingKong.value = { ...kong, remainingRobbers: rest }
@@ -663,7 +726,19 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function userGang(tile = userKongs.value[0]) {
-    if (!tile || !isUserTurn.value) return
+    if (!tile) return
+    // 控制器模式：resolve 待处理的 turn promise
+    if (humanController.hasPendingTurn()) {
+      const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
+      if (meldIndex >= 0) {
+        humanController.resolveAddedKong(meldIndex)
+      } else {
+        humanController.resolveConcealedKong(tile)
+      }
+      return
+    }
+    // 兼容测试的同步路径
+    if (!isUserTurn.value) return
     userDrewThisTurn.value = false
     window.clearInterval(countdownHandle)
     const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
@@ -674,6 +749,16 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function userHu() {
+    // 控制器模式：优先 resolve 待处理的 promise
+    if (humanController.hasPendingRobKong()) {
+      humanController.resolveRobKongAction('win')
+      return
+    }
+    if (humanController.hasPendingTurn()) {
+      humanController.resolveWin()
+      return
+    }
+    // 兼容测试的同步路径
     if (actionPrompt.value?.type === 'rob') {
       const kongPlayerIndex = pendingKong.value?.playerIndex ?? actionPrompt.value.from
       pendingKong.value = null
@@ -904,5 +989,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
     userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
+    humanController,
   }
 }

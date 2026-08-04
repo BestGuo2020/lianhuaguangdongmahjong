@@ -82,7 +82,7 @@ describe('decideClaim 吃碰杠响应', () => {
 
 describe('decideRobKong 抢杠', () => {
   it('当前 AI 能抢必抢', () => {
-    expect(decideRobKong()).toBe('win')
+    expect(decideRobKong({ hand: ['east', 'east', 'm1', 'm2'], exposedMelds: 1, tile: 'east', from: 2 })).toBe('win')
   })
 })
 
