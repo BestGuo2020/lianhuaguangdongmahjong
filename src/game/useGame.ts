@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { decideClaim, decideRobKong, decideTurn, chooseDiscardIndex, makeTurnView } from './ai'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
@@ -21,6 +22,11 @@ const PLAYER_SEED = [
 
 const MATCH_HANDS = { east: 4, hanchan: 8 }
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+
+// 唯一标识「哪个座位是人类玩家」：当前固定为 0 号座位。
+function isHuman(playerIndex: number) {
+  return playerIndex === 0
+}
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -393,54 +399,36 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
     if (!drawn || phase.value === 'settled') return
 
-    if (playerIndex === 0) {
+    if (isHuman(playerIndex)) {
       userDrewThisTurn.value = !options.skipDraw
       phase.value = 'discard'
       startCountdown()
       return
     }
     phase.value = 'thinking'
-    later(() => playAI(playerIndex), 650)
+    later(() => playAITurn(playerIndex), 650)
   }
 
-  function chooseAIDiscard(player) {
-    const scored = player.hand.map((tile, index) => {
-      const same = matchingCount(player.hand, tile) - 1
-      const suitMatch = /^([mps])([1-9])$/.exec(tile)
-      let neighbors = 0
-      if (suitMatch) {
-        const number = Number(suitMatch[2])
-        neighbors += player.hand.includes(`${suitMatch[1]}${number - 1}`) ? 1 : 0
-        neighbors += player.hand.includes(`${suitMatch[1]}${number + 1}`) ? 1 : 0
-      }
-      const penalty = tile === 'white' ? 10 : 0
-      return { index, score: same * 4 + neighbors * 2 + penalty + Math.random() }
-    })
-    scored.sort((a, b) => a.score - b.score)
-    return scored[0]?.index ?? 0
-  }
-
-  async function playAI(playerIndex) {
+  async function playAITurn(playerIndex: number) {
     if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
     const player = players[playerIndex]
-    if (isWinningHand(player.hand, structuralMeldCount(player))) {
-      return endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
+    const decision = decideTurn(makeTurnView(
+      player,
+      structuralMeldCount(player),
+      kongDrawPlayerIndex === playerIndex,
+    ))
+    switch (decision.kind) {
+      case 'win':
+        return endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
+      case 'added-kong':
+        return requestAddedKong(playerIndex, decision.meldIndex, player.melds[decision.meldIndex].tile)
+      case 'concealed-kong':
+        await performConcealedKong(playerIndex, decision.tile)
+        if (phase.value === 'settled') return
+        return later(() => playAITurn(playerIndex), 550)
+      case 'discard':
+        return discardTile(playerIndex, decision.handIndex)
     }
-
-    const added = player.melds.findIndex((meld) => meld.type === 'peng' && player.hand.includes(meld.tile))
-    if (added >= 0) {
-      const tile = player.melds[added].tile
-      return requestAddedKong(playerIndex, added, tile)
-    }
-
-    const concealed = concealedKongs(player.hand)
-    if (concealed.length) {
-      await performConcealedKong(playerIndex, concealed[0])
-      if (phase.value === 'settled') return
-      return later(() => playAI(playerIndex), 550)
-    }
-
-    discardTile(playerIndex, chooseAIDiscard(player))
   }
 
   function discardTile(playerIndex, handIndex) {
@@ -451,7 +439,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     player.drawnTileIndex = -1
     kongDrawPlayerIndex = -1
     player.discards.push(tile)
-    if (playerIndex === 0) userDrewThisTurn.value = false
+    if (isHuman(playerIndex)) userDrewThisTurn.value = false
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     playSound('dapai.mp3', 0.8)
     later(() => playSound(tileAudioFile(tile)), 80)
@@ -490,15 +478,15 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function offerNextClaim(claimants, tile, from) {
     const [claimant, ...remainingClaims] = claimants
     if (!claimant) return later(() => beginTurn((from + 1) % 4), 450)
-    if (claimant.playerIndex === 0) {
+    if (isHuman(claimant.playerIndex)) {
       actionPrompt.value = {
         type: 'claim', tile, from, canGang: claimant.canGang, remainingClaims,
       }
       phase.value = 'prompt'
       startPromptCountdown()
-    } else {
-      later(() => aiClaim(claimant.playerIndex, tile), 500)
+      return
     }
+    later(() => executeAIClaim(claimant.playerIndex, tile, claimant.canGang, from, remainingClaims), 500)
   }
 
   function removeMatches(hand, tile, amount) {
@@ -512,14 +500,14 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (pile[pile.length - 1] === tile) pile.pop()
   }
 
-  async function aiClaim(playerIndex, tile) {
+  async function executeAIClaim(playerIndex: number, tile: TileType, canGang: boolean, from: number, remainingClaims: number[]) {
     if (phase.value === 'settled') return
     const player = players[playerIndex]
+    const decision = decideClaim({ hand: player.hand, canGang })
+    if (decision === 'pass') return offerNextClaim(remainingClaims, tile, from)
     player.drawnTileIndex = -1
-    const from = lastDiscard.value.from
-    const isGang = matchingCount(player.hand, tile) >= 3
     removeLastDiscard(from, tile)
-    if (isGang) {
+    if (decision === 'gang') {
       player.hand = removeMatches(player.hand, tile, 3)
       player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
       const scoreDeltas = applyKongScore(players, playerIndex, 'discard', from)
@@ -527,7 +515,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       showScoreFlow(scoreDeltas)
       playSound('gang.mp3')
       currentPlayer.value = playerIndex
-      if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 550)
+      if (await drawFor(playerIndex, true)) later(() => playAITurn(playerIndex), 550)
     } else {
       player.hand = removeMatches(player.hand, tile, 2)
       player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
@@ -535,7 +523,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       playSound('peng.mp3')
       currentPlayer.value = playerIndex
       phase.value = 'thinking'
-      later(() => discardTile(playerIndex, chooseAIDiscard(player)), 650)
+      later(() => discardTile(playerIndex, chooseDiscardIndex(player.hand, Math.random)), 650)
     }
   }
 
@@ -624,7 +612,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
     showScoreFlow(scoreDeltas)
     playSound('gang.mp3')
-    if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
+    if (isHuman(playerIndex)) later(() => beginTurn(0, { fromTail: true }), 350)
     else if (await drawFor(playerIndex, true)) phase.value = 'thinking'
   }
 
@@ -651,8 +639,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (meld) meld.pending = false
     const scoreDeltas = applyKongScore(players, playerIndex, 'added')
     showScoreFlow(scoreDeltas)
-    if (playerIndex === 0) later(() => beginTurn(0, { fromTail: true }), 350)
-    else if (await drawFor(playerIndex, true)) later(() => playAI(playerIndex), 500)
+    if (isHuman(playerIndex)) later(() => beginTurn(0, { fromTail: true }), 350)
+    else if (await drawFor(playerIndex, true)) later(() => playAITurn(playerIndex), 500)
   }
 
   function findRobbers(kongPlayerIndex, tile) {
@@ -680,12 +668,18 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function offerRobKong(robberIndex) {
     const kong = pendingKong.value
     if (!kong || phase.value === 'settled') return
-    if (robberIndex === 0) {
+    if (isHuman(robberIndex)) {
       actionPrompt.value = { type: 'rob', tile: kong.tile, from: kong.playerIndex }
       phase.value = 'prompt'
       announce('可抢杠胡', 'red')
       startPromptCountdown()
       return
+    }
+    if (decideRobKong() === 'pass') {
+      const [nextRobber, ...rest] = kong.remainingRobbers ?? []
+      if (nextRobber === undefined) return settleAddedKong(kong.playerIndex)
+      pendingKong.value = { ...kong, remainingRobbers: rest }
+      return later(() => offerRobKong(nextRobber), 450)
     }
 
     announce(`${players[robberIndex].name} 抢杠胡`, 'red')

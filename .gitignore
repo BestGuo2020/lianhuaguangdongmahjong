@@ -145,3 +145,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# AI/AGENT
+.claude
+.mcp.json
