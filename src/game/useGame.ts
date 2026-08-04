@@ -729,6 +729,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function endGame(winnerIndex: number, options: EndGameOptions = {}) {
     if (['win-effect', 'revealing', 'settled', 'finished'].includes(phase.value)) return
     clearTimers()
+    scoreFlowEvent.value = null
+    tableActionEvent.value = null
     phase.value = 'win-effect'
     openingStage.value = null
     currentPlayer.value = -1
