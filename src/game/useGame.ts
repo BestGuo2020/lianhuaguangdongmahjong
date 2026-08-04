@@ -25,6 +25,17 @@ const PLAYER_SEED = [
 const MATCH_HANDS = { east: 4, hanchan: 8 }
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 
+// 视觉节奏延迟（非 AI 思考，用于动作动画展示与牌桌节奏）
+const PACE_MS = {
+  afterDiscardToNextTurn: 450,  // 弃牌后到下一家回合
+  afterClaimGang: 550,          // 点杠后到补摸回合
+  afterClaimPeng: 650,          // 碰后到出牌（AI 预计算弃牌在此间隔后展示）
+  afterKongSettle: 600,         // 杠结算后到补摸回合
+  beforeRobKong: 650,           // 加杠声明后到首次抢杠询问
+  betweenRobKongs: 450,         // 抢杠询问之间
+  skipDrawPengDelay: 350,       // 人类碰后跳过摸牌直接出牌的间隔
+}
+
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
@@ -470,7 +481,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
     const claimants = findClaims(playerIndex, tile)
     if (claimants.length) return offerNextClaim(claimants, tile, playerIndex)
-    later(() => beginTurn((playerIndex + 1) % 4), 450)
+    later(() => beginTurn((playerIndex + 1) % 4), PACE_MS.afterDiscardToNextTurn)
   }
 
   function seatDistance(from, to) {
@@ -509,7 +520,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   async function offerNextClaim(claimants, tile, from) {
     const [claimant, ...remainingClaims] = claimants
-    if (!claimant) return later(() => beginTurn((from + 1) % 4), 450)
+    if (!claimant) return later(() => beginTurn((from + 1) % 4), PACE_MS.afterDiscardToNextTurn)
 
     const player = players[claimant.playerIndex]
     const ctx: ClaimContext = {
@@ -528,17 +539,17 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       case 'gang':
         performDiscardGang(tableContext, claimant.playerIndex, tile, from)
         if (await drawFor(claimant.playerIndex, true)) {
-          beginTurn(claimant.playerIndex, { fromTail: true })
+          later(() => beginTurn(claimant.playerIndex, { fromTail: true }), PACE_MS.afterClaimGang)
         }
         return
       case 'peng':
         performPeng(tableContext, claimant.playerIndex, tile, from)
         if (action.discardIndex !== undefined) {
-          // AI 单次事件：碰 + 弃牌一次跨边界完成
-          discardTile(claimant.playerIndex, action.discardIndex)
+          // AI 单次事件：碰 + 弃牌一次跨边界完成（延迟用于动画展示）
+          later(() => discardTile(claimant.playerIndex, action.discardIndex), PACE_MS.afterClaimPeng)
         } else {
-          // 人类：碰后需要互动选弃牌（skipDraw 进入新回合）
-          beginTurn(claimant.playerIndex, { skipDraw: true })
+          // 人类：碰后需要互动选弃牌
+          later(() => beginTurn(claimant.playerIndex, { skipDraw: true }), PACE_MS.skipDrawPengDelay)
         }
         return
     }
@@ -672,8 +683,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (meld) meld.pending = false
     const scoreDeltas = applyKongScore(players, playerIndex, 'added')
     showScoreFlow(scoreDeltas)
-    // 统一走 beginTurn：控制器处理后续（AI 用 afterKong 延迟，人类激活 UI）
-    beginTurn(playerIndex, { fromTail: true })
+    // 延迟用于杠结算动画展示，之后 beginTurn 统一处理补摸+决策
+    later(() => beginTurn(playerIndex, { fromTail: true }), PACE_MS.afterKongSettle)
   }
 
   function findRobbers(kongPlayerIndex, tile) {
@@ -692,10 +703,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   function requestAddedKong(playerIndex, meldIndex, tile) {
     const [robberIndex, ...remainingRobbers] = findRobbers(playerIndex, tile)
     declareAddedKong(playerIndex, meldIndex, tile)
-    if (robberIndex === undefined) return later(() => settleAddedKong(playerIndex), 650)
+    if (robberIndex === undefined) return later(() => settleAddedKong(playerIndex), PACE_MS.beforeRobKong)
 
     pendingKong.value = { playerIndex, meldIndex, tile, remainingRobbers }
-    later(() => offerRobKong(robberIndex), 650)
+    later(() => offerRobKong(robberIndex), PACE_MS.beforeRobKong)
   }
 
   async function offerRobKong(robberIndex) {
@@ -717,12 +728,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       const [nextRobber, ...rest] = kong.remainingRobbers ?? []
       if (nextRobber === undefined) return settleAddedKong(kong.playerIndex)
       pendingKong.value = { ...kong, remainingRobbers: rest }
-      return later(() => offerRobKong(nextRobber), 450)
+      return later(() => offerRobKong(nextRobber), PACE_MS.betweenRobKongs)
     }
 
     announce(`${players[robberIndex].name} 抢杠胡`, 'red')
     pendingKong.value = null
-    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), 450)
+    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), PACE_MS.betweenRobKongs)
   }
 
   function userGang(tile = userKongs.value[0]) {
