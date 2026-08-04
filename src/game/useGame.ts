@@ -1,5 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { decideClaim, decideRobKong, decideTurn, chooseDiscardIndex, makeTurnView } from './ai'
+import { performDiscardGang, performPeng, removeMatches } from './actions'
+import type { ActionContext } from './actions'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
 import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
@@ -489,15 +491,14 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => executeAIClaim(claimant.playerIndex, tile, claimant.canGang, from, remainingClaims), 500)
   }
 
-  function removeMatches(hand, tile, amount) {
-    const next = [...hand]
-    for (let count = 0; count < amount; count += 1) next.splice(next.indexOf(tile), 1)
-    return next
-  }
-
-  function removeLastDiscard(from, tile) {
-    const pile = players[from].discards
-    if (pile[pile.length - 1] === tile) pile.pop()
+  // 共享执行的上下文：把可变状态与表现副作用注入 actions.ts 的执行函数，
+  // 让用户与 AI 复用同一套碰/杠物理操作。
+  const tableContext: ActionContext = {
+    players,
+    currentPlayer,
+    showTableAction,
+    showScoreFlow,
+    playSound,
   }
 
   async function executeAIClaim(playerIndex: number, tile: TileType, canGang: boolean, from: number, remainingClaims: number[]) {
@@ -505,23 +506,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const player = players[playerIndex]
     const decision = decideClaim({ hand: player.hand, canGang })
     if (decision === 'pass') return offerNextClaim(remainingClaims, tile, from)
-    player.drawnTileIndex = -1
-    removeLastDiscard(from, tile)
     if (decision === 'gang') {
-      player.hand = removeMatches(player.hand, tile, 3)
-      player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
-      const scoreDeltas = applyKongScore(players, playerIndex, 'discard', from)
-      showTableAction('discard-gang', playerIndex, from, tile, player.melds.length - 1)
-      showScoreFlow(scoreDeltas)
-      playSound('gang.mp3')
-      currentPlayer.value = playerIndex
+      performDiscardGang(tableContext, playerIndex, tile, from)
       if (await drawFor(playerIndex, true)) later(() => playAITurn(playerIndex), 550)
     } else {
-      player.hand = removeMatches(player.hand, tile, 2)
-      player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
-      showTableAction('peng', playerIndex, from, tile, player.melds.length - 1)
-      playSound('peng.mp3')
-      currentPlayer.value = playerIndex
+      performPeng(tableContext, playerIndex, tile, from)
       phase.value = 'thinking'
       later(() => discardTile(playerIndex, chooseDiscardIndex(player.hand, Math.random)), 650)
     }
@@ -570,18 +559,12 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (prompt?.type !== 'claim') return
     window.clearInterval(countdownHandle)
     countdownHandle = null
-    removeLastDiscard(prompt.from, prompt.tile)
-    user.value.hand = removeMatches(user.value.hand, prompt.tile, 2)
-    user.value.drawnTileIndex = -1
-    user.value.melds.push({ type: 'peng', tile: prompt.tile, from: prompt.from, tiles: [prompt.tile, prompt.tile, prompt.tile] })
+    performPeng(tableContext, 0, prompt.tile, prompt.from)
     actionPrompt.value = null
-    currentPlayer.value = 0
     userDrewThisTurn.value = false
     phase.value = 'discard'
     selectedIndex.value = -1
     startCountdown()
-    showTableAction('peng', 0, prompt.from, prompt.tile, user.value.melds.length - 1)
-    playSound('peng.mp3')
   }
 
   function userGangFromDiscard() {
@@ -589,17 +572,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (prompt?.type !== 'claim' || !prompt.canGang) return
     window.clearInterval(countdownHandle)
     countdownHandle = null
-    removeLastDiscard(prompt.from, prompt.tile)
-    user.value.hand = removeMatches(user.value.hand, prompt.tile, 3)
-    user.value.drawnTileIndex = -1
-    user.value.melds.push({ type: 'gang', tile: prompt.tile, from: prompt.from, tiles: Array(4).fill(prompt.tile) })
-    const scoreDeltas = applyKongScore(players, 0, 'discard', prompt.from)
+    performDiscardGang(tableContext, 0, prompt.tile, prompt.from)
     actionPrompt.value = null
-    currentPlayer.value = 0
     userDrewThisTurn.value = false
-    showTableAction('discard-gang', 0, prompt.from, prompt.tile, user.value.melds.length - 1)
-    showScoreFlow(scoreDeltas)
-    playSound('gang.mp3')
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
 
