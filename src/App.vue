@@ -7,6 +7,7 @@ import RulesPanel from './components/RulesPanel.vue'
 import { isHorse } from './game/tiles'
 import { BASE_SCORE } from './game/rules'
 import { useGame } from './game/useGame'
+import { useRemoteGame } from './game/useRemoteGame'
 import { useAudio } from './game/useAudio'
 import { splitWinningTile } from './game/winEffect'
 import type { MatchType, TileType } from './game/types'
@@ -67,6 +68,33 @@ onUnmounted(() => {
   screen.orientation?.removeEventListener?.('change', updateOrientationGate)
 })
 
+const gameMode = ref<'local' | 'remote'>('local')
+const localGame = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+
+// 模式切换桥：解构出的 ref / 函数始终委托给当前模式的 composable，
+// 使本地 / 远程共用同一套模板与交互逻辑。
+const gameFacade: Record<string, unknown> = {}
+const activeGame = () => (gameMode.value === 'remote' ? remoteGame : localGame) as unknown as Record<string, unknown>
+for (const key of Object.keys(localGame)) {
+  const value = activeGame()[key]
+  if (typeof value === 'function') {
+    gameFacade[key] = (...args: unknown[]) => {
+      const target = activeGame()[key] as (...a: unknown[]) => unknown
+      return target(...args)
+    }
+  } else {
+    gameFacade[key] = computed(() => {
+      const source = activeGame()[key]
+      // ref / computed → 取 .value；reactive 数组（players）→ 直接返回
+      return source && typeof source === 'object' && 'value' in source
+        ? (source as { value: unknown }).value
+        : source
+    })
+  }
+}
+const game = gameFacade as unknown as ReturnType<typeof useGame>
+
 const {
   phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
   actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
@@ -74,12 +102,40 @@ const {
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
   userGang, userHu, nextRound, returnToLobby, debugPreviewWin,
-} = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+} = game
+
+// ── 联机模式状态（远程房间 / WS 连接）──────────────────
+const {
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, isCreator, roomSeats, remoteActions, waitingNextRound,
+} = remoteGame
+const nicknameInput = ref('')
+const joinCode = ref('')
+const allOccupiedReady = computed(() => {
+  const occupied = roomSeats.value.filter(Boolean)
+  return occupied.length > 0 && occupied.every((seat) => seat?.ready)
+})
+
+async function createRemoteRoom() {
+  if (!nicknameInput.value.trim()) return
+  nickname.value = nicknameInput.value.trim()
+  await remoteActions.createRoom(selectedMatch.value, 4)
+}
+
+async function joinRemoteRoom() {
+  if (!nicknameInput.value.trim() || !joinCode.value.trim()) return
+  nickname.value = nicknameInput.value.trim()
+  await remoteActions.joinRoom(joinCode.value)
+}
 
 function startGameWithAudio() {
   startBgm()
   // 音效在后台缓存，不能阻塞玩家创建和 3D 牌桌首次渲染。
   startGame(selectedMatch.value)
+}
+
+async function startRemoteMatch() {
+  startBgm()
+  await remoteActions.startMatch()
 }
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
@@ -106,6 +162,40 @@ watch(userDiscardWaits, (value) => {
 
 watch(isUserTurn, (value) => {
   if (!value) waitsOpen.value = false
+})
+
+// ── 联机结算「继续」按钮：10s 倒计时，超时自动确认（服务端同样有兜底超时）──
+const continueCountdown = ref(10)
+let continueTimer: number | null = null
+
+function stopContinueCountdown() {
+  if (continueTimer != null) {
+    window.clearInterval(continueTimer)
+    continueTimer = null
+  }
+  continueCountdown.value = 10
+}
+
+function startContinueCountdown() {
+  stopContinueCountdown()
+  continueCountdown.value = 10
+  continueTimer = window.setInterval(() => {
+    continueCountdown.value -= 1
+    if (continueCountdown.value <= 0) {
+      stopContinueCountdown()
+      nextRound()
+    }
+  }, 1000)
+}
+
+watch([result, phase, resultVisible, gameMode, matchFinished], () => {
+  const countdownActive = gameMode.value === 'remote'
+    && phase.value === 'settled'
+    && Boolean(result.value)
+    && resultVisible.value
+    && !matchFinished.value
+  if (countdownActive) startContinueCountdown()
+  else stopContinueCountdown()
 })
 
 const hoveredWaits = computed(() => hoveredDiscard.value
@@ -211,11 +301,15 @@ function clearMobileSelection(event: PointerEvent) {
     </div>
   </div>
   <main class="game-app">
+    <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting'" class="remote-banner" role="status">网络断开，正在重连…</div>
+    <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
+    <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }" @pointerdown="clearMobileSelection">
         <header class="top-bar">
           <div class="brand-mini"><span v-if="!players.length">莲花广麻</span></div>
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
+          <span v-if="gameMode === 'remote' && roomId && players.length" class="room-badge">房间 {{ roomId }}</span>
           <nav>
             <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
               <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
@@ -251,7 +345,7 @@ function clearMobileSelection(event: PointerEvent) {
           />
           <PlayerSeat
             v-for="(player, index) in players.slice(1)"
-            :key="player.name"
+            :key="player.seat"
             :player="player"
             :position="seatPosition[index + 1]"
             :active="currentPlayer === index + 1"
@@ -377,11 +471,67 @@ function clearMobileSelection(event: PointerEvent) {
           <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
           <h1>莲花<span>广麻</span></h1>
           <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
-          <div class="match-selector" role="radiogroup" aria-label="场次选择">
-            <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>一场4局（不含连庄）</span></button>
-            <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
+          <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
+            <button :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="gameMode = 'local'"><b>单机对战</b><span>与 AI 同桌</span></button>
+            <button :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="gameMode = 'remote'"><b>联机对战</b><span>创建或加入房间</span></button>
           </div>
-          <button class="start-button" @click="startGameWithAudio"><b>开始{{ selectedMatch === 'east' ? '东风场' : '半庄场' }}</b><span>四人对局</span></button>
+
+          <template v-if="gameMode === 'local'">
+            <div class="match-selector" role="radiogroup" aria-label="场次选择">
+              <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>一场4局（不含连庄）</span></button>
+              <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
+            </div>
+            <button class="start-button" @click="startGameWithAudio"><b>开始{{ selectedMatch === 'east' ? '东风场' : '半庄场' }}</b><span>四人对局</span></button>
+          </template>
+
+          <template v-else>
+            <div class="remote-lobby">
+              <label class="remote-field">
+                <span>昵称</span>
+                <input
+                  v-model="nicknameInput"
+                  maxlength="12"
+                  placeholder="输入昵称"
+                  @keyup.enter="joinCode ? joinRemoteRoom() : createRemoteRoom()"
+                />
+              </label>
+              <div class="remote-actions">
+                <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="createRemoteRoom">
+                  {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
+                </button>
+                <div class="remote-join">
+                  <input v-model="joinCode" maxlength="6" placeholder="6 位房间码" @keyup.enter="joinRemoteRoom()" />
+                  <button class="remote-join-btn" :disabled="!nicknameInput.trim() || !joinCode.trim() || sessionStatus === 'joining'" @click="joinRemoteRoom">
+                    {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
+                  </button>
+                </div>
+              </div>
+              <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
+
+              <div v-if="roomId" class="room-panel">
+                <div class="room-code">房间码 <strong>{{ roomId }}</strong></div>
+                <div class="room-seats">
+                  <div v-for="(seat, index) in roomSeats" :key="index" class="room-seat" :class="{ occupied: !!seat }">
+                    <span class="room-seat-no">{{ index + 1 }}</span>
+                    <b>{{ seat?.nickname || '等待加入…' }}</b>
+                    <em v-if="seat?.ready">已准备</em>
+                    <em v-else-if="seat" class="unready">未准备</em>
+                  </div>
+                </div>
+                <div class="room-owner-actions">
+                  <button v-if="mySeat >= 0" class="secondary" @click="remoteActions.toggleReady()">准备 / 取消准备</button>
+                  <button
+                    v-if="isCreator"
+                    class="start-button room-start"
+                    :disabled="!allOccupiedReady"
+                    @click="startRemoteMatch"
+                  ><b>开始对局</b><span>{{ allOccupiedReady ? '全员已准备' : '等待全员准备' }}</span></button>
+                </div>
+                <button class="text-button room-leave" @click="remoteActions.leaveRoom()">离开房间</button>
+              </div>
+            </div>
+          </template>
+
           <div class="lobby-links">
             <button class="text-button" @click="rulesOpen = true">游戏规则 →</button>
             <a
@@ -430,7 +580,7 @@ function clearMobileSelection(event: PointerEvent) {
               </div>
               <div class="result-actions">
                 <button class="secondary" @click="resultVisible = false">查看牌桌</button>
-                <button @click="nextRound">继续</button>
+                <button @click="nextRound">继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></button>
               </div>
             </section>
           </div>

@@ -34,6 +34,7 @@ const PACE_MS = {
   beforeRobKong: 650,           // 加杠声明后到首次抢杠询问
   betweenRobKongs: 450,         // 抢杠询问之间
   skipDrawPengDelay: 350,       // 人类碰后跳过摸牌直接出牌的间隔
+  redKongDraw: 600,             // 红中花杠亮杠后到补摸的停顿（人类正常速度）
 }
 
 interface UseGameOptions {
@@ -412,8 +413,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         endGame(playerIndex, { fourRed: true })
         return false
       }
-      // 红中先完成亮杠与报杠音效，再从牌墙尾补摸，避免两个动画挤在一起。
-      await playSoundAndWait('gang.mp3')
+      // 红中先完成亮杠与报杠音效，再从牌墙尾补摸，避免两个动画挤在一起；
+      // 至少停顿 redKongDraw 再补摸，对齐人类正常节奏（AI 与用户一致）。
+      await Promise.all([playSoundAndWait('gang.mp3'), wait(PACE_MS.redKongDraw)])
       if (phase.value === 'settled') return false
       return drawFor(playerIndex, true)
     }
@@ -531,9 +533,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         return offerNextClaim(remainingClaims, tile, from)
       case 'gang':
         performDiscardGang(tableContext, claimant.playerIndex, tile, from)
-        if (await drawFor(claimant.playerIndex, true)) {
-          later(() => beginTurn(claimant.playerIndex, { fromTail: true }), PACE_MS.afterClaimGang)
-        }
+        // 杠后补摸只由 beginTurn(fromTail) 完成：这里不能再 drawFor，
+        // 否则点杠会连摸两张（补摸 + 回合摸），四副露时手牌多一张，不再是单骑。
+        later(() => beginTurn(claimant.playerIndex, { fromTail: true }), PACE_MS.afterClaimGang)
         return
       case 'peng':
         performPeng(tableContext, claimant.playerIndex, tile, from)

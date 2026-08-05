@@ -904,3 +904,43 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ── Phase 7 联机对战：模式切换 / 远程房间 Lobby ── */
+.mode-selector { display: grid; grid-template-columns: repeat(2, minmax(145px, 1fr)); gap: 10px; width: min(390px, 86vw); margin: 0 auto 22px; }
+.mode-selector button { padding: 13px 12px 11px; border: 1px solid rgba(211,174,87,.27); border-radius: 7px; background: rgba(3,18,13,.72); color: #9fb0a6; cursor: pointer; transition: .2s ease; }
+.mode-selector button b, .mode-selector button span { display: block; }
+.mode-selector button b { margin-bottom: 4px; color: #e5d5ad; font: 800 16px "Noto Serif SC", serif; }
+.mode-selector button span { font-size: 11px; letter-spacing: .05em; }
+.mode-selector button.active { border-color: #d5ab54; background: linear-gradient(180deg, rgba(168,116,48,.34), rgba(18,54,39,.88)); box-shadow: 0 0 0 1px rgba(244,204,106,.16), 0 8px 24px rgba(0,0,0,.25); transform: translateY(-2px); }
+.mode-selector button.active b { color: #ffe6a5; }
+
+.remote-lobby { display: flex; flex-direction: column; gap: 12px; width: min(390px, 86vw); }
+.remote-field { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid rgba(211,174,87,.27); border-radius: 7px; background: rgba(3,18,13,.72); }
+.remote-field span { color: #d0c39e; font-size: 13px; letter-spacing: .1em; }
+.remote-field input, .remote-join input { flex: 1; min-width: 0; border: 0; background: transparent; color: #f1e7cd; font-size: 14px; outline: none; }
+.remote-field input::placeholder, .remote-join input::placeholder { color: #5f7368; }
+.remote-actions { display: flex; flex-direction: column; gap: 10px; }
+.remote-create { padding: 12px 20px; border: 1px solid #d2aa58; border-radius: 3px; background: linear-gradient(135deg, #b98737, #d9b65d 48%, #956622); color: #182218; font-weight: 800; letter-spacing: .12em; cursor: pointer; }
+.remote-create:disabled, .remote-join-btn:disabled { filter: grayscale(.6); opacity: .55; cursor: not-allowed; }
+.remote-join { display: flex; gap: 8px; }
+.remote-join input { flex: 1; padding: 11px 14px; border: 1px solid rgba(211,174,87,.27); border-radius: 5px; background: rgba(3,18,13,.72); color: #f1e7cd; font-size: 14px; letter-spacing: .2em; text-align: center; outline: none; }
+.remote-join-btn { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
+.session-error { margin: 0; color: #e0a06a; font-size: 13px; }
+.room-panel { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; padding: 14px; border: 1px solid rgba(211,174,87,.3); border-radius: 9px; background: rgba(3,18,13,.6); }
+.room-code { color: #d0c39e; font-size: 13px; letter-spacing: .1em; }
+.room-code strong { margin-left: 6px; color: #ffe6a5; font: 900 26px "Noto Serif SC", serif; letter-spacing: .3em; }
+.room-seats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.room-seat { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(211,174,87,.18); border-radius: 6px; background: rgba(2,12,9,.6); color: #5f7368; font-size: 12px; }
+.room-seat.occupied { border-color: rgba(211,174,87,.4); color: #e5d5ad; }
+.room-seat-no { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(211,174,87,.18); color: #d0c39e; font-size: 11px; }
+.room-seat b { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-seat em { font-style: normal; font-size: 10px; color: #9ac97e; }
+.room-seat em.unready { color: #b8935a; }
+.room-owner-actions { display: flex; flex-direction: column; gap: 10px; }
+.room-owner-actions button.secondary { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
+.room-start:disabled { filter: grayscale(.6); opacity: .5; cursor: not-allowed; }
+.room-leave { align-self: flex-start; }
+
+.room-badge { margin-left: auto; padding: 4px 10px; border: 1px solid rgba(211,174,87,.4); border-radius: 20px; color: #d0c39e; font-size: 12px; letter-spacing: .12em; }
+.remote-banner { position: absolute; z-index: 120; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 20px; background: rgba(30,22,10,.92); border: 1px solid #d2aa58; color: #ffe6a5; font-size: 13px; letter-spacing: .08em; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+.remote-banner.error { border-color: #c07a4a; color: #f0b088; }

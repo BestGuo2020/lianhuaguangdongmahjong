@@ -34,6 +34,7 @@ async function playOneMatch(maxSteps = 8000) {
     if (game.matchFinished.value || game.phase.value === 'finished') break
     if (game.phase.value === 'settled') {
       settledRounds.push(String(game.round.value))
+      checkTileCountInvariant(game)
       game.nextRound()
       continue
     }
@@ -49,6 +50,26 @@ async function playOneMatch(maxSteps = 8000) {
     settledRounds,
     scores: game.players.map((player) => ({ name: player.name, score: player.score })),
   }
+}
+
+/**
+ * 手牌数守恒（结算稳定态）：hand.length + 副露张数 === 13 + 杠数 + 花数 + (摸牌 ? 1 : 0)。
+ * 回归守卫：点杠若连摸两张，杠后手牌多一张，四副露时不是单骑（此断言会失败）。
+ */
+function checkTileCountInvariant(game: ReturnType<typeof useGame>) {
+  game.players.forEach((player) => {
+    if (player.redCount >= 4) return   // 四红中：末张红中直接胡牌，无补摸，drawnTileIndex 残留
+    const meldTiles = player.melds.reduce((sum, meld) => sum + (meld.tiles?.length ?? 0), 0)
+    const kongs = player.melds.filter((meld) => meld.type === 'gang' || meld.type === 'angang').length
+    const flowers = player.melds.filter((meld) => meld.type === 'flower').length
+    const drawn = player.drawnTileIndex >= 0 ? 1 : 0
+    const actual = player.hand.length + meldTiles
+    const expected = 13 + kongs + flowers + drawn
+    expect(
+      actual,
+      `牌数不守恒: ${player.name} hand=${player.hand.length} melds=${meldTiles} kongs=${kongs} flowers=${flowers} drawn=${drawn}`,
+    ).toBe(expected)
+  })
 }
 
 describe('整局模拟：东风场自动打完', () => {
