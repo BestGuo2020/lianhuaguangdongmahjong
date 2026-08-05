@@ -161,7 +161,8 @@ button { font: inherit; }
 
 .brand-mini { display: flex; align-items: center; gap: 8px; color: #d9c491; letter-spacing: .12em; }
 .brand-mini i { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #a9823c; border-radius: 50%; font: 700 14px "Noto Serif SC", serif; font-style: normal; }
-.base-score-badge { position: absolute; z-index: 60; top: 12px; left: 16px; padding: 6px 12px; border: 1px solid rgba(217,180,92,.48); border-radius: 999px; background: rgba(5,18,13,.82); color: #f1cc70; font-size: clamp(12px,1vw,16px); font-weight: 800; letter-spacing: .08em; box-shadow: 0 4px 14px rgba(0,0,0,.34); pointer-events: none; }
+.base-score-badge { margin-right: auto; display: flex; align-items: center; gap: 9px; padding: 5px 12px; border: 1px solid rgba(217,180,92,.48); border-radius: 999px; background: rgba(5,18,13,.82); color: #f1cc70; font-size: clamp(12px,1vw,15px); font-weight: 800; letter-spacing: .08em; box-shadow: 0 4px 14px rgba(0,0,0,.34); pointer-events: none; }
+.base-score-badge .badge-room { color: #d0c39e; font-weight: 600; }
 .round-info { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 19px; border: 1px solid rgba(208,183,110,.2); border-radius: 99px; background: rgba(0,0,0,.18); letter-spacing: .12em; }
 .top-bar nav { display: flex; gap: 8px; }
 .top-bar button { width: clamp(34px, 2.8vw, 44px); height: clamp(34px, 2.8vw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25vw, 20px); cursor: pointer; }
@@ -971,8 +972,11 @@ button { font: inherit; }
 .room-start:disabled { filter: grayscale(.6); opacity: .5; cursor: not-allowed; }
 .room-leave { align-self: flex-start; }
 .room-close { align-self: flex-start; color: #d0896a; }
-.quit-match { padding: 6px 12px; border: 1px solid rgba(213,184,112,.4); border-radius: 5px; background: rgba(8,28,20,.88); color: #d0b68a; font-size: 12px; letter-spacing: .08em; cursor: pointer; }
-.quit-match:hover { color: #f0d9a8; border-color: rgba(213,184,112,.7); }
+.quit-match { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(213,184,112,.4); border-radius: 5px; background: rgba(8,28,20,.88); cursor: pointer; }
+.quit-match img { display: block; width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.42)); transition: transform .18s ease, filter .18s ease; }
+.quit-match:hover { border-color: rgba(213,184,112,.7); }
+.quit-match:hover img { transform: translateY(-1px) scale(1.07); filter: brightness(1.08) drop-shadow(0 3px 5px rgba(0,0,0,.48)); }
+.quit-match:active img { transform: scale(.94); }
 .stats-card { min-width: 300px; }
 .stats-nickname { margin: 2px 0 12px; color: #d0c39e; font-size: 14px; letter-spacing: .1em; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 14px; }
@@ -983,6 +987,6 @@ button { font: inherit; }
 .stats-grid span { color: #a8b6a8; font-size: 11px; letter-spacing: .06em; }
 .stats-loading, .stats-empty { padding: 18px 0; color: #a8b6a8; text-align: center; }
 
-.room-badge { margin-left: auto; padding: 4px 10px; border: 1px solid rgba(211,174,87,.4); border-radius: 20px; color: #d0c39e; font-size: 12px; letter-spacing: .12em; }
+/* 房间号已并入 base-score-badge（顶栏下方），原顶栏 room-badge 移除 */
 .remote-banner { position: absolute; z-index: 120; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 20px; background: rgba(30,22,10,.92); border: 1px solid #d2aa58; color: #ffe6a5; font-size: 13px; letter-spacing: .08em; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
 .remote-banner.error { border-color: #c07a4a; color: #f0b088; }

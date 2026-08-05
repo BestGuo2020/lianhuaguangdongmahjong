@@ -374,9 +374,18 @@ function clearMobileSelection(event: PointerEvent) {
         <header class="top-bar">
           <div class="brand-mini"><span v-if="!players.length">莲花广麻</span></div>
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
-          <span v-if="gameMode === 'remote' && roomId && players.length" class="room-badge">房间 {{ roomId }}</span>
+          <div v-if="players.length" class="base-score-badge">
+            <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
+            <span>底分{{ BASE_SCORE }}</span>
+          </div>
           <nav>
-            <button v-if="gameMode === 'remote' && phase !== 'lobby'" class="quit-match" @click="quitMatch">退出对局</button>
+            <button
+              v-if="gameMode === 'remote' && phase !== 'lobby'"
+              class="quit-match"
+              aria-label="退出对局"
+              title="退出对局"
+              @click="quitMatch"
+            ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
             <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
               <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
             </button>
@@ -727,7 +736,6 @@ function clearMobileSelection(event: PointerEvent) {
           </div>
         </aside>
       </div>
-      <div v-if="players.length" class="base-score-badge">底分{{ BASE_SCORE }}分</div>
     </div>
     <RulesPanel :open="rulesOpen" @close="rulesOpen = false" />
   </main>
