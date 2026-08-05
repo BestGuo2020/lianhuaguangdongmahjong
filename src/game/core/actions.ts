@@ -7,7 +7,12 @@ import type { GamePlayer, ScoreDelta, TableActionType, TileType } from './types'
 
 export function removeMatches(hand: TileType[], tile: TileType, amount: number): TileType[] {
   const next = [...hand]
-  for (let count = 0; count < amount; count += 1) next.splice(next.indexOf(tile), 1)
+  for (let count = 0; count < amount; count += 1) {
+    const index = next.indexOf(tile)
+    // 该牌不足 amount 张（或缺失）：停止移除，绝不 splice(-1) 误删手牌末张
+    if (index < 0) break
+    next.splice(index, 1)
+  }
   return next
 }
 

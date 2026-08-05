@@ -33,6 +33,13 @@ describe('removeMatches / removeLastDiscard', () => {
     expect(hand).toEqual(['m1', 'm2', 'm1', 'm3'])
   })
 
+  it('removeMatches 该牌不足指定张数时不再移除，绝不误删手牌末张', () => {
+    // 手牌只有 1 张 m1，却要求移除 2 张：只移除存在的 1 张，保留其余（对齐后端 remove 行为）
+    expect(removeMatches(['m1', 'p2', 'p3'], 'm1', 2)).toEqual(['p2', 'p3'])
+    // 该牌完全缺失：原样返回，不再 splice(-1) 误删末张
+    expect(removeMatches(['p2', 'p3'], 'm9', 2)).toEqual(['p2', 'p3'])
+  })
+
   it('removeLastDiscard 只移除最后一张且匹配才移除', () => {
     const pile: TileType[] = ['m1', 'east']
     removeLastDiscard(pile, 'east')

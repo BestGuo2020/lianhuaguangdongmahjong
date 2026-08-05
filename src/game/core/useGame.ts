@@ -468,6 +468,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function discardTile(playerIndex, handIndex) {
     const player = players[playerIndex]
+    // 越界索引 clamp 到末张（对齐后端 manager.discard_tile），避免 splice 落空导致卡死在 checking
+    handIndex = Math.min(handIndex, player.hand.length - 1)
     const [tile] = player.hand.splice(handIndex, 1)
     if (!tile) return
     player.hand = sortTiles(player.hand)

@@ -220,3 +220,40 @@ describe('胡牌座位提示', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('越界弃牌索引（回归：clamp 到末张，不卡死）', () => {
+  const badDiscard = {
+    requestTurn: async () => ({ kind: 'discard' as const, handIndex: 99 }),
+    requestClaim: async () => ({ kind: 'pass' as const }),
+    requestRobKong: async () => 'pass' as const,
+    onDiscarded: () => {},
+    reset: () => {},
+  }
+
+  it('AI 返回越界弃牌索引时 clamp 到末张，对局正常推进到流局（不卡在弃牌）', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', {
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
+      setInterval: globalThis.setInterval,
+      clearInterval: globalThis.clearInterval,
+    })
+    const game = useGame({
+      controllers: [badDiscard, badDiscard, badDiscard, badDiscard],
+      playSound: () => {},
+      playSoundAndWait: async () => {},
+    })
+    const startPromise = game.startGame('east')
+    let steps = 0
+    while (!game.matchFinished.value && game.phase.value !== 'settled' && steps < 300) {
+      steps += 1
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    // 未卡死：对局推进到流局/结算（若无 clamp，首家越界弃牌会永久停在弃牌阶段）
+    expect(game.phase.value).toBe('settled')
+    expect(steps).toBeLessThan(300)
+    await startPromise
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+})
