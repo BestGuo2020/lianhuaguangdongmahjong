@@ -315,8 +315,12 @@ export class AiController implements PlayerController {
     const decision: ClaimDecision = decideClaim({ hand: ctx.hand, canGang: ctx.canGang })
     if (decision === 'gang') return { kind: 'gang' }
     if (decision === 'peng') {
-      // 预计算碰后弃牌索引，实现 AI 的单次碰+出牌闭环
+      // 碰后无牌可打（手牌恰好只剩这 2 张）：真实规则下不能碰，
+      // 否则出牌阶段手牌为空，discardTile 空手 no-op → 对局停滞在 checking。
+      // 与后端 AIPlayer.request_claim 的守卫对齐。
       const afterPeng = removeMatches(ctx.hand, ctx.tile, 2)
+      if (!afterPeng.length) return { kind: 'pass' }
+      // 预计算碰后弃牌索引，实现 AI 的单次碰+出牌闭环
       const discardIndex = chooseDiscardIndex(afterPeng, this.random)
       return { kind: 'peng', discardIndex }
     }

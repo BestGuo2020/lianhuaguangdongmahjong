@@ -111,6 +111,13 @@ describe('AiController.requestClaim', () => {
     }
   })
 
+  it('碰后无牌可打时返回 pass（防止出牌空手卡死）', async () => {
+    // hand 恰好只剩要碰的 2 张 east：碰后手牌为空，真实规则下不能碰
+    const controller = new AiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn(), () => 0)
+    const action = await controller.requestClaim(makeClaimCtx(['east', 'east'], { canGang: false, tile: 'east' }))
+    expect(action).toEqual({ kind: 'pass' })
+  })
+
   it('使用 claim 延迟', async () => {
     const calls: number[] = []
     const scheduler = (fn: () => void, ms: number) => { calls.push(ms); fn() }
