@@ -13,10 +13,10 @@
 import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
 import { API_BASE, createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom } from './remoteApi'
 import type { RoomSeatState } from './remoteApi'
-import type { ActionPrompt } from './playerController'
-import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from './rules'
-import { TILE_TYPES, tileAudioFile, tileName } from './tiles'
-import type { GamePlayer, MatchType, Meld, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from './types'
+import type { ActionPrompt } from '../core/playerController'
+import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
+import { TILE_TYPES, tileAudioFile, tileName } from '../core/tiles'
+import type { GamePlayer, MatchType, Meld, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -24,7 +24,7 @@ import {
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
-} from './winEffect'
+} from '../core/winEffect'
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const DEFAULT_AVATARS = ['lotus', 'ah-lok', 'shisan', 'young-master'].map((name) => `${AVATAR_BASE}${name}.svg`)

@@ -3,11 +3,11 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/tiles'
-import { meldSourceTileIndex } from '../game/rules'
-import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/tableLayout'
-import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/winEffect'
-import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/types'
+import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/core/tiles'
+import { meldSourceTileIndex } from '../game/core/rules'
+import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/core/tableLayout'
+import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/core/winEffect'
+import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/types'
 
 interface TableProps {
   players?: GamePlayer[]

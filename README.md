@@ -154,9 +154,9 @@ npm run build
 
 ## 开发规范
 
-- 使用 Vue 单文件组件和 `<script setup lang="ts">`；可复用的游戏逻辑放在 `src/game/`，展示逻辑放在 `src/components/`。
+- 使用 Vue 单文件组件和 `<script setup lang="ts">`；可复用的游戏逻辑放在 `src/game/core/`（离线核心）与 `src/game/online/`（联机交互），展示逻辑放在 `src/components/`。
 - 保持现有代码风格：2 空格缩进、单引号、通常不写行末分号。
-- 共享的牌、玩家、动作和结算结构应在 `src/game/types.ts` 中定义，避免在组件内重复声明。
+- 共享的牌、玩家、动作和结算结构应在 `src/game/core/types.ts` 中定义，避免在组件内重复声明。
 - 修改规则时同时检查 `rules.ts`、`useGame.ts`、游戏内 `RulesPanel.vue` 与本 README，确保实现和说明一致。
 - 修改牌桌位置或胡牌演出时，优先更新相应的纯函数，并补充或调整测试。
 - 静态资源放入 `public/` 对应子目录，运行时代码使用 `import.meta.env.BASE_URL` 构建 URL，以避免硬编码站点根路径。
@@ -205,7 +205,7 @@ npm run preview
 
 ### 修改规则后测试失败
 
-规则测试位于 `src/game/*.test.ts`。确认规则实现、对局流程、计分预期和玩法文案都已同步更新，然后重新运行 `npm test` 和 `npm run build`。
+规则测试位于 `src/game/core/*.test.ts` 与 `src/game/online/*.test.ts`。确认规则实现、对局流程、计分预期和玩法文案都已同步更新，然后重新运行 `npm test` 和 `npm run build`。
 
 ## 资源说明
 

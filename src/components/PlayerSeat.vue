@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import MahjongTile from './MahjongTile.vue'
-import type { GamePlayer } from '../game/types'
+import type { GamePlayer } from '../game/core/types'
 
 withDefaults(defineProps<{
   player: GamePlayer

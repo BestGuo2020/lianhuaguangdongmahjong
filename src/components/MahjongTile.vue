@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TILE_META, tileFaceFile } from '../game/tiles'
-import type { TileType } from '../game/types'
+import { TILE_META, tileFaceFile } from '../game/core/tiles'
+import type { TileType } from '../game/core/types'
 
 const props = withDefaults(defineProps<{
   tile?: TileType | 'back'

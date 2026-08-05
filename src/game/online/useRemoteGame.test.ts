@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteGame } from './useRemoteGame'
-import type { GamePlayer, TileType } from './types'
+import type { GamePlayer, TileType } from '../core/types'
 
 // ─── Mock WebSocket / fetch / window ──────────────────────
 

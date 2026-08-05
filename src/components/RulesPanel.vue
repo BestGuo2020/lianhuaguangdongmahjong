@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BASE_SCORE } from '../game/rules'
+import { BASE_SCORE } from '../game/core/rules'
 
 defineProps({ open: Boolean })
 defineEmits(['close'])

@@ -1,6 +1,6 @@
 // 远程房间 REST 客户端 —— 对应 backend/app/api/rooms.py 的 6 个路由
 // 由 useRemoteGame 调用，与 WebSocket 实时通道分离（REST 管生命周期，WS 管对局）。
-import type { MatchType } from './types'
+import type { MatchType } from '../core/types'
 
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
