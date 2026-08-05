@@ -942,6 +942,18 @@ button { font: inherit; }
 .room-owner-actions button.secondary { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
 .room-start:disabled { filter: grayscale(.6); opacity: .5; cursor: not-allowed; }
 .room-leave { align-self: flex-start; }
+.room-close { align-self: flex-start; color: #d0896a; }
+.quit-match { padding: 6px 12px; border: 1px solid rgba(213,184,112,.4); border-radius: 5px; background: rgba(8,28,20,.88); color: #d0b68a; font-size: 12px; letter-spacing: .08em; cursor: pointer; }
+.quit-match:hover { color: #f0d9a8; border-color: rgba(213,184,112,.7); }
+.stats-card { min-width: 300px; }
+.stats-nickname { margin: 2px 0 12px; color: #d0c39e; font-size: 14px; letter-spacing: .1em; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 14px; }
+.stats-grid article { display: flex; flex-direction: column; gap: 4px; padding: 12px 6px; border: 1px solid rgba(211,174,87,.25); border-radius: 8px; background: rgba(8,28,20,.5); text-align: center; }
+.stats-grid b { color: #e5d5ad; font-size: 20px; }
+.stats-grid b.positive { color: #9ac97e; }
+.stats-grid b.negative { color: #d0896a; }
+.stats-grid span { color: #a8b6a8; font-size: 11px; letter-spacing: .06em; }
+.stats-loading, .stats-empty { padding: 18px 0; color: #a8b6a8; text-align: center; }
 
 .room-badge { margin-left: auto; padding: 4px 10px; border: 1px solid rgba(211,174,87,.4); border-radius: 20px; color: #d0c39e; font-size: 12px; letter-spacing: .12em; }
 .remote-banner { position: absolute; z-index: 120; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 20px; background: rgba(30,22,10,.92); border: 1px solid #d2aa58; color: #ffe6a5; font-size: 13px; letter-spacing: .08em; box-shadow: 0 6px 20px rgba(0,0,0,.4); }

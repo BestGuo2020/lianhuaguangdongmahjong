@@ -2,7 +2,7 @@
 // 由 useRemoteGame 调用，与 WebSocket 实时通道分离（REST 管生命周期，WS 管对局）。
 import type { MatchType } from '../core/types'
 
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+export const API_BASE = import.meta.env.VITE_API_BASE || `http://${location.hostname}`
 
 // ─── 请求/响应类型（与后端 Pydantic 模型对应）─────────────
 
@@ -18,6 +18,7 @@ export interface RoomInfo {
   mode: MatchType
   capacity: number
   status: 'lobby' | 'playing' | 'finished' | 'error' | 'closed'
+  creatorSeat: number | null
   seats: Array<RoomSeatState | null>
 }
 
@@ -122,4 +123,28 @@ export function startRoom(roomId: string): Promise<StartResult> {
     method: 'POST',
     body: '{}',
   })
+}
+
+export interface CloseResult {
+  roomId: string
+  closed: boolean
+}
+
+export function closeRoom(roomId: string, seat: number, rejoinCode: string): Promise<CloseResult> {
+  return request<CloseResult>(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ seat, rejoinCode }),
+  })
+}
+
+export interface PlayerStats {
+  nickname: string
+  matches: number
+  hands: number
+  wins: number
+  totalDelta: number
+}
+
+export function getPlayerStats(nickname: string): Promise<PlayerStats> {
+  return request<PlayerStats>(`/api/players/${encodeURIComponent(nickname)}/stats`)
 }

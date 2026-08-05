@@ -8,6 +8,8 @@ import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { useRemoteGame } from './game/online/useRemoteGame'
+import { getPlayerStats } from './game/online/remoteApi'
+import type { PlayerStats } from './game/online/remoteApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
 import type { MatchType, TileType } from './game/core/types'
@@ -136,6 +138,33 @@ function startGameWithAudio() {
 async function startRemoteMatch() {
   startBgm()
   await remoteActions.startMatch()
+}
+
+function quitMatch() {
+  // 中途退出：释放座位 + 关闭 WS，回大厅（服务端该座位转 AI 代打剩余对局）
+  if (window.confirm('退出对局将放弃本场对局（座位由 AI 代打），确定退出？')) {
+    void remoteActions.leaveRoom()
+  }
+}
+
+// ── 战绩页：个人统计（服务端 /api/players/{nickname}/stats）──
+const statsOpen = ref(false)
+const playerStats = ref<PlayerStats | null>(null)
+const statsLoading = ref(false)
+
+async function openStats() {
+  const name = nickname.value || nicknameInput.value.trim()
+  if (!name) return
+  statsOpen.value = true
+  statsLoading.value = true
+  playerStats.value = null
+  try {
+    playerStats.value = await getPlayerStats(name)
+  } catch {
+    playerStats.value = null
+  } finally {
+    statsLoading.value = false
+  }
 }
 
 const seatPosition = ['bottom', 'right', 'top', 'left']
@@ -313,6 +342,7 @@ function clearMobileSelection(event: PointerEvent) {
           <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
           <span v-if="gameMode === 'remote' && roomId && players.length" class="room-badge">房间 {{ roomId }}</span>
           <nav>
+            <button v-if="gameMode === 'remote' && phase !== 'lobby'" class="quit-match" @click="quitMatch">退出对局</button>
             <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
               <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
             </button>
@@ -497,6 +527,10 @@ function clearMobileSelection(event: PointerEvent) {
                   @keyup.enter="joinCode ? joinRemoteRoom() : createRemoteRoom()"
                 />
               </label>
+              <div v-if="!roomId" class="match-selector" role="radiogroup" aria-label="场次选择">
+                <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>一场4局（不含连庄）</span></button>
+                <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
+              </div>
               <div class="remote-actions">
                 <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="createRemoteRoom">
                   {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
@@ -530,11 +564,18 @@ function clearMobileSelection(event: PointerEvent) {
                   ><b>开始对局</b><span>{{ allOccupiedReady ? '全员已准备' : '等待全员准备' }}</span></button>
                 </div>
                 <button class="text-button room-leave" @click="remoteActions.leaveRoom()">离开房间</button>
+                <button v-if="isCreator" class="text-button room-close" @click="remoteActions.closeRoom()">关闭房间</button>
               </div>
             </div>
           </template>
 
           <div class="lobby-links">
+            <button
+              v-if="gameMode === 'remote'"
+              class="text-button"
+              :disabled="!(nickname || nicknameInput.trim())"
+              @click="openStats"
+            >我的战绩 →</button>
             <button class="text-button" @click="rulesOpen = true">游戏规则 →</button>
             <a
               class="repository-link"
@@ -604,6 +645,27 @@ function clearMobileSelection(event: PointerEvent) {
                 </article>
               </div>
               <button @click="returnToLobby">返回大厅</button>
+            </section>
+          </div>
+        </Transition>
+        <Transition name="modal">
+          <div v-if="statsOpen" class="result-backdrop round-settlement">
+            <section class="result-card settlement-card stats-card">
+              <h2>个人战绩</h2>
+              <p class="stats-nickname">{{ nickname || nicknameInput }}</p>
+              <div v-if="statsLoading" class="stats-loading">加载中…</div>
+              <template v-else-if="playerStats">
+                <div class="stats-grid">
+                  <article><b>{{ playerStats.matches }}</b><span>场次</span></article>
+                  <article><b>{{ playerStats.hands }}</b><span>参与局数</span></article>
+                  <article><b>{{ playerStats.wins }}</b><span>胡牌局数</span></article>
+                  <article><b :class="{ positive: playerStats.totalDelta > 0, negative: playerStats.totalDelta < 0 }">{{ playerStats.totalDelta > 0 ? '+' : '' }}{{ playerStats.totalDelta }}</b><span>净胜分</span></article>
+                </div>
+              </template>
+              <p v-else class="stats-empty">暂无战绩记录，快去打一局吧！</p>
+              <div class="result-actions">
+                <button @click="statsOpen = false">关闭</button>
+              </div>
             </section>
           </div>
         </Transition>

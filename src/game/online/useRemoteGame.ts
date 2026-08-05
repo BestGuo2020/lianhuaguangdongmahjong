@@ -11,7 +11,7 @@
 // 结算展示：服务端无条件推进场次，客户端在赢牌动画 / 结算弹窗期间延迟应用
 // 后续快照与请求（pendingSnapshot / pendingRequest），用户点「继续」后再落地。
 import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
-import { API_BASE, createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom } from './remoteApi'
+import { API_BASE, closeRoom, createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom } from './remoteApi'
 import type { RoomSeatState } from './remoteApi'
 import type { ActionPrompt } from '../core/playerController'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
@@ -88,6 +88,7 @@ type ServerMessage =
   | { kind: 'hand_result'; result: RoundResult }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; finalScores: Array<{ seat: number; name: string; score: number }> }
+  | { kind: 'room_closed' }
   | { kind: 'error'; code: string }
 
 interface UseRemoteGameOptions {
@@ -108,6 +109,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const mySeat = ref(-1)                 // 服务端座位（权威）
   const nickname = ref('')
   const rejoinCode = ref('')
+  const creatorSeat = ref<number | null>(null)   // 服务端权威房主座位（轮询刷新，支持房主转移）
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
 
@@ -834,6 +836,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       case 'match_finished':
         handleMatchFinished(msg)
         break
+      case 'room_closed':
+        // 房间被创建者解散：清理本地会话回大厅
+        leaveRemoteRoom()
+        break
       case 'error':
         handleError(msg.code)
         break
@@ -933,9 +939,15 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   async function refreshRoom() {
     if (!roomId.value) return
+    // 对局进行中（phase ≠ lobby）不轮询：牌桌状态由 WS 快照驱动，座位面板不可见。
+    // 回到大厅后 phase 回到 lobby，轮询自动恢复。
+    if (phase.value !== 'lobby') return
     try {
       const info = await getRoom(roomId.value)
       roomSeats.value = info.seats ?? []
+      // 房主以服务端 creatorSeat 为准：创建者离房后轮询自动转移「开始对局」按钮
+      creatorSeat.value = info.creatorSeat ?? null
+      isCreator.value = creatorSeat.value != null && mySeat.value === creatorSeat.value
     } catch {
       // 轮询失败静默，下次重试
     }
@@ -1019,6 +1031,20 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     resetAll()
   }
 
+  async function closeRemoteRoom() {
+    if (!roomId.value || mySeat.value < 0 || !rejoinCode.value) return
+    try {
+      await closeRoom(roomId.value, mySeat.value, rejoinCode.value)
+    } catch (error) {
+      // 关闭失败（如房主已转移）：保留本地会话，仅提示；轮询会刷新房主身份
+      sessionError.value = error instanceof Error ? error.message : '关闭房间失败'
+      throw error
+    }
+    stopPolling()
+    closeConnection()
+    resetAll()
+  }
+
   // ── 重置 ───────────────────────────────────────────────
 
   function resetAll() {
@@ -1056,6 +1082,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     mySeat.value = -1
     nickname.value = ''
     rejoinCode.value = ''
+    creatorSeat.value = null
     isCreator.value = false
     roomSeats.value = []
     sessionStatus.value = 'idle'
@@ -1191,13 +1218,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   return {
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
-    isCreator, roomSeats, waitingNextRound,
+    isCreator, creatorSeat, roomSeats, waitingNextRound,
     remoteActions: {
       createRoom: createRemoteRoom,
       joinRoom: joinRemoteRoom,
       toggleReady,
       startMatch,
       leaveRoom: leaveRemoteRoom,
+      closeRoom: closeRemoteRoom,
       refreshRoom,
     },
     // 游戏状态（useGame 兼容接口）

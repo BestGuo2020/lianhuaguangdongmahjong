@@ -63,13 +63,22 @@ beforeEach(() => {
     // 与 API_BASE 解耦（可能被 .env 的 VITE_API_BASE 指到 Vite 代理源）
     const path = new URL(String(input)).pathname
     if (path === '/api/rooms' && init?.method === 'POST') {
-      return json({ roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', seats: [null, null, null, null] })
+      return json({ roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', creatorSeat: null, seats: [null, null, null, null] })
     }
     if (path === '/api/rooms/ABC123/join' && init?.method === 'POST') {
       return json({ roomId: 'ABC123', seat: 2, nickname: '测试', rejoinCode: 'AAAA-BBBB', rejoin: false })
     }
+    if (path === '/api/rooms/ABC123/leave' && init?.method === 'POST') {
+      return json({ roomId: 'ABC123', seat: 2, left: true })
+    }
+    if (path === '/api/rooms/ABC123' && init?.method === 'DELETE') {
+      return json({ roomId: 'ABC123', closed: true })
+    }
     if (path === '/api/rooms/ABC123') {
-      return json({ roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', seats: [null, null, null, null] })
+      return json({ roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', creatorSeat: 2, seats: [null, null, null, null] })
+    }
+    if (path === '/api/players/测试/stats') {
+      return json({ nickname: '测试', matches: 3, hands: 12, wins: 4, totalDelta: 350 })
     }
     throw new Error(`unexpected fetch: ${path}`)
   }))
@@ -623,5 +632,68 @@ describe('useRemoteGame 出牌报牌（dapai + 牌名语音）', () => {
     expect(sounds).toContain('dapai.mp3')
     await vi.advanceTimersByTimeAsync(80)
     expect(sounds).toContain('9s.mp3')
+  })
+})
+
+// ─── 房间会话：关闭房间 / 房主转移 / room_closed ─────────────
+
+describe('useRemoteGame 房间会话（Phase 8）', () => {
+  it('房主轮询同步 creatorSeat：房主转移后 isCreator 跟随服务端权威座位', async () => {
+    const game = await connectGame()   // mySeat = 2
+    // 初始轮询：creatorSeat = 2（本家创建者）→ isCreator 保持 true
+    await game.remoteActions.refreshRoom()
+    expect(game.isCreator.value).toBe(true)
+
+    // 创建者离房 → 房主转移给 seat 3：轮询后 isCreator 变 false
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(json({
+      roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', creatorSeat: 3,
+      seats: [null, null, { seat: 2, nickname: '测试', ready: true, connected: true }, { seat: 3, nickname: '新主', ready: true, connected: true }],
+    }))
+    await game.remoteActions.refreshRoom()
+    expect(game.creatorSeat.value).toBe(3)
+    expect(game.isCreator.value).toBe(false)
+
+    // 房主回到本家 → isCreator 恢复
+    fetchMock.mockResolvedValueOnce(json({
+      roomId: 'ABC123', mode: 'east', capacity: 4, status: 'lobby', creatorSeat: 2,
+      seats: [null, null, { seat: 2, nickname: '测试', ready: true, connected: true }],
+    }))
+    await game.remoteActions.refreshRoom()
+    expect(game.isCreator.value).toBe(true)
+  })
+
+  it('关闭房间：DELETE 房间后清理本地会话回大厅', async () => {
+    const game = await connectGame()
+    await game.remoteActions.closeRoom()
+    expect(game.sessionStatus.value).toBe('idle')
+    expect(game.roomId.value).toBe('')
+    expect(game.wsStatus.value).toBe('idle')
+  })
+
+  it('收到 room_closed：房间被创建者解散 → 本地会话清理回大厅', async () => {
+    const game = await connectGame()
+    mockSocket!.receive({ kind: 'room_closed' })
+    // leaveRemoteRoom 内部 await leave 请求：flush 微任务后完成 reset
+    await vi.advanceTimersByTimeAsync(0)
+    expect(game.roomId.value).toBe('')
+    expect(game.sessionStatus.value).toBe('idle')
+    expect(game.players.length).toBe(0)
+  })
+
+  it('对局进行中不轮询房间：phase ≠ lobby 时 refreshRoom 跳过请求', async () => {
+    const game = await connectGame()
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    const roomGets = () => fetchMock.mock.calls.filter(
+      ([input, init]: [unknown, RequestInit | undefined]) =>
+        String(input).includes('/api/rooms/ABC123') && !init?.method,   // 无 method = GET（getRoom）
+    ).length
+
+    const before = roomGets()
+    // 进入对局：快照把 phase 推出 lobby → refreshRoom 不再发 GET
+    mockSocket!.receive(makeSnapshot())   // phase 'drawing' → 客户端 'playing'
+    expect(game.phase.value).not.toBe('lobby')
+    await game.remoteActions.refreshRoom()
+    expect(roomGets()).toBe(before)   // 未新增轮询请求
   })
 })
