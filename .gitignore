@@ -149,3 +149,5 @@ vite.config.ts.timestamp-*
 # AI/AGENT
 .claude
 .mcp.json
+
+/backend/
