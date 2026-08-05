@@ -108,7 +108,7 @@ const {
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, remoteActions, waitingNextRound, storedSession,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, remoteActions, waitingNextRound, storedSession, signalQuality,
 } = remoteGame
 function readStoredNickname() {
   try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
@@ -377,6 +377,13 @@ function clearMobileSelection(event: PointerEvent) {
           <div v-if="players.length" class="base-score-badge">
             <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
             <span>底分{{ BASE_SCORE }}</span>
+            <img
+              v-if="gameMode === 'remote'"
+              class="signal-icon"
+              :src="`${imageBase}signal-${signalQuality}.png`"
+              :alt="`信号 ${signalQuality}/3`"
+              :title="`信号 ${signalQuality}/3`"
+            />
           </div>
           <nav>
             <button

@@ -135,6 +135,7 @@ type ServerMessage =
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; finalScores: Array<{ seat: number; name: string; score: number }> }
   | { kind: 'room_closed' }
+  | { kind: 'pong' }
   | { kind: 'error'; code: string }
 
 interface UseRemoteGameOptions {
@@ -151,6 +152,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const sessionStatus = ref<'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing'>('idle')
   const wsStatus = ref<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'>('idle')
   const sessionError = ref('')
+  const signalQuality = ref(0)   // 0-3 信号质量（越大连接越好，由 ping/pong RTT 测得）
   const roomId = ref('')
   const mySeat = ref(-1)                 // 服务端座位（权威）
   const nickname = ref('')
@@ -197,6 +199,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   let reconnectAttempts = 0
   let pollTimer: number | null = null
   let pingTimer: number | null = null
+  let lastPingAt = 0   // 最近一次 ping 的发送时刻（测 RTT → 信号质量）
   let countdownHandle: number | null = null
   let winSequenceTimer: number | null = null
   let winSequenceSerial = 0
@@ -891,6 +894,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         // 房间被创建者解散：清理本地会话回大厅
         leaveRemoteRoom()
         break
+      case 'pong':
+        // ping 的回应：测 RTT → 信号质量（越大越好）
+        if (lastPingAt) signalQuality.value = rttToSignal(Date.now() - lastPingAt)
+        break
       case 'error':
         handleError(msg.code)
         break
@@ -927,6 +934,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     socket.onclose = () => {
       if (ws === socket) ws = null
       wsStatus.value = 'closed'
+      signalQuality.value = 0   // 断开：信号归零
       if (!closedByUser && roomId.value) scheduleReconnect()
     }
     socket.onerror = () => {
@@ -937,6 +945,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function scheduleReconnect() {
     if (closedByUser || !roomId.value || reconnectTimer != null) return
     wsStatus.value = 'reconnecting'
+    signalQuality.value = 0   // 重连中：信号归零
     const delay = Math.min(1000 * 2 ** reconnectAttempts, 8000)
     reconnectAttempts += 1
     reconnectTimer = window.setTimeout(() => {
@@ -945,11 +954,21 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     }, delay)
   }
 
+  function rttToSignal(rtt: number): number {
+    if (rtt <= 80) return 3
+    if (rtt <= 150) return 2
+    if (rtt <= 300) return 1
+    return 0
+  }
+
   function startPing() {
     stopPing()
     pingTimer = window.setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
-    }, 20000)
+      if (ws?.readyState === WebSocket.OPEN) {
+        lastPingAt = Date.now()
+        ws.send(JSON.stringify({ type: 'ping', t: lastPingAt }))
+      }
+    }, 5000)
   }
 
   function stopPing() {
@@ -1202,6 +1221,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     sessionStatus.value = 'idle'
     wsStatus.value = 'idle'
     sessionError.value = ''
+    signalQuality.value = 0
   }
 
   // ── 用户动作（发送到服务端，状态由快照权威回写）────────
@@ -1333,6 +1353,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
     playerId, isCreator, creatorSeat, roomSeats, waitingNextRound,
+    signalQuality,   // 0-3 信号质量（越大连接越好）
     storedSession,   // 上次未完成对局（「继续对局」入口；null = 无）
     remoteActions: {
       createRoom: createRemoteRoom,

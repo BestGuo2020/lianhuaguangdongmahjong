@@ -757,4 +757,18 @@ describe('useRemoteGame 匿名身份与会话持久化（Phase 8 P1）', () => {
     expect(game.storedSession.value).toBeNull()
     expect(window.localStorage.getItem('lgm_session')).toBeNull()
   })
+
+  it('ping/pong 测 RTT 更新信号质量；断开后归零', async () => {
+    const game = await connectGame()
+    // 推进 5s 触发 ping（记录发送时刻），服务端回 pong → RTT≈0 → 信号 3（最佳）
+    await vi.advanceTimersByTimeAsync(5000)
+    const ping = mockSocket!.sent.map((s) => JSON.parse(s)).find((m) => m.type === 'ping')
+    expect(ping).toBeTruthy()
+    expect(typeof ping?.t).toBe('number')
+    mockSocket!.receive({ kind: 'pong' })
+    expect(game.signalQuality.value).toBe(3)
+    // 断开 → 信号归零
+    mockSocket!.close()
+    expect(game.signalQuality.value).toBe(0)
+  })
 })
