@@ -573,6 +573,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     openingStage.value = null
     openingInProgress = false
     applyBufferedAfterOpening()
+    // 开局就绪屏障：发牌动画结束、本家已就绪 → 通知服务端，等所有在线真人就绪才开局，
+    // 避免服务端在慢设备上抢跑（AI 已出牌/副露/胡牌而用户没反应过来）。
+    send({ type: 'opening_done' })
   }
 
   // ── 发牌动画：按庄家顺序逐批从缓冲快照取牌，驱动 3D 发牌 tween ──

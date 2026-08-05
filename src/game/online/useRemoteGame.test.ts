@@ -490,6 +490,8 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.players[0].hand.length).toBe(13)
     // 发牌共耗 52 张：满墙 132 → 真实余数 80
     expect(game.wallCount.value).toBe(80)
+    // 开局就绪屏障：发牌动画结束 → 发送 opening_done，服务端等所有在线真人就绪才开局
+    expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'opening_done' }))
 
     // 落地时补报开局期间错过的弃牌（id 1），随后新弃牌（id 2）继续报牌
     expect(sounds).toContain('dapai.mp3')
