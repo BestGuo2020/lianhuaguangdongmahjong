@@ -2,7 +2,10 @@
 // 由 useRemoteGame 调用，与 WebSocket 实时通道分离（REST 管生命周期，WS 管对局）。
 import type { MatchType } from '../core/types'
 
-export const API_BASE = import.meta.env.VITE_API_BASE || `http://${location.hostname}`
+// 默认指向「页面所在主机」的 8000 端口（部署到局域网/同源时 API 与页面同 host）；
+// 非浏览器环境（vitest）无 location，回退 localhost。
+const API_HOST = typeof location !== 'undefined' ? location.host : 'localhost'
+export const API_BASE = import.meta.env.VITE_API_BASE || `http://${API_HOST}`
 
 // ─── 请求/响应类型（与后端 Pydantic 模型对应）─────────────
 

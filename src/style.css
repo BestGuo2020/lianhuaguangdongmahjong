@@ -490,7 +490,11 @@ button { font: inherit; }
 .waiting-options b { color: #d8a93d; }
 .waiting-options small { color: #9fb2a8; }
 
-.lobby { position: absolute; z-index: 50; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 46%, rgba(25,87,58,.12), transparent 36%), linear-gradient(rgba(4,18,13,.89), rgba(4,22,16,.93)); text-align: center; }
+.lobby { position: absolute; z-index: 50; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: radial-gradient(ellipse at 50% 46%, rgba(25,87,58,.12), transparent 36%), linear-gradient(rgba(4,18,13,.89), rgba(4,22,16,.93)); text-align: center; }
+/* 内容超高时改为从顶部排布（可滚动到顶部），避免 justify-content:center 裁剪头部 */
+@supports (justify-content: safe center) {
+  .lobby { justify-content: safe center; }
+}
 .lotus-mark { position: relative; display: grid; place-items: center; width: 75px; height: 75px; margin-bottom: 18px; border: 1px solid #b88a3c; border-radius: 50% 50% 46% 46%; transform: rotate(45deg); box-shadow: 0 0 0 7px rgba(184,138,60,.06), 0 0 45px rgba(194,145,51,.13); }
 .lotus-mark::before, .lotus-mark::after { content: ""; position: absolute; inset: 11px -18px; border: 1px solid rgba(205,165,80,.45); border-radius: 50%; }.lotus-mark::before { transform: rotate(45deg); }.lotus-mark::after { transform: rotate(-45deg); }
 .lotus-mark span { transform: rotate(-45deg); color: #e4c875; font: 900 35px "Noto Serif SC", serif; }
@@ -901,6 +905,26 @@ button { font: inherit; }
   .waiting-action { width: 50px; height: 54px; padding: 0; }
   .turn-timer { right: 8%; bottom: 174px; min-width: 72px; padding: 7px 10px 6px; }
   .lobby-rules { gap: 7px; font-size: 11px; }
+}
+
+/* ── 联机大厅移动适配：小屏压缩纵向空间 + 始终可从顶部滚动 ──
+   手机横屏下 16:9 视口高度仅 ~390px，而联机面板（昵称/场次/按钮/房间面板）
+   远超该高度；取消居中缩放改为顶部对齐可滚动，加入/创建房间可达。 */
+@media (max-width: 700px), (max-height: 460px) {
+  .lobby { justify-content: flex-start; padding: 14px 0 22px; transform: none; inset: 0; }
+  .eyebrow { margin-bottom: 3px; font-size: 10px; }
+  .lobby h1 { font-size: clamp(26px, 8vh, 38px); }
+  .subtitle { margin: 5px 0 12px; font-size: 12px; letter-spacing: .2em; }
+  .mode-selector { margin-bottom: 12px; gap: 8px; }
+  .mode-selector button { padding: 9px 10px 8px; }
+  .mode-selector button b { margin-bottom: 2px; font-size: 14px; }
+  .mode-selector button span { font-size: 10px; }
+  .match-selector { margin-bottom: 10px; gap: 8px; }
+  .match-selector button { padding: 9px 10px 8px; }
+  .match-selector button b { font-size: 15px; }
+  .remote-lobby { gap: 8px; }
+  .room-panel { gap: 9px; padding: 10px; }
+  .lobby-links { margin-top: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
