@@ -223,7 +223,7 @@ function makeFaceMaterial(tile) {
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
-  const material = own(new THREE.MeshPhysicalMaterial({
+  const material = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
     envMap: scene.userData.tileEnvironment,
     color: 0xd8d7ce,
@@ -235,7 +235,13 @@ function makeFaceMaterial(tile) {
     specularIntensity: .36,
     specularColor: new THREE.Color(0xfffdf4),
     envMapIntensity: .3,
-  }))
+  })))
+  if (!glossyMaterials) {
+    material.clearcoat = 0
+    material.clearcoatRoughness = 0
+    material.specularIntensity = 0
+    material.ior = 1.5
+  }
   faceMaterials.set(tile, material)
   return material
 }
@@ -363,7 +369,7 @@ function addTable() {
     clearcoat: .76,
     clearcoatRoughness: .16,
   }))
-  scene.userData.tileSide = own(new THREE.MeshPhysicalMaterial({
+  scene.userData.tileSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
     color: 0xc9c9c1,
     metalness: 0,
@@ -374,8 +380,8 @@ function addTable() {
     specularIntensity: .34,
     specularColor: new THREE.Color(0xfffdf3),
     envMapIntensity: .3,
-  }))
-  scene.userData.faceSide = own(new THREE.MeshPhysicalMaterial({
+  })))
+  scene.userData.faceSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
     color: 0x32a73a,
     metalness: 0,
@@ -385,8 +391,8 @@ function addTable() {
     ior: 1.46,
     specularIntensity: .62,
     envMapIntensity: .46,
-  }))
-  scene.userData.tileBottom = own(new THREE.MeshPhysicalMaterial({
+  })))
+  scene.userData.tileBottom = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
     color: 0xbfc1b9,
     metalness: 0,
@@ -395,8 +401,8 @@ function addTable() {
     clearcoatRoughness: .24,
     ior: 1.45,
     envMapIntensity: .25,
-  }))
-  scene.userData.backMaterial = own(new THREE.MeshPhysicalMaterial({
+  })))
+  scene.userData.backMaterial = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: makeBackTexture(),
     envMap: scene.userData.tileEnvironment,
     color: 0xd1d2cb,
@@ -406,7 +412,7 @@ function addTable() {
     clearcoatRoughness: .26,
     ior: 1.46,
     envMapIntensity: .28,
-  }))
+  })))
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
   // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
   // 绿色牌背层略微内收，白色正面层形成完整外轮廓。
@@ -460,16 +466,7 @@ function clearDynamicScene() {
   dynamicResources.splice(0).forEach((resource) => resource.dispose?.())
 }
 
-function makeHiddenTile() {
-  // 暗手复用正面牌的固定结构，将绿色底面翻向玩家后竖直放置。
-  const wrapper = new THREE.Group()
-  const body = makeTableTile(scene.userData.tileBottom)
-  body.rotation.x = -Math.PI / 2
-  wrapper.add(body)
-  return wrapper
-}
-
-function makeTableTile(topMaterial, highlighted = false) {
+function makeTableTile(topMaterial) {
   const tile = new THREE.Group()
   const green = scene.userData.faceSide
   const white = scene.userData.tileSide
@@ -486,32 +483,97 @@ function makeTableTile(topMaterial, highlighted = false) {
   cap.castShadow = true
   cap.receiveShadow = true
   tile.add(cap)
-  if (highlighted) {
-    const marker = new THREE.Mesh(
-      ownDynamic(new RoundedBoxGeometry(.76, .045, 1.02, 2, .02)),
-      scene.userData.highlightMaterial,
-    )
-    marker.position.y = -.205
-    marker.receiveShadow = true
-    tile.add(marker)
-  }
   return tile
 }
 
-function makeFaceTile(tileName, highlighted = false) {
-  return makeTableTile(makeFaceMaterial(tileName), highlighted)
+function makeFaceTile(tileName) {
+  return makeTableTile(makeFaceMaterial(tileName))
 }
 
-function makeFaceDownTile() {
-  const wrapper = new THREE.Group()
-  const body = makeTableTile(scene.userData.tileBottom)
-  body.rotation.x = Math.PI
-  body.position.y = .13
-  wrapper.add(body)
-  return wrapper
+// ---- InstancedMesh 合批：暗手/弃牌/副露全部写进实例矩阵，draw call 从 ~1000 降到 ~几十 ----
+const INSTANCE_CAPACITY = 260
+const TILE_BASE_OFFSET = new THREE.Matrix4().makeTranslation(0, -.06, 0)
+const TILE_CAP_OFFSET = new THREE.Matrix4().makeTranslation(0, .13, 0)
+let tableBaseInstances: THREE.InstancedMesh | null = null
+const tableCapInstances = new Map<THREE.Material, THREE.InstancedMesh>()
+const tableCapCounts = new Map<THREE.Material, number>()
+let tableInstanceCount = 0
+const scratchMatrix = new THREE.Matrix4()
+const scratchScale = new THREE.Vector3()
+const scratchVector = new THREE.Vector3()
+
+function beginTableInstances() {
+  tableBaseInstances = ownDynamic(new THREE.InstancedMesh(
+    scene.userData.tileBaseGeometry,
+    [scene.userData.faceSide, scene.userData.faceSide, scene.userData.faceSide,
+      scene.userData.backMaterial, scene.userData.faceSide, scene.userData.faceSide],
+    INSTANCE_CAPACITY,
+  ))
+  tableBaseInstances.castShadow = true
+  tableBaseInstances.receiveShadow = true
+  tableBaseInstances.frustumCulled = false
+  scene.add(tableBaseInstances)
+  dynamicGroups.push(tableBaseInstances)
+  tableCapInstances.clear()
+  tableCapCounts.clear()
+  tableInstanceCount = 0
 }
 
-function addConcealedHand(group, playerIndex) {
+function getCapInstances(topMaterial: THREE.Material) {
+  let cap = tableCapInstances.get(topMaterial)
+  if (!cap) {
+    cap = ownDynamic(new THREE.InstancedMesh(
+      scene.userData.tileCapGeometry,
+      [scene.userData.tileSide, scene.userData.tileSide, topMaterial,
+        scene.userData.tileBottom, scene.userData.tileSide, scene.userData.tileSide],
+      INSTANCE_CAPACITY,
+    ))
+    cap.castShadow = true
+    cap.receiveShadow = true
+    cap.frustumCulled = false
+    scene.add(cap)
+    dynamicGroups.push(cap)
+    tableCapInstances.set(topMaterial, cap)
+  }
+  return cap
+}
+
+// 写一张牌的实例矩阵。initialPos/initialScale 供发牌、副露动画在最终位置前先置于起点。
+function addTableTile(pos, quat, topMaterial, scale = 1, initialPos = null, initialScale = null) {
+  const baseIndex = tableInstanceCount
+  tableInstanceCount += 1
+  scratchMatrix.compose(initialPos ?? pos, quat, scratchScale.setScalar(initialScale ?? scale))
+  tableBaseInstances.setMatrixAt(baseIndex, scratchMatrix.clone().multiply(TILE_BASE_OFFSET))
+  const capMesh = getCapInstances(topMaterial)
+  // 每个 cap 合批对象维护自己的实例序号，不能与全局 baseIndex 混用，否则牌面会错乱串位。
+  const capIndex = tableCapCounts.get(topMaterial) ?? 0
+  capMesh.setMatrixAt(capIndex, scratchMatrix.multiply(TILE_CAP_OFFSET))
+  tableCapCounts.set(topMaterial, capIndex + 1)
+  return { baseIndex, capIndex, capMesh }
+}
+
+function setTileInstance(baseIndex, capMesh, capIndex, pos, quat, scale) {
+  scratchMatrix.compose(pos, quat, scratchScale.setScalar(scale))
+  tableBaseInstances.setMatrixAt(baseIndex, scratchMatrix.clone().multiply(TILE_BASE_OFFSET))
+  capMesh.setMatrixAt(capIndex, scratchMatrix.multiply(TILE_CAP_OFFSET))
+  tableBaseInstances.instanceMatrix.needsUpdate = true
+  capMesh.instanceMatrix.needsUpdate = true
+}
+
+function finishTableInstances() {
+  if (!tableBaseInstances) return
+  tableBaseInstances.count = tableInstanceCount
+  tableBaseInstances.instanceMatrix.needsUpdate = true
+  tableCapCounts.forEach((count, material) => {
+    const cap = tableCapInstances.get(material)
+    if (cap) {
+      cap.count = count
+      cap.instanceMatrix.needsUpdate = true
+    }
+  })
+}
+
+function addConcealedHand(playerIndex) {
   if (playerIndex === 0) return
   const position = ['bottom', 'right', 'top', 'left'][playerIndex]
   const rawHand = props.players[playerIndex]?.hand ?? []
@@ -538,14 +600,18 @@ function addConcealedHand(group, playerIndex) {
     )
     return span + meldSpan + (meldIndex > 0 ? .18 : 0)
   }, 0)
+  const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
+  const dealThisHand = props.dealAnimation.playerIndex === playerIndex
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
-    const tile = props.revealHands
-      ? makeFaceTile(revealedHand[faceIndex])
-      : makeHiddenTile()
+    const topMaterial = props.revealHands
+      ? makeFaceMaterial(revealedHand[faceIndex])
+      : scene.userData.tileBottom
     const tileY = props.revealHands ? .28 : .56
+    let x
+    let z
+    let rotationY
     if (position === 'top') {
-      let x
       if (layoutDrawnTileIndex >= 0 && melds.length) {
         const slot = index === layoutDrawnTileIndex ? 0 : index + 1
         x = -9 + exposedSpan + .62 + slot * gap + (index === layoutDrawnTileIndex ? 0 : drawnGap)
@@ -557,14 +623,13 @@ function addConcealedHand(group, playerIndex) {
           : (index - (arrangedTotal - 1) / 2) * gap
       }
       // 对家固定使用远端后场，避免中后局牌河向后扩展时覆盖暗牌。
-      tile.position.set(x, tileY, -7.75)
-      if (props.revealHands) tile.rotation.y = Math.PI
+      z = -7.75
+      rotationY = props.revealHands ? Math.PI : 0
     } else {
-      tile.rotation.y = props.revealHands
+      rotationY = props.revealHands
         ? (position === 'left' ? -Math.PI / 2 : Math.PI / 2)
         : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
       const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
-      let z
       if (index === layoutDrawnTileIndex) {
         z = position === 'right'
           ? -(arrangedTotal - 1) / 2 * gap - gap - drawnGap
@@ -575,21 +640,29 @@ function addConcealedHand(group, playerIndex) {
       }
       // 下家的暗手沿桌边向上家方向收拢；明牌结算与独立副露轨道保持原位。
       const concealedHandShift = position === 'right' && !props.revealHands ? -1.15 : 0
-      tile.position.set(position === 'left' ? -9.15 : 9.15, tileY, z + concealedHandShift)
+      x = position === 'left' ? -9.15 : 9.15
+      z += concealedHandShift
     }
-    const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
-    if (props.dealAnimation.playerIndex === playerIndex && index >= animatedFromIndex) {
-      const target = tile.position.clone()
-      tile.position.set(0, 3.4, .5)
+    const pos = new THREE.Vector3(x, tileY, z + PLAY_AREA_OFFSET_Z)
+    // 暗手为背面朝玩家的立牌：makeHiddenTile 内部 body 绕 X 转 -90°，合批时折进实例矩阵。
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
+    if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
+    if (dealThisHand && index >= animatedFromIndex) {
+      const origin = new THREE.Vector3(0, 3.4, PLAY_AREA_OFFSET_Z + .5)
+      const inst = addTableTile(pos, quat, topMaterial, 1, origin)
       dealTweens.push({
-        tile,
-        origin: new THREE.Vector3(0, 3.4, .5),
-        target,
+        baseIndex: inst.baseIndex,
+        capIndex: inst.capIndex,
+        capMesh: inst.capMesh,
+        origin,
+        target: pos.clone(),
+        quat,
         startedAt: performance.now(),
         duration: props.dealAnimation.count === 4 ? 230 : 125,
       })
+    } else {
+      addTableTile(pos, quat, topMaterial)
     }
-    group.add(tile)
   }
 }
 
@@ -660,6 +733,45 @@ function robbedKongSourceTransform(effect) {
   return null
 }
 
+// 胡牌特效的几何体与光晕纹理在组件生命周期内固定不变，缓存复用避免每次胡牌重新分配/上传。
+let cachedFlareTexture: THREE.CanvasTexture | null = null
+let beamGeometry: THREE.CylinderGeometry | null = null
+const ringGeometries: (THREE.TorusGeometry | null)[] = []
+const particleGeometries: (THREE.SphereGeometry | null)[] = []
+
+function getFlareTexture() {
+  if (cachedFlareTexture) return cachedFlareTexture
+  const flareCanvas = document.createElement('canvas')
+  flareCanvas.width = 64
+  flareCanvas.height = 64
+  const flareContext = flareCanvas.getContext('2d')
+  const flareGradient = flareContext.createRadialGradient(32, 32, 0, 32, 32, 31)
+  flareGradient.addColorStop(0, 'rgba(255,255,235,1)')
+  flareGradient.addColorStop(.18, 'rgba(255,224,125,.95)')
+  flareGradient.addColorStop(.52, 'rgba(255,188,55,.38)')
+  flareGradient.addColorStop(1, 'rgba(255,170,30,0)')
+  flareContext.fillStyle = flareGradient
+  flareContext.fillRect(0, 0, 64, 64)
+  cachedFlareTexture = own(new THREE.CanvasTexture(flareCanvas))
+  cachedFlareTexture.colorSpace = THREE.SRGBColorSpace
+  return cachedFlareTexture
+}
+
+function getBeamGeometry() {
+  if (!beamGeometry) beamGeometry = own(new THREE.CylinderGeometry(.055, .18, 8.5, 16, 1, true))
+  return beamGeometry
+}
+
+function getRingGeometry(index: number) {
+  if (!ringGeometries[index]) ringGeometries[index] = own(new THREE.TorusGeometry(.64 + index * .18, .025, 8, 48))
+  return ringGeometries[index]!
+}
+
+function getParticleGeometry(index: number) {
+  if (!particleGeometries[index]) particleGeometries[index] = own(new THREE.SphereGeometry(.035 + index % 3 * .012, 8, 8))
+  return particleGeometries[index]!
+}
+
 function addWinEffect() {
   if (!props.winEffect?.tile) return
   const anchor = winEffectAnchor(props.winEffect.winnerIndex)
@@ -677,10 +789,7 @@ function addWinEffect() {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   }))
-  const beam = new THREE.Mesh(
-    ownDynamic(new THREE.CylinderGeometry(.055, .18, 8.5, 16, 1, true)),
-    beamMaterial,
-  )
+  const beam = new THREE.Mesh(getBeamGeometry(), beamMaterial)
   beam.position.set(anchor.x, 4.45, anchor.z)
   beam.rotation.z = outward.x * .07
   beam.rotation.x = -outward.z * .07
@@ -716,7 +825,7 @@ function addWinEffect() {
     depthWrite: false,
   }))
   const rings = [0, 1, 2].map((index) => {
-    const ring = new THREE.Mesh(ownDynamic(new THREE.TorusGeometry(.64 + index * .18, .025, 8, 48)), ringMaterial.clone())
+    const ring = new THREE.Mesh(getRingGeometry(index), ringMaterial.clone())
     ownDynamic(ring.material)
     ring.position.copy(burstAnchor).setY(.38 + index * .025)
     ring.rotation.x = Math.PI / 2
@@ -734,7 +843,7 @@ function addWinEffect() {
   }))
   const particles = Array.from({ length: 14 }, (_, index) => {
     const angle = index / 14 * Math.PI * 2 + (index % 3) * .12
-    const particle = new THREE.Mesh(ownDynamic(new THREE.SphereGeometry(.035 + index % 3 * .012, 8, 8)), particleMaterial.clone())
+    const particle = new THREE.Mesh(getParticleGeometry(index), particleMaterial.clone())
     ownDynamic(particle.material)
     particle.scale.set(.7, .18, 1.8)
     particle.rotation.y = angle
@@ -756,19 +865,7 @@ function addWinEffect() {
   winningTile.rotation.y = startRotation
   group.add(winningTile)
 
-  const flareCanvas = document.createElement('canvas')
-  flareCanvas.width = 64
-  flareCanvas.height = 64
-  const flareContext = flareCanvas.getContext('2d')
-  const flareGradient = flareContext.createRadialGradient(32, 32, 0, 32, 32, 31)
-  flareGradient.addColorStop(0, 'rgba(255,255,235,1)')
-  flareGradient.addColorStop(.18, 'rgba(255,224,125,.95)')
-  flareGradient.addColorStop(.52, 'rgba(255,188,55,.38)')
-  flareGradient.addColorStop(1, 'rgba(255,170,30,0)')
-  flareContext.fillStyle = flareGradient
-  flareContext.fillRect(0, 0, 64, 64)
-  const flareTexture = ownDynamic(new THREE.CanvasTexture(flareCanvas))
-  flareTexture.colorSpace = THREE.SRGBColorSpace
+  const flareTexture = getFlareTexture()
   const flareMaterial = ownDynamic(new THREE.SpriteMaterial({
     map: flareTexture,
     color: 0xffdf82,
@@ -811,17 +908,27 @@ function discardTransform(playerIndex, index) {
   return { x: -2.64 - row * discardGap, z: lateral, rotation: -Math.PI / 2 }
 }
 
-function addDiscards(group, playerIndex) {
+function addDiscards(playerIndex) {
   const discards = props.players[playerIndex]?.discards || []
   discards.forEach((tileName, index) => {
     const highlighted = props.lastDiscard?.from === playerIndex && index === discards.length - 1
-    const tile = makeFaceTile(tileName, highlighted)
     const transform = discardTransform(playerIndex, index)
-    tile.position.x = transform.x
-    tile.position.z = transform.z
-    tile.position.y = highlighted ? .48 : .28
-    tile.rotation.y = transform.rotation
-    group.add(tile)
+    const y = highlighted ? .48 : .28
+    const pos = new THREE.Vector3(transform.x, y, transform.z + PLAY_AREA_OFFSET_Z)
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
+    addTableTile(pos, quat, makeFaceMaterial(tileName))
+    if (highlighted) {
+      // 最新一张弃牌的高亮垫片保持独立 mesh（仅 1 张，无需合批）。
+      const marker = new THREE.Mesh(
+        ownDynamic(new RoundedBoxGeometry(.76, .045, 1.02, 2, .02)),
+        scene.userData.highlightMaterial,
+      )
+      marker.position.set(transform.x, y - .205, transform.z + PLAY_AREA_OFFSET_Z)
+      marker.rotation.y = transform.rotation
+      marker.receiveShadow = true
+      scene.add(marker)
+      dynamicGroups.push(marker)
+    }
   })
 }
 
@@ -844,7 +951,7 @@ function alignMeldBottom(transform, playerIndex, pointsToSource) {
   return transform
 }
 
-function addMelds(group, playerIndex) {
+function addMelds(playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
   melds.forEach((meld, meldIndex) => {
@@ -856,7 +963,7 @@ function addMelds(group, playerIndex) {
     laidTiles.forEach((tileName, tileIndex) => {
       const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
       const pointsToSource = tileIndex === sourceTileIndex
-      const tile = concealed ? makeFaceDownTile() : makeFaceTile(tileName)
+      const topMaterial = concealed ? scene.userData.tileBottom : makeFaceMaterial(tileName)
       const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
       const centerOffset = trackOffset + (tileSpan - .725) / 2
       const transform = alignMeldBottom(
@@ -864,40 +971,62 @@ function addMelds(group, playerIndex) {
         playerIndex,
         pointsToSource,
       )
-      tile.position.set(transform.x, .28, transform.z)
-      tile.rotation.y = transform.rotation + (pointsToSource ? Math.PI / 2 : 0)
+      const rotationY = transform.rotation + (pointsToSource ? Math.PI / 2 : 0)
+      // 暗杠首尾两张背朝上：makeFaceDownTile 内部 body 绕 X 转 180° 并上抬 .13，合批时折进矩阵。
+      const bodyOffsetY = concealed ? .13 : 0
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
+      if (concealed) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
+      const pos = new THREE.Vector3(transform.x, .28 + bodyOffsetY, transform.z + PLAY_AREA_OFFSET_Z)
       if (pointsToSource) {
         sourcePlacement = {
           x: transform.x,
           z: transform.z,
-          rotation: tile.rotation.y,
+          rotation: rotationY,
         }
       }
-      group.add(tile)
       if (animatesThisMeld && pendingTableActionAnimation.type !== 'added-gang') {
-        const targetY = tile.position.y
-        tile.position.y = targetY + .72
-        tile.scale.setScalar(.78)
-        meldTweens.push({ tile, targetY, startedAt: performance.now(), duration: 430 })
+        const inst = addTableTile(pos, quat, topMaterial, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
+        meldTweens.push({
+          baseIndex: inst.baseIndex,
+          capIndex: inst.capIndex,
+          capMesh: inst.capMesh,
+          baseX: pos.x,
+          baseZ: pos.z,
+          targetY: .28,
+          extraY: bodyOffsetY,
+          quat,
+          startedAt: performance.now(),
+          duration: 430,
+        })
+      } else {
+        addTableTile(pos, quat, topMaterial)
       }
       trackOffset += tileSpan
     })
     if (meld.added && sourcePlacement) {
-      const addedTile = makeFaceTile(meld.tile)
       // 补杠牌与原横牌同样横摆，平放在它靠牌桌中心的一侧，形成 T/L 形。
       const addedOffset = addedKongTileOffset(playerIndex, TILE_GAP_OFFSET)
-      addedTile.position.set(
+      const pos = new THREE.Vector3(
         sourcePlacement.x + addedOffset.x,
         .28,
-        sourcePlacement.z + addedOffset.z,
+        sourcePlacement.z + addedOffset.z + PLAY_AREA_OFFSET_Z,
       )
-      addedTile.rotation.y = sourcePlacement.rotation
-      group.add(addedTile)
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, sourcePlacement.rotation, 0))
       if (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang') {
-        const targetY = addedTile.position.y
-        addedTile.position.y = targetY + .72
-        addedTile.scale.setScalar(.78)
-        meldTweens.push({ tile: addedTile, targetY, startedAt: performance.now(), duration: 430 })
+        const inst = addTableTile(pos, quat, makeFaceMaterial(meld.tile), 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
+        meldTweens.push({
+          baseIndex: inst.baseIndex,
+          capIndex: inst.capIndex,
+          capMesh: inst.capMesh,
+          baseX: pos.x,
+          baseZ: pos.z,
+          targetY: pos.y,
+          quat,
+          startedAt: performance.now(),
+          duration: 430,
+        })
+      } else {
+        addTableTile(pos, quat, makeFaceMaterial(meld.tile))
       }
     }
     trackOffset += .18
@@ -906,25 +1035,68 @@ function addMelds(group, playerIndex) {
 
 function rebuildTableTiles() {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
-  updateMachineTexture()
   clearDynamicScene()
   meldTweens = []
   pendingTableActionAnimation = props.tableActionEvent?.id !== animatedTableActionId
     ? props.tableActionEvent
     : null
+  beginTableInstances()
   for (let playerIndex = 0; playerIndex < 4; playerIndex += 1) {
-    const group = new THREE.Group()
-    addConcealedHand(group, playerIndex)
-    addDiscards(group, playerIndex)
-    addMelds(group, playerIndex)
-    group.position.z = PLAY_AREA_OFFSET_Z
-    scene.add(group)
-    dynamicGroups.push(group)
+    addConcealedHand(playerIndex)
+    addDiscards(playerIndex)
+    addMelds(playerIndex)
   }
+  finishTableInstances()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null
   addWinEffect()
   addWinningDisplayTile()
+}
+
+// 手机端自适应降质：帧耗时超过预算时逐步降低牌面材质开销与阴影分辨率，保住帧率。
+// 始终保持满分辨率渲染（画面不糊、布局不变），高负载时牌面由亮面转哑光、阴影略柔化。
+const QUALITY_LEVELS = [
+  { glossy: true, shadowSize: 2048 },    // 0: 最高（高性能设备保持此档）
+  { glossy: true, shadowSize: 1024 },    // 1: 阴影略柔化
+  { glossy: false, shadowSize: 1024 },   // 2: 牌面转哑光
+  { glossy: false, shadowSize: 512 },    // 3: 最低
+]
+const DOWNGRADE_FRAME_MS = 26   // EMA 帧耗时超过约 38fps 一档，持续触发降级
+const UPGRADE_FRAME_MS = 15     // EMA 帧耗时低于约 67fps 一档，持续触发恢复
+const DOWNGRADE_FRAMES = 45
+const UPGRADE_FRAMES = 180
+let qualityLevel = 0
+let emaFrameMs = 0
+let badFrames = 0
+let goodFrames = 0
+let lastFrameAt = 0
+let qualityWarmup = 10
+let shadowLight: THREE.DirectionalLight | null = null
+let glossyMaterials = true
+
+// 共享牌体材质：创建时把满配参数存入 userData，高负载时清零 clearcoat/specular/ior 以砍掉片元开销。
+const tileMaterials: THREE.MeshPhysicalMaterial[] = []
+function trackTileMaterial(material: THREE.MeshPhysicalMaterial) {
+  material.userData.fullClearcoat = material.clearcoat
+  material.userData.fullClearcoatRoughness = material.clearcoatRoughness
+  material.userData.fullSpecularIntensity = material.specularIntensity
+  material.userData.fullIor = material.ior
+  tileMaterials.push(material)
+  return material
+}
+
+function applyGlossy(glossy: boolean) {
+  if (glossyMaterials === glossy) return
+  glossyMaterials = glossy
+  const change = (m: THREE.MeshPhysicalMaterial) => {
+    m.clearcoat = glossy ? m.userData.fullClearcoat : 0
+    m.clearcoatRoughness = glossy ? m.userData.fullClearcoatRoughness : 0
+    m.specularIntensity = glossy ? m.userData.fullSpecularIntensity : 0
+    m.ior = glossy ? m.userData.fullIor : 1.5
+    m.needsUpdate = true
+  }
+  tileMaterials.forEach(change)
+  faceMaterials.forEach((m) => change(m))
 }
 
 function resize() {
@@ -937,8 +1109,87 @@ function resize() {
   camera.updateProjectionMatrix()
 }
 
+function applyQuality() {
+  const level = QUALITY_LEVELS[qualityLevel]
+  applyGlossy(level.glossy)
+  if (shadowLight && shadowLight.shadow.mapSize.x !== level.shadowSize) {
+    shadowLight.shadow.mapSize.set(level.shadowSize, level.shadowSize)
+    shadowLight.shadow.map?.dispose()
+    shadowLight.shadow.map = null
+    shadowLight.shadow.needsUpdate = true
+  }
+}
+
+function updateAdaptiveQuality(frameMs: number) {
+  if (qualityWarmup > 0) {
+    qualityWarmup -= 1
+    emaFrameMs = 0
+    return
+  }
+  if (frameMs <= 0) return
+  emaFrameMs = emaFrameMs ? emaFrameMs * .92 + frameMs * .08 : frameMs
+  if (emaFrameMs > DOWNGRADE_FRAME_MS) {
+    badFrames += 1
+    goodFrames = 0
+    if (badFrames >= DOWNGRADE_FRAMES && qualityLevel < QUALITY_LEVELS.length - 1) {
+      qualityLevel += 1
+      badFrames = 0
+      applyQuality()
+    }
+  } else if (emaFrameMs < UPGRADE_FRAME_MS) {
+    goodFrames += 1
+    badFrames = 0
+    if (goodFrames >= UPGRADE_FRAMES && qualityLevel > 0) {
+      qualityLevel -= 1
+      goodFrames = 0
+      applyQuality()
+    }
+  } else {
+    badFrames = 0
+    goodFrames = 0
+  }
+}
+
+// DEV-only：URL 带 ?perf 时显示帧耗时 HUD，便于真机量化卡顿；生产构建不包含。
+let perfHud: { frame: (now: number) => void } | null = null
+let perfHudEl: HTMLDivElement | null = null
+
+function setupPerfHud() {
+  if (!import.meta.env.DEV) return
+  if (!new URLSearchParams(window.location.search).has('perf')) return
+  perfHudEl = document.createElement('div')
+  perfHudEl.style.cssText = 'position:fixed;top:8px;left:8px;z-index:9999;font:11px/1.5 ui-monospace,Consolas,monospace;color:#9ff;background:rgba(0,0,0,.6);padding:6px 9px;border-radius:6px;pointer-events:none;white-space:pre;'
+  document.body.appendChild(perfHudEl)
+  const samples: number[] = []
+  let last = -1
+  let maxMs = 0
+  perfHud = {
+    frame(now: number) {
+      const ms = last >= 0 ? now - last : 0
+      if (last >= 0) {
+        samples.push(ms)
+        if (samples.length > 120) samples.shift()
+        if (ms > maxMs) maxMs = ms
+      }
+      last = now
+      if (samples.length >= 30 && samples.length % 30 === 0 && perfHudEl) {
+        const sorted = [...samples].sort((a, b) => a - b)
+        const avg = samples.reduce((sum, v) => sum + v, 0) / samples.length
+        const p95 = sorted[Math.floor(sorted.length * .95)]!
+        const dc = renderer?.info.render.calls ?? 0
+        const tris = Math.round((renderer?.info.render.triangles ?? 0) / 1000)
+        perfHudEl.textContent = `frame ${ms.toFixed(1)}ms\navg ${avg.toFixed(1)}  p95 ${p95.toFixed(1)}  max ${maxMs.toFixed(1)}\n~${Math.min(60, 1000 / avg).toFixed(0)}fps  q${qualityLevel}${glossyMaterials ? 'G' : 'M'}\ndc${dc}  tri${tris}k`
+      }
+    },
+  }
+}
+
 function render(time = 0) {
   if (!renderer) return
+  perfHud?.frame(time)
+  const frameMs = lastFrameAt ? time - lastFrameAt : 0
+  lastFrameAt = time
+  updateAdaptiveQuality(frameMs)
   let cameraShakeX = 0
   let cameraShakeZ = 0
   let exposure = BASE_EXPOSURE
@@ -946,15 +1197,18 @@ function render(time = 0) {
   dealTweens = dealTweens.filter((tween) => {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
     const eased = 1 - (1 - progress) ** 3
-    tween.tile.position.lerpVectors(tween.origin, tween.target, eased)
+    scratchVector.lerpVectors(tween.origin, tween.target, eased)
+    setTileInstance(tween.baseIndex, tween.capMesh, tween.capIndex, scratchVector, tween.quat, 1)
     return progress < 1
   })
   meldTweens = meldTweens.filter((tween) => {
     const progress = Math.min(1, Math.max(0, (time - tween.startedAt) / tween.duration))
     const settled = 1 - (1 - progress) ** 3
     const bounce = Math.sin(progress * Math.PI) * (1 - progress) * .16
-    tween.tile.position.y = THREE.MathUtils.lerp(tween.targetY + .72, tween.targetY, settled) + bounce
-    tween.tile.scale.setScalar(THREE.MathUtils.lerp(.78, 1, settled))
+    const y = THREE.MathUtils.lerp(tween.targetY + .72, tween.targetY, settled) + bounce + (tween.extraY ?? 0)
+    const scale = THREE.MathUtils.lerp(.78, 1, settled)
+    scratchVector.set(tween.baseX, y, tween.baseZ)
+    setTileInstance(tween.baseIndex, tween.capMesh, tween.capIndex, scratchVector, tween.quat, scale)
     return progress < 1
   })
   if (winEffectAnimation) {
@@ -982,8 +1236,12 @@ function render(time = 0) {
     effect.particles.forEach(({ mesh, velocity }, index) => {
       const particleProgress = Math.max(0, Math.min(1, (progress - .28 - index * .003) / .38))
       mesh.material.opacity = Math.sin(particleProgress * Math.PI) * .95
-      mesh.position.copy(effect.burstAnchor).addScaledVector(velocity, particleProgress)
-      mesh.position.y += Math.sin(particleProgress * Math.PI) * .3
+      // 直接计算目标坐标，避免每帧新建临时 Vector3 造成移动端 GC 压力。
+      mesh.position.set(
+        effect.burstAnchor.x + velocity.x * particleProgress,
+        effect.burstAnchor.y + velocity.y * particleProgress + Math.sin(particleProgress * Math.PI) * .3,
+        effect.burstAnchor.z + velocity.z * particleProgress,
+      )
     })
 
     const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .34)
@@ -1042,6 +1300,7 @@ onMounted(async () => {
   keyLight.shadow.camera.top = 10
   keyLight.shadow.camera.bottom = -10
   scene.add(keyLight)
+  shadowLight = keyLight
   const rimLight = new THREE.DirectionalLight(0x3acb8b, 1.6)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
@@ -1061,6 +1320,7 @@ onMounted(async () => {
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas.value)
   resize()
+  setupPerfHud()
   render()
 
   await Promise.all(TILE_TYPES.map(async (tile) => {
@@ -1083,9 +1343,7 @@ watch(
     player.discards.join(','),
     player.melds.map((meld) => `${meld.type}:${meld.from ?? '-'}:${meld.tiles.join(',')}`).join('|'),
   ]).flat() as unknown[]).concat(
-    props.currentPlayer,
     props.lastDiscard?.id,
-    props.wallCount,
     props.revealHands,
     props.winnerIndex,
     props.winEffect?.id,
@@ -1105,12 +1363,16 @@ watch(() => props.openingStage, (stage) => {
 
 watch(() => props.dealerIndex, updateMachineTexture)
 
-// 剩余牌数实时刷新：单独监听 wallCount 重绘中央机器 LCD，不依赖整桌重建
+// 剩余牌数与当前玩家只影响中央机器 LCD（数字 / 高亮边），单独监听即可，避免整桌重建
 watch(() => props.wallCount, updateMachineTexture)
+watch(() => props.currentPlayer, updateMachineTexture)
 
 onBeforeUnmount(() => {
   destroyed = true
   cancelAnimationFrame(animationFrame)
+  perfHudEl?.remove()
+  perfHudEl = null
+  perfHud = null
   resizeObserver?.disconnect()
   if (scene) clearDynamicScene()
   staticResources.forEach((resource) => resource.dispose?.())
