@@ -331,6 +331,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
     if (sequence !== openingSequence) return
 
+    // 骰子决定拆墙点（与后端 _break_wall_by_dice 一致）：一墩=2 张，旋转列表让拆墙处成为前端
+    const breakIndex = (diceValues.value[0] + diceValues.value[1]) * 2 % wall.value.length
+    wall.value = [...wall.value.slice(breakIndex), ...wall.value.slice(0, breakIndex)]
+
     openingStage.value = 'deal'
     const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
     const dealBatch = async (playerIndex, count) => {
