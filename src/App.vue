@@ -188,11 +188,13 @@ function startContinueCountdown() {
   }, 1000)
 }
 
-// 倒计时不依赖结算页是否展开：无论用户在看结算还是看牌桌，都会自动推进下一局
-watch([result, phase, gameMode, matchFinished], () => {
+// 倒计时不依赖结算页是否展开：无论用户在看结算还是看牌桌，都会自动确认。
+// 已确认（waitingNextRound）后停止倒计时，等所有玩家确认服务端推进。
+watch([result, phase, gameMode, matchFinished, waitingNextRound], () => {
   const countdownActive = gameMode.value === 'remote'
     && phase.value === 'settled'
     && Boolean(result.value)
+    && !waitingNextRound.value
     && !matchFinished.value
   if (countdownActive) startContinueCountdown()
   else stopContinueCountdown()
@@ -580,7 +582,10 @@ function clearMobileSelection(event: PointerEvent) {
               </div>
               <div class="result-actions">
                 <button class="secondary" @click="resultVisible = false">查看牌桌</button>
-                <button @click="nextRound">继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></button>
+                <button @click="nextRound" :disabled="waitingNextRound">
+                  <template v-if="waitingNextRound">等待其他玩家确定...</template>
+                  <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
+                </button>
               </div>
             </section>
           </div>
@@ -607,7 +612,8 @@ function clearMobileSelection(event: PointerEvent) {
           v-if="gameMode === 'remote' && result && !resultVisible && !matchFinished"
           class="result-reopen continue"
           @click="nextRound"
-        >继续<template v-if="continueCountdown > 0"> ({{ continueCountdown }})</template></button>
+          :disabled="waitingNextRound"
+        ><template v-if="waitingNextRound">等待其他玩家确定...</template><template v-else>继续<template v-if="continueCountdown > 0"> ({{ continueCountdown }})</template></template></button>
         <aside v-if="winEffectLab" class="win-effect-lab" aria-label="胡牌特效测试面板">
           <strong>胡牌特效测试</strong>
           <div v-for="(seat, index) in winEffectLabSeats" :key="seat">

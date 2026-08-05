@@ -401,6 +401,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         ...player,
         // seat 保留服务端权威座位（仅作稳定 key），本地位置由数组索引决定
         avatar: player.avatar || defaultAvatarForSeat(player.seat),
+        // 副露来源 from 是服务端座位，须映射为本地索引供 3D 计算指向
+        // （meldSourceTileIndex 用 (from - playerIndex + 4) % 4）。
+        // 否则只有房主（服务端座位 0 == 本地 0）能对上，其它玩家指向错误。
+        melds: player.melds.map((meld) => (
+          meld.from != null ? { ...meld, from: toLocal(meld.from) } : meld
+        )),
       }))
   }
 
@@ -521,9 +527,11 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 开局序列（对局开始 / 骰子投掷，纯表现层）────────────
 
   function handleRoundStart(msg: RoundStartMessage) {
-    // 结算展示期间到达（服务端兜底超时已推进）→ 延迟到点「继续」后应用
+    const alreadyConfirmed = waitingNextRound.value
     waitingNextRound.value = false
-    if (isShowingRoundResult()) {
+    // 结算展示期间到达（服务端兜底超时已推进）且本家尚未确认 → 延迟到点「继续」后应用；
+    // 本家已确认（等齐其他玩家后服务端推进）→ 直接开局，startOpeningRound 会清理结算态。
+    if (isShowingRoundResult() && !alreadyConfirmed) {
       pendingRoundStart = msg
       return
     }
@@ -1131,17 +1139,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function nextRound() {
     cancelWinSequence()
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = false
-    winningPlayerIndex.value = -1
     if (matchFinished.value) return
-    phase.value = 'playing'
-    // 确认屏障：通知服务端本家已看完结算；服务端等所有在线真人确认后才进下一局
+    // 确认屏障：通知服务端本家已看完结算。**不清结算态**——对话框保留、
+    // 按钮显示「等待其他玩家确定...」；等服务端等齐所有在线真人后推进，
+    // round_start 到达时由 handleRoundStart → startOpeningRound 统一清理结算态。
     send({ type: 'continue' })
     waitingNextRound.value = true
     if (pendingRoundStart) {
+      // 服务端兜底已推进，round_start 在结算展示期间已缓冲 → 直接落地
       const rs = pendingRoundStart
       pendingRoundStart = null
       waitingNextRound.value = false
@@ -1150,8 +1155,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     if (pendingSnapshot) {
       const snap = pendingSnapshot
       pendingSnapshot = null
-      // 若刚进入开局动画（结算期间缓冲的 round_start 落地）→ 重新缓冲，发牌动画结束统一落地；
-      // 滞留的旧结算快照（重复广播）丢弃，避免赢牌动画重复触发。
+      // 若仍处结算态会再次缓冲，随下一局发牌动画结束后统一落地；滞留的旧结算快照丢弃
       if (!(snap.phase === 'settled' && snap.result)) applySnapshot(snap)
     }
     if (pendingRequest) {

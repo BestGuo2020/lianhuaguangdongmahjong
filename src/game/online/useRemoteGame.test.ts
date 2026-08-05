@@ -158,6 +158,19 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     expect(game.players[2].avatar).toContain('lotus')
   })
 
+  it('副露来源 from 从服务端座位映射为本地索引（非房主也能正确指向）', async () => {
+    const game = await connectGame()   // 本家服务端座位 2
+    const players = SERVER_PLAYERS.map((p) => ({ ...p }))
+    // 服务端座位 1 的玩家有一个碰副露，来源是服务端座位 3
+    players[1].melds = [{ type: 'peng', tile: 'm1', from: 3, tiles: ['m1', 'm1', 'm1'] }]
+
+    mockSocket!.receive(makeSnapshot({ players }))
+
+    // 本地顺序：seat 2(本家)→0, 3→1, 0→2, 1→3
+    expect(game.players[3].seat).toBe(1)
+    expect(game.players[3].melds[0].from).toBe(1)   // 服务端 3 → 本地 (3-2+4)%4=1
+  })
+
   it('预开局 lobby 快照保持 lobby 面板（不推成 playing，否则无法准备/开局）', async () => {
     const game = await connectGame()
 
@@ -271,7 +284,7 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     expect(game.result.value?.scoreChanges[0].avatar).toContain('lotus')
   })
 
-  it('结算展示期间到达的下一局快照被延迟，点继续后落地', async () => {
+  it('结算展示期间到达的下一局快照被延迟；点继续后对话框保留，round_start 到达才开下一局', async () => {
     const game = await connectGame()
     mockSocket!.receive(makeSnapshot({
       phase: 'settled',
@@ -289,11 +302,23 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     expect(game.phase.value).toBe('settled')
     expect(game.result.value).not.toBeNull()
 
+    // 点继续：确认发送，但对话框保留（结算态不清），等待其他玩家
     game.nextRound()
-    expect(game.phase.value).toBe('playing')
-    expect(game.round.value).toBe(2)             // 延迟的快照已应用
-    expect(game.lastDiscard.value?.from).toBe(2) // 服务端 0 → 本地 (0-2+4)%4=2
+    expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'continue' }))
+    expect(game.waitingNextRound.value).toBe(true)
+    expect(game.phase.value).toBe('settled')
+    expect(game.result.value).not.toBeNull()
+
+    // 等齐后服务端推进 → round_start 到达 → 结算态清除，进入下一局开局
+    mockSocket!.receive({ kind: 'round_start', matchStarted: false, round: 2, dealer: 1, honba: 0, dice: [2, 2] })
+    expect(game.waitingNextRound.value).toBe(false)
     expect(game.result.value).toBeNull()
+    expect(game.phase.value).toBe('dealing')
+
+    // 开局动画结束（未发开局快照 → 跳过发牌）→ 缓冲的下一局快照落地
+    await vi.advanceTimersByTimeAsync(1250 + 1150)
+    expect(game.round.value).toBe(2)
+    expect(game.lastDiscard.value?.from).toBe(2) // 服务端 0 → 本地 (0-2+4)%4=2
   })
 
   it('match_finished 立即应用最终成绩，覆盖结算展示', async () => {
@@ -373,7 +398,7 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     expect(game.announcement.value?.text).toBe('东2局 · 开牌')
   })
 
-  it('结算展示期间到达的公告消息不弹出，点继续后随下一局快照展示一次', async () => {
+  it('结算展示期间到达的公告消息不弹出，点继续后保留结算，随 round_start 后的下一局快照展示一次', async () => {
     const game = await connectGame()
     mockSocket!.receive(settleSnapshot())
     expect(game.phase.value).toBe('win-effect')
@@ -389,8 +414,15 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     await vi.advanceTimersByTimeAsync(4100)
     expect(game.phase.value).toBe('settled')
 
-    // 点继续 → 快照落地，新公告展示一次
+    // 点继续：对话框保留等待其他玩家
     game.nextRound()
+    expect(game.waitingNextRound.value).toBe(true)
+    expect(game.result.value).not.toBeNull()
+
+    // 等齐后 round_start 到达 → 开下一局，缓冲快照落地 → 公告展示一次
+    mockSocket!.receive({ kind: 'round_start', matchStarted: false, round: 2, dealer: 1, honba: 0, dice: [2, 2] })
+    expect(game.result.value).toBeNull()
+    await vi.advanceTimersByTimeAsync(1250 + 1150)
     expect(game.round.value).toBe(2)
     expect(game.announcement.value?.text).toBe('东2局 · 开牌')
 
