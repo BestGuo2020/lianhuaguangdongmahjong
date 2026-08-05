@@ -679,17 +679,19 @@ CREATE INDEX idx_room_seats_player ON room_seats(player_id);
 > 结论：**注册挡不住专职赌狗**（线下结算拦不住），真正的杠杆是「游戏内无赌资流通」+「可封禁/可举报」；
 > 注册只在以后为封禁追责与合规实名而上。`player_id` 从一开始就是锚点，将来升级不返工。
 
-### P1（现在就做 · 成本低、为后续铺路）
+### P1（✅ 已完成）
 
-1. **匿名 guest 身份 + 会话持久化**（解决「对局中可重进」，0 注册摩擦）
-   - 前端：首访自动生成稳定 `guestId` 存 `localStorage`；记住昵称（默认「玩家#XXXX」）；
-     进房后把 `{ roomId, rejoinCode, nickname }` 持久化；页面加载检测到未完成会话 → 大厅「继续对局」按钮，
-     凭原 `rejoinCode` 走 `resume_by_code` 归位（对局中 AI 托管座位可找回）。
-   - 后端：`room_seats` 增加 `player_id` 字段（guest ID 即锚点）；join/握手时写入。
-2. **bans 黑名单 + 举报**（封禁/举报，现在就值）
-   - 新表 `bans`（`player_id` / 房间 / 设备指纹，含原因、封禁时间、操作者）；
-   - join 与 WS 握手查禁，命中直接拒绝（`BANNED`）；
-   - 前端举报入口 + 管理侧封禁（可先手工 SQL / 后台命令，再上管理页）。
+1. ✅ **匿名 guest 身份 + 会话持久化**（解决「对局中可重进」，0 注册摩擦）
+   - 前端：首访自动生成稳定 `guestId` 存 `localStorage`；进房后把 `{ roomId, rejoinCode, nickname, playerId }`
+     持久化（`lgm_session`）；页面加载检测到未完成会话 → 大厅「继续对局」按钮，凭原 `rejoinCode`
+     走 `resume_by_code` 归位（对局中 AI 托管座位可找回）；离开/关闭/`rejoin_err` 时清除会话。
+   - 后端：`room_seats` 增加 `player_id` 字段（guest ID 即锚点，含旧库迁移）；join 接收并落库。
+2. ✅ **bans 黑名单 + 举报**（封禁/举报）
+   - 新表 `bans`（scope: player/room/device + target + 原因/操作者）与 `reports`；
+   - join 与 WS 握手查禁（`join_or_rejoin` / `resume_by_code`），命中返回 `BANNED`；
+   - 管理端点 `POST/DELETE /api/admin/bans/{...}`；举报端点 `POST /api/reports`（可按昵称反查 player_id）；
+   - 前端：终局页每行「举报」入口（`window.prompt` 填原因）。
+   - 注：首版无管理端鉴权（内部工具）；上真账号体系后再收紧。
 
 ### P2（以后）
 

@@ -52,11 +52,17 @@ function json(body: unknown) {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  const store: Record<string, string> = {}
   vi.stubGlobal('window', {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
     setInterval: globalThis.setInterval,
     clearInterval: globalThis.clearInterval,
+    localStorage: {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => { store[key] = value },
+      removeItem: (key: string) => { delete store[key] },
+    },
   })
   vi.stubGlobal('WebSocket', MockWebSocket)
   vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
@@ -695,5 +701,60 @@ describe('useRemoteGame 房间会话（Phase 8）', () => {
     expect(game.phase.value).not.toBe('lobby')
     await game.remoteActions.refreshRoom()
     expect(roomGets()).toBe(before)   // 未新增轮询请求
+  })
+})
+
+// ─── P1：匿名身份 + 会话持久化 + 继续对局 ────────────────
+
+describe('useRemoteGame 匿名身份与会话持久化（Phase 8 P1）', () => {
+  it('join 携带 playerId（匿名身份）', async () => {
+    await connectGame()
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    const joinCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes('/api/rooms/ABC123/join'))
+    expect(joinCall).toBeTruthy()
+    const body = JSON.parse((joinCall![1] as RequestInit).body as string)
+    expect(body.playerId).toBeTruthy()
+    expect(String(body.playerId)).toMatch(/^g/)
+  })
+
+  it('guestId 跨会话稳定（localStorage 持久）', async () => {
+    const game = await connectGame()
+    const first = game.playerId.value
+    expect(first).toBeTruthy()
+    const game2 = useRemoteGame()
+    expect(game2.playerId.value).toBe(first)   // 新实例复用同一匿名身份
+  })
+
+  it('进房持久化会话，离开后清除', async () => {
+    const game = await connectGame()
+    expect(game.storedSession.value).not.toBeNull()
+    expect(game.storedSession.value?.roomId).toBe('ABC123')
+    expect(window.localStorage.getItem('lgm_session')).toContain('ABC123')
+    await game.remoteActions.leaveRoom()
+    expect(game.storedSession.value).toBeNull()
+    expect(window.localStorage.getItem('lgm_session')).toBeNull()
+  })
+
+  it('resumeSession 凭存储会话回原座位（刷新/关浏览器后可继续对局）', async () => {
+    window.localStorage.setItem('lgm_session', JSON.stringify({
+      roomId: 'OLD123', rejoinCode: 'CODE-1111', nickname: '老玩家', playerId: 'guest-old', mode: 'east',
+    }))
+    const game = useRemoteGame()
+    expect(game.storedSession.value?.roomId).toBe('OLD123')   // 初始化即读到上次会话
+    await game.remoteActions.resumeSession()
+    expect(game.roomId.value).toBe('OLD123')
+    expect(game.rejoinCode.value).toBe('CODE-1111')
+    expect(game.nickname.value).toBe('老玩家')
+    expect(mockSocket).not.toBeNull()                          // 已建立 WS 连接
+    expect(mockSocket!.url).toContain('rejoin_code=CODE-1111')
+  })
+
+  it('rejoin_err 清除持久化会话（房间没了 / 码失效 / 被封禁）', async () => {
+    const game = await connectGame()
+    expect(game.storedSession.value).not.toBeNull()
+    mockSocket!.receive({ kind: 'rejoin_err', code: 'INVALID_REJOIN_CODE' })
+    expect(game.storedSession.value).toBeNull()
+    expect(window.localStorage.getItem('lgm_session')).toBeNull()
   })
 })

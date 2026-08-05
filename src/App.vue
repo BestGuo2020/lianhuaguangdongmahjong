@@ -8,7 +8,7 @@ import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { getPlayerStats } from './game/online/remoteApi'
+import { getPlayerStats, getPlayerStatsById, reportPlayer as reportPlayerApi } from './game/online/remoteApi'
 import type { PlayerStats } from './game/online/remoteApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
@@ -108,9 +108,12 @@ const {
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, isCreator, roomSeats, remoteActions, waitingNextRound,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, remoteActions, waitingNextRound, storedSession,
 } = remoteGame
-const nicknameInput = ref('')
+function readStoredNickname() {
+  try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
+}
+const nicknameInput = ref(readStoredNickname())
 const joinCode = ref('')
 const allOccupiedReady = computed(() => {
   const occupied = roomSeats.value.filter(Boolean)
@@ -147,19 +150,50 @@ function quitMatch() {
   }
 }
 
+// 继续对局（P1）：凭 localStorage 会话直接回上次未完成对局的原座位
+function resumeRemoteSession() {
+  gameMode.value = 'remote'
+  void remoteActions.resumeSession()
+}
+
+// 举报（P1）：报告当前房间里的某位玩家（后端 resolves player_id 以便封禁）
+async function reportPlayer(name: string) {
+  if (!playerId.value) return
+  const reason = window.prompt(`举报「${name}」的原因？（对局中违规 / 作弊 / 赌博引流 等）`, '对局中违规')
+  if (reason == null) return
+  try {
+    await reportPlayerApi({
+      roomId: roomId.value,
+      reporterPlayerId: playerId.value,
+      targetName: name,
+      reason,
+    })
+    window.alert('举报已提交，感谢反馈')
+  } catch {
+    window.alert('举报提交失败，请稍后再试')
+  }
+}
+
 // ── 战绩页：个人统计（服务端 /api/players/{nickname}/stats）──
 const statsOpen = ref(false)
 const playerStats = ref<PlayerStats | null>(null)
 const statsLoading = ref(false)
 
 async function openStats() {
-  const name = nickname.value || nicknameInput.value.trim()
-  if (!name) return
   statsOpen.value = true
   statsLoading.value = true
   playerStats.value = null
   try {
-    playerStats.value = await getPlayerStats(name)
+    // 身份锚点是 guestId（启动即生成），无需先填昵称/进房
+    playerStats.value = await getPlayerStatsById(playerId.value)
+    // 旧局（P1 前无 player_id）回退昵称查询：用当前/已记忆的昵称
+    if (playerStats.value.matches === 0) {
+      const name = nickname.value || nicknameInput.value.trim() || readStoredNickname()
+      if (name) {
+        const byName = await getPlayerStats(name)
+        if (byName.matches > 0) playerStats.value = byName
+      }
+    }
   } catch {
     playerStats.value = null
   } finally {
@@ -503,6 +537,11 @@ function clearMobileSelection(event: PointerEvent) {
           <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
           <h1>莲花<span>广麻</span></h1>
           <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
+          <button
+            v-if="storedSession && !roomId"
+            class="continue-session"
+            @click="resumeRemoteSession"
+          >⏵ 继续对局<template v-if="storedSession.roomId">（房间 {{ storedSession.roomId }}）</template></button>
           <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
             <button :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="gameMode = 'local'"><b>单机对战</b><span>与 AI 同桌</span></button>
             <button :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="gameMode = 'remote'"><b>联机对战</b><span>创建或加入房间</span></button>
@@ -573,7 +612,6 @@ function clearMobileSelection(event: PointerEvent) {
             <button
               v-if="gameMode === 'remote'"
               class="text-button"
-              :disabled="!(nickname || nicknameInput.trim())"
               @click="openStats"
             >我的战绩 →</button>
             <button class="text-button" @click="rulesOpen = true">游戏规则 →</button>
@@ -640,7 +678,11 @@ function clearMobileSelection(event: PointerEvent) {
                 <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]">
                   <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
                   <img :src="entry.avatar" :alt="`${entry.name}头像`" />
-                  <div class="final-name"><strong>{{ entry.name }}</strong><small v-if="entry.playerIndex === 0">你</small></div>
+                  <div class="final-name">
+                    <strong>{{ entry.name }}</strong>
+                    <small v-if="entry.playerIndex === 0">你</small>
+                    <button v-if="entry.playerIndex !== 0 && playerId" class="report-link" @click="reportPlayer(entry.name)">举报</button>
+                  </div>
                   <em>{{ entry.score }}</em>
                 </article>
               </div>

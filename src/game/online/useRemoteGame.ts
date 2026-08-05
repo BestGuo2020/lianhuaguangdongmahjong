@@ -31,6 +31,52 @@ const DEFAULT_AVATARS = ['lotus', 'ah-lok', 'shisan', 'young-master'].map((name)
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 
+// ─── 匿名身份与会话持久化（Phase 8 P1）：guestId / 昵称 / 对局会话 ──
+// 刷新 / 关浏览器后凭 localStorage 里的会话一键「继续对局」，对局中座位（AI 托管）可找回。
+const STORAGE = {
+  guestId: 'lgm_guest_id',
+  nickname: 'lgm_nickname',
+  session: 'lgm_session',
+}
+
+interface StoredSession {
+  roomId: string
+  rejoinCode: string
+  nickname: string
+  playerId: string
+  mode: MatchType
+}
+
+function loadStored(key: string): string | null {
+  try {
+    return window.localStorage?.getItem(key) ?? null
+  } catch {
+    return null   // 隐私模式 / 无 localStorage 环境
+  }
+}
+
+function saveStored(key: string, value: string): void {
+  try {
+    window.localStorage?.setItem(key, value)
+  } catch {
+    // 隐私模式静默
+  }
+}
+
+function clearStored(key: string): void {
+  try {
+    window.localStorage?.removeItem(key)
+  } catch {
+    // 忽略
+  }
+}
+
+function generateGuestId(): string {
+  const rand = Math.random().toString(36).slice(2, 10)
+  const stamp = Date.now().toString(36).slice(-4)
+  return `g${rand}${stamp}`
+}
+
 type RoundResult = Record<string, any>
 interface Announcement { text: string; tone: string; id: number }
 interface LastDiscard { tile: TileType; from: number; id: number }
@@ -109,9 +155,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const mySeat = ref(-1)                 // 服务端座位（权威）
   const nickname = ref('')
   const rejoinCode = ref('')
+  const playerId = ref(loadStored(STORAGE.guestId) || '')   // 匿名身份（guestId），跨会话稳定
   const creatorSeat = ref<number | null>(null)   // 服务端权威房主座位（轮询刷新，支持房主转移）
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
+  const storedSession = ref<StoredSession | null>(readStoredSession())   // 上次未完成对局（继续对局入口）
+  ensurePlayerId()   // 启动即生成匿名身份：战绩按 guestId 查，无需先输入昵称/进房
 
   // ── 游戏状态（与 useGame 同名同形，App.vue 模板直接复用）──
   const phase = ref<ClientPhase>('lobby')
@@ -797,6 +846,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       case 'rejoin_err':
         wsStatus.value = 'closed'
         sessionError.value = msg.code
+        // 重进码被服务端拒绝（房间没了 / 被封禁 / 码失效）：持久化会话作废
+        clearSession()
         break
       case 'state_snapshot':
         applySnapshot(msg)
@@ -924,6 +975,64 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     wsStatus.value = 'idle'
   }
 
+  // ── 匿名身份 / 会话持久化（Phase 8 P1）──────────────────
+
+  function ensurePlayerId() {
+    if (!playerId.value) {
+      playerId.value = generateGuestId()
+      saveStored(STORAGE.guestId, playerId.value)
+    }
+  }
+
+  function readStoredSession(): StoredSession | null {
+    const raw = loadStored(STORAGE.session)
+    if (!raw) return null
+    try {
+      const session = JSON.parse(raw) as StoredSession
+      return session?.rejoinCode ? session : null
+    } catch {
+      return null
+    }
+  }
+
+  function persistSession() {
+    if (!roomId.value || !rejoinCode.value) return
+    const session: StoredSession = {
+      roomId: roomId.value,
+      rejoinCode: rejoinCode.value,
+      nickname: nickname.value,
+      playerId: playerId.value,
+      mode: matchType.value,
+    }
+    saveStored(STORAGE.session, JSON.stringify(session))
+    storedSession.value = session
+    if (nickname.value) saveStored(STORAGE.nickname, nickname.value)   // 记住昵称：旧局战绩回退用
+  }
+
+  function clearSession() {
+    clearStored(STORAGE.session)
+    storedSession.value = null
+  }
+
+  async function resumeSession() {
+    // 凭上次持久化的 rejoinCode 直接回原座位（对局中刷新/关浏览器后可「继续对局」）。
+    const session = storedSession.value ?? readStoredSession()
+    if (!session?.rejoinCode) return
+    sessionError.value = ''
+    roomId.value = session.roomId
+    rejoinCode.value = session.rejoinCode
+    nickname.value = session.nickname
+    playerId.value = session.playerId || playerId.value
+    matchType.value = session.mode || 'east'
+    phase.value = 'lobby'
+    matchFinished.value = false
+    players.splice(0, players.length)
+    closedByUser = false
+    sessionStatus.value = 'connected'
+    startPolling()
+    connect()
+  }
+
   // ── 房间生命周期（REST）───────────────────────────────
 
   function startPolling() {
@@ -959,8 +1068,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     try {
       const info = await createRoom(mode, capacity)
       isCreator.value = true
+      ensurePlayerId()
       // 创建者也要占座（签发 rejoinCode 供 WS 握手恢复座位）
-      const joined = await joinRoom(info.roomId, nickname.value)
+      const joined = await joinRoom(info.roomId, nickname.value, playerId.value)
       await enterRoom(joined.roomId, joined.nickname, info.mode, joined.rejoinCode)
     } catch (error) {
       sessionError.value = error instanceof Error ? error.message : '创建房间失败'
@@ -973,7 +1083,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     sessionError.value = ''
     sessionStatus.value = 'joining'
     try {
-      const joined = await joinRoom(code.trim().toUpperCase(), nickname.value)
+      ensurePlayerId()
+      const joined = await joinRoom(code.trim().toUpperCase(), nickname.value, playerId.value)
       isCreator.value = false
       await enterRoom(joined.roomId, joined.nickname, joined.rejoin ? matchType.value : 'east', joined.rejoinCode)
     } catch (error) {
@@ -996,6 +1107,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     sessionStatus.value = 'connected'
     startPolling()
     connect()
+    persistSession()   // 记录会话：刷新 / 关浏览器后可「继续对局」回原座位
   }
 
   async function toggleReady() {
@@ -1028,6 +1140,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       // 已离开 / 房间已关闭时忽略
     }
     closeConnection()
+    clearSession()   // 座位已释放，原会话不再可「继续对局」
     resetAll()
   }
 
@@ -1042,6 +1155,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     }
     stopPolling()
     closeConnection()
+    clearSession()
     resetAll()
   }
 
@@ -1218,7 +1332,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   return {
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
-    isCreator, creatorSeat, roomSeats, waitingNextRound,
+    playerId, isCreator, creatorSeat, roomSeats, waitingNextRound,
+    storedSession,   // 上次未完成对局（「继续对局」入口；null = 无）
     remoteActions: {
       createRoom: createRemoteRoom,
       joinRoom: joinRemoteRoom,
@@ -1226,6 +1341,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       startMatch,
       leaveRoom: leaveRemoteRoom,
       closeRoom: closeRemoteRoom,
+      resumeSession,
       refreshRoom,
     },
     // 游戏状态（useGame 兼容接口）

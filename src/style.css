@@ -932,6 +932,10 @@ button { font: inherit; }
 }
 
 /* ── Phase 7 联机对战：模式切换 / 远程房间 Lobby ── */
+.continue-session { margin: 0 auto 16px; padding: 11px 26px; border: 1px solid #d2aa58; border-radius: 24px; background: linear-gradient(135deg, rgba(185,135,55,.9), rgba(217,182,93,.85)); color: #182218; font: 800 15px "Noto Serif SC", serif; letter-spacing: .08em; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.continue-session:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.report-link { margin-left: 6px; padding: 1px 7px; border: 1px solid rgba(208,137,106,.45); border-radius: 9px; background: transparent; color: #d0896a; font-size: 10px; cursor: pointer; vertical-align: 1px; }
+.report-link:hover { color: #f0a585; border-color: rgba(208,137,106,.8); }
 .mode-selector { display: grid; grid-template-columns: repeat(2, minmax(145px, 1fr)); gap: 10px; width: min(390px, 86vw); margin: 0 auto 22px; }
 .mode-selector button { padding: 13px 12px 11px; border: 1px solid rgba(211,174,87,.27); border-radius: 7px; background: rgba(3,18,13,.72); color: #9fb0a6; cursor: pointer; transition: .2s ease; }
 .mode-selector button b, .mode-selector button span { display: block; }

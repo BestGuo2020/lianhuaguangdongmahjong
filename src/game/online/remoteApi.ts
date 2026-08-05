@@ -30,6 +30,7 @@ export interface JoinResult {
   seat: number
   nickname: string
   rejoinCode: string
+  playerId: string | null
   rejoin: boolean
 }
 
@@ -95,10 +96,10 @@ export function getRoom(roomId: string): Promise<RoomInfo> {
   return request<RoomInfo>(`/api/rooms/${encodeURIComponent(roomId)}`)
 }
 
-export function joinRoom(roomId: string, nickname: string): Promise<JoinResult> {
+export function joinRoom(roomId: string, nickname: string, playerId?: string): Promise<JoinResult> {
   return request<JoinResult>(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
     method: 'POST',
-    body: JSON.stringify({ nickname }),
+    body: JSON.stringify({ nickname, playerId }),
   })
 }
 
@@ -141,7 +142,8 @@ export function closeRoom(roomId: string, seat: number, rejoinCode: string): Pro
 }
 
 export interface PlayerStats {
-  nickname: string
+  nickname?: string
+  playerId?: string
   matches: number
   hands: number
   wins: number
@@ -150,4 +152,24 @@ export interface PlayerStats {
 
 export function getPlayerStats(nickname: string): Promise<PlayerStats> {
   return request<PlayerStats>(`/api/players/${encodeURIComponent(nickname)}/stats`)
+}
+
+/** 按匿名身份（guestId / player_id）查战绩：改名不丢历史、重名不混。 */
+export function getPlayerStatsById(playerId: string): Promise<PlayerStats> {
+  return request<PlayerStats>(`/api/players/by-id/${encodeURIComponent(playerId)}/stats`)
+}
+
+export interface ReportRequest {
+  roomId?: string
+  reporterPlayerId: string
+  targetPlayerId?: string
+  targetName?: string
+  reason?: string
+}
+
+export function reportPlayer(body: ReportRequest): Promise<{ reported: boolean }> {
+  return request<{ reported: boolean }>('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
