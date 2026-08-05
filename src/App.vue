@@ -188,11 +188,11 @@ function startContinueCountdown() {
   }, 1000)
 }
 
-watch([result, phase, resultVisible, gameMode, matchFinished], () => {
+// 倒计时不依赖结算页是否展开：无论用户在看结算还是看牌桌，都会自动推进下一局
+watch([result, phase, gameMode, matchFinished], () => {
   const countdownActive = gameMode.value === 'remote'
     && phase.value === 'settled'
     && Boolean(result.value)
-    && resultVisible.value
     && !matchFinished.value
   if (countdownActive) startContinueCountdown()
   else stopContinueCountdown()
@@ -603,6 +603,11 @@ function clearMobileSelection(event: PointerEvent) {
           </div>
         </Transition>
         <button v-if="result && !resultVisible && !matchFinished" class="result-reopen" @click="resultVisible = true">查看结算</button>
+        <button
+          v-if="gameMode === 'remote' && result && !resultVisible && !matchFinished"
+          class="result-reopen continue"
+          @click="nextRound"
+        >继续<template v-if="continueCountdown > 0"> ({{ continueCountdown }})</template></button>
         <aside v-if="winEffectLab" class="win-effect-lab" aria-label="胡牌特效测试面板">
           <strong>胡牌特效测试</strong>
           <div v-for="(seat, index) in winEffectLabSeats" :key="seat">

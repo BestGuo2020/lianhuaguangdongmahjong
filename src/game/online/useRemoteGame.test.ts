@@ -462,9 +462,10 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.phase.value).toBe('dealing')
     expect(sounds).toContain('game_start.mp3')
 
-    // 开局动画期间到达的开局快照 → 缓冲：不填表、不报牌
+    // 开局动画期间到达的开局快照 → 缓冲：不填表、不报牌；中央牌数显示满墙（快照余数 80 + 已发 52）
     mockSocket!.receive(makeSnapshot({ phase: 'opening', currentPlayer: 3, lastDiscard: { tile: 'm5', from: 0, id: 1 } }))
     expect(game.players[0].hand.length).toBe(0)
+    expect(game.wallCount.value).toBe(132)   // 80 + 52 = 满墙，发牌动画期间实时递减
     expect(sounds).not.toContain('dapai.mp3')
 
     // 1.25s 后进入骰子投掷阶段
@@ -487,6 +488,8 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.openingStage.value).toBeNull()
     expect(game.phase.value).toBe('playing')
     expect(game.players[0].hand.length).toBe(13)
+    // 发牌共耗 52 张：满墙 132 → 真实余数 80
+    expect(game.wallCount.value).toBe(80)
 
     // 落地时补报开局期间错过的弃牌（id 1），随后新弃牌（id 2）继续报牌
     expect(sounds).toContain('dapai.mp3')
@@ -494,7 +497,7 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(sounds).toContain('dapai.mp3')
   })
 
-  it('自摸：table_action(self-draw) 不产生 2D 文字也不播音效，由 settled 快照的 startWinSequence 统一输出（消除两段视觉）', async () => {
+  it('自摸：table_action(self-draw) 展示「自摸」文字但不播音效，zimo 由 startWinSequence 单播一次', async () => {
     const sounds: string[] = []
     const game = await connectGame({ playSound: (name: string) => { sounds.push(name) } })
     mockSocket!.receive(makeSnapshot())   // 进行中快照
@@ -504,8 +507,9 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
       kind: 'table_action',
       event: { id: 7, type: 'self-draw', actorIndex: 2, sourceIndex: 3, tile: 'm1', meldIndex: -1 },
     })
-    // tableActionEvent 不应被设置（赢牌动作由 startWinSequence 统一负责）
-    expect(game.tableActionEvent.value).toBeNull()
+    // 2D 文字提示（自摸/抢杠胡）照常展示，但不单独播音效
+    expect(game.tableActionEvent.value?.type).toBe('self-draw')
+    expect(game.tableActionEvent.value?.actorIndex).toBe(0)   // 服务端 2 → 本家
     expect(sounds).not.toContain('zimo.mp3')
 
     mockSocket!.receive(makeSnapshot({
@@ -519,16 +523,19 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(sounds.filter((name) => name === 'zimo.mp3')).toHaveLength(1)
   })
 
-  it('非首局 round_start 跳过对局开始覆盖层，只投骰子', async () => {
+  it('非首局 round_start 也展示「xx场·xx局」对局开始提示（对齐本地每局显示），再投骰子', async () => {
     const game = await connectGame()
 
     mockSocket!.receive({ kind: 'round_start', matchStarted: false, round: 2, dealer: 1, honba: 0, dice: [2, 6] })
 
-    expect(game.openingStage.value).toBe('dice')
+    // 每局都先进入对局开始覆盖层（xx场·xx局），不再只首局显示
+    expect(game.openingStage.value).toBe('start')
     expect(game.round.value).toBe(2)
     expect(game.dealer.value).toBe(3)   // 服务端座位 1 → 本家(seat 2) 相对 3
     expect(game.diceValues.value).toEqual([2, 6])
 
+    await vi.advanceTimersByTimeAsync(1250)
+    expect(game.openingStage.value).toBe('dice')
     await vi.advanceTimersByTimeAsync(1150)
     expect(game.openingStage.value).toBeNull()
   })
@@ -552,10 +559,10 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.phase.value).toBe('settled')
 
     game.nextRound()
-    // 确认屏障：发送 continue；缓冲的 round_start 落地 → 下一局骰子阶段
+    // 确认屏障：发送 continue；缓冲的 round_start 落地 → 下一局对局开始提示
     expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'continue' }))
     expect(game.round.value).toBe(2)
-    expect(game.openingStage.value).toBe('dice')
+    expect(game.openingStage.value).toBe('start')
     expect(game.diceValues.value).toEqual([4, 2])
     expect(game.waitingNextRound.value).toBe(false)
   })

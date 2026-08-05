@@ -543,6 +543,7 @@ button { font: inherit; }
 .result-actions button { min-width: 170px; padding: 13px 20px; border: 1px solid #d3aa57; border-radius: 5px; background: #b88b3e; color: #122019; font-size: clamp(16px, 1.25vw, 20px); font-weight: 800; cursor: pointer; }
 .result-actions button.secondary { border-color: rgba(213,184,112,.5); background: rgba(8,28,20,.88); color: #e5d5ad; }
 .result-reopen { position: absolute; z-index: 92; right: 4%; bottom: 5%; padding: 12px 22px; border: 2px solid #d0a64d; border-radius: 24px; background: rgba(7,25,18,.92); color: #f3d27c; font-size: clamp(15px, 1.2vw, 19px); font-weight: 800; box-shadow: 0 7px 22px rgba(0,0,0,.55); cursor: pointer; }
+.result-reopen.continue { right: calc(4% + 170px); border-color: #b98a36; }
 .win-effect-lab { position: fixed; z-index: 150; top: 12px; left: 12px; display: grid; gap: 5px; width: 230px; padding: 10px; border: 1px solid #bd974c; border-radius: 7px; background: rgba(4,16,12,.94); color: #f3dfad; font-size: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
 .win-effect-lab > strong { margin-bottom: 3px; text-align: center; }
 .win-effect-lab > div { display: grid; grid-template-columns: 42px 1fr 1fr; align-items: center; gap: 5px; }

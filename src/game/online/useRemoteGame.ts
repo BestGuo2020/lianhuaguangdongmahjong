@@ -503,7 +503,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       // 首份快照作为发牌动画数据源（各家手牌数/值），后续只保留最新待落地。
       if (!openingSnapshot) {
         openingSnapshot = snap
-        wallCount.value = snap.wallCount
+        // 开局显示满墙（snap.wallCount 是发牌后的余数，+52 = 每家 13 张已发的满墙值），
+        // 发牌动画逐步递减到真实值，对齐本地 startGame 的「满墙 → 递减」观感。
+        wallCount.value = snap.wallCount + 52
         // 先摆空桌：站位/名字/分数可见，手牌由发牌动画逐步填充
         const skeleton = rotatePlayers(snap.players)
         players.splice(0, players.length, ...skeleton.map((p) => ({
@@ -551,17 +553,16 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     revealHands.value = false
     winningPlayerIndex.value = -1
     phase.value = 'dealing'
-    void runOpeningSequence(msg.matchStarted)
+    void runOpeningSequence()
   }
 
-  async function runOpeningSequence(matchStarted: boolean) {
+  async function runOpeningSequence() {
     const sequence = openingSequence
     openingInProgress = true
-    if (matchStarted) {
-      openingStage.value = 'start'
-      await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
-      if (sequence !== openingSequence) { openingStage.value = null; openingInProgress = false; return }
-    }
+    // 每局都展示「xx场·xx局 · 对局开始」提示，对齐本地 startGame（matchStarted 仅决定音效/文案强弱）
+    openingStage.value = 'start'
+    await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
+    if (sequence !== openingSequence) { openingStage.value = null; openingInProgress = false; return }
     openingStage.value = 'dice'
     await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
     if (sequence !== openingSequence) { openingStage.value = null; openingInProgress = false; return }
@@ -594,6 +595,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       const remaining = hands[playerIndex].length
       const slice = hands[playerIndex].splice(remaining - count, count)
       players[playerIndex].hand.push(...slice)
+      // 发牌即耗牌墙：中央剩余牌数随发牌实时递减（对齐本地 startGame 的观感）
+      wallCount.value = Math.max(0, wallCount.value - count)
       dealAnimation.value = { playerIndex, count, serial: serial + 1 }
       serial += 1
       playSound('deal.mp3', 0.72)
@@ -671,14 +674,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 瞬时事件（动画 / 播报 / 分数流水）─────────────────
 
   function handleTableAction(msg: { kind: 'table_action'; event: TableActionEvent }) {
-    // 赢牌动作（self-draw / robbed-kong-win）不在此处理：settled 快照的
-    // startWinSequence 统一负责赢牌视觉 + 音效。此处若再设 tableActionEvent
-    // 会与 startWinSequence 的 3D 特效形成两条独立视觉序列，观感上就是"执行两遍"。
-    // 本地 useGame 里 showTableAction 与 winEffect 在同一同步块，Vue 批量为一次渲染；
-    // 远程这两者来自不同 WS 消息，必须只保留一处。
-    if (msg.event.type === 'self-draw' || msg.event.type === 'robbed-kong-win') return
-    // 开局动画期间到达的表动作（如四红中自摸立即和牌）→ 忽略：
-    // 等发牌动画结束，缓冲的 settled 快照统一触发赢牌序列展示。
+    // 赢牌动作（self-draw / robbed-kong-win）：展示「自摸 / 抢杠胡」文字提示，
+    // 但**不播音效**（zimo/hu 由 settled 快照的 startWinSequence 统一播放，避免双响）。
+    // 开局动画期间（如四红中立即和牌）→ 等发牌结束的 settled 快照统一展示。
+    const isWin = msg.event.type === 'self-draw' || msg.event.type === 'robbed-kong-win'
     if (openingInProgress) return
     const event: TableActionEvent = {
       ...msg.event,
@@ -689,6 +688,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     later(() => {
       if (tableActionEvent.value?.id === event.id) tableActionEvent.value = null
     }, 1050)
+    if (isWin) return   // 赢牌音效统一由 startWinSequence 播放
     const sound: Record<string, string> = {
       peng: 'peng.mp3',
       'discard-gang': 'gang.mp3',

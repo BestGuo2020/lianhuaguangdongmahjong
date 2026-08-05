@@ -1105,6 +1105,9 @@ watch(() => props.openingStage, (stage) => {
 
 watch(() => props.dealerIndex, updateMachineTexture)
 
+// 剩余牌数实时刷新：单独监听 wallCount 重绘中央机器 LCD，不依赖整桌重建
+watch(() => props.wallCount, updateMachineTexture)
+
 onBeforeUnmount(() => {
   destroyed = true
   cancelAnimationFrame(animationFrame)
