@@ -3,7 +3,7 @@ import { performDiscardGang, performPeng, removeMatches } from './actions'
 import type { ActionContext } from './actions'
 import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from './playerController'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
-import { createWall, shuffle, sortTiles, tileName, TILE_TYPES } from './tiles'
+import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from './tiles'
 import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
 import {
   prefersReducedMotion,
@@ -486,13 +486,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function seatDistance(from, to) {
     return (to - from + players.length) % players.length
-  }
-
-  function tileAudioFile(tile) {
-    const suited = /^([mps])([1-9])$/.exec(tile)
-    if (suited) return `${suited[2]}${suited[1]}.mp3`
-    const honorIndex = { east: 1, south: 2, west: 3, north: 4, red: 5, green: 6, white: 7 }
-    return honorIndex[tile] ? `${honorIndex[tile]}z.mp3` : null
   }
 
   function findClaims(from, tile) {

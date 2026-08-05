@@ -30,6 +30,13 @@ export function tileFaceFile(tile: TileType) {
   return HONOR_FACE_INDEX[tile] ? `${HONOR_FACE_INDEX[tile]}z.png` : null
 }
 
+/** 出牌报牌的牌名语音文件（如 3m → '3m.mp3'，东风 → '1z.mp3'）。 */
+export function tileAudioFile(tile: TileType) {
+  const suited = /^([mps])([1-9])$/.exec(tile)
+  if (suited) return `${suited[2]}${suited[1]}.mp3`
+  return HONOR_FACE_INDEX[tile] ? `${HONOR_FACE_INDEX[tile]}z.mp3` : null
+}
+
 export const tileOrder = (tile: TileType) => TILE_TYPES.indexOf(tile)
 export const sortTiles = (tiles: TileType[]) => [...tiles].sort((a, b) => tileOrder(a) - tileOrder(b))
 export const tileName = (tile: TileType) => TILE_META[tile]?.name ?? tile
