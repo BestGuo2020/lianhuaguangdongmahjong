@@ -63,6 +63,9 @@ const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
 const DEFAULT_PIXEL_RATIO_CAP = 3
 let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || DEFAULT_PIXEL_RATIO_CAP
 
+// 抗锯齿开关：默认开；URL 带 ?aa=off 关闭 MSAA（省一大截 fill，但牌边缘会出现锯齿）。
+const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
+
 function own(resource) {
   staticResources.push(resource)
   return resource
@@ -836,9 +839,6 @@ function robbedKongSourceTransform(effect) {
 
 // 胡牌特效的几何体与光晕纹理在组件生命周期内固定不变，缓存复用避免每次胡牌重新分配/上传。
 let cachedFlareTexture: THREE.CanvasTexture | null = null
-let beamGeometry: THREE.CylinderGeometry | null = null
-const ringGeometries: (THREE.TorusGeometry | null)[] = []
-const particleGeometries: (THREE.SphereGeometry | null)[] = []
 
 function getFlareTexture() {
   if (cachedFlareTexture) return cachedFlareTexture
@@ -858,19 +858,90 @@ function getFlareTexture() {
   return cachedFlareTexture
 }
 
+// 金色星芒贴图：胡牌牌处向外爆发的光束（12 道光芒 + 中心柔光）。
+// 信标式竖直光束纹理：底部亮金、向上渐隐（贴在圆柱侧面，v 沿高度）。
+let cachedBeamTexture: THREE.CanvasTexture | null = null
+function getBeamTexture() {
+  if (cachedBeamTexture) return cachedBeamTexture
+  const w = 32
+  const h = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  const grad = ctx.createLinearGradient(0, h, 0, 0)
+  grad.addColorStop(0, 'rgba(255,222,135,.95)')
+  grad.addColorStop(.3, 'rgba(255,210,115,.55)')
+  grad.addColorStop(.65, 'rgba(255,195,95,.2)')
+  grad.addColorStop(1, 'rgba(255,185,85,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, w, h)
+  cachedBeamTexture = own(new THREE.CanvasTexture(canvas))
+  cachedBeamTexture.colorSpace = THREE.SRGBColorSpace
+  return cachedBeamTexture
+}
+
+// 信标内芯光束（细、亮）
+let beamGeometry: THREE.CylinderGeometry | null = null
 function getBeamGeometry() {
-  if (!beamGeometry) beamGeometry = own(new THREE.CylinderGeometry(.055, .18, 8.5, 16, 1, true))
+  if (!beamGeometry) beamGeometry = own(new THREE.CylinderGeometry(.05, .1, 8.5, 12, 1, true))
   return beamGeometry
 }
 
-function getRingGeometry(index: number) {
-  if (!ringGeometries[index]) ringGeometries[index] = own(new THREE.TorusGeometry(.64 + index * .18, .025, 8, 48))
-  return ringGeometries[index]!
+// 信标外层光晕（宽、柔）
+let beamGlowGeometry: THREE.CylinderGeometry | null = null
+function getBeamGlowGeometry() {
+  if (!beamGlowGeometry) beamGlowGeometry = own(new THREE.CylinderGeometry(.16, .26, 7, 12, 1, true))
+  return beamGlowGeometry
 }
 
-function getParticleGeometry(index: number) {
-  if (!particleGeometries[index]) particleGeometries[index] = own(new THREE.SphereGeometry(.035 + index % 3 * .012, 8, 8))
-  return particleGeometries[index]!
+// 金色星芒纹理：光束底部向外爆发的光芒（12 道），与信标光束叠加。
+let cachedStarburstTexture: THREE.CanvasTexture | null = null
+function getStarburstTexture() {
+  if (cachedStarburstTexture) return cachedStarburstTexture
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2
+  const cy = size / 2
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2)
+  core.addColorStop(0, 'rgba(255,255,235,1)')
+  core.addColorStop(.22, 'rgba(255,228,140,.9)')
+  core.addColorStop(1, 'rgba(255,195,70,0)')
+  ctx.fillStyle = core
+  ctx.fillRect(0, 0, size, size)
+  const rays = 12
+  const rayLen = size * .46
+  for (let i = 0; i < rays; i++) {
+    const angle = (i / rays) * Math.PI * 2
+    const grad = ctx.createLinearGradient(0, 0, rayLen, 0)
+    grad.addColorStop(0, 'rgba(255,238,180,.95)')
+    grad.addColorStop(.6, 'rgba(255,212,110,.45)')
+    grad.addColorStop(1, 'rgba(255,195,70,0)')
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(angle)
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(rayLen, -size * .05)
+    ctx.lineTo(rayLen, size * .05)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
+  }
+  cachedStarburstTexture = own(new THREE.CanvasTexture(canvas))
+  cachedStarburstTexture.colorSpace = THREE.SRGBColorSpace
+  return cachedStarburstTexture
+}
+
+// 金色菱形粒子几何体（八面体 = 立体菱形）。
+let diamondGeometry: THREE.OctahedronGeometry | null = null
+function getDiamondGeometry() {
+  if (!diamondGeometry) diamondGeometry = own(new THREE.OctahedronGeometry(.06, 0))
+  return diamondGeometry
 }
 
 function addWinEffect() {
@@ -882,79 +953,85 @@ function addWinEffect() {
   const outward = new THREE.Vector3(anchor.x, 0, anchor.z - PLAY_AREA_OFFSET_Z).normalize()
   const group = new THREE.Group()
 
+  // 信标式竖直光束：从胡牌牌垂直射向天空（垂直于牌面），带光晕
   const beamMaterial = ownDynamic(new THREE.MeshBasicMaterial({
-    color: 0xffe59a,
+    map: getBeamTexture(),
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    side: THREE.DoubleSide,
   }))
   const beam = new THREE.Mesh(getBeamGeometry(), beamMaterial)
-  beam.position.set(anchor.x, 4.45, anchor.z)
-  beam.rotation.z = outward.x * .07
-  beam.rotation.x = -outward.z * .07
-  beam.scale.y = .04
+  beam.position.set(anchor.x, anchor.y + .25 + 8.5 / 2, anchor.z)
   group.add(beam)
+  const beamGlowMaterial = ownDynamic(new THREE.MeshBasicMaterial({
+    map: getBeamTexture(),
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  }))
+  const beamGlow = new THREE.Mesh(getBeamGlowGeometry(), beamGlowMaterial)
+  beamGlow.position.set(anchor.x, anchor.y + .3 + 7 / 2, anchor.z)
+  group.add(beamGlow)
 
-  const tangent = new THREE.Vector3(-outward.z, 0, outward.x)
-  const streakStarts = [
-    burstAnchor.clone().addScaledVector(tangent, 3.4).addScaledVector(outward, -.8).setY(4.8),
-    burstAnchor.clone().addScaledVector(tangent, -3.4).addScaledVector(outward, -.8).setY(4.8),
-    burstAnchor.clone().addScaledVector(outward, -3.2).setY(5.4),
-  ]
-  const streaks = streakStarts.map((start, index) => {
-    const direction = faceCenter.clone().sub(start)
-    const length = direction.length()
-    const material = ownDynamic(beamMaterial.clone())
-    material.opacity = 0
-    const streak = new THREE.Mesh(
-      ownDynamic(new THREE.CylinderGeometry(.018 + index * .008, .055, length, 8, 1, true)),
-      material,
-    )
-    streak.position.copy(start).add(faceCenter).multiplyScalar(.5)
-    streak.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
-    group.add(streak)
-    return streak
-  })
-
-  const ringMaterial = ownDynamic(new THREE.MeshBasicMaterial({
-    color: 0xffd76a,
+  // 星芒：光束底部向外爆发的光芒（与信标光束叠加）
+  const starburstMaterial = ownDynamic(new THREE.SpriteMaterial({
+    map: getStarburstTexture(),
+    color: 0xffd86e,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   }))
-  const rings = [0, 1, 2].map((index) => {
-    const ring = new THREE.Mesh(getRingGeometry(index), ringMaterial.clone())
-    ownDynamic(ring.material)
-    ring.position.copy(burstAnchor).setY(.38 + index * .025)
-    ring.rotation.x = Math.PI / 2
-    ring.scale.setScalar(.18)
-    group.add(ring)
-    return ring
-  })
+  const starburst = new THREE.Sprite(starburstMaterial)
+  starburst.position.copy(anchor).setY(anchor.y + .4)
+  starburst.scale.setScalar(.4)
+  group.add(starburst)
 
-  const particleMaterial = ownDynamic(new THREE.MeshBasicMaterial({
-    color: 0xffdf72,
+  // 金色光晕：落在牌上的强光晕
+  const glowMaterial = ownDynamic(new THREE.SpriteMaterial({
+    map: getFlareTexture(),
+    color: 0xffc23d,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   }))
-  const particles = Array.from({ length: 14 }, (_, index) => {
-    const angle = index / 14 * Math.PI * 2 + (index % 3) * .12
-    const particle = new THREE.Mesh(getParticleGeometry(index), particleMaterial.clone())
-    ownDynamic(particle.material)
-    particle.scale.set(.7, .18, 1.8)
-    particle.rotation.y = angle
-    particle.position.copy(burstAnchor).setY(.48)
-    group.add(particle)
+  const glow = new THREE.Sprite(glowMaterial)
+  glow.position.copy(anchor).setY(anchor.y + .35)
+  glow.scale.setScalar(.5)
+  group.add(glow)
+
+  // 大量金色菱形粒子：向四周 3D 散射（黄金比例均匀撒布）
+  const diamondMaterial = ownDynamic(new THREE.MeshBasicMaterial({
+    color: 0xffe9a8,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }))
+  const diamonds = Array.from({ length: 40 }, (_, index) => {
+    const y = (index / 40) * 2 - 1
+    const radius = Math.sqrt(Math.max(0, 1 - y * y))
+    const theta = index * 2.39996
+    const speed = 1.5 + index % 8 * .26
+    const diamond = new THREE.Mesh(getDiamondGeometry(), diamondMaterial.clone())
+    ownDynamic(diamond.material)
+    diamond.scale.setScalar(.6 + index % 4 * .22)
+    diamond.position.copy(burstAnchor)
+    group.add(diamond)
     return {
-      mesh: particle,
-      velocity: new THREE.Vector3(Math.cos(angle) * (1.2 + index % 4 * .22), .55 + index % 5 * .17, Math.sin(angle) * (1.2 + index % 3 * .28)),
+      mesh: diamond,
+      direction: new THREE.Vector3(radius * Math.cos(theta), y, radius * Math.sin(theta)),
+      speed,
+      spin: (index % 2 ? 1 : -1) * (2.5 + index % 3),
     }
   })
 
+  // 胡牌牌：飞入 + 落地弹跳
   const winningTile = makeFaceTile(props.winEffect.tile)
   const robbedKongSource = robbedKongSourceTransform(props.winEffect)
   const startPosition = robbedKongSource?.position
@@ -963,26 +1040,14 @@ function addWinEffect() {
   const startRotation = robbedKongSource?.rotation ?? seatRotation
   winningTile.position.copy(startPosition)
   winningTile.rotation.y = startRotation
+  winningTile.scale.setScalar(.7)
   group.add(winningTile)
-
-  const flareTexture = getFlareTexture()
-  const flareMaterial = ownDynamic(new THREE.SpriteMaterial({
-    map: flareTexture,
-    color: 0xffdf82,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  }))
-  const flare = new THREE.Sprite(flareMaterial)
-  flare.position.copy(faceCenter).setY(anchor.y + .58)
-  flare.scale.setScalar(.45)
-  group.add(flare)
 
   scene.add(group)
   dynamicGroups.push(group)
   winEffectAnimation = {
-    startedAt: performance.now(), anchor, burstAnchor, outward, beam, streaks, rings, particles, winningTile, flare,
+    startedAt: performance.now(), anchor, burstAnchor, outward,
+    beam, beamGlow, starburst, glow, diamonds, winningTile,
     startPosition, startRotation, seatRotation,
     duration: props.winEffect.duration ?? WIN_EFFECT_DURATION,
     reducedMotion: Boolean(props.winEffect.reducedMotion),
@@ -1206,7 +1271,8 @@ function resize() {
   if (!renderer || !canvas.value) return
   const width = canvas.value.clientWidth
   const height = canvas.value.clientHeight
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap))
+  const pixelRatio = Math.min(window.devicePixelRatio, pixelRatioCap)
+  renderer.setPixelRatio(pixelRatio)
   renderer.setSize(width, height, false)
   camera.aspect = width / Math.max(height, 1)
   camera.updateProjectionMatrix()
@@ -1319,48 +1385,53 @@ function render(time = 0) {
   if (winEffectAnimation) {
     const effect = winEffectAnimation
     const progress = Math.max(0, Math.min(1, (time - effect.startedAt) / effect.duration))
-    const beamIn = THREE.MathUtils.smoothstep(progress, .1, .2)
-    const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .72, .9)
-    effect.beam.material.opacity = beamIn * beamOut * .52
-    effect.beam.scale.y = THREE.MathUtils.lerp(.04, 1, beamIn)
 
-    const burst = THREE.MathUtils.smoothstep(progress, .22, .34)
-    const burstFade = 1 - THREE.MathUtils.smoothstep(progress, .66, .82)
-    effect.flare.material.opacity = burst * burstFade * .92
-    effect.flare.scale.setScalar(THREE.MathUtils.lerp(.35, .82, burst) * (1 - burst * .12))
-    effect.streaks.forEach((streak, index) => {
-      streak.material.opacity = burst * burstFade * (.42 - index * .06)
-      streak.scale.x = streak.scale.z = THREE.MathUtils.lerp(.35, 1.25, burst)
-    })
-    effect.rings.forEach((ring, index) => {
-      ring.material.opacity = burst * burstFade * (.9 - index * .2)
-      ring.scale.setScalar(THREE.MathUtils.lerp(.18, 1.65 + index * .24, burst))
-      ring.rotation.z = progress * (index ? -4.2 : 5.1)
-    })
-    effect.particles.forEach(({ mesh, velocity }, index) => {
-      const particleProgress = Math.max(0, Math.min(1, (progress - .28 - index * .003) / .38))
-      mesh.material.opacity = Math.sin(particleProgress * Math.PI) * .95
-      // 直接计算目标坐标，避免每帧新建临时 Vector3 造成移动端 GC 压力。
-      mesh.position.set(
-        effect.burstAnchor.x + velocity.x * particleProgress,
-        effect.burstAnchor.y + velocity.y * particleProgress + Math.sin(particleProgress * Math.PI) * .3,
-        effect.burstAnchor.z + velocity.z * particleProgress,
-      )
-    })
-
-    const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .34)
+    // 胡牌牌飞入 + 落地弹跳
+    const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .15)
     effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)
-    effect.winningTile.rotation.set(
-      0,
-      THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach),
-      0,
-    )
-    effect.winningTile.scale.setScalar(1)
+    effect.winningTile.rotation.set(0, THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach), 0)
+    const pop = Math.sin(Math.min(1, approach) * Math.PI) * .28
+    effect.winningTile.scale.setScalar(THREE.MathUtils.lerp(.7, 1, approach) + pop)
 
-    const impactProgress = Math.max(0, Math.min(1, (progress - .22) / .22))
-    const impact = Math.sin(impactProgress * Math.PI) * (1 - THREE.MathUtils.smoothstep(progress, .44, .58))
-    const dim = .66 + THREE.MathUtils.smoothstep(progress, .66, .94) * .26
-    exposure = dim + impact * .72
+    // 信标光束：牌落地后快速竖起，末尾缓缓收
+    const beamIn = THREE.MathUtils.smoothstep(progress, .08, .15)
+    const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .55, 1)
+    const beamVis = beamIn * beamOut
+    effect.beam.material.opacity = beamVis * .8
+    effect.beamGlow.material.opacity = beamVis * .32
+
+    // 星芒：光束底部向外爆发的光芒（快速展开后淡出）
+    const burstIn = THREE.MathUtils.smoothstep(progress, .08, .16)
+    const burstOut = 1 - THREE.MathUtils.smoothstep(progress, .3, .42)
+    effect.starburst.material.opacity = burstIn * burstOut * .85
+    effect.starburst.scale.setScalar(THREE.MathUtils.lerp(.4, 3, burstIn) * (1 + (1 - burstOut) * .2))
+
+    // 光晕：星芒爆出后逐渐亮起，常驻在牌上，末尾淡出
+    const glowIn = THREE.MathUtils.smoothstep(progress, .3, .5)
+    const glowOut = 1 - THREE.MathUtils.smoothstep(progress, .85, 1)
+    effect.glow.material.opacity = glowIn * glowOut * .85
+    effect.glow.scale.setScalar(THREE.MathUtils.lerp(.5, 1.1, glowIn))
+
+    // 金色菱形粒子：向四周 3D 散射 + 旋转闪光
+    effect.diamonds.forEach((d, index) => {
+      const t = Math.max(0, Math.min(1, (progress - .08 - index * .004) / .55))
+      const fade = Math.sin(Math.min(1, t) * Math.PI)
+      d.mesh.material.opacity = fade * .95
+      // 直接计算目标坐标，避免每帧新建临时 Vector3 造成移动端 GC 压力。
+      d.mesh.position.set(
+        effect.burstAnchor.x + d.direction.x * d.speed * t,
+        effect.burstAnchor.y + d.direction.y * d.speed * t,
+        effect.burstAnchor.z + d.direction.z * d.speed * t,
+      )
+      d.mesh.rotation.x = time * .001 * d.spin
+      d.mesh.rotation.y = time * .001 * d.spin * 1.3
+    })
+
+    // 曝光：星芒爆发时闪亮，之后略压暗衬托光晕，末尾回稳
+    const impactProgress = Math.max(0, Math.min(1, (progress - .08) / .2))
+    const impact = Math.sin(impactProgress * Math.PI) * (1 - THREE.MathUtils.smoothstep(progress, .3, .42))
+    const dim = .82 + THREE.MathUtils.smoothstep(progress, .5, .9) * .1
+    exposure = dim + impact * .42
     if (!effect.reducedMotion) {
       cameraShakeX = Math.sin(time * .075) * impact * .075
       cameraShakeZ = Math.cos(time * .061) * impact * .055
@@ -1375,7 +1446,7 @@ function render(time = 0) {
 }
 
 onMounted(async () => {
-  renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, alpha: true, powerPreference: 'high-performance' })
+  renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: aaEnabled, alpha: true, powerPreference: 'high-performance' })
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = BASE_EXPOSURE
