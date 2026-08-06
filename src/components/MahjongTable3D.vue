@@ -58,6 +58,11 @@ const BASE_EXPOSURE = .92
 const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
 
+// 渲染分辨率上限（清晰度 vs 帧率）：默认 3 取设备原生 DPR，真机实测本设备 2.2 vs 2.0 帧率无差，原生清晰免费。
+// URL 带 ?pr=<数字> 可覆盖。
+const DEFAULT_PIXEL_RATIO_CAP = 3
+let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || DEFAULT_PIXEL_RATIO_CAP
+
 function own(resource) {
   staticResources.push(resource)
   return resource
@@ -198,28 +203,34 @@ function makeBackTexture() {
   return texture
 }
 
-function makeFaceMaterial(tile) {
-  if (faceMaterials.has(tile)) return faceMaterials.get(tile)
+// 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
+function drawTileFace(ctx, tile, x, y, w, h) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
-  const surface = document.createElement('canvas')
-  surface.width = 384
-  surface.height = 512
-  const ctx = surface.getContext('2d')
-  const faceGradient = ctx.createLinearGradient(0, 0, surface.width, surface.height)
+  const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
   faceGradient.addColorStop(0, '#e9e8df')
   faceGradient.addColorStop(.58, '#dad9d0')
   faceGradient.addColorStop(1, '#c9ccc2')
   ctx.fillStyle = faceGradient
-  ctx.fillRect(0, 0, surface.width, surface.height)
+  ctx.fillRect(x, y, w, h)
   if (image) {
     ctx.save()
     ctx.shadowColor = 'rgba(40,30,18,.24)'
     ctx.shadowBlur = 2.4
     ctx.shadowOffsetX = .7
     ctx.shadowOffsetY = 1.2
-    ctx.drawImage(image, 20, 20, 344, 472)
+    const insetX = w * 20 / 384
+    const insetY = h * 20 / 512
+    ctx.drawImage(image, x + insetX, y + insetY, w - insetX * 2, h - insetY * 2)
     ctx.restore()
   }
+}
+
+function makeFaceMaterial(tile) {
+  if (faceMaterials.has(tile)) return faceMaterials.get(tile)
+  const surface = document.createElement('canvas')
+  surface.width = 384
+  surface.height = 512
+  drawTileFace(surface.getContext('2d'), tile, 0, 0, 384, 512)
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
@@ -244,6 +255,81 @@ function makeFaceMaterial(tile) {
   }
   faceMaterials.set(tile, material)
   return material
+}
+
+// ---- 牌面纹理图集：全部牌面压进一张图，cap 合批从"每类型一个"压成 1 个 ----
+const ATLAS_COLS = 6
+const ATLAS_ROWS = 6
+const ATLAS_CELL_W = 96
+const ATLAS_CELL_H = 128
+const ATLAS_CELL_U = 1 / ATLAS_COLS
+const ATLAS_CELL_V = 1 / ATLAS_ROWS
+let atlasMaterial: THREE.MeshPhysicalMaterial | null = null
+let atlasUvData: Float32Array | null = null
+// 图集 cap 用克隆几何体，aUvOffset 只挂在克隆上，绝不动共享的 tileCapGeometry（避免污染 back cap）。
+let atlasCapGeometry: THREE.BufferGeometry | null = null
+function getAtlasCapGeometry() {
+  if (!atlasCapGeometry) atlasCapGeometry = own(scene.userData.tileCapGeometry.clone())
+  return atlasCapGeometry
+}
+
+// 返回某牌在 6×6 图集中的左下角 UV（canvas 顶行为 row 0，对应 UV 高值）。
+function atlasCellUvFor(tile) {
+  const i = Math.max(0, TILE_TYPES.indexOf(tile))
+  const col = i % ATLAS_COLS
+  const row = Math.floor(i / ATLAS_COLS)
+  return { u: col * ATLAS_CELL_U, v: 1 - (row + 1) * ATLAS_CELL_V }
+}
+
+function getAtlasMaterial() {
+  if (atlasMaterial) return atlasMaterial
+  const canvas = document.createElement('canvas')
+  canvas.width = ATLAS_COLS * ATLAS_CELL_W
+  canvas.height = ATLAS_ROWS * ATLAS_CELL_H
+  const ctx = canvas.getContext('2d')
+  TILE_TYPES.forEach((tile, i) => {
+    const col = i % ATLAS_COLS
+    const row = Math.floor(i / ATLAS_COLS)
+    drawTileFace(ctx, tile, col * ATLAS_CELL_W, row * ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_CELL_H)
+  })
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+  const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+    map: texture,
+    envMap: scene.userData.tileEnvironment,
+    color: 0xd8d7ce,
+    roughness: .4,
+    metalness: 0,
+    clearcoat: .56,
+    clearcoatRoughness: .24,
+    ior: 1.46,
+    specularIntensity: .36,
+    specularColor: new THREE.Color(0xfffdf4),
+    envMapIntensity: .3,
+  })))
+  // 每实例 UV 偏移：aUvOffset 由 InstancedMesh 逐实例提供，把顶面 UV 折进对应图集格。
+  // 只改 vMapUv（r185 里 map 用 vMapUv 采样，且它在 #ifdef USE_MAP 下声明）。
+  // ⚠️ 不能碰 vUv：three r185 的 USE_UV 已不存在（改成 USE_UV1/2/3），vUv 未声明，引用即编译失败→黑面。
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      `#include <uv_vertex>
+      #ifdef USE_MAP
+        vMapUv = aUvOffset + vMapUv * vec2(${ATLAS_CELL_U.toFixed(6)}, ${ATLAS_CELL_V.toFixed(6)});
+      #endif`,
+    )
+  }
+  if (!glossyMaterials) {
+    mat.clearcoat = 0
+    mat.clearcoatRoughness = 0
+    mat.specularIntensity = 0
+    mat.ior = 1.5
+  }
+  atlasMaterial = mat
+  return mat
 }
 
 function makeMachineTexture() {
@@ -348,6 +434,8 @@ function addTable() {
   }))
   const gold = own(new THREE.MeshPhysicalMaterial({
     color: 0xb88a38,
+    emissive: 0x3a2406,
+    emissiveIntensity: .3,
     roughness: .28,
     metalness: .88,
     clearcoat: .3,
@@ -356,7 +444,7 @@ function addTable() {
   const goldHighlight = own(new THREE.MeshPhysicalMaterial({
     color: 0xe1b85d,
     emissive: 0x392006,
-    emissiveIntensity: .2,
+    emissiveIntensity: .35,
     roughness: .22,
     metalness: .94,
     clearcoat: .38,
@@ -490,17 +578,35 @@ function makeFaceTile(tileName) {
   return makeTableTile(makeFaceMaterial(tileName))
 }
 
-// ---- InstancedMesh 合批：暗手/弃牌/副露全部写进实例矩阵，draw call 从 ~1000 降到 ~几十 ----
+// ---- InstancedMesh 合批：暗手/弃牌/副露全部写进实例矩阵 ----
 const INSTANCE_CAPACITY = 260
 const TILE_BASE_OFFSET = new THREE.Matrix4().makeTranslation(0, -.06, 0)
 const TILE_CAP_OFFSET = new THREE.Matrix4().makeTranslation(0, .13, 0)
 let tableBaseInstances: THREE.InstancedMesh | null = null
-const tableCapInstances = new Map<THREE.Material, THREE.InstancedMesh>()
-const tableCapCounts = new Map<THREE.Material, number>()
+let backCapInstances: THREE.InstancedMesh | null = null   // 背朝上（暗手/暗杠首尾）的 cap
+let atlasCapInstances: THREE.InstancedMesh | null = null  // 所有牌面朝上的 cap（图集）
+let atlasUvAttribute: THREE.InstancedBufferAttribute | null = null
+let backCapCount = 0
+let atlasCapCount = 0
 let tableInstanceCount = 0
 const scratchMatrix = new THREE.Matrix4()
 const scratchScale = new THREE.Vector3()
 const scratchVector = new THREE.Vector3()
+
+function createCapInstances(topMaterial: THREE.Material, geometry: THREE.BufferGeometry) {
+  const cap = ownDynamic(new THREE.InstancedMesh(
+    geometry,
+    [scene.userData.tileSide, scene.userData.tileSide, topMaterial,
+      scene.userData.tileBottom, scene.userData.tileSide, scene.userData.tileSide],
+    INSTANCE_CAPACITY,
+  ))
+  cap.castShadow = true
+  cap.receiveShadow = true
+  cap.frustumCulled = false
+  scene.add(cap)
+  dynamicGroups.push(cap)
+  return cap
+}
 
 function beginTableInstances() {
   tableBaseInstances = ownDynamic(new THREE.InstancedMesh(
@@ -514,41 +620,36 @@ function beginTableInstances() {
   tableBaseInstances.frustumCulled = false
   scene.add(tableBaseInstances)
   dynamicGroups.push(tableBaseInstances)
-  tableCapInstances.clear()
-  tableCapCounts.clear()
+  backCapInstances = createCapInstances(scene.userData.tileBottom, scene.userData.tileCapGeometry)
+  atlasCapInstances = createCapInstances(getAtlasMaterial(), getAtlasCapGeometry())
+  atlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
+  atlasUvAttribute = new THREE.InstancedBufferAttribute(atlasUvData, 2)
+  // aUvOffset 只挂在图集 cap 的克隆几何体上，共享 tileCapGeometry 不受影响（上次破坏的根因）。
+  atlasCapInstances.geometry.setAttribute('aUvOffset', atlasUvAttribute)
+  backCapCount = 0
+  atlasCapCount = 0
   tableInstanceCount = 0
 }
 
-function getCapInstances(topMaterial: THREE.Material) {
-  let cap = tableCapInstances.get(topMaterial)
-  if (!cap) {
-    cap = ownDynamic(new THREE.InstancedMesh(
-      scene.userData.tileCapGeometry,
-      [scene.userData.tileSide, scene.userData.tileSide, topMaterial,
-        scene.userData.tileBottom, scene.userData.tileSide, scene.userData.tileSide],
-      INSTANCE_CAPACITY,
-    ))
-    cap.castShadow = true
-    cap.receiveShadow = true
-    cap.frustumCulled = false
-    scene.add(cap)
-    dynamicGroups.push(cap)
-    tableCapInstances.set(topMaterial, cap)
-  }
-  return cap
-}
-
-// 写一张牌的实例矩阵。initialPos/initialScale 供发牌、副露动画在最终位置前先置于起点。
-function addTableTile(pos, quat, topMaterial, scale = 1, initialPos = null, initialScale = null) {
+// 写一张牌的实例矩阵。face 为牌面类型字符串（朝上→图集格）或 null（背朝上→back 合批）。
+// initialPos/initialScale 供发牌、副露动画在最终位置前先置于起点。
+function addTableTile(pos, quat, face, scale = 1, initialPos = null, initialScale = null) {
   const baseIndex = tableInstanceCount
   tableInstanceCount += 1
   scratchMatrix.compose(initialPos ?? pos, quat, scratchScale.setScalar(initialScale ?? scale))
   tableBaseInstances.setMatrixAt(baseIndex, scratchMatrix.clone().multiply(TILE_BASE_OFFSET))
-  const capMesh = getCapInstances(topMaterial)
+  const faceUp = face !== null && face !== undefined
+  const capMesh = faceUp ? atlasCapInstances : backCapInstances
   // 每个 cap 合批对象维护自己的实例序号，不能与全局 baseIndex 混用，否则牌面会错乱串位。
-  const capIndex = tableCapCounts.get(topMaterial) ?? 0
+  const capIndex = faceUp ? atlasCapCount : backCapCount
+  if (faceUp) {
+    const uv = atlasCellUvFor(face)
+    atlasUvData[capIndex * 2] = uv.u
+    atlasUvData[capIndex * 2 + 1] = uv.v
+  }
   capMesh.setMatrixAt(capIndex, scratchMatrix.multiply(TILE_CAP_OFFSET))
-  tableCapCounts.set(topMaterial, capIndex + 1)
+  if (faceUp) atlasCapCount += 1
+  else backCapCount += 1
   return { baseIndex, capIndex, capMesh }
 }
 
@@ -564,13 +665,15 @@ function finishTableInstances() {
   if (!tableBaseInstances) return
   tableBaseInstances.count = tableInstanceCount
   tableBaseInstances.instanceMatrix.needsUpdate = true
-  tableCapCounts.forEach((count, material) => {
-    const cap = tableCapInstances.get(material)
-    if (cap) {
-      cap.count = count
-      cap.instanceMatrix.needsUpdate = true
-    }
-  })
+  if (backCapInstances) {
+    backCapInstances.count = backCapCount
+    backCapInstances.instanceMatrix.needsUpdate = true
+  }
+  if (atlasCapInstances) {
+    atlasCapInstances.count = atlasCapCount
+    atlasCapInstances.instanceMatrix.needsUpdate = true
+    if (atlasUvAttribute) atlasUvAttribute.needsUpdate = true
+  }
 }
 
 function addConcealedHand(playerIndex) {
@@ -604,9 +707,7 @@ function addConcealedHand(playerIndex) {
   const dealThisHand = props.dealAnimation.playerIndex === playerIndex
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
-    const topMaterial = props.revealHands
-      ? makeFaceMaterial(revealedHand[faceIndex])
-      : scene.userData.tileBottom
+    const face = props.revealHands ? revealedHand[faceIndex] : null
     const tileY = props.revealHands ? .28 : .56
     let x
     let z
@@ -649,7 +750,7 @@ function addConcealedHand(playerIndex) {
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
     if (dealThisHand && index >= animatedFromIndex) {
       const origin = new THREE.Vector3(0, 3.4, PLAY_AREA_OFFSET_Z + .5)
-      const inst = addTableTile(pos, quat, topMaterial, 1, origin)
+      const inst = addTableTile(pos, quat, face, 1, origin)
       dealTweens.push({
         baseIndex: inst.baseIndex,
         capIndex: inst.capIndex,
@@ -661,7 +762,7 @@ function addConcealedHand(playerIndex) {
         duration: props.dealAnimation.count === 4 ? 230 : 125,
       })
     } else {
-      addTableTile(pos, quat, topMaterial)
+      addTableTile(pos, quat, face)
     }
   }
 }
@@ -778,7 +879,6 @@ function addWinEffect() {
   anchor.z += PLAY_AREA_OFFSET_Z
   const faceCenter = anchor.clone().setY(anchor.y + .25)
   const burstAnchor = cameraAlignedPoint(faceCenter, .38)
-  const lightAnchor = cameraAlignedPoint(faceCenter, -.1)
   const outward = new THREE.Vector3(anchor.x, 0, anchor.z - PLAY_AREA_OFFSET_Z).normalize()
   const group = new THREE.Group()
 
@@ -879,13 +979,10 @@ function addWinEffect() {
   flare.scale.setScalar(.45)
   group.add(flare)
 
-  const light = new THREE.PointLight(0xffc447, 0, 5.5, 2)
-  light.position.copy(lightAnchor).setY(1.15)
-  group.add(light)
   scene.add(group)
   dynamicGroups.push(group)
   winEffectAnimation = {
-    startedAt: performance.now(), anchor, burstAnchor, outward, beam, streaks, rings, particles, winningTile, flare, light,
+    startedAt: performance.now(), anchor, burstAnchor, outward, beam, streaks, rings, particles, winningTile, flare,
     startPosition, startRotation, seatRotation,
     duration: props.winEffect.duration ?? WIN_EFFECT_DURATION,
     reducedMotion: Boolean(props.winEffect.reducedMotion),
@@ -916,7 +1013,7 @@ function addDiscards(playerIndex) {
     const y = highlighted ? .48 : .28
     const pos = new THREE.Vector3(transform.x, y, transform.z + PLAY_AREA_OFFSET_Z)
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
-    addTableTile(pos, quat, makeFaceMaterial(tileName))
+    addTableTile(pos, quat, tileName)
     if (highlighted) {
       // 最新一张弃牌的高亮垫片保持独立 mesh（仅 1 张，无需合批）。
       const marker = new THREE.Mesh(
@@ -963,7 +1060,7 @@ function addMelds(playerIndex) {
     laidTiles.forEach((tileName, tileIndex) => {
       const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
       const pointsToSource = tileIndex === sourceTileIndex
-      const topMaterial = concealed ? scene.userData.tileBottom : makeFaceMaterial(tileName)
+      const face = concealed ? null : tileName
       const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
       const centerOffset = trackOffset + (tileSpan - .725) / 2
       const transform = alignMeldBottom(
@@ -985,7 +1082,7 @@ function addMelds(playerIndex) {
         }
       }
       if (animatesThisMeld && pendingTableActionAnimation.type !== 'added-gang') {
-        const inst = addTableTile(pos, quat, topMaterial, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
+        const inst = addTableTile(pos, quat, face, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
         meldTweens.push({
           baseIndex: inst.baseIndex,
           capIndex: inst.capIndex,
@@ -999,7 +1096,7 @@ function addMelds(playerIndex) {
           duration: 430,
         })
       } else {
-        addTableTile(pos, quat, topMaterial)
+        addTableTile(pos, quat, face)
       }
       trackOffset += tileSpan
     })
@@ -1013,7 +1110,7 @@ function addMelds(playerIndex) {
       )
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, sourcePlacement.rotation, 0))
       if (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang') {
-        const inst = addTableTile(pos, quat, makeFaceMaterial(meld.tile), 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
+        const inst = addTableTile(pos, quat, meld.tile, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
         meldTweens.push({
           baseIndex: inst.baseIndex,
           capIndex: inst.capIndex,
@@ -1026,7 +1123,7 @@ function addMelds(playerIndex) {
           duration: 430,
         })
       } else {
-        addTableTile(pos, quat, makeFaceMaterial(meld.tile))
+        addTableTile(pos, quat, meld.tile)
       }
     }
     trackOffset += .18
@@ -1056,16 +1153,22 @@ function rebuildTableTiles() {
 // 手机端自适应降质：帧耗时超过预算时逐步降低牌面材质开销与阴影分辨率，保住帧率。
 // 始终保持满分辨率渲染（画面不糊、布局不变），高负载时牌面由亮面转哑光、阴影略柔化。
 const QUALITY_LEVELS = [
-  { glossy: true, shadowSize: 2048 },    // 0: 最高（高性能设备保持此档）
-  { glossy: true, shadowSize: 1024 },    // 1: 阴影略柔化
-  { glossy: false, shadowSize: 1024 },   // 2: 牌面转哑光
-  { glossy: false, shadowSize: 512 },    // 3: 最低
+  { glossy: true, shadowSize: 1024 },    // 0: 最高（默认）
+  { glossy: true, shadowSize: 512 },     // 1: 阴影略柔化
+  { glossy: false, shadowSize: 512 },    // 2: 牌面转哑光
 ]
 const DOWNGRADE_FRAME_MS = 26   // EMA 帧耗时超过约 38fps 一档，持续触发降级
-const UPGRADE_FRAME_MS = 15     // EMA 帧耗时低于约 67fps 一档，持续触发恢复
+const UPGRADE_FRAME_MS = 20     // EMA 帧耗时低于约 50fps 一档，持续触发恢复（避免降到哑光后因阈值过高永远回不来）
 const DOWNGRADE_FRAMES = 45
 const UPGRADE_FRAMES = 180
-let qualityLevel = 0
+// URL 带 ?q=<0|1|2> 强制固定质量档（关闭自适应）；不填则自动。
+const qOverride = (() => {
+  const raw = new URLSearchParams(window.location.search).get('q')
+  if (raw === null || raw === '') return null
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n >= 0 && n < QUALITY_LEVELS.length ? n : null
+})()
+let qualityLevel = qOverride ?? 0
 let emaFrameMs = 0
 let badFrames = 0
 let goodFrames = 0
@@ -1103,7 +1206,7 @@ function resize() {
   if (!renderer || !canvas.value) return
   const width = canvas.value.clientWidth
   const height = canvas.value.clientHeight
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap))
   renderer.setSize(width, height, false)
   camera.aspect = width / Math.max(height, 1)
   camera.updateProjectionMatrix()
@@ -1121,6 +1224,7 @@ function applyQuality() {
 }
 
 function updateAdaptiveQuality(frameMs: number) {
+  if (qOverride !== null) return
   if (qualityWarmup > 0) {
     qualityWarmup -= 1
     emaFrameMs = 0
@@ -1178,7 +1282,8 @@ function setupPerfHud() {
         const p95 = sorted[Math.floor(sorted.length * .95)]!
         const dc = renderer?.info.render.calls ?? 0
         const tris = Math.round((renderer?.info.render.triangles ?? 0) / 1000)
-        perfHudEl.textContent = `frame ${ms.toFixed(1)}ms\navg ${avg.toFixed(1)}  p95 ${p95.toFixed(1)}  max ${maxMs.toFixed(1)}\n~${Math.min(60, 1000 / avg).toFixed(0)}fps  q${qualityLevel}${glossyMaterials ? 'G' : 'M'}\ndc${dc}  tri${tris}k`
+        const pr = renderer?.getPixelRatio() ?? 2
+        perfHudEl.textContent = `frame ${ms.toFixed(1)}ms\navg ${avg.toFixed(1)}  p95 ${p95.toFixed(1)}  max ${maxMs.toFixed(1)}\n~${Math.min(60, 1000 / avg).toFixed(0)}fps  q${qualityLevel}${glossyMaterials ? 'G' : 'M'}\ndc${dc}  tri${tris}k  pr${pr.toFixed(1)}`
       }
     },
   }
@@ -1218,7 +1323,6 @@ function render(time = 0) {
     const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .72, .9)
     effect.beam.material.opacity = beamIn * beamOut * .52
     effect.beam.scale.y = THREE.MathUtils.lerp(.04, 1, beamIn)
-    effect.light.intensity = beamIn * beamOut * 4.5
 
     const burst = THREE.MathUtils.smoothstep(progress, .22, .34)
     const burstFade = 1 - THREE.MathUtils.smoothstep(progress, .66, .82)
@@ -1294,7 +1398,7 @@ onMounted(async () => {
   const keyLight = new THREE.DirectionalLight(0xffdfa0, 3.8)
   keyLight.position.set(-7, 13, 9)
   keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(2048, 2048)
+  keyLight.shadow.mapSize.set(1024, 1024)
   keyLight.shadow.camera.left = -12
   keyLight.shadow.camera.right = 12
   keyLight.shadow.camera.top = 10
@@ -1304,19 +1408,18 @@ onMounted(async () => {
   const rimLight = new THREE.DirectionalLight(0x3acb8b, 1.6)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
-  const goldFill = new THREE.PointLight(0xd8a948, 2.8, 24, 2)
-  goldFill.position.set(0, 9, -1.5)
-  scene.add(goldFill)
-  const tileHighlight = new THREE.DirectionalLight(0xfff8e8, .8)
-  tileHighlight.position.set(-7, 12, 9)
-  tileHighlight.target.position.set(1, 0, -1)
-  scene.add(tileHighlight, tileHighlight.target)
+  // 移除了 goldFill（点光源，每片元开销最大）与 tileHighlight（与 keyLight 同向的微弱重复）。
+  // 金色桌沿改由 gold/goldHighlight 的自发光补偿，保持亮度不依赖点光源。
   addDice()
 
   // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
   scene.userData.tileImages = new Map<TileType, HTMLImageElement>()
   addTable()
   rebuildTableTiles()
+  if (qOverride !== null) {
+    qualityLevel = qOverride
+    applyQuality()
+  }
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas.value)
   resize()
@@ -1333,6 +1436,8 @@ onMounted(async () => {
   }))
   if (destroyed) return
   faceMaterials.clear()
+  // 图集在图片就绪前可能已用空底构建，需失效让下一次重建带上真实牌面。
+  atlasMaterial = null
   rebuildTableTiles()
 })
 
