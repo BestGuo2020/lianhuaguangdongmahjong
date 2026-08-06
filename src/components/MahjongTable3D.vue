@@ -816,7 +816,7 @@ function robbedKongSourceTransform(effect) {
         sourcePlacement = {
           x: transform.x,
           z: transform.z,
-          rotation: transform.rotation + Math.PI / 2,
+          rotation: transform.rotation + sourceTileRotationOffset(playerIndex),
         }
       }
       trackOffset += tileSpan
@@ -1113,6 +1113,12 @@ function alignMeldBottom(transform, playerIndex, pointsToSource) {
   return transform
 }
 
+function sourceTileRotationOffset(playerIndex) {
+  // 来源牌横置方向按座位区分：本家(0)/对家(2) 横置后再转 180°（数字/花色朝外），
+  // 上家(3)/下家(1) 是侧边座位，朝向相反，保持原始横置即可。
+  return (playerIndex === 0 || playerIndex === 2) ? Math.PI / 2 + Math.PI : Math.PI / 2
+}
+
 function addMelds(playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
@@ -1133,7 +1139,7 @@ function addMelds(playerIndex) {
         playerIndex,
         pointsToSource,
       )
-      const rotationY = transform.rotation + (pointsToSource ? Math.PI / 2 : 0)
+      const rotationY = transform.rotation + (pointsToSource ? sourceTileRotationOffset(playerIndex) : 0)
       // 暗杠首尾两张背朝上：makeFaceDownTile 内部 body 绕 X 转 180° 并上抬 .13，合批时折进矩阵。
       const bodyOffsetY = concealed ? .13 : 0
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
