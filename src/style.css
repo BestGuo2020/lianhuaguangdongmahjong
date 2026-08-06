@@ -141,7 +141,6 @@ button { font: inherit; }
 .edge-left, .edge-right { top: 21%; bottom: 21%; width: 7px; border-radius: 50%; }
 .edge-left { left: 0; transform: perspective(500px) rotateY(-58deg); }
 .edge-right { right: 0; transform: perspective(500px) rotateY(58deg); }
-.felt-emblem { position: absolute; top: 51%; left: 50%; transform: translate(-50%, -50%) rotate(-9deg); color: rgba(224,196,127,.035); font: 900 clamp(40px,7vw,100px) "Noto Serif SC",serif; letter-spacing: .25em; white-space: nowrap; }
 
 .top-bar {
   position: absolute;
@@ -678,7 +677,6 @@ button { font: inherit; }
 .table-edge { opacity: .32; background: linear-gradient(180deg, rgba(12,35,25,.7), rgba(3,18,12,.6)); border-color: rgba(3,27,18,.55); }
 .edge-top, .edge-bottom { right: 18%; left: 18%; height: 10px; }
 .edge-left, .edge-right { top: 13%; bottom: 13%; width: 10px; }
-.felt-emblem { opacity: .45; }
 
 .mahjong-tile { --tile-width: clamp(44px, 4.75vw, 86px); box-shadow: 0 5px 0 #d8ddd2, 0 9px 0 #4e9b43, 0 13px 9px rgba(0,0,0,.54), inset 0 1px rgba(255,255,255,.9); }
 .mahjong-tile.small { --tile-width: clamp(25px, 2.45vw, 42px); box-shadow: 0 3px 0 #d5dbd0, 0 6px 0 #4c9341, 0 8px 5px rgba(0,0,0,.5); }

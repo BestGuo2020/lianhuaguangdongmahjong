@@ -406,7 +406,6 @@ function clearMobileSelection(event: PointerEvent) {
           <i class="table-edge edge-right"></i>
           <i class="table-edge edge-bottom"></i>
           <i class="table-edge edge-left"></i>
-          <span class="felt-emblem">莲花广麻</span>
         </div>
 
         <template v-if="players.length">
