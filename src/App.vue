@@ -108,7 +108,7 @@ const {
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, remoteActions, waitingNextRound, storedSession, signalQuality,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality, autoPlay, toggleAutoPlay,
 } = remoteGame
 function readStoredNickname() {
   try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
@@ -388,6 +388,14 @@ function clearMobileSelection(event: PointerEvent) {
           <nav>
             <button
               v-if="gameMode === 'remote' && phase !== 'lobby'"
+              class="autoplay-toggle"
+              :class="{ active: autoPlay }"
+              :aria-pressed="autoPlay"
+              :title="autoPlay ? '自动打牌已开启（点击关闭）' : '自动打牌已关闭（点击开启，无需手动出牌）'"
+              @click="toggleAutoPlay"
+            >{{ autoPlay ? '自动·开' : '自动·关' }}</button>
+            <button
+              v-if="gameMode === 'remote' && phase !== 'lobby'"
               class="quit-match"
               aria-label="退出对局"
               title="退出对局"
@@ -600,6 +608,9 @@ function clearMobileSelection(event: PointerEvent) {
 
               <div v-if="roomId" class="room-panel">
                 <div class="room-code">房间码 <strong>{{ roomId }}</strong></div>
+                <p v-if="roomTimeLimit" class="room-limit-note">
+                  房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
+                </p>
                 <div class="room-seats">
                   <div v-for="(seat, index) in roomSeats" :key="index" class="room-seat" :class="{ occupied: !!seat }">
                     <span class="room-seat-no">{{ index + 1 }}</span>

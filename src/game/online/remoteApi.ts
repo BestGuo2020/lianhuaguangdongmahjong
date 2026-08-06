@@ -22,6 +22,7 @@ export interface RoomInfo {
   capacity: number
   status: 'lobby' | 'playing' | 'finished' | 'error' | 'closed'
   creatorSeat: number | null
+  timeLimitSeconds?: number
   seats: Array<RoomSeatState | null>
 }
 

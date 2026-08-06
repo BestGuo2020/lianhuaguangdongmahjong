@@ -28,8 +28,21 @@ import {
 
 const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
 const DEFAULT_AVATARS = ['lotus', 'ah-lok', 'shisan', 'young-master'].map((name) => `${AVATAR_BASE}${name}.svg`)
+
+// 服务端错误码 → 用户可读文案（未命中的回退到原始错误码）
+const REMOTE_ERROR_TEXT: Record<string, string> = {
+  ROOM_LIMIT_REACHED: '房间已满',   // 服务端房间数已达上限
+  ROOM_FULL: '房间已满',           // 加入房间座位已满
+}
+
+function remoteErrorText(code: string): string {
+  return REMOTE_ERROR_TEXT[code] ?? code
+}
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+
+// 自动打牌：开关后到自动出牌/过牌的间隔（毫秒）。留一点时间让摸牌动画/音效可读。
+const AUTO_PLAY_DELAY = 600
 
 // ─── 匿名身份与会话持久化（Phase 8 P1）：guestId / 昵称 / 对局会话 ──
 // 刷新 / 关浏览器后凭 localStorage 里的会话一键「继续对局」，对局中座位（AI 托管）可找回。
@@ -161,6 +174,11 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const creatorSeat = ref<number | null>(null)   // 服务端权威房主座位（轮询刷新，支持房主转移）
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
+  const roomTimeLimit = ref<number | null>(null)   // 房间限时（秒），静态提示「超时自动解散」
+  // 自动打牌：开关后每步（出牌/碰杠/抢杠提示）到达即自动处理，无需手动点击。
+  // 支持 URL 参数 ?auto=1 开启 —— 开 4 个窗口联机测试/观战时可免逐个设置。
+  const autoPlay = ref(typeof location !== 'undefined'
+    && new URLSearchParams(location.search).get('auto') === '1')
   const storedSession = ref<StoredSession | null>(readStoredSession())   // 上次未完成对局（继续对局入口）
   ensurePlayerId()   // 启动即生成匿名身份：战绩按 guestId 查，无需先输入昵称/进房
 
@@ -714,6 +732,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         if (!isUserTurn.value || !user.value?.hand.length) return
         userDiscard(user.value.hand.length - 1)
       })
+      // 自动打牌：可胡则胡，否则自动打出进张最多的牌（留一点动画/音效时间）
+      if (autoPlay.value) {
+        later(() => {
+          if (!autoPlay.value || !isUserTurn.value) return
+          if (userCanHu.value) userHu()
+          else userDiscard(autoPickDiscard())
+        }, AUTO_PLAY_DELAY)
+      }
       return
     }
     if (msg.kind === 'claim_request') {
@@ -727,6 +753,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       startCountdown(12, () => {
         if (actionPrompt.value?.type === 'claim') userPass()
       })
+      if (autoPlay.value) {
+        later(() => {
+          if (!autoPlay.value || actionPrompt.value?.type !== 'claim') return
+          userPass()
+        }, AUTO_PLAY_DELAY)
+      }
       return
     }
     // rob_kong_request
@@ -736,6 +768,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     startCountdown(12, () => {
       if (actionPrompt.value?.type === 'rob') userPass()
     })
+    if (autoPlay.value) {
+      later(() => {
+        if (!autoPlay.value || actionPrompt.value?.type !== 'rob') return
+        userPass()
+      }, AUTO_PLAY_DELAY)
+    }
   }
 
   // ── 瞬时事件（动画 / 播报 / 分数流水）─────────────────
@@ -1078,6 +1116,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       // 房主以服务端 creatorSeat 为准：创建者离房后轮询自动转移「开始对局」按钮
       creatorSeat.value = info.creatorSeat ?? null
       isCreator.value = creatorSeat.value != null && mySeat.value === creatorSeat.value
+      roomTimeLimit.value = info.timeLimitSeconds ?? null
     } catch {
       // 轮询失败静默，下次重试
     }
@@ -1089,12 +1128,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     try {
       const info = await createRoom(mode, capacity)
       isCreator.value = true
+      roomTimeLimit.value = info.timeLimitSeconds ?? null
       ensurePlayerId()
       // 创建者也要占座（签发 rejoinCode 供 WS 握手恢复座位）
       const joined = await joinRoom(info.roomId, nickname.value, playerId.value)
       await enterRoom(joined.roomId, joined.nickname, info.mode, joined.rejoinCode)
     } catch (error) {
-      sessionError.value = error instanceof Error ? error.message : '创建房间失败'
+      sessionError.value = error instanceof Error ? remoteErrorText(error.message) : '创建房间失败'
       sessionStatus.value = 'idle'
       throw error
     }
@@ -1109,7 +1149,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       isCreator.value = false
       await enterRoom(joined.roomId, joined.nickname, joined.rejoin ? matchType.value : 'east', joined.rejoinCode)
     } catch (error) {
-      sessionError.value = error instanceof Error ? error.message : '加入房间失败'
+      sessionError.value = error instanceof Error ? remoteErrorText(error.message) : '加入房间失败'
       sessionStatus.value = 'idle'
       throw error
     }
@@ -1220,6 +1260,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     creatorSeat.value = null
     isCreator.value = false
     roomSeats.value = []
+    roomTimeLimit.value = null
     sessionStatus.value = 'idle'
     wsStatus.value = 'idle'
     sessionError.value = ''
@@ -1249,6 +1290,32 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     clearCountdown()
     selectedIndex.value = -1
     send({ type: 'discard', handIndex: index })
+  }
+
+  // 自动打牌挑张：弃牌后听牌（可进张牌种）数最多者；无进张时退回末张。
+  function autoPickDiscard(): number {
+    const hand = user.value?.hand ?? []
+    if (!hand.length) return -1
+    const meldCount = structuralMeldCount(user.value)
+    let bestIndex = hand.length - 1
+    let bestWaits = -1
+    const seen = new Set()
+    for (let i = 0; i < hand.length; i += 1) {
+      const tile = hand[i]
+      if (seen.has(tile)) continue
+      seen.add(tile)
+      const after = hand.filter((_, j) => j !== i)
+      const waits = waitingTiles(after, meldCount).length
+      if (waits > bestWaits) {
+        bestWaits = waits
+        bestIndex = i
+      }
+    }
+    return bestIndex
+  }
+
+  function toggleAutoPlay() {
+    autoPlay.value = !autoPlay.value
   }
 
   function userPass() {
@@ -1328,8 +1395,31 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     }
   }
 
-  async function returnToLobby() {
-    await leaveRemoteRoom()
+  function returnToLobby() {
+    // 对局结束后回房间大厅：保留座位与 WS 连接（不释放座位、不散房），
+    // 服务端房间仍在（finished），可再准备开局；房主解散用「关闭房间」。
+    // 对局中返回大厅请用「退出对局」（leaveRemoteRoom）。
+    if (!matchFinished.value) return
+    cancelWinSequence()
+    clearCountdown()
+    matchFinished.value = false
+    result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
+    waitingNextRound.value = false
+    lastDiscard.value = null
+    actionPrompt.value = null
+    announcement.value = null
+    tableActionEvent.value = null
+    scoreFlowEvent.value = null
+    selectedIndex.value = -1
+    currentPlayer.value = -1
+    wallCount.value = 0
+    players.splice(0, players.length)
+    phase.value = 'lobby'
+    void refreshRoom()
   }
 
   function startGame() {
@@ -1354,9 +1444,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   return {
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
-    playerId, isCreator, creatorSeat, roomSeats, waitingNextRound,
+    playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, waitingNextRound,
     signalQuality,   // 0-3 信号质量（越大连接越好）
     storedSession,   // 上次未完成对局（「继续对局」入口；null = 无）
+    autoPlay, toggleAutoPlay,   // 自动打牌开关（多窗口联机测试/观战）
     remoteActions: {
       createRoom: createRemoteRoom,
       joinRoom: joinRemoteRoom,

@@ -50,6 +50,13 @@ function json(body: unknown) {
   })
 }
 
+function errorJson(code: string, status = 409) {
+  return new Response(JSON.stringify({ detail: { code } }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   const store: Record<string, string> = {}
@@ -248,6 +255,46 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     })
     game.userGang('east')
     expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'gang', kind: 'concealed', tile: 'east' }))
+  })
+})
+
+describe('useRemoteGame 自动打牌', () => {
+  it('开启后 turn_request 到达自动弃牌（无需手动点）', async () => {
+    const game = await connectGame()
+    game.toggleAutoPlay()
+    expect(game.autoPlay.value).toBe(true)
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'turn_request',
+      ctx: { hand: SERVER_PLAYERS[2].hand, melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false },
+    })
+    expect(game.phase.value).toBe('discard')
+    await vi.advanceTimersByTimeAsync(1000)   // 超过 AUTO_PLAY_DELAY(600ms)
+    expect(mockSocket!.sent.filter((s) => s.includes('"discard"')).length).toBe(1)
+  })
+
+  it('关闭时保持手动：turn_request 不自动出牌', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'turn_request',
+      ctx: { hand: SERVER_PLAYERS[2].hand, melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false },
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockSocket!.sent.filter((s) => s.includes('"discard"')).length).toBe(0)
+  })
+
+  it('开启后 claim_request 到达自动过牌', async () => {
+    const game = await connectGame()
+    game.toggleAutoPlay()
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'claim_request',
+      ctx: { hand: [], canGang: true, tile: 'm5', from: 3 },
+    })
+    expect(game.phase.value).toBe('prompt')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'pass' }))
   })
 })
 
@@ -669,6 +716,16 @@ describe('useRemoteGame 房间会话（Phase 8）', () => {
     expect(game.isCreator.value).toBe(true)
   })
 
+  it('创建房间遇服务端房间数已满（第 5 个）→ 提示「房间已满」', async () => {
+    const game = useRemoteGame()
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(errorJson('ROOM_LIMIT_REACHED'))
+    await expect(game.remoteActions.createRoom('east', 4)).rejects.toThrow()
+    expect(game.sessionError.value).toBe('房间已满')
+    expect(game.sessionStatus.value).toBe('idle')
+    expect(game.roomId.value).toBe('')
+  })
+
   it('关闭房间：DELETE 房间后清理本地会话回大厅', async () => {
     const game = await connectGame()
     await game.remoteActions.closeRoom()
@@ -685,6 +742,29 @@ describe('useRemoteGame 房间会话（Phase 8）', () => {
     expect(game.roomId.value).toBe('')
     expect(game.sessionStatus.value).toBe('idle')
     expect(game.players.length).toBe(0)
+  })
+
+  it('对局结束返回大厅：保留座位与连接回房间面板，不释放座位', async () => {
+    const game = await connectGame()
+    mockSocket!.receive({ kind: 'match_finished', roomId: 'ABC123', mode: 'east', finalScores: [] })
+    expect(game.phase.value).toBe('finished')
+    expect(game.matchFinished.value).toBe(true)
+
+    game.returnToLobby()
+
+    // 回房间面板：清除对局展示，但会话/座位/连接全部保留
+    expect(game.phase.value).toBe('lobby')
+    expect(game.matchFinished.value).toBe(false)
+    expect(game.players.length).toBe(0)
+    expect(game.roomId.value).toBe('ABC123')
+    expect(game.mySeat.value).toBe(2)
+    expect(game.rejoinCode.value).toBe('AAAA-BBBB')
+    expect(game.wsStatus.value).toBe('connected')
+    // 未发 leave（REST），座位未释放
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    const leaveCalls = fetchMock.mock.calls.filter(([input]: [unknown]) =>
+      String(input).includes('/api/rooms/ABC123/leave'))
+    expect(leaveCalls.length).toBe(0)
   })
 
   it('对局进行中不轮询房间：phase ≠ lobby 时 refreshRoom 跳过请求', async () => {
