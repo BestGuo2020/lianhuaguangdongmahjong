@@ -669,7 +669,11 @@ function clearMobileSelection(event: PointerEvent) {
                 <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }">
                   <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
                   <img :src="entry.avatar" :alt="`${entry.name}头像`" />
-                  <span>{{ entry.name }}</span>
+                  <span class="player-line">
+                    {{ entry.name }}
+                    <i v-if="entry.playerIndex === dealer" class="mark dealer">庄</i>
+                    <i v-if="result.draw && result.tenpai?.includes(entry.playerIndex)" class="mark tenpai">听</i>
+                  </span>
                   <em :class="{ positive: entry.delta > 0, negative: entry.delta < 0 }">{{ entry.delta > 0 ? '+' : '' }}{{ entry.delta }}</em>
                   <b>{{ entry.score }}</b>
                 </article>

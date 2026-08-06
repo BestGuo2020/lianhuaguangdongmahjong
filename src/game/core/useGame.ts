@@ -58,7 +58,9 @@ type RoundResult = Record<string, any>
 export function advanceMatchState({ round, dealer, honba, matchType, result, playerCount = 4 }: {
   round: number; dealer: number; honba: number; matchType: MatchType; result: RoundResult; scores?: number[]; playerCount?: number
 }) {
-  const dealerKeepsSeat = !result.draw && result.winnerIndex === dealer
+  // 连庄：胡牌且赢家为庄家；流局且庄家听牌。否则下庄。
+  const dealerKeepsSeat = (!result.draw && result.winnerIndex === dealer)
+    || (result.draw && result.dealerTenpai)
   const next = dealerKeepsSeat
     ? { round, dealer, honba: honba + 1 }
     : { round: round + 1, dealer: (dealer + 1) % playerCount, honba: 0 }
@@ -935,7 +937,16 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     revealHands.value = true
     winningPlayerIndex.value = -1
     const scoresBefore = players.map((player) => player.score)
-    result.value = makeRoundResult({ draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [] }, scoresBefore)
+    // 流局：各家是否听牌（连庄判断 + 结算展示；不付点数）
+    const tenpai = players
+      .map((player, playerIndex) => ({ playerIndex, waits: waitingTiles(player.hand, structuralMeldCount(player)) }))
+      .filter((item) => item.waits.length > 0)
+      .map((item) => item.playerIndex)
+    result.value = makeRoundResult({
+      draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [],
+      tenpai,
+      dealerTenpai: tenpai.includes(dealer.value),
+    }, scoresBefore)
   }
 
   function makeRoundResult(base, scoresBefore) {

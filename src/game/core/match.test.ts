@@ -29,4 +29,16 @@ describe('场次推进', () => {
     expect(advanceMatchState(eastFour)).toMatchObject({ round: 5, dealer: 0, finished: true })
     expect(advanceMatchState({ ...eastFour, matchType: 'hanchan' })).toMatchObject({ round: 5, dealer: 0, finished: false })
   })
+
+  it('流局且庄家听牌 → 连庄（round/dealer 不变，honba+1）', () => {
+    expect(advanceMatchState({ ...base, result: { draw: true, dealerTenpai: true } })).toEqual({
+      round: 1, dealer: 0, honba: 1, finished: false,
+    })
+  })
+
+  it('流局且庄家未听牌 → 下庄（庄位轮转）', () => {
+    expect(advanceMatchState({ ...base, result: { draw: true, dealerTenpai: false } })).toEqual({
+      round: 2, dealer: 1, honba: 0, finished: false,
+    })
+  })
 })

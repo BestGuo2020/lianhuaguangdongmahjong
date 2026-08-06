@@ -366,6 +366,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       robbedKongPlayerIndex: raw.robbedKongPlayerIndex != null && raw.robbedKongPlayerIndex >= 0
         ? toLocal(raw.robbedKongPlayerIndex)
         : -1,
+      // 流局听牌名单：服务端座位 → 本地索引（结算页按 scoreChanges 展示）
+      tenpai: (raw.tenpai ?? []).map((seat: number) => toLocal(seat)),
       scoreChanges: (raw.scoreChanges ?? []).map((change: any) => ({
         ...change,
         // avatar 先按服务端座位补默认，再映射 playerIndex
