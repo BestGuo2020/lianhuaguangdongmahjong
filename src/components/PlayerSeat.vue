@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import MahjongTile from './MahjongTile.vue'
+import { defaultAvatarForSeat } from '../game/core/avatar'
 import type { GamePlayer } from '../game/core/types'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   player: GamePlayer
   active?: boolean
   actionActive?: boolean
@@ -13,13 +15,20 @@ withDefaults(defineProps<{
   renderHand?: boolean
   renderMelds?: boolean
 }>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true })
+
+// 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
+const avatarSrc = ref(props.player.avatar)
+watch(() => props.player.avatar, (value) => { avatarSrc.value = value })
+function onAvatarError() {
+  avatarSrc.value = defaultAvatarForSeat(props.player.seat)
+}
 </script>
 
 <template>
   <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive }]">
     <div class="avatar-wrap">
       <span v-if="dealer" class="dealer-badge">庄</span>
-      <img class="avatar" :src="player.avatar" :alt="`${player.name}头像`" />
+      <img class="avatar" :src="avatarSrc" :alt="`${player.name}头像`" @error="onAvatarError" />
       <div class="player-info">
         <strong>{{ player.name }}</strong>
         <span>{{ player.score }}</span>

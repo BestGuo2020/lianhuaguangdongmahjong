@@ -12,6 +12,7 @@ import { getPlayerStats, getPlayerStatsById, getRoomMeta, reportPlayer as report
 import type { PlayerStats, RoomMeta } from './game/online/remoteApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
+import { defaultAvatarForSeat } from './game/core/avatar'
 import type { MatchType, TileType } from './game/core/types'
 
 const rulesOpen = ref(false)
@@ -186,6 +187,14 @@ async function copyRoomCode() {
     copied.value = true
     window.setTimeout(() => { copied.value = false }, 1600)
   }
+}
+
+// 外部头像（联机真人）加载失败 → 回退本地座位默认头像。
+// 结算/排名条目带 fallbackAvatar（结算页按服务端座位预先算好）或 seat（牌桌座位）。
+function onAvatarError(entry?: { avatar?: string; seat?: number; fallbackAvatar?: string }) {
+  if (!entry) return
+  const target = entry.fallbackAvatar ?? (entry.seat != null ? defaultAvatarForSeat(entry.seat) : '')
+  if (target && entry.avatar !== target) entry.avatar = target
 }
 
 function startGameWithAudio() {
@@ -556,7 +565,7 @@ function clearMobileSelection(event: PointerEvent) {
           <section class="user-area">
             <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }">
               <span v-if="dealer === 0" class="dealer-badge">庄</span>
-              <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" />
+              <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
               <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
             </div>
             <Transition name="score-flow">
@@ -769,7 +778,7 @@ function clearMobileSelection(event: PointerEvent) {
               <div class="round-rankings">
                 <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }">
                   <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
-                  <img :src="entry.avatar" :alt="`${entry.name}头像`" />
+                  <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
                   <span class="player-line">
                     {{ entry.name }}
                     <i v-if="entry.playerIndex === dealer" class="mark dealer">庄</i>
@@ -797,7 +806,7 @@ function clearMobileSelection(event: PointerEvent) {
               <div class="final-rankings">
                 <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]">
                   <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
-                  <img :src="entry.avatar" :alt="`${entry.name}头像`" />
+                  <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
                   <div class="final-name">
                     <strong>{{ entry.name }}</strong>
                     <small v-if="entry.playerIndex === 0">你</small>

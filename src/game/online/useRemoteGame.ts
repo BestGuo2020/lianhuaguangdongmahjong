@@ -14,6 +14,7 @@ import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vu
 import { API_BASE, closeRoom, createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom } from './remoteApi'
 import type { RoomSeatState } from './remoteApi'
 import type { ActionPrompt } from '../core/playerController'
+import { defaultAvatarForSeat } from '../core/avatar'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
 import { TILE_TYPES, tileAudioFile, tileName } from '../core/tiles'
 import type { GamePlayer, MatchType, Meld, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
@@ -25,9 +26,6 @@ import {
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
 } from '../core/winEffect'
-
-const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
-const DEFAULT_AVATARS = ['lotus', 'ah-lok', 'shisan', 'young-master'].map((name) => `${AVATAR_BASE}${name}.svg`)
 
 // 服务端错误码 → 用户可读文案（未命中的回退到原始错误码）
 const REMOTE_ERROR_TEXT: Record<string, string> = {
@@ -161,10 +159,6 @@ type ServerMessage =
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
-}
-
-function defaultAvatarForSeat(serverSeat: number): string {
-  return DEFAULT_AVATARS[((serverSeat % 4) + 4) % 4]
 }
 
 export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseRemoteGameOptions = {}) {
@@ -399,8 +393,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       tenpai: (raw.tenpai ?? []).map((seat: number) => toLocal(seat)),
       scoreChanges: (raw.scoreChanges ?? []).map((change: any) => ({
         ...change,
-        // avatar 先按服务端座位补默认，再映射 playerIndex
+        // avatar 先按服务端座位补默认，再映射 playerIndex；
+        // fallbackAvatar 供外部头像加载失败时回退（按服务端座位，与牌桌视角一致）
         avatar: change.avatar || defaultAvatarForSeat(change.playerIndex),
+        fallbackAvatar: defaultAvatarForSeat(change.playerIndex),
         playerIndex: toLocal(change.playerIndex),
       })),
     }
