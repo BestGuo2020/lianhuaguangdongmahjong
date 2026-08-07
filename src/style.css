@@ -960,10 +960,14 @@ button { font: inherit; }
 .remote-join { display: flex; gap: 8px; }
 .remote-join input { flex: 1; padding: 11px 14px; border: 1px solid rgba(211,174,87,.27); border-radius: 5px; background: rgba(3,18,13,.72); color: #f1e7cd; font-size: 14px; letter-spacing: .2em; text-align: center; outline: none; }
 .remote-join-btn { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
+.room-meta-note { margin: 0; color: #9aa88f; font-size: 12px; letter-spacing: .05em; }
+.room-meta-note b { color: #ffe6a5; font-size: 13px; }
 .session-error { margin: 0; color: #e0a06a; font-size: 13px; }
 .room-panel { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; padding: 14px; border: 1px solid rgba(211,174,87,.3); border-radius: 9px; background: rgba(3,18,13,.6); }
-.room-code { color: #d0c39e; font-size: 13px; letter-spacing: .1em; }
+.room-code { color: #d0c39e; font-size: 13px; letter-spacing: .1em; cursor: pointer; user-select: none; }
+.room-code:hover strong { color: #ffd97a; }
 .room-code strong { margin-left: 6px; color: #ffe6a5; font: 900 26px "Noto Serif SC", serif; letter-spacing: .3em; }
+.room-code-copied { margin-left: 8px; padding: 1px 7px; border: 1px solid rgba(154,201,126,.5); border-radius: 8px; background: rgba(154,201,126,.12); color: #9ac97e; font-size: 11px; letter-spacing: .05em; }
 .room-limit-note { margin: 0; color: #9aa88f; font-size: 12px; }
 .room-seats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .room-seat { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(211,174,87,.18); border-radius: 6px; background: rgba(2,12,9,.6); color: #5f7368; font-size: 12px; }
@@ -974,9 +978,11 @@ button { font: inherit; }
 .room-seat em.unready { color: #b8935a; }
 .room-owner-actions { display: flex; flex-direction: column; gap: 10px; }
 .room-owner-actions button.secondary { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
+.room-owner-actions button.secondary:disabled { filter: grayscale(.6); opacity: .55; cursor: not-allowed; }
 .room-start:disabled { filter: grayscale(.6); opacity: .5; cursor: not-allowed; }
-.room-leave { align-self: flex-start; }
-.room-close { align-self: flex-start; color: #d0896a; }
+.room-actions-row { display: flex; align-items: center; gap: 18px; }
+.room-close { color: #d0896a; }
+.room-leave:disabled, .room-close:disabled { opacity: .5; cursor: not-allowed; }
 .autoplay-toggle { padding: 7px 10px; border: 1px solid rgba(213,184,112,.4); border-radius: 5px; background: rgba(8,28,20,.88); color: #9aa88f; font-size: 12px; font-weight: 700; cursor: pointer; }
 .autoplay-toggle.active { border-color: rgba(213,184,112,.8); background: rgba(213,184,112,.18); color: #ffe6a5; }
 .autoplay-toggle:hover { border-color: rgba(213,184,112,.7); }

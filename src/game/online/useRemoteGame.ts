@@ -1227,11 +1227,16 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   async function toggleReady() {
     if (!roomId.value || mySeat.value < 0) return
+    if (sessionStatus.value === 'readying') return   // 防抖：请求进行中禁止重复点击
+    sessionStatus.value = 'readying'
     try {
       await readyRoom(roomId.value, mySeat.value, rejoinCode.value)
       await refreshRoom()
     } catch (error) {
       sessionError.value = error instanceof Error ? error.message : '准备失败'
+    } finally {
+      // 房间仍在则回到 connected；已因离开/关闭被 resetAll 清为 idle 时保持不变
+      if (roomId.value) sessionStatus.value = 'connected'
     }
   }
 
@@ -1241,6 +1246,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       await startRoom(roomId.value)
     } catch (error) {
       sessionError.value = error instanceof Error ? error.message : '开局失败'
+      throw error   // 让 UI 复位「正在打扫房间」按钮态
     }
   }
 

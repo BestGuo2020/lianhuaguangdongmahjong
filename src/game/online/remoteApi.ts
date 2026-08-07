@@ -97,6 +97,16 @@ export function getRoom(roomId: string): Promise<RoomInfo> {
   return request<RoomInfo>(`/api/rooms/${encodeURIComponent(roomId)}`)
 }
 
+export interface RoomMeta {
+  active: number   // 当前在册房间数
+  max: number      // 服务器房间上限
+}
+
+/** 服务器房间容量（大厅展示「剩余房间」用）。 */
+export function getRoomMeta(): Promise<RoomMeta> {
+  return request<RoomMeta>('/api/rooms/meta')
+}
+
 export function joinRoom(roomId: string, nickname: string, playerId?: string): Promise<JoinResult> {
   return request<JoinResult>(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
     method: 'POST',

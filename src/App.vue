@@ -8,8 +8,8 @@ import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { getPlayerStats, getPlayerStatsById, reportPlayer as reportPlayerApi } from './game/online/remoteApi'
-import type { PlayerStats } from './game/online/remoteApi'
+import { getPlayerStats, getPlayerStatsById, getRoomMeta, reportPlayer as reportPlayerApi } from './game/online/remoteApi'
+import type { PlayerStats, RoomMeta } from './game/online/remoteApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
 import type { MatchType, TileType } from './game/core/types'
@@ -65,6 +65,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (roomMetaTimer != null) window.clearInterval(roomMetaTimer)
   window.removeEventListener('resize', updateOrientationGate)
   window.removeEventListener('orientationchange', updateOrientationGate)
   screen.orientation?.removeEventListener?.('change', updateOrientationGate)
@@ -123,16 +124,68 @@ const allOccupiedReady = computed(() => {
 const signalText = computed(() =>
   ({ 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' })[signalQuality.value] ?? '')
 
+// 大厅房间容量：轮询 GET /api/rooms/meta，剩余房间 = max - active（进房后停止）
+const roomMeta = ref<RoomMeta | null>(null)
+let roomMetaTimer: number | null = null
+async function refreshRoomMeta() {
+  try {
+    roomMeta.value = await getRoomMeta()
+  } catch {
+    // 网络抖动静默：大厅不因容量查询失败而报错
+  }
+}
+watch([gameMode, roomId], ([mode, id]) => {
+  if (mode === 'remote' && !id) {
+    void refreshRoomMeta()
+    if (roomMetaTimer == null) {
+      roomMetaTimer = window.setInterval(refreshRoomMeta, 5000)
+    }
+  } else if (roomMetaTimer != null) {
+    window.clearInterval(roomMetaTimer)
+    roomMetaTimer = null
+  }
+}, { immediate: true })
+
 async function createRemoteRoom() {
+  if (roomId.value) return   // 已在房间：禁重复建房（按钮禁用，回车路径同样拦截）
   if (!nicknameInput.value.trim()) return
   nickname.value = nicknameInput.value.trim()
   await remoteActions.createRoom(selectedMatch.value, 4)
 }
 
 async function joinRemoteRoom() {
+  if (roomId.value) return   // 已在房间：禁重复加入
   if (!nicknameInput.value.trim() || !joinCode.value.trim()) return
   nickname.value = nicknameInput.value.trim()
   await remoteActions.joinRoom(joinCode.value)
+}
+
+// 房间码一键复制：优先 Clipboard API；局域网 http 非安全上下文回退隐藏 textarea + execCommand
+const copied = ref(false)
+async function copyRoomCode() {
+  const code = roomId.value
+  if (!code) return
+  let ok = false
+  if (window.isSecureContext && navigator.clipboard) {
+    try { await navigator.clipboard.writeText(code); ok = true } catch { ok = false }
+  }
+  if (!ok) {
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = code
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.top = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+    } catch { ok = false }
+  }
+  if (ok) {
+    copied.value = true
+    window.setTimeout(() => { copied.value = false }, 1600)
+  }
 }
 
 function startGameWithAudio() {
@@ -141,15 +194,49 @@ function startGameWithAudio() {
   startGame(selectedMatch.value)
 }
 
+const matchStarting = ref(false)   // 「正在打扫房间」：房主点击开始到开局快照落地之间的过渡态
 async function startRemoteMatch() {
-  startBgm()
-  await remoteActions.startMatch()
+  matchStarting.value = true
+  try {
+    // 不在点击瞬间播 BGM：等 WS 开局快照（phase 离开 lobby）进入房间后再播
+    await remoteActions.startMatch()
+  } catch {
+    // 开局失败（composable 已写 sessionError）：复位按钮态供房主重试
+    matchStarting.value = false
+  }
 }
+// 远程开局（phase 离开 lobby）才播 BGM，与本地 startGameWithAudio 的进桌时机对齐
+watch(phase, (value) => {
+  if (gameMode.value === 'remote' && value !== 'lobby') startBgm()
+  matchStarting.value = false
+})
 
 function quitMatch() {
   // 中途退出：释放座位 + 关闭 WS，回大厅（服务端该座位转 AI 代打剩余对局）
   if (window.confirm('退出对局将放弃本场对局（座位由 AI 代打），确定退出？')) {
     void remoteActions.leaveRoom()
+  }
+}
+
+// 房间面板：离开 / 关闭需要 in-flight 提示，且进行中禁止重复操作
+const leaving = ref(false)
+const closing = ref(false)
+async function leaveRoom() {
+  if (leaving.value || closing.value) return
+  leaving.value = true
+  try {
+    await remoteActions.leaveRoom()
+  } finally {
+    leaving.value = false
+  }
+}
+async function closeRoom() {
+  if (leaving.value || closing.value) return
+  closing.value = true
+  try {
+    await remoteActions.closeRoom()
+  } finally {
+    closing.value = false
   }
 }
 
@@ -585,17 +672,20 @@ function clearMobileSelection(event: PointerEvent) {
                   @keyup.enter="joinCode ? joinRemoteRoom() : createRemoteRoom()"
                 />
               </label>
+              <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
+                剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
+              </p>
               <div v-if="!roomId" class="match-selector" role="radiogroup" aria-label="场次选择">
                 <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="selectedMatch = 'east'"><b>东风场</b><span>一场4局（不含连庄）</span></button>
                 <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="selectedMatch = 'hanchan'"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
               </div>
               <div class="remote-actions">
-                <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="createRemoteRoom">
+                <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating' || !!roomId" @click="createRemoteRoom">
                   {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
                 </button>
                 <div class="remote-join">
                   <input v-model="joinCode" maxlength="6" placeholder="6 位房间码" @keyup.enter="joinRemoteRoom()" />
-                  <button class="remote-join-btn" :disabled="!nicknameInput.trim() || !joinCode.trim() || sessionStatus === 'joining'" @click="joinRemoteRoom">
+                  <button class="remote-join-btn" :disabled="!nicknameInput.trim() || !joinCode.trim() || sessionStatus === 'joining' || !!roomId" @click="joinRemoteRoom">
                     {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
                   </button>
                 </div>
@@ -603,7 +693,9 @@ function clearMobileSelection(event: PointerEvent) {
               <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
 
               <div v-if="roomId" class="room-panel">
-                <div class="room-code">房间码 <strong>{{ roomId }}</strong></div>
+                <div class="room-code" title="点击复制房间码" role="button" tabindex="0" @click="copyRoomCode" @keyup.enter="copyRoomCode">
+                  房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
+                </div>
                 <p v-if="roomTimeLimit" class="room-limit-note">
                   房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
                 </p>
@@ -616,16 +708,18 @@ function clearMobileSelection(event: PointerEvent) {
                   </div>
                 </div>
                 <div class="room-owner-actions">
-                  <button v-if="mySeat >= 0" class="secondary" @click="remoteActions.toggleReady()">准备 / 取消准备</button>
+                  <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="remoteActions.toggleReady()">准备 / 取消准备</button>
                   <button
                     v-if="isCreator"
                     class="start-button room-start"
-                    :disabled="!allOccupiedReady"
+                    :disabled="!allOccupiedReady || matchStarting"
                     @click="startRemoteMatch"
-                  ><b>开始对局</b><span>{{ allOccupiedReady ? '全员已准备' : '等待全员准备' }}</span></button>
+                  ><b>开始对局</b><span>{{ matchStarting ? '正在打扫房间' : (allOccupiedReady ? '全员已准备' : '等待全员准备') }}</span></button>
                 </div>
-                <button class="text-button room-leave" @click="remoteActions.leaveRoom()">离开房间</button>
-                <button v-if="isCreator" class="text-button room-close" @click="remoteActions.closeRoom()">关闭房间</button>
+                <div class="room-actions-row">
+                  <button class="text-button room-leave" :disabled="leaving || closing" @click="leaveRoom">{{ leaving ? '离开中…' : '离开房间' }}</button>
+                  <button v-if="isCreator" class="text-button room-close" :disabled="leaving || closing" @click="closeRoom">{{ closing ? '关闭中…' : '关闭房间' }}</button>
+                </div>
               </div>
             </div>
           </template>
