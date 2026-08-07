@@ -51,7 +51,10 @@ let diceStartedAt = 0
 const staticResources = []
 const dynamicResources = []
 const faceMaterials = new Map()
-const PLAY_AREA_OFFSET_Z = -.5
+// 中控台与墨玉台面的 Z 中心（桌身中心，保持不变）
+const PLAY_AREA_OFFSET_Z = -1.65
+// 牌层（牌墙/牌河/手牌/副露/骰子）的 Z 中心：单独向本家（+z）偏移，靠近玩家侧
+const TILE_LAYER_Z = -1.0
 const DICE_SIZE = .5
 const DICE_LANDING_Y = .62
 const BASE_EXPOSURE = .92
@@ -167,7 +170,7 @@ function animateDice(time) {
       THREE.MathUtils.lerp(5.2, .2, travel) + side * .1,
     )
     die.position.x = throwPoint.x
-    die.position.z = throwPoint.z
+    die.position.z = throwPoint.z + TILE_LAYER_Z
     const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
     const bounceProgress = Math.max(0, (progress - .82) / .18)
     const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0
@@ -511,22 +514,23 @@ function addTable() {
   scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .34, .95, 6, .072))
 
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
-  addStaticMesh(new RoundedBoxGeometry(21.8, .54, 17.3, 3, .18), darkJade, 0, -.37, -1.65)
-  addStaticMesh(new RoundedBoxGeometry(21.46, .22, 16.96, 3, .13), gold, 0, -.14, -1.65)
-  addStaticMesh(new RoundedBoxGeometry(21.04, .18, 16.54, 3, .12), jade, 0, -.02, -1.62)
+  // 几何正方形：宽 = 深 = 21.8，桌身中心保持在 z=-1.65。
+  addStaticMesh(new RoundedBoxGeometry(21.8, .54, 21.8, 3, .18), darkJade, 0, -.37, -1.65)
+  addStaticMesh(new RoundedBoxGeometry(21.46, .22, 21.46, 3, .13), gold, 0, -.14, -1.65)
+  addStaticMesh(new RoundedBoxGeometry(21.04, .18, 21.04, 3, .12), jade, 0, -.02, -1.62)
 
   const railY = .1
-  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, -9.68)
-  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, 6.45)
-  addStaticMesh(new THREE.BoxGeometry(.105, .075, 16.02), goldHighlight, -10.22, railY, -1.62)
-  addStaticMesh(new THREE.BoxGeometry(.105, .075, 16.02), goldHighlight, 10.22, railY, -1.62)
-  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, -9.38)
-  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, 6.16)
-  addStaticMesh(new THREE.BoxGeometry(.045, .05, 15.5), gold, -9.92, .105, -1.61)
-  addStaticMesh(new THREE.BoxGeometry(.045, .05, 15.5), gold, 9.92, .105, -1.61)
+  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, -11.87)
+  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, 8.57)
+  addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, -10.22, railY, -1.65)
+  addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, 10.22, railY, -1.65)
+  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, -11.57)
+  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, 8.27)
+  addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, -9.92, .105, -1.65)
+  addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, 9.92, .105, -1.65)
 
   const cornerGeometry = own(new THREE.CylinderGeometry(.24, .3, .1, 12))
-  ;[[-9.93, -9.4], [9.93, -9.4], [-9.93, 6.18], [9.93, 6.18]].forEach(([x, z]) => {
+  ;[[-9.93, -11.59], [9.93, -11.59], [-9.93, 8.29], [9.93, 8.29]].forEach(([x, z]) => {
     const stud = addStaticMesh(cornerGeometry.clone(), goldHighlight, x, .16, z)
     stud.rotation.y = Math.PI / 4
   })
@@ -708,6 +712,30 @@ function addConcealedHand(playerIndex) {
   }, 0)
   const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
   const dealThisHand = props.dealAnimation.playerIndex === playerIndex
+  // 副露带逼近手牌（半个牌宽内）→ 手牌让位到副露带外侧；否则手牌保持居中。
+  // 对家/左右三家统一此规则（本家不在此函数内处理）。meldClear = 手牌 index 0 的让位起点。
+  const tileHalf = .34
+  let meldClear = null
+  if (melds.length) {
+    if (position === 'top') {
+      const handNear = -(arrangedTotal - 1) / 2 * gap
+      if (-9 + exposedSpan + tileHalf >= handNear - tileHalf) {
+        meldClear = -9 + exposedSpan + .62
+      }
+    } else if (position === 'right') {
+      const handNear = -(arrangedTotal - 1) / 2 * gap + (props.revealHands ? 0 : -1.15)
+      if (-6.1 + exposedSpan + tileHalf >= handNear - tileHalf) {
+        meldClear = -6.1 + exposedSpan + .62
+      }
+    } else if (position === 'left') {
+      const handNear = (arrangedTotal - 1) / 2 * gap
+      if (6.1 - exposedSpan - tileHalf <= handNear + tileHalf) {
+        // 副露在左家手牌上端：手牌整体下移，index 0 起点 = 副露下缘下方 - 手牌跨度
+        meldClear = 6.1 - exposedSpan - .62 - (arrangedTotal - 1) * gap
+      }
+    }
+  }
+
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
     const face = props.revealHands ? revealedHand[faceIndex] : null
@@ -716,43 +744,48 @@ function addConcealedHand(playerIndex) {
     let z
     let rotationY
     if (position === 'top') {
-      if (layoutDrawnTileIndex >= 0 && melds.length) {
+      if (meldClear != null && layoutDrawnTileIndex >= 0) {
         const slot = index === layoutDrawnTileIndex ? 0 : index + 1
-        x = -9 + exposedSpan + .62 + slot * gap + (index === layoutDrawnTileIndex ? 0 : drawnGap)
+        x = meldClear + slot * gap + (index === layoutDrawnTileIndex ? 0 : drawnGap)
+      } else if (meldClear != null) {
+        x = meldClear + index * gap
       } else if (index === layoutDrawnTileIndex) {
         x = -(arrangedTotal - 1) / 2 * gap - gap - drawnGap
       } else {
-        x = melds.length
-          ? -9 + exposedSpan + .62 + index * gap
-          : (index - (arrangedTotal - 1) / 2) * gap
+        x = (index - (arrangedTotal - 1) / 2) * gap
       }
       // 对家固定使用远端后场，避免中后局牌河向后扩展时覆盖暗牌。
-      z = -7.75
+      // 对家手牌整体向后（远离本家）移一个牌深（0.94）。
+      z = -8.69
       rotationY = props.revealHands ? Math.PI : 0
     } else {
       rotationY = props.revealHands
         ? (position === 'left' ? -Math.PI / 2 : Math.PI / 2)
         : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
-      const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
-      if (index === layoutDrawnTileIndex) {
-        z = position === 'right'
-          ? -(arrangedTotal - 1) / 2 * gap - gap - drawnGap
-          : (arrangedTotal - 1) / 2 * gap + gap + drawnGap
-      } else {
-        // 左右两家的副露使用独立轨道；暗手始终保持居中，避免副露时整排突然跳位。
-        z = centeredZ
-      }
-      // 下家的暗手沿桌边向上家方向收拢；明牌结算与独立副露轨道保持原位。
-      const concealedHandShift = position === 'right' && !props.revealHands ? -1.15 : 0
       x = position === 'left' ? -9.15 : 9.15
-      z += concealedHandShift
+      if (meldClear != null) {
+        // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露
+        z = meldClear + index * gap + (index === layoutDrawnTileIndex ? drawnGap : 0)
+      } else {
+        const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
+        if (index === layoutDrawnTileIndex) {
+          z = position === 'right'
+            ? -(arrangedTotal - 1) / 2 * gap - gap - drawnGap
+            : (arrangedTotal - 1) / 2 * gap + gap + drawnGap
+        } else {
+          z = centeredZ
+        }
+        // 下家的暗手沿桌边向上家方向收拢；明牌结算与独立副露轨道保持原位。
+        const concealedHandShift = position === 'right' && !props.revealHands ? -1.15 : 0
+        z += concealedHandShift
+      }
     }
-    const pos = new THREE.Vector3(x, tileY, z + PLAY_AREA_OFFSET_Z)
+    const pos = new THREE.Vector3(x, tileY, z + TILE_LAYER_Z)
     // 暗手为背面朝玩家的立牌：makeHiddenTile 内部 body 绕 X 转 -90°，合批时折进实例矩阵。
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
     if (dealThisHand && index >= animatedFromIndex) {
-      const origin = new THREE.Vector3(0, 3.4, PLAY_AREA_OFFSET_Z + .5)
+      const origin = new THREE.Vector3(0, 3.4, TILE_LAYER_Z + .5)
       const inst = addTableTile(pos, quat, face, 1, origin)
       dealTweens.push({
         baseIndex: inst.baseIndex,
@@ -786,7 +819,7 @@ function addWinningDisplayTile() {
   const layout = winDisplayLayout(props.winPresentation.winnerIndex)
   const group = new THREE.Group()
   const tile = makeFaceTile(props.winPresentation.tile)
-  tile.position.set(layout.x, layout.y, layout.z + PLAY_AREA_OFFSET_Z)
+  tile.position.set(layout.x, layout.y, layout.z + TILE_LAYER_Z)
   tile.rotation.y = layout.rotation
   group.add(tile)
   scene.add(group)
@@ -802,21 +835,25 @@ function robbedKongSourceTransform(effect) {
     const meld = melds[meldIndex]
     const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
+    const relativeSource = ['peng', 'gang'].includes(meld.type) && Number.isInteger(meld.from)
+      ? (meld.from - playerIndex + 4) % 4
+      : -1
     let sourcePlacement = null
     laidTiles.forEach((_, tileIndex) => {
       const pointsToSource = tileIndex === sourceTileIndex
       const tileSpan = pointsToSource ? 1.025 : .725
       const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const sourceRot = pointsToSource ? sourceTileRotationOffset(relativeSource) : 0
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
         playerIndex,
-        pointsToSource,
+        sourceRot !== 0,  // 仅横摆的来源牌需要底边对齐补偿
       )
       if (pointsToSource) {
         sourcePlacement = {
           x: transform.x,
           z: transform.z,
-          rotation: transform.rotation + sourceTileRotationOffset(playerIndex),
+          rotation: transform.rotation + sourceRot,
         }
       }
       trackOffset += tileSpan
@@ -827,7 +864,7 @@ function robbedKongSourceTransform(effect) {
         position: new THREE.Vector3(
           sourcePlacement.x + offset.x,
           .28,
-          sourcePlacement.z + offset.z + PLAY_AREA_OFFSET_Z,
+          sourcePlacement.z + offset.z + TILE_LAYER_Z,
         ),
         rotation: sourcePlacement.rotation,
       }
@@ -947,10 +984,10 @@ function getDiamondGeometry() {
 function addWinEffect() {
   if (!props.winEffect?.tile) return
   const anchor = winEffectAnchor(props.winEffect.winnerIndex)
-  anchor.z += PLAY_AREA_OFFSET_Z
+  anchor.z += TILE_LAYER_Z
   const faceCenter = anchor.clone().setY(anchor.y + .25)
   const burstAnchor = cameraAlignedPoint(faceCenter, .38)
-  const outward = new THREE.Vector3(anchor.x, 0, anchor.z - PLAY_AREA_OFFSET_Z).normalize()
+  const outward = new THREE.Vector3(anchor.x, 0, anchor.z - TILE_LAYER_Z).normalize()
   const group = new THREE.Group()
 
   // 信标式竖直光束：从胡牌牌垂直射向天空（垂直于牌面），带光晕
@@ -1076,6 +1113,7 @@ function addDiscards(playerIndex) {
     const highlighted = props.lastDiscard?.from === playerIndex && index === discards.length - 1
     const transform = discardTransform(playerIndex, index)
     const y = highlighted ? .48 : .28
+    // 牌河保持原位（不与手牌一起向本家偏移）
     const pos = new THREE.Vector3(transform.x, y, transform.z + PLAY_AREA_OFFSET_Z)
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
     addTableTile(pos, quat, tileName)
@@ -1096,14 +1134,17 @@ function addDiscards(playerIndex) {
 
 function meldTransform(playerIndex, trackOffset) {
   // 和参考界面一致：每家只有一条副露带，从玩家右手端连续排向手牌。
-  if (playerIndex === 0) return { x: 9 - trackOffset, z: 5.85, rotation: 0 }
-  if (playerIndex === 1) return { x: 7.78, z: -6.1 + trackOffset, rotation: Math.PI / 2 }
-  if (playerIndex === 2) return { x: -9 + trackOffset, z: -7.35, rotation: Math.PI }
-  return { x: -7.78, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
+  // 本家副露整体下移一个牌深（0.94），与牌河拉开距离。
+  // 下家（右）副露往右移、上家（左）副露往左移各一个牌宽（0.68），远离中间牌河/副露区。
+  if (playerIndex === 0) return { x: 9 - trackOffset, z: 6.79, rotation: 0 }
+  if (playerIndex === 1) return { x: 8.46, z: -6.1 + trackOffset, rotation: Math.PI / 2 }
+  // 对家副露随手牌一起向后（远离本家）移一个牌深（0.94）。
+  if (playerIndex === 2) return { x: -9 + trackOffset, z: -8.29, rotation: Math.PI }
+  return { x: -8.46, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
 }
 
-function alignMeldBottom(transform, playerIndex, pointsToSource) {
-  if (!pointsToSource) return transform
+function alignMeldBottom(transform, playerIndex, rotated: boolean) {
+  if (!rotated) return transform
   // 牌面尺寸为 .72 x 1.02；横置后朝玩家方向缩短 .135，中心外移一半即可底边对齐。
   const edgeCompensation = .135
   if (playerIndex === 0) transform.z += edgeCompensation
@@ -1113,10 +1154,13 @@ function alignMeldBottom(transform, playerIndex, pointsToSource) {
   return transform
 }
 
-function sourceTileRotationOffset(playerIndex) {
-  // 来源牌横置方向按座位区分：本家(0)/对家(2) 横置后再转 180°（数字/花色朝外），
-  // 上家(3)/下家(1) 是侧边座位，朝向相反，保持原始横置即可。
-  return (playerIndex === 0 || playerIndex === 2) ? Math.PI / 2 + Math.PI : Math.PI / 2
+function sourceTileRotationOffset(relativeSource: number) {
+  // 来源牌一律横摆 ±90°（视觉统一、一眼可辨）：
+  // - 相邻玩家 → 牌头指向出牌方：下家（1）→ -90°，上家（3）→ +90°
+  // - 对家（2）→ +90°：对家方向恰好 = 副露带方向，横摆后长轴只能指相邻一侧、
+  //   牌头指不到对家；头方向为任意值，保留 +90°（可调）
+  if (relativeSource === 1) return -Math.PI / 2
+  return Math.PI / 2
 }
 
 function addMelds(playerIndex) {
@@ -1127,6 +1171,9 @@ function addMelds(playerIndex) {
       && pendingTableActionAnimation?.meldIndex === meldIndex
     const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
+    const relativeSource = ['peng', 'gang'].includes(meld.type) && Number.isInteger(meld.from)
+      ? (meld.from - playerIndex + 4) % 4
+      : -1
     let sourcePlacement = null
     laidTiles.forEach((tileName, tileIndex) => {
       const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
@@ -1134,17 +1181,19 @@ function addMelds(playerIndex) {
       const face = concealed ? null : tileName
       const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
       const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const sourceRot = pointsToSource ? sourceTileRotationOffset(relativeSource) : 0
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
         playerIndex,
-        pointsToSource,
+        sourceRot !== 0,  // 仅横摆的来源牌需要底边对齐补偿
       )
-      const rotationY = transform.rotation + (pointsToSource ? sourceTileRotationOffset(playerIndex) : 0)
+      // 来源牌相对副露带基准旋转（长轴指向出牌方），其余牌保持副露带基准方向
+      const rotationY = transform.rotation + sourceRot
       // 暗杠首尾两张背朝上：makeFaceDownTile 内部 body 绕 X 转 180° 并上抬 .13，合批时折进矩阵。
       const bodyOffsetY = concealed ? .13 : 0
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
       if (concealed) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
-      const pos = new THREE.Vector3(transform.x, .28 + bodyOffsetY, transform.z + PLAY_AREA_OFFSET_Z)
+      const pos = new THREE.Vector3(transform.x, .28 + bodyOffsetY, transform.z + TILE_LAYER_Z)
       if (pointsToSource) {
         sourcePlacement = {
           x: transform.x,
@@ -1177,7 +1226,7 @@ function addMelds(playerIndex) {
       const pos = new THREE.Vector3(
         sourcePlacement.x + addedOffset.x,
         .28,
-        sourcePlacement.z + addedOffset.z + PLAY_AREA_OFFSET_Z,
+        sourcePlacement.z + addedOffset.z + TILE_LAYER_Z,
       )
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, sourcePlacement.rotation, 0))
       if (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang') {
@@ -1461,7 +1510,8 @@ onMounted(async () => {
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0x03100b, 20, 34)
+  // 雾推到桌身之外（桌角最远约 30）：让整张桌（含对家远侧）都在雾区外，只让背景淡出。
+  scene.fog = new THREE.Fog(0x03100b, 32, 60)
   const pmremGenerator = new THREE.PMREMGenerator(renderer)
   const roomEnvironment = new RoomEnvironment()
   const environmentTarget = own(pmremGenerator.fromScene(roomEnvironment, .04))
@@ -1470,7 +1520,10 @@ onMounted(async () => {
   roomEnvironment.dispose()
   pmremGenerator.dispose()
   camera = new THREE.PerspectiveCamera(39, 1, .1, 60)
-  camera.position.set(0, 15, 11.8)
+  // 斜俯视 55°（更接近俯拍，参考雀魂牌桌视角）：y = 水平距离 12.05 × tan(55°) ≈ 17.2
+  camera.position.set(0, 17.2, 11.8)
+  // 均匀亮（参考雀魂）：环境光（半球光）为主要基底，主光只做轻微方向感。
+  // 半球光地面色提亮 + 强度拉高，让所有朝向的面都有基础亮度，避免右侧/远端掉进暗区。
   scene.add(new THREE.HemisphereLight(0xf3e4ba, 0x020b08, 1.65))
   const keyLight = new THREE.DirectionalLight(0xffdfa0, 3.8)
   keyLight.position.set(-7, 13, 9)
