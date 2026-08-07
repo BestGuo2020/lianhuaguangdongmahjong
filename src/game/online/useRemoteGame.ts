@@ -31,6 +31,7 @@ import {
 const REMOTE_ERROR_TEXT: Record<string, string> = {
   ROOM_LIMIT_REACHED: '房间已满',   // 服务端房间数已达上限
   ROOM_FULL: '房间已满',           // 加入房间座位已满
+  ALREADY_IN_ROOM: '你已在房间中，请先离开当前房间',   // 已在房间占座时再建/加入新房
 }
 
 function remoteErrorText(code: string): string {
@@ -1176,7 +1177,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     sessionError.value = ''
     sessionStatus.value = 'creating'
     try {
-      const info = await createRoom(mode, capacity)
+      const info = await createRoom(mode, capacity, playerId.value)
       isCreator.value = true
       roomTimeLimit.value = info.timeLimitSeconds ?? null
       ensurePlayerId()

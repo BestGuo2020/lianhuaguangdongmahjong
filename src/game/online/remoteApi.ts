@@ -86,10 +86,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── 路由 ─────────────────────────────────────────────────
 
-export function createRoom(mode: MatchType, capacity: number): Promise<RoomInfo> {
+export function createRoom(mode: MatchType, capacity: number, playerId?: string): Promise<RoomInfo> {
   return request<RoomInfo>('/api/rooms', {
     method: 'POST',
-    body: JSON.stringify({ mode, capacity }),
+    body: JSON.stringify({ mode, capacity, playerId }),
   })
 }
 
