@@ -163,6 +163,7 @@ button { font: inherit; }
 .base-score-badge { margin-right: auto; display: flex; align-items: center; gap: 9px; padding: 5px 12px; border: 1px solid rgba(217,180,92,.48); border-radius: 999px; background: rgba(5,18,13,.82); color: #f1cc70; font-size: clamp(12px,1vw,15px); font-weight: 800; letter-spacing: .08em; box-shadow: 0 4px 14px rgba(0,0,0,.34); pointer-events: none; }
 .base-score-badge .badge-room { color: #d0c39e; font-weight: 600; }
 .base-score-badge .signal-icon { width: 18px; height: 18px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+.base-score-badge .signal-warn { color: #e0a06a; font-size: 11px; }
 .round-info { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 19px; border: 1px solid rgba(208,183,110,.2); border-radius: 99px; background: rgba(0,0,0,.18); letter-spacing: .12em; }
 .top-bar nav { display: flex; gap: 8px; }
 .top-bar button { width: clamp(34px, 2.8vw, 44px); height: clamp(34px, 2.8vw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25vw, 20px); cursor: pointer; }

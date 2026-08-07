@@ -119,6 +119,9 @@ const allOccupiedReady = computed(() => {
   const occupied = roomSeats.value.filter(Boolean)
   return occupied.length > 0 && occupied.every((seat) => seat?.ready)
 })
+// 网络信号：0-3 格的语义是「连接健康度」，而非延迟（棋牌类对延迟不敏感）
+const signalText = computed(() =>
+  ({ 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' })[signalQuality.value] ?? '')
 
 async function createRemoteRoom() {
   if (!nicknameInput.value.trim()) return
@@ -381,19 +384,12 @@ function clearMobileSelection(event: PointerEvent) {
               v-if="gameMode === 'remote'"
               class="signal-icon"
               :src="`${imageBase}signal-${signalQuality}.png`"
-              :alt="`信号 ${signalQuality}/3`"
-              :title="`信号 ${signalQuality}/3`"
+              :alt="signalText"
+              :title="signalQuality <= 1 ? `${signalText}，可能被 AI 托管` : signalText"
             />
+            <span v-if="signalQuality <= 1" class="signal-warn">{{ signalText }}</span>
           </div>
           <nav>
-            <button
-              v-if="gameMode === 'remote' && phase !== 'lobby'"
-              class="autoplay-toggle"
-              :class="{ active: autoPlay }"
-              :aria-pressed="autoPlay"
-              :title="autoPlay ? '自动打牌已开启（点击关闭）' : '自动打牌已关闭（点击开启，无需手动出牌）'"
-              @click="toggleAutoPlay"
-            >{{ autoPlay ? '自动·开' : '自动·关' }}</button>
             <button
               v-if="gameMode === 'remote' && phase !== 'lobby'"
               class="quit-match"

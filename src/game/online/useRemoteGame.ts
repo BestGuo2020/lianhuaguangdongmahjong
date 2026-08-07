@@ -44,6 +44,13 @@ const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 // 自动打牌：开关后到自动出牌/过牌的间隔（毫秒）。留一点时间让摸牌动画/音效可读。
 const AUTO_PLAY_DELAY = 600
 
+// ─── 网络信号：以「连接健康度」替代纯 RTT 延迟判定 ──
+// 棋牌类对延迟不敏感（出牌有 12s 倒计时），真正致命的是连接卡死 → 被 AI 托管。
+// 因此信号 = min(平滑 RTT 等级, 心跳停顿等级, 重连降级上限)，而非单次 RTT 快照。
+const PING_INTERVAL = 5000        // 心跳周期（兼作 CDN 空闲保活）
+const STALL_TIMEOUT = 15000       // 超过此间隔无任何服务端消息 → 判定卡死，主动重连
+const RTT_EWMA_ALPHA = 0.3        // RTT 平滑：新采样权重（0.3）
+
 // ─── 匿名身份与会话持久化（Phase 8 P1）：guestId / 昵称 / 对局会话 ──
 // 刷新 / 关浏览器后凭 localStorage 里的会话一键「继续对局」，对局中座位（AI 托管）可找回。
 const STORAGE = {
@@ -218,6 +225,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   let pollTimer: number | null = null
   let pingTimer: number | null = null
   let lastPingAt = 0   // 最近一次 ping 的发送时刻（测 RTT → 信号质量）
+  let smoothedRtt = 200           // EWMA 平滑 RTT（初始估计，避免首 ping 前显示 0 格）
+  let lastServerMessageAt = 0     // 最近一次收到服务端消息（pong/快照/请求）的时刻
+  let postReconnectPongs = 2      // 重连后连续干净 pong 数；≥2 才解除「波动」降级
+  let stallTimer: number | null = null   // 周期健康检查（2s）
   let countdownHandle: number | null = null
   let winSequenceTimer: number | null = null
   let winSequenceSerial = 0
@@ -860,6 +871,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function handleMessage(raw: unknown) {
     const msg = raw as ServerMessage
+    lastServerMessageAt = Date.now()   // 任意服务端消息 = 连接存活（心跳停顿判定用）
     switch (msg.kind) {
       case 'rejoin_ok':
         roomId.value = msg.roomId
@@ -935,8 +947,15 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         leaveRemoteRoom()
         break
       case 'pong':
-        // ping 的回应：测 RTT → 信号质量（越大越好）
-        if (lastPingAt) signalQuality.value = rttToSignal(Date.now() - lastPingAt)
+        // ping 的回应：EWMA 平滑 RTT；pong 即心跳正常，解除重连降级
+        if (lastPingAt) {
+          const rtt = Date.now() - lastPingAt
+          smoothedRtt = smoothedRtt > 0
+            ? smoothedRtt * (1 - RTT_EWMA_ALPHA) + rtt * RTT_EWMA_ALPHA
+            : rtt
+          postReconnectPongs += 1
+        }
+        updateSignal()
         break
       case 'error':
         handleError(msg.code)
@@ -962,7 +981,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     ws = socket
     socket.onopen = () => {
       wsStatus.value = 'connected'
+      lastServerMessageAt = Date.now()
       startPing()
+      startStallCheck()
     }
     socket.onmessage = (event) => {
       try {
@@ -975,6 +996,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       if (ws === socket) ws = null
       wsStatus.value = 'closed'
       signalQuality.value = 0   // 断开：信号归零
+      stopStallCheck()
       if (!closedByUser && roomId.value) scheduleReconnect()
     }
     socket.onerror = () => {
@@ -986,6 +1008,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     if (closedByUser || !roomId.value || reconnectTimer != null) return
     wsStatus.value = 'reconnecting'
     signalQuality.value = 0   // 重连中：信号归零
+    postReconnectPongs = 0    // 重连后需连续 2 个干净 pong 才恢复（期间上限 1 格）
     const delay = Math.min(1000 * 2 ** reconnectAttempts, 8000)
     reconnectAttempts += 1
     reconnectTimer = window.setTimeout(() => {
@@ -994,11 +1017,41 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     }, delay)
   }
 
-  function rttToSignal(rtt: number): number {
-    if (rtt <= 80) return 3
-    if (rtt <= 150) return 2
-    if (rtt <= 300) return 1
-    return 0
+  // 合成信号：取三个维度的最小值（0-3，越大连接越可靠）
+  function updateSignal() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      signalQuality.value = 0
+      return
+    }
+    const sinceMessage = Date.now() - lastServerMessageAt
+    // ① 心跳停顿：距最近服务端消息超 1.5/2 个 ping 周期 → 1 格 / 0 格
+    const stallGrade = sinceMessage > PING_INTERVAL * 2 ? 0
+      : sinceMessage > PING_INTERVAL * 1.5 ? 1 : 3
+    // ② 平滑 RTT 等级（棋牌类阈值放宽，对延迟不敏感）
+    const rttGrade = smoothedRtt <= 200 ? 3 : smoothedRtt <= 500 ? 2 : smoothedRtt <= 1000 ? 1 : 0
+    // ③ 刚重连过（<2 个干净 pong）→ 上限 1 格「波动」
+    const reconnectCap = postReconnectPongs >= 2 ? 3 : 1
+    signalQuality.value = Math.max(0, Math.min(rttGrade, stallGrade, reconnectCap))
+  }
+
+  // 周期健康检查（2s）：无任何服务端消息超 STALL_TIMEOUT → 半死连接（CDN 空闲断开/
+  // 网络黑洞把 ping 也静默丢弃）→ 主动断开触发重连，避免干等被 AI 托管。
+  function startStallCheck() {
+    stopStallCheck()
+    stallTimer = window.setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      if (Date.now() - lastServerMessageAt > STALL_TIMEOUT) {
+        signalQuality.value = 0
+        ws.close()
+        return
+      }
+      updateSignal()
+    }, 2000)
+  }
+
+  function stopStallCheck() {
+    window.clearInterval(stallTimer as number)
+    stallTimer = null
   }
 
   function startPing() {
@@ -1021,6 +1074,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     window.clearTimeout(reconnectTimer as number)
     reconnectTimer = null
     stopPing()
+    stopStallCheck()
     clearTimers()
     if (ws) {
       try {
@@ -1265,6 +1319,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     wsStatus.value = 'idle'
     sessionError.value = ''
     signalQuality.value = 0
+    smoothedRtt = 200
+    postReconnectPongs = 2
+    lastServerMessageAt = 0
+    stopStallCheck()
   }
 
   // ── 用户动作（发送到服务端，状态由快照权威回写）────────

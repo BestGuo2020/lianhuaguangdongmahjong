@@ -298,6 +298,43 @@ describe('useRemoteGame 自动打牌', () => {
   })
 })
 
+describe('useRemoteGame 网络信号（连接健康度）', () => {
+  it('心跳 pong 正常 → 信号按平滑 RTT 保持高格', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    await vi.advanceTimersByTimeAsync(5000)   // 触发首个 ping
+    mockSocket!.receive({ kind: 'pong' })      // RTT≈0，心跳正常
+    expect(game.signalQuality.value).toBe(3)
+  })
+
+  it('长时间无服务端消息 → 判定连接卡死并主动重连', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    await vi.advanceTimersByTimeAsync(16000)  // 超 STALL_TIMEOUT(15s)：半死连接
+    expect(game.wsStatus.value).toBe('reconnecting')
+    expect(game.signalQuality.value).toBe(0)
+  })
+
+  it('重连后信号上限 1 格，连续 2 个干净 pong 后恢复', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    await vi.advanceTimersByTimeAsync(16000)  // 卡死 → 断开
+    await vi.advanceTimersByTimeAsync(2000)   // 退避后 connect() 建新连接
+    mockSocket!.open()                        // 模拟 onopen
+    expect(game.wsStatus.value).toBe('connected')
+
+    // 第 1 个干净 pong：仍在「重连降级」窗口 → 上限 1 格
+    await vi.advanceTimersByTimeAsync(5000)
+    mockSocket!.receive({ kind: 'pong' })
+    expect(game.signalQuality.value).toBe(1)
+
+    // 第 2 个干净 pong：解除降级，恢复高格
+    await vi.advanceTimersByTimeAsync(5000)
+    mockSocket!.receive({ kind: 'pong' })
+    expect(game.signalQuality.value).toBe(3)
+  })
+})
+
 describe('useRemoteGame 结算展示与延迟队列', () => {
   it('settled 快照触发赢牌动画序列，result 座位索引映射正确', async () => {
     const game = await connectGame()
