@@ -474,7 +474,7 @@ function clearMobileSelection(event: PointerEvent) {
               :alt="signalText"
               :title="signalQuality <= 1 ? `${signalText}，可能被 AI 托管` : signalText"
             />
-            <span v-if="signalQuality <= 1" class="signal-warn">{{ signalText }}</span>
+            <span v-if="gameMode === 'remote' && signalQuality <= 1" class="signal-warn">{{ signalText }}</span>
           </div>
           <nav>
             <button
