@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { sortTiles, TILE_TYPES } from '../game/core/tiles'
+import { isHorse, sortTiles, TILE_TYPES } from '../game/core/tiles'
 import { preloadTileImages, preloadedTileImages } from '../game/core/tileAssets'
 import { meldSourceTileIndex } from '../game/core/rules'
 import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/core/tableLayout'
@@ -18,6 +18,7 @@ interface TableProps {
   wall?: TileType[]
   wallHeadDrawn?: number
   wallCount?: number
+  horses?: TileType[]
   revealHands?: boolean
   winnerIndex?: number
   winEffect?: Record<string, any> | null
@@ -30,7 +31,7 @@ interface TableProps {
 }
 
 const props = withDefaults(defineProps<TableProps>(), {
-  players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0,
+  players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0,
@@ -257,6 +258,134 @@ function makeFaceMaterial(tile) {
   }
   faceMaterials.set(tile, material)
   return material
+}
+
+// 买马未中：牌面正常渲染（能识别是哪张牌），整牌 75% 透明（半透明、区别于中马）。
+// 共享材质按 75% 透明度克隆缓存，避免影响正常牌。
+const transparentMaterialCache = new Map<THREE.Material, THREE.Material>()
+function transparentClone(material: THREE.Material) {
+  if (!transparentMaterialCache.has(material)) {
+    const clone = material.clone()
+    clone.transparent = true
+    clone.opacity = .75
+    clone.depthWrite = false
+    transparentMaterialCache.set(material, clone)
+  }
+  return transparentMaterialCache.get(material)!
+}
+
+function makeTransparentFaceMaterial(tile) {
+  const key = `dim:${tile}`
+  if (faceMaterials.has(key)) return faceMaterials.get(key)
+  const material = makeFaceMaterial(tile).clone()
+  material.transparent = true
+  material.opacity = .75
+  material.depthWrite = false
+  faceMaterials.set(key, material)
+  return material
+}
+
+// 未中马牌：牌面（+y）+ 整体 75% 透明，仍能看清是哪张牌。
+function makeDimmedHorseTile(tile) {
+  const tileObj = new THREE.Group()
+  const base = new THREE.Mesh(scene.userData.tileBaseGeometry, [
+    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.faceSide),
+    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.backMaterial),
+    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.faceSide),
+  ])
+  base.position.y = -.06
+  tileObj.add(base)
+  const cap = new THREE.Mesh(scene.userData.tileCapGeometry, [
+    transparentClone(scene.userData.tileSide), transparentClone(scene.userData.tileSide),
+    makeTransparentFaceMaterial(tile), transparentClone(scene.userData.tileBottom),
+    transparentClone(scene.userData.tileSide), transparentClone(scene.userData.tileSide),
+  ])
+  cap.position.y = .13
+  tileObj.add(cap)
+  return tileObj
+}
+
+// 买马中马：四周金光 = 金色柔光晕（径向渐变，加色混合），铺在牌下方，光从牌底溢出。
+let glowTexture: THREE.Texture | null = null
+function getGlowTexture() {
+  if (!glowTexture) {
+    const size = 256
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+    grad.addColorStop(0, 'rgba(255, 205, 90, .95)')
+    grad.addColorStop(.4, 'rgba(255, 180, 60, .45)')
+    grad.addColorStop(1, 'rgba(255, 160, 40, 0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+    glowTexture = own(new THREE.CanvasTexture(canvas))
+    glowTexture.colorSpace = THREE.SRGBColorSpace
+  }
+  return glowTexture
+}
+
+function makeGoldGlow() {
+  // 平铺在桌面的金色光晕（比牌大一圈，径向渐变边缘渐隐），加色混合 → 从牌底溢出的金光。
+  const glow = new THREE.Mesh(
+    ownDynamic(new THREE.PlaneGeometry(1.5, 1.5)),
+    ownDynamic(new THREE.MeshBasicMaterial({
+      map: getGlowTexture(),
+      transparent: true,
+      opacity: .95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })),
+  )
+  glow.rotation.x = -Math.PI / 2
+  return glow
+}
+
+// 中马竖光：从牌向上溢出的金色光柱（垂直渐变：下亮上渐隐 + 水平中心保留），Sprite 始终面向相机。
+let verticalGlowTexture: THREE.Texture | null = null
+function getVerticalGlowTexture() {
+  if (!verticalGlowTexture) {
+    const w = 96
+    const h = 256
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    const vgrad = ctx.createLinearGradient(0, h, 0, 0)
+    vgrad.addColorStop(0, 'rgba(255, 200, 85, .8)')
+    vgrad.addColorStop(.55, 'rgba(255, 180, 60, .28)')
+    vgrad.addColorStop(1, 'rgba(255, 150, 40, 0)')
+    ctx.fillStyle = vgrad
+    ctx.fillRect(0, 0, w, h)
+    // 水平：中心保留、两侧裁掉（destination-in 只取 alpha）
+    const hgrad = ctx.createLinearGradient(0, 0, w, 0)
+    hgrad.addColorStop(0, 'rgba(0,0,0,0)')
+    hgrad.addColorStop(.5, 'rgba(0,0,0,1)')
+    hgrad.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.fillStyle = hgrad
+    ctx.fillRect(0, 0, w, h)
+    ctx.globalCompositeOperation = 'source-over'
+    verticalGlowTexture = own(new THREE.CanvasTexture(canvas))
+    verticalGlowTexture.colorSpace = THREE.SRGBColorSpace
+  }
+  return verticalGlowTexture
+}
+
+function makeGoldVerticalGlow() {
+  const sprite = new THREE.Sprite(
+    ownDynamic(new THREE.SpriteMaterial({
+      map: getVerticalGlowTexture(),
+      transparent: true,
+      opacity: .7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })),
+  )
+  sprite.scale.set(.85, 1.5, 1)
+  return sprite
 }
 
 // ---- 牌面纹理图集：全部牌面压进一张图，cap 合批从"每类型一个"压成 1 个 ----
@@ -812,8 +941,17 @@ function cameraAlignedPoint(point, planeY) {
   return camera.position.clone().addScaledVector(direction, distance)
 }
 
+// 四红中赢牌：4 张红中都已作为花杠亮在副露区，胡牌牌（第 4 张红中）已包含其中，
+// 若再单独显示胡牌红中会多出一张 → 四红中时跳过独立胡牌牌展示。
+function isFourRedWin() {
+  const tile = props.winPresentation?.tile ?? props.winEffect?.tile
+  const winnerIndex = props.winPresentation?.winnerIndex ?? props.winEffect?.winnerIndex
+  return tile === 'red' && winnerIndex >= 0 && (props.players[winnerIndex]?.redCount ?? 0) >= 4
+}
+
 function addWinningDisplayTile() {
   if (!props.revealHands || !props.winPresentation?.tile) return
+  if (isFourRedWin()) return
   const layout = winDisplayLayout(props.winPresentation.winnerIndex)
   const group = new THREE.Group()
   const tile = makeFaceTile(props.winPresentation.tile)
@@ -1066,17 +1204,20 @@ function addWinEffect() {
     }
   })
 
-  // 胡牌牌：飞入 + 落地弹跳
-  const winningTile = makeFaceTile(props.winEffect.tile)
+  // 胡牌牌：飞入 + 落地弹跳。四红中时 4 张红中已在花杠区，不单独飞牌（避免多一张红中）。
+  const isFourRed = isFourRedWin()
+  const winningTile = isFourRed ? null : makeFaceTile(props.winEffect.tile)
   const robbedKongSource = robbedKongSourceTransform(props.winEffect)
   const startPosition = robbedKongSource?.position
     ?? anchor.clone().addScaledVector(outward, 1.08).setY(anchor.y)
   const seatRotation = winDisplayLayout(props.winEffect.winnerIndex).rotation
   const startRotation = robbedKongSource?.rotation ?? seatRotation
-  winningTile.position.copy(startPosition)
-  winningTile.rotation.y = startRotation
-  winningTile.scale.setScalar(.7)
-  group.add(winningTile)
+  if (winningTile) {
+    winningTile.position.copy(startPosition)
+    winningTile.rotation.y = startRotation
+    winningTile.scale.setScalar(.7)
+    group.add(winningTile)
+  }
 
   scene.add(group)
   dynamicGroups.push(group)
@@ -1252,7 +1393,7 @@ function addMelds(playerIndex) {
 function wallDrawHeadPos() {
   const headOffset = props.wallHeadDrawn ?? 0
   const breakIndex = wallBreakIndex(props.diceValues)
-  const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL)
+  const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL, props.wall?.length ?? 0)
   const slot = wallStackSlot(stackIndex)
   return { x: slot.x, z: slot.z }
 }
@@ -1267,13 +1408,45 @@ function addWall() {
   const breakIndex = wallBreakIndex(props.diceValues)
   const headOffset = props.wallHeadDrawn ?? 0
   tiles.forEach((_, index) => {
-    const { stackIndex, layer } = wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL)
+    const { stackIndex, layer } = wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length)
     const slot = wallStackSlot(stackIndex)
     const y = .41 + layer * .47
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
     // 背朝上：绕 X 转 180°，使 base 底面的牌背（backMaterial）朝上（与暗杠首尾一致）。
     quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
     addTableTile(new THREE.Vector3(slot.x, y, slot.z), quat, null)
+  })
+}
+
+// 买马：胡牌后把 8 张马牌显示到赢家牌河里（续接在赢家弃牌河之后）。
+// 中马（红中/1/5/9）正常牌面 + 四周金光（金色发光边框）；未中则牌面正常渲染但整牌 75% 透明。
+function addHorses() {
+  const horses = props.horses || []
+  if (!horses.length) return
+  const winnerIndex = props.winnerIndex
+  if (winnerIndex < 0) return
+  const discardCount = props.players[winnerIndex]?.discards.length ?? 0
+  horses.forEach((tile, index) => {
+    const hit = isHorse(tile)
+    const transform = discardTransform(winnerIndex, discardCount + index)
+    const pos = new THREE.Vector3(transform.x, .28, transform.z + PLAY_AREA_OFFSET_Z)
+    const tileObj = hit ? makeFaceTile(tile) : makeDimmedHorseTile(tile)
+    tileObj.position.copy(pos)
+    tileObj.rotation.y = transform.rotation
+    scene.add(tileObj)
+    dynamicGroups.push(tileObj)
+    if (hit) {
+      // 中马：四周金光（金色柔光晕铺在牌下方，光从牌底溢出）+ 一点向上的竖光。
+      const glow = makeGoldGlow()
+      glow.position.set(transform.x, .09, transform.z + PLAY_AREA_OFFSET_Z)
+      scene.add(glow)
+      dynamicGroups.push(glow)
+      const vGlow = makeGoldVerticalGlow()
+      // Sprite 中心：让光柱底部（亮端）落在牌顶附近
+      vGlow.position.set(transform.x, .55 + .75, transform.z + PLAY_AREA_OFFSET_Z)
+      scene.add(vGlow)
+      dynamicGroups.push(vGlow)
+    }
   })
 }
 
@@ -1291,6 +1464,7 @@ function rebuildTableTiles() {
     addMelds(playerIndex)
   }
   addWall()
+  addHorses()
   finishTableInstances()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null
@@ -1469,12 +1643,14 @@ function render(time = 0) {
     const effect = winEffectAnimation
     const progress = Math.max(0, Math.min(1, (time - effect.startedAt) / effect.duration))
 
-    // 胡牌牌飞入 + 落地弹跳
+    // 胡牌牌飞入 + 落地弹跳（四红中无独立胡牌牌）
     const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .15)
-    effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)
-    effect.winningTile.rotation.set(0, THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach), 0)
-    const pop = Math.sin(Math.min(1, approach) * Math.PI) * .28
-    effect.winningTile.scale.setScalar(THREE.MathUtils.lerp(.7, 1, approach) + pop)
+    if (effect.winningTile) {
+      effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)
+      effect.winningTile.rotation.set(0, THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach), 0)
+      const pop = Math.sin(Math.min(1, approach) * Math.PI) * .28
+      effect.winningTile.scale.setScalar(THREE.MathUtils.lerp(.7, 1, approach) + pop)
+    }
 
     // 信标光束：牌落地后快速竖起，末尾缓缓收
     const beamIn = THREE.MathUtils.smoothstep(progress, .08, .15)
@@ -1610,6 +1786,7 @@ watch(
     props.winPresentation?.robbedKong,
     props.dealAnimation.serial,
     props.wall?.length,
+    props.horses?.length,
   ),
   rebuildTableTiles,
 )

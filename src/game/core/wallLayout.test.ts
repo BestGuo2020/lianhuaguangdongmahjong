@@ -50,6 +50,15 @@ describe('wall tile placement', () => {
     expect(wallTilePlacement(0, 136)).toEqual(wallTilePlacement(0, 0))
     expect(wallTilePlacement(0, 135)).toEqual({ stackIndex: 67, layer: 0 })
   })
+
+  it('tail-side (kong) tiles draw the top layer first, like the head side', () => {
+    // 尾侧最后 14 张（供开杠补牌）：奇数物理位为顶，牌尾 pop 先抓上层
+    expect(wallTilePlacement(135, 0, 136)).toEqual({ stackIndex: 67, layer: 1 })  // 顶
+    expect(wallTilePlacement(134, 0, 136)).toEqual({ stackIndex: 67, layer: 0 })  // 底
+    // 牌尾先 pop 顶层（135），再 pop 底层（134）——先上后下
+    expect(wallTilePlacement(133, 0, 136)).toEqual({ stackIndex: 66, layer: 1 })
+    expect(wallTilePlacement(132, 0, 136)).toEqual({ stackIndex: 66, layer: 0 })
+  })
 })
 
 describe('wall stack ring', () => {

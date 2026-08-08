@@ -51,11 +51,23 @@ export function wallBreakIndex(dice: readonly [number, number] | number[], total
   return (segmentStart + n * 2) % total
 }
 
-/** 第 i 张当前牌（wall[i]）在固定环中的墩位与层（0=底牌，1=顶牌）。 */
-export function wallTilePlacement(tileIndex: number, headOffset: number) {
+/** 牌尾死墙预留（张数）：开杠补牌从牌尾摸，尾侧需保证"先抓上层"。 */
+const WALL_TAIL_RESERVE = 14
+
+/** 第 i 张当前牌（wall[i]）在固定环中的墩位与层（0=底牌，1=顶牌）。
+ * 牌头侧：偶数物理位为顶（牌头先抓上层）；牌尾侧（最后 WALL_TAIL_RESERVE 张，供开杠补牌）：
+ * 奇数物理位为顶（开杠补牌也从顶层开始摸，先抓上层再抓下层）。分界对齐到墩，避免同墩一顶一底被拆开。 */
+export function wallTilePlacement(tileIndex: number, headOffset: number, total = WALL_TOTAL) {
   const physical = (headOffset + tileIndex) % WALL_TOTAL
-  // 先抓墩上面的牌，再抓下面那张：同墩中先被抓的（物理位更小）是顶牌（layer 1）。
-  return { stackIndex: Math.floor(physical / 2), layer: 1 - (physical % 2) }
+  const stackIndex = Math.floor(physical / 2)
+  const tailReserve = Math.min(WALL_TAIL_RESERVE, total)
+  let tailStart = total - tailReserve
+  // 让分界落在墩与墩之间（headOffset + tailStart 为偶数），保证同墩层一致
+  if ((headOffset + tailStart) % 2 !== 0) tailStart += 1
+  tailStart = Math.max(0, Math.min(total, tailStart))
+  const headSide = tileIndex < tailStart
+  const layer = headSide ? (1 - (physical % 2)) : (physical % 2)
+  return { stackIndex, layer }
 }
 
 /** 环形第 stack 个墩（0..67）的位置。牌径向放置：长边指向桌中心（近/远墙沿 z，侧墙沿 x）。 */

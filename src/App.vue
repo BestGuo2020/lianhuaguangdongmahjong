@@ -521,6 +521,7 @@ function clearMobileSelection(event: PointerEvent) {
             :wall="wall"
             :wall-head-drawn="wallHeadDrawn"
             :wall-count="wallCount"
+            :horses="result?.horses"
             :reveal-hands="revealHands"
             :winner-index="winningPlayerIndex"
             :win-effect="winEffect"
