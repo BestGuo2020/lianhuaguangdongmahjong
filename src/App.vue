@@ -429,6 +429,15 @@ const displayedUserHand = computed(() => {
   return splitWinningTile(user.value.hand, winPresentation.value).hand
 })
 
+// 摸牌位：手牌比基准（13 - 3×非花副露数）多出一张即视为「摸牌」并留间隙；
+// drawnTileIndex 有效时用它，否则取末张（与 3D addConcealedHand 保持一致）。
+const userDrawnTileIndex = computed(() => {
+  const hand = displayedUserHand.value
+  const baseHand = 13 - 3 * user.value.melds.filter((m) => m.type !== 'flower').length
+  const raw = user.value.drawnTileIndex
+  return raw >= 0 && raw < hand.length ? raw : (hand.length > baseHand ? hand.length - 1 : -1)
+})
+
 function usesFinePointer() {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches
 }
@@ -641,7 +650,7 @@ function clearMobileSelection(event: PointerEvent) {
                 v-for="(tile, index) in displayedUserHand"
                 :key="`${tile}-${index}`"
                 class="hand-tile-slot"
-                :class="{ drawn: user.drawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
+                :class="{ drawn: userDrawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
                 @mouseenter="previewDesktopWaits(tile)"
                 @mouseleave="clearDesktopWaits"
                 @pointerdown.stop="beginTileGesture(index, $event)"
@@ -656,7 +665,7 @@ function clearMobileSelection(event: PointerEvent) {
                 <MahjongTile
                   :tile="tile"
                   :selected="selectedIndex === index"
-                  :drawn="user.drawnTileIndex === index"
+                  :drawn="userDrawnTileIndex === index"
                   :disabled="!isUserTurn"
                   @choose="handleTileActivation(index, $event)"
                 />

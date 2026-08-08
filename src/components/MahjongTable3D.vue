@@ -825,7 +825,14 @@ function addConcealedHand(playerIndex) {
   const displayedHand = splitWinningTile(rawHand, presentation).hand
   const total = Math.min(displayedHand.length, 14)
   const gap = TILE_GAP_OFFSET // 三家手牌间隙
-  const drawnTileIndex = props.players[playerIndex]?.drawnTileIndex ?? -1
+  // 摸牌位：只要手牌比基准（13 - 3×非花副露数）多出一张，就把多出的那张视为「摸牌」并留间隙。
+  // drawnTileIndex 有效时用它；否则取末张（本地/服务端都把摸的牌放在末尾）。
+  const meldCount = (props.players[playerIndex]?.melds ?? []).filter((m) => m.type !== 'flower').length
+  const baseHand = 13 - 3 * meldCount
+  const rawDrawn = props.players[playerIndex]?.drawnTileIndex ?? -1
+  const drawnTileIndex = rawDrawn >= 0 && rawDrawn < total
+    ? rawDrawn
+    : (displayedHand.length > baseHand ? displayedHand.length - 1 : -1)
   const layoutDrawnTileIndex = props.revealHands ? -1 : drawnTileIndex
   const drawnGap = .28
   const arrangedTotal = layoutDrawnTileIndex >= 0 ? total - 1 : total
