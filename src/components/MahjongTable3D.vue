@@ -69,7 +69,7 @@ const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
 // 副露带逼近手牌时，手牌让位后的「副露-暗手」间距：原 .62 ≈ 半个麻将，改为 1.24 ≈ 一个麻将牌。
 const MELD_HAND_GAP = 1.24
-// 下家（右家）副露整体向上（-z）移动 3 个麻将牌（3 × 牌宽 0.68），给摸牌位留出间隙。
+// 下家（右家）副露整体向上（-z）移动 3 个麻将牌（3 × 牌宽 0.68），给摸牌位（右侧 -z 顶端）留出间隙。
 const MELD_UP_MOVE = 3 * .68
 const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初始高度（略高于两墩牌顶）
 
@@ -855,10 +855,11 @@ function addConcealedHand(playerIndex) {
         meldClear = -9 + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'right') {
-      // 下家镜像上家：副露逼近时手牌让位（摸牌位在手牌末尾），副露基准已上移 MELD_UP_MOVE。
+      // 下家副露逼近时手牌让位（与上家一致）；meldClear 按旧基准（-6.1）计算，
+      // 副露上移 MELD_UP_MOVE 后留出空间，摸牌位放在右侧（-z 顶端）。
       const handNear = -(arrangedTotal - 1) / 2 * gap + (props.revealHands ? 0 : -1.15)
       if (-6.1 - MELD_UP_MOVE + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -6.1 - MELD_UP_MOVE + exposedSpan + MELD_HAND_GAP
+        meldClear = -6.1 + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'left') {
       const handNear = (arrangedTotal - 1) / 2 * gap
@@ -898,9 +899,11 @@ function addConcealedHand(playerIndex) {
       x = position === 'left' ? -9.15 : 9.15
       if (meldClear != null) {
         // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露。
-        // 四家统一：摸牌位在手牌末尾（带 drawnGap），与上家一致。
+        // 下家（右）摸牌位在右侧（-z 顶端，与无副露时一致）；上家/其他摸牌位在手牌末尾。
         const isDrawn = index === layoutDrawnTileIndex
-        z = meldClear + index * gap + (isDrawn ? drawnGap : 0)
+        z = position === 'right' && isDrawn
+          ? meldClear - gap - drawnGap
+          : meldClear + index * gap + (isDrawn ? drawnGap : 0)
       } else {
         const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
         if (index === layoutDrawnTileIndex) {
