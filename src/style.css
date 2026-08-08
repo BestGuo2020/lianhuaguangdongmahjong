@@ -160,7 +160,7 @@ button { font: inherit; }
 
 .brand-mini { display: flex; align-items: center; gap: 8px; color: #d9c491; letter-spacing: .12em; }
 .brand-mini i { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #a9823c; border-radius: 50%; font: 700 14px "Noto Serif SC", serif; font-style: normal; }
-.base-score-badge { margin-right: auto; display: flex; align-items: center; gap: 9px; padding: 5px 12px; color: #f1cc70; font-size: clamp(12px,1vw,15px); font-weight: 800; letter-spacing: .08em; pointer-events: none; }
+.base-score-badge { margin-right: auto; display: flex; align-items: center; gap: 9px; padding: 5px; color: #f1cc70; font-size: clamp(12px,1vw,15px); font-weight: 800; letter-spacing: .08em; pointer-events: none; }
 .base-score-badge .badge-room { color: #d0c39e; font-weight: 600; }
 .base-score-badge .signal-icon { width: 18px; height: 18px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .base-score-badge .signal-warn { color: #e0a06a; font-size: 11px; }
@@ -249,7 +249,7 @@ button { font: inherit; }
 .player-seat.active .avatar-wrap { border-color: #d6ad52; box-shadow: 0 0 16px rgba(239,194,85,.2); }
 
 .seat-top { top: 49px; left: 50%; transform: translateX(-50%) perspective(700px) rotateX(-2deg); }
-.seat-top .avatar-wrap { margin: 0 auto 7px; transform: translate(-10px, -18px); }
+.seat-top .avatar-wrap { margin: 0 auto 7px; transform: translate(-60%, -30%); }
 .seat-right { top: 42%; right: 17px; transform: translateY(-50%) perspective(700px) rotateY(-4deg); transform-origin: right center; }
 .seat-right .avatar-wrap { margin: 0 0 8px auto; }
 .seat-left { top: 42%; left: 17px; transform: translateY(-50%) perspective(700px) rotateY(4deg); transform-origin: left center; }
@@ -812,7 +812,7 @@ button { font: inherit; }
   .top-bar nav { gap: 5px; }
   .top-bar button { width: 28px; height: 28px; font-size: 13px; }
   .top-bar .icon-button img { width: 88%; height: 88%; }
-  .seat-top .avatar-wrap { transform: scale(.76) translate(-90px, -15px); transform-origin: top center; }
+  .seat-top .avatar-wrap { transform: scale(.76) translate(-105px, -30px); transform-origin: top center; }
   .seat-left .avatar-wrap { transform: scale(.76); transform-origin: left center; }
   .seat-right .avatar-wrap { transform: scale(.76); transform-origin: right center; }
   .player-info strong { max-width: 104px; font-size: 13px; }

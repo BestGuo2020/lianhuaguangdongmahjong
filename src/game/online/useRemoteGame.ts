@@ -359,6 +359,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     turnSeconds.value = seconds
     countdownHandle = window.setInterval(() => {
       turnSeconds.value -= 1
+      // 倒计时到 3 秒：播一次提示音
+      if (turnSeconds.value === 3) playSound('didu.ogg')
       if (turnSeconds.value <= 0) {
         clearCountdown()
         onExpire()

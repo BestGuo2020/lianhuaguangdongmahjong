@@ -20,6 +20,7 @@ const EFFECT_AUDIO_FILES = [
   'hu_effect_sound.mp3',
   'peng.mp3',
   'zimo.mp3',
+  'didu.ogg',
 ]
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }

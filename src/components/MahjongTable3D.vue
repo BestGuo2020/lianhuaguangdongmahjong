@@ -65,6 +65,10 @@ const DICE_LANDING_Y = .62
 const BASE_EXPOSURE = .92
 const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
+// 副露带逼近手牌时，手牌让位后的「副露-暗手」间距：原 .62 ≈ 半个麻将，改为 1.24 ≈ 一个麻将牌。
+const MELD_HAND_GAP = 1.24
+// 下家（右家）副露整体向上（-z）移动 3 个麻将牌（3 × 牌宽 0.68），给摸牌位留出间隙。
+const MELD_UP_MOVE = 3 * .68
 const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初始高度（略高于两墩牌顶）
 
 // 渲染分辨率上限（清晰度 vs 帧率）：默认 3 取设备原生 DPR，真机实测本设备 2.2 vs 2.0 帧率无差，原生清晰免费。
@@ -845,18 +849,19 @@ function addConcealedHand(playerIndex) {
     if (position === 'top') {
       const handNear = -(arrangedTotal - 1) / 2 * gap
       if (-9 + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -9 + exposedSpan + .62
+        meldClear = -9 + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'right') {
+      // 下家副露已上移 MELD_UP_MOVE：手牌随副露一起让位（与对家一致），meldClear 用上移后的基准。
       const handNear = -(arrangedTotal - 1) / 2 * gap + (props.revealHands ? 0 : -1.15)
-      if (-6.1 + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -6.1 + exposedSpan + .62
+      if (-6.1 - MELD_UP_MOVE + exposedSpan + tileHalf >= handNear - tileHalf) {
+        meldClear = -6.1 - MELD_UP_MOVE + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'left') {
       const handNear = (arrangedTotal - 1) / 2 * gap
       if (6.1 - exposedSpan - tileHalf <= handNear + tileHalf) {
         // 副露在左家手牌上端：手牌整体下移，index 0 起点 = 副露下缘下方 - 手牌跨度
-        meldClear = 6.1 - exposedSpan - .62 - (arrangedTotal - 1) * gap
+        meldClear = 6.1 - exposedSpan - MELD_HAND_GAP - (arrangedTotal - 1) * gap
       }
     }
   }
@@ -889,8 +894,13 @@ function addConcealedHand(playerIndex) {
         : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
       x = position === 'left' ? -9.15 : 9.15
       if (meldClear != null) {
-        // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露
-        z = meldClear + index * gap + (index === layoutDrawnTileIndex ? drawnGap : 0)
+        // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露。
+        // 下家（右）参照对家：摸牌位放在开头（slot 0），手牌随之跟上；
+        // 上家（左）保持摸牌位在底端（+z），因其右手侧本就朝近端。
+        const isDrawn = index === layoutDrawnTileIndex
+        z = position === 'right' && layoutDrawnTileIndex >= 0
+          ? meldClear + (isDrawn ? 0 : index + 1) * gap + (isDrawn ? 0 : drawnGap)
+          : meldClear + index * gap + (isDrawn ? drawnGap : 0)
       } else {
         const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
         if (index === layoutDrawnTileIndex) {
@@ -1231,15 +1241,16 @@ function addWinEffect() {
 }
 
 function discardTransform(playerIndex, index) {
-  // 本家前两行保持每行 6 张；从第 3 行开始每行 11 张，减少后续行被手牌遮挡。
-  const isUserWideRow = playerIndex === 0 && index >= 12
-  const columnCount = isUserWideRow ? 11 : 6
-  const rowIndex = isUserWideRow ? index - 12 : index
+  // 四家牌河统一：1-3 行每行 6 张，第 4 行起每行 10 张。
+  const wideStart = 18   // 前三行 6×3=18 张后进入 10 张/行
+  const isWide = index >= wideStart
+  const columnCount = isWide ? 10 : 6
+  const rowIndex = isWide ? index - wideStart : index
   const column = rowIndex % columnCount
   const discardGap = 0.95   // 牌河行间隙
-  const row = isUserWideRow ? 2 + Math.floor(rowIndex / columnCount) : Math.floor(rowIndex / columnCount)
-  // 宽行沿用前两行的左侧起点，再向右扩展，避免每行中心线变化造成跳动。
-  const lateral = (column - 2.5) * TILE_GAP_OFFSET
+  const row = isWide ? 3 + Math.floor(rowIndex / columnCount) : Math.floor(rowIndex / columnCount)
+  // 每行居中对齐：6 列中心 2.5、10 列中心 4.5
+  const lateral = (column - (columnCount - 1) / 2) * TILE_GAP_OFFSET
   if (playerIndex === 0) return { x: lateral, z: 2.48 + row * discardGap, rotation: 0 }
   if (playerIndex === 1) return { x: 2.64 + row * discardGap, z: -lateral, rotation: Math.PI / 2 }
   if (playerIndex === 2) return { x: -lateral, z: -2.48 - row * discardGap, rotation: Math.PI }
@@ -1276,7 +1287,7 @@ function meldTransform(playerIndex, trackOffset) {
   // 本家副露整体下移一个牌深（0.94），与牌河拉开距离。
   // 下家（右）副露往右移、上家（左）副露往左移各一个牌宽（0.68），远离中间牌河/副露区。
   if (playerIndex === 0) return { x: 9 - trackOffset, z: 6.79, rotation: 0 }
-  if (playerIndex === 1) return { x: 8.9, z: -6.1 + trackOffset, rotation: Math.PI / 2 }
+  if (playerIndex === 1) return { x: 8.9, z: -6.1 - MELD_UP_MOVE + trackOffset, rotation: Math.PI / 2 }
   // 对家副露随手牌一起向后（远离本家）移一个牌深（0.94）。
   if (playerIndex === 2) return { x: -9 + trackOffset, z: -8.29, rotation: Math.PI }
   return { x: -8.9, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }

@@ -405,6 +405,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     countdownHandle = window.setInterval(() => {
       if (phase.value !== 'discard' || currentPlayer.value !== 0) return
       turnSeconds.value -= 1
+      // 倒计时到 3 秒：播一次提示音
+      if (turnSeconds.value === 3) playSound('didu.ogg')
       if (turnSeconds.value <= 0) {
         window.clearInterval(countdownHandle)
         selectedIndex.value = user.value.hand.length - 1
@@ -424,6 +426,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         return
       }
       turnSeconds.value -= 1
+      // 倒计时到 3 秒：播一次提示音
+      if (turnSeconds.value === 3) playSound('didu.ogg')
       if (turnSeconds.value <= 0) {
         window.clearInterval(countdownHandle)
         countdownHandle = null
