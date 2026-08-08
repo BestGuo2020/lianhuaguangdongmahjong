@@ -855,11 +855,11 @@ function addConcealedHand(playerIndex) {
         meldClear = -9 + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'right') {
-      // 下家副露逼近时手牌让位（与上家一致）；meldClear 按旧基准（-6.1）计算，
-      // 副露上移 MELD_UP_MOVE 后留出空间，摸牌位放在右侧（-z 顶端）。
-      const handNear = -(arrangedTotal - 1) / 2 * gap + (props.revealHands ? 0 : -1.15)
+      // 下家副露逼近时手牌让位：meldClear 以副露实际轨道（-6.1 - MELD_UP_MOVE）为基准，
+      // 使手牌与副露间距 = MELD_HAND_GAP（与上家/对家一致），避免副露上移后让位过多留出大缝。
+      const handNear = -(arrangedTotal - 1) / 2 * gap
       if (-6.1 - MELD_UP_MOVE + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -6.1 + exposedSpan + MELD_HAND_GAP
+        meldClear = -6.1 - MELD_UP_MOVE + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'left') {
       const handNear = (arrangedTotal - 1) / 2 * gap
@@ -913,9 +913,6 @@ function addConcealedHand(playerIndex) {
         } else {
           z = centeredZ
         }
-        // 下家的暗手沿桌边向上家方向收拢；明牌结算与独立副露轨道保持原位。
-        const concealedHandShift = position === 'right' && !props.revealHands ? -1.15 : 0
-        z += concealedHandShift
       }
     }
     const pos = new THREE.Vector3(x, tileY, z + TILE_LAYER_Z)

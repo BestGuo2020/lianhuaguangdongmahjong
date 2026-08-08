@@ -1,6 +1,7 @@
 // 远程房间 REST 客户端 —— 对应 backend/app/api/rooms.py 的 6 个路由
 // 由 useRemoteGame 调用，与 WebSocket 实时通道分离（REST 管生命周期，WS 管对局）。
 import type { MatchType } from '../core/types'
+import { DISCLAIMER_VERSION } from '../../content/disclaimer'
 
 // 默认指向「页面所在主机」的 8000 端口（部署到局域网/同源时 API 与页面同 host）；
 // 非浏览器环境（vitest）无 location，回退 localhost。
@@ -183,4 +184,32 @@ export function reportPlayer(body: ReportRequest): Promise<{ reported: boolean }
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+// ─── 纯娱乐声明同意（跨设备记住「首次确认」）─────────────
+
+export interface DisclaimerAgreement {
+  playerId: string
+  agreed: boolean
+  /** 已同意的声明版本号（未同意时无此字段） */
+  version?: number
+  agreedAt?: string
+}
+
+/** 查询某玩家是否已同意声明（含版本号，供比对当前声明版本）。 */
+export function getDisclaimerAgreement(playerId: string): Promise<DisclaimerAgreement> {
+  return request<DisclaimerAgreement>(
+    `/api/players/by-id/${encodeURIComponent(playerId)}/disclaimer-agreement`,
+  )
+}
+
+/** 记录玩家同意声明（幂等）。失败由调用方静默处理，本地记录仍兜底。 */
+export function agreeDisclaimer(playerId: string, version: number = DISCLAIMER_VERSION): Promise<DisclaimerAgreement> {
+  return request<DisclaimerAgreement>(
+    `/api/players/by-id/${encodeURIComponent(playerId)}/disclaimer-agreement`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ version }),
+    },
+  )
 }

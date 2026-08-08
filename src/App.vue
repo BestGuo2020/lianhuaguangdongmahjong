@@ -4,12 +4,12 @@ import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
 import RulesPanel from './components/RulesPanel.vue'
-import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from './content/disclaimer'
+import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE, DISCLAIMER_VERSION } from './content/disclaimer'
 import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { getPlayerStats, getPlayerStatsById, getRoomMeta, reportPlayer as reportPlayerApi } from './game/online/remoteApi'
+import { getPlayerStats, getPlayerStatsById, getRoomMeta, reportPlayer as reportPlayerApi, getDisclaimerAgreement, agreeDisclaimer } from './game/online/remoteApi'
 import type { PlayerStats, RoomMeta } from './game/online/remoteApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
@@ -153,7 +153,8 @@ watch([gameMode, roomId], ([mode, id]) => {
   }
 }, { immediate: true })
 
-// ── 纯娱乐声明：首次创建/加入房间前需确认，localStorage 记忆后不再重复询问 ──
+// ── 纯娱乐声明：首次创建/加入房间前需确认。
+// 确认记录 localStorage（本机记忆）+ 同步服务端账号（换浏览器/设备也记住，Phase 8 P1）。
 const DISCLAIMER_STORAGE_KEY = 'lgm_disclaimer_agreed'
 const disclaimerOpen = ref(false)
 let pendingRoomAction: (() => void) | null = null
@@ -162,10 +163,23 @@ function hasAgreedDisclaimer(): boolean {
   try { return localStorage.getItem(DISCLAIMER_STORAGE_KEY) === '1' } catch { return false }
 }
 
-function guardRoomEntry(action: () => void) {
+async function guardRoomEntry(action: () => void) {
   if (hasAgreedDisclaimer()) {
     action()
     return
+  }
+  // 本地无记录：查服务端（换浏览器 / 清 localStorage 后仍能记住「已确认」）
+  if (playerId.value) {
+    try {
+      const server = await getDisclaimerAgreement(playerId.value)
+      if (server.agreed && (server.version ?? 0) >= DISCLAIMER_VERSION) {
+        try { localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1') } catch { /* 忽略 */ }
+        action()
+        return
+      }
+    } catch {
+      // 后端不可达：降级为本地弹窗确认
+    }
   }
   pendingRoomAction = action
   disclaimerOpen.value = true
@@ -173,6 +187,10 @@ function guardRoomEntry(action: () => void) {
 
 function acceptDisclaimer() {
   try { localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1') } catch { /* localStorage 不可用时本次仍放行 */ }
+  // 同步到服务端账号；失败静默（本地已兜底，下次进房不再询问）
+  if (playerId.value) {
+    void agreeDisclaimer(playerId.value).catch(() => { /* 忽略 */ })
+  }
   disclaimerOpen.value = false
   const action = pendingRoomAction
   pendingRoomAction = null
@@ -837,6 +855,7 @@ function clearMobileSelection(event: PointerEvent) {
                   <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
                 </button>
               </div>
+              <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
             </section>
           </div>
         </Transition>
@@ -858,6 +877,7 @@ function clearMobileSelection(event: PointerEvent) {
                 </article>
               </div>
               <button @click="returnToLobby">返回大厅</button>
+              <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
             </section>
           </div>
         </Transition>

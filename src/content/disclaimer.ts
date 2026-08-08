@@ -1,6 +1,10 @@
 // 纯娱乐声明：与 README「声明」章节同步维护。
 // 游戏内声明弹窗（进房前确认）与玩法面板（RulesPanel.vue）共用此文案。
 
+/** 声明版本号：声明文案有实质修改时 +1，已确认旧版的用户需重新确认。
+ *  与后端 app/api/account.py 的 DISCLAIMER_VERSION 保持同步。 */
+export const DISCLAIMER_VERSION = 1
+
 export interface DisclaimerSection {
   /** 段落小标题（可选，如「免责提示」） */
   title?: string
