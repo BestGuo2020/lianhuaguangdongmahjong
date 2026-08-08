@@ -48,6 +48,8 @@ let destroyed = false
 let dynamicGroups = []
 let dealTweens = []
 let meldTweens = []
+let discardTweens = []
+let animatedDiscardId = -1   // 最近一次已播过出牌动画的弃牌 id，避免重复动画
 let animatedTableActionId = -1
 let pendingTableActionAnimation = null
 let winEffectAnimation = null
@@ -686,6 +688,7 @@ function clearDynamicScene() {
   dynamicGroups.forEach((group) => scene.remove(group))
   dynamicGroups = []
   dealTweens = []
+  discardTweens = []
   winEffectAnimation = null
   dynamicResources.splice(0).forEach((resource) => resource.dispose?.())
 }
@@ -852,7 +855,7 @@ function addConcealedHand(playerIndex) {
         meldClear = -9 + exposedSpan + MELD_HAND_GAP
       }
     } else if (position === 'right') {
-      // 下家副露已上移 MELD_UP_MOVE：手牌随副露一起让位（与对家一致），meldClear 用上移后的基准。
+      // 下家镜像上家：副露逼近时手牌让位（摸牌位在手牌末尾），副露基准已上移 MELD_UP_MOVE。
       const handNear = -(arrangedTotal - 1) / 2 * gap + (props.revealHands ? 0 : -1.15)
       if (-6.1 - MELD_UP_MOVE + exposedSpan + tileHalf >= handNear - tileHalf) {
         meldClear = -6.1 - MELD_UP_MOVE + exposedSpan + MELD_HAND_GAP
@@ -895,12 +898,9 @@ function addConcealedHand(playerIndex) {
       x = position === 'left' ? -9.15 : 9.15
       if (meldClear != null) {
         // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露。
-        // 下家（右）参照对家：摸牌位放在开头（slot 0），手牌随之跟上；
-        // 上家（左）保持摸牌位在底端（+z），因其右手侧本就朝近端。
+        // 四家统一：摸牌位在手牌末尾（带 drawnGap），与上家一致。
         const isDrawn = index === layoutDrawnTileIndex
-        z = position === 'right' && layoutDrawnTileIndex >= 0
-          ? meldClear + (isDrawn ? 0 : index + 1) * gap + (isDrawn ? 0 : drawnGap)
-          : meldClear + index * gap + (isDrawn ? drawnGap : 0)
+        z = meldClear + index * gap + (isDrawn ? drawnGap : 0)
       } else {
         const centeredZ = (index - (arrangedTotal - 1) / 2) * gap
         if (index === layoutDrawnTileIndex) {
@@ -1257,6 +1257,15 @@ function discardTransform(playerIndex, index) {
   return { x: -2.64 - row * discardGap, z: lateral, rotation: -Math.PI / 2 }
 }
 
+// 出牌动画的起点 = 各家手牌位置（牌从手牌方向飞向牌河）。
+// 本家为底部 2D 手牌（屏幕底部 → 近桌沿），其余三家为各自立牌手牌中心。
+function discardSourcePos(playerIndex) {
+  if (playerIndex === 0) return new THREE.Vector3(0, .56, 8.5)
+  if (playerIndex === 1) return new THREE.Vector3(9.15, .56, -2.15)
+  if (playerIndex === 2) return new THREE.Vector3(0, .56, -9.69)
+  return new THREE.Vector3(-9.15, .56, -1.0)
+}
+
 function addDiscards(playerIndex) {
   const discards = props.players[playerIndex]?.discards || []
   discards.forEach((tileName, index) => {
@@ -1266,7 +1275,25 @@ function addDiscards(playerIndex) {
     // 牌河保持原位（不与手牌一起向本家偏移）
     const pos = new THREE.Vector3(transform.x, y, transform.z + PLAY_AREA_OFFSET_Z)
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
-    addTableTile(pos, quat, tileName)
+    // 最新一张弃牌：从手牌方向飞向牌河（带弧度 + 落地微弹），其余牌直接放置。
+    const isNewDiscard = highlighted && props.lastDiscard?.id !== animatedDiscardId
+    if (isNewDiscard) {
+      animatedDiscardId = props.lastDiscard?.id
+      const origin = discardSourcePos(playerIndex)
+      const inst = addTableTile(pos, quat, tileName, 1, origin)
+      discardTweens.push({
+        baseIndex: inst.baseIndex,
+        capIndex: inst.capIndex,
+        capMesh: inst.capMesh,
+        origin,
+        target: pos.clone(),
+        quat,
+        startedAt: performance.now(),
+        duration: 360,
+      })
+    } else {
+      addTableTile(pos, quat, tileName)
+    }
     if (highlighted) {
       // 最新一张弃牌的高亮垫片保持独立 mesh（仅 1 张，无需合批）。
       const marker = new THREE.Mesh(
@@ -1465,6 +1492,7 @@ function rebuildTableTiles() {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
   clearDynamicScene()
   meldTweens = []
+  discardTweens = []
   pendingTableActionAnimation = props.tableActionEvent?.id !== animatedTableActionId
     ? props.tableActionEvent
     : null
@@ -1648,6 +1676,17 @@ function render(time = 0) {
     const scale = THREE.MathUtils.lerp(.78, 1, settled)
     scratchVector.set(tween.baseX, y, tween.baseZ)
     setTileInstance(tween.baseIndex, tween.capMesh, tween.capIndex, scratchVector, tween.quat, scale)
+    return progress < 1
+  })
+  // 出牌动画：牌从手牌方向飞向牌河，带弧度抬升 + 落地微弹（模拟人类打牌）
+  discardTweens = discardTweens.filter((tween) => {
+    const progress = Math.min(1, Math.max(0, (time - tween.startedAt) / tween.duration))
+    const eased = 1 - (1 - progress) ** 3
+    const arc = Math.sin(progress * Math.PI) * .32
+    const bounce = Math.sin(progress * Math.PI) * (1 - progress) * .1
+    scratchVector.lerpVectors(tween.origin, tween.target, eased)
+    scratchVector.y = THREE.MathUtils.lerp(tween.origin.y, tween.target.y, eased) + arc + bounce
+    setTileInstance(tween.baseIndex, tween.capMesh, tween.capIndex, scratchVector, tween.quat, 1)
     return progress < 1
   })
   if (winEffectAnimation) {
