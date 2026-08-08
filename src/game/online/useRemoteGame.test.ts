@@ -593,10 +593,10 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.phase.value).toBe('dealing')
     expect(sounds).toContain('game_start.mp3')
 
-    // 开局动画期间到达的开局快照 → 缓冲：不填表、不报牌；中央牌数显示满墙（快照余数 80 + 已发 52）
+    // 开局动画期间到达的开局快照 → 缓冲：不填表、不报牌；中央牌数显示满墙 136
     mockSocket!.receive(makeSnapshot({ phase: 'opening', currentPlayer: 3, lastDiscard: { tile: 'm5', from: 0, id: 1 } }))
     expect(game.players[0].hand.length).toBe(0)
-    expect(game.wallCount.value).toBe(132)   // 80 + 52 = 满墙，发牌动画期间实时递减
+    expect(game.wallCount.value).toBe(136)   // 满墙，发牌动画期间实时递减
     expect(sounds).not.toContain('dapai.mp3')
 
     // 1.25s 后进入骰子投掷阶段

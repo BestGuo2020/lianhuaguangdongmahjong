@@ -4,6 +4,7 @@ import type { ActionContext } from './actions'
 import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from './playerController'
 import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
 import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from './tiles'
+import { wallBreakIndex } from './wallLayout'
 import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
 import {
   prefersReducedMotion,
@@ -74,6 +75,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const phase = ref('lobby')
   const players = reactive<GamePlayer[]>([])
   const wall = ref<TileType[]>([])
+  // 从牌头（shift）累计摸走的张数：区别于牌尾 pop（杠/红中补张），供 3D 牌山正确显示头/尾消耗。
+  const wallHeadDrawn = ref(0)
   const currentPlayer = ref(-1)
   let kongDrawPlayerIndex = -1
   const selectedIndex = ref(-1)
@@ -272,6 +275,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   function takeTile(fromTail = false) {
     if (!wall.value.length) return null
+    if (!fromTail) wallHeadDrawn.value += 1
     return fromTail ? wall.value.pop() : wall.value.shift()
   }
 
@@ -282,13 +286,23 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function receiveDealtTile(player: GamePlayer, tile) {
-    if (tile === 'red') {
-      player.redCount += 1
-      player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-      const replacement = takeTile(true)
-      if (replacement) receiveDealtTile(player, replacement)
-    } else {
-      player.hand.push(tile)
+    // 发牌阶段红中先入正常手牌，发完牌后统一从牌墙尾补杠（见 resolveDealtReds），
+    // 避免发牌过程中牌山就因红中补张而少牌。
+    player.hand.push(tile)
+  }
+
+  // 发完牌后处理红中：若手牌有红中，依次逆时针（庄家起）从牌墙尾补张。
+  function resolveDealtReds() {
+    const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
+    for (const playerIndex of seatOrder) {
+      const player = players[playerIndex]
+      while (player.hand.includes('red')) {
+        player.hand.splice(player.hand.indexOf('red'), 1)
+        player.redCount += 1
+        player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
+        const replacement = takeTile(true)
+        if (replacement) player.hand.push(replacement)  // 补到红中则由 while 继续转
+      }
     }
   }
 
@@ -309,6 +323,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const sequence = openingSequence
     resetPlayers()
     wall.value = shuffle(createWall())
+    wallHeadDrawn.value = 0
     result.value = null
     winEffect.value = null
     winPresentation.value = null
@@ -333,8 +348,9 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
     if (sequence !== openingSequence) return
 
-    // 骰子决定拆墙点（与后端 _break_wall_by_dice 一致）：一墩=2 张，旋转列表让拆墙处成为前端
-    const breakIndex = (diceValues.value[0] + diceValues.value[1]) * 2 % wall.value.length
+    // 骰子决定拆墙点（莲花广麻规则，与后端 _break_wall_by_dice 一致）：
+    // 和数定拆哪家墙（5/9→庄，2/6/10→下，3/7/11→对，4/8/12→上），小点数定列；旋转列表让拆墙处成为前端。
+    const breakIndex = wallBreakIndex(diceValues.value)
     wall.value = [...wall.value.slice(breakIndex), ...wall.value.slice(0, breakIndex)]
 
     openingStage.value = 'deal'
@@ -356,10 +372,22 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         if (sequence !== openingSequence) return
       }
     }
-    for (const playerIndex of seatOrder) {
-      await dealBatch(playerIndex, 1)
-      if (sequence !== openingSequence) return
+    // 庄家跳牌：其余三家各补一张之前，庄家先抓上层两张（隔一墩）。
+    // 依次从墙头取 5 张：第 1、5 张给庄家（隔开中间），第 2、3、4 张给下家/对家/上家。
+    const jumpTiles = Array.from({ length: 5 }, () => takeTile(false))
+    const jumpOrder = [dealer.value, seatOrder[1], seatOrder[2], seatOrder[3], dealer.value]
+    jumpOrder.forEach((playerIndex, index) => {
+      if (jumpTiles[index]) receiveDealtTile(players[playerIndex], jumpTiles[index])
+    })
+    dealAnimation.value = { playerIndex: dealer.value, count: 2, serial: dealAnimation.value.serial + 1 }
+    await wait(260)
+    for (const other of [seatOrder[1], seatOrder[2], seatOrder[3]]) {
+      dealAnimation.value = { playerIndex: other, count: 1, serial: dealAnimation.value.serial + 1 }
+      await wait(150)
     }
+    if (sequence !== openingSequence) return
+    // 发完牌后统一处理红中补杠（逆时针从牌墙尾补张），避免发牌中牌山就少牌
+    resolveDealtReds()
     phase.value = 'opening'
     openingStage.value = null
     dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
@@ -367,7 +395,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const fourRedWinner = players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return endGame(fourRedWinner, { fourRed: true })
     announce(`${roundLabel.value} · 开牌`)
-    later(() => beginTurn(dealer.value), 650)
+    // 庄家已因跳牌持有 14 张：首回合跳过摸牌直接出牌
+    later(() => beginTurn(dealer.value, { skipDraw: true }), 650)
   }
 
   function startCountdown() {
@@ -865,6 +894,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const winner = players[winnerIndex]
     const scoresBefore = players.map((player) => player.score)
     const { horses, hits } = drawHorses(wall.value, 8)
+    // 买马从牌头摸走：同步牌头计数，供 3D 牌山正确显示牌头缺口
+    wallHeadDrawn.value += horses.length
     const score = scoreHand({
       dealer: winnerIndex === dealer.value,
       noJoker: !winner.hand.includes('white'),
@@ -1005,7 +1036,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   onBeforeUnmount(clearTimers)
 
   return {
-    phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
+    phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,

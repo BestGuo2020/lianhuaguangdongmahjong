@@ -17,6 +17,7 @@ import type { ActionPrompt } from '../core/playerController'
 import { defaultAvatarForSeat } from '../core/avatar'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
 import { TILE_TYPES, tileAudioFile, tileName } from '../core/tiles'
+import { WALL_TOTAL } from '../core/wallLayout'
 import type { GamePlayer, MatchType, Meld, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
 import {
   prefersReducedMotion,
@@ -116,6 +117,8 @@ interface ServerSnapshot {
   honba: number
   dice?: [number, number]
   wallCount: number
+  wall: TileType[]
+  headDrawn: number
   currentPlayer: number
   players: GamePlayer[]
   seat: number
@@ -188,6 +191,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const phase = ref<ClientPhase>('lobby')
   const players = reactive<GamePlayer[]>([])
   const wallCount = ref(0)
+  const wall = ref<TileType[]>([])
+  const wallHeadDrawn = ref(0)   // 服务端权威：牌头已摸走张数（区分牌尾补杠）
   const currentPlayer = ref(-1)
   const selectedIndex = ref(-1)
   const turnSeconds = ref(12)
@@ -547,11 +552,15 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       revealHands.value = true
       winningPlayerIndex.value = -1
       players.splice(0, players.length, ...rotatePlayers(snap.players))
+      wall.value = snap.wall ?? []
+      wallHeadDrawn.value = snap.headDrawn ?? 0
       return
     }
     if (snap.phase === 'settled' && snap.result) {
       // 结算快照：触发赢牌动画 / 结算展示
       players.splice(0, players.length, ...rotatePlayers(snap.players))
+      wall.value = snap.wall ?? []
+      wallHeadDrawn.value = snap.headDrawn ?? 0
       wallCount.value = snap.wallCount
       currentPlayer.value = snap.currentPlayer >= 0 ? toLocal(snap.currentPlayer) : -1
       dealer.value = toLocal(snap.dealer)
@@ -565,6 +574,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     // 普通进行中快照
     selectedIndex.value = -1
     players.splice(0, players.length, ...rotatePlayers(snap.players))
+    wall.value = snap.wall ?? []
+    wallHeadDrawn.value = snap.headDrawn ?? 0
     wallCount.value = snap.wallCount
     currentPlayer.value = snap.currentPlayer >= 0 ? toLocal(snap.currentPlayer) : -1
     dealer.value = toLocal(snap.dealer)
@@ -591,9 +602,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       // 首份快照作为发牌动画数据源（各家手牌数/值），后续只保留最新待落地。
       if (!openingSnapshot) {
         openingSnapshot = snap
-        // 开局显示满墙（snap.wallCount 是发牌后的余数，+52 = 每家 13 张已发的满墙值），
-        // 发牌动画逐步递减到真实值，对齐本地 startGame 的「满墙 → 递减」观感。
-        wallCount.value = snap.wallCount + 52
+        // 开局显示满墙（136），发牌动画逐步递减到真实值，对齐本地 startGame 的「满墙 → 递减」观感。
+        // 假满墙 = 待发的占位牌 + 真实余墙（服务端已把红中补杠从牌尾消耗，余墙 = 136-53-R）。
+        const fullWallCount = WALL_TOTAL
+        wallCount.value = fullWallCount
+        const snapshotWall = snap.wall ?? []
+        const placeholders = Math.max(0, fullWallCount - snapshotWall.length)
+        wall.value = [...Array<TileType>(placeholders).fill('m1'), ...snapshotWall]
+        wallHeadDrawn.value = 0
         // 先摆空桌：站位/名字/分数可见，手牌由发牌动画逐步填充
         const skeleton = rotatePlayers(snap.players)
         players.splice(0, players.length, ...skeleton.map((p) => ({
@@ -688,8 +704,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       const remaining = hands[playerIndex].length
       const slice = hands[playerIndex].splice(remaining - count, count)
       players[playerIndex].hand.push(...slice)
-      // 发牌即耗牌墙：中央剩余牌数随发牌实时递减（对齐本地 startGame 的观感）
+      // 发牌即耗牌墙：中央剩余牌数与 3D 牌山随发牌实时递减（对齐本地 startGame 的观感）
       wallCount.value = Math.max(0, wallCount.value - count)
+      wall.value.splice(0, count)
+      wallHeadDrawn.value += count
       dealAnimation.value = { playerIndex, count, serial: serial + 1 }
       serial += 1
       playSound('deal.mp3', 0.72)
@@ -701,8 +719,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         if (!(await dealBatch(playerIndex, 4))) return false
       }
     }
+    // 庄家跳牌：先 2 张，其余三家各 1 张（与本地 startGame / 服务端发牌一致）
+    if (!(await dealBatch(localDealer, 2))) return false
     for (const playerIndex of seatOrder) {
-      if (!(await dealBatch(playerIndex, 1))) return false
+      if (playerIndex !== localDealer && !(await dealBatch(playerIndex, 1))) return false
     }
     dealAnimation.value = { playerIndex: -1, count: 0, serial: serial + 1 }
     return true
@@ -1292,6 +1312,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     openingStage.value = null
     phase.value = 'lobby'
     players.splice(0, players.length)
+    wall.value = []
+    wallHeadDrawn.value = 0
     wallCount.value = 0
     currentPlayer.value = -1
     selectedIndex.value = -1
@@ -1477,6 +1499,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     scoreFlowEvent.value = null
     selectedIndex.value = -1
     currentPlayer.value = -1
+    wall.value = []
+    wallHeadDrawn.value = 0
     wallCount.value = 0
     players.splice(0, players.length)
     phase.value = 'lobby'
@@ -1520,7 +1544,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       refreshRoom,
     },
     // 游戏状态（useGame 兼容接口）
-    phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
+    phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect,
     winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,

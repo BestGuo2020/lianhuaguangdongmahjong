@@ -105,7 +105,7 @@ for (const key of Object.keys(localGame)) {
 const game = gameFacade as unknown as ReturnType<typeof useGame>
 
 const {
-  phase, players, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
+  phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
   actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
@@ -518,6 +518,8 @@ function clearMobileSelection(event: PointerEvent) {
             :players="players"
             :current-player="currentPlayer"
             :last-discard="lastDiscard"
+            :wall="wall"
+            :wall-head-drawn="wallHeadDrawn"
             :wall-count="wallCount"
             :reveal-hands="revealHands"
             :winner-index="winningPlayerIndex"

@@ -7,6 +7,7 @@ import { sortTiles, TILE_TYPES } from '../game/core/tiles'
 import { preloadTileImages, preloadedTileImages } from '../game/core/tileAssets'
 import { meldSourceTileIndex } from '../game/core/rules'
 import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/core/tableLayout'
+import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../game/core/wallLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/core/winEffect'
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/types'
 
@@ -14,6 +15,8 @@ interface TableProps {
   players?: GamePlayer[]
   currentPlayer?: number
   lastDiscard?: { tile: TileType; from: number; id: number } | null
+  wall?: TileType[]
+  wallHeadDrawn?: number
   wallCount?: number
   revealHands?: boolean
   winnerIndex?: number
@@ -27,7 +30,7 @@ interface TableProps {
 }
 
 const props = withDefaults(defineProps<TableProps>(), {
-  players: () => [], currentPlayer: -1, lastDiscard: null, wallCount: 0,
+  players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0,
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0,
@@ -61,6 +64,7 @@ const DICE_LANDING_Y = .62
 const BASE_EXPOSURE = .92
 const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
+const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初始高度（略高于两墩牌顶）
 
 // 渲染分辨率上限（清晰度 vs 帧率）：默认 3 取设备原生 DPR，真机实测本设备 2.2 vs 2.0 帧率无差，原生清晰免费。
 // URL 带 ?pr=<数字> 可覆盖。
@@ -777,7 +781,9 @@ function addConcealedHand(playerIndex) {
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
     if (dealThisHand && index >= animatedFromIndex) {
-      const origin = new THREE.Vector3(0, 3.4, TILE_LAYER_Z + .5)
+      // 发牌从牌山 head 槽位（下一张要摸的牌所在处）飞出，而不是从中控台上方。
+      const head = wallDrawHeadPos()
+      const origin = new THREE.Vector3(head.x, WALL_DEAL_ORIGIN_Y, head.z)
       const inst = addTableTile(pos, quat, face, 1, origin)
       dealTweens.push({
         baseIndex: inst.baseIndex,
@@ -1129,10 +1135,10 @@ function meldTransform(playerIndex, trackOffset) {
   // 本家副露整体下移一个牌深（0.94），与牌河拉开距离。
   // 下家（右）副露往右移、上家（左）副露往左移各一个牌宽（0.68），远离中间牌河/副露区。
   if (playerIndex === 0) return { x: 9 - trackOffset, z: 6.79, rotation: 0 }
-  if (playerIndex === 1) return { x: 8.46, z: -6.1 + trackOffset, rotation: Math.PI / 2 }
+  if (playerIndex === 1) return { x: 8.9, z: -6.1 + trackOffset, rotation: Math.PI / 2 }
   // 对家副露随手牌一起向后（远离本家）移一个牌深（0.94）。
   if (playerIndex === 2) return { x: -9 + trackOffset, z: -8.29, rotation: Math.PI }
-  return { x: -8.46, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
+  return { x: -8.9, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
 }
 
 function alignMeldBottom(transform, playerIndex, rotated: boolean) {
@@ -1242,6 +1248,35 @@ function addMelds(playerIndex) {
   })
 }
 
+// 牌山 head 位置 = 下一张要摸的牌所在处：wall[0] 经 wallHeadDrawn 沿环顺时针推进。
+function wallDrawHeadPos() {
+  const headOffset = props.wallHeadDrawn ?? 0
+  const breakIndex = wallBreakIndex(props.diceValues)
+  const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL)
+  const slot = wallStackSlot(stackIndex)
+  return { x: slot.x, z: slot.z }
+}
+
+// 四边环状牌山（参考欢乐麻将）：wall[i] → 物理槽 (breakIndex + headOffset + i) % 136。
+// 每墩 2 张上下叠，牌径向放置（长边指向桌中心），X-180° 翻转让绿色牌背朝上。
+// headOffset = wallHeadDrawn（从牌头累计摸走的张数），使 head 顺时针推进（抓牌顺时针）；
+// 开杠/红中从牌尾补张（pop）不计入，因此牌尾端会正确地随之缩短。
+function addWall() {
+  const tiles = props.wall || []
+  if (!tiles.length) return
+  const breakIndex = wallBreakIndex(props.diceValues)
+  const headOffset = props.wallHeadDrawn ?? 0
+  tiles.forEach((_, index) => {
+    const { stackIndex, layer } = wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL)
+    const slot = wallStackSlot(stackIndex)
+    const y = .41 + layer * .47
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
+    // 背朝上：绕 X 转 180°，使 base 底面的牌背（backMaterial）朝上（与暗杠首尾一致）。
+    quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
+    addTableTile(new THREE.Vector3(slot.x, y, slot.z), quat, null)
+  })
+}
+
 function rebuildTableTiles() {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
   clearDynamicScene()
@@ -1255,6 +1290,7 @@ function rebuildTableTiles() {
     addDiscards(playerIndex)
     addMelds(playerIndex)
   }
+  addWall()
   finishTableInstances()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null
@@ -1573,6 +1609,7 @@ watch(
     props.winPresentation?.tile,
     props.winPresentation?.robbedKong,
     props.dealAnimation.serial,
+    props.wall?.length,
   ),
   rebuildTableTiles,
 )
