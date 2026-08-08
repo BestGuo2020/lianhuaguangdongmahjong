@@ -873,6 +873,15 @@ describe('useRemoteGame 匿名身份与会话持久化（Phase 8 P1）', () => {
     mockSocket!.receive({ kind: 'rejoin_err', code: 'INVALID_REJOIN_CODE' })
     expect(game.storedSession.value).toBeNull()
     expect(window.localStorage.getItem('lgm_session')).toBeNull()
+    // 会话作废后必须停掉 WS 重连循环并回大厅（否则对失效房间无限重连，一直「正在重连」）
+    expect(game.roomId.value).toBe('')
+    expect(game.rejoinCode.value).toBe('')
+    expect(game.wsStatus.value).toBe('idle')
+    expect(game.sessionStatus.value).toBe('idle')
+    expect(game.phase.value).toBe('lobby')
+    // 不再发起重连：定时器已清空，推进时间不会触发新的 connect
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(game.wsStatus.value).toBe('idle')
   })
 
   it('ping/pong 测 RTT 更新信号质量；断开后归零', async () => {

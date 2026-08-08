@@ -1142,6 +1142,15 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function clearSession() {
     clearStored(STORAGE.session)
     storedSession.value = null
+    // 会话作废：必须停掉 WS 重连循环并清空内存中的房间/重进码，回到大厅。
+    // 否则对已失效房间会一直重连（rejoin_err → onclose → scheduleReconnect 死循环）。
+    closeConnection()
+    roomId.value = ''
+    rejoinCode.value = ''
+    mySeat.value = -1
+    sessionStatus.value = 'idle'
+    phase.value = 'lobby'
+    roomSeats.value = []
   }
 
   async function resumeSession() {
