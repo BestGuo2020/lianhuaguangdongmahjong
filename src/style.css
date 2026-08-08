@@ -534,6 +534,25 @@ button { font: inherit; }
 .rule-list article > b { color: #b18c48; font: 700 15px Georgia, serif; }.rule-list h3 { margin: 0 0 4px; color: #f0dfba; font: 700 16px "Noto Serif SC", serif; }.rule-list p { margin: 0; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
 .rule-note { margin-top: 17px; padding: 11px; border: 1px dashed rgba(215,179,91,.25); color: #c2aa73; font-size: 13px; text-align: center; letter-spacing: .08em; }
 
+/* ── 纯娱乐声明：玩法面板声明块 / 进房前确认弹窗 ── */
+.rules-panel .disclaimer-block { margin-top: 16px; padding: 13px 14px; border: 1px dashed rgba(215,179,91,.25); border-radius: 4px; background: rgba(0,0,0,.18); }
+.rules-panel .disclaimer-block > h3 { margin: 0 0 9px; color: #eccb7d; font: 800 15px "Noto Serif SC", serif; letter-spacing: .12em; }
+.rules-panel .disclaimer-block h4 { margin: 10px 0 5px; color: #d9bd7f; font: 700 13px "Noto Serif SC", serif; }
+.rules-panel .disclaimer-block p { margin: 0 0 8px; color: #9db0a6; font-size: 12px; line-height: 1.7; }
+.rules-panel .disclaimer-block p:last-child { margin-bottom: 0; }
+.rules-panel .disclaimer-block ol { margin: 0 0 8px; padding-left: 20px; }
+.rules-panel .disclaimer-block li { margin-bottom: 4px; color: #9db0a6; font-size: 12px; line-height: 1.65; }
+.disclaimer-backdrop { z-index: 110; }
+.disclaimer-card { width: min(660px, 92vw); max-height: 88%; padding: 30px 34px 26px; overflow: hidden; }
+.disclaimer-card h2 { margin-bottom: 14px; font-size: clamp(24px, 2.6vw, 34px); }
+.disclaimer-scroll { max-height: 56vh; padding-right: 6px; overflow-y: auto; text-align: left; }
+.disclaimer-scroll h3 { margin: 15px 0 6px; color: #eccb7d; font: 800 15px "Noto Serif SC", serif; letter-spacing: .08em; }
+.disclaimer-scroll h3:first-child { margin-top: 0; }
+.disclaimer-scroll p { margin: 0 0 8px; color: #c4d0c9; font-size: 13px; line-height: 1.75; }
+.disclaimer-scroll ol { margin: 0 0 8px; padding-left: 22px; }
+.disclaimer-scroll li { margin-bottom: 5px; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
+.disclaimer-card .result-actions { margin-top: 16px; }
+
 .result-backdrop { position: absolute; z-index: 90; inset: 0; display: grid; place-items: center; background: rgba(2,8,6,.78); backdrop-filter: blur(4px); }
 .result-card { position: relative; width: min(590px, 91vw); padding: 43px 42px 34px; border: 1px solid #b58a3c; border-radius: 8px; background: radial-gradient(circle at 50% 0, rgba(155,106,44,.2), transparent 42%), linear-gradient(145deg, #17352b, #081711 78%); box-shadow: 0 25px 70px #000; text-align: center; }
 .result-card::before { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(211,175,91,.13); pointer-events: none; }

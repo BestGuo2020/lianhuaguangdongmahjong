@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { BASE_SCORE } from '../game/core/rules'
+import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
 
 defineProps({ open: Boolean })
 defineEmits(['close'])
@@ -32,6 +33,16 @@ const rules = [
         </article>
       </div>
       <div class="rule-note">基础分 {{ BASE_SCORE }} 分 · 总分 = 底分 × 倍数 + 中马数 × 底分</div>
+      <section class="disclaimer-block" aria-label="用户声明">
+        <h3>{{ DISCLAIMER_TITLE }}</h3>
+        <template v-for="(section, index) in DISCLAIMER_SECTIONS" :key="index">
+          <h4 v-if="section.title">{{ section.title }}</h4>
+          <p v-if="section.body">{{ section.body }}</p>
+          <ol v-if="section.list?.length">
+            <li v-for="(item, itemIndex) in section.list" :key="itemIndex">{{ item }}</li>
+          </ol>
+        </template>
+      </section>
     </aside>
   </Transition>
 </template>

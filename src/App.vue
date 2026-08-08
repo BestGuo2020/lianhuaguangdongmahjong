@@ -4,6 +4,7 @@ import MahjongTile from './components/MahjongTile.vue'
 import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
 import RulesPanel from './components/RulesPanel.vue'
+import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from './content/disclaimer'
 import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
@@ -152,18 +153,49 @@ watch([gameMode, roomId], ([mode, id]) => {
   }
 }, { immediate: true })
 
-async function createRemoteRoom() {
+// ── 纯娱乐声明：首次创建/加入房间前需确认，localStorage 记忆后不再重复询问 ──
+const DISCLAIMER_STORAGE_KEY = 'lgm_disclaimer_agreed'
+const disclaimerOpen = ref(false)
+let pendingRoomAction: (() => void) | null = null
+
+function hasAgreedDisclaimer(): boolean {
+  try { return localStorage.getItem(DISCLAIMER_STORAGE_KEY) === '1' } catch { return false }
+}
+
+function guardRoomEntry(action: () => void) {
+  if (hasAgreedDisclaimer()) {
+    action()
+    return
+  }
+  pendingRoomAction = action
+  disclaimerOpen.value = true
+}
+
+function acceptDisclaimer() {
+  try { localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1') } catch { /* localStorage 不可用时本次仍放行 */ }
+  disclaimerOpen.value = false
+  const action = pendingRoomAction
+  pendingRoomAction = null
+  action?.()
+}
+
+function declineDisclaimer() {
+  disclaimerOpen.value = false
+  pendingRoomAction = null
+}
+
+function createRemoteRoom() {
   if (roomId.value) return   // 已在房间：禁重复建房（按钮禁用，回车路径同样拦截）
   if (!nicknameInput.value.trim()) return
   nickname.value = nicknameInput.value.trim()
-  await remoteActions.createRoom(selectedMatch.value, 4)
+  guardRoomEntry(() => void remoteActions.createRoom(selectedMatch.value, 4))
 }
 
-async function joinRemoteRoom() {
+function joinRemoteRoom() {
   if (roomId.value) return   // 已在房间：禁重复加入
   if (!nicknameInput.value.trim() || !joinCode.value.trim()) return
   nickname.value = nicknameInput.value.trim()
-  await remoteActions.joinRoom(joinCode.value)
+  guardRoomEntry(() => void remoteActions.joinRoom(joinCode.value))
 }
 
 // 房间码一键复制：优先 Clipboard API；局域网 http 非安全上下文回退隐藏 textarea + execCommand
@@ -254,10 +286,12 @@ async function closeRoom() {
   }
 }
 
-// 继续对局（P1）：凭 localStorage 会话直接回上次未完成对局的原座位
+// 继续对局（P1）：凭 localStorage 会话直接回上次未完成对局的原座位（同为进房，需先确认声明）
 function resumeRemoteSession() {
-  gameMode.value = 'remote'
-  void remoteActions.resumeSession()
+  guardRoomEntry(() => {
+    gameMode.value = 'remote'
+    void remoteActions.resumeSession()
+  })
 }
 
 // 举报（P1）：报告当前房间里的某位玩家（后端 resolves player_id 以便封禁）
@@ -844,6 +878,26 @@ function clearMobileSelection(event: PointerEvent) {
               <p v-else class="stats-empty">暂无战绩记录，快去打一局吧！</p>
               <div class="result-actions">
                 <button @click="statsOpen = false">关闭</button>
+              </div>
+            </section>
+          </div>
+        </Transition>
+        <Transition name="modal">
+          <div v-if="disclaimerOpen" class="result-backdrop disclaimer-backdrop" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">
+            <section class="result-card disclaimer-card">
+              <h2 id="disclaimer-title">{{ DISCLAIMER_TITLE }}</h2>
+              <div class="disclaimer-scroll">
+                <template v-for="(section, index) in DISCLAIMER_SECTIONS" :key="index">
+                  <h3 v-if="section.title">{{ section.title }}</h3>
+                  <p v-if="section.body">{{ section.body }}</p>
+                  <ol v-if="section.list?.length">
+                    <li v-for="(item, itemIndex) in section.list" :key="itemIndex">{{ item }}</li>
+                  </ol>
+                </template>
+              </div>
+              <div class="result-actions">
+                <button class="secondary" @click="declineDisclaimer">不同意，返回</button>
+                <button @click="acceptDisclaimer">同意并继续</button>
               </div>
             </section>
           </div>
