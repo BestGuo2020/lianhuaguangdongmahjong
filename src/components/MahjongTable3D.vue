@@ -3,7 +3,8 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { sortTiles, TILE_TYPES, tileFaceFile } from '../game/core/tiles'
+import { sortTiles, TILE_TYPES } from '../game/core/tiles'
+import { preloadTileImages, preloadedTileImages } from '../game/core/tileAssets'
 import { meldSourceTileIndex } from '../game/core/rules'
 import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/core/tableLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/core/winEffect'
@@ -77,15 +78,6 @@ function own(resource) {
 function ownDynamic(resource) {
   dynamicResources.push(resource)
   return resource
-}
-
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = reject
-    image.src = url
-  })
 }
 
 function makeDiceTexture(value) {
@@ -1543,7 +1535,8 @@ onMounted(async () => {
   addDice()
 
   // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
-  scene.userData.tileImages = new Map<TileType, HTMLImageElement>()
+  // 牌面用应用启动时预加载的共享表（可能已在内存中，直接带真实牌面）。
+  scene.userData.tileImages = preloadedTileImages()
   addTable()
   rebuildTableTiles()
   if (qOverride !== null) {
@@ -1556,14 +1549,8 @@ onMounted(async () => {
   setupPerfHud()
   render()
 
-  await Promise.all(TILE_TYPES.map(async (tile) => {
-    try {
-      const image = await loadImage(`${import.meta.env.BASE_URL}tiles/${tileFaceFile(tile)}`)
-      scene.userData.tileImages.set(tile, image)
-    } catch {
-      // 单张牌面加载失败不应阻断整个 3D 牌桌，其牌面会回退为无图案底色。
-    }
-  }))
+  // 等启动预加载完成（已完成则立即返回），确保图集带上全部真实牌面。
+  await preloadTileImages()
   if (destroyed) return
   faceMaterials.clear()
   // 图集在图片就绪前可能已用空底构建，需失效让下一次重建带上真实牌面。

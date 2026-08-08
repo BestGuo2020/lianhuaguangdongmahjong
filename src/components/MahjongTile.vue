@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TILE_META, tileFaceFile } from '../game/core/tiles'
+import { TILE_META } from '../game/core/tiles'
+import { tileFaceUrl } from '../game/core/tileAssets'
 import type { TileType } from '../game/core/types'
 
 const props = withDefaults(defineProps<{
@@ -20,8 +21,8 @@ const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)
 const tileStyle = computed(() => {
   if (shownTile.value === 'back') return {}
-  const file = tileFaceFile(shownTile.value as TileType)
-  return file ? { backgroundImage: `url("${import.meta.env.BASE_URL}tiles/${file}")` } : {}
+  // 优先用预加载的内存 blob URL；预加载未完成时回退网络地址（浏览器缓存兜底）
+  return { backgroundImage: `url("${tileFaceUrl(shownTile.value as TileType)}")` }
 })
 </script>
 

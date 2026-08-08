@@ -28,7 +28,12 @@ const hoveredDiscard = ref<TileType | null>(null)
 const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
 let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
-const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
+const { soundOn, playEffect, playEffectAndWait, startBgm, preloadBgm } = useAudio()
+// 首次用户交互即预加载 BGM 到内存（fetch 无需手势，仅为提前下载；开局时播放零网络等待）。
+const primeBgm = () => { preloadBgm() }
+window.addEventListener('pointerdown', primeBgm, { once: true, passive: true })
+window.addEventListener('keydown', primeBgm, { once: true })
+window.addEventListener('touchstart', primeBgm, { once: true, passive: true })
 
 function updateOrientationGate() {
   const isPortrait = window.matchMedia('(orientation: portrait)').matches
