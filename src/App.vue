@@ -111,8 +111,35 @@ const {
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, nextRound, returnToLobby, debugPreviewWin,
+  userGang, userHu, nextRound, returnToLobby, debugPreviewWin, debugPreviewKong,
 } = game
+
+// ── 开杠选牌对话框 ──────────────────────────────
+// 点「杠」打开选牌弹窗（杠按钮变「取消」），点牌立即开杠；杠候选消失时自动关闭。
+const kongPickerOpen = ref(false)
+const toggleKongPicker = () => {
+  if (kongPickerOpen.value) {
+    kongPickerOpen.value = false
+    return
+  }
+  const kongs = userKongs.value
+  // 只有一张可杠时直接开杠，不弹选择框；多张才需要选牌
+  if (kongs.length === 1) userGang(kongs[0])
+  else if (kongs.length > 1) kongPickerOpen.value = true
+}
+const chooseKong = (tile: TileType) => {
+  kongPickerOpen.value = false
+  userGang(tile)
+}
+watch(userKongs, (kongs) => {
+  if (!kongs.length) kongPickerOpen.value = false
+})
+
+// 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）
+const debugKong = (mode: 'concealed' | 'added' | 'both') => {
+  if (gameMode.value !== 'local') return
+  debugPreviewKong(mode)
+}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
@@ -692,7 +719,7 @@ function clearMobileSelection(event: PointerEvent) {
             </template>
           </div>
 
-          <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
+          <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen }">
               <button
                 v-if="userCurrentWaits || userTingOptions.length"
                 class="action waiting-action"
@@ -711,7 +738,11 @@ function clearMobileSelection(event: PointerEvent) {
                 <button class="action pass" @click="userPass"><b>过</b></button>
               </template>
               <template v-else>
-                <button v-if="userKongs.length" class="action primary" @click="userGang()"><b>杠</b></button>
+                <button
+                  v-if="userKongs.length"
+                  class="action primary"
+                  @click="toggleKongPicker"
+                ><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
                 <button v-if="userCanHu" class="action hu" @click="userHu"><b>胡</b></button>
               </template>
           </div>
@@ -931,6 +962,22 @@ function clearMobileSelection(event: PointerEvent) {
             </section>
           </div>
         </Transition>
+        <Transition name="modal">
+          <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
+            <section class="result-card kong-picker-card">
+              <h2 id="kong-picker-title">请选择想要杠的牌</h2>
+              <div class="kong-picker-tiles">
+                <MahjongTile
+                  v-for="tile in userKongs"
+                  :key="tile"
+                  :tile="tile"
+                  class="kong-picker-tile"
+                  @choose="chooseKong(tile)"
+                />
+              </div>
+            </section>
+          </div>
+        </Transition>
         <button v-if="result && !resultVisible && !matchFinished" class="result-reopen" @click="resultVisible = true">查看结算</button>
         <button
           v-if="gameMode === 'remote' && result && !resultVisible && !matchFinished"
@@ -944,6 +991,13 @@ function clearMobileSelection(event: PointerEvent) {
             <span>{{ seat }}</span>
             <button :data-testid="`win-self-${index}`" @click="debugPreviewWin(index)">自摸</button>
             <button :data-testid="`win-rob-${index}`" @click="debugPreviewWin(index, { robbedKong: true })">抢杠胡</button>
+          </div>
+          <strong>杠选牌测试</strong>
+          <div class="kong-debug">
+            <span>本家</span>
+            <button data-testid="kong-concealed" @click="debugKong('concealed')">暗杠</button>
+            <button data-testid="kong-added" @click="debugKong('added')">补杠</button>
+            <button data-testid="kong-both" @click="debugKong('both')">双杠</button>
           </div>
         </aside>
       </div>

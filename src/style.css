@@ -573,12 +573,20 @@ button { font: inherit; }
 .result-actions button:disabled, .result-reopen:disabled { opacity: .55; cursor: not-allowed; }
 .result-actions button.secondary { border-color: rgba(213,184,112,.5); background: rgba(8,28,20,.88); color: #e5d5ad; }
 .result-disclaimer-note { margin: 14px 0 0; color: #b8935a; font-size: 12px; letter-spacing: .1em; }
+.kong-picker-backdrop { z-index: 91; }
+.kong-picker-card { width: min(400px, 88vw); padding: 34px 30px 28px; }
+.kong-picker-card h2 { margin-bottom: 22px; font-size: clamp(19px, 2.3vw, 24px); }
+.kong-picker-tiles { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
+.kong-picker-card .kong-picker-tile { --tile-width: clamp(52px, 7vw, 66px); cursor: pointer; }
+.kong-picker-card .kong-picker-tile:not(.disabled):hover { transform: translateY(-4px) rotateX(-3deg) scale(1.04); box-shadow: 0 4px 0 #c0bd92, 0 0 0 2px #f4cb63, 0 8px 8px rgba(0,0,0,.5); }
+.action-bar.kong-picker-open { z-index: 92; }
 .result-reopen { position: absolute; z-index: 92; right: 4%; bottom: 5%; padding: 12px 22px; border: 2px solid #d0a64d; border-radius: 24px; background: rgba(7,25,18,.92); color: #f3d27c; font-size: clamp(15px, 1.2vw, 19px); font-weight: 800; box-shadow: 0 7px 22px rgba(0,0,0,.55); cursor: pointer; }
 .result-reopen.continue { right: calc(4% + 170px); border-color: #b98a36; }
 .win-effect-lab { position: fixed; z-index: 150; top: 12px; left: 12px; display: grid; gap: 5px; width: 230px; padding: 10px; border: 1px solid #bd974c; border-radius: 7px; background: rgba(4,16,12,.94); color: #f3dfad; font-size: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
 .win-effect-lab > strong { margin-bottom: 3px; text-align: center; }
 .win-effect-lab > div { display: grid; grid-template-columns: 42px 1fr 1fr; align-items: center; gap: 5px; }
 .win-effect-lab button { padding: 4px 5px; border: 1px solid rgba(214,178,91,.5); border-radius: 4px; background: #17372c; color: #f4dfac; cursor: pointer; }
+.win-effect-lab .kong-debug { grid-template-columns: 42px repeat(3, 1fr); }
 
 .round-settlement { background: radial-gradient(circle at 50% 45%, rgba(28,63,92,.3), transparent 55%), rgba(1,5,10,.82); }
 .settlement-card { width: min(860px, 94%); max-height: 94%; padding-top: 31px; overflow: hidden auto; }

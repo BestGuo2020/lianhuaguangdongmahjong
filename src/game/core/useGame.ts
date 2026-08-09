@@ -960,6 +960,67 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     })
   }
 
+  /**
+   * 开发期杠测试：注入一副带杠候选的手牌并切到本家回合（phase=discard），
+   * 让「杠」按钮出现以测试选牌弹窗。dev 构建外为 no-op。
+   * mode：concealed=纯暗杠 / added=纯补杠 / both=暗杠与补杠并存。
+   */
+  function debugPreviewKong(mode: 'concealed' | 'added' | 'both' = 'both') {
+    if (!import.meta.env.DEV) return
+    clearTimers()
+    if (players.length !== 4) resetPlayers()
+    const p = players[0]
+    p.score = 1000
+    p.discards.splice(0)
+    p.melds.splice(0)
+    p.drawnTileIndex = -1
+    p.redCount = 0
+
+    const hands: Record<'concealed' | 'added' | 'both', TileType[]> = {
+      // 暗杠：手牌 4×m1；刻意不构成胡牌，聚焦杠测试
+      concealed: ['m1', 'm1', 'm1', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'west'],
+      // 补杠：已有碰副露 m1 + 手牌 1×m1
+      added: ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east', 'west', 'west', 'north'],
+      // 双杠并存：手牌 4×m2 暗杠 + 碰副露 m1 与手牌 1×m1 补杠
+      both: ['m2', 'm2', 'm2', 'm2', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east', 'west', 'm1'],
+    }
+    p.hand.splice(0, p.hand.length, ...hands[mode])
+    p.hand = sortTiles(p.hand)
+    if (mode !== 'concealed') {
+      p.melds.push({ type: 'peng', tile: 'm1', from: 1, tiles: ['m1', 'm1', 'm1'] })
+    }
+
+    for (let index = 1; index < 4; index += 1) {
+      const opponent = players[index]
+      opponent.hand.splice(0, opponent.hand.length,
+        'm4', 'm5', 'm6', 'p1', 'p2', 'p3', 's1', 's2', 's3', 's4', 's5', 's6', 's7')
+      opponent.melds.splice(0)
+      opponent.discards.splice(0)
+      opponent.drawnTileIndex = -1
+    }
+
+    wall.value = shuffle(createWall())
+    wallHeadDrawn.value = 0
+    lastDiscard.value = null
+    result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
+    matchFinished.value = false
+    actionPrompt.value = null
+    dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
+    openingStage.value = null
+    currentPlayer.value = 0
+    phase.value = 'discard'
+    userDrewThisTurn.value = true
+    selectedIndex.value = -1
+    announce(
+      mode === 'concealed' ? '测试：可暗杠' : mode === 'added' ? '测试：可补杠' : '测试：暗杠+补杠并存',
+      'red',
+    )
+  }
+
   function endDraw() {
     clearTimers()
     phase.value = 'settled'
@@ -1046,7 +1107,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-    userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
+    userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin, debugPreviewKong,
     humanController,
   }
 }
