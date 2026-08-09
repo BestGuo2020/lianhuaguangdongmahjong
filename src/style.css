@@ -899,7 +899,7 @@ button { font: inherit; }
 @media (max-height: 460px) {
   .settlement-card { max-height: 98%; padding: 12px 14px 9px; }
   .result-seal { top: -18px; width: 40px; height: 40px; font-size: 22px; }
-  .settlement-card > p { margin: 0; font-size: 11px; }
+  .settlement-card > p { margin-top: 10px; font-size: 11px; }
   .settlement-card h2 { margin: 0 0 3px; font-size: 24px; }
   .settlement-card .score-total strong { font-size: 31px; }
   .settlement-card .score-details { margin: 3px 0 5px; }

@@ -650,7 +650,7 @@ function clearMobileSelection(event: PointerEvent) {
                 v-for="(tile, index) in displayedUserHand"
                 :key="`${tile}-${index}`"
                 class="hand-tile-slot"
-                :class="{ drawn: userDrawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
+                :class="{ drawn: user.drawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
                 @mouseenter="previewDesktopWaits(tile)"
                 @mouseleave="clearDesktopWaits"
                 @pointerdown.stop="beginTileGesture(index, $event)"
@@ -665,7 +665,7 @@ function clearMobileSelection(event: PointerEvent) {
                 <MahjongTile
                   :tile="tile"
                   :selected="selectedIndex === index"
-                  :drawn="userDrawnTileIndex === index"
+                  :drawn="user.drawnTileIndex === index"
                   :disabled="!isUserTurn"
                   @choose="handleTileActivation(index, $event)"
                 />
