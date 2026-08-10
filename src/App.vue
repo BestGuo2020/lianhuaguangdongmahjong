@@ -111,7 +111,7 @@ const {
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, nextRound, returnToLobby, debugPreviewWin, debugPreviewKong,
+  userGang, userHu, nextRound, returnToLobby, debugPreviewWin, debugPreviewKong, debugPreviewFourRed,
 } = game
 
 // ── 开杠选牌对话框 ──────────────────────────────
@@ -139,6 +139,10 @@ watch(userKongs, (kongs) => {
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {
   if (gameMode.value !== 'local') return
   debugPreviewKong(mode)
+}
+const debugFourRed = () => {
+  if (gameMode.value !== 'local') return
+  debugPreviewFourRed()
 }
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
@@ -998,6 +1002,11 @@ function clearMobileSelection(event: PointerEvent) {
             <button data-testid="kong-concealed" @click="debugKong('concealed')">暗杠</button>
             <button data-testid="kong-added" @click="debugKong('added')">补杠</button>
             <button data-testid="kong-both" @click="debugKong('both')">双杠</button>
+          </div>
+          <strong>红中测试</strong>
+          <div class="kong-debug">
+            <span>本家</span>
+            <button data-testid="four-red" @click="debugFourRed">四红中</button>
           </div>
         </aside>
       </div>

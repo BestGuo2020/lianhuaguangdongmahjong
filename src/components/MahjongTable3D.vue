@@ -958,12 +958,15 @@ function cameraAlignedPoint(point, planeY) {
   return camera.position.clone().addScaledVector(direction, distance)
 }
 
-// 四红中赢牌：4 张红中都已作为花杠亮在副露区，胡牌牌（第 4 张红中）已包含其中，
-// 若再单独显示胡牌红中会多出一张 → 四红中时跳过独立胡牌牌展示。
+// 四红中赢牌：摸到第 4 张红中直接胡牌时，该红中在手牌中，须在赢牌位置独立展示；
+// 仅发牌即 4 红中（4 张都已亮花杠、手牌无红）时跳过，避免与花杠重复多出一张。
 function isFourRedWin() {
   const tile = props.winPresentation?.tile ?? props.winEffect?.tile
   const winnerIndex = props.winPresentation?.winnerIndex ?? props.winEffect?.winnerIndex
-  return tile === 'red' && winnerIndex >= 0 && (props.players[winnerIndex]?.redCount ?? 0) >= 4
+  if (tile !== 'red' || winnerIndex < 0) return false
+  const winner = props.players[winnerIndex]
+  if (!winner || (winner.redCount ?? 0) < 4) return false
+  return !winner.hand.includes('red')
 }
 
 function addWinningDisplayTile() {

@@ -297,6 +297,11 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     for (const playerIndex of seatOrder) {
       const player = players[playerIndex]
       while (player.hand.includes('red')) {
+        // 已有 3 张红中亮花杠，再发到第 4 张 → 四红中：红中留手牌作胡牌牌，不再亮花杠/补张
+        if (player.redCount >= 3) {
+          player.redCount += 1
+          break
+        }
         player.hand.splice(player.hand.indexOf('red'), 1)
         player.redCount += 1
         player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
@@ -446,12 +451,17 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }
     if (tile === 'red') {
       player.redCount += 1
-      player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-      showTableAction('flower-gang', playerIndex, null, tile, player.melds.length - 1)
       if (player.redCount >= 4) {
+        // 四红中：第 4 张红中直接作为胡牌牌进手牌（不再亮花杠/补张），位置随摸牌最右端，
+        // 由胡牌展示 splitWinningTile 抽到赢牌位置。
+        player.hand = [...player.hand, tile]
+        player.drawnTileIndex = player.hand.length - 1
+        playSound('give.mp3', 0.7)
         endGame(playerIndex, { fourRed: true })
         return false
       }
+      player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
+      showTableAction('flower-gang', playerIndex, null, tile, player.melds.length - 1)
       // 红中先完成亮杠与报杠音效，再从牌墙尾补摸，避免两个动画挤在一起；
       // 至少停顿 redKongDraw 再补摸，对齐人类正常节奏（AI 与用户一致）。
       await Promise.all([playSoundAndWait('gang.mp3'), wait(PACE_MS.redKongDraw)])
@@ -1021,6 +1031,56 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     )
   }
 
+  /** 开发期四红中测试：注入 3 个红中花杠 + 牌头放第 4 张红中，摸牌即四红中胡牌。 */
+  function debugPreviewFourRed() {
+    if (!import.meta.env.DEV) return
+    clearTimers()
+    if (players.length !== 4) resetPlayers()
+    const p = players[0]
+    p.score = 1000
+    p.discards.splice(0)
+    p.melds.splice(0)
+    p.redCount = 3
+    p.drawnTileIndex = -1
+    for (let index = 0; index < 3; index += 1) {
+      p.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
+    }
+    p.hand.splice(0, p.hand.length, 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's7', 's7', 'east', 'east', 'west', 'west')
+
+    for (let index = 1; index < 4; index += 1) {
+      const opponent = players[index]
+      opponent.hand.splice(0, opponent.hand.length,
+        'm4', 'm5', 'm6', 'p1', 'p2', 'p3', 's1', 's2', 's3', 's4', 's5', 's6', 's7')
+      opponent.melds.splice(0)
+      opponent.discards.splice(0)
+      opponent.drawnTileIndex = -1
+    }
+
+    wall.value = shuffle(createWall())
+    // 把一张红中放到牌头：本家摸牌即第 4 张红中 → 四红中
+    const redIndex = wall.value.indexOf('red')
+    if (redIndex > 0) {
+      const head = wall.value[0]
+      wall.value[0] = 'red'
+      wall.value[redIndex] = head
+    }
+    wallHeadDrawn.value = 0
+    lastDiscard.value = null
+    result.value = null
+    winEffect.value = null
+    winPresentation.value = null
+    revealHands.value = false
+    winningPlayerIndex.value = -1
+    matchFinished.value = false
+    actionPrompt.value = null
+    dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
+    openingStage.value = null
+    currentPlayer.value = 0
+    phase.value = 'drawing'
+    announce('测试：摸第 4 张红中 → 四红中胡牌', 'red')
+    void beginTurn(0)
+  }
+
   function endDraw() {
     clearTimers()
     phase.value = 'settled'
@@ -1107,7 +1167,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-    userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin, debugPreviewKong,
+    userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin, debugPreviewKong, debugPreviewFourRed,
     humanController,
   }
 }
