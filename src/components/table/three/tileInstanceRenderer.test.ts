@@ -53,4 +53,46 @@ describe('tileInstanceRenderer', () => {
     atlasGeometry.dispose()
     material.dispose()
   })
+
+  it('reuses the same meshes and buffers between deal batches', () => {
+    const scene = new THREE.Scene()
+    const dynamicGroups: THREE.Object3D[] = []
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    const atlasGeometry = geometry.clone()
+    const material = new THREE.MeshBasicMaterial()
+    scene.userData.tileBaseGeometry = geometry
+    scene.userData.tileCapGeometry = geometry
+    scene.userData.faceSide = material
+    scene.userData.backMaterial = material
+    scene.userData.tileSide = material
+    scene.userData.tileBottom = material
+
+    const renderer = createTileInstanceRenderer({
+      scene,
+      dynamicGroups,
+      ownDynamic: (resource) => resource,
+      getAtlasMaterial: () => material,
+      getAtlasCapGeometry: () => atlasGeometry,
+      atlasCellUvFor: () => ({ u: 0, v: 0 }),
+    })
+
+    renderer.begin()
+    renderer.add(new THREE.Vector3(), new THREE.Quaternion(), null)
+    renderer.finish()
+    const firstMeshes = [...dynamicGroups]
+    const firstAtlasUv = atlasGeometry.getAttribute('aUvOffset')
+
+    expect(renderer.canReuse()).toBe(true)
+    renderer.begin(true)
+    renderer.add(new THREE.Vector3(1, 0, 0), new THREE.Quaternion(), null)
+    renderer.finish()
+
+    expect(dynamicGroups).toEqual(firstMeshes)
+    expect(scene.children).toEqual(firstMeshes)
+    expect(atlasGeometry.getAttribute('aUvOffset')).toBe(firstAtlasUv)
+
+    geometry.dispose()
+    atlasGeometry.dispose()
+    material.dispose()
+  })
 })

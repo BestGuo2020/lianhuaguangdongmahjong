@@ -41,23 +41,33 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     return cap
   }
 
-  function begin() {
-    baseMesh = options.ownDynamic(new THREE.InstancedMesh(
-      options.scene.userData.tileBaseGeometry,
-      [options.scene.userData.faceSide, options.scene.userData.faceSide, options.scene.userData.faceSide,
-        options.scene.userData.backMaterial, options.scene.userData.faceSide, options.scene.userData.faceSide],
-      INSTANCE_CAPACITY,
-    ))
-    baseMesh.castShadow = true
-    baseMesh.receiveShadow = true
-    baseMesh.frustumCulled = false
-    options.scene.add(baseMesh)
-    options.dynamicGroups.push(baseMesh)
-    backCapMesh = createCap(options.scene.userData.tileBottom, options.scene.userData.tileCapGeometry)
-    atlasCapMesh = createCap(options.getAtlasMaterial(), options.getAtlasCapGeometry())
-    atlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
-    atlasUvAttribute = new THREE.InstancedBufferAttribute(atlasUvData, 2)
-    atlasCapMesh.geometry.setAttribute('aUvOffset', atlasUvAttribute)
+  function canReuse() {
+    return Boolean(
+      baseMesh?.parent === options.scene
+      && backCapMesh?.parent === options.scene
+      && atlasCapMesh?.parent === options.scene,
+    )
+  }
+
+  function begin(reuse = false) {
+    if (!reuse || !canReuse()) {
+      baseMesh = options.ownDynamic(new THREE.InstancedMesh(
+        options.scene.userData.tileBaseGeometry,
+        [options.scene.userData.faceSide, options.scene.userData.faceSide, options.scene.userData.faceSide,
+          options.scene.userData.backMaterial, options.scene.userData.faceSide, options.scene.userData.faceSide],
+        INSTANCE_CAPACITY,
+      ))
+      baseMesh.castShadow = true
+      baseMesh.receiveShadow = true
+      baseMesh.frustumCulled = false
+      options.scene.add(baseMesh)
+      options.dynamicGroups.push(baseMesh)
+      backCapMesh = createCap(options.scene.userData.tileBottom, options.scene.userData.tileCapGeometry)
+      atlasCapMesh = createCap(options.getAtlasMaterial(), options.getAtlasCapGeometry())
+      atlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
+      atlasUvAttribute = new THREE.InstancedBufferAttribute(atlasUvData, 2)
+      atlasCapMesh.geometry.setAttribute('aUvOffset', atlasUvAttribute)
+    }
     backCapCount = 0
     atlasCapCount = 0
     instanceCount = 0
@@ -98,5 +108,5 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     if (atlasUvAttribute) atlasUvAttribute.needsUpdate = true
   }
 
-  return { begin, add, set, finish }
+  return { begin, canReuse, add, set, finish }
 }

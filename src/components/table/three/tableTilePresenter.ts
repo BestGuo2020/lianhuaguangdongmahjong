@@ -428,16 +428,17 @@ function addHorses() {
   })
 }
 
-function rebuildTableTiles() {
+function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolean } = {}) {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
-  clearDynamicScene()
+  const reuse = reuseInstances && tileInstances.canReuse()
+  if (!reuse) clearDynamicScene()
   dealTweens.length = 0
   meldTweens.length = 0
   discardTweens.length = 0
   pendingTableActionAnimation = props.tableActionEvent?.id !== animatedTableActionId
     ? props.tableActionEvent
     : null
-  beginTableInstances()
+  beginTableInstances(reuse)
   for (let playerIndex = 0; playerIndex < 4; playerIndex += 1) {
     addConcealedHand(playerIndex)
     addDiscards(playerIndex)
