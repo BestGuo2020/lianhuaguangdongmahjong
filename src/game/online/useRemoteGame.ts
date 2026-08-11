@@ -9,7 +9,7 @@
 // result / winPresentation）在应用时统一经 toLocal() 映射。
 //
 // 结算展示：服务端无条件推进场次，客户端在赢牌动画 / 结算弹窗期间延迟应用
-// 后续快照与请求（pendingSnapshot / pendingRequest），用户点「继续」后再落地。
+// 后续快照与请求分别由 reconciler / requestCoordinator 缓冲，用户点「继续」后再落地。
 import { computed, getCurrentInstance, onBeforeUnmount } from 'vue'
 import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/gamePort'
@@ -19,7 +19,7 @@ import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../c
 import { TILE_TYPES, tileName } from '../core/tiles'
 import type { GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
 import type { ServerSnapshot } from './protocol/dto'
-import type { RoundStartMessage, ServerRequest } from './protocol/messages'
+import type { RoundStartMessage } from './protocol/messages'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createRoomSocketTransport } from './transport/roomSocket'
 import { createRemoteRoomLifecycle } from './session/remoteRoomLifecycle'
@@ -28,6 +28,8 @@ import { createSettlementTimeline } from './presentation/settlementTimeline'
 import { createRemoteGameState } from './state/remoteGameState'
 import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
 import { createServerMessageRouter } from './orchestration/serverMessageRouter'
+import { createRequestCoordinator } from './orchestration/requestCoordinator'
+import { createRemoteActionController } from './orchestration/remoteActionController'
 import {
   mapPlayersToLocal,
   mapRoundResultToLocal,
@@ -39,9 +41,6 @@ import {
 
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
-
-// 自动打牌：开关后到自动出牌/过牌的间隔（毫秒）。留一点时间让摸牌动画/音效可读。
-const AUTO_PLAY_DELAY = 600
 
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -73,8 +72,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const signalQuality = roomSocket.signalQuality
 
   // ── 内部：连接 / 定时器 / 延迟队列 ──
-  let countdownHandle: number | null = null
-  let pendingRequest: ServerRequest | null = null
   let pendingRoundStart: RoundStartMessage | null = null
   const timers = new Set<number>()
 
@@ -111,7 +108,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     mapPlayers: (value) => rotatePlayers(value),
     playSound,
     playSoundAndWait,
-    send,
+    send: roomSocket.send,
     onFinished: applyBufferedAfterOpening,
   })
   const snapshotReconciler = createSnapshotReconciler({
@@ -121,7 +118,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     opening: openingTimeline,
     settlement: settlementTimeline,
     clearCountdown,
-    onFinishedSnapshot: () => { pendingRequest = null },
+    onFinishedSnapshot: clearPendingRequest,
     playSound,
     later,
   })
@@ -204,6 +201,51 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     return makeWaitInfo(waits, user.value.hand[handIndex])
   }
 
+  const remoteActionController = createRemoteActionController({
+    state,
+    isUserTurn: () => isUserTurn.value,
+    canUserHu: () => userCanHu.value,
+    getUser: () => user.value,
+    getUserKongs: () => userKongs.value,
+    clearCountdown,
+    playSound,
+    send: roomSocket.send,
+  })
+  const {
+    selectTile,
+    clearUserSelection,
+    userDiscard,
+    pickDiscard: autoPickDiscard,
+    toggleAutoPlay,
+    userPass,
+    userPeng,
+    userGangFromDiscard,
+    userGang,
+    userHu,
+  } = remoteActionController
+
+  const requestCoordinator = createRequestCoordinator({
+    state,
+    isBlocked: () => isShowingRoundResult() || openingTimeline.isRunning(),
+    isUserTurn: () => isUserTurn.value,
+    canUserHu: () => userCanHu.value,
+    getUserHandLength: () => user.value?.hand.length ?? 0,
+    toLocalSeat: toLocal,
+    announce,
+    playSound,
+    later,
+    actions: {
+      discard: remoteActionController.userDiscard,
+      pass: remoteActionController.userPass,
+      hu: remoteActionController.userHu,
+      pickDiscard: remoteActionController.pickDiscard,
+    },
+  })
+
+  function clearPendingRequest() {
+    requestCoordinator.clearPending()
+  }
+
   // ── 定时器工具 ─────────────────────────────────────────
 
   function later(callback: () => void, delay: number) {
@@ -218,29 +260,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function clearTimers() {
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
-    window.clearInterval(countdownHandle as number)
-    countdownHandle = null
+    requestCoordinator.clearCountdown()
     openingTimeline.cancel()
     settlementTimeline.cancel()
   }
 
   function clearCountdown() {
-    window.clearInterval(countdownHandle as number)
-    countdownHandle = null
-  }
-
-  function startCountdown(seconds = 12, onExpire: () => void) {
-    clearCountdown()
-    turnSeconds.value = seconds
-    countdownHandle = window.setInterval(() => {
-      turnSeconds.value -= 1
-      // 倒计时到 3 秒：播一次提示音
-      if (turnSeconds.value === 3) playSound('didu.ogg')
-      if (turnSeconds.value <= 0) {
-        clearCountdown()
-        onExpire()
-      }
-    }, 1000)
+    requestCoordinator.clearCountdown()
   }
 
   function announce(text: string, tone = 'gold') {
@@ -294,72 +320,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function applyBufferedAfterOpening() {
     snapshotReconciler.flush()
-    if (pendingRequest) {
-      const req = pendingRequest
-      pendingRequest = null
-      applyRequest(req)
-    }
-  }
-
-  // ── 请求应用（回合 / 碰杠 / 抢杠提示）─────────────────
-
-  function applyRequest(msg: ServerRequest) {
-    if (isShowingRoundResult() || openingTimeline.isRunning()) {
-      pendingRequest = msg
-      return
-    }
-    if (msg.kind === 'turn_request') {
-      currentPlayer.value = 0
-      userDrewThisTurn.value = !msg.ctx.skipDraw
-      actionPrompt.value = null
-      phase.value = 'discard'
-      if (!msg.ctx.skipDraw) playSound('give.mp3', 0.7)
-      startCountdown(12, () => {
-        if (!isUserTurn.value || !user.value?.hand.length) return
-        userDiscard(user.value.hand.length - 1)
-      })
-      // 自动打牌：可胡则胡，否则自动打出进张最多的牌（留一点动画/音效时间）
-      if (autoPlay.value) {
-        later(() => {
-          if (!autoPlay.value || !isUserTurn.value) return
-          if (userCanHu.value) userHu()
-          else userDiscard(autoPickDiscard())
-        }, AUTO_PLAY_DELAY)
-      }
-      return
-    }
-    if (msg.kind === 'claim_request') {
-      actionPrompt.value = {
-        type: 'claim',
-        tile: msg.ctx.tile,
-        from: toLocal(msg.ctx.from),
-        canGang: msg.ctx.canGang,
-      }
-      phase.value = 'prompt'
-      startCountdown(12, () => {
-        if (actionPrompt.value?.type === 'claim') userPass()
-      })
-      if (autoPlay.value) {
-        later(() => {
-          if (!autoPlay.value || actionPrompt.value?.type !== 'claim') return
-          userPass()
-        }, AUTO_PLAY_DELAY)
-      }
-      return
-    }
-    // rob_kong_request
-    actionPrompt.value = { type: 'rob', tile: msg.ctx.tile, from: toLocal(msg.ctx.from) }
-    phase.value = 'prompt'
-    announce('可抢杠胡', 'red')
-    startCountdown(12, () => {
-      if (actionPrompt.value?.type === 'rob') userPass()
-    })
-    if (autoPlay.value) {
-      later(() => {
-        if (!autoPlay.value || actionPrompt.value?.type !== 'rob') return
-        userPass()
-      }, AUTO_PLAY_DELAY)
-    }
+    requestCoordinator.flush()
   }
 
   // ── 瞬时事件（动画 / 播报 / 分数流水）─────────────────
@@ -405,7 +366,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function handleMatchFinished(msg: { kind: 'match_finished'; finalScores: Array<{ seat: number; name: string; score: number }> }) {
     settlementTimeline.cancel()
     snapshotReconciler.clearPending()
-    pendingRequest = null
+    requestCoordinator.clearPending()
     matchFinished.value = true
     phase.value = 'finished'
     result.value = null
@@ -444,7 +405,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       settlementTimeline.cancel()
       snapshotReconciler.clearPending()
       snapshotReconciler.resetDiscardDedup()
-      pendingRequest = null
+      requestCoordinator.clearPending()
       pendingRoundStart = null
       openingTimeline.cancel()
       waitingNextRound.value = false
@@ -461,9 +422,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
     round_start: handleRoundStart,
-    turn_request: applyRequest,
-    claim_request: applyRequest,
-    rob_kong_request: applyRequest,
+    turn_request: requestCoordinator.apply,
+    claim_request: requestCoordinator.apply,
+    rob_kong_request: requestCoordinator.apply,
     table_action: handleTableAction,
     score_flow: handleScoreFlow,
     announcement: handleAnnouncement,
@@ -500,7 +461,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function resetAll() {
     clearTimers()
     snapshotReconciler.reset()
-    pendingRequest = null
+    requestCoordinator.reset()
     pendingRoundStart = null
     openingTimeline.cancel()
     waitingNextRound.value = false
@@ -539,102 +500,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     sessionError.value = ''
   }
 
-  // ── 用户动作（发送到服务端，状态由快照权威回写）────────
-
-  function send(message: Record<string, unknown>) {
-    roomSocket.send(message)
-  }
-
-  function selectTile(index: number) {
-    if (!isUserTurn.value) return
-    selectedIndex.value = index
-    playSound('click.mp3', 0.65)
-  }
-
-  function clearUserSelection() {
-    selectedIndex.value = -1
-  }
-
-  function userDiscard(index = selectedIndex.value) {
-    if (!isUserTurn.value || index < 0 || index >= user.value.hand.length) return
-    clearCountdown()
-    selectedIndex.value = -1
-    send({ type: 'discard', handIndex: index })
-  }
-
-  // 自动打牌挑张：弃牌后听牌（可进张牌种）数最多者；无进张时退回末张。
-  function autoPickDiscard(): number {
-    const hand = user.value?.hand ?? []
-    if (!hand.length) return -1
-    const meldCount = structuralMeldCount(user.value)
-    let bestIndex = hand.length - 1
-    let bestWaits = -1
-    const seen = new Set()
-    for (let i = 0; i < hand.length; i += 1) {
-      const tile = hand[i]
-      if (seen.has(tile)) continue
-      seen.add(tile)
-      const after = hand.filter((_, j) => j !== i)
-      const waits = waitingTiles(after, meldCount).length
-      if (waits > bestWaits) {
-        bestWaits = waits
-        bestIndex = i
-      }
-    }
-    return bestIndex
-  }
-
-  function toggleAutoPlay() {
-    autoPlay.value = !autoPlay.value
-  }
-
-  function userPass() {
-    const prompt = actionPrompt.value
-    clearCountdown()
-    actionPrompt.value = null
-    if (!prompt) return
-    playSound('click.mp3', 0.65)
-    send({ type: 'pass' })
-  }
-
-  function userPeng() {
-    if (actionPrompt.value?.type !== 'claim') return
-    clearCountdown()
-    actionPrompt.value = null
-    playSound('click.mp3', 0.65)
-    send({ type: 'claim', action: 'peng' })
-  }
-
-  function userGangFromDiscard() {
-    if (actionPrompt.value?.type !== 'claim' || !actionPrompt.value.canGang) return
-    clearCountdown()
-    actionPrompt.value = null
-    playSound('click.mp3', 0.65)
-    send({ type: 'claim', action: 'gang' })
-  }
-
-  function userGang(tile = userKongs.value[0]) {
-    if (!tile || !isUserTurn.value) return
-    clearCountdown()
-    playSound('click.mp3', 0.65)
-    const hasPengMeld = user.value.melds.some((meld) => meld.type === 'peng' && meld.tile === tile)
-    send({ type: 'gang', kind: hasPengMeld ? 'added' : 'concealed', tile })
-  }
-
-  function userHu() {
-    if (actionPrompt.value?.type === 'rob') {
-      clearCountdown()
-      actionPrompt.value = null
-      playSound('click.mp3', 0.65)
-      send({ type: 'hu' })
-      return
-    }
-    if (userCanHu.value) {
-      clearCountdown()
-      send({ type: 'hu' })
-    }
-  }
-
   // ── 场次推进（远程：服务端无条件推进，客户端只清除结算展示）──
 
   function nextRound() {
@@ -643,7 +508,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     // 确认屏障：通知服务端本家已看完结算。**不清结算态**——对话框保留、
     // 按钮显示「等待其他玩家确定...」；等服务端等齐所有在线真人后推进，
     // round_start 到达时由 handleRoundStart → startOpeningRound 统一清理结算态。
-    send({ type: 'continue' })
+    roomSocket.send({ type: 'continue' })
     waitingNextRound.value = true
     if (pendingRoundStart) {
       // 服务端兜底已推进，round_start 在结算展示期间已缓冲 → 直接落地
@@ -659,11 +524,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         snapshotReconciler.apply(pendingSnapshot)
       }
     }
-    if (pendingRequest) {
-      const req = pendingRequest
-      pendingRequest = null
-      applyRequest(req)   // applyRequest 内部会按开局表现时间线的运行状态重新缓冲
-    }
+    requestCoordinator.flush()
   }
 
   function returnToLobby() {
