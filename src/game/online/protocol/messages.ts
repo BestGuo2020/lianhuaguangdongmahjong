@@ -1,12 +1,12 @@
 import type { RoundResult } from '../../core/contracts/gamePort'
 import type {
   MatchType,
-  Meld,
   ScoreDelta,
   TableActionEvent,
   TileType,
 } from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
+import type { ServerMeldDto } from './dto'
 
 export interface RoundStartMessage {
   kind: 'round_start'
@@ -18,7 +18,7 @@ export interface RoundStartMessage {
 }
 
 export type ServerRequest =
-  | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: Meld[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean } }
+  | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: ServerMeldDto[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean } }
   | { kind: 'claim_request'; ctx: { hand: TileType[]; canGang: boolean; tile: TileType; from: number } }
   | { kind: 'rob_kong_request'; ctx: { tile: TileType; from: number; hand: TileType[]; exposedMelds: number } }
 

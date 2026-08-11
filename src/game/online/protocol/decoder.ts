@@ -1,6 +1,6 @@
 import type { GamePhase, RoundResult } from '../../core/contracts/gamePort'
-import type { Meld, TileType, WinPresentation } from '../../core/contracts/types'
-import type { ServerPlayerDto } from './dto'
+import type { TileType, WinPresentation } from '../../core/contracts/types'
+import type { ServerMeldDto, ServerPlayerDto } from './dto'
 import type { ServerMessage } from './messages'
 
 type JsonObject = Record<string, unknown>
@@ -50,14 +50,14 @@ function isTile(value: unknown): value is TileType {
     && (HONORS.has(value) || /^[mps][1-9]$/.test(value))
 }
 
-function isMeld(value: unknown): value is Meld {
+function isMeld(value: unknown): value is ServerMeldDto {
   if (!isObject(value)) return false
   return isString(value.type) && MELD_TYPES.has(value.type)
     && isTile(value.tile)
     && isArrayOf(value.tiles, isTile)
-    && isOptional(value.from, isNumber)
-    && isOptional(value.added, isBoolean)
-    && isOptional(value.pending, isBoolean)
+    && isOptional(value.from, (candidate): candidate is number | null => isNullable(candidate, isNumber))
+    && isOptional(value.added, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
+    && isOptional(value.pending, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
 }
 
 function isPlayer(value: unknown): value is ServerPlayerDto {

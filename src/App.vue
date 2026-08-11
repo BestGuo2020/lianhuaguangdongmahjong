@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
 import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
@@ -99,6 +99,10 @@ const {
 } = lobbyController
 
 const statsOpen = ref(false)
+const showLobby = computed(() => (
+  phase.value === 'lobby'
+  || (gameMode.value === 'remote' && Boolean(roomId.value) && players.value.length === 0)
+))
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
@@ -125,7 +129,7 @@ const continueCountdown = useRemoteContinueCountdown({
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">
         <GameShellHeader
           :game-mode="gameMode"
-          :phase="phase"
+          :phase="showLobby ? 'lobby' : phase"
           :has-players="Boolean(players.length)"
           :match-name="matchName"
           :round-label="roundLabel"
@@ -188,7 +192,7 @@ const continueCountdown = useRemoteContinueCountdown({
         />
 
         <LobbyView
-          v-if="phase === 'lobby'"
+          v-if="showLobby"
           v-model:game-mode="gameMode"
           v-model:selected-match="selectedMatch"
           v-model:nickname-input="nicknameInput"

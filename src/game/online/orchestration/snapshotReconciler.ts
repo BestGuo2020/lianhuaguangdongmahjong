@@ -143,7 +143,11 @@ export function createSnapshotReconciler({
     state.result.value = null
     state.actionPrompt.value = null
     clearCountdown()
-    state.phase.value = snapshot.phase === 'lobby' ? 'lobby' : 'playing'
+    // A room snapshot without players cannot render a game table. Keep it in the
+    // room lobby even if an inconsistent/stale server phase says otherwise.
+    state.phase.value = snapshot.phase === 'lobby' || snapshot.players.length === 0
+      ? 'lobby'
+      : 'playing'
   }
 
   function apply(snapshot: ServerSnapshot) {

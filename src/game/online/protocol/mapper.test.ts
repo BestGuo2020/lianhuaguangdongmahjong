@@ -131,12 +131,16 @@ describe('protocol seat mapper', () => {
   it('maps hidden server tiles into an explicit concealed count without leaking null into core state', () => {
     const source = snapshot()
     source.players[0].hand = Array(13).fill(null)
+    source.players[0].melds = [{
+      type: 'flower', tile: 'red', tiles: ['red'], from: null, added: null, pending: null,
+    }]
     source.players[2].hand = ['m1', 'm2', 'm3']
 
     const mapped = mapServerSnapshotToLocal(source, 2)
 
     expect(mapped.players[0]).toMatchObject({ seat: 2, hand: ['m1', 'm2', 'm3'], concealedTileCount: 3 })
     expect(mapped.players[2]).toMatchObject({ seat: 0, hand: [], concealedTileCount: 13 })
+    expect(mapped.players[2].melds).toEqual([{ type: 'flower', tile: 'red', tiles: ['red'] }])
     expect(mapped.players.flatMap((item) => item.hand)).not.toContain(null)
   })
 })

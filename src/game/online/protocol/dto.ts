@@ -1,9 +1,16 @@
 import type { Announcement, GamePhase, LastDiscard, RoundResult } from '../../core/contracts/gamePort'
-import type { GamePlayer, MatchType, TileType, WinPresentation } from '../../core/contracts/types'
+import type { GamePlayer, MatchType, Meld, TileType, WinPresentation } from '../../core/contracts/types'
 
-export interface ServerPlayerDto extends Omit<GamePlayer, 'hand' | 'concealedTileCount'> {
+export interface ServerMeldDto extends Omit<Meld, 'from' | 'added' | 'pending'> {
+  from?: number | null
+  added?: boolean | null
+  pending?: boolean | null
+}
+
+export interface ServerPlayerDto extends Omit<GamePlayer, 'hand' | 'concealedTileCount' | 'melds'> {
   /** null represents an intentionally hidden tile face. */
   hand: Array<TileType | null>
+  melds: ServerMeldDto[]
 }
 
 export interface ServerSnapshot {

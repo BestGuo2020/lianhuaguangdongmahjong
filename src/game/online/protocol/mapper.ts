@@ -1,10 +1,21 @@
 import { defaultAvatarForSeat } from '../../core/presentation/avatar'
 import type { LastDiscard, RoundResult } from '../../core/contracts/gamePort'
-import type { GamePlayer, ScoreDelta, TableActionEvent, WinPresentation } from '../../core/contracts/types'
-import type { LocalSnapshot, ServerPlayerDto, ServerSnapshot } from './dto'
+import type { GamePlayer, Meld, ScoreDelta, TableActionEvent, WinPresentation } from '../../core/contracts/types'
+import type { LocalSnapshot, ServerMeldDto, ServerPlayerDto, ServerSnapshot } from './dto'
 
 export function toLocalSeat(serverSeat: number, localServerSeat: number): number {
   return ((serverSeat - localServerSeat + 4) % 4 + 4) % 4
+}
+
+function mapMeldToLocal(meld: ServerMeldDto, localServerSeat: number): Meld {
+  return {
+    type: meld.type,
+    tile: meld.tile,
+    tiles: meld.tiles,
+    ...(meld.from != null ? { from: toLocalSeat(meld.from, localServerSeat) } : {}),
+    ...(meld.added != null ? { added: meld.added } : {}),
+    ...(meld.pending != null ? { pending: meld.pending } : {}),
+  }
 }
 
 export function mapPlayersToLocal(players: ServerPlayerDto[], localServerSeat: number): GamePlayer[] {
@@ -15,11 +26,7 @@ export function mapPlayersToLocal(players: ServerPlayerDto[], localServerSeat: n
       hand: player.hand.filter((tile): tile is NonNullable<typeof tile> => tile !== null),
       concealedTileCount: player.hand.length,
       avatar: player.avatar || defaultAvatarForSeat(player.seat),
-      melds: player.melds.map((meld) => (
-        meld.from != null
-          ? { ...meld, from: toLocalSeat(meld.from, localServerSeat) }
-          : meld
-      )),
+      melds: player.melds.map((meld) => mapMeldToLocal(meld, localServerSeat)),
     }))
 }
 

@@ -50,6 +50,15 @@ function setup() {
 }
 
 describe('snapshotReconciler', () => {
+  it('keeps an empty-player room snapshot in the lobby instead of showing a blank table', () => {
+    const { state, reconciler } = setup()
+
+    reconciler.apply(snapshot({ phase: 'drawing', players: [] }))
+
+    expect(state.phase.value).toBe('lobby')
+    expect(state.players).toHaveLength(0)
+  })
+
   it('开局期间缓冲快照，结束后按本家座位统一映射并落地', () => {
     const { state, reconciler, captureSnapshot, playSound, setOpening } = setup()
     const incoming = snapshot({
