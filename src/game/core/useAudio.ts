@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`
 const SUIT_AUDIO_FILES = ['m', 'p', 's'].flatMap((suit) => (
@@ -143,6 +143,23 @@ export function useAudio() {
     return bgmPreloadPromise
   }
 
+  function removeBgmPrimeListeners() {
+    window.removeEventListener('pointerdown', primeBgm)
+    window.removeEventListener('keydown', primeBgm)
+    window.removeEventListener('touchstart', primeBgm)
+  }
+
+  function primeBgm() {
+    removeBgmPrimeListeners()
+    void preloadBgm()
+  }
+
+  onMounted(() => {
+    window.addEventListener('pointerdown', primeBgm, { once: true, passive: true })
+    window.addEventListener('keydown', primeBgm, { once: true })
+    window.addEventListener('touchstart', primeBgm, { once: true, passive: true })
+  })
+
   // Web Audio 无缝循环：BufferSource.loop 在缓冲区边界样本级拼接，无 HTMLAudio 的卡顿。
   function playBgmWebAudio() {
     const ctx = ensureAudioContext()
@@ -203,6 +220,7 @@ export function useAudio() {
   })
 
   onBeforeUnmount(() => {
+    removeBgmPrimeListeners()
     if (bgmWebAudio) {
       bgmSource?.stop()
       bgmSource = null

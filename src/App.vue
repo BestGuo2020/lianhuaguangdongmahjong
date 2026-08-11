@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import StatsOverlay from './components/account/StatsOverlay.vue'
+import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
+import OrientationGate from './components/shell/OrientationGate.vue'
 import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
-import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE, DISCLAIMER_VERSION } from './content/disclaimer'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { createActiveGamePort, type GameMode } from './game/core/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { agreeDisclaimer, getDisclaimerAgreement, getPlayerStats, getPlayerStatsById } from './game/online/api/accountApi'
-import type { PlayerStats } from './game/online/api/accountApi'
 import { reportPlayer as reportPlayerApi } from './game/online/api/moderationApi'
-import { getRoomMeta, type RoomMeta } from './game/online/api/roomApi'
+import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
+import { useRoomAvailability } from './game/online/session/useRoomAvailability'
+import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/useAudio'
 import type { MatchType } from './game/core/types'
 
@@ -24,56 +26,7 @@ const selectedMatch = ref<MatchType>('east')
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const winEffectLabSeats = ['本家', '下家', '对家', '上家']
-const requiresLandscape = ref(false)
-const orientationMessage = ref('')
-const { soundOn, playEffect, playEffectAndWait, startBgm, preloadBgm } = useAudio()
-// 首次用户交互即预加载 BGM 到内存（fetch 无需手势，仅为提前下载；开局时播放零网络等待）。
-const primeBgm = () => { preloadBgm() }
-window.addEventListener('pointerdown', primeBgm, { once: true, passive: true })
-window.addEventListener('keydown', primeBgm, { once: true })
-window.addEventListener('touchstart', primeBgm, { once: true, passive: true })
-
-function updateOrientationGate() {
-  const isPortrait = window.matchMedia('(orientation: portrait)').matches
-  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
-  const isMobileViewport = Math.min(window.innerWidth, window.innerHeight) <= 1024
-  requiresLandscape.value = isPortrait && isTouchDevice && isMobileViewport
-
-  if (!requiresLandscape.value) orientationMessage.value = ''
-}
-
-async function enterLandscapeFullscreen() {
-  orientationMessage.value = ''
-
-  try {
-    if (!document.fullscreenElement) {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-    }
-
-    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> }
-    if (orientation?.lock) {
-      await orientation.lock('landscape')
-    }
-  } catch (error) {
-    orientationMessage.value = '当前浏览器无法自动旋转，请将手机横置后继续'
-  } finally {
-    updateOrientationGate()
-  }
-}
-
-onMounted(() => {
-  updateOrientationGate()
-  window.addEventListener('resize', updateOrientationGate)
-  window.addEventListener('orientationchange', updateOrientationGate)
-  screen.orientation?.addEventListener?.('change', updateOrientationGate)
-})
-
-onUnmounted(() => {
-  if (roomMetaTimer != null) window.clearInterval(roomMetaTimer)
-  window.removeEventListener('resize', updateOrientationGate)
-  window.removeEventListener('orientationchange', updateOrientationGate)
-  screen.orientation?.removeEventListener?.('change', updateOrientationGate)
-})
+const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
 const localGame = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
@@ -122,89 +75,22 @@ const allOccupiedReady = computed(() => {
 const signalText = computed(() =>
   ({ 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' })[signalQuality.value] ?? '')
 
-// 大厅房间容量：轮询 GET /api/rooms/meta，剩余房间 = max - active（进房后停止）
-const roomMeta = ref<RoomMeta | null>(null)
-let roomMetaTimer: number | null = null
-async function refreshRoomMeta() {
-  try {
-    roomMeta.value = await getRoomMeta()
-  } catch {
-    // 网络抖动静默：大厅不因容量查询失败而报错
-  }
-}
-watch([gameMode, roomId], ([mode, id]) => {
-  if (mode === 'remote' && !id) {
-    void refreshRoomMeta()
-    if (roomMetaTimer == null) {
-      roomMetaTimer = window.setInterval(refreshRoomMeta, 5000)
-    }
-  } else if (roomMetaTimer != null) {
-    window.clearInterval(roomMetaTimer)
-    roomMetaTimer = null
-  }
-}, { immediate: true })
+const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
-// ── 纯娱乐声明：首次创建/加入房间前需确认。
-// 确认记录 localStorage（本机记忆）+ 同步服务端账号（换浏览器/设备也记住，Phase 8 P1）。
-const DISCLAIMER_STORAGE_KEY = 'lgm_disclaimer_agreed'
-const disclaimerOpen = ref(false)
-let pendingRoomAction: (() => void) | null = null
-
-function hasAgreedDisclaimer(): boolean {
-  try { return localStorage.getItem(DISCLAIMER_STORAGE_KEY) === '1' } catch { return false }
-}
-
-async function guardRoomEntry(action: () => void) {
-  if (hasAgreedDisclaimer()) {
-    action()
-    return
-  }
-  // 本地无记录：查服务端（换浏览器 / 清 localStorage 后仍能记住「已确认」）
-  if (playerId.value) {
-    try {
-      const server = await getDisclaimerAgreement(playerId.value)
-      if (server.agreed && (server.version ?? 0) >= DISCLAIMER_VERSION) {
-        try { localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1') } catch { /* 忽略 */ }
-        action()
-        return
-      }
-    } catch {
-      // 后端不可达：降级为本地弹窗确认
-    }
-  }
-  pendingRoomAction = action
-  disclaimerOpen.value = true
-}
-
-function acceptDisclaimer() {
-  try { localStorage.setItem(DISCLAIMER_STORAGE_KEY, '1') } catch { /* localStorage 不可用时本次仍放行 */ }
-  // 同步到服务端账号；失败静默（本地已兜底，下次进房不再询问）
-  if (playerId.value) {
-    void agreeDisclaimer(playerId.value).catch(() => { /* 忽略 */ })
-  }
-  disclaimerOpen.value = false
-  const action = pendingRoomAction
-  pendingRoomAction = null
-  action?.()
-}
-
-function declineDisclaimer() {
-  disclaimerOpen.value = false
-  pendingRoomAction = null
-}
+const disclaimerGate = useDisclaimerGate(playerId)
 
 function createRemoteRoom() {
   if (roomId.value) return   // 已在房间：禁重复建房（按钮禁用，回车路径同样拦截）
   if (!nicknameInput.value.trim()) return
   nickname.value = nicknameInput.value.trim()
-  guardRoomEntry(() => void remoteActions.createRoom(selectedMatch.value, 4))
+  void disclaimerGate.guard(() => void remoteActions.createRoom(selectedMatch.value, 4))
 }
 
 function joinRemoteRoom() {
   if (roomId.value) return   // 已在房间：禁重复加入
   if (!nicknameInput.value.trim() || !joinCode.value.trim()) return
   nickname.value = nicknameInput.value.trim()
-  guardRoomEntry(() => void remoteActions.joinRoom(joinCode.value))
+  void disclaimerGate.guard(() => void remoteActions.joinRoom(joinCode.value))
 }
 
 // 房间码一键复制：优先 Clipboard API；局域网 http 非安全上下文回退隐藏 textarea + execCommand
@@ -289,7 +175,7 @@ async function closeRoom() {
 
 // 继续对局（P1）：凭 localStorage 会话直接回上次未完成对局的原座位（同为进房，需先确认声明）
 function resumeRemoteSession() {
-  guardRoomEntry(() => {
+  void disclaimerGate.guard(() => {
     gameMode.value = 'remote'
     void remoteActions.resumeSession()
   })
@@ -313,86 +199,25 @@ async function reportPlayer(name: string) {
   }
 }
 
-// ── 战绩页：个人统计（服务端 /api/players/{nickname}/stats）──
 const statsOpen = ref(false)
-const playerStats = ref<PlayerStats | null>(null)
-const statsLoading = ref(false)
-
-async function openStats() {
-  statsOpen.value = true
-  statsLoading.value = true
-  playerStats.value = null
-  try {
-    // 身份锚点是 guestId（启动即生成），无需先填昵称/进房
-    playerStats.value = await getPlayerStatsById(playerId.value)
-    // 旧局（P1 前无 player_id）回退昵称查询：用当前/已记忆的昵称
-    if (playerStats.value.matches === 0) {
-      const name = nickname.value || nicknameInput.value.trim() || readStoredNickname()
-      if (name) {
-        const byName = await getPlayerStats(name)
-        if (byName.matches > 0) playerStats.value = byName
-      }
-    }
-  } catch {
-    playerStats.value = null
-  } finally {
-    statsLoading.value = false
-  }
-}
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
 })
 
-// ── 联机结算「继续」按钮：10s 倒计时，超时自动确认（服务端同样有兜底超时）──
-const continueCountdown = ref(10)
-let continueTimer: number | null = null
-
-function stopContinueCountdown() {
-  if (continueTimer != null) {
-    window.clearInterval(continueTimer)
-    continueTimer = null
-  }
-  continueCountdown.value = 10
-}
-
-function startContinueCountdown() {
-  stopContinueCountdown()
-  continueCountdown.value = 10
-  continueTimer = window.setInterval(() => {
-    continueCountdown.value -= 1
-    if (continueCountdown.value <= 0) {
-      stopContinueCountdown()
-      nextRound()
-    }
-  }, 1000)
-}
-
-// 倒计时不依赖结算页是否展开：无论用户在看结算还是看牌桌，都会自动确认。
-// 已确认（waitingNextRound）后停止倒计时，等所有玩家确认服务端推进。
-watch([result, phase, gameMode, matchFinished, waitingNextRound], () => {
-  const countdownActive = gameMode.value === 'remote'
-    && phase.value === 'settled'
-    && Boolean(result.value)
-    && !waitingNextRound.value
-    && !matchFinished.value
-  if (countdownActive) startContinueCountdown()
-  else stopContinueCountdown()
+const continueCountdown = useRemoteContinueCountdown({
+  gameMode,
+  phase,
+  result,
+  matchFinished,
+  waitingNextRound,
+  continueRound: nextRound,
 })
 
 </script>
 
 <template>
-  <div v-if="requiresLandscape" class="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
-    <div class="orientation-card">
-      <div class="phone-rotate-icon" aria-hidden="true"><span></span></div>
-      <p class="eyebrow">LANDSCAPE MODE</p>
-      <h2 id="orientation-title">请横屏游玩</h2>
-      <p>为了完整显示牌桌，请进入全屏并将手机旋转为横屏。</p>
-      <button type="button" @click="enterLandscapeFullscreen">进入全屏横屏</button>
-      <small v-if="orientationMessage" role="status">{{ orientationMessage }}</small>
-    </div>
-  </div>
+  <OrientationGate />
   <main class="game-app">
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting'" class="remote-banner" role="status">网络断开，正在重连…</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
@@ -509,7 +334,7 @@ watch([result, phase, gameMode, matchFinished, waitingNextRound], () => {
           @start-remote="startRemoteMatch"
           @leave-room="leaveRoom"
           @close-room="closeRoom"
-          @open-stats="openStats"
+          @open-stats="statsOpen = true"
           @open-rules="rulesOpen = true"
         />
 
@@ -528,47 +353,17 @@ watch([result, phase, gameMode, matchFinished, waitingNextRound], () => {
           @return-to-lobby="returnToLobby"
           @report="reportPlayer"
         />
-        <Transition name="modal">
-          <div v-if="statsOpen" class="result-backdrop round-settlement">
-            <section class="result-card settlement-card stats-card">
-              <h2>个人战绩</h2>
-              <p class="stats-nickname">{{ nickname || nicknameInput }}</p>
-              <div v-if="statsLoading" class="stats-loading">加载中…</div>
-              <template v-else-if="playerStats">
-                <div class="stats-grid">
-                  <article><b>{{ playerStats.matches }}</b><span>场次</span></article>
-                  <article><b>{{ playerStats.hands }}</b><span>参与局数</span></article>
-                  <article><b>{{ playerStats.wins }}</b><span>胡牌局数</span></article>
-                  <article><b :class="{ positive: playerStats.totalDelta > 0, negative: playerStats.totalDelta < 0 }">{{ playerStats.totalDelta > 0 ? '+' : '' }}{{ playerStats.totalDelta }}</b><span>净胜分</span></article>
-                </div>
-              </template>
-              <p v-else class="stats-empty">暂无战绩记录，快去打一局吧！</p>
-              <div class="result-actions">
-                <button @click="statsOpen = false">关闭</button>
-              </div>
-            </section>
-          </div>
-        </Transition>
-        <Transition name="modal">
-          <div v-if="disclaimerOpen" class="result-backdrop disclaimer-backdrop" role="dialog" aria-modal="true" aria-labelledby="disclaimer-title">
-            <section class="result-card disclaimer-card">
-              <h2 id="disclaimer-title">{{ DISCLAIMER_TITLE }}</h2>
-              <div class="disclaimer-scroll">
-                <template v-for="(section, index) in DISCLAIMER_SECTIONS" :key="index">
-                  <h3 v-if="section.title">{{ section.title }}</h3>
-                  <p v-if="section.body">{{ section.body }}</p>
-                  <ol v-if="section.list?.length">
-                    <li v-for="(item, itemIndex) in section.list" :key="itemIndex">{{ item }}</li>
-                  </ol>
-                </template>
-              </div>
-              <div class="result-actions">
-                <button class="secondary" @click="declineDisclaimer">不同意，返回</button>
-                <button @click="acceptDisclaimer">同意并继续</button>
-              </div>
-            </section>
-          </div>
-        </Transition>
+        <StatsOverlay
+          v-model:open="statsOpen"
+          :player-id="playerId"
+          :nickname="nickname"
+          :fallback-nickname="nicknameInput"
+        />
+        <DisclaimerDialog
+          :open="disclaimerGate.open.value"
+          @accept="disclaimerGate.accept"
+          @decline="disclaimerGate.decline"
+        />
         <aside v-if="winEffectLab" class="win-effect-lab" aria-label="胡牌特效测试面板">
           <strong>胡牌特效测试</strong>
           <div v-for="(seat, index) in winEffectLabSeats" :key="seat">
