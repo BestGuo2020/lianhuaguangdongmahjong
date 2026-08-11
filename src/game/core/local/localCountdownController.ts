@@ -5,10 +5,12 @@ interface LocalCountdownControllerOptions {
   playSound(name: string, volume?: number): unknown
   onDiscard(): void
   onPass(): void
+  /** 单机对局是否启用回合倒计时（超时自动出牌/过牌）。关闭后玩家无时限，UI 不显示倒计时 */
+  enabled?: boolean
 }
 
 export function createLocalCountdownController(options: LocalCountdownControllerOptions) {
-  const { state } = options
+  const { state, enabled = true } = options
   let handle: number | null = null
 
   function stop() {
@@ -18,6 +20,10 @@ export function createLocalCountdownController(options: LocalCountdownController
 
   function startTurn() {
     stop()
+    if (!enabled) {
+      state.turnSeconds.value = 0
+      return
+    }
     state.turnSeconds.value = 12
     handle = window.setInterval(() => {
       if (state.phase.value !== 'discard' || state.currentPlayer.value !== 0) return
@@ -33,6 +39,10 @@ export function createLocalCountdownController(options: LocalCountdownController
 
   function startPrompt() {
     stop()
+    if (!enabled) {
+      state.turnSeconds.value = 0
+      return
+    }
     state.turnSeconds.value = 12
     const prompt = state.actionPrompt.value
     handle = window.setInterval(() => {

@@ -28,7 +28,12 @@ const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
-const localGame = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+const localGame = useGame({
+  playSound: playEffect,
+  playSoundAndWait: playEffectAndWait,
+  // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
+  countdownEnabled: false,
+})
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。

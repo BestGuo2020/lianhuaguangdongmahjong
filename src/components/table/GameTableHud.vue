@@ -80,6 +80,18 @@ const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
   return splitWinningTile(props.user.hand, props.winPresentation).hand
 })
+// 摸牌位：手牌比基准（13 - 3×非花副露数）多一张时，把多出的那张视为「摸牌」并留间隙。
+// 与 3D 牌桌 tableTilePresenter 规则一致：drawnTileIndex 有效时用它，否则取末张。
+// 覆盖 14/11/8/5/2 张（副露 0-4 副）场景——碰/杠后跳摸时 drawnTileIndex 为 -1，也要据此留间隙。
+const userDrawnIndex = computed(() => {
+  if (props.revealHands) return -1
+  const hand = displayedUserHand.value
+  const rawDrawn = props.user.drawnTileIndex
+  const meldCount = props.user.melds.filter((meld) => meld.type !== 'flower').length
+  const baseHand = 13 - 3 * meldCount
+  if (rawDrawn >= 0 && rawDrawn < hand.length) return rawDrawn
+  return hand.length > baseHand ? hand.length - 1 : -1
+})
 
 watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(value) })
 watch(() => props.isUserTurn, (value) => { if (!value) waitsOpen.value = false })
@@ -212,17 +224,17 @@ function onAvatarError(entry: GamePlayer) {
       <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div
           v-for="(tile, index) in displayedUserHand" :key="`${tile}-${index}`" class="hand-tile-slot"
-          :class="{ drawn: user.drawnTileIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
+          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
           @mouseenter="previewDesktopWaits(tile)" @mouseleave="clearDesktopWaits"
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :selected="selectedIndex === index" :drawn="user.drawnTileIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
 
-    <div v-if="isUserTurn || actionPrompt" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
+    <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" small disabled /><small>{{ item.remaining }}张</small></div></div></template>

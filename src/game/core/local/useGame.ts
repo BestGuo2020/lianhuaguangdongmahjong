@@ -22,12 +22,15 @@ interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: PlayerController[]
+  /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
+  countdownEnabled?: boolean
 }
 
 export function useGame({
   playSound = () => {},
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
+  countdownEnabled = true,
 }: UseGameOptions = {}) {
   const state = createLocalGameState()
   const selectors = createLocalGameSelectors(state)
@@ -105,6 +108,7 @@ export function useGame({
   countdown = createLocalCountdownController({
     state,
     playSound,
+    enabled: countdownEnabled,
     onDiscard: () => playerActions.userDiscard(),
     onPass: () => playerActions.userPass(),
   })
