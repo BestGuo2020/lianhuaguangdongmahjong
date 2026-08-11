@@ -56,7 +56,7 @@
 | 3D 渲染 | Three.js |
 | 构建工具 | Vite 8 |
 | 类型检查 | vue-tsc |
-| 测试 | Vitest |
+| 测试 | Vitest（单元/契约测试）、Playwright（端到端测试） |
 | 包管理 | npm（仓库包含 `package-lock.json`） |
 
 前端为单页应用，可独立运行单机模式；联机模式需要配套的后端房间服务（见「本地运行」）。`package.json` 已通过 `engines` 声明运行环境：Node.js `^20.19.0 || >=22.12.0`，npm `>=9.0.0`。
@@ -85,6 +85,25 @@
 - 暗杠由其余三家各支付 2 份底分；明杠由出牌者支付 1 份底分；补杠由其余三家各支付 1 份底分。
 - 抢杠胡只由被抢杠者支付胡牌分数。
 - 胡牌单家支付额：`底分 × 倍数 + 中马数 × 底分`。
+
+## 前端架构
+
+前端目前以统一的 `GamePort` 作为界面与对局实现之间的边界。`App.vue` 只负责应用级组合：根据当前模式选择本地或远程端口，并装配大厅、牌桌 HUD、结算层、战绩层和声明弹窗。牌桌与结算组件不直接判断本地/联机分支，两种模式向上提供同一套状态和动作契约。
+
+```text
+Vue 页面与组件
+      │
+      ▼
+activeGamePort / GamePort
+      ├─ 本地：useGame → 本地回合、动作、时间线与规则模块
+      └─ 联机：useRemoteGame → 编排层 → 协议层 → REST / WebSocket
+```
+
+- `src/game/core/contracts/` 定义共享领域类型、`GamePort` 以及本地/联机端口选择器，并通过契约测试保证两种实现可以被相同 UI 消费。
+- 本地对局按规则、控制器、状态、回合编排、杠执行器、开局/结算时间线和瞬态表现拆分；`useGame.ts` 仅保留组合与对外适配职责。
+- 联机对局按 API、协议、传输、会话、状态、编排和表现分层。服务端数据先由 decoder 校验，再经 mapper 转换为前端领域模型，随后由消息路由和 snapshot reconciler 驱动状态。
+- 房间创建、加入、准备、开局、离开、恢复和继续对局均由独立生命周期模块处理；断线恢复使用本地会话信息重新连接并接受服务端快照。
+- Three.js 场景将静态牌桌、中央机器、牌面/材质、牌墙/手牌/弃牌/副露实例渲染、骰子和胡牌特效分别封装；3D 牌桌与规则面板按需加载，避免大厅首屏加载完整渲染代码。
 
 ## 安装方式
 
@@ -119,7 +138,7 @@ http://localhost:4173
 
 进入大厅后选择“东风场”或“半庄场”开始单机对战，或在“联机对战”下创建/加入房间。移动端建议横屏使用；部分浏览器不允许网页自动锁定方向，此时请手动横置设备。
 
-**联机对战**需要配套的后端房间服务：前端默认请求「页面所在主机」的 `8000` 端口（如本机 `http://localhost:8000`）。`backend/` 为独立仓库（本仓库已将其忽略），本地可用 `docker compose up --build` 在 8000 端口启动；部署与运行方式见 [backend/DEPLOY.md](./backend/DEPLOY.md)。同一局域网（或同一域名下）的玩家访问同一页面，即可通过房间码同场对局。后端部署在其他地址时，通过环境变量 `VITE_API_BASE` 指定 API 地址（见「环境变量」）。
+**联机对战**需要配套的后端房间服务。开发环境下，前端请求同源的 `/api` 和 `/ws`，Vite 会将它们代理到 `http://127.0.0.1:8000`；`backend/` 为独立仓库（本仓库已将其忽略），本地可用 `docker compose up --build` 启动，部署与运行方式见 [backend/DEPLOY.md](./backend/DEPLOY.md)。生产环境建议让 Web 服务器将 `/api`、`/ws` 反向代理到后端；如果后端使用独立地址，则通过 `VITE_API_BASE` 指定（见「环境变量」）。
 
 ## 操作方式
 
@@ -133,7 +152,8 @@ http://localhost:4173
 | --- | --- |
 | `npm run dev` | 启动 Vite 开发服务器，监听所有网络接口 |
 | `npm run typecheck` | 使用 `vue-tsc` 执行 TypeScript 类型检查，不生成文件 |
-| `npm test` | 使用 Vitest 单次运行全部测试 |
+| `npm test` | 使用 Vitest 单次运行 `src/` 下的单元、流程和契约测试 |
+| `npm run test:e2e` | 使用 Playwright 运行浏览器端本地对局冒烟测试 |
 | `npm run build` | 先执行类型检查，再生成生产构建 |
 | `npm run preview` | 在本地预览生产构建，监听所有网络接口 |
 
@@ -142,13 +162,14 @@ http://localhost:4173
 ```bash
 npm test
 npm run build
+npm run test:e2e
 ```
 
 ## 环境变量
 
-客户端环境变量均以 Vite 的 `VITE_` 前缀声明，参考模板见 `.env.example`：
+客户端环境变量均以 Vite 的 `VITE_` 前缀声明：
 
-- `VITE_API_BASE`（可选）：联机模式后端 API 地址。默认 `http://<页面所在主机>`（即同主机 8000 端口，见「本地运行」）；后端部署到独立域名/端口时设置，例如 `VITE_API_BASE=https://api.example.com`。构建时以 `import.meta.env` 注入。
+- `VITE_API_BASE`（可选）：联机模式 REST 与 WebSocket 的服务基址。默认使用页面当前 origin；本地开发由 Vite 代理 `/api`、`/ws` 到 `127.0.0.1:8000`。后端部署到独立域名或端口时设置，例如 `VITE_API_BASE=https://api.example.com`。该值在构建时通过 `import.meta.env` 注入。
 
 代码通过 Vite 内置的 `import.meta.env.BASE_URL` 拼接音频、图片和头像资源路径。不要把密钥放入前端环境变量或提交到仓库。
 
@@ -163,29 +184,40 @@ npm run build
 │  └─ tiles/               # 麻将牌面图片
 ├─ src/
 │  ├─ components/
-│  │  ├─ MahjongTable3D.vue # Three.js 牌桌与 3D 场景
-│  │  ├─ MahjongTile.vue    # 2D 麻将牌组件
-│  │  ├─ PlayerSeat.vue     # 玩家座位与状态展示
-│  │  └─ RulesPanel.vue     # 游戏内玩法说明面板（含用户声明）
+│  │  ├─ lobby/              # 大厅与联机房间面板
+│  │  ├─ table/              # 牌桌 HUD 与 Three.js 子模块
+│  │  │  └─ three/           # 静态场景、实例渲染、骰子、特效与性能调节
+│  │  ├─ settlement/         # 局末/比赛结算覆盖层
+│  │  ├─ account/            # 战绩覆盖层
+│  │  ├─ legal/ / shell/     # 声明、应用外壳与横屏门禁
+│  │  ├─ MahjongTable3D.vue  # 3D 场景组合入口
+│  │  ├─ MahjongTile.vue / PlayerSeat.vue
+│  │  └─ RulesPanel.vue      # 按需加载的玩法说明
 │  ├─ content/
 │  │  └─ disclaimer.ts      # 纯娱乐声明文案（声明弹窗与玩法面板共用）
 │  ├─ game/
-│  │  ├─ core/              # 离线核心：对局、规则、AI、布局与胡牌演出
-│  │  │  ├─ useGame.ts      # 对局状态、回合流程和玩家/AI 操作
-│  │  │  ├─ rules.ts        # 胡牌判断、杠分、胡牌计分与买马
-│  │  │  ├─ tiles.ts        # 牌集合、牌墙、排序和牌名工具
-│  │  │  ├─ tableLayout.ts / wallLayout.ts # 牌桌与牌墙布局
-│  │  │  ├─ winEffect.ts    # 胡牌展示布局与动效时序
-│  │  │  ├─ ai.ts / playerController.ts / actions.ts # 本地 AI 与动作执行
-│  │  │  ├─ types.ts / useAudio.ts / avatar.ts / tileAssets.ts
-│  │  │  └─ *.test.ts       # Vitest 单元与流程测试
-│  │  └─ online/            # 联机交互：房间生命周期与对局同步
-│  │     ├─ remoteApi.ts    # 房间 REST 客户端（创建/加入/准备/离开/关闭/举报/战绩）
-│  │     └─ useRemoteGame.ts # 联机状态机与 WebSocket 对局同步
-│  ├─ App.vue               # 应用界面、交互入口和响应式适配
+│  │  ├─ core/
+│  │  │  ├─ contracts/       # GamePort、共享类型及契约测试
+│  │  │  ├─ rules/           # 牌、动作、胡牌、计分与牌墙规则
+│  │  │  ├─ controllers/     # AI 与玩家动作决策
+│  │  │  ├─ local/           # 本地状态、生命周期、回合/动作编排和表现时间线
+│  │  │  ├─ selectors/       # 可供本地和远程复用的派生查询
+│  │  │  └─ presentation/    # 音频、头像、牌面资源和布局/胡牌表现模型
+│  │  └─ online/
+│  │     ├─ api/             # 房间、账号、举报 REST 客户端
+│  │     ├─ protocol/        # 服务端 DTO、消息、decoder 与 mapper
+│  │     ├─ transport/       # 房间 WebSocket
+│  │     ├─ session/         # 会话持久化、房间恢复与可用性
+│  │     ├─ state/           # 远程对局状态容器
+│  │     ├─ orchestration/   # 请求协调、消息路由、快照协调与动作/生命周期
+│  │     ├─ presentation/    # 开局、结算和瞬态事件表现时间线
+│  │     └─ useRemoteGame.ts # 远程端口组合入口
+│  ├─ App.vue                # 应用组合根，不承载具体对局规则
 │  ├─ main.ts               # Vue 应用入口
 │  ├─ style.css             # 全局样式
 │  └─ env.d.ts              # Vite 类型声明
+├─ tests/e2e/                # Playwright 浏览器冒烟测试
+├─ .github/workflows/        # 前端持续集成
 ├─ docs/                    # 项目参考图片
 ├─ index.html               # Vite HTML 入口
 ├─ vite.config.ts           # Vite 与开发服务器配置
@@ -196,16 +228,16 @@ npm run build
 
 `dist/`、`node_modules/`、`tmp/` 和本地日志属于生成物或本地工作文件，不应作为业务源码维护。
 
-## 开发规范
+## 开发与扩展约定
 
-- 使用 Vue 单文件组件和 `<script setup lang="ts">`；可复用的游戏逻辑放在 `src/game/core/`（离线核心）与 `src/game/online/`（联机交互），展示逻辑放在 `src/components/`。
-- 保持现有代码风格：2 空格缩进、单引号、通常不写行末分号。
-- 共享的牌、玩家、动作和结算结构应在 `src/game/core/types.ts` 中定义，避免在组件内重复声明。
-- 修改规则时同时检查 `rules.ts`、`useGame.ts`、游戏内 `RulesPanel.vue` 与本 README，确保实现和说明一致。
-- 修改牌桌位置或胡牌演出时，优先更新相应的纯函数，并补充或调整测试。
-- 静态资源放入 `public/` 对应子目录，运行时代码使用 `import.meta.env.BASE_URL` 构建 URL，以避免硬编码站点根路径。
-- 不直接编辑 `dist/`；生产文件必须由构建命令重新生成。
-- 当前项目中未发现 ESLint、Prettier、提交信息规范或贡献流程说明。
+- 使用 Vue 单文件组件和 `<script setup lang="ts">`。组件只消费 `GamePort`，不要在视图内新增本地/联机模式分支或直接解析后端 DTO。
+- 共享的牌、玩家、动作和结算类型放在 `src/game/core/contracts/`；协议原始类型只放在 `src/game/online/protocol/dto.ts`，并经过 decoder 与 mapper 后才能进入核心状态。
+- 本地与远程组合入口分别为 `src/game/core/local/useGame.ts` 和 `src/game/online/useRemoteGame.ts`。新流程优先下沉到对应的状态、编排、控制器或时间线模块，避免组合入口再次膨胀。
+- 修改规则时同步更新 `src/game/core/rules/`、本地动作/结算流程、游戏内 `RulesPanel.vue` 和本 README；若后端权威计算也依赖该规则，还需要同步后端并补充协议映射测试。
+- 新增一套麻将规则时，优先把规则差异封装为规则配置或策略，复用 `GamePort`、房间生命周期、协议传输和 UI 外壳。只有服务端 DTO 新增字段时才扩展 `dto.ts`、decoder 和 mapper；只有 UI 需要新状态/动作时才扩展 `GamePort`，并同步本地、远程契约测试。
+- 修改牌桌位置、实例渲染或胡牌演出时，优先更新 `src/components/table/three/` 或 `src/game/core/presentation/` 中的独立模块，并补充纯函数/渲染器测试。
+- 保持现有代码风格：2 空格缩进、单引号、通常不写行末分号。静态资源放入 `public/` 对应目录，运行时使用 `import.meta.env.BASE_URL` 构建 URL。
+- 不直接编辑 `dist/`；生产文件必须由构建命令重新生成。当前仓库尚未配置 ESLint、Prettier 或提交信息规范。
 
 ## 构建和部署
 
@@ -221,9 +253,9 @@ npm run build
 npm run preview
 ```
 
-部署时将 `dist/` 的内容交给能够托管静态站点的 Web 服务器即可。联机模式需同时部署后端房间服务：`backend/` 为独立仓库，已配置 GitHub Actions 自动构建镜像并推送到服务器（见 [backend/DEPLOY.md](./backend/DEPLOY.md)），前端通过 `VITE_API_BASE` 指向该服务。
+部署时将 `dist/` 的内容交给能够托管静态站点的 Web 服务器即可。联机模式需同时部署后端房间服务：`backend/` 为独立仓库，部署方式见 [backend/DEPLOY.md](./backend/DEPLOY.md)。可以通过同源反向代理暴露 `/api`、`/ws`，也可以通过 `VITE_API_BASE` 指向独立服务地址。
 
-当前 `vite.config.ts` 未设置自定义 `base`，默认按站点根路径构建。如果部署到域名的子路径，需要先根据目标环境配置 Vite 的 `base`，并确认 `public/` 下的音频、图片和头像均能正确加载。应用当前没有前端路由，因此不需要额外配置 SPA 路由回退。
+当前 `vite.config.ts` 使用相对路径 `base: './'`，可将构建产物部署到根路径或未知子目录；子目录地址应以 `/` 结尾，避免浏览器将相对资源解析到错误层级。应用当前没有前端路由，因此不需要额外配置 SPA 路由回退。
 
 ## 常见问题
 
@@ -245,15 +277,15 @@ npm run preview
 
 ### 构建后静态资源返回 404
 
-如果站点部署在子路径而不是域名根路径，请配置 Vite 的 `base` 后重新构建。不要直接修改 `dist/` 中生成的 URL。
+确认站点通过带尾斜杠的目录地址访问，例如 `/项目名/`，并确认 Web 服务器没有重写掉构建产物的相对路径。不要直接修改 `dist/` 中生成的 URL。
 
 ### 联机模式创建 / 加入房间失败
 
-确认后端房间服务已启动且端口可达（默认页面所在主机的 `8000` 端口，见「本地运行」）；浏览器访问的地址与后端 API 需能互通，同一局域网跨设备时确认防火墙放行对应端口。若后端部署在其他地址，请设置 `VITE_API_BASE` 后重新构建，不要直接修改 `dist/`。
+本地开发时确认后端监听 `127.0.0.1:8000`，并通过 Vite 页面访问，让 `/api`、`/ws` 使用开发代理。部署环境则检查同源反向代理或 `VITE_API_BASE`，并确认 WebSocket 升级请求未被代理层拦截。若“继续对局”不能恢复，还应检查浏览器会话存储、房间是否仍存在，以及后端返回快照能否通过协议 decoder。
 
 ### 修改规则后测试失败
 
-规则测试位于 `src/game/core/*.test.ts` 与 `src/game/online/*.test.ts`。确认规则实现、对局流程、计分预期和玩法文案都已同步更新，然后重新运行 `npm test` 和 `npm run build`。
+单元、流程和契约测试与实现文件并置在 `src/game/core/**`、`src/game/online/**` 和 `src/components/table/three/**`，浏览器冒烟测试位于 `tests/e2e/`。确认规则实现、两种 GamePort、计分预期和玩法文案均已同步，再运行 `npm test`、`npm run build` 和 `npm run test:e2e`。
 
 ## 资源说明
 
