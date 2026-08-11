@@ -6,10 +6,13 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { isHorse, sortTiles, TILE_TYPES } from '../game/core/tiles'
 import { preloadTileImages, preloadedTileImages } from '../game/core/tileAssets'
 import { meldSourceTileIndex } from '../game/core/rules'
-import { addedKongTileOffset, pointFromSeat, windForSeat } from '../game/core/tableLayout'
+import { addedKongTileOffset, windForSeat } from '../game/core/tableLayout'
 import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../game/core/wallLayout'
 import { splitWinningTile, WIN_EFFECT_DURATION, winDisplayLayout } from '../game/core/winEffect'
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/types'
+import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
+import { createDicePresenter } from './table/three/dicePresenter'
+import { createPerfHud } from './table/three/perfHud'
 
 interface TableProps {
   players?: GamePlayer[]
@@ -53,8 +56,8 @@ let animatedDiscardId = -1   // 最近一次已播过出牌动画的弃牌 id，
 let animatedTableActionId = -1
 let pendingTableActionAnimation = null
 let winEffectAnimation = null
-let diceGroup
-let diceStartedAt = 0
+let dicePresenter: ReturnType<typeof createDicePresenter> | null = null
+let perfHud: ReturnType<typeof createPerfHud> | null = null
 const staticResources = []
 const dynamicResources = []
 const faceMaterials = new Map()
@@ -62,8 +65,6 @@ const faceMaterials = new Map()
 const PLAY_AREA_OFFSET_Z = -1.65
 // 牌层（牌墙/牌河/手牌/副露/骰子）的 Z 中心：单独向本家（+z）偏移，靠近玩家侧
 const TILE_LAYER_Z = -1.0
-const DICE_SIZE = .5
-const DICE_LANDING_Y = .62
 const BASE_EXPOSURE = .92
 const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
@@ -80,6 +81,11 @@ let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('
 
 // 抗锯齿开关：默认开；URL 带 ?aa=off 关闭 MSAA（省一大截 fill，但牌边缘会出现锯齿）。
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
+const adaptiveQuality = createAdaptiveQualityController({
+  override: parseQualityOverride(window.location.search),
+  onChange: applyQuality,
+})
+let lastFrameAt = 0
 
 function own(resource) {
   staticResources.push(resource)
@@ -91,103 +97,6 @@ function ownDynamic(resource) {
   return resource
 }
 
-function makeDiceTexture(value) {
-  const surface = document.createElement('canvas')
-  surface.width = 192
-  surface.height = 192
-  const ctx = surface.getContext('2d')
-  const gradient = ctx.createLinearGradient(0, 0, 192, 192)
-  gradient.addColorStop(0, '#fffef5')
-  gradient.addColorStop(1, '#d9d9cd')
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 192, 192)
-  const positions = {
-    1: [[96, 96]],
-    2: [[55, 55], [137, 137]],
-    3: [[52, 52], [96, 96], [140, 140]],
-    4: [[54, 54], [138, 54], [54, 138], [138, 138]],
-    5: [[52, 52], [140, 52], [96, 96], [52, 140], [140, 140]],
-    6: [[55, 45], [137, 45], [55, 96], [137, 96], [55, 147], [137, 147]],
-  }
-  ctx.fillStyle = value === 1 ? '#b42629' : '#17251f'
-  positions[value].forEach(([x, y]) => {
-    ctx.beginPath()
-    ctx.arc(x, y, 17, 0, Math.PI * 2)
-    ctx.fill()
-  })
-  const texture = own(new THREE.CanvasTexture(surface))
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
-}
-
-function addDice() {
-  const materials = Array.from({ length: 6 }, (_, index) => own(new THREE.MeshStandardMaterial({
-    map: makeDiceTexture(index + 1),
-    roughness: .5,
-    metalness: 0,
-  })))
-  // BoxGeometry 面顺序：右、左、上、下、前、后。
-  const faceMaterials = [materials[1], materials[4], materials[0], materials[5], materials[2], materials[3]]
-  const geometry = own(new RoundedBoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE, 6, .08))
-  diceGroup = new THREE.Group()
-  for (let index = 0; index < 2; index += 1) {
-    const die = new THREE.Mesh(geometry, faceMaterials)
-    die.castShadow = true
-    die.receiveShadow = true
-    diceGroup.add(die)
-  }
-  diceGroup.visible = props.openingStage === 'dice'
-  if (diceGroup.visible) diceStartedAt = performance.now()
-  scene.add(diceGroup)
-}
-
-function settledDiceQuaternion(value) {
-  const rotations = {
-    1: [0, 0, 0],
-    2: [0, 0, Math.PI / 2],
-    3: [-Math.PI / 2, 0, 0],
-    4: [Math.PI / 2, 0, 0],
-    5: [0, 0, -Math.PI / 2],
-    6: [Math.PI, 0, 0],
-  }
-  return new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotations[value]))
-}
-
-function rollingDiceQuaternion(index, progress) {
-  return new THREE.Quaternion().setFromEuler(new THREE.Euler(
-    progress * Math.PI * (index === 0 ? 9 : 8),
-    progress * Math.PI * (index === 0 ? 7 : -9),
-    progress * Math.PI * (index === 0 ? -5 : 6),
-  ))
-}
-
-function animateDice(time) {
-  if (!diceGroup?.visible) return
-  const progress = Math.min(1, Math.max(0, (time - diceStartedAt) / 1050))
-  const travel = 1 - (1 - progress) ** 2
-  diceGroup.children.forEach((die, index) => {
-    const side = index === 0 ? -1 : 1
-    const throwPoint = pointFromSeat(
-      props.dealerIndex,
-      side * (.58 + .22 * travel),
-      THREE.MathUtils.lerp(5.2, .2, travel) + side * .1,
-    )
-    die.position.x = throwPoint.x
-    die.position.z = throwPoint.z + TILE_LAYER_Z
-    const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
-    const bounceProgress = Math.max(0, (progress - .82) / .18)
-    const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0
-    die.position.y = DICE_LANDING_Y + arc + bounce
-    const settleStart = .72
-    if (progress < settleStart) {
-      die.quaternion.copy(rollingDiceQuaternion(index, progress))
-    } else {
-      const from = rollingDiceQuaternion(index, settleStart)
-      const target = settledDiceQuaternion(props.diceValues[index] || 1)
-      die.quaternion.copy(from).slerp(target, (progress - settleStart) / (1 - settleStart))
-    }
-  })
-}
 
 function makeBackTexture() {
   const surface = document.createElement('canvas')
@@ -1522,30 +1431,6 @@ function rebuildTableTiles() {
   addWinningDisplayTile()
 }
 
-// 手机端自适应降质：帧耗时超过预算时逐步降低牌面材质开销与阴影分辨率，保住帧率。
-// 始终保持满分辨率渲染（画面不糊、布局不变），高负载时牌面由亮面转哑光、阴影略柔化。
-const QUALITY_LEVELS = [
-  { glossy: true, shadowSize: 1024 },    // 0: 最高（默认）
-  { glossy: true, shadowSize: 512 },     // 1: 阴影略柔化
-  { glossy: false, shadowSize: 512 },    // 2: 牌面转哑光
-]
-const DOWNGRADE_FRAME_MS = 26   // EMA 帧耗时超过约 38fps 一档，持续触发降级
-const UPGRADE_FRAME_MS = 20     // EMA 帧耗时低于约 50fps 一档，持续触发恢复（避免降到哑光后因阈值过高永远回不来）
-const DOWNGRADE_FRAMES = 45
-const UPGRADE_FRAMES = 180
-// URL 带 ?q=<0|1|2> 强制固定质量档（关闭自适应）；不填则自动。
-const qOverride = (() => {
-  const raw = new URLSearchParams(window.location.search).get('q')
-  if (raw === null || raw === '') return null
-  const n = parseInt(raw, 10)
-  return Number.isFinite(n) && n >= 0 && n < QUALITY_LEVELS.length ? n : null
-})()
-let qualityLevel = qOverride ?? 0
-let emaFrameMs = 0
-let badFrames = 0
-let goodFrames = 0
-let lastFrameAt = 0
-let qualityWarmup = 10
 let shadowLight: THREE.DirectionalLight | null = null
 let glossyMaterials = true
 
@@ -1585,8 +1470,8 @@ function resize() {
   camera.updateProjectionMatrix()
 }
 
-function applyQuality() {
-  const level = QUALITY_LEVELS[qualityLevel]
+function applyQuality(levelIndex = adaptiveQuality.level) {
+  const level = QUALITY_LEVELS[levelIndex]
   applyGlossy(level.glossy)
   if (shadowLight && shadowLight.shadow.mapSize.x !== level.shadowSize) {
     shadowLight.shadow.mapSize.set(level.shadowSize, level.shadowSize)
@@ -1596,82 +1481,16 @@ function applyQuality() {
   }
 }
 
-function updateAdaptiveQuality(frameMs: number) {
-  if (qOverride !== null) return
-  if (qualityWarmup > 0) {
-    qualityWarmup -= 1
-    emaFrameMs = 0
-    return
-  }
-  if (frameMs <= 0) return
-  emaFrameMs = emaFrameMs ? emaFrameMs * .92 + frameMs * .08 : frameMs
-  if (emaFrameMs > DOWNGRADE_FRAME_MS) {
-    badFrames += 1
-    goodFrames = 0
-    if (badFrames >= DOWNGRADE_FRAMES && qualityLevel < QUALITY_LEVELS.length - 1) {
-      qualityLevel += 1
-      badFrames = 0
-      applyQuality()
-    }
-  } else if (emaFrameMs < UPGRADE_FRAME_MS) {
-    goodFrames += 1
-    badFrames = 0
-    if (goodFrames >= UPGRADE_FRAMES && qualityLevel > 0) {
-      qualityLevel -= 1
-      goodFrames = 0
-      applyQuality()
-    }
-  } else {
-    badFrames = 0
-    goodFrames = 0
-  }
-}
-
-// DEV-only：URL 带 ?perf 时显示帧耗时 HUD，便于真机量化卡顿；生产构建不包含。
-let perfHud: { frame: (now: number) => void } | null = null
-let perfHudEl: HTMLDivElement | null = null
-
-function setupPerfHud() {
-  if (!import.meta.env.DEV) return
-  if (!new URLSearchParams(window.location.search).has('perf')) return
-  perfHudEl = document.createElement('div')
-  perfHudEl.style.cssText = 'position:fixed;top:8px;left:8px;z-index:9999;font:11px/1.5 ui-monospace,Consolas,monospace;color:#9ff;background:rgba(0,0,0,.6);padding:6px 9px;border-radius:6px;pointer-events:none;white-space:pre;'
-  document.body.appendChild(perfHudEl)
-  const samples: number[] = []
-  let last = -1
-  let maxMs = 0
-  perfHud = {
-    frame(now: number) {
-      const ms = last >= 0 ? now - last : 0
-      if (last >= 0) {
-        samples.push(ms)
-        if (samples.length > 120) samples.shift()
-        if (ms > maxMs) maxMs = ms
-      }
-      last = now
-      if (samples.length >= 30 && samples.length % 30 === 0 && perfHudEl) {
-        const sorted = [...samples].sort((a, b) => a - b)
-        const avg = samples.reduce((sum, v) => sum + v, 0) / samples.length
-        const p95 = sorted[Math.floor(sorted.length * .95)]!
-        const dc = renderer?.info.render.calls ?? 0
-        const tris = Math.round((renderer?.info.render.triangles ?? 0) / 1000)
-        const pr = renderer?.getPixelRatio() ?? 2
-        perfHudEl.textContent = `frame ${ms.toFixed(1)}ms\navg ${avg.toFixed(1)}  p95 ${p95.toFixed(1)}  max ${maxMs.toFixed(1)}\n~${Math.min(60, 1000 / avg).toFixed(0)}fps  q${qualityLevel}${glossyMaterials ? 'G' : 'M'}\ndc${dc}  tri${tris}k  pr${pr.toFixed(1)}`
-      }
-    },
-  }
-}
-
 function render(time = 0) {
   if (!renderer) return
   perfHud?.frame(time)
   const frameMs = lastFrameAt ? time - lastFrameAt : 0
   lastFrameAt = time
-  updateAdaptiveQuality(frameMs)
+  adaptiveQuality.frame(frameMs)
   let cameraShakeX = 0
   let cameraShakeZ = 0
   let exposure = BASE_EXPOSURE
-  animateDice(time)
+  dicePresenter?.animate(time)
   dealTweens = dealTweens.filter((tween) => {
     const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
     const eased = 1 - (1 - progress) ** 3
@@ -1805,21 +1624,34 @@ onMounted(async () => {
   scene.add(rimLight)
   // 移除了 goldFill（点光源，每片元开销最大）与 tileHighlight（与 keyLight 同向的微弱重复）。
   // 金色桌沿改由 gold/goldHighlight 的自发光补偿，保持亮度不依赖点光源。
-  addDice()
+  dicePresenter = createDicePresenter({
+    scene,
+    own,
+    getOpeningStage: () => props.openingStage,
+    getValues: () => props.diceValues,
+    getDealerIndex: () => props.dealerIndex,
+    tileLayerZ: TILE_LAYER_Z,
+  })
 
   // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
   // 牌面用应用启动时预加载的共享表（可能已在内存中，直接带真实牌面）。
   scene.userData.tileImages = preloadedTileImages()
   addTable()
   rebuildTableTiles()
-  if (qOverride !== null) {
-    qualityLevel = qOverride
-    applyQuality()
-  }
+  if (adaptiveQuality.overridden) adaptiveQuality.apply()
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas.value)
   resize()
-  setupPerfHud()
+  perfHud = createPerfHud(
+    import.meta.env.DEV && new URLSearchParams(window.location.search).has('perf'),
+    () => ({
+      drawCalls: renderer?.info.render.calls ?? 0,
+      triangles: renderer?.info.render.triangles ?? 0,
+      pixelRatio: renderer?.getPixelRatio() ?? 2,
+      qualityLevel: adaptiveQuality.level,
+      glossy: glossyMaterials,
+    }),
+  )
   render()
 
   // 等启动预加载完成（已完成则立即返回），确保图集带上全部真实牌面。
@@ -1853,9 +1685,7 @@ watch(
 )
 
 watch(() => props.openingStage, (stage) => {
-  if (!diceGroup) return
-  diceGroup.visible = stage === 'dice'
-  if (diceGroup.visible) diceStartedAt = performance.now()
+  dicePresenter?.setVisible(stage === 'dice')
 })
 
 watch(() => props.dealerIndex, updateMachineTexture)
@@ -1867,8 +1697,7 @@ watch(() => props.currentPlayer, updateMachineTexture)
 onBeforeUnmount(() => {
   destroyed = true
   cancelAnimationFrame(animationFrame)
-  perfHudEl?.remove()
-  perfHudEl = null
+  perfHud?.destroy()
   perfHud = null
   resizeObserver?.disconnect()
   if (scene) clearDynamicScene()

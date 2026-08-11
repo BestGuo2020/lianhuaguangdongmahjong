@@ -1,0 +1,104 @@
+import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { pointFromSeat } from '../../../game/core/tableLayout'
+
+interface DisposableResource { dispose?: () => void }
+
+interface DicePresenterOptions {
+  scene: THREE.Scene
+  own<T extends DisposableResource>(resource: T): T
+  getOpeningStage(): string | null
+  getValues(): number[]
+  getDealerIndex(): number
+  tileLayerZ: number
+}
+
+const DICE_SIZE = .5
+const DICE_LANDING_Y = .62
+
+export function createDicePresenter(options: DicePresenterOptions) {
+  let startedAt = 0
+  const group = new THREE.Group()
+
+  function makeTexture(value: number) {
+    const surface = document.createElement('canvas')
+    surface.width = 192
+    surface.height = 192
+    const context = surface.getContext('2d')!
+    const gradient = context.createLinearGradient(0, 0, 192, 192)
+    gradient.addColorStop(0, '#fffef5')
+    gradient.addColorStop(1, '#d9d9cd')
+    context.fillStyle = gradient
+    context.fillRect(0, 0, 192, 192)
+    const positions: Record<number, number[][]> = {
+      1: [[96, 96]], 2: [[55, 55], [137, 137]], 3: [[52, 52], [96, 96], [140, 140]],
+      4: [[54, 54], [138, 54], [54, 138], [138, 138]],
+      5: [[52, 52], [140, 52], [96, 96], [52, 140], [140, 140]],
+      6: [[55, 45], [137, 45], [55, 96], [137, 96], [55, 147], [137, 147]],
+    }
+    context.fillStyle = value === 1 ? '#b42629' : '#17251f'
+    positions[value]!.forEach(([x, y]) => {
+      context.beginPath()
+      context.arc(x!, y!, 17, 0, Math.PI * 2)
+      context.fill()
+    })
+    const texture = options.own(new THREE.CanvasTexture(surface))
+    texture.colorSpace = THREE.SRGBColorSpace
+    return texture
+  }
+
+  function settledQuaternion(value: number) {
+    const rotations: Record<number, [number, number, number]> = {
+      1: [0, 0, 0], 2: [0, 0, Math.PI / 2], 3: [-Math.PI / 2, 0, 0],
+      4: [Math.PI / 2, 0, 0], 5: [0, 0, -Math.PI / 2], 6: [Math.PI, 0, 0],
+    }
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(...(rotations[value] ?? rotations[1]!)))
+  }
+
+  function rollingQuaternion(index: number, progress: number) {
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      progress * Math.PI * (index === 0 ? 9 : 8),
+      progress * Math.PI * (index === 0 ? 7 : -9),
+      progress * Math.PI * (index === 0 ? -5 : 6),
+    ))
+  }
+
+  const materials = Array.from({ length: 6 }, (_, index) => options.own(new THREE.MeshStandardMaterial({
+    map: makeTexture(index + 1), roughness: .5, metalness: 0,
+  })))
+  const faceMaterials = [materials[1]!, materials[4]!, materials[0]!, materials[5]!, materials[2]!, materials[3]!]
+  const geometry = options.own(new RoundedBoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE, 6, .08))
+  for (let index = 0; index < 2; index += 1) {
+    const die = new THREE.Mesh(geometry, faceMaterials)
+    die.castShadow = true
+    die.receiveShadow = true
+    group.add(die)
+  }
+  options.scene.add(group)
+
+  function setVisible(visible: boolean) {
+    group.visible = visible
+    if (visible) startedAt = performance.now()
+  }
+
+  function animate(time: number) {
+    if (!group.visible) return
+    const progress = Math.min(1, Math.max(0, (time - startedAt) / 1050))
+    const travel = 1 - (1 - progress) ** 2
+    group.children.forEach((die, index) => {
+      const side = index === 0 ? -1 : 1
+      const throwPoint = pointFromSeat(options.getDealerIndex(), side * (.58 + .22 * travel), THREE.MathUtils.lerp(5.2, .2, travel) + side * .1)
+      die.position.set(throwPoint.x, DICE_LANDING_Y, throwPoint.z + options.tileLayerZ)
+      const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
+      const bounceProgress = Math.max(0, (progress - .82) / .18)
+      const bounce = bounceProgress > 0 ? Math.abs(Math.sin(bounceProgress * Math.PI * 2)) * .14 * (1 - bounceProgress) : 0
+      die.position.y += arc + bounce
+      const settleStart = .72
+      if (progress < settleStart) die.quaternion.copy(rollingQuaternion(index, progress))
+      else die.quaternion.copy(rollingQuaternion(index, settleStart)).slerp(settledQuaternion(options.getValues()[index] || 1), (progress - settleStart) / (1 - settleStart))
+    })
+  }
+
+  setVisible(options.getOpeningStage() === 'dice')
+  return { animate, setVisible }
+}
