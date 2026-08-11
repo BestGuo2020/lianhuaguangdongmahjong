@@ -10,7 +10,7 @@ import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { createActiveGamePort, type GameMode } from './game/core/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { reportPlayer as reportPlayerApi } from './game/online/api/moderationApi'
+import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useRoomAvailability } from './game/online/session/useRoomAvailability'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
@@ -62,15 +62,6 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality, autoPlay, toggleAutoPlay,
 } = remoteGame
-function readStoredNickname() {
-  try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
-}
-const nicknameInput = ref(readStoredNickname())
-const joinCode = ref('')
-const allOccupiedReady = computed(() => {
-  const occupied = roomSeats.value.filter(Boolean)
-  return occupied.length > 0 && occupied.every((seat) => seat?.ready)
-})
 // 网络信号：0-3 格的语义是「连接健康度」，而非延迟（棋牌类对延迟不敏感）
 const signalText = computed(() =>
   ({ 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' })[signalQuality.value] ?? '')
@@ -79,125 +70,37 @@ const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
 const disclaimerGate = useDisclaimerGate(playerId)
 
-function createRemoteRoom() {
-  if (roomId.value) return   // 已在房间：禁重复建房（按钮禁用，回车路径同样拦截）
-  if (!nicknameInput.value.trim()) return
-  nickname.value = nicknameInput.value.trim()
-  void disclaimerGate.guard(() => void remoteActions.createRoom(selectedMatch.value, 4))
-}
-
-function joinRemoteRoom() {
-  if (roomId.value) return   // 已在房间：禁重复加入
-  if (!nicknameInput.value.trim() || !joinCode.value.trim()) return
-  nickname.value = nicknameInput.value.trim()
-  void disclaimerGate.guard(() => void remoteActions.joinRoom(joinCode.value))
-}
-
-// 房间码一键复制：优先 Clipboard API；局域网 http 非安全上下文回退隐藏 textarea + execCommand
-const copied = ref(false)
-async function copyRoomCode() {
-  const code = roomId.value
-  if (!code) return
-  let ok = false
-  if (window.isSecureContext && navigator.clipboard) {
-    try { await navigator.clipboard.writeText(code); ok = true } catch { ok = false }
-  }
-  if (!ok) {
-    try {
-      const textarea = document.createElement('textarea')
-      textarea.value = code
-      textarea.setAttribute('readonly', '')
-      textarea.style.position = 'fixed'
-      textarea.style.top = '-9999px'
-      document.body.appendChild(textarea)
-      textarea.select()
-      ok = document.execCommand('copy')
-      document.body.removeChild(textarea)
-    } catch { ok = false }
-  }
-  if (ok) {
-    copied.value = true
-    window.setTimeout(() => { copied.value = false }, 1600)
-  }
-}
-
 function startGameWithAudio() {
   startBgm()
   // 音效在后台缓存，不能阻塞玩家创建和 3D 牌桌首次渲染。
   startGame(selectedMatch.value)
 }
 
-const matchStarting = ref(false)   // 「正在打扫房间」：房主点击开始到开局快照落地之间的过渡态
-async function startRemoteMatch() {
-  matchStarting.value = true
-  try {
-    // 不在点击瞬间播 BGM：等 WS 开局快照（phase 离开 lobby）进入房间后再播
-    await remoteActions.startMatch()
-  } catch {
-    // 开局失败（composable 已写 sessionError）：复位按钮态供房主重试
-    matchStarting.value = false
-  }
-}
-// 远程开局（phase 离开 lobby）才播 BGM，与本地 startGameWithAudio 的进桌时机对齐
-watch(phase, (value) => {
-  if (gameMode.value === 'remote' && value !== 'lobby') startBgm()
-  matchStarting.value = false
+const lobbyController = createRemoteLobbyController({
+  gameMode,
+  selectedMatch,
+  phase,
+  roomId,
+  nickname,
+  playerId,
+  roomSeats,
+  actions: remoteActions,
+  guardEntry: disclaimerGate.guard,
+  startBgm,
 })
-
-function quitMatch() {
-  // 中途退出：释放座位 + 关闭 WS，回大厅（服务端该座位转 AI 代打剩余对局）
-  if (window.confirm('退出对局将放弃本场对局（座位由 AI 代打），确定退出？')) {
-    void remoteActions.leaveRoom()
-  }
-}
-
-// 房间面板：离开 / 关闭需要 in-flight 提示，且进行中禁止重复操作
-const leaving = ref(false)
-const closing = ref(false)
-async function leaveRoom() {
-  if (leaving.value || closing.value) return
-  leaving.value = true
-  try {
-    await remoteActions.leaveRoom()
-  } finally {
-    leaving.value = false
-  }
-}
-async function closeRoom() {
-  if (leaving.value || closing.value) return
-  closing.value = true
-  try {
-    await remoteActions.closeRoom()
-  } finally {
-    closing.value = false
-  }
-}
-
-// 继续对局（P1）：凭 localStorage 会话直接回上次未完成对局的原座位（同为进房，需先确认声明）
-function resumeRemoteSession() {
-  void disclaimerGate.guard(() => {
-    gameMode.value = 'remote'
-    void remoteActions.resumeSession()
-  })
-}
-
-// 举报（P1）：报告当前房间里的某位玩家（后端 resolves player_id 以便封禁）
-async function reportPlayer(name: string) {
-  if (!playerId.value) return
-  const reason = window.prompt(`举报「${name}」的原因？（对局中违规 / 作弊 / 赌博引流 等）`, '对局中违规')
-  if (reason == null) return
-  try {
-    await reportPlayerApi({
-      roomId: roomId.value,
-      reporterPlayerId: playerId.value,
-      targetName: name,
-      reason,
-    })
-    window.alert('举报已提交，感谢反馈')
-  } catch {
-    window.alert('举报提交失败，请稍后再试')
-  }
-}
+const {
+  nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,
+  createRoom: createRemoteRoom,
+  joinRoom: joinRemoteRoom,
+  resumeSession: resumeRemoteSession,
+  copyRoomCode,
+  startMatch: startRemoteMatch,
+  quitMatch,
+  leaveRoom,
+  closeRoom,
+  report: reportPlayer,
+  toggleReady,
+} = lobbyController
 
 const statsOpen = ref(false)
 
@@ -330,7 +233,7 @@ const continueCountdown = useRemoteContinueCountdown({
           @join-room="joinRemoteRoom"
           @resume-session="resumeRemoteSession"
           @copy-room="copyRoomCode"
-          @toggle-ready="remoteActions.toggleReady()"
+          @toggle-ready="toggleReady"
           @start-remote="startRemoteMatch"
           @leave-room="leaveRoom"
           @close-room="closeRoom"
