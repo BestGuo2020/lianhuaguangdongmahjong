@@ -1,9 +1,9 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { defineGamePort } from '../contracts/gamePort'
-import { performDiscardGang, performPeng, removeMatches } from '../rules/actions'
+import { performDiscardGang, performPeng } from '../rules/actions'
 import type { ActionContext } from '../rules/actions'
 import { AiController, HumanController, type PlayerController, type HumanBridge } from '../controllers/playerController'
-import { applyKongScore, applyWinScore, concealedKongs, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from '../rules/rules'
+import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../rules/rules'
 import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from '../rules/tiles'
 import type {
   EndGameOptions,
@@ -15,19 +15,13 @@ import type {
   TableActionType,
   TileType,
 } from '../contracts/types'
-import {
-  prefersReducedMotion,
-  REDUCED_WIN_EFFECT_DURATION,
-  REDUCED_WIN_REVEAL_DURATION,
-  WIN_EFFECT_DURATION,
-  WIN_EFFECT_SOUND_DELAY,
-  WIN_REVEAL_DURATION,
-} from '../presentation/winEffect'
 import { MATCH_NAMES, PACE_MS } from './localGameConfig'
 import { createLocalGameState } from './localGameState'
+import { createLocalKongActionExecutor } from './localKongActionExecutor'
 import { createLocalOpeningTimeline } from './localOpeningTimeline'
+import { createLocalSettlementTimeline } from './localSettlementTimeline'
 import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
-import { advanceMatchState, resolveWinTile } from './matchProgress'
+import { advanceMatchState } from './matchProgress'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -47,6 +41,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   const timers = new Set<number>()
   let countdownHandle: number | null = null
   let openingTimeline!: ReturnType<typeof createLocalOpeningTimeline>
+  let settlementTimeline!: ReturnType<typeof createLocalSettlementTimeline>
+  let kongActionExecutor!: ReturnType<typeof createLocalKongActionExecutor>
   let turnOrchestrator!: ReturnType<typeof createLocalTurnOrchestrator>
 
   // ── 默认控制器装配（不传 controllers 时自动构建 1 人类 + 3 AI）──
@@ -213,6 +209,24 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return new Promise((resolve) => later(resolve, delay))
   }
 
+  function endGame(winnerIndex: number, options: EndGameOptions = {}) {
+    return settlementTimeline.endGame(winnerIndex, options)
+  }
+
+  function endDraw() {
+    return settlementTimeline.endDraw()
+  }
+
+  settlementTimeline = createLocalSettlementTimeline({
+    state,
+    clearTimers,
+    later,
+    playSound,
+    showTableAction,
+    structuralMeldCount: (playerIndex) => structuralMeldCount(players[playerIndex]),
+    getRoundLabel: () => roundLabel.value,
+  })
+
   openingTimeline = createLocalOpeningTimeline({
     state,
     clearTimers,
@@ -334,15 +348,24 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     playSound,
   }
 
+  kongActionExecutor = createLocalKongActionExecutor({
+    state,
+    showTableAction,
+    showScoreFlow,
+    playSound,
+    later,
+    beginTurn,
+  })
+
   turnOrchestrator = createLocalTurnOrchestrator({
     state,
     controllers,
     tableContext,
     structuralMeldCount: (playerIndex) => structuralMeldCount(players[playerIndex]),
     drawFor,
-    performConcealedKong,
-    declareAddedKong,
-    settleAddedKong,
+    performConcealedKong: kongActionExecutor.performConcealedKong,
+    declareAddedKong: kongActionExecutor.declareAddedKong,
+    settleAddedKong: kongActionExecutor.settleAddedKong,
     discardTile,
     endDraw,
     endGame,
@@ -394,7 +417,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         return later(() => endGame(nextRobber, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), 450)
       }
       pendingKong.value = null
-      return settleAddedKong(kong.playerIndex)
+      return kongActionExecutor.settleAddedKong(kong.playerIndex)
     }
     // 控制器模式：resolve 待处理的 claim promise
     if (humanController.hasPendingClaim()) {
@@ -441,47 +464,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => beginTurn(0, { fromTail: true }), 350)
   }
 
-  async function performConcealedKong(playerIndex, tile, { noContinue = false } = {}) {
-    const player = players[playerIndex]
-    player.hand = removeMatches(player.hand, tile, 4)
-    player.drawnTileIndex = -1
-    player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
-    const scoreDeltas = applyKongScore(players, playerIndex, 'concealed')
-    showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
-    showScoreFlow(scoreDeltas)
-    playSound('gang.mp3')
-    if (noContinue) return
-    // 遗留路径（测试直驱 userGang / performConcealedKong）：beginTurn 统一处理补摸+决策
-    later(() => beginTurn(playerIndex, { fromTail: true }), 350)
-  }
-
-  function declareAddedKong(playerIndex, meldIndex, tile) {
-    const player = players[playerIndex]
-    player.hand = removeMatches(player.hand, tile, 1)
-    player.drawnTileIndex = -1
-    player.melds[meldIndex] = {
-      ...player.melds[meldIndex],
-      type: 'gang',
-      added: true,
-      pending: true,
-      tile,
-      tiles: [tile, tile, tile, tile],
-    }
-    phase.value = 'kong'
-    showTableAction('added-gang', playerIndex, null, tile, meldIndex)
-    playSound('gang.mp3')
-  }
-
-  async function settleAddedKong(playerIndex) {
-    const player = players[playerIndex]
-    const meld = player.melds.find((item) => item.type === 'gang' && item.added && item.pending)
-    if (meld) meld.pending = false
-    const scoreDeltas = applyKongScore(players, playerIndex, 'added')
-    showScoreFlow(scoreDeltas)
-    // 延迟用于杠结算动画展示，之后 beginTurn 统一处理补摸+决策
-    later(() => beginTurn(playerIndex, { fromTail: true }), PACE_MS.afterKongSettle)
-  }
-
   function userGang(tile = userKongs.value[0]) {
     if (!tile) return
     // 控制器模式：resolve 待处理的 turn promise
@@ -501,7 +483,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
     if (meldIndex >= 0) turnOrchestrator.requestAddedKong(0, meldIndex, tile)
     else {
-      performConcealedKong(0, tile)
+      void kongActionExecutor.performConcealedKong(0, tile)
     }
   }
 
@@ -526,107 +508,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       })
     }
     if (userCanHu.value) endGame(0, { kongBloom: turnOrchestrator.isKongDraw(0) })
-  }
-
-  function takeRobbedKongTile(playerIndex, tile) {
-    const player = players[playerIndex]
-    const meldIndex = player?.melds.findIndex((meld) => (
-      meld.type === 'gang' && meld.added && meld.pending && meld.tile === tile
-    )) ?? -1
-    if (meldIndex < 0) return -1
-    const { added, pending, ...meld } = player.melds[meldIndex]
-    player.melds[meldIndex] = {
-      ...meld,
-      type: 'peng',
-      tiles: meld.tiles.slice(0, 3),
-    }
-    return meldIndex
-  }
-
-  function endGame(winnerIndex: number, options: EndGameOptions = {}) {
-    if (['win-effect', 'revealing', 'settled', 'finished'].includes(phase.value)) return
-    clearTimers()
-    scoreFlowEvent.value = null
-    tableActionEvent.value = null
-    phase.value = 'win-effect'
-    openingStage.value = null
-    currentPlayer.value = -1
-    userDrewThisTurn.value = false
-    actionPrompt.value = null
-    pendingKong.value = null
-    const winner = players[winnerIndex]
-    winningPlayerIndex.value = winnerIndex
-    // 四红中在摸到时已经亮到花杠区，不在暗手里；胡牌展示必须使用这张红中，
-    // 不能回退到此前摸到的牌或手牌末张。
-    const winTile = resolveWinTile(winner, options)
-    const robbedKongMeldIndex = options.robbedKong
-      ? takeRobbedKongTile(options.robbedKongPlayerIndex, winTile)
-      : -1
-    const sourceIndex = options.robbedKong || options.fourRed
-      ? -1
-      : (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
-    winPresentation.value = {
-      winnerIndex,
-      tile: winTile,
-      sourceIndex,
-      robbedKong: Boolean(options.robbedKong),
-      robbedKongPlayerIndex: options.robbedKongPlayerIndex ?? -1,
-      robbedKongMeldIndex,
-    }
-    const reducedMotion = prefersReducedMotion()
-    const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
-    const revealDuration = reducedMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
-    winEffect.value = {
-      winnerIndex,
-      tile: winTile,
-      robbedKong: Boolean(options.robbedKong),
-      robbedKongPlayerIndex: options.robbedKongPlayerIndex ?? -1,
-      robbedKongMeldIndex,
-      duration: effectDuration,
-      reducedMotion,
-      id: Date.now(),
-    }
-    showTableAction(
-      options.robbedKong ? 'robbed-kong-win' : 'self-draw',
-      winnerIndex,
-      options.robbedKong ? (options.robbedKongPlayerIndex ?? null) : null,
-      winTile,
-      -1,
-    )
-    playSound(options.robbedKong ? 'hu.mp3' : 'zimo.mp3')
-    if (!reducedMotion) later(() => playSound('hu_effect_sound.mp3', 0.72), WIN_EFFECT_SOUND_DELAY)
-    announcement.value = null
-    later(() => {
-      winEffect.value = null
-      revealHands.value = true
-      phase.value = 'revealing'
-      later(() => finalizeWin(winnerIndex, options), revealDuration)
-    }, effectDuration)
-  }
-
-  function finalizeWin(winnerIndex: number, options: EndGameOptions) {
-    const winner = players[winnerIndex]
-    const scoresBefore = players.map((player) => player.score)
-    const { horses, hits } = drawHorses(wall.value, 8)
-    // 买马从牌头摸走：同步牌头计数，供 3D 牌山正确显示牌头缺口
-    wallHeadDrawn.value += horses.length
-    const score = scoreHand({
-      dealer: winnerIndex === dealer.value,
-      noJoker: !winner.hand.includes('white'),
-      fourRed: Boolean(options.fourRed),
-      kongBloom: Boolean(options.kongBloom),
-      horseHits: hits,
-      robbedKong: Boolean(options.robbedKong),
-    })
-    const totalWon = applyWinScore(
-      players,
-      winnerIndex,
-      score.points,
-      options.robbedKong ? options.robbedKongPlayerIndex : null,
-      dealer.value,
-    )
-    result.value = makeRoundResult({ winnerIndex, winner: winner.name, horses, hits, ...score, totalWon, ...options }, scoresBefore)
-    phase.value = 'settled'
   }
 
   function debugPreviewWin(winnerIndex = 0, { robbedKong = false } = {}) {
@@ -779,50 +660,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'drawing'
     announce('测试：摸第 4 张红中 → 四红中胡牌', 'red')
     void beginTurn(0)
-  }
-
-  function endDraw() {
-    clearTimers()
-    phase.value = 'settled'
-    openingStage.value = null
-    currentPlayer.value = -1
-    userDrewThisTurn.value = false
-    actionPrompt.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = true
-    winningPlayerIndex.value = -1
-    const scoresBefore = players.map((player) => player.score)
-    // 流局：各家是否听牌（连庄判断 + 结算展示；不付点数）
-    const tenpai = players
-      .map((player, playerIndex) => ({ playerIndex, waits: waitingTiles(player.hand, structuralMeldCount(player)) }))
-      .filter((item) => item.waits.length > 0)
-      .map((item) => item.playerIndex)
-    result.value = makeRoundResult({
-      draw: true, winner: '荒庄', horses: [], hits: 0, multiplier: 0, points: 0, details: [],
-      tenpai,
-      dealerTenpai: tenpai.includes(dealer.value),
-    }, scoresBefore)
-  }
-
-  function makeRoundResult(base, scoresBefore) {
-    const ranking = players
-      .map((player, playerIndex) => ({ playerIndex, score: player.score }))
-      .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
-    const ranks = new Map(ranking.map((item, index) => [item.playerIndex, index + 1]))
-    return {
-      ...base,
-      roundLabel: roundLabel.value,
-      honba: honba.value,
-      scoreChanges: players.map((player, playerIndex) => ({
-        playerIndex,
-        name: player.name,
-        avatar: player.avatar,
-        score: player.score,
-        delta: player.score - scoresBefore[playerIndex],
-        rank: ranks.get(playerIndex),
-      })),
-    }
   }
 
   function nextRound() {
