@@ -18,7 +18,6 @@ import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../c
 import { TILE_TYPES, tileName } from '../core/tiles'
 import type { GamePlayer, MatchType, TileType, WinPresentation } from '../core/types'
 import type { ServerSnapshot } from './protocol/dto'
-import type { RoundStartMessage } from './protocol/messages'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createRoomSocketTransport } from './transport/roomSocket'
 import { createRemoteRoomLifecycle } from './session/remoteRoomLifecycle'
@@ -30,6 +29,7 @@ import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import { createRequestCoordinator } from './orchestration/requestCoordinator'
 import { createRemoteActionController } from './orchestration/remoteActionController'
 import { createTransientEventPresenter } from './presentation/transientEventPresenter'
+import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle'
 import {
   mapPlayersToLocal,
   mapRoundResultToLocal,
@@ -70,7 +70,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const signalQuality = roomSocket.signalQuality
 
   // ── 内部：连接 / 定时器 / 延迟队列 ──
-  let pendingRoundStart: RoundStartMessage | null = null
   const timers = new Set<number>()
 
   const roomLifecycle = createRemoteRoomLifecycle({
@@ -247,6 +246,19 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       pickDiscard: remoteActionController.pickDiscard,
     },
   })
+  const matchLifecycle = createRemoteMatchLifecycle({
+    state,
+    isShowingRoundResult,
+    clearTimers,
+    opening: openingTimeline,
+    settlement: settlementTimeline,
+    snapshots: snapshotReconciler,
+    requests: requestCoordinator,
+    transientEvents: transientEventPresenter,
+    sendContinue: () => roomSocket.send({ type: 'continue' }),
+    refreshRoom: roomLifecycle.refreshRoom,
+  })
+  const { nextRound, returnToLobby } = matchLifecycle
 
   function clearPendingRequest() {
     requestCoordinator.clearPending()
@@ -297,49 +309,11 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     return mapPlayersToLocal(snapshotPlayers, mySeatLocal.value)
   }
 
-  // ── 开局序列（对局开始 / 骰子投掷，纯表现层）────────────
-
-  function handleRoundStart(msg: RoundStartMessage) {
-    const alreadyConfirmed = waitingNextRound.value
-    waitingNextRound.value = false
-    // 结算展示期间到达（服务端兜底超时已推进）且本家尚未确认 → 延迟到点「继续」后应用；
-    // 本家已确认（等齐其他玩家后服务端推进）→ 直接开局，startOpeningRound 会清理结算态。
-    if (isShowingRoundResult() && !alreadyConfirmed) {
-      pendingRoundStart = msg
-      return
-    }
-    openingTimeline.start(msg)
-  }
-
-  function startOpeningRound(msg: RoundStartMessage) {
-    openingTimeline.start(msg)
-  }
-
   // ── 开局动画结束后的统一落地：先应用最新快照，再激活回合/请求 ──
 
   function applyBufferedAfterOpening() {
     snapshotReconciler.flush()
     requestCoordinator.flush()
-  }
-
-  function handleMatchFinished(msg: { kind: 'match_finished'; finalScores: Array<{ seat: number; name: string; score: number }> }) {
-    settlementTimeline.cancel()
-    snapshotReconciler.clearPending()
-    requestCoordinator.clearPending()
-    matchFinished.value = true
-    phase.value = 'finished'
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = true
-    winningPlayerIndex.value = -1
-    if (msg.finalScores) {
-      const scores = new Map(msg.finalScores.map((entry) => [entry.seat, entry.score]))
-      players.forEach((player) => {
-        const score = scores.get(player.seat)
-        if (score != null) player.score = score
-      })
-    }
   }
 
   function handleError(code: string) {
@@ -365,7 +339,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       snapshotReconciler.clearPending()
       snapshotReconciler.resetDiscardDedup()
       requestCoordinator.clearPending()
-      pendingRoundStart = null
+      matchLifecycle.clearRoundBarrier()
       openingTimeline.cancel()
       waitingNextRound.value = false
       result.value = null
@@ -380,7 +354,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       roomLifecycle.clearSession()
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
-    round_start: handleRoundStart,
+    round_start: matchLifecycle.handleRoundStart,
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
     rob_kong_request: requestCoordinator.apply,
@@ -400,7 +374,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       }, 600)
     },
     continue_prompt: () => {},
-    match_finished: handleMatchFinished,
+    match_finished: (msg) => matchLifecycle.finishMatch(msg.finalScores),
     room_closed: () => { void roomLifecycle.leaveRoom() },
     pong: () => {},
     error: (msg) => handleError(msg.code),
@@ -418,97 +392,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 重置 ───────────────────────────────────────────────
 
   function resetAll() {
-    clearTimers()
-    snapshotReconciler.reset()
-    requestCoordinator.reset()
-    pendingRoundStart = null
-    openingTimeline.cancel()
-    waitingNextRound.value = false
-    openingStage.value = null
-    phase.value = 'lobby'
-    players.splice(0, players.length)
-    wall.value = []
-    wallHeadDrawn.value = 0
-    wallCount.value = 0
-    currentPlayer.value = -1
-    selectedIndex.value = -1
-    turnSeconds.value = 12
-    lastDiscard.value = null
-    actionPrompt.value = null
-    transientEventPresenter.clear()
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = false
-    winningPlayerIndex.value = -1
-    round.value = 1
-    dealer.value = 0
-    honba.value = 0
-    matchFinished.value = false
-    roomId.value = ''
-    mySeat.value = -1
-    nickname.value = ''
-    rejoinCode.value = ''
-    creatorSeat.value = null
-    isCreator.value = false
-    roomSeats.value = []
-    roomTimeLimit.value = null
-    sessionStatus.value = 'idle'
-    sessionError.value = ''
-  }
-
-  // ── 场次推进（远程：服务端无条件推进，客户端只清除结算展示）──
-
-  function nextRound() {
-    settlementTimeline.cancel()
-    if (matchFinished.value) return
-    // 确认屏障：通知服务端本家已看完结算。**不清结算态**——对话框保留、
-    // 按钮显示「等待其他玩家确定...」；等服务端等齐所有在线真人后推进，
-    // round_start 到达时由 handleRoundStart → startOpeningRound 统一清理结算态。
-    roomSocket.send({ type: 'continue' })
-    waitingNextRound.value = true
-    if (pendingRoundStart) {
-      // 服务端兜底已推进，round_start 在结算展示期间已缓冲 → 直接落地
-      const rs = pendingRoundStart
-      pendingRoundStart = null
-      waitingNextRound.value = false
-      startOpeningRound(rs)
-    }
-    const pendingSnapshot = snapshotReconciler.takePending()
-    if (pendingSnapshot) {
-      // 若仍处结算态会再次缓冲，随下一局发牌动画结束后统一落地；滞留的旧结算快照丢弃
-      if (!(pendingSnapshot.phase === 'settled' && pendingSnapshot.result)) {
-        snapshotReconciler.apply(pendingSnapshot)
-      }
-    }
-    requestCoordinator.flush()
-  }
-
-  function returnToLobby() {
-    // 对局结束后回房间大厅：保留座位与 WS 连接（不释放座位、不散房），
-    // 服务端房间仍在（finished），可再准备开局；房主解散用「关闭房间」。
-    // 对局中返回大厅请用「退出对局」（房间生命周期的 leaveRoom）。
-    if (!matchFinished.value) return
-    settlementTimeline.cancel()
-    clearCountdown()
-    matchFinished.value = false
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = false
-    winningPlayerIndex.value = -1
-    waitingNextRound.value = false
-    lastDiscard.value = null
-    actionPrompt.value = null
-    transientEventPresenter.clear()
-    selectedIndex.value = -1
-    currentPlayer.value = -1
-    wall.value = []
-    wallHeadDrawn.value = 0
-    wallCount.value = 0
-    players.splice(0, players.length)
-    phase.value = 'lobby'
-    void roomLifecycle.refreshRoom()
+    matchLifecycle.resetAll()
   }
 
   function startGame() {
