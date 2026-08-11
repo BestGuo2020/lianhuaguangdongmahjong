@@ -14,10 +14,9 @@ import { computed, getCurrentInstance, onBeforeUnmount } from 'vue'
 import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/gamePort'
 import type { RoundResult } from '../core/gamePort'
-import type { ActionPrompt } from '../core/playerController'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
 import { TILE_TYPES, tileName } from '../core/tiles'
-import type { GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
+import type { GamePlayer, MatchType, TileType, WinPresentation } from '../core/types'
 import type { ServerSnapshot } from './protocol/dto'
 import type { RoundStartMessage } from './protocol/messages'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
@@ -30,11 +29,10 @@ import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
 import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import { createRequestCoordinator } from './orchestration/requestCoordinator'
 import { createRemoteActionController } from './orchestration/remoteActionController'
+import { createTransientEventPresenter } from './presentation/transientEventPresenter'
 import {
   mapPlayersToLocal,
   mapRoundResultToLocal,
-  mapScoreDeltasToLocal,
-  mapTableActionToLocal,
   mapWinPresentationToLocal,
   toLocalSeat,
 } from './protocol/mapper'
@@ -119,6 +117,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     settlement: settlementTimeline,
     clearCountdown,
     onFinishedSnapshot: clearPendingRequest,
+    playSound,
+    later,
+  })
+  const transientEventPresenter = createTransientEventPresenter({
+    state,
+    getLocalSeat: () => mySeatLocal.value,
+    isOpening: openingTimeline.isRunning,
+    showServerAnnouncement: snapshotReconciler.showAnnouncement,
     playSound,
     later,
   })
@@ -231,7 +237,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     canUserHu: () => userCanHu.value,
     getUserHandLength: () => user.value?.hand.length ?? 0,
     toLocalSeat: toLocal,
-    announce,
+    announce: transientEventPresenter.announce,
     playSound,
     later,
     actions: {
@@ -267,13 +273,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function clearCountdown() {
     requestCoordinator.clearCountdown()
-  }
-
-  function announce(text: string, tone = 'gold') {
-    announcement.value = { text, tone, id: Date.now() }
-    later(() => {
-      if (announcement.value?.text === text) announcement.value = null
-    }, 1500)
   }
 
   // ── 结算展示 / 延迟队列 ────────────────────────────────
@@ -321,46 +320,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function applyBufferedAfterOpening() {
     snapshotReconciler.flush()
     requestCoordinator.flush()
-  }
-
-  // ── 瞬时事件（动画 / 播报 / 分数流水）─────────────────
-
-  function handleTableAction(msg: { kind: 'table_action'; event: TableActionEvent }) {
-    // 赢牌动作（self-draw / robbed-kong-win）：展示「自摸 / 抢杠胡」文字提示，
-    // 但**不播音效**（zimo/hu 由结算表现时间线统一播放，避免双响）。
-    // 开局动画期间（如四红中立即和牌）→ 等发牌结束的 settled 快照统一展示。
-    const isWin = msg.event.type === 'self-draw' || msg.event.type === 'robbed-kong-win'
-    if (openingTimeline.isRunning()) return
-    const event = mapTableActionToLocal(msg.event, mySeatLocal.value)
-    tableActionEvent.value = event
-    later(() => {
-      if (tableActionEvent.value?.id === event.id) tableActionEvent.value = null
-    }, 1050)
-    if (isWin) return   // 赢牌音效统一由结算表现时间线播放
-    const sound: Record<string, string> = {
-      peng: 'peng.mp3',
-      'discard-gang': 'gang.mp3',
-      'concealed-gang': 'gang.mp3',
-      'added-gang': 'gang.mp3',
-      'flower-gang': 'gang.mp3',
-    }
-    if (sound[event.type]) playSound(sound[event.type])
-  }
-
-  function handleScoreFlow(msg: { kind: 'score_flow'; deltas: ScoreDelta[] }) {
-    if (!msg.deltas.length) return
-    const event: ScoreFlowEvent = {
-      id: Date.now(),
-      deltas: mapScoreDeltasToLocal(msg.deltas, mySeatLocal.value),
-    }
-    scoreFlowEvent.value = event
-    later(() => {
-      if (scoreFlowEvent.value?.id === event.id) scoreFlowEvent.value = null
-    }, 1050)
-  }
-
-  function handleAnnouncement(msg: { kind: 'announcement'; text: string; tone: string; id?: number }) {
-    snapshotReconciler.showAnnouncement(msg)
   }
 
   function handleMatchFinished(msg: { kind: 'match_finished'; finalScores: Array<{ seat: number; name: string; score: number }> }) {
@@ -425,9 +384,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
     rob_kong_request: requestCoordinator.apply,
-    table_action: handleTableAction,
-    score_flow: handleScoreFlow,
-    announcement: handleAnnouncement,
+    table_action: transientEventPresenter.handleTableAction,
+    score_flow: transientEventPresenter.handleScoreFlow,
+    announcement: transientEventPresenter.handleAnnouncement,
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
@@ -476,9 +435,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     turnSeconds.value = 12
     lastDiscard.value = null
     actionPrompt.value = null
-    announcement.value = null
-    tableActionEvent.value = null
-    scoreFlowEvent.value = null
+    transientEventPresenter.clear()
     result.value = null
     winEffect.value = null
     winPresentation.value = null
@@ -543,9 +500,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     waitingNextRound.value = false
     lastDiscard.value = null
     actionPrompt.value = null
-    announcement.value = null
-    tableActionEvent.value = null
-    scoreFlowEvent.value = null
+    transientEventPresenter.clear()
     selectedIndex.value = -1
     currentPlayer.value = -1
     wall.value = []
