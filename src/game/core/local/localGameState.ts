@@ -55,3 +55,5 @@ export function createLocalGameState() {
     userDrewThisTurn: ref(false),
   }
 }
+
+export type LocalGameState = ReturnType<typeof createLocalGameState>

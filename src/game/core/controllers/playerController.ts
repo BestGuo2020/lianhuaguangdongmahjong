@@ -96,7 +96,7 @@ export interface ActionPrompt {
   tile: TileType
   from: number
   canGang?: boolean
-  remainingClaims?: number[]
+  remainingClaims?: Array<{ playerIndex: number; canGang: boolean }>
 }
 
 // ── HumanBridge ──

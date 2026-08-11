@@ -2,10 +2,9 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { defineGamePort } from '../contracts/gamePort'
 import { performDiscardGang, performPeng, removeMatches } from '../rules/actions'
 import type { ActionContext } from '../rules/actions'
-import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from '../controllers/playerController'
-import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from '../rules/rules'
+import { AiController, HumanController, type PlayerController, type HumanBridge } from '../controllers/playerController'
+import { applyKongScore, applyWinScore, concealedKongs, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from '../rules/rules'
 import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from '../rules/tiles'
-import { wallBreakIndex } from '../rules/wallLayout'
 import type {
   EndGameOptions,
   GamePlayer,
@@ -24,8 +23,10 @@ import {
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
 } from '../presentation/winEffect'
-import { MATCH_HANDS, MATCH_NAMES, PACE_MS, PLAYER_SEED } from './localGameConfig'
+import { MATCH_NAMES, PACE_MS } from './localGameConfig'
 import { createLocalGameState } from './localGameState'
+import { createLocalOpeningTimeline } from './localOpeningTimeline'
+import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import { advanceMatchState, resolveWinTile } from './matchProgress'
 
 interface UseGameOptions {
@@ -43,10 +44,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     winningPlayerIndex, round, dealer, matchType, honba, matchFinished,
     dealAnimation, openingStage, diceValues, userDrewThisTurn,
   } = state
-  let kongDrawPlayerIndex = -1
   const timers = new Set<number>()
   let countdownHandle: number | null = null
-  let openingSequence = 0
+  let openingTimeline!: ReturnType<typeof createLocalOpeningTimeline>
+  let turnOrchestrator!: ReturnType<typeof createLocalTurnOrchestrator>
 
   // ── 默认控制器装配（不传 controllers 时自动构建 1 人类 + 3 AI）──
   const humanBridge: HumanBridge = {
@@ -170,7 +171,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
   }
 
   function clearTimers() {
-    openingSequence += 1
+    openingTimeline?.cancel()
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
     window.clearInterval(countdownHandle)
@@ -202,154 +203,31 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }, 1050)
   }
 
-  function resetPlayers() {
-    const previousScores = players.map((player) => player.score)
-    players.splice(0, players.length, ...PLAYER_SEED.map((player, index) => ({
-      ...player,
-      score: previousScores[index] ?? player.score,
-      seat: index,
-      hand: [],
-      discards: [],
-      melds: [],
-      redCount: 0,
-      drawnTileIndex: -1,
-    })))
-  }
-
   function takeTile(fromTail = false) {
     if (!wall.value.length) return null
     if (!fromTail) wallHeadDrawn.value += 1
     return fromTail ? wall.value.pop() : wall.value.shift()
   }
 
-  function dealOne(player: GamePlayer) {
-    const tile = takeTile(false)
-    if (!tile) return
-    receiveDealtTile(player, tile)
-  }
-
-  function receiveDealtTile(player: GamePlayer, tile) {
-    // 发牌阶段红中先入正常手牌，发完牌后统一从牌墙尾补杠（见 resolveDealtReds），
-    // 避免发牌过程中牌山就因红中补张而少牌。
-    player.hand.push(tile)
-  }
-
-  // 发完牌后处理红中：若手牌有红中，依次逆时针（庄家起）从牌墙尾补张。
-  function resolveDealtReds() {
-    const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
-    for (const playerIndex of seatOrder) {
-      const player = players[playerIndex]
-      while (player.hand.includes('red')) {
-        // 已有 3 张红中亮花杠，再发到第 4 张 → 四红中：红中留手牌作胡牌牌，不再亮花杠/补张
-        if (player.redCount >= 3) {
-          player.redCount += 1
-          break
-        }
-        player.hand.splice(player.hand.indexOf('red'), 1)
-        player.redCount += 1
-        player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-        const replacement = takeTile(true)
-        if (replacement) player.hand.push(replacement)  // 补到红中则由 while 继续转
-      }
-    }
-  }
-
   function wait(delay: number): Promise<void> {
     return new Promise((resolve) => later(resolve, delay))
   }
 
-  function hasSettled() {
-    return phase.value === 'settled'
-  }
-
-  async function startGame(mode?: MatchType) {
-    clearTimers()
-    if (mode && MATCH_HANDS[mode]) {
-      matchType.value = mode
-      round.value = 1
-      dealer.value = 0
-      honba.value = 0
-      matchFinished.value = false
-      players.splice(0, players.length)
-    }
-    const sequence = openingSequence
-    resetPlayers()
-    wall.value = shuffle(createWall())
-    wallHeadDrawn.value = 0
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = false
-    winningPlayerIndex.value = -1
-    actionPrompt.value = null
-    pendingKong.value = null
-    userDrewThisTurn.value = false
-    selectedIndex.value = -1
-    lastDiscard.value = null
-    phase.value = 'dealing'
-    dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
-    openingStage.value = 'start'
-
-    await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
-    if (sequence !== openingSequence) return
-    diceValues.value = [
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-    ]
-    openingStage.value = 'dice'
-    await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
-    if (sequence !== openingSequence) return
-
-    // 骰子决定拆墙点（莲花广麻规则，与后端 _break_wall_by_dice 一致）：
-    // 和数定拆哪家墙（5/9→庄，2/6/10→下，3/7/11→对，4/8/12→上），小点数定列；旋转列表让拆墙处成为前端。
-    const breakIndex = wallBreakIndex(diceValues.value)
-    wall.value = [...wall.value.slice(breakIndex), ...wall.value.slice(0, breakIndex)]
-
-    openingStage.value = 'deal'
-    const seatOrder = players.map((_, offset) => (dealer.value + offset) % players.length)
-    const dealBatch = async (playerIndex, count) => {
-      if (count === 4) playSound('deal.mp3', 0.72)
-      for (let tileIndex = 0; tileIndex < count; tileIndex += 1) dealOne(players[playerIndex])
-      dealAnimation.value = {
-        playerIndex,
-        count,
-        serial: dealAnimation.value.serial + 1,
-      }
-      await wait(count === 4 ? 260 : 150)
-    }
-
-    for (let batch = 0; batch < 3; batch += 1) {
-      for (const playerIndex of seatOrder) {
-        await dealBatch(playerIndex, 4)
-        if (sequence !== openingSequence) return
-      }
-    }
-    // 庄家跳牌：其余三家各补一张之前，庄家先抓上层两张（隔一墩）。
-    // 依次从墙头取 5 张：第 1、5 张给庄家（隔开中间），第 2、3、4 张给下家/对家/上家。
-    const jumpTiles = Array.from({ length: 5 }, () => takeTile(false))
-    const jumpOrder = [dealer.value, seatOrder[1], seatOrder[2], seatOrder[3], dealer.value]
-    jumpOrder.forEach((playerIndex, index) => {
-      if (jumpTiles[index]) receiveDealtTile(players[playerIndex], jumpTiles[index])
-    })
-    dealAnimation.value = { playerIndex: dealer.value, count: 2, serial: dealAnimation.value.serial + 1 }
-    await wait(260)
-    for (const other of [seatOrder[1], seatOrder[2], seatOrder[3]]) {
-      dealAnimation.value = { playerIndex: other, count: 1, serial: dealAnimation.value.serial + 1 }
-      await wait(150)
-    }
-    if (sequence !== openingSequence) return
-    // 发完牌后统一处理红中补杠（逆时针从牌墙尾补张），避免发牌中牌山就少牌
-    resolveDealtReds()
-    phase.value = 'opening'
-    openingStage.value = null
-    dealAnimation.value = { playerIndex: -1, count: 0, serial: dealAnimation.value.serial + 1 }
-    players.forEach((player) => { player.hand = sortTiles(player.hand) })
-    const fourRedWinner = players.findIndex((player) => player.redCount >= 4)
-    if (fourRedWinner >= 0) return endGame(fourRedWinner, { fourRed: true })
-    announce(`${roundLabel.value} · 开牌`)
-    // 庄家已因跳牌持有 14 张：首回合跳过摸牌直接出牌
-    later(() => beginTurn(dealer.value, { skipDraw: true }), 650)
-  }
+  openingTimeline = createLocalOpeningTimeline({
+    state,
+    clearTimers,
+    takeTile,
+    wait,
+    later,
+    playSound,
+    playSoundAndWait,
+    announce,
+    getRoundLabel: () => roundLabel.value,
+    beginTurn,
+    endGame,
+  })
+  const startGame = openingTimeline.start
+  const resetPlayers = openingTimeline.resetPlayers
 
   function startCountdown() {
     window.clearInterval(countdownHandle)
@@ -390,7 +268,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   async function drawFor(playerIndex, fromTail = false) {
     const player = players[playerIndex]
-    kongDrawPlayerIndex = fromTail ? playerIndex : -1
+    turnOrchestrator.markDrawSource(playerIndex, fromTail)
     const tile = takeTile(fromTail)
     if (!tile) {
       endDraw()
@@ -422,44 +300,8 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return true
   }
 
-  async function beginTurn(playerIndex: number, options: { skipDraw?: boolean; fromTail?: boolean } = {}) {
-    if (phase.value === 'settled') return
-    if (!wall.value.length) return endDraw()
-    currentPlayer.value = playerIndex
-    userDrewThisTurn.value = false
-    phase.value = 'drawing'
-    selectedIndex.value = -1
-    actionPrompt.value = null
-    if (options.skipDraw) kongDrawPlayerIndex = -1
-    const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
-    if (!drawn || hasSettled()) return
-
-    phase.value = 'thinking'
-    const player = players[playerIndex]
-    const ctx: TurnContext = {
-      hand: player.hand,
-      melds: player.melds,
-      exposedMelds: structuralMeldCount(player),
-      kongBloom: kongDrawPlayerIndex === playerIndex,
-      skipDraw: Boolean(options.skipDraw),
-      afterKong: Boolean(options.fromTail),
-    }
-    const action = await controllers[playerIndex].requestTurn(ctx)
-    // 守卫：游戏可能已在 await 期间结束或轮次已转移
-    if (hasSettled() || currentPlayer.value !== playerIndex) return
-
-    switch (action.kind) {
-      case 'win':
-        return endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
-      case 'added-kong':
-        return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
-      case 'concealed-kong':
-        await performConcealedKong(playerIndex, action.tile, { noContinue: true })
-        if (hasSettled()) return
-        return beginTurn(playerIndex, { fromTail: true })
-      case 'discard':
-        return discardTile(playerIndex, action.handIndex)
-    }
+  function beginTurn(playerIndex: number, options: { skipDraw?: boolean; fromTail?: boolean } = {}) {
+    return turnOrchestrator.beginTurn(playerIndex, options)
   }
 
   function discardTile(playerIndex, handIndex) {
@@ -470,7 +312,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     if (!tile) return
     player.hand = sortTiles(player.hand)
     player.drawnTileIndex = -1
-    kongDrawPlayerIndex = -1
+    turnOrchestrator.clearDrawSource()
     player.discards.push(tile)
     controllers[playerIndex].onDiscarded?.()
     lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
@@ -479,26 +321,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     phase.value = 'checking'
     window.clearInterval(countdownHandle)
 
-    const claimants = findClaims(playerIndex, tile)
-    if (claimants.length) return offerNextClaim(claimants, tile, playerIndex)
-    later(() => beginTurn((playerIndex + 1) % 4), PACE_MS.afterDiscardToNextTurn)
-  }
-
-  function seatDistance(from, to) {
-    return (to - from + players.length) % players.length
-  }
-
-  function findClaims(from, tile) {
-    if (tile === 'white' || tile === 'red') return []
-    return players
-      .map((player, playerIndex) => ({
-        playerIndex,
-        count: matchingCount(player.hand, tile),
-        distance: seatDistance(from, playerIndex),
-      }))
-      .filter(({ playerIndex, count }) => playerIndex !== from && count >= 2)
-      .sort((a, b) => a.distance - b.distance)
-      .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
+    turnOrchestrator.routeDiscard(playerIndex, tile)
   }
 
   // 共享执行的上下文：把可变状态与表现副作用注入 actions.ts 的执行函数，
@@ -511,42 +334,21 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     playSound,
   }
 
-  async function offerNextClaim(claimants, tile, from) {
-    const [claimant, ...remainingClaims] = claimants
-    if (!claimant) return later(() => beginTurn((from + 1) % 4), PACE_MS.afterDiscardToNextTurn)
-
-    const player = players[claimant.playerIndex]
-    const ctx: ClaimContext = {
-      hand: player.hand,
-      canGang: claimant.canGang,
-      tile,
-      from,
-    }
-    const action = await controllers[claimant.playerIndex].requestClaim(ctx)
-    // 守卫：游戏可能已在 await 期间结束
-    if (phase.value === 'settled') return
-
-    switch (action.kind) {
-      case 'pass':
-        return offerNextClaim(remainingClaims, tile, from)
-      case 'gang':
-        performDiscardGang(tableContext, claimant.playerIndex, tile, from)
-        // 杠后补摸只由 beginTurn(fromTail) 完成：这里不能再 drawFor，
-        // 否则点杠会连摸两张（补摸 + 回合摸），四副露时手牌多一张，不再是单骑。
-        later(() => beginTurn(claimant.playerIndex, { fromTail: true }), PACE_MS.afterClaimGang)
-        return
-      case 'peng':
-        performPeng(tableContext, claimant.playerIndex, tile, from)
-        if (action.discardIndex !== undefined) {
-          // AI 单次事件：碰 + 弃牌一次跨边界完成（延迟用于动画展示）
-          later(() => discardTile(claimant.playerIndex, action.discardIndex), PACE_MS.afterClaimPeng)
-        } else {
-          // 人类：碰后需要互动选弃牌
-          later(() => beginTurn(claimant.playerIndex, { skipDraw: true }), PACE_MS.skipDrawPengDelay)
-        }
-        return
-    }
-  }
+  turnOrchestrator = createLocalTurnOrchestrator({
+    state,
+    controllers,
+    tableContext,
+    structuralMeldCount: (playerIndex) => structuralMeldCount(players[playerIndex]),
+    drawFor,
+    performConcealedKong,
+    declareAddedKong,
+    settleAddedKong,
+    discardTile,
+    endDraw,
+    endGame,
+    announce,
+    later,
+  })
 
   function selectTile(index) {
     if (!isUserTurn.value) return
@@ -600,7 +402,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
       return
     }
     // 兼容测试的同步路径
-    offerNextClaim(prompt.remainingClaims ?? [], prompt.tile, prompt.from)
+    void turnOrchestrator.offerNextClaim(prompt.remainingClaims ?? [], prompt.tile, prompt.from)
   }
 
   function userPeng() {
@@ -680,55 +482,6 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     later(() => beginTurn(playerIndex, { fromTail: true }), PACE_MS.afterKongSettle)
   }
 
-  function findRobbers(kongPlayerIndex, tile) {
-    return players
-      .map((player, playerIndex) => ({
-        playerIndex,
-        distance: seatDistance(kongPlayerIndex, playerIndex),
-        canRob: playerIndex !== kongPlayerIndex
-          && canRobKong(player.hand, tile, structuralMeldCount(player)),
-      }))
-      .filter(({ canRob }) => canRob)
-      .sort((a, b) => a.distance - b.distance)
-      .map(({ playerIndex }) => playerIndex)
-  }
-
-  function requestAddedKong(playerIndex, meldIndex, tile) {
-    const [robberIndex, ...remainingRobbers] = findRobbers(playerIndex, tile)
-    declareAddedKong(playerIndex, meldIndex, tile)
-    if (robberIndex === undefined) return later(() => settleAddedKong(playerIndex), PACE_MS.beforeRobKong)
-
-    pendingKong.value = { playerIndex, meldIndex, tile, remainingRobbers }
-    later(() => offerRobKong(robberIndex), PACE_MS.beforeRobKong)
-  }
-
-  async function offerRobKong(robberIndex) {
-    const kong = pendingKong.value
-    if (!kong || phase.value === 'settled') return
-
-    const robber = players[robberIndex]
-    const ctx: RobKongContext = {
-      hand: robber.hand,
-      exposedMelds: structuralMeldCount(robber),
-      tile: kong.tile,
-      from: kong.playerIndex,
-    }
-    const action = await controllers[robberIndex].requestRobKong(ctx)
-    // 守卫：await 期间游戏可能已结束或 kong 已被处理
-    if (hasSettled() || pendingKong.value !== kong) return
-
-    if (action === 'pass') {
-      const [nextRobber, ...rest] = kong.remainingRobbers ?? []
-      if (nextRobber === undefined) return settleAddedKong(kong.playerIndex)
-      pendingKong.value = { ...kong, remainingRobbers: rest }
-      return later(() => offerRobKong(nextRobber), PACE_MS.betweenRobKongs)
-    }
-
-    announce(`${players[robberIndex].name} 抢杠胡`, 'red')
-    pendingKong.value = null
-    later(() => endGame(robberIndex, { robbedKong: true, robbedKongPlayerIndex: kong.playerIndex, winTile: kong.tile }), PACE_MS.betweenRobKongs)
-  }
-
   function userGang(tile = userKongs.value[0]) {
     if (!tile) return
     // 控制器模式：resolve 待处理的 turn promise
@@ -746,7 +499,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     userDrewThisTurn.value = false
     window.clearInterval(countdownHandle)
     const meldIndex = user.value.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === tile)
-    if (meldIndex >= 0) requestAddedKong(0, meldIndex, tile)
+    if (meldIndex >= 0) turnOrchestrator.requestAddedKong(0, meldIndex, tile)
     else {
       performConcealedKong(0, tile)
     }
@@ -772,7 +525,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         winTile: actionPrompt.value?.tile,
       })
     }
-    if (userCanHu.value) endGame(0, { kongBloom: kongDrawPlayerIndex === 0 })
+    if (userCanHu.value) endGame(0, { kongBloom: turnOrchestrator.isKongDraw(0) })
   }
 
   function takeRobbedKongTile(playerIndex, tile) {
