@@ -11,7 +11,8 @@ test('starts a local match and begins the opening deal', async ({ page }) => {
   await page.getByRole('button', { name: /开始东风场/ }).click()
 
   await expect(page.locator('.game-table-hud')).toBeVisible()
-  await expect(page.locator('canvas.mahjong-scene')).toBeVisible()
+  // 3D 牌桌是按需加载的大模块；为低性能 CI Runner 留出独立加载窗口。
+  await expect(page.locator('canvas.mahjong-scene')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('东风场 · 东1局', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.player-seat')).toHaveCount(3)
   await expect.poll(
