@@ -1,4 +1,4 @@
-import type { MatchType } from '../../core/types'
+import type { MatchType } from '../../core/contracts/types'
 
 export interface StoredSession {
   roomId: string

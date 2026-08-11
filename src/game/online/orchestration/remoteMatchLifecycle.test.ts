@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GamePlayer } from '../../core/types'
+import type { GamePlayer } from '../../core/contracts/types'
 import type { ServerSnapshot } from '../protocol/dto'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createRemoteMatchLifecycle } from './remoteMatchLifecycle'

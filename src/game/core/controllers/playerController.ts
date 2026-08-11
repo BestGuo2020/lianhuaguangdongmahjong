@@ -3,9 +3,9 @@
 // AI 编排（决策时序、延迟）完全封装在 AiController 中。
 import { decideClaim, decideRobKong, decideTurn, makeTurnView, chooseDiscardIndex } from './ai'
 import type { AITurnView, ClaimDecision, RobKongView, TurnDecision } from './ai'
-import { removeMatches } from './actions'
-import { concealedKongs, isWinningHand } from './rules'
-import type { GamePlayer, Meld, TileType } from './types'
+import { removeMatches } from '../rules/actions'
+import { concealedKongs, isWinningHand } from '../rules/rules'
+import type { GamePlayer, Meld, TileType } from '../contracts/types'
 
 // ── 共享类型 ──
 

@@ -2,8 +2,9 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { preloadTileImages, preloadedTileImages } from '../game/core/tileAssets'
-import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/types'
+import { preloadTileImages, preloadedTileImages } from '../game/core/presentation/tileAssets'
+import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/contracts/types'
+import type { DealAnimation, OpeningStage, WinEffect } from '../game/core/contracts/gamePort'
 import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
 import { createDicePresenter } from './table/three/dicePresenter'
 import { createPerfHud } from './table/three/perfHud'
@@ -22,10 +23,10 @@ interface TableProps {
   horses?: TileType[]
   revealHands?: boolean
   winnerIndex?: number
-  winEffect?: Record<string, any> | null
+  winEffect?: WinEffect | null
   winPresentation?: WinPresentation | null
-  dealAnimation?: { playerIndex: number; count: number; serial: number }
-  openingStage?: string | null
+  dealAnimation?: DealAnimation
+  openingStage?: OpeningStage | null
   diceValues?: number[]
   dealerIndex?: number
   tableActionEvent?: TableActionEvent | null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceMatchState } from './useGame'
+import { advanceMatchState } from './matchProgress'
 
 type AdvanceMatchInput = Parameters<typeof advanceMatchState>[0]
 

@@ -1,5 +1,5 @@
-import type { RefLike, RoundResult } from '../../core/gamePort'
-import type { WinPresentation } from '../../core/types'
+import type { GamePhase, RefLike, RoundResult, WinEffect } from '../../core/contracts/gamePort'
+import type { WinPresentation } from '../../core/contracts/types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -7,13 +7,13 @@ import {
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
-} from '../../core/winEffect'
+} from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
 
 export interface SettlementTimelineState {
-  phase: RefLike<string>
+  phase: RefLike<GamePhase>
   result: RefLike<RoundResult | null>
-  winEffect: RefLike<RoundResult | null>
+  winEffect: RefLike<WinEffect | null>
   winPresentation: RefLike<WinPresentation | null>
   revealHands: RefLike<boolean>
   winningPlayerIndex: RefLike<number>

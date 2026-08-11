@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import MahjongTile from '../MahjongTile.vue'
-import { isHorse } from '../../game/core/tiles'
-import { defaultAvatarForSeat } from '../../game/core/avatar'
-import type { RoundResult } from '../../game/core/gamePort'
-import type { GamePlayer } from '../../game/core/types'
-import type { GameMode } from '../../game/core/activeGamePort'
+import { isHorse } from '../../game/core/rules/tiles'
+import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
+import type { RoundResult } from '../../game/core/contracts/gamePort'
+import type { GamePlayer } from '../../game/core/contracts/types'
+import type { GameMode } from '../../game/core/contracts/activeGamePort'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 

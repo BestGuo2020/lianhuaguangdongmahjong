@@ -2,6 +2,7 @@ import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { createRemoteLobbyController, type RemoteLobbyActions } from './remoteLobbyController'
 import type { RoomSeatState } from '../api/roomApi'
+import type { GamePhase } from '../../core/contracts/gamePort'
 
 function setup() {
   const actions: RemoteLobbyActions = {
@@ -66,7 +67,7 @@ describe('remoteLobbyController', () => {
   })
 
   it('resets the starting indicator when the phase leaves the lobby', async () => {
-    const phase = ref('lobby')
+    const phase = ref<GamePhase>('lobby')
     const startBgm = vi.fn()
     const base = setup()
     const controller = createRemoteLobbyController({

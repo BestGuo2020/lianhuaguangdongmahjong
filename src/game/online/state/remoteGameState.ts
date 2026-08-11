@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import type { RoomSeatState } from '../api/roomApi'
-import type { Announcement, LastDiscard, RoundResult } from '../../core/gamePort'
-import type { ActionPrompt } from '../../core/playerController'
+import type { Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
+import type { ActionPrompt } from '../../core/controllers/playerController'
 import type {
   GamePlayer,
   MatchType,
@@ -9,13 +9,11 @@ import type {
   TableActionEvent,
   TileType,
   WinPresentation,
-} from '../../core/types'
+} from '../../core/contracts/types'
 import type { RemoteSessionStatus } from '../session/remoteRoomLifecycle'
 import type { StoredSession } from '../session/remoteSessionStore'
 
-export type RemoteClientPhase =
-  | 'lobby' | 'dealing' | 'playing' | 'discard' | 'prompt'
-  | 'win-effect' | 'revealing' | 'settled' | 'finished'
+export type RemoteClientPhase = GamePhase
 
 export interface RemoteGameStateOptions {
   guestId?: string
@@ -59,7 +57,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const tableActionEvent = ref<TableActionEvent | null>(null)
   const scoreFlowEvent = ref<ScoreFlowEvent | null>(null)
   const result = ref<RoundResult | null>(null)
-  const winEffect = ref<RoundResult | null>(null)
+  const winEffect = ref<WinEffect | null>(null)
   const winPresentation = ref<WinPresentation | null>(null)
   const revealHands = ref(false)
   const winningPlayerIndex = ref(-1)
@@ -69,7 +67,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const matchType = ref<MatchType>('east')
   const matchFinished = ref(false)
   const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
-  const openingStage = ref<string | null>(null)
+  const openingStage = ref<OpeningStage | null>(null)
   const diceValues = ref([1, 1])
   const userDrewThisTurn = ref(false)
   const waitingNextRound = ref(false)

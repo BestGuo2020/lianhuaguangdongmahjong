@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { performDiscardGang, performPeng, removeLastDiscard, removeMatches } from './actions'
 import type { ActionContext } from './actions'
-import type { GamePlayer, TileType } from './types'
+import type { GamePlayer, TileType } from '../contracts/types'
 
 function player(hand: TileType[] = [], seat = 0): GamePlayer {
   return {

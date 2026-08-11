@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { pointFromSeat } from '../../../game/core/tableLayout'
+import { pointFromSeat } from '../../../game/core/presentation/tableLayout'
 
 interface DisposableResource { dispose?: () => void }
 

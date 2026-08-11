@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BASE_SCORE } from '../game/core/rules'
+import { BASE_SCORE } from '../game/core/rules/rules'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
 
 defineProps({ open: Boolean })

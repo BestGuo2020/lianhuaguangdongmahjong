@@ -1,11 +1,11 @@
-import type { RoundResult } from '../../core/gamePort'
+import type { RoundResult } from '../../core/contracts/gamePort'
 import type {
   MatchType,
   Meld,
   ScoreDelta,
   TableActionEvent,
   TileType,
-} from '../../core/types'
+} from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
 
 export interface RoundStartMessage {

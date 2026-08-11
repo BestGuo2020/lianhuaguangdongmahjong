@@ -3,7 +3,7 @@
 // 决策（做什么）在 ai.ts，回合编排（谁继续、何时继续）留在 useGame，
 // 这里只负责「把某个动作在牌桌上执行掉」。
 import { applyKongScore } from './rules'
-import type { GamePlayer, ScoreDelta, TableActionType, TileType } from './types'
+import type { GamePlayer, ScoreDelta, TableActionType, TileType } from '../contracts/types'
 
 export function removeMatches(hand: TileType[], tile: TileType, amount: number): TileType[] {
   const next = [...hand]

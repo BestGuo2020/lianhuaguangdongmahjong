@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AiController } from './playerController'
 import type { ClaimContext, RobKongContext, TurnContext } from './playerController'
-import type { Meld, TileType } from './types'
+import type { Meld, TileType } from '../contracts/types'
 
 function makeTurnCtx(hand: TileType[], overrides: Partial<TurnContext> = {}): TurnContext {
   return {

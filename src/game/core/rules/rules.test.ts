@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyKongScore, applyWinScore, canRobKong, concealedKongs, drawHorses, isWinningHand, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
-import type { GamePlayer, Meld, TileType } from './types'
+import type { GamePlayer, Meld, TileType } from '../contracts/types'
 
 describe('莲花广麻胡牌规则', () => {
   it('识别标准自摸牌型', () => {

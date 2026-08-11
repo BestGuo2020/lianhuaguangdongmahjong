@@ -1,4 +1,4 @@
-import type { TileType, WinPresentation } from './types'
+import type { TileType, WinPresentation } from '../contracts/types'
 
 export const WIN_EFFECT_DURATION = 2600
 export const WIN_REVEAL_DURATION = 1500

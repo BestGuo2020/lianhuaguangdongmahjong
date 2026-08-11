@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import RoomPanel from './RoomPanel.vue'
-import type { GameMode } from '../../game/core/activeGamePort'
-import type { MatchType } from '../../game/core/types'
+import type { GameMode } from '../../game/core/contracts/activeGamePort'
+import type { MatchType } from '../../game/core/contracts/types'
 import type { RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
 

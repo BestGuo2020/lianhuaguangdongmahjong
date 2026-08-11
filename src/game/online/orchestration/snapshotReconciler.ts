@@ -1,5 +1,5 @@
-import { tileAudioFile } from '../../core/tiles'
-import type { Announcement } from '../../core/gamePort'
+import { tileAudioFile } from '../../core/rules/tiles'
+import type { Announcement } from '../../core/contracts/gamePort'
 import type { RemoteGameState } from '../state/remoteGameState'
 import type { ServerSnapshot } from '../protocol/dto'
 import {

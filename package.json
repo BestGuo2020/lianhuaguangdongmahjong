@@ -12,13 +12,15 @@
     "typecheck": "vue-tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest run"
+    "test": "vitest run src",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "three": "^0.185.1",
     "vue": "^3.5.40"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/three": "^0.185.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "typescript": "^5.9.3",

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BASE_SCORE } from '../../game/core/rules'
-import type { GameMode } from '../../game/core/activeGamePort'
+import { BASE_SCORE } from '../../game/core/rules/rules'
+import type { GameMode } from '../../game/core/contracts/activeGamePort'
+import type { GamePhase } from '../../game/core/contracts/gamePort'
 
 interface Props {
   gameMode: GameMode
-  phase: string
+  phase: GamePhase
   hasPlayers: boolean
   matchName: string
   roundLabel: string

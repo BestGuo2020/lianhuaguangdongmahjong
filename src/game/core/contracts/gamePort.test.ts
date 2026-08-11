@@ -1,8 +1,8 @@
 import { isRef } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { GAME_PORT_ACTION_KEYS, GAME_PORT_STATE_KEYS, type GamePort } from './gamePort'
-import { useGame } from './useGame'
-import { useRemoteGame } from '../online/useRemoteGame'
+import { useGame } from '../local/useGame'
+import { useRemoteGame } from '../../online/useRemoteGame'
 
 function assertCompileTimeContract<T extends GamePort>(port: T): T {
   return port

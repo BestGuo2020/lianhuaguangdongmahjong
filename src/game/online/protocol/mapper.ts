@@ -1,6 +1,6 @@
-import { defaultAvatarForSeat } from '../../core/avatar'
-import type { LastDiscard, RoundResult } from '../../core/gamePort'
-import type { GamePlayer, ScoreDelta, TableActionEvent, WinPresentation } from '../../core/types'
+import { defaultAvatarForSeat } from '../../core/presentation/avatar'
+import type { LastDiscard, RoundResult } from '../../core/contracts/gamePort'
+import type { GamePlayer, ScoreDelta, TableActionEvent, WinPresentation } from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
 
 export function toLocalSeat(serverSeat: number, localServerSeat: number): number {
@@ -35,7 +35,7 @@ export function mapRoundResultToLocal(
       ? toLocalSeat(result.robbedKongPlayerIndex, localServerSeat)
       : -1,
     tenpai: (result.tenpai ?? []).map((seat: number) => toLocalSeat(seat, localServerSeat)),
-    scoreChanges: (result.scoreChanges ?? []).map((change: Record<string, any>) => ({
+    scoreChanges: (result.scoreChanges ?? []).map((change) => ({
       ...change,
       avatar: change.avatar || defaultAvatarForSeat(change.playerIndex),
       fallbackAvatar: defaultAvatarForSeat(change.playerIndex),

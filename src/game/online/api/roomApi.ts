@@ -1,4 +1,4 @@
-import type { MatchType } from '../../core/types'
+import type { MatchType } from '../../core/contracts/types'
 import { request } from './httpClient'
 
 export interface RoomSeatState {

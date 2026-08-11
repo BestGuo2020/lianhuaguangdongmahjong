@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GamePlayer, TableActionEvent } from '../../core/types'
+import type { GamePlayer, TableActionEvent } from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
 import {
   mapScoreDeltasToLocal,

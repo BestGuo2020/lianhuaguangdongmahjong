@@ -1,12 +1,21 @@
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
-import { defineGamePort } from './gamePort'
-import { performDiscardGang, performPeng, removeMatches } from './actions'
-import type { ActionContext } from './actions'
-import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from './playerController'
-import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from './rules'
-import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from './tiles'
-import { wallBreakIndex } from './wallLayout'
-import type { EndGameOptions, GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TableActionType, TileType, WinPresentation } from './types'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { defineGamePort } from '../contracts/gamePort'
+import { performDiscardGang, performPeng, removeMatches } from '../rules/actions'
+import type { ActionContext } from '../rules/actions'
+import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from '../controllers/playerController'
+import { applyKongScore, applyWinScore, concealedKongs, canRobKong, drawHorses, isWinningHand, matchingCount, scoreHand, waitingTiles } from '../rules/rules'
+import { createWall, shuffle, sortTiles, tileAudioFile, tileName, TILE_TYPES } from '../rules/tiles'
+import { wallBreakIndex } from '../rules/wallLayout'
+import type {
+  EndGameOptions,
+  GamePlayer,
+  MatchType,
+  ScoreDelta,
+  ScoreFlowEvent,
+  TableActionEvent,
+  TableActionType,
+  TileType,
+} from '../contracts/types'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -14,30 +23,10 @@ import {
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
-} from './winEffect'
-
-const AVATAR_BASE = `${import.meta.env.BASE_URL}avatars/`
-const PLAYER_SEED = [
-  { name: '北冥重生', avatar: `${AVATAR_BASE}lotus.svg`, score: 1000 },
-  { name: '南粤阿乐', avatar: `${AVATAR_BASE}ah-lok.svg`, score: 1000 },
-  { name: '西关十三姨', avatar: `${AVATAR_BASE}shisan.svg`, score: 1000 },
-  { name: '东山少爷', avatar: `${AVATAR_BASE}young-master.svg`, score: 1000 },
-]
-
-const MATCH_HANDS = { east: 4, hanchan: 8 }
-const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
-
-// 视觉节奏延迟（非 AI 思考，用于动作动画展示与牌桌节奏）
-const PACE_MS = {
-  afterDiscardToNextTurn: 450,  // 弃牌后到下一家回合
-  afterClaimGang: 550,          // 点杠后到补摸回合
-  afterClaimPeng: 650,          // 碰后到出牌（AI 预计算弃牌在此间隔后展示）
-  afterKongSettle: 600,         // 杠结算后到补摸回合
-  beforeRobKong: 650,           // 加杠声明后到首次抢杠询问
-  betweenRobKongs: 450,         // 抢杠询问之间
-  skipDrawPengDelay: 350,       // 人类碰后跳过摸牌直接出牌的间隔
-  redKongDraw: 600,             // 红中花杠亮杠后到补摸的停顿（人类正常速度）
-}
+} from '../presentation/winEffect'
+import { MATCH_HANDS, MATCH_NAMES, PACE_MS, PLAYER_SEED } from './localGameConfig'
+import { createLocalGameState } from './localGameState'
+import { advanceMatchState, resolveWinTile } from './matchProgress'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -45,63 +34,16 @@ interface UseGameOptions {
   controllers?: PlayerController[]
 }
 
-export function resolveWinTile(winner: GamePlayer, options: EndGameOptions = {}) {
-  if (options.fourRed) return 'red' as const
-  return options.winTile
-    ?? winner.hand[winner.drawnTileIndex]
-    ?? winner.hand[winner.hand.length - 1]
-}
-
-interface LastDiscard { tile: TileType; from: number; id: number }
-interface Announcement { text: string; tone: string; id: number }
-interface PendingKong { playerIndex: number; meldIndex: number; tile: TileType; remainingRobbers: number[] }
-type RoundResult = Record<string, any>
-
-export function advanceMatchState({ round, dealer, honba, matchType, result, playerCount = 4 }: {
-  round: number; dealer: number; honba: number; matchType: MatchType; result: RoundResult; scores?: number[]; playerCount?: number
-}) {
-  // 连庄：胡牌且赢家为庄家；流局且庄家听牌。否则下庄。
-  const dealerKeepsSeat = (!result.draw && result.winnerIndex === dealer)
-    || (result.draw && result.dealerTenpai)
-  const next = dealerKeepsSeat
-    ? { round, dealer, honba: honba + 1 }
-    : { round: round + 1, dealer: (dealer + 1) % playerCount, honba: 0 }
-  return {
-    ...next,
-    finished: next.round > MATCH_HANDS[matchType],
-  }
-}
-
 export function useGame({ playSound = () => {}, playSoundAndWait = async () => {}, controllers: optControllers }: UseGameOptions = {}) {
-  const phase = ref('lobby')
-  const players = reactive<GamePlayer[]>([])
-  const wall = ref<TileType[]>([])
-  // 从牌头（shift）累计摸走的张数：区别于牌尾 pop（杠/红中补张），供 3D 牌山正确显示头/尾消耗。
-  const wallHeadDrawn = ref(0)
-  const currentPlayer = ref(-1)
+  const state = createLocalGameState()
+  const {
+    phase, players, wall, wallHeadDrawn, currentPlayer, selectedIndex, turnSeconds,
+    lastDiscard, actionPrompt, pendingKong, announcement, tableActionEvent,
+    scoreFlowEvent, result, winEffect, winPresentation, revealHands,
+    winningPlayerIndex, round, dealer, matchType, honba, matchFinished,
+    dealAnimation, openingStage, diceValues, userDrewThisTurn,
+  } = state
   let kongDrawPlayerIndex = -1
-  const selectedIndex = ref(-1)
-  const turnSeconds = ref(12)
-  const lastDiscard = ref<LastDiscard | null>(null)
-  const actionPrompt = ref<ActionPrompt | null>(null)
-  const pendingKong = ref<PendingKong | null>(null)
-  const announcement = ref<Announcement | null>(null)
-  const tableActionEvent = ref<TableActionEvent | null>(null)
-  const scoreFlowEvent = ref<ScoreFlowEvent | null>(null)
-  const result = ref<RoundResult | null>(null)
-  const winEffect = ref<RoundResult | null>(null)
-  const winPresentation = ref<WinPresentation | null>(null)
-  const revealHands = ref(false)
-  const winningPlayerIndex = ref(-1)
-  const round = ref(1)
-  const dealer = ref(0)
-  const matchType = ref<MatchType>('east')
-  const honba = ref(0)
-  const matchFinished = ref(false)
-  const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
-  const openingStage = ref(null)
-  const diceValues = ref([1, 1])
-  const userDrewThisTurn = ref(false)
   const timers = new Set<number>()
   let countdownHandle: number | null = null
   let openingSequence = 0
@@ -316,6 +258,10 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     return new Promise((resolve) => later(resolve, delay))
   }
 
+  function hasSettled() {
+    return phase.value === 'settled'
+  }
+
   async function startGame(mode?: MatchType) {
     clearTimers()
     if (mode && MATCH_HANDS[mode]) {
@@ -486,7 +432,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     actionPrompt.value = null
     if (options.skipDraw) kongDrawPlayerIndex = -1
     const drawn = options.skipDraw ? true : await drawFor(playerIndex, options.fromTail)
-    if (!drawn || phase.value === 'settled') return
+    if (!drawn || hasSettled()) return
 
     phase.value = 'thinking'
     const player = players[playerIndex]
@@ -500,7 +446,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }
     const action = await controllers[playerIndex].requestTurn(ctx)
     // 守卫：游戏可能已在 await 期间结束或轮次已转移
-    if (phase.value === 'settled' || currentPlayer.value !== playerIndex) return
+    if (hasSettled() || currentPlayer.value !== playerIndex) return
 
     switch (action.kind) {
       case 'win':
@@ -509,7 +455,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
         return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
       case 'concealed-kong':
         await performConcealedKong(playerIndex, action.tile, { noContinue: true })
-        if (phase.value === 'settled') return
+        if (hasSettled()) return
         return beginTurn(playerIndex, { fromTail: true })
       case 'discard':
         return discardTile(playerIndex, action.handIndex)
@@ -769,7 +715,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     }
     const action = await controllers[robberIndex].requestRobKong(ctx)
     // 守卫：await 期间游戏可能已结束或 kong 已被处理
-    if (phase.value === 'settled' || pendingKong.value !== kong) return
+    if (hasSettled() || pendingKong.value !== kong) return
 
     if (action === 'pass') {
       const [nextRobber, ...rest] = kong.remainingRobbers ?? []

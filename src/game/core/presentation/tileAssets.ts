@@ -1,5 +1,5 @@
-import { TILE_TYPES, tileFaceFile } from './tiles'
-import type { TileType } from './types'
+import { TILE_TYPES, tileFaceFile } from '../rules/tiles'
+import type { TileType } from '../contracts/types'
 
 // 牌面资产预加载：应用启动即把全部牌面拉进内存（blob URL + 已解码位图各存一份），
 // 2D（CSS background）与 3D（图集）共用同一份，避免各路径重复请求 / 重复解码。

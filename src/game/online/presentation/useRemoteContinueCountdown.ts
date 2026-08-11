@@ -1,10 +1,10 @@
 import { onUnmounted, ref, watch, type Ref } from 'vue'
-import type { GameMode } from '../../core/activeGamePort'
-import type { RoundResult } from '../../core/gamePort'
+import type { GameMode } from '../../core/contracts/activeGamePort'
+import type { GamePhase, RoundResult } from '../../core/contracts/gamePort'
 
 interface ContinueCountdownSources {
   gameMode: Ref<GameMode>
-  phase: Ref<string>
+  phase: Ref<GamePhase>
   result: Ref<RoundResult | null>
   matchFinished: Ref<boolean>
   waitingNextRound: Ref<boolean>

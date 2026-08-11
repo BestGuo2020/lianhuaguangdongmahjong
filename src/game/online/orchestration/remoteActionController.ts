@@ -1,5 +1,5 @@
-import { waitingTiles } from '../../core/rules'
-import type { GamePlayer, TileType } from '../../core/types'
+import { waitingTiles } from '../../core/rules/rules'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { RemoteGameState } from '../state/remoteGameState'
 
 type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay'>

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { TileType } from '../../../game/core/types'
+import type { TileType } from '../../../game/core/contracts/types'
 
 interface TileInstanceRendererOptions {
   scene: THREE.Scene

@@ -2,18 +2,18 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
-import { splitWinningTile } from '../../game/core/winEffect'
-import { defaultAvatarForSeat } from '../../game/core/avatar'
-import type { ActionPrompt } from '../../game/core/playerController'
-import type { Announcement, LastDiscard, RoundResult, WaitInfo } from '../../game/core/gamePort'
-import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/types'
+import { splitWinningTile } from '../../game/core/presentation/winEffect'
+import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
+import type { ActionPrompt } from '../../game/core/controllers/playerController'
+import type { Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
+import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 
 interface Props {
   players: GamePlayer[]
   user: GamePlayer
-  phase: string
+  phase: GamePhase
   wall: TileType[]
   wallHeadDrawn: number
   wallCount: number
@@ -26,7 +26,7 @@ interface Props {
   tableActionEvent: TableActionEvent | null
   scoreFlowEvent: ScoreFlowEvent | null
   result: RoundResult | null
-  winEffect: RoundResult | null
+  winEffect: WinEffect | null
   winPresentation: WinPresentation | null
   revealHands: boolean
   winningPlayerIndex: number
@@ -35,8 +35,8 @@ interface Props {
   userCanHu: boolean
   matchName: string
   roundLabel: string
-  dealAnimation: { playerIndex: number; count: number; serial: number }
-  openingStage: string | null
+  dealAnimation: DealAnimation
+  openingStage: OpeningStage | null
   diceValues: number[]
   userCurrentWaits: WaitInfo | null
   userTingOptions: WaitInfo[]

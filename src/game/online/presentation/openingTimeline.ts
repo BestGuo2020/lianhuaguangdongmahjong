@@ -1,12 +1,20 @@
-import type { RefLike, LastDiscard, RoundResult } from '../../core/gamePort'
-import type { ActionPrompt } from '../../core/playerController'
-import type { GamePlayer, TileType, WinPresentation } from '../../core/types'
-import { WALL_TOTAL } from '../../core/wallLayout'
+import type {
+  DealAnimation,
+  GamePhase,
+  LastDiscard,
+  OpeningStage,
+  RefLike,
+  RoundResult,
+  WinEffect,
+} from '../../core/contracts/gamePort'
+import type { ActionPrompt } from '../../core/controllers/playerController'
+import type { GamePlayer, TileType, WinPresentation } from '../../core/contracts/types'
+import { WALL_TOTAL } from '../../core/rules/wallLayout'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RoundStartMessage } from '../protocol/messages'
 
 export interface OpeningTimelineState {
-  phase: RefLike<string>
+  phase: RefLike<GamePhase>
   players: GamePlayer[]
   wall: RefLike<TileType[]>
   wallCount: RefLike<number>
@@ -16,7 +24,7 @@ export interface OpeningTimelineState {
   actionPrompt: RefLike<ActionPrompt | null>
   lastDiscard: RefLike<LastDiscard | null>
   result: RefLike<RoundResult | null>
-  winEffect: RefLike<RoundResult | null>
+  winEffect: RefLike<WinEffect | null>
   winPresentation: RefLike<WinPresentation | null>
   revealHands: RefLike<boolean>
   winningPlayerIndex: RefLike<number>
@@ -24,8 +32,8 @@ export interface OpeningTimelineState {
   dealer: RefLike<number>
   honba: RefLike<number>
   diceValues: RefLike<number[]>
-  openingStage: RefLike<string | null>
-  dealAnimation: RefLike<{ playerIndex: number; count: number; serial: number }>
+  openingStage: RefLike<OpeningStage | null>
+  dealAnimation: RefLike<DealAnimation>
 }
 
 export interface OpeningTimelineOptions {

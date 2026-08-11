@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chooseDiscardIndex, decideClaim, decideRobKong, decideTurn, makeTurnView } from './ai'
 import type { AITurnView } from './ai'
-import type { GamePlayer, Meld, TileType } from './types'
+import type { GamePlayer, Meld, TileType } from '../contracts/types'
 
 function view(hand: TileType[], melds: Meld[] = [], exposedMelds = 0, kongBloom = false): AITurnView {
   return { hand, melds, exposedMelds, kongBloom }

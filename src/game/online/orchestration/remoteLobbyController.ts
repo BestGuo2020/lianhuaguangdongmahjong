@@ -1,6 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
-import type { GameMode } from '../../core/activeGamePort'
-import type { MatchType } from '../../core/types'
+import type { GameMode } from '../../core/contracts/activeGamePort'
+import type { GamePhase } from '../../core/contracts/gamePort'
+import type { MatchType } from '../../core/contracts/types'
 import { reportPlayer, type ReportRequest } from '../api/moderationApi'
 import type { RoomSeatState } from '../api/roomApi'
 
@@ -25,7 +26,7 @@ interface RemoteLobbyEnvironment {
 interface RemoteLobbyControllerOptions {
   gameMode: Ref<GameMode>
   selectedMatch: Ref<MatchType>
-  phase: Ref<string>
+  phase: Ref<GamePhase>
   roomId: Ref<string>
   nickname: Ref<string>
   playerId: Ref<string>

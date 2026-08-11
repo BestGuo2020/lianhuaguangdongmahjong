@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { addedKongTileOffset } from '../../../game/core/tableLayout'
-import { meldSourceTileIndex } from '../../../game/core/rules'
-import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/winEffect'
+import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
+import { meldSourceTileIndex } from '../../../game/core/rules/rules'
+import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/presentation/winEffect'
 
 interface WinEffectPresenterOptions {
   scene: THREE.Scene

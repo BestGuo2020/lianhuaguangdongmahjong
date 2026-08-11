@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import MahjongTile from './MahjongTile.vue'
-import { defaultAvatarForSeat } from '../game/core/avatar'
-import type { GamePlayer } from '../game/core/types'
+import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
+import type { GamePlayer } from '../game/core/contracts/types'
 
 const props = withDefaults(defineProps<{
   player: GamePlayer

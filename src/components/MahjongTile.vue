@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TILE_META } from '../game/core/tiles'
-import { tileFaceUrl } from '../game/core/tileAssets'
-import type { TileType } from '../game/core/types'
+import { TILE_META } from '../game/core/rules/tiles'
+import { tileFaceUrl } from '../game/core/presentation/tileAssets'
+import type { TileType } from '../game/core/contracts/types'
 
 const props = withDefaults(defineProps<{
   tile?: TileType | 'back'

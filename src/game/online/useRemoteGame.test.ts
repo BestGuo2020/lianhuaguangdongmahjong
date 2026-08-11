@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteGame } from './useRemoteGame'
-import type { GamePlayer, TileType } from '../core/types'
+import type { GamePlayer, TileType } from '../core/contracts/types'
 
 // ─── Mock WebSocket / fetch / window ──────────────────────
 
@@ -126,6 +126,8 @@ function makeSnapshot(overrides: Record<string, unknown> = {}) {
     dealer: 0,
     honba: 0,
     wallCount: 80,
+    wall: [],
+    headDrawn: 0,
     currentPlayer: 2,
     players: SERVER_PLAYERS,
     seat: 2,

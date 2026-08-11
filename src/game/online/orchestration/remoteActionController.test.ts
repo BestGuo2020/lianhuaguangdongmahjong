@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GamePlayer, TileType } from '../../core/types'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createRemoteActionController } from './remoteActionController'
 

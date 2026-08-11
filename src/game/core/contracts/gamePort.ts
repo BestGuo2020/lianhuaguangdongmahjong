@@ -1,4 +1,4 @@
-import type { ActionPrompt } from './playerController'
+import type { ActionPrompt } from '../controllers/playerController'
 import type {
   GamePlayer,
   MatchType,
@@ -24,7 +24,69 @@ export interface Announcement {
   id: number
 }
 
-export type RoundResult = Record<string, any>
+export type GamePhase =
+  | 'lobby' | 'dealing' | 'opening' | 'playing'
+  | 'drawing' | 'thinking' | 'checking' | 'discard' | 'prompt' | 'kong'
+  | 'win-effect' | 'revealing' | 'settled' | 'finished'
+
+export type OpeningStage = 'start' | 'dice' | 'deal'
+
+export interface DealAnimation {
+  playerIndex: number
+  count: number
+  serial: number
+}
+
+export interface RoundScoreDetail {
+  label: string
+  multiplier?: number
+  points?: number
+}
+
+export interface RoundScoreChange {
+  playerIndex: number
+  name: string
+  avatar: string
+  fallbackAvatar?: string
+  score: number
+  delta: number
+  rank?: number
+}
+
+export interface RoundResult {
+  draw?: boolean
+  winnerIndex?: number
+  winner?: string
+  roundLabel?: string
+  honba?: number
+  horses?: TileType[]
+  hits?: number
+  multiplier?: number
+  totalMultiplier?: number
+  horsePoints?: number
+  points?: number
+  totalWon?: number
+  details?: RoundScoreDetail[]
+  scoreChanges?: RoundScoreChange[]
+  tenpai?: number[]
+  dealerTenpai?: boolean
+  fourRed?: boolean
+  kongBloom?: boolean
+  robbedKong?: boolean
+  robbedKongPlayerIndex?: number
+  winTile?: TileType
+}
+
+export interface WinEffect {
+  winnerIndex: number
+  tile: TileType
+  robbedKong: boolean
+  robbedKongPlayerIndex: number
+  robbedKongMeldIndex: number
+  duration: number
+  reducedMotion: boolean
+  id: number
+}
 
 export interface WaitTileInfo {
   tile: TileType
@@ -39,7 +101,7 @@ export interface WaitInfo {
 }
 
 export interface GamePort {
-  phase: RefLike<string>
+  phase: RefLike<GamePhase>
   players: GamePlayer[]
   wall: RefLike<TileType[]>
   wallHeadDrawn: RefLike<number>
@@ -53,7 +115,7 @@ export interface GamePort {
   tableActionEvent: RefLike<TableActionEvent | null>
   scoreFlowEvent: RefLike<ScoreFlowEvent | null>
   result: RefLike<RoundResult | null>
-  winEffect: RefLike<RoundResult | null>
+  winEffect: RefLike<WinEffect | null>
   winPresentation: RefLike<WinPresentation | null>
   revealHands: RefLike<boolean>
   winningPlayerIndex: RefLike<number>
@@ -68,8 +130,8 @@ export interface GamePort {
   honba: RefLike<number>
   roundLabel: RefLike<string>
   standings: RefLike<Array<GamePlayer & { playerIndex: number; rank: number }>>
-  dealAnimation: RefLike<{ playerIndex: number; count: number; serial: number }>
-  openingStage: RefLike<string | null>
+  dealAnimation: RefLike<DealAnimation>
+  openingStage: RefLike<OpeningStage | null>
   diceValues: RefLike<number[]>
   userCurrentWaits: RefLike<WaitInfo | null>
   userTingOptions: RefLike<WaitInfo[]>

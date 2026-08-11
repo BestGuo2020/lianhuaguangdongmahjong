@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GamePlayer, TileType } from '../../core/types'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
+import type { GamePhase, OpeningStage } from '../../core/contracts/gamePort'
 import type { ServerSnapshot } from '../protocol/dto'
 import { createOpeningTimeline } from './openingTimeline'
 
@@ -24,12 +25,12 @@ function snapshot(): ServerSnapshot {
 
 function harness() {
   const state = {
-    phase: ref('lobby'), players: reactive<GamePlayer[]>([]), wall: ref<TileType[]>([]),
+    phase: ref<GamePhase>('lobby'), players: reactive<GamePlayer[]>([]), wall: ref<TileType[]>([]),
     wallCount: ref(0), wallHeadDrawn: ref(0), currentPlayer: ref(-1), selectedIndex: ref(-1),
     actionPrompt: ref(null), lastDiscard: ref(null), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
     round: ref(1), dealer: ref(0), honba: ref(0), diceValues: ref<number[]>([1, 1]),
-    openingStage: ref<string | null>(null), dealAnimation: ref({ playerIndex: -1, count: 0, serial: 0 }),
+    openingStage: ref<OpeningStage | null>(null), dealAnimation: ref({ playerIndex: -1, count: 0, serial: 0 }),
   }
   const sent: Array<Record<string, unknown>> = []
   const finished = vi.fn()

@@ -1,4 +1,4 @@
-import type { HonorTile, Suit, TileType } from './types'
+import type { HonorTile, Suit, TileType } from '../contracts/types'
 
 export const SUITS: Suit[] = ['m', 'p', 's']
 export const HONORS: HonorTile[] = ['east', 'south', 'west', 'north', 'red', 'green', 'white']

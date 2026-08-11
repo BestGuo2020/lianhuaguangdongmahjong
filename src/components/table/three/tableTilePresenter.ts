@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { isHorse, sortTiles } from '../../../game/core/tiles'
-import { meldSourceTileIndex } from '../../../game/core/rules'
-import { addedKongTileOffset } from '../../../game/core/tableLayout'
-import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/wallLayout'
-import { splitWinningTile } from '../../../game/core/winEffect'
+import { isHorse, sortTiles } from '../../../game/core/rules/tiles'
+import { meldSourceTileIndex } from '../../../game/core/rules/rules'
+import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
+import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
+import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 
 interface TableTilePresenterOptions {
   props: any

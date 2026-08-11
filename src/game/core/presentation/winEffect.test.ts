@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useGame } from './useGame'
+import { useGame } from '../local/useGame'
 import { splitWinningTile, WIN_DISPLAY_LAYOUTS } from './winEffect'
-import type { TileType } from './types'
+import type { TileType } from '../contracts/types'
 
 function installTimerWindow() {
   const timers: Array<{ id: number; callback: () => void; delay: number }> = []

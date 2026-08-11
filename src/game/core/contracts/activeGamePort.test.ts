@@ -1,15 +1,15 @@
 import { ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { createActiveGamePort, type GameMode } from './activeGamePort'
-import { useGame } from './useGame'
+import { useGame } from '../local/useGame'
 
 describe('ActiveGamePort', () => {
   it('switches every state read to the selected adapter without rebuilding consumers', () => {
     const mode = ref<GameMode>('local')
     const local = useGame()
     const remote = useGame()
-    local.phase.value = 'local-phase'
-    remote.phase.value = 'remote-phase'
+    local.phase.value = 'drawing'
+    remote.phase.value = 'thinking'
     local.currentPlayer.value = 1
     remote.currentPlayer.value = 3
     local.players.push({
@@ -23,12 +23,12 @@ describe('ActiveGamePort', () => {
 
     const active = createActiveGamePort(mode, local, remote)
 
-    expect(active.phase.value).toBe('local-phase')
+    expect(active.phase.value).toBe('drawing')
     expect(active.currentPlayer.value).toBe(1)
     expect(active.players.value[0].name).toBe('local')
 
     mode.value = 'remote'
-    expect(active.phase.value).toBe('remote-phase')
+    expect(active.phase.value).toBe('thinking')
     expect(active.currentPlayer.value).toBe(3)
     expect(active.players.value[0].name).toBe('remote')
   })

@@ -1,5 +1,5 @@
 import { onUnmounted, ref, watch, type Ref } from 'vue'
-import type { GameMode } from '../../core/activeGamePort'
+import type { GameMode } from '../../core/contracts/activeGamePort'
 import { getRoomMeta, type RoomMeta } from '../api/roomApi'
 
 export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>) {

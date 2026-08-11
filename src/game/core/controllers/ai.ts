@@ -1,7 +1,7 @@
 // AI 玩家的纯决策层：只负责「看状态 → 给出动作命令」，不修改任何游戏状态、
 // 不触发表现副作用，因此可以独立单元测试。动作的「执行」仍由 useGame 完成。
-import { concealedKongs, isWinningHand, matchingCount } from './rules'
-import type { GamePlayer, Meld, TileType } from './types'
+import { concealedKongs, isWinningHand, matchingCount } from '../rules/rules'
+import type { GamePlayer, Meld, TileType } from '../contracts/types'
 
 /** AI 回合内的动作命令 */
 export type TurnDecision =

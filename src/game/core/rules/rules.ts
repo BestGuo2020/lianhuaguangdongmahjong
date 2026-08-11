@@ -1,5 +1,5 @@
 import { TILE_TYPES, isHorse } from './tiles'
-import type { GamePlayer, Meld, ScoreDelta, TileType } from './types'
+import type { GamePlayer, Meld, ScoreDelta, TileType } from '../contracts/types'
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
 const WINNING_DRAW_TILES: TileType[] = [...STANDARD_TILES, 'white']

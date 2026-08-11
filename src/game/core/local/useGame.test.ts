@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { advanceMatchState, resolveWinTile, useGame } from './useGame'
-import type { GamePlayer, TileType } from './types'
+import { useGame } from './useGame'
+import { advanceMatchState, resolveWinTile } from './matchProgress'
+import type { GamePlayer, TileType } from '../contracts/types'
 
 describe('match progression', () => {
   it('continues the match when a player has a negative score', () => {

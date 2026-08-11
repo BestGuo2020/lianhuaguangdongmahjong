@@ -1,5 +1,6 @@
 import { type Ref } from 'vue'
-import type { GamePlayer, MatchType } from '../../core/types'
+import type { GamePhase } from '../../core/contracts/gamePort'
+import type { GamePlayer, MatchType } from '../../core/contracts/types'
 import {
   closeRoom,
   createRoom,
@@ -27,7 +28,7 @@ export interface RemoteRoomState {
   roomSeats: Ref<Array<RoomSeatState | null>>
   roomTimeLimit: Ref<number | null>
   storedSession: Ref<StoredSession | null>
-  phase: Ref<string>
+  phase: Ref<GamePhase>
   matchType: Ref<MatchType>
   matchFinished: Ref<boolean>
   players: GamePlayer[]

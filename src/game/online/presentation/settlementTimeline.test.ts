@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION } from '../../core/winEffect'
+import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
+import type { GamePhase } from '../../core/contracts/gamePort'
 import { createSettlementTimeline } from './settlementTimeline'
 
 function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
@@ -20,7 +21,7 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
 
 function harness() {
   const state = {
-    phase: ref('playing'), result: ref<any>(null), winEffect: ref<any>(null),
+    phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
   }
   const sounds: string[] = []
