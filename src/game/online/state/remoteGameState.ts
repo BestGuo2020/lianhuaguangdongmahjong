@@ -1,7 +1,6 @@
 import { reactive, ref } from 'vue'
 import type { RoomSeatState } from '../api/roomApi'
-import type { Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
-import type { ActionPrompt } from '../../core/controllers/playerController'
+import type { ActionPrompt, Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
 import type {
   GamePlayer,
   MatchType,

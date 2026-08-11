@@ -20,6 +20,8 @@ export interface GamePlayer {
   score: number
   seat: number
   hand: TileType[]
+  /** Concealed tile count when a remote player's faces are intentionally hidden. */
+  concealedTileCount?: number
   discards: TileType[]
   melds: Meld[]
   redCount: number

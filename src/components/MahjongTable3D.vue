@@ -3,8 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { preloadTileImages, preloadedTileImages } from '../game/core/presentation/tileAssets'
-import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../game/core/contracts/types'
-import type { DealAnimation, OpeningStage, WinEffect } from '../game/core/contracts/gamePort'
+import type { TileType } from '../game/core/contracts/types'
 import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
 import { createDicePresenter } from './table/three/dicePresenter'
 import { createPerfHud } from './table/three/perfHud'
@@ -12,25 +11,7 @@ import { createStaticTableScene } from './table/three/staticTableScene'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
-
-interface TableProps {
-  players?: GamePlayer[]
-  currentPlayer?: number
-  lastDiscard?: { tile: TileType; from: number; id: number } | null
-  wall?: TileType[]
-  wallHeadDrawn?: number
-  wallCount?: number
-  horses?: TileType[]
-  revealHands?: boolean
-  winnerIndex?: number
-  winEffect?: WinEffect | null
-  winPresentation?: WinPresentation | null
-  dealAnimation?: DealAnimation
-  openingStage?: OpeningStage | null
-  diceValues?: number[]
-  dealerIndex?: number
-  tableActionEvent?: TableActionEvent | null
-}
+import type { TableProps } from './table/three/tableRenderTypes'
 
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
@@ -349,6 +330,7 @@ onMounted(async () => {
 watch(
   () => (props.players.map((player) => [
     player.hand.length,
+    player.concealedTileCount,
     player.drawnTileIndex,
     player.discards.join(','),
     player.melds.map((meld) => `${meld.type}:${meld.from ?? '-'}:${meld.tiles.join(',')}`).join('|'),

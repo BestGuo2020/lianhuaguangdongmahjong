@@ -1,4 +1,3 @@
-import type { ActionPrompt } from '../controllers/playerController'
 import type {
   GamePlayer,
   MatchType,
@@ -22,6 +21,15 @@ export interface Announcement {
   text: string
   tone: string
   id: number
+}
+
+/** UI prompt shared by local and remote player-action controllers. */
+export interface ActionPrompt {
+  type: string
+  tile: TileType
+  from: number
+  canGang?: boolean
+  remainingClaims?: Array<{ playerIndex: number; canGang: boolean }>
 }
 
 export type GamePhase =

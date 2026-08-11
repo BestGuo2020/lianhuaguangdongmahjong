@@ -1,5 +1,6 @@
 import type { GamePhase, RoundResult } from '../../core/contracts/gamePort'
-import type { GamePlayer, Meld, TileType, WinPresentation } from '../../core/contracts/types'
+import type { Meld, TileType, WinPresentation } from '../../core/contracts/types'
+import type { ServerPlayerDto } from './dto'
 import type { ServerMessage } from './messages'
 
 type JsonObject = Record<string, unknown>
@@ -59,7 +60,7 @@ function isMeld(value: unknown): value is Meld {
     && isOptional(value.pending, isBoolean)
 }
 
-function isPlayer(value: unknown): value is GamePlayer {
+function isPlayer(value: unknown): value is ServerPlayerDto {
   if (!isObject(value)) return false
   return isString(value.name) && isString(value.avatar)
     && isNumber(value.score) && isNumber(value.seat)

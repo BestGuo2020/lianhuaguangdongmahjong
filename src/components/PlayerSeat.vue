@@ -45,7 +45,7 @@ function onAvatarError() {
     </div>
     <div v-if="renderHand" class="opponent-hand" :class="`hand-${position}`">
       <MahjongTile
-        v-for="index in Math.min(player.hand.length, 13)"
+        v-for="index in Math.min(player.concealedTileCount ?? player.hand.length, 13)"
         :key="index"
         tile="back"
         hidden

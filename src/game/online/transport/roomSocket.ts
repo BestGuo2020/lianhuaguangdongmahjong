@@ -91,14 +91,14 @@ export function createRoomSocketTransport({
   }
 
   function handleIncoming(raw: string) {
-    let message: any
+    let message: unknown
     try {
       message = JSON.parse(raw)
     } catch {
       return
     }
     lastServerMessageAt = Date.now()
-    if (message?.kind === 'pong') {
+    if (typeof message === 'object' && message !== null && 'kind' in message && message.kind === 'pong') {
       if (lastPingAt) {
         const rtt = Date.now() - lastPingAt
         smoothedRtt = smoothedRtt > 0

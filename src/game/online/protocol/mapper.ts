@@ -1,17 +1,19 @@
 import { defaultAvatarForSeat } from '../../core/presentation/avatar'
 import type { LastDiscard, RoundResult } from '../../core/contracts/gamePort'
 import type { GamePlayer, ScoreDelta, TableActionEvent, WinPresentation } from '../../core/contracts/types'
-import type { ServerSnapshot } from './dto'
+import type { LocalSnapshot, ServerPlayerDto, ServerSnapshot } from './dto'
 
 export function toLocalSeat(serverSeat: number, localServerSeat: number): number {
   return ((serverSeat - localServerSeat + 4) % 4 + 4) % 4
 }
 
-export function mapPlayersToLocal(players: GamePlayer[], localServerSeat: number): GamePlayer[] {
+export function mapPlayersToLocal(players: ServerPlayerDto[], localServerSeat: number): GamePlayer[] {
   return [...players]
     .sort((a, b) => toLocalSeat(a.seat, localServerSeat) - toLocalSeat(b.seat, localServerSeat))
     .map((player) => ({
       ...player,
+      hand: player.hand.filter((tile): tile is NonNullable<typeof tile> => tile !== null),
+      concealedTileCount: player.hand.length,
       avatar: player.avatar || defaultAvatarForSeat(player.seat),
       melds: player.melds.map((meld) => (
         meld.from != null
@@ -96,7 +98,7 @@ export function mapScoreDeltasToLocal(
 export function mapServerSnapshotToLocal(
   snapshot: ServerSnapshot,
   localServerSeat: number,
-): ServerSnapshot {
+): LocalSnapshot {
   return {
     ...snapshot,
     dealer: toLocalSeat(snapshot.dealer, localServerSeat),

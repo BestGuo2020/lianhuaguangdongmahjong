@@ -2,18 +2,46 @@ import * as THREE from 'three'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
 import { meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/presentation/winEffect'
+import type { WinEffect } from '../../../game/core/contracts/gamePort'
+import type { TileType } from '../../../game/core/contracts/types'
+import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
+
+interface DiamondParticle {
+  mesh: THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshBasicMaterial>
+  direction: THREE.Vector3
+  speed: number
+  spin: number
+}
+
+interface WinEffectAnimation {
+  startedAt: number
+  anchor: THREE.Vector3
+  burstAnchor: THREE.Vector3
+  outward: THREE.Vector3
+  beam: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>
+  beamGlow: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>
+  starburst: THREE.Sprite
+  glow: THREE.Sprite
+  diamonds: DiamondParticle[]
+  winningTile: THREE.Group | null
+  startPosition: THREE.Vector3
+  startRotation: number
+  seatRotation: number
+  duration: number
+  reducedMotion: boolean
+}
 
 interface WinEffectPresenterOptions {
   scene: THREE.Scene
   camera: THREE.Camera
-  props: any
+  props: Readonly<ResolvedTableProps>
   tileLayerZ: number
   dynamicGroups: THREE.Object3D[]
   own<T>(resource: T): T
   ownDynamic<T>(resource: T): T
-  makeFaceTile(tile: string): THREE.Group
-  meldTransform(playerIndex: number, trackOffset: number): any
-  alignMeldBottom(transform: any, playerIndex: number, rotated: boolean): any
+  makeFaceTile(tile: TileType): THREE.Group
+  meldTransform(playerIndex: number, trackOffset: number): TableTransform
+  alignMeldBottom(transform: TableTransform, playerIndex: number, rotated: boolean): TableTransform
   sourceTileRotationOffset(relativeSource: number): number
 }
 
@@ -21,14 +49,14 @@ export function createWinEffectPresenter(options: WinEffectPresenterOptions) {
   const { scene, camera, props, dynamicGroups, own, ownDynamic, makeFaceTile } = options
   const { meldTransform, alignMeldBottom, sourceTileRotationOffset } = options
   const TILE_LAYER_Z = options.tileLayerZ
-  let winEffectAnimation: any = null
+  let winEffectAnimation: WinEffectAnimation | null = null
 
 function winEffectAnchor(playerIndex) {
   const layout = winDisplayLayout(playerIndex)
   return new THREE.Vector3(layout.x, layout.y, layout.z)
 }
 
-function cameraAlignedPoint(point, planeY) {
+function cameraAlignedPoint(point: THREE.Vector3, planeY: number) {
   const direction = point.clone().sub(camera.position).normalize()
   const distance = (planeY - camera.position.y) / direction.y
   return camera.position.clone().addScaledVector(direction, distance)
@@ -58,7 +86,7 @@ function addWinningDisplayTile() {
   dynamicGroups.push(group)
 }
 
-function robbedKongSourceTransform(effect) {
+function robbedKongSourceTransform(effect: WinEffect) {
   if (!effect.robbedKong || effect.robbedKongPlayerIndex < 0 || effect.robbedKongMeldIndex < 0) return null
   const playerIndex = effect.robbedKongPlayerIndex
   const melds = props.players[playerIndex]?.melds || []
@@ -70,7 +98,7 @@ function robbedKongSourceTransform(effect) {
     const relativeSource = ['peng', 'gang'].includes(meld.type) && Number.isInteger(meld.from)
       ? (meld.from - playerIndex + 4) % 4
       : -1
-    let sourcePlacement = null
+    let sourcePlacement: TableTransform | null = null
     laidTiles.forEach((_, tileIndex) => {
       const pointsToSource = tileIndex === sourceTileIndex
       const tileSpan = pointsToSource ? 1.025 : .725

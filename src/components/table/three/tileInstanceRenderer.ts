@@ -110,3 +110,5 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
 
   return { begin, canReuse, add, set, finish }
 }
+
+export type TileInstanceRenderer = ReturnType<typeof createTileInstanceRenderer>

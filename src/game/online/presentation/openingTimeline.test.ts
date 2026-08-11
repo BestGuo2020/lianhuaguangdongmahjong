@@ -2,13 +2,16 @@ import { reactive, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { GamePhase, OpeningStage } from '../../core/contracts/gamePort'
-import type { ServerSnapshot } from '../protocol/dto'
+import type { ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
+import { mapPlayersToLocal } from '../protocol/mapper'
 import { createOpeningTimeline } from './openingTimeline'
 
-function player(seat: number, count: number): GamePlayer {
+function player(seat: number, count: number, hidden = false): ServerPlayerDto {
   return {
     name: `P${seat}`, avatar: '', score: 1000, seat,
-    hand: Array<TileType>(count).fill((['m1', 'm2', 'm3', 'm4'] as TileType[])[seat]),
+    hand: hidden
+      ? Array<null>(count).fill(null)
+      : Array<TileType>(count).fill((['m1', 'm2', 'm3', 'm4'] as TileType[])[seat]),
     discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
   }
 }
@@ -17,7 +20,7 @@ function snapshot(): ServerSnapshot {
   return {
     kind: 'state_snapshot', roomId: 'A', mode: 'east', phase: 'opening', round: 1,
     dealer: 2, honba: 0, wallCount: 83, wall: Array<TileType>(83).fill('s1'), headDrawn: 53,
-    currentPlayer: 2, players: [player(0, 13), player(1, 13), player(2, 14), player(3, 13)],
+    currentPlayer: 2, players: [player(0, 13, true), player(1, 13, true), player(2, 14), player(3, 13, true)],
     seat: 2, result: null, announcement: null, matchFinished: false, lastDiscard: null,
     winPresentation: null, winningPlayerIndex: -1,
   }
@@ -37,7 +40,7 @@ function harness() {
   const timeline = createOpeningTimeline({
     state,
     toLocalSeat: (seat) => (seat - 2 + 4) % 4,
-    mapPlayers: (players) => [...players].sort((a, b) => ((a.seat - 2 + 4) % 4) - ((b.seat - 2 + 4) % 4)),
+    mapPlayers: (players) => mapPlayersToLocal(players, 2),
     playSound: () => {},
     playSoundAndWait: async () => {},
     send: (message) => sent.push(message),
@@ -60,7 +63,8 @@ describe('openingTimeline', () => {
     await vi.advanceTimersByTimeAsync(10000)
 
     expect(state.openingStage.value).toBeNull()
-    expect(state.players.map((item) => item.hand.length)).toEqual([14, 13, 13, 13])
+    expect(state.players.map((item) => item.hand.length)).toEqual([14, 0, 0, 0])
+    expect(state.players.map((item) => item.concealedTileCount)).toEqual([14, 13, 13, 13])
     expect(state.wallCount.value).toBe(83)
     expect(state.wallHeadDrawn.value).toBe(53)
     expect(finished).toHaveBeenCalledOnce()

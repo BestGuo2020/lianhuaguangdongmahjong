@@ -1,13 +1,13 @@
 import { reactive, ref } from 'vue'
 import type {
   Announcement,
+  ActionPrompt,
   GamePhase,
   LastDiscard,
   OpeningStage,
   RoundResult,
   WinEffect,
 } from '../contracts/gamePort'
-import type { ActionPrompt } from '../controllers/playerController'
 import type {
   GamePlayer,
   MatchType,

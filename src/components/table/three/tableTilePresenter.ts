@@ -5,16 +5,44 @@ import { meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
+import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
+import type { TileInstanceRenderer } from './tileInstanceRenderer'
+import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
+import type { createStaticTableScene } from './staticTableScene'
+
+type TableScene = Pick<ReturnType<typeof createStaticTableScene>,
+  'makeDimmedHorseTile' | 'makeGoldGlow' | 'makeGoldVerticalGlow'>
+
+interface InstanceTween {
+  baseIndex: number
+  capIndex: number
+  capMesh: THREE.InstancedMesh
+  quat: THREE.Quaternion
+  startedAt: number
+  duration: number
+}
+
+interface DealTween extends InstanceTween {
+  origin: THREE.Vector3
+  target: THREE.Vector3
+}
+
+interface MeldTween extends InstanceTween {
+  baseX: number
+  baseZ: number
+  targetY: number
+  extraY?: number
+}
 
 interface TableTilePresenterOptions {
-  props: any
+  props: Readonly<ResolvedTableProps>
   scene: THREE.Scene
   dynamicGroups: THREE.Object3D[]
   ownDynamic<T>(resource: T): T
   clearDynamicScene(): void
-  makeFaceTile(tile: string): THREE.Group
-  tableScene: any
-  tileInstances: any
+  makeFaceTile(tile: TileType): THREE.Group
+  tableScene: TableScene
+  tileInstances: TileInstanceRenderer
   tileLayerZ: number
   playAreaOffsetZ: number
   tileGapOffset: number
@@ -36,12 +64,12 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const MELD_HAND_GAP = options.meldHandGap
   const MELD_UP_MOVE = options.meldUpMove
   const WALL_DEAL_ORIGIN_Y = options.wallDealOriginY
-  const dealTweens: any[] = []
-  const meldTweens: any[] = []
-  const discardTweens: any[] = []
+  const dealTweens: DealTween[] = []
+  const meldTweens: MeldTween[] = []
+  const discardTweens: DealTween[] = []
   let animatedDiscardId = -1
   let animatedTableActionId = -1
-  let pendingTableActionAnimation: any = null
+  let pendingTableActionAnimation: TableActionEvent | null = null
   const beginTableInstances = tileInstances.begin
   const addTableTile = tileInstances.add
   const finishTableInstances = tileInstances.finish
@@ -54,7 +82,8 @@ function addConcealedHand(playerIndex) {
     ? props.winPresentation
     : null
   const displayedHand = splitWinningTile(rawHand, presentation).hand
-  const total = Math.min(displayedHand.length, 14)
+  const concealedCount = props.players[playerIndex]?.concealedTileCount ?? displayedHand.length
+  const total = Math.min(props.revealHands ? displayedHand.length : concealedCount, 14)
   const gap = TILE_GAP_OFFSET // 三家手牌间隙
   // 摸牌位：只要手牌比基准（13 - 3×非花副露数）多出一张，就把多出的那张视为「摸牌」并留间隙。
   // drawnTileIndex 有效时用它；否则取末张（本地/服务端都把摸的牌放在末尾）。
@@ -249,7 +278,7 @@ function addDiscards(playerIndex) {
   })
 }
 
-function meldTransform(playerIndex, trackOffset) {
+function meldTransform(playerIndex: number, trackOffset: number): TableTransform {
   // 和参考界面一致：每家只有一条副露带，从玩家右手端连续排向手牌。
   // 本家副露整体下移一个牌深（0.94），与牌河拉开距离。
   // 下家（右）副露往右移、上家（左）副露往左移各一个牌宽（0.68），远离中间牌河/副露区。
@@ -260,7 +289,7 @@ function meldTransform(playerIndex, trackOffset) {
   return { x: -8.9, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
 }
 
-function alignMeldBottom(transform, playerIndex, rotated: boolean) {
+function alignMeldBottom(transform: TableTransform, playerIndex: number, rotated: boolean): TableTransform {
   if (!rotated) return transform
   // 牌面尺寸为 .72 x 1.02；横置后朝玩家方向缩短 .135，中心外移一半即可底边对齐。
   const edgeCompensation = .135

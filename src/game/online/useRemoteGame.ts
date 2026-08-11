@@ -14,10 +14,10 @@ import { computed, getCurrentInstance, onBeforeUnmount } from 'vue'
 import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
-import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules/rules'
-import { TILE_TYPES, tileName } from '../core/rules/tiles'
-import type { GamePlayer, MatchType, TileType, WinPresentation } from '../core/contracts/types'
-import type { ServerSnapshot } from './protocol/dto'
+import { tileName } from '../core/rules/tiles'
+import type { MatchType, WinPresentation } from '../core/contracts/types'
+import { createPlayerSelectors } from '../core/selectors/playerSelectors'
+import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createRoomSocketTransport } from './transport/roomSocket'
 import { createRemoteRoomLifecycle } from './session/remoteRoomLifecycle'
@@ -130,17 +130,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   const user = computed(() => players[0])
   const isUserTurn = computed(() => currentPlayer.value === 0 && phase.value === 'discard')
-  const userCanHu = computed(() => Boolean(user.value)
-    && isUserTurn.value
-    && userDrewThisTurn.value
-    && isWinningHand(user.value.hand, structuralMeldCount(user.value)))
-  const userKongs = computed(() => {
-    if (!user.value || !isUserTurn.value || !userDrewThisTurn.value) return []
-    const concealed = concealedKongs(user.value.hand)
-    const added = user.value.melds
-      .filter((meld) => meld.type === 'peng' && user.value.hand.includes(meld.tile))
-      .map((meld) => meld.tile)
-    return [...new Set([...concealed, ...added])]
+  const { userCanHu, userKongs, userCurrentWaits, userTingOptions, userDiscardWaits } = createPlayerSelectors({
+    players,
+    user,
+    phase,
+    isUserTurn,
+    userDrewThisTurn,
+    selectedIndex,
   })
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
@@ -150,62 +146,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     .map((player, index) => ({ ...player, playerIndex: index }))
     .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
     .map((player, index) => ({ ...player, rank: index + 1 })))
-  const userCurrentWaits = computed(() => {
-    if (!user.value || ['lobby', 'dealing', 'settled'].includes(phase.value)) return null
-    return makeWaitInfo(waitingTiles(user.value.hand, structuralMeldCount(user.value)))
-  })
-  const userTingOptions = computed(() => {
-    if (!user.value || !isUserTurn.value) return []
-    const seen = new Set()
-    return user.value.hand.flatMap((tile, index) => {
-      if (seen.has(tile)) return []
-      seen.add(tile)
-      const info = discardWaitInfo(index)
-      return info ? [info] : []
-    })
-  })
-  const userDiscardWaits = computed(() => {
-    if (selectedIndex.value < 0) return null
-    const selectedTile = user.value?.hand[selectedIndex.value]
-    return userTingOptions.value.find((option) => option.discard === selectedTile) ?? null
-  })
-
-  function structuralMeldCount(player: GamePlayer) {
-    return player.melds.filter((meld) => meld.type !== 'flower').length
-  }
-
-  function visibleRemainingCount(tile: TileType) {
-    let visible = matchingCount(user.value?.hand ?? [], tile)
-    players.forEach((player) => {
-      visible += matchingCount(player.discards, tile)
-      player.melds.forEach((meld) => {
-        visible += matchingCount(meld.tiles ?? [], tile)
-      })
-    })
-    return Math.max(0, 4 - visible)
-  }
-
-  function makeWaitInfo(waits: TileType[], discard: TileType | null = null) {
-    if (!waits.length) return null
-    const tiles = waits.map((tile) => ({
-      tile,
-      remaining: visibleRemainingCount(tile),
-    }))
-    const allTiles = TILE_TYPES.filter((tile) => tile !== 'red')
-    return {
-      discard,
-      tiles,
-      any: waits.length === allTiles.length,
-      remaining: tiles.reduce((total, item) => total + item.remaining, 0),
-    }
-  }
-
-  function discardWaitInfo(handIndex: number) {
-    const handAfterDiscard = user.value.hand.filter((_, index) => index !== handIndex)
-    const waits = waitingTiles(handAfterDiscard, structuralMeldCount(user.value))
-    return makeWaitInfo(waits, user.value.hand[handIndex])
-  }
-
   const remoteActionController = createRemoteActionController({
     state,
     isUserTurn: () => isUserTurn.value,
@@ -305,7 +245,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   // ── 快照应用 ───────────────────────────────────────────
 
-  function rotatePlayers(snapshotPlayers: GamePlayer[]): GamePlayer[] {
+  function rotatePlayers(snapshotPlayers: ServerPlayerDto[]) {
     return mapPlayersToLocal(snapshotPlayers, mySeatLocal.value)
   }
 

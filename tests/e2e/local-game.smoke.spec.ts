@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+test.describe.configure({ mode: 'serial' })
+
 test('starts a local match and begins the opening deal', async ({ page }) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -17,5 +19,21 @@ test('starts a local match and begins the opening deal', async ({ page }) => {
     { timeout: 12_000, message: 'opening timeline should deal the first local batch' },
   ).toBeGreaterThanOrEqual(4)
 
+  expect(pageErrors).toEqual([])
+})
+
+test('runs the win presentation through reveal into settlement', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+
+  await page.goto('/?winEffectLab=1')
+  await expect(page.getByTestId('win-self-0')).toBeVisible()
+  await page.getByTestId('win-self-0').click()
+
+  await expect(page.locator('.game-table-hud')).toBeVisible()
+  await expect(page.locator('.round-settlement')).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('.settlement-card .round-rankings article')).toHaveCount(4)
+  await expect(page.locator('.settlement-card .horse-area .mahjong-tile')).toHaveCount(8)
   expect(pageErrors).toEqual([])
 })

@@ -1,5 +1,6 @@
 import type {
   DealAnimation,
+  ActionPrompt,
   GamePhase,
   LastDiscard,
   OpeningStage,
@@ -7,10 +8,9 @@ import type {
   RoundResult,
   WinEffect,
 } from '../../core/contracts/gamePort'
-import type { ActionPrompt } from '../../core/controllers/playerController'
 import type { GamePlayer, TileType, WinPresentation } from '../../core/contracts/types'
 import { WALL_TOTAL } from '../../core/rules/wallLayout'
-import type { ServerSnapshot } from '../protocol/dto'
+import type { ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
 import type { RoundStartMessage } from '../protocol/messages'
 
 export interface OpeningTimelineState {
@@ -39,7 +39,7 @@ export interface OpeningTimelineState {
 export interface OpeningTimelineOptions {
   state: OpeningTimelineState
   toLocalSeat: (seat: number) => number
-  mapPlayers: (players: GamePlayer[]) => GamePlayer[]
+  mapPlayers: (players: ServerPlayerDto[]) => GamePlayer[]
   playSound: (name: string, volume?: number) => unknown
   playSoundAndWait: (name: string, volume?: number) => Promise<void>
   send: (message: Record<string, unknown>) => void
@@ -93,7 +93,7 @@ export function createOpeningTimeline({
     state.wallHeadDrawn.value = 0
     const skeleton = mapPlayers(snapshot.players)
     state.players.splice(0, state.players.length, ...skeleton.map((player) => ({
-      ...player, hand: [], discards: [], melds: [], drawnTileIndex: -1,
+      ...player, hand: [], concealedTileCount: 0, discards: [], melds: [], drawnTileIndex: -1,
     })))
   }
 
@@ -104,8 +104,9 @@ export function createOpeningTimeline({
     state.phase.value = 'dealing'
     const source = mapPlayers(snapshot.players)
     const hands = source.map((player) => [...player.hand])
+    const concealedRemaining = source.map((player) => player.concealedTileCount ?? player.hand.length)
     state.players.splice(0, state.players.length, ...source.map((player) => ({
-      ...player, hand: [], discards: [], melds: [], drawnTileIndex: -1,
+      ...player, hand: [], concealedTileCount: 0, discards: [], melds: [], drawnTileIndex: -1,
     })))
     const localDealer = state.dealer.value
     const seatOrder = Array.from(
@@ -115,13 +116,16 @@ export function createOpeningTimeline({
     let serial = 0
     const dealBatch = async (playerIndex: number, count: number): Promise<boolean> => {
       if (currentSequence !== sequence) return false
+      const dealCount = Math.min(count, concealedRemaining[playerIndex])
+      concealedRemaining[playerIndex] -= dealCount
       const remaining = hands[playerIndex].length
-      const slice = hands[playerIndex].splice(remaining - count, count)
+      const slice = hands[playerIndex].splice(Math.max(0, remaining - dealCount), dealCount)
       state.players[playerIndex].hand.push(...slice)
-      state.wallCount.value = Math.max(0, state.wallCount.value - count)
-      state.wall.value.splice(0, count)
-      state.wallHeadDrawn.value += count
-      state.dealAnimation.value = { playerIndex, count, serial: serial + 1 }
+      state.players[playerIndex].concealedTileCount = (state.players[playerIndex].concealedTileCount ?? 0) + dealCount
+      state.wallCount.value = Math.max(0, state.wallCount.value - dealCount)
+      state.wall.value.splice(0, dealCount)
+      state.wallHeadDrawn.value += dealCount
+      state.dealAnimation.value = { playerIndex, count: dealCount, serial: serial + 1 }
       serial += 1
       playSound('deal.mp3', 0.72)
       await wait(count === 4 ? 260 : 150)

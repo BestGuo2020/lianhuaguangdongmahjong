@@ -6,6 +6,7 @@ import type { AITurnView, ClaimDecision, RobKongView, TurnDecision } from './ai'
 import { removeMatches } from '../rules/actions'
 import { concealedKongs, isWinningHand } from '../rules/rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
+import type { ActionPrompt } from '../contracts/gamePort'
 
 // ── 共享类型 ──
 
@@ -91,14 +92,6 @@ export interface PlayerController {
 interface Ref<T> { value: T }
 
 /** UI 交互提示（与 useGame 内部的 ActionPrompt 形状一致） */
-export interface ActionPrompt {
-  type: string
-  tile: TileType
-  from: number
-  canGang?: boolean
-  remainingClaims?: Array<{ playerIndex: number; canGang: boolean }>
-}
-
 // ── HumanBridge ──
 
 /**

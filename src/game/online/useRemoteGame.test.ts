@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteGame } from './useRemoteGame'
 import type { GamePlayer, TileType } from '../core/contracts/types'
+import type { ServerPlayerDto } from './protocol/dto'
 
 // ─── Mock WebSocket / fetch / window ──────────────────────
 
@@ -105,7 +106,7 @@ afterEach(() => {
 
 // ─── 构造快照辅助 ────────────────────────────────────────
 
-function makePlayer(seat: number, name: string, hand: Array<TileType | null> = []): GamePlayer {
+function makePlayer(seat: number, name: string, hand: Array<TileType | null> = []): ServerPlayerDto {
   return { name, avatar: '', score: 1000, seat, hand, discards: [], melds: [], redCount: 0, drawnTileIndex: -1 }
 }
 
@@ -169,9 +170,13 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     expect(game.players.map((p) => p.seat)).toEqual([2, 3, 0, 1])
     expect(game.players[0].name).toBe('本家')
     // 本人手牌可见，他人手牌隐藏
-    expect(game.players[0].hand.every((t) => t != null)).toBe(true)
-    expect(game.players[1].hand.every((t) => t == null)).toBe(true)
-    expect(game.players[2].hand.every((t) => t == null)).toBe(true)
+    expect(game.players[0].hand).toHaveLength(13)
+    expect(game.players[0].concealedTileCount).toBe(13)
+    expect(game.players[1].hand).toEqual([])
+    expect(game.players[1].concealedTileCount).toBe(3)
+    expect(game.players[2].hand).toEqual([])
+    expect(game.players[2].concealedTileCount).toBe(3)
+    expect(game.players.flatMap((player) => player.hand)).not.toContain(null)
     // currentPlayer / dealer 服务端座位 → 本地索引
     expect(game.currentPlayer.value).toBe(0)   // 服务端 2 → 本家
     expect(game.dealer.value).toBe(2)          // 服务端 0 → 本地 2
@@ -334,6 +339,27 @@ describe('useRemoteGame 网络信号（连接健康度）', () => {
     await vi.advanceTimersByTimeAsync(5000)
     mockSocket!.receive({ kind: 'pong' })
     expect(game.signalQuality.value).toBe(3)
+  })
+
+  it('重连握手后用最新快照恢复座位、回合和隐藏手牌数量', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    await vi.advanceTimersByTimeAsync(16000)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    mockSocket!.open()
+    mockSocket!.receive({
+      kind: 'rejoin_ok', seat: 2, rejoin: true, roomId: 'ABC123', mode: 'east',
+      nickname: '测试', rejoinCode: 'AAAA-BBBB',
+    })
+    mockSocket!.receive(makeSnapshot({ round: 2, currentPlayer: 3, wallCount: 51 }))
+
+    expect(game.wsStatus.value).toBe('connected')
+    expect(game.round.value).toBe(2)
+    expect(game.currentPlayer.value).toBe(1)
+    expect(game.wallCount.value).toBe(51)
+    expect(game.players[0].seat).toBe(2)
+    expect(game.players[1]).toMatchObject({ seat: 3, hand: [], concealedTileCount: 3 })
   })
 })
 
