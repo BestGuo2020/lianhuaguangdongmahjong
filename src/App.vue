@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { defineAsyncComponent, ref, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
+import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
+import GameShellHeader from './components/shell/GameShellHeader.vue'
 import OrientationGate from './components/shell/OrientationGate.vue'
 import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
-import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
 import { createActiveGamePort, type GameMode } from './game/core/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
@@ -23,9 +24,7 @@ const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vu
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
-const imageBase = `${import.meta.env.BASE_URL}img/`
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
-const winEffectLabSeats = ['本家', '下家', '对家', '上家']
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
@@ -60,11 +59,8 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality, autoPlay, toggleAutoPlay,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
 } = remoteGame
-// 网络信号：0-3 格的语义是「连接健康度」，而非延迟（棋牌类对延迟不敏感）
-const signalText = computed(() =>
-  ({ 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' })[signalQuality.value] ?? '')
 
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
@@ -127,37 +123,20 @@ const continueCountdown = useRemoteContinueCountdown({
     <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">
-        <header class="top-bar">
-          <div class="brand-mini"><span v-if="!players.length">莲花广麻</span></div>
-          <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
-          <div v-if="players.length" class="base-score-badge">
-            <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
-            <span>底分{{ BASE_SCORE }}</span>
-            <img
-              v-if="gameMode === 'remote'"
-              class="signal-icon"
-              :src="`${imageBase}signal-${signalQuality}.png`"
-              :alt="signalText"
-              :title="signalQuality <= 1 ? `${signalText}，可能被 AI 托管` : signalText"
-            />
-            <span v-if="gameMode === 'remote' && signalQuality <= 1" class="signal-warn">{{ signalText }}</span>
-          </div>
-          <nav>
-            <button
-              v-if="gameMode === 'remote' && phase !== 'lobby'"
-              class="quit-match"
-              aria-label="退出对局"
-              title="退出对局"
-              @click="quitMatch"
-            ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
-            <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="soundOn = !soundOn">
-              <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
-            </button>
-            <button class="icon-button" aria-label="查看规则" @click="rulesOpen = true">
-              <img :src="`${imageBase}manual.png`" alt="" />
-            </button>
-          </nav>
-        </header>
+        <GameShellHeader
+          :game-mode="gameMode"
+          :phase="phase"
+          :has-players="Boolean(players.length)"
+          :match-name="matchName"
+          :round-label="roundLabel"
+          :honba="honba"
+          :room-id="roomId"
+          :signal-quality="signalQuality"
+          :sound-on="soundOn"
+          @quit="quitMatch"
+          @toggle-sound="soundOn = !soundOn"
+          @open-rules="rulesOpen = true"
+        />
         <div class="table-depth" aria-hidden="true">
           <i class="table-edge edge-top"></i>
           <i class="table-edge edge-right"></i>
@@ -267,26 +246,12 @@ const continueCountdown = useRemoteContinueCountdown({
           @accept="disclaimerGate.accept"
           @decline="disclaimerGate.decline"
         />
-        <aside v-if="winEffectLab" class="win-effect-lab" aria-label="胡牌特效测试面板">
-          <strong>胡牌特效测试</strong>
-          <div v-for="(seat, index) in winEffectLabSeats" :key="seat">
-            <span>{{ seat }}</span>
-            <button :data-testid="`win-self-${index}`" @click="debugPreviewWin(index)">自摸</button>
-            <button :data-testid="`win-rob-${index}`" @click="debugPreviewWin(index, { robbedKong: true })">抢杠胡</button>
-          </div>
-          <strong>杠选牌测试</strong>
-          <div class="kong-debug">
-            <span>本家</span>
-            <button data-testid="kong-concealed" @click="debugKong('concealed')">暗杠</button>
-            <button data-testid="kong-added" @click="debugKong('added')">补杠</button>
-            <button data-testid="kong-both" @click="debugKong('both')">双杠</button>
-          </div>
-          <strong>红中测试</strong>
-          <div class="kong-debug">
-            <span>本家</span>
-            <button data-testid="four-red" @click="debugFourRed">四红中</button>
-          </div>
-        </aside>
+        <WinEffectLab
+          :open="winEffectLab"
+          @preview-win="debugPreviewWin"
+          @preview-kong="debugKong"
+          @preview-four-red="debugFourRed"
+        />
       </div>
     </div>
     <RulesPanel :open="rulesOpen" @close="rulesOpen = false" />
