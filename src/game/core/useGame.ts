@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { defineGamePort } from './gamePort'
 import { performDiscardGang, performPeng, removeMatches } from './actions'
 import type { ActionContext } from './actions'
 import { AiController, HumanController, type PlayerController, type HumanBridge, type ActionPrompt, type ClaimContext, type RobKongContext, type TurnContext } from './playerController'
@@ -1160,7 +1161,7 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
 
   onBeforeUnmount(clearTimers)
 
-  return {
+  return defineGamePort({
     phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,
@@ -1169,5 +1170,5 @@ export function useGame({ playSound = () => {}, playSoundAndWait = async () => {
     userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
     userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin, debugPreviewKong, debugPreviewFourRed,
     humanController,
-  }
+  })
 }

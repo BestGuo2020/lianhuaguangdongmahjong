@@ -1,0 +1,129 @@
+import type { ActionPrompt } from './playerController'
+import type {
+  GamePlayer,
+  MatchType,
+  ScoreFlowEvent,
+  TableActionEvent,
+  TileType,
+  WinPresentation,
+} from './types'
+
+export interface RefLike<T> {
+  value: T
+}
+
+export interface LastDiscard {
+  tile: TileType
+  from: number
+  id: number
+}
+
+export interface Announcement {
+  text: string
+  tone: string
+  id: number
+}
+
+export type RoundResult = Record<string, any>
+
+export interface WaitTileInfo {
+  tile: TileType
+  remaining: number
+}
+
+export interface WaitInfo {
+  discard: TileType | null
+  tiles: WaitTileInfo[]
+  any: boolean
+  remaining: number
+}
+
+export interface GamePort {
+  phase: RefLike<string>
+  players: GamePlayer[]
+  wall: RefLike<TileType[]>
+  wallHeadDrawn: RefLike<number>
+  wallCount: RefLike<number>
+  currentPlayer: RefLike<number>
+  selectedIndex: RefLike<number>
+  turnSeconds: RefLike<number>
+  lastDiscard: RefLike<LastDiscard | null>
+  actionPrompt: RefLike<ActionPrompt | null>
+  announcement: RefLike<Announcement | null>
+  tableActionEvent: RefLike<TableActionEvent | null>
+  scoreFlowEvent: RefLike<ScoreFlowEvent | null>
+  result: RefLike<RoundResult | null>
+  winEffect: RefLike<RoundResult | null>
+  winPresentation: RefLike<WinPresentation | null>
+  revealHands: RefLike<boolean>
+  winningPlayerIndex: RefLike<number>
+  round: RefLike<number>
+  dealer: RefLike<number>
+  user: RefLike<GamePlayer | undefined>
+  isUserTurn: RefLike<boolean>
+  userCanHu: RefLike<boolean>
+  matchType: RefLike<MatchType>
+  matchName: RefLike<string>
+  matchFinished: RefLike<boolean>
+  honba: RefLike<number>
+  roundLabel: RefLike<string>
+  standings: RefLike<Array<GamePlayer & { playerIndex: number; rank: number }>>
+  dealAnimation: RefLike<{ playerIndex: number; count: number; serial: number }>
+  openingStage: RefLike<string | null>
+  diceValues: RefLike<number[]>
+  userCurrentWaits: RefLike<WaitInfo | null>
+  userTingOptions: RefLike<WaitInfo[]>
+  userDiscardWaits: RefLike<WaitInfo | null>
+  userKongs: RefLike<TileType[]>
+
+  startGame(mode?: MatchType): unknown
+  selectTile(index: number): void
+  clearUserSelection(): void
+  userDiscard(index?: number): void
+  userPass(): void
+  userPeng(): void
+  userGangFromDiscard(): void
+  userGang(tile?: TileType): void
+  userHu(): void
+  nextRound(): void
+  returnToLobby(): void
+  tileName(tile: TileType): string
+}
+
+type FunctionKeys<T> = {
+  [K in keyof T]-?: T[K] extends (...args: any[]) => any ? K : never
+}[keyof T]
+
+type GamePortActionKey = FunctionKeys<GamePort>
+type GamePortStateKey = Exclude<keyof GamePort, GamePortActionKey>
+
+export const GAME_PORT_STATE_KEYS = [
+  'phase', 'players', 'wall', 'wallHeadDrawn', 'wallCount', 'currentPlayer', 'selectedIndex',
+  'turnSeconds', 'lastDiscard', 'actionPrompt', 'announcement', 'tableActionEvent',
+  'scoreFlowEvent', 'result', 'winEffect', 'winPresentation', 'revealHands',
+  'winningPlayerIndex', 'round', 'dealer', 'user', 'isUserTurn', 'userCanHu', 'matchType',
+  'matchName', 'matchFinished', 'honba', 'roundLabel', 'standings', 'dealAnimation',
+  'openingStage', 'diceValues', 'userCurrentWaits', 'userTingOptions', 'userDiscardWaits',
+  'userKongs',
+] as const satisfies ReadonlyArray<GamePortStateKey>
+
+export const GAME_PORT_ACTION_KEYS = [
+  'startGame', 'selectTile', 'clearUserSelection', 'userDiscard', 'userPass', 'userPeng',
+  'userGangFromDiscard', 'userGang', 'userHu', 'nextRound', 'returnToLobby', 'tileName',
+] as const satisfies ReadonlyArray<GamePortActionKey>
+
+type MissingStateKeys = Exclude<GamePortStateKey, typeof GAME_PORT_STATE_KEYS[number]>
+type MissingActionKeys = Exclude<GamePortActionKey, typeof GAME_PORT_ACTION_KEYS[number]>
+
+// 新增契约字段却忘记补测试清单时，这两个断言会让类型检查失败。
+const allStateKeysCovered: MissingStateKeys extends never ? true : never = true
+const allActionKeysCovered: MissingActionKeys extends never ? true : never = true
+void allStateKeysCovered
+void allActionKeysCovered
+
+/**
+ * 编译期契约检查，同时保留实现自身的精确返回类型和扩展能力。
+ */
+export function defineGamePort<T extends GamePort>(port: T): T {
+  return port
+}

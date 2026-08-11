@@ -8,9 +8,12 @@ import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE, DISCLAIMER_VERSION } from './con
 import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
 import { useGame } from './game/core/useGame'
+import { createActiveGamePort, type GameMode } from './game/core/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
-import { getPlayerStats, getPlayerStatsById, getRoomMeta, reportPlayer as reportPlayerApi, getDisclaimerAgreement, agreeDisclaimer } from './game/online/remoteApi'
-import type { PlayerStats, RoomMeta } from './game/online/remoteApi'
+import { agreeDisclaimer, getDisclaimerAgreement, getPlayerStats, getPlayerStatsById } from './game/online/api/accountApi'
+import type { PlayerStats } from './game/online/api/accountApi'
+import { reportPlayer as reportPlayerApi } from './game/online/api/moderationApi'
+import { getRoomMeta, type RoomMeta } from './game/online/api/roomApi'
 import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
 import { defaultAvatarForSeat } from './game/core/avatar'
@@ -78,32 +81,12 @@ onUnmounted(() => {
   screen.orientation?.removeEventListener?.('change', updateOrientationGate)
 })
 
-const gameMode = ref<'local' | 'remote'>('local')
+const gameMode = ref<GameMode>('local')
 const localGame = useGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
-// 模式切换桥：解构出的 ref / 函数始终委托给当前模式的 composable，
-// 使本地 / 远程共用同一套模板与交互逻辑。
-const gameFacade: Record<string, unknown> = {}
-const activeGame = () => (gameMode.value === 'remote' ? remoteGame : localGame) as unknown as Record<string, unknown>
-for (const key of Object.keys(localGame)) {
-  const value = activeGame()[key]
-  if (typeof value === 'function') {
-    gameFacade[key] = (...args: unknown[]) => {
-      const target = activeGame()[key] as (...a: unknown[]) => unknown
-      return target(...args)
-    }
-  } else {
-    gameFacade[key] = computed(() => {
-      const source = activeGame()[key]
-      // ref / computed → 取 .value；reactive 数组（players）→ 直接返回
-      return source && typeof source === 'object' && 'value' in source
-        ? (source as { value: unknown }).value
-        : source
-    })
-  }
-}
-const game = gameFacade as unknown as ReturnType<typeof useGame>
+// 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
+const game = createActiveGamePort(gameMode, localGame, remoteGame)
 
 const {
   phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
@@ -111,7 +94,7 @@ const {
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
   userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, nextRound, returnToLobby, debugPreviewWin, debugPreviewKong, debugPreviewFourRed,
+  userGang, userHu, nextRound, returnToLobby,
 } = game
 
 // ── 开杠选牌对话框 ──────────────────────────────
@@ -138,11 +121,15 @@ watch(userKongs, (kongs) => {
 // 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {
   if (gameMode.value !== 'local') return
-  debugPreviewKong(mode)
+  localGame.debugPreviewKong(mode)
 }
 const debugFourRed = () => {
   if (gameMode.value !== 'local') return
-  debugPreviewFourRed()
+  localGame.debugPreviewFourRed()
+}
+const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}) => {
+  if (gameMode.value !== 'local') return
+  localGame.debugPreviewWin(winnerIndex, options)
 }
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────

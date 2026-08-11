@@ -1,7 +1,7 @@
 // 远程对局 composable —— 与 useGame 返回完全兼容的接口，但状态由服务端快照驱动
 //
 // 职责划分：
-// - REST（remoteApi.ts）管理房间生命周期：创建 / 加入 / 准备 / 开始 / 离开
+// - REST（api/roomApi.ts）管理房间资源，session/remoteRoomLifecycle.ts 编排生命周期
 // - WebSocket 只做实时对局：state_snapshot 为唯一真源，turn/claim/rob 请求驱动交互
 //
 // 座位旋转：服务端座位是权威索引，客户端固定把「本家」排到 players[0]（桌面底部）。
@@ -11,154 +11,40 @@
 // 结算展示：服务端无条件推进场次，客户端在赢牌动画 / 结算弹窗期间延迟应用
 // 后续快照与请求（pendingSnapshot / pendingRequest），用户点「继续」后再落地。
 import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
-import { API_BASE, closeRoom, createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom } from './remoteApi'
-import type { RoomSeatState } from './remoteApi'
+import { API_BASE } from './api/httpClient'
+import type { RoomSeatState } from './api/roomApi'
+import { defineGamePort } from '../core/gamePort'
+import type { Announcement, LastDiscard, RoundResult } from '../core/gamePort'
 import type { ActionPrompt } from '../core/playerController'
-import { defaultAvatarForSeat } from '../core/avatar'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
 import { TILE_TYPES, tileAudioFile, tileName } from '../core/tiles'
-import { WALL_TOTAL } from '../core/wallLayout'
-import type { GamePlayer, MatchType, Meld, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
+import type { GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
+import type { ServerSnapshot } from './protocol/dto'
+import type { RoundStartMessage, ServerMessage, ServerRequest } from './protocol/messages'
+import { createRemoteSessionStore, type StoredSession } from './session/remoteSessionStore'
+import { createRoomSocketTransport } from './transport/roomSocket'
+import { createRemoteRoomLifecycle, type RemoteSessionStatus } from './session/remoteRoomLifecycle'
+import { createOpeningTimeline } from './presentation/openingTimeline'
+import { createSettlementTimeline } from './presentation/settlementTimeline'
 import {
-  prefersReducedMotion,
-  REDUCED_WIN_EFFECT_DURATION,
-  REDUCED_WIN_REVEAL_DURATION,
-  WIN_EFFECT_DURATION,
-  WIN_EFFECT_SOUND_DELAY,
-  WIN_REVEAL_DURATION,
-} from '../core/winEffect'
+  mapLastDiscardToLocal,
+  mapPlayersToLocal,
+  mapRoundResultToLocal,
+  mapScoreDeltasToLocal,
+  mapTableActionToLocal,
+  mapWinPresentationToLocal,
+  toLocalSeat,
+} from './protocol/mapper'
 
-// 服务端错误码 → 用户可读文案（未命中的回退到原始错误码）
-const REMOTE_ERROR_TEXT: Record<string, string> = {
-  ROOM_LIMIT_REACHED: '房间已满',   // 服务端房间数已达上限
-  ROOM_FULL: '房间已满',           // 加入房间座位已满
-  ALREADY_IN_ROOM: '你已在房间中，请先离开当前房间',   // 已在房间占座时再建/加入新房
-}
-
-function remoteErrorText(code: string): string {
-  return REMOTE_ERROR_TEXT[code] ?? code
-}
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 
 // 自动打牌：开关后到自动出牌/过牌的间隔（毫秒）。留一点时间让摸牌动画/音效可读。
 const AUTO_PLAY_DELAY = 600
 
-// ─── 网络信号：以「连接健康度」替代纯 RTT 延迟判定 ──
-// 棋牌类对延迟不敏感（出牌有 12s 倒计时），真正致命的是连接卡死 → 被 AI 托管。
-// 因此信号 = min(平滑 RTT 等级, 心跳停顿等级, 重连降级上限)，而非单次 RTT 快照。
-const PING_INTERVAL = 5000        // 心跳周期（兼作 CDN 空闲保活）
-const STALL_TIMEOUT = 15000       // 超过此间隔无任何服务端消息 → 判定卡死，主动重连
-const RTT_EWMA_ALPHA = 0.3        // RTT 平滑：新采样权重（0.3）
-
-// ─── 匿名身份与会话持久化（Phase 8 P1）：guestId / 昵称 / 对局会话 ──
-// 刷新 / 关浏览器后凭 localStorage 里的会话一键「继续对局」，对局中座位（AI 托管）可找回。
-const STORAGE = {
-  guestId: 'lgm_guest_id',
-  nickname: 'lgm_nickname',
-  session: 'lgm_session',
-}
-
-interface StoredSession {
-  roomId: string
-  rejoinCode: string
-  nickname: string
-  playerId: string
-  mode: MatchType
-}
-
-function loadStored(key: string): string | null {
-  try {
-    return window.localStorage?.getItem(key) ?? null
-  } catch {
-    return null   // 隐私模式 / 无 localStorage 环境
-  }
-}
-
-function saveStored(key: string, value: string): void {
-  try {
-    window.localStorage?.setItem(key, value)
-  } catch {
-    // 隐私模式静默
-  }
-}
-
-function clearStored(key: string): void {
-  try {
-    window.localStorage?.removeItem(key)
-  } catch {
-    // 忽略
-  }
-}
-
-function generateGuestId(): string {
-  const rand = Math.random().toString(36).slice(2, 10)
-  const stamp = Date.now().toString(36).slice(-4)
-  return `g${rand}${stamp}`
-}
-
-type RoundResult = Record<string, any>
-interface Announcement { text: string; tone: string; id: number }
-interface LastDiscard { tile: TileType; from: number; id: number }
-
 type ClientPhase =
   | 'lobby' | 'dealing' | 'playing' | 'discard' | 'prompt'
   | 'win-effect' | 'revealing' | 'settled' | 'finished'
-
-// ─── 服务端消息类型（对应 backend messages.py）────────────
-
-interface ServerSnapshot {
-  kind: 'state_snapshot'
-  roomId: string
-  mode: MatchType
-  phase: string
-  round: number
-  dealer: number
-  honba: number
-  dice?: [number, number]
-  wallCount: number
-  wall: TileType[]
-  headDrawn: number
-  currentPlayer: number
-  players: GamePlayer[]
-  seat: number
-  result: RoundResult | null
-  announcement: Announcement | null
-  matchFinished: boolean
-  lastDiscard: LastDiscard | null
-  winPresentation: WinPresentation | null
-  winningPlayerIndex: number
-}
-
-interface RoundStartMessage {
-  kind: 'round_start'
-  matchStarted: boolean
-  round: number
-  dealer: number
-  honba: number
-  dice: [number, number]
-}
-
-type ServerRequest =
-  | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: Meld[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean } }
-  | { kind: 'claim_request'; ctx: { hand: TileType[]; canGang: boolean; tile: TileType; from: number } }
-  | { kind: 'rob_kong_request'; ctx: { tile: TileType; from: number; hand: TileType[]; exposedMelds: number } }
-
-type ServerMessage =
-  | ServerSnapshot
-  | ServerRequest
-  | RoundStartMessage
-  | { kind: 'rejoin_ok'; seat: number; rejoin: boolean; roomId: string; mode: MatchType; nickname: string; rejoinCode: string }
-  | { kind: 'rejoin_err'; code: string }
-  | { kind: 'table_action'; event: TableActionEvent }
-  | { kind: 'score_flow'; deltas: ScoreDelta[] }
-  | { kind: 'announcement'; text: string; tone: string; id?: number }
-  | { kind: 'hand_result'; result: RoundResult }
-  | { kind: 'continue_prompt'; total: number }
-  | { kind: 'match_finished'; roomId: string; mode: MatchType; finalScores: Array<{ seat: number; name: string; score: number }> }
-  | { kind: 'room_closed' }
-  | { kind: 'pong' }
-  | { kind: 'error'; code: string }
 
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -166,16 +52,23 @@ interface UseRemoteGameOptions {
 }
 
 export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseRemoteGameOptions = {}) {
+  const sessionStore = createRemoteSessionStore()
   // ── 远程会话状态 ──
-  const sessionStatus = ref<'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing'>('idle')
-  const wsStatus = ref<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'>('idle')
+  const sessionStatus = ref<RemoteSessionStatus>('idle')
   const sessionError = ref('')
-  const signalQuality = ref(0)   // 0-3 信号质量（越大连接越好，由 ping/pong RTT 测得）
   const roomId = ref('')
   const mySeat = ref(-1)                 // 服务端座位（权威）
   const nickname = ref('')
   const rejoinCode = ref('')
-  const playerId = ref(loadStored(STORAGE.guestId) || '')   // 匿名身份（guestId），跨会话稳定
+  const roomSocket = createRoomSocketTransport({
+    getUrl: () => roomId.value && rejoinCode.value
+      ? `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
+      : null,
+    onMessage: handleMessage,
+  })
+  const wsStatus = roomSocket.status
+  const signalQuality = roomSocket.signalQuality
+  const playerId = ref(sessionStore.loadGuestId() || '')   // 匿名身份（guestId），跨会话稳定
   const creatorSeat = ref<number | null>(null)   // 服务端权威房主座位（轮询刷新，支持房主转移）
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
@@ -184,8 +77,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // 支持 URL 参数 ?auto=1 开启 —— 开 4 个窗口联机测试/观战时可免逐个设置。
   const autoPlay = ref(typeof location !== 'undefined'
     && new URLSearchParams(location.search).get('auto') === '1')
-  const storedSession = ref<StoredSession | null>(readStoredSession())   // 上次未完成对局（继续对局入口）
-  ensurePlayerId()   // 启动即生成匿名身份：战绩按 guestId 查，无需先输入昵称/进房
+  const storedSession = ref<StoredSession | null>(sessionStore.loadSession())   // 上次未完成对局（继续对局入口）
 
   // ── 游戏状态（与 useGame 同名同形，App.vue 模板直接复用）──
   const phase = ref<ClientPhase>('lobby')
@@ -218,33 +110,50 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const waitingNextRound = ref(false)   // 已点「继续」，等待其他玩家确认后进下一局
 
   // ── 内部：连接 / 定时器 / 延迟队列 ──
-  let ws: WebSocket | null = null
-  let closedByUser = false
-  let reconnectTimer: number | null = null
-  let reconnectAttempts = 0
-  let pollTimer: number | null = null
-  let pingTimer: number | null = null
-  let lastPingAt = 0   // 最近一次 ping 的发送时刻（测 RTT → 信号质量）
-  let smoothedRtt = 200           // EWMA 平滑 RTT（初始估计，避免首 ping 前显示 0 格）
-  let lastServerMessageAt = 0     // 最近一次收到服务端消息（pong/快照/请求）的时刻
-  let postReconnectPongs = 2      // 重连后连续干净 pong 数；≥2 才解除「波动」降级
-  let stallTimer: number | null = null   // 周期健康检查（2s）
   let countdownHandle: number | null = null
-  let winSequenceTimer: number | null = null
-  let winSequenceSerial = 0
   let pendingSnapshot: ServerSnapshot | null = null
   let pendingRequest: ServerRequest | null = null
   let lastAnnouncementId = -1   // 服务端公告自增 id：同一公告只展示一次
   let lastDiscardIdApplied = -1   // 出牌报牌：按服务端 lastDiscard.id 去重，重连不重复播
   let pendingRoundStart: RoundStartMessage | null = null
-  let openingInProgress = false   // 开局动画期间缓冲回合/请求提示
-  let openingSequence = 0
-  let openingSnapshot: ServerSnapshot | null = null   // 开局期间缓冲的首份快照（发牌动画数据源）
   const timers = new Set<number>()
+
+  const roomLifecycle = createRemoteRoomLifecycle({
+    state: {
+      sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
+      creatorSeat, isCreator, roomSeats, roomTimeLimit, storedSession,
+      phase, matchType, matchFinished, players,
+    },
+    sessionStore,
+    socket: roomSocket,
+    closeConnection,
+    resetGame: resetAll,
+  })
 
   // ── 座位映射（服务端座位 → 本地索引）────────────────────
   const mySeatLocal = computed(() => (mySeat.value >= 0 ? mySeat.value : -1))
-  const toLocal = (serverSeat: number) => ((serverSeat - mySeatLocal.value + 4) % 4 + 4) % 4
+  const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
+
+  const settlementTimeline = createSettlementTimeline({
+    state: { phase, result, winEffect, winPresentation, revealHands, winningPlayerIndex },
+    mapResult: (value) => mapResult(value),
+    mapPresentation: (value) => mapWinPresentation(value),
+    toLocalSeat: toLocal,
+    playSound,
+  })
+  const openingTimeline = createOpeningTimeline({
+    state: {
+      phase, players, wall, wallCount, wallHeadDrawn, currentPlayer, selectedIndex,
+      actionPrompt, lastDiscard, result, winEffect, winPresentation, revealHands,
+      winningPlayerIndex, round, dealer, honba, diceValues, openingStage, dealAnimation,
+    },
+    toLocalSeat: toLocal,
+    mapPlayers: (value) => rotatePlayers(value),
+    playSound,
+    playSoundAndWait,
+    send,
+    onFinished: applyBufferedAfterOpening,
+  })
 
   const user = computed(() => players[0])
   const isUserTurn = computed(() => currentPlayer.value === 0 && phase.value === 'discard')
@@ -335,18 +244,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     return id
   }
 
-  function wait(ms: number): Promise<void> {
-    return new Promise((resolve) => later(resolve, ms))
-  }
-
   function clearTimers() {
-    openingSequence += 1
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
     window.clearInterval(countdownHandle as number)
     countdownHandle = null
-    window.clearTimeout(winSequenceTimer as number)
-    winSequenceTimer = null
+    openingTimeline.cancel()
+    settlementTimeline.cancel()
   }
 
   function clearCountdown() {
@@ -383,120 +287,18 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       || (phase.value === 'settled' && result.value != null)
   }
 
-  function cancelWinSequence() {
-    winSequenceSerial += 1
-    window.clearTimeout(winSequenceTimer as number)
-    winSequenceTimer = null
-  }
-
   function mapResult(raw: RoundResult | null): RoundResult | null {
-    if (!raw) return null
-    return {
-      ...raw,
-      winnerIndex: raw.winnerIndex != null && raw.winnerIndex >= 0 ? toLocal(raw.winnerIndex) : -1,
-      robbedKongPlayerIndex: raw.robbedKongPlayerIndex != null && raw.robbedKongPlayerIndex >= 0
-        ? toLocal(raw.robbedKongPlayerIndex)
-        : -1,
-      // 流局听牌名单：服务端座位 → 本地索引（结算页按 scoreChanges 展示）
-      tenpai: (raw.tenpai ?? []).map((seat: number) => toLocal(seat)),
-      scoreChanges: (raw.scoreChanges ?? []).map((change: any) => ({
-        ...change,
-        // avatar 先按服务端座位补默认，再映射 playerIndex；
-        // fallbackAvatar 供外部头像加载失败时回退（按服务端座位，与牌桌视角一致）
-        avatar: change.avatar || defaultAvatarForSeat(change.playerIndex),
-        fallbackAvatar: defaultAvatarForSeat(change.playerIndex),
-        playerIndex: toLocal(change.playerIndex),
-      })),
-    }
+    return mapRoundResultToLocal(raw, mySeatLocal.value)
   }
 
   function mapWinPresentation(wp: WinPresentation | null): WinPresentation | null {
-    if (!wp) return null
-    return {
-      ...wp,
-      winnerIndex: toLocal(wp.winnerIndex),
-      robbedKongPlayerIndex: wp.robbedKongPlayerIndex >= 0 ? toLocal(wp.robbedKongPlayerIndex) : -1,
-    }
-  }
-
-  function startWinSequence(snap: ServerSnapshot) {
-    cancelWinSequence()
-    const serial = winSequenceSerial
-    const mapped = mapResult(snap.result)
-    const wp = mapWinPresentation(snap.winPresentation)
-    winningPlayerIndex.value = snap.winningPlayerIndex >= 0
-      ? toLocal(snap.winningPlayerIndex)
-      : (mapped?.winnerIndex ?? -1)
-    const isDraw = Boolean(snap.result?.draw) || !wp
-
-    if (isDraw) {
-      // 流局：简短翻牌后直接展示结算
-      phase.value = 'revealing'
-      revealHands.value = true
-      winPresentation.value = null
-      winEffect.value = null
-      winSequenceTimer = window.setTimeout(() => {
-        if (winSequenceSerial !== serial) return
-        phase.value = 'settled'
-        result.value = mapped
-      }, 600)
-      return
-    }
-
-    const reducedMotion = prefersReducedMotion()
-    const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
-    const revealDuration = reducedMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
-    phase.value = 'win-effect'
-    revealHands.value = false
-    winPresentation.value = wp
-    winEffect.value = {
-      winnerIndex: winningPlayerIndex.value,
-      tile: wp.tile,
-      robbedKong: wp.robbedKong,
-      robbedKongPlayerIndex: wp.robbedKongPlayerIndex,
-      robbedKongMeldIndex: wp.robbedKongMeldIndex,
-      duration: effectDuration,
-      reducedMotion,
-      id: Date.now(),
-    }
-    playSound(wp.robbedKong ? 'hu.mp3' : 'zimo.mp3')
-    // 胡牌特效音（延迟播出），与本地 useGame.endGame 对齐；reducedMotion 时跳过
-    if (!reducedMotion) {
-      later(() => {
-        if (winSequenceSerial === serial) playSound('hu_effect_sound.mp3', 0.72)
-      }, WIN_EFFECT_SOUND_DELAY)
-    }
-    winSequenceTimer = window.setTimeout(() => {
-      if (winSequenceSerial !== serial) return
-      phase.value = 'revealing'
-      // 亮牌前先清掉 winEffect：否则 revealHands 翻转触发 3D rebuild 时，
-      // addWinEffect 会用新的 startedAt 重播整段胡牌特效（本地 endGame 同样先置 null）。
-      winEffect.value = null
-      revealHands.value = true
-      winSequenceTimer = window.setTimeout(() => {
-        if (winSequenceSerial !== serial) return
-        phase.value = 'settled'
-        result.value = mapped
-      }, revealDuration)
-    }, effectDuration)
+    return mapWinPresentationToLocal(wp, mySeatLocal.value)
   }
 
   // ── 快照应用 ───────────────────────────────────────────
 
   function rotatePlayers(snapshotPlayers: GamePlayer[]): GamePlayer[] {
-    return [...snapshotPlayers]
-      .sort((a, b) => toLocal(a.seat) - toLocal(b.seat))
-      .map((player) => ({
-        ...player,
-        // seat 保留服务端权威座位（仅作稳定 key），本地位置由数组索引决定
-        avatar: player.avatar || defaultAvatarForSeat(player.seat),
-        // 副露来源 from 是服务端座位，须映射为本地索引供 3D 计算指向
-        // （meldSourceTileIndex 用 (from - playerIndex + 4) % 4）。
-        // 否则只有房主（服务端座位 0 == 本地 0）能对上，其它玩家指向错误。
-        melds: player.melds.map((meld) => (
-          meld.from != null ? { ...meld, from: toLocal(meld.from) } : meld
-        )),
-      }))
+    return mapPlayersToLocal(snapshotPlayers, mySeatLocal.value)
   }
 
   function applySnapshotAnnouncement(snap: ServerSnapshot) {
@@ -531,11 +333,11 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       lastDiscard.value = null
       return
     }
-    lastDiscard.value = { ...ld, from: toLocal(ld.from) }
+    lastDiscard.value = mapLastDiscardToLocal(ld, mySeatLocal.value)
     if (ld.id === lastDiscardIdApplied) return
     lastDiscardIdApplied = ld.id
     // 开局动画期间（对局开始/骰子音效播放中）不报牌：首家弃牌与开场音效重叠会刺耳
-    if (openingInProgress) return
+    if (openingTimeline.isRunning()) return
     playSound('dapai.mp3', 0.8)
     const audio = tileAudioFile(ld.tile)
     if (audio) later(() => playSound(audio), 80)
@@ -543,7 +345,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function mapAndApply(snap: ServerSnapshot) {
     if (snap.matchFinished || snap.phase === 'finished') {
-      cancelWinSequence()
+      settlementTimeline.cancel()
       pendingSnapshot = null
       pendingRequest = null
       matchFinished.value = true
@@ -570,7 +372,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       round.value = snap.round
       applyLastDiscard(snap)
       applySnapshotAnnouncement(snap)
-      startWinSequence(snap)
+      settlementTimeline.start(snap)
       return
     }
     // 普通进行中快照
@@ -599,25 +401,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       pendingSnapshot = snap
       return
     }
-    if (openingInProgress) {
+    if (openingTimeline.isRunning()) {
       // 开局动画期间（对局开始/骰子/发牌）不填表：发牌动画结束后统一落地。
       // 首份快照作为发牌动画数据源（各家手牌数/值），后续只保留最新待落地。
-      if (!openingSnapshot) {
-        openingSnapshot = snap
-        // 开局显示满墙（136），发牌动画逐步递减到真实值，对齐本地 startGame 的「满墙 → 递减」观感。
-        // 假满墙 = 待发的占位牌 + 真实余墙（服务端已把红中补杠从牌尾消耗，余墙 = 136-53-R）。
-        const fullWallCount = WALL_TOTAL
-        wallCount.value = fullWallCount
-        const snapshotWall = snap.wall ?? []
-        const placeholders = Math.max(0, fullWallCount - snapshotWall.length)
-        wall.value = [...Array<TileType>(placeholders).fill('m1'), ...snapshotWall]
-        wallHeadDrawn.value = 0
-        // 先摆空桌：站位/名字/分数可见，手牌由发牌动画逐步填充
-        const skeleton = rotatePlayers(snap.players)
-        players.splice(0, players.length, ...skeleton.map((p) => ({
-          ...p, hand: [], discards: [], melds: [], drawnTileIndex: -1,
-        })))
-      }
+      openingTimeline.captureSnapshot(snap)
       pendingSnapshot = snap
       return
     }
@@ -635,99 +422,11 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       pendingRoundStart = msg
       return
     }
-    startOpeningRound(msg)
+    openingTimeline.start(msg)
   }
 
   function startOpeningRound(msg: RoundStartMessage) {
-    round.value = msg.round
-    dealer.value = toLocal(msg.dealer)   // 服务端座位 → 本地索引
-    honba.value = msg.honba
-    diceValues.value = msg.dice
-    openingSnapshot = null
-    // 清空上一局牌桌：三家手牌由发牌动画逐步重建（本家空手等待发牌）
-    players.forEach((p) => {
-      p.hand.splice(0)
-      p.discards.splice(0)
-      p.melds.splice(0)
-      p.drawnTileIndex = -1
-    })
-    currentPlayer.value = -1
-    selectedIndex.value = -1
-    actionPrompt.value = null
-    lastDiscard.value = null
-    result.value = null
-    winEffect.value = null
-    winPresentation.value = null
-    revealHands.value = false
-    winningPlayerIndex.value = -1
-    phase.value = 'dealing'
-    void runOpeningSequence()
-  }
-
-  async function runOpeningSequence() {
-    const sequence = openingSequence
-    openingInProgress = true
-    // 每局都展示「xx场·xx局 · 对局开始」提示，对齐本地 startGame（matchStarted 仅决定音效/文案强弱）
-    openingStage.value = 'start'
-    await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
-    if (sequence !== openingSequence) { openingStage.value = null; openingInProgress = false; return }
-    openingStage.value = 'dice'
-    await Promise.all([playSoundAndWait('dice.mp3'), wait(1150)])
-    if (sequence !== openingSequence) { openingStage.value = null; openingInProgress = false; return }
-    if (openingSnapshot) {
-      const dealt = await runDealSequence(sequence)
-      if (!dealt) return
-    }
-    openingStage.value = null
-    openingInProgress = false
-    applyBufferedAfterOpening()
-    // 开局就绪屏障：发牌动画结束、本家已就绪 → 通知服务端，等所有在线真人就绪才开局，
-    // 避免服务端在慢设备上抢跑（AI 已出牌/副露/胡牌而用户没反应过来）。
-    send({ type: 'opening_done' })
-  }
-
-  // ── 发牌动画：按庄家顺序逐批从缓冲快照取牌，驱动 3D 发牌 tween ──
-
-  async function runDealSequence(sequence: number): Promise<boolean> {
-    const snap = openingSnapshot
-    if (!snap) return true
-    openingStage.value = 'deal'
-    phase.value = 'dealing'
-    const source = rotatePlayers(snap.players)          // 本地顺序
-    const hands = source.map((p) => [...p.hand])        // 本家真实，他家为 null（仅牌数）
-    players.splice(0, players.length, ...source.map((p) => ({
-      ...p, hand: [], discards: [], melds: [], drawnTileIndex: -1,
-    })))
-    const localDealer = dealer.value                    // 已映射为本地索引
-    const seatOrder = Array.from({ length: players.length }, (_, i) => (localDealer + i) % players.length)
-    let serial = 0
-    const dealBatch = async (playerIndex: number, count: number): Promise<boolean> => {
-      if (sequence !== openingSequence) return false
-      const remaining = hands[playerIndex].length
-      const slice = hands[playerIndex].splice(remaining - count, count)
-      players[playerIndex].hand.push(...slice)
-      // 发牌即耗牌墙：中央剩余牌数与 3D 牌山随发牌实时递减（对齐本地 startGame 的观感）
-      wallCount.value = Math.max(0, wallCount.value - count)
-      wall.value.splice(0, count)
-      wallHeadDrawn.value += count
-      dealAnimation.value = { playerIndex, count, serial: serial + 1 }
-      serial += 1
-      playSound('deal.mp3', 0.72)
-      await wait(count === 4 ? 260 : 150)
-      return true
-    }
-    for (let batch = 0; batch < 3; batch += 1) {
-      for (const playerIndex of seatOrder) {
-        if (!(await dealBatch(playerIndex, 4))) return false
-      }
-    }
-    // 庄家跳牌：先 2 张，其余三家各 1 张（与本地 startGame / 服务端发牌一致）
-    if (!(await dealBatch(localDealer, 2))) return false
-    for (const playerIndex of seatOrder) {
-      if (playerIndex !== localDealer && !(await dealBatch(playerIndex, 1))) return false
-    }
-    dealAnimation.value = { playerIndex: -1, count: 0, serial: serial + 1 }
-    return true
+    openingTimeline.start(msg)
   }
 
   // ── 开局动画结束后的统一落地：先应用最新快照，再激活回合/请求 ──
@@ -748,7 +447,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 请求应用（回合 / 碰杠 / 抢杠提示）─────────────────
 
   function applyRequest(msg: ServerRequest) {
-    if (isShowingRoundResult() || openingInProgress) {
+    if (isShowingRoundResult() || openingTimeline.isRunning()) {
       pendingRequest = msg
       return
     }
@@ -810,20 +509,16 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function handleTableAction(msg: { kind: 'table_action'; event: TableActionEvent }) {
     // 赢牌动作（self-draw / robbed-kong-win）：展示「自摸 / 抢杠胡」文字提示，
-    // 但**不播音效**（zimo/hu 由 settled 快照的 startWinSequence 统一播放，避免双响）。
+    // 但**不播音效**（zimo/hu 由结算表现时间线统一播放，避免双响）。
     // 开局动画期间（如四红中立即和牌）→ 等发牌结束的 settled 快照统一展示。
     const isWin = msg.event.type === 'self-draw' || msg.event.type === 'robbed-kong-win'
-    if (openingInProgress) return
-    const event: TableActionEvent = {
-      ...msg.event,
-      actorIndex: toLocal(msg.event.actorIndex),
-      sourceIndex: msg.event.sourceIndex != null ? toLocal(msg.event.sourceIndex) : null,
-    }
+    if (openingTimeline.isRunning()) return
+    const event = mapTableActionToLocal(msg.event, mySeatLocal.value)
     tableActionEvent.value = event
     later(() => {
       if (tableActionEvent.value?.id === event.id) tableActionEvent.value = null
     }, 1050)
-    if (isWin) return   // 赢牌音效统一由 startWinSequence 播放
+    if (isWin) return   // 赢牌音效统一由结算表现时间线播放
     const sound: Record<string, string> = {
       peng: 'peng.mp3',
       'discard-gang': 'gang.mp3',
@@ -838,7 +533,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     if (!msg.deltas.length) return
     const event: ScoreFlowEvent = {
       id: Date.now(),
-      deltas: msg.deltas.map((delta) => ({ ...delta, playerIndex: toLocal(delta.playerIndex) })),
+      deltas: mapScoreDeltasToLocal(msg.deltas, mySeatLocal.value),
     }
     scoreFlowEvent.value = event
     later(() => {
@@ -849,7 +544,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   function handleAnnouncement(msg: { kind: 'announcement'; text: string; tone: string; id?: number }) {
     // 结算展示期间到达的公告（如下一局「开牌」）不弹出：避免盖住赢牌动画/结算窗。
     // 开局动画期间也不弹：随发牌后落地的快照自然展示一次（快照同样携带该公告，由 id 去重兜底）。
-    if (isShowingRoundResult() || openingInProgress) return
+    if (isShowingRoundResult() || openingTimeline.isRunning()) return
     if (msg.id != null) {
       if (msg.id === lastAnnouncementId) return
       lastAnnouncementId = msg.id
@@ -861,7 +556,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   }
 
   function handleMatchFinished(msg: { kind: 'match_finished'; finalScores: Array<{ seat: number; name: string; score: number }> }) {
-    cancelWinSequence()
+    settlementTimeline.cancel()
     pendingSnapshot = null
     pendingRequest = null
     matchFinished.value = true
@@ -890,7 +585,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function handleMessage(raw: unknown) {
     const msg = raw as ServerMessage
-    lastServerMessageAt = Date.now()   // 任意服务端消息 = 连接存活（心跳停顿判定用）
     switch (msg.kind) {
       case 'rejoin_ok':
         roomId.value = msg.roomId
@@ -901,15 +595,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         wsStatus.value = 'connected'
         sessionStatus.value = 'connected'
         sessionError.value = ''
-        reconnectAttempts = 0
+        roomSocket.confirmSession()
         // 重连时清掉旧结算展示，避免误延迟新状态
-        cancelWinSequence()
+        settlementTimeline.cancel()
         pendingSnapshot = null
         pendingRequest = null
         lastDiscardIdApplied = -1   // 允许重连后当前弃牌播一次报牌音效
         pendingRoundStart = null
-        openingInProgress = false
-        openingSnapshot = null
+        openingTimeline.cancel()
         waitingNextRound.value = false
         result.value = null
         winEffect.value = null
@@ -921,7 +614,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         wsStatus.value = 'closed'
         sessionError.value = msg.code
         // 重进码被服务端拒绝（房间没了 / 被封禁 / 码失效）：持久化会话作废
-        clearSession()
+        roomLifecycle.clearSession()
         break
       case 'state_snapshot':
         applySnapshot(msg)
@@ -946,13 +639,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       case 'hand_result':
         // 冗余消息：settled 快照已触发结算展示；断线边缘快照丢失时兜底。
         // 开局动画期间（如四红中立即和牌）忽略，等发牌后缓冲的 settled 快照统一展示。
-        if (!isShowingRoundResult() && !result.value && players.length && !openingInProgress) {
+        if (!isShowingRoundResult() && !result.value && players.length && !openingTimeline.isRunning()) {
           phase.value = 'revealing'
           revealHands.value = true
           const mapped = mapResult(msg.result)
-          // 兜底分支同样播胡牌音效（与 startWinSequence 主路径对齐）
+          // 兜底分支同样播胡牌音效（与结算表现时间线主路径对齐）
           playSound('zimo.mp3')
-          winSequenceTimer = window.setTimeout(() => {
+          later(() => {
             phase.value = 'settled'
             result.value = mapped
           }, 600)
@@ -963,18 +656,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
         break
       case 'room_closed':
         // 房间被创建者解散：清理本地会话回大厅
-        leaveRemoteRoom()
+        void roomLifecycle.leaveRoom()
         break
       case 'pong':
-        // ping 的回应：EWMA 平滑 RTT；pong 即心跳正常，解除重连降级
-        if (lastPingAt) {
-          const rtt = Date.now() - lastPingAt
-          smoothedRtt = smoothedRtt > 0
-            ? smoothedRtt * (1 - RTT_EWMA_ALPHA) + rtt * RTT_EWMA_ALPHA
-            : rtt
-          postReconnectPongs += 1
-        }
-        updateSignal()
+        // 心跳和信号质量由 transport/roomSocket 统一处理。
         break
       case 'error':
         handleError(msg.code)
@@ -984,328 +669,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     }
   }
 
-  // ── WebSocket 连接 / 重连 ──────────────────────────────
-
-  function connect() {
-    if (!roomId.value || !rejoinCode.value || closedByUser) return
-    wsStatus.value = 'connecting'
-    const url = `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
-    let socket: WebSocket
-    try {
-      socket = new WebSocket(url)
-    } catch {
-      scheduleReconnect()
-      return
-    }
-    ws = socket
-    socket.onopen = () => {
-      wsStatus.value = 'connected'
-      lastServerMessageAt = Date.now()
-      startPing()
-      startStallCheck()
-    }
-    socket.onmessage = (event) => {
-      try {
-        handleMessage(JSON.parse(event.data))
-      } catch {
-        // 非 JSON 消息忽略
-      }
-    }
-    socket.onclose = () => {
-      if (ws === socket) ws = null
-      wsStatus.value = 'closed'
-      signalQuality.value = 0   // 断开：信号归零
-      stopStallCheck()
-      if (!closedByUser && roomId.value) scheduleReconnect()
-    }
-    socket.onerror = () => {
-      // onclose 随即触发，重连逻辑统一在 onclose
-    }
-  }
-
-  function scheduleReconnect() {
-    if (closedByUser || !roomId.value || reconnectTimer != null) return
-    wsStatus.value = 'reconnecting'
-    signalQuality.value = 0   // 重连中：信号归零
-    postReconnectPongs = 0    // 重连后需连续 2 个干净 pong 才恢复（期间上限 1 格）
-    const delay = Math.min(1000 * 2 ** reconnectAttempts, 8000)
-    reconnectAttempts += 1
-    reconnectTimer = window.setTimeout(() => {
-      reconnectTimer = null
-      connect()
-    }, delay)
-  }
-
-  // 合成信号：取三个维度的最小值（0-3，越大连接越可靠）
-  function updateSignal() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      signalQuality.value = 0
-      return
-    }
-    const sinceMessage = Date.now() - lastServerMessageAt
-    // ① 心跳停顿：距最近服务端消息超 1.5/2 个 ping 周期 → 1 格 / 0 格
-    const stallGrade = sinceMessage > PING_INTERVAL * 2 ? 0
-      : sinceMessage > PING_INTERVAL * 1.5 ? 1 : 3
-    // ② 平滑 RTT 等级（棋牌类阈值放宽，对延迟不敏感）
-    const rttGrade = smoothedRtt <= 200 ? 3 : smoothedRtt <= 500 ? 2 : smoothedRtt <= 1000 ? 1 : 0
-    // ③ 刚重连过（<2 个干净 pong）→ 上限 1 格「波动」
-    const reconnectCap = postReconnectPongs >= 2 ? 3 : 1
-    signalQuality.value = Math.max(0, Math.min(rttGrade, stallGrade, reconnectCap))
-  }
-
-  // 周期健康检查（2s）：无任何服务端消息超 STALL_TIMEOUT → 半死连接（CDN 空闲断开/
-  // 网络黑洞把 ping 也静默丢弃）→ 主动断开触发重连，避免干等被 AI 托管。
-  function startStallCheck() {
-    stopStallCheck()
-    stallTimer = window.setInterval(() => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return
-      if (Date.now() - lastServerMessageAt > STALL_TIMEOUT) {
-        signalQuality.value = 0
-        ws.close()
-        return
-      }
-      updateSignal()
-    }, 2000)
-  }
-
-  function stopStallCheck() {
-    window.clearInterval(stallTimer as number)
-    stallTimer = null
-  }
-
-  function startPing() {
-    stopPing()
-    pingTimer = window.setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN) {
-        lastPingAt = Date.now()
-        ws.send(JSON.stringify({ type: 'ping', t: lastPingAt }))
-      }
-    }, 5000)
-  }
-
-  function stopPing() {
-    window.clearInterval(pingTimer as number)
-    pingTimer = null
-  }
-
   function closeConnection() {
-    closedByUser = true
-    window.clearTimeout(reconnectTimer as number)
-    reconnectTimer = null
-    stopPing()
-    stopStallCheck()
+    roomSocket.close()
     clearTimers()
-    if (ws) {
-      try {
-        ws.onclose = null
-        ws.close()
-      } catch {
-        // 已关闭
-      }
-      ws = null
-    }
-    wsStatus.value = 'idle'
-  }
-
-  // ── 匿名身份 / 会话持久化（Phase 8 P1）──────────────────
-
-  function ensurePlayerId() {
-    if (!playerId.value) {
-      playerId.value = generateGuestId()
-      saveStored(STORAGE.guestId, playerId.value)
-    }
-  }
-
-  function readStoredSession(): StoredSession | null {
-    const raw = loadStored(STORAGE.session)
-    if (!raw) return null
-    try {
-      const session = JSON.parse(raw) as StoredSession
-      return session?.rejoinCode ? session : null
-    } catch {
-      return null
-    }
-  }
-
-  function persistSession() {
-    if (!roomId.value || !rejoinCode.value) return
-    const session: StoredSession = {
-      roomId: roomId.value,
-      rejoinCode: rejoinCode.value,
-      nickname: nickname.value,
-      playerId: playerId.value,
-      mode: matchType.value,
-    }
-    saveStored(STORAGE.session, JSON.stringify(session))
-    storedSession.value = session
-    if (nickname.value) saveStored(STORAGE.nickname, nickname.value)   // 记住昵称：旧局战绩回退用
-  }
-
-  function clearSession() {
-    clearStored(STORAGE.session)
-    storedSession.value = null
-    // 会话作废：必须停掉 WS 重连循环并清空内存中的房间/重进码，回到大厅。
-    // 否则对已失效房间会一直重连（rejoin_err → onclose → scheduleReconnect 死循环）。
-    closeConnection()
-    roomId.value = ''
-    rejoinCode.value = ''
-    mySeat.value = -1
-    sessionStatus.value = 'idle'
-    phase.value = 'lobby'
-    roomSeats.value = []
-  }
-
-  async function resumeSession() {
-    // 凭上次持久化的 rejoinCode 直接回原座位（对局中刷新/关浏览器后可「继续对局」）。
-    const session = storedSession.value ?? readStoredSession()
-    if (!session?.rejoinCode) return
-    sessionError.value = ''
-    roomId.value = session.roomId
-    rejoinCode.value = session.rejoinCode
-    nickname.value = session.nickname
-    playerId.value = session.playerId || playerId.value
-    matchType.value = session.mode || 'east'
-    phase.value = 'lobby'
-    matchFinished.value = false
-    players.splice(0, players.length)
-    closedByUser = false
-    sessionStatus.value = 'connected'
-    startPolling()
-    connect()
-  }
-
-  // ── 房间生命周期（REST）───────────────────────────────
-
-  function startPolling() {
-    stopPolling()
-    void refreshRoom()
-    pollTimer = window.setInterval(() => void refreshRoom(), 1500)
-  }
-
-  function stopPolling() {
-    window.clearInterval(pollTimer as number)
-    pollTimer = null
-  }
-
-  async function refreshRoom() {
-    if (!roomId.value) return
-    // 对局进行中（phase ≠ lobby）不轮询：牌桌状态由 WS 快照驱动，座位面板不可见。
-    // 回到大厅后 phase 回到 lobby，轮询自动恢复。
-    if (phase.value !== 'lobby') return
-    try {
-      const info = await getRoom(roomId.value)
-      roomSeats.value = info.seats ?? []
-      // 房主以服务端 creatorSeat 为准：创建者离房后轮询自动转移「开始对局」按钮
-      creatorSeat.value = info.creatorSeat ?? null
-      isCreator.value = creatorSeat.value != null && mySeat.value === creatorSeat.value
-      roomTimeLimit.value = info.timeLimitSeconds ?? null
-    } catch {
-      // 轮询失败静默，下次重试
-    }
-  }
-
-  async function createRemoteRoom(mode: MatchType, capacity: number) {
-    sessionError.value = ''
-    sessionStatus.value = 'creating'
-    try {
-      const info = await createRoom(mode, capacity, playerId.value)
-      isCreator.value = true
-      roomTimeLimit.value = info.timeLimitSeconds ?? null
-      ensurePlayerId()
-      // 创建者也要占座（签发 rejoinCode 供 WS 握手恢复座位）
-      const joined = await joinRoom(info.roomId, nickname.value, playerId.value)
-      await enterRoom(joined.roomId, joined.nickname, info.mode, joined.rejoinCode)
-    } catch (error) {
-      sessionError.value = error instanceof Error ? remoteErrorText(error.message) : '创建房间失败'
-      sessionStatus.value = 'idle'
-      throw error
-    }
-  }
-
-  async function joinRemoteRoom(code: string) {
-    sessionError.value = ''
-    sessionStatus.value = 'joining'
-    try {
-      ensurePlayerId()
-      const joined = await joinRoom(code.trim().toUpperCase(), nickname.value, playerId.value)
-      isCreator.value = false
-      await enterRoom(joined.roomId, joined.nickname, joined.rejoin ? matchType.value : 'east', joined.rejoinCode)
-    } catch (error) {
-      sessionError.value = error instanceof Error ? remoteErrorText(error.message) : '加入房间失败'
-      sessionStatus.value = 'idle'
-      throw error
-    }
-  }
-
-  async function enterRoom(id: string, name: string, mode: MatchType, code: string) {
-    roomId.value = id
-    matchType.value = mode
-    nickname.value = name
-    rejoinCode.value = code    // WS 握手凭 rejoin_code 恢复座位
-    mySeat.value = -1          // rejoin_ok 会带上权威座位
-    phase.value = 'lobby'
-    matchFinished.value = false
-    players.splice(0, players.length)
-    closedByUser = false
-    sessionStatus.value = 'connected'
-    startPolling()
-    connect()
-    persistSession()   // 记录会话：刷新 / 关浏览器后可「继续对局」回原座位
-  }
-
-  async function toggleReady() {
-    if (!roomId.value || mySeat.value < 0) return
-    if (sessionStatus.value === 'readying') return   // 防抖：请求进行中禁止重复点击
-    sessionStatus.value = 'readying'
-    try {
-      await readyRoom(roomId.value, mySeat.value, rejoinCode.value)
-      await refreshRoom()
-    } catch (error) {
-      sessionError.value = error instanceof Error ? error.message : '准备失败'
-    } finally {
-      // 房间仍在则回到 connected；已因离开/关闭被 resetAll 清为 idle 时保持不变
-      if (roomId.value) sessionStatus.value = 'connected'
-    }
-  }
-
-  async function startMatch() {
-    if (!roomId.value) return
-    try {
-      await startRoom(roomId.value)
-    } catch (error) {
-      sessionError.value = error instanceof Error ? error.message : '开局失败'
-      throw error   // 让 UI 复位「正在打扫房间」按钮态
-    }
-  }
-
-  async function leaveRemoteRoom() {
-    closedByUser = true
-    stopPolling()
-    try {
-      if (roomId.value && mySeat.value >= 0 && rejoinCode.value) {
-        await leaveRoom(roomId.value, mySeat.value, rejoinCode.value)
-      }
-    } catch {
-      // 已离开 / 房间已关闭时忽略
-    }
-    closeConnection()
-    clearSession()   // 座位已释放，原会话不再可「继续对局」
-    resetAll()
-  }
-
-  async function closeRemoteRoom() {
-    if (!roomId.value || mySeat.value < 0 || !rejoinCode.value) return
-    try {
-      await closeRoom(roomId.value, mySeat.value, rejoinCode.value)
-    } catch (error) {
-      // 关闭失败（如房主已转移）：保留本地会话，仅提示；轮询会刷新房主身份
-      sessionError.value = error instanceof Error ? error.message : '关闭房间失败'
-      throw error
-    }
-    stopPolling()
-    closeConnection()
-    clearSession()
-    resetAll()
   }
 
   // ── 重置 ───────────────────────────────────────────────
@@ -1317,8 +683,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     lastAnnouncementId = -1   // 新会话公告 id 从 1 重新计数
     lastDiscardIdApplied = -1
     pendingRoundStart = null
-    openingInProgress = false
-    openingSnapshot = null
+    openingTimeline.cancel()
     waitingNextRound.value = false
     openingStage.value = null
     phase.value = 'lobby'
@@ -1352,21 +717,13 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     roomSeats.value = []
     roomTimeLimit.value = null
     sessionStatus.value = 'idle'
-    wsStatus.value = 'idle'
     sessionError.value = ''
-    signalQuality.value = 0
-    smoothedRtt = 200
-    postReconnectPongs = 2
-    lastServerMessageAt = 0
-    stopStallCheck()
   }
 
   // ── 用户动作（发送到服务端，状态由快照权威回写）────────
 
   function send(message: Record<string, unknown>) {
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message))
-    }
+    roomSocket.send(message)
   }
 
   function selectTile(index: number) {
@@ -1462,7 +819,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 场次推进（远程：服务端无条件推进，客户端只清除结算展示）──
 
   function nextRound() {
-    cancelWinSequence()
+    settlementTimeline.cancel()
     if (matchFinished.value) return
     // 确认屏障：通知服务端本家已看完结算。**不清结算态**——对话框保留、
     // 按钮显示「等待其他玩家确定...」；等服务端等齐所有在线真人后推进，
@@ -1485,16 +842,16 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     if (pendingRequest) {
       const req = pendingRequest
       pendingRequest = null
-      applyRequest(req)   // applyRequest 内部会按 openingInProgress 重新缓冲
+      applyRequest(req)   // applyRequest 内部会按开局表现时间线的运行状态重新缓冲
     }
   }
 
   function returnToLobby() {
     // 对局结束后回房间大厅：保留座位与 WS 连接（不释放座位、不散房），
     // 服务端房间仍在（finished），可再准备开局；房主解散用「关闭房间」。
-    // 对局中返回大厅请用「退出对局」（leaveRemoteRoom）。
+    // 对局中返回大厅请用「退出对局」（房间生命周期的 leaveRoom）。
     if (!matchFinished.value) return
-    cancelWinSequence()
+    settlementTimeline.cancel()
     clearCountdown()
     matchFinished.value = false
     result.value = null
@@ -1515,7 +872,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     wallCount.value = 0
     players.splice(0, players.length)
     phase.value = 'lobby'
-    void refreshRoom()
+    void roomLifecycle.refreshRoom()
   }
 
   function startGame() {
@@ -1531,29 +888,20 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function cleanup() {
     closeConnection()
-    stopPolling()
+    roomLifecycle.stopPolling()
     clearTimers()
   }
   const instance = getCurrentInstance()
   if (instance) onBeforeUnmount(cleanup)
 
-  return {
+  return defineGamePort({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
     playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, waitingNextRound,
     signalQuality,   // 0-3 信号质量（越大连接越好）
     storedSession,   // 上次未完成对局（「继续对局」入口；null = 无）
     autoPlay, toggleAutoPlay,   // 自动打牌开关（多窗口联机测试/观战）
-    remoteActions: {
-      createRoom: createRemoteRoom,
-      joinRoom: joinRemoteRoom,
-      toggleReady,
-      startMatch,
-      leaveRoom: leaveRemoteRoom,
-      closeRoom: closeRemoteRoom,
-      resumeSession,
-      refreshRoom,
-    },
+    remoteActions: roomLifecycle,
     // 游戏状态（useGame 兼容接口）
     phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect,
@@ -1563,5 +911,5 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
     userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
     userGangFromDiscard, userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
-  }
+  })
 }
