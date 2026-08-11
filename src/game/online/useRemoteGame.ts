@@ -10,24 +10,25 @@
 //
 // 结算展示：服务端无条件推进场次，客户端在赢牌动画 / 结算弹窗期间延迟应用
 // 后续快照与请求（pendingSnapshot / pendingRequest），用户点「继续」后再落地。
-import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount } from 'vue'
 import { API_BASE } from './api/httpClient'
-import type { RoomSeatState } from './api/roomApi'
 import { defineGamePort } from '../core/gamePort'
-import type { Announcement, LastDiscard, RoundResult } from '../core/gamePort'
+import type { RoundResult } from '../core/gamePort'
 import type { ActionPrompt } from '../core/playerController'
 import { concealedKongs, isWinningHand, matchingCount, waitingTiles } from '../core/rules'
-import { TILE_TYPES, tileAudioFile, tileName } from '../core/tiles'
+import { TILE_TYPES, tileName } from '../core/tiles'
 import type { GamePlayer, MatchType, ScoreDelta, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../core/types'
 import type { ServerSnapshot } from './protocol/dto'
-import type { RoundStartMessage, ServerMessage, ServerRequest } from './protocol/messages'
-import { createRemoteSessionStore, type StoredSession } from './session/remoteSessionStore'
+import type { RoundStartMessage, ServerRequest } from './protocol/messages'
+import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createRoomSocketTransport } from './transport/roomSocket'
-import { createRemoteRoomLifecycle, type RemoteSessionStatus } from './session/remoteRoomLifecycle'
+import { createRemoteRoomLifecycle } from './session/remoteRoomLifecycle'
 import { createOpeningTimeline } from './presentation/openingTimeline'
 import { createSettlementTimeline } from './presentation/settlementTimeline'
+import { createRemoteGameState } from './state/remoteGameState'
+import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
+import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import {
-  mapLastDiscardToLocal,
   mapPlayersToLocal,
   mapRoundResultToLocal,
   mapScoreDeltasToLocal,
@@ -42,10 +43,6 @@ const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 // 自动打牌：开关后到自动出牌/过牌的间隔（毫秒）。留一点时间让摸牌动画/音效可读。
 const AUTO_PLAY_DELAY = 600
 
-type ClientPhase =
-  | 'lobby' | 'dealing' | 'playing' | 'discard' | 'prompt'
-  | 'win-effect' | 'revealing' | 'settled' | 'finished'
-
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
@@ -53,13 +50,19 @@ interface UseRemoteGameOptions {
 
 export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
-  // ── 远程会话状态 ──
-  const sessionStatus = ref<RemoteSessionStatus>('idle')
-  const sessionError = ref('')
-  const roomId = ref('')
-  const mySeat = ref(-1)                 // 服务端座位（权威）
-  const nickname = ref('')
-  const rejoinCode = ref('')
+  const state = createRemoteGameState({
+    guestId: sessionStore.loadGuestId() || '',
+    storedSession: sessionStore.loadSession(),
+  })
+  const {
+    sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, autoPlay, storedSession,
+    phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
+    turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
+    scoreFlowEvent, result, winEffect, winPresentation, revealHands,
+    winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
+    dealAnimation, openingStage, diceValues, userDrewThisTurn, waitingNextRound,
+  } = state
   const roomSocket = createRoomSocketTransport({
     getUrl: () => roomId.value && rejoinCode.value
       ? `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
@@ -68,53 +71,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   })
   const wsStatus = roomSocket.status
   const signalQuality = roomSocket.signalQuality
-  const playerId = ref(sessionStore.loadGuestId() || '')   // 匿名身份（guestId），跨会话稳定
-  const creatorSeat = ref<number | null>(null)   // 服务端权威房主座位（轮询刷新，支持房主转移）
-  const isCreator = ref(false)
-  const roomSeats = ref<Array<RoomSeatState | null>>([])
-  const roomTimeLimit = ref<number | null>(null)   // 房间限时（秒），静态提示「超时自动解散」
-  // 自动打牌：开关后每步（出牌/碰杠/抢杠提示）到达即自动处理，无需手动点击。
-  // 支持 URL 参数 ?auto=1 开启 —— 开 4 个窗口联机测试/观战时可免逐个设置。
-  const autoPlay = ref(typeof location !== 'undefined'
-    && new URLSearchParams(location.search).get('auto') === '1')
-  const storedSession = ref<StoredSession | null>(sessionStore.loadSession())   // 上次未完成对局（继续对局入口）
-
-  // ── 游戏状态（与 useGame 同名同形，App.vue 模板直接复用）──
-  const phase = ref<ClientPhase>('lobby')
-  const players = reactive<GamePlayer[]>([])
-  const wallCount = ref(0)
-  const wall = ref<TileType[]>([])
-  const wallHeadDrawn = ref(0)   // 服务端权威：牌头已摸走张数（区分牌尾补杠）
-  const currentPlayer = ref(-1)
-  const selectedIndex = ref(-1)
-  const turnSeconds = ref(12)
-  const lastDiscard = ref<LastDiscard | null>(null)
-  const actionPrompt = ref<ActionPrompt | null>(null)
-  const announcement = ref<Announcement | null>(null)
-  const tableActionEvent = ref<TableActionEvent | null>(null)
-  const scoreFlowEvent = ref<ScoreFlowEvent | null>(null)
-  const result = ref<RoundResult | null>(null)
-  const winEffect = ref<RoundResult | null>(null)
-  const winPresentation = ref<WinPresentation | null>(null)
-  const revealHands = ref(false)
-  const winningPlayerIndex = ref(-1)
-  const round = ref(1)
-  const dealer = ref(0)
-  const honba = ref(0)
-  const matchType = ref<MatchType>('east')
-  const matchFinished = ref(false)
-  const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
-  const openingStage = ref<string | null>(null)
-  const diceValues = ref([1, 1])
-  const userDrewThisTurn = ref(false)
-  const waitingNextRound = ref(false)   // 已点「继续」，等待其他玩家确认后进下一局
 
   // ── 内部：连接 / 定时器 / 延迟队列 ──
   let countdownHandle: number | null = null
-  let pendingSnapshot: ServerSnapshot | null = null
   let pendingRequest: ServerRequest | null = null
-  let lastAnnouncementId = -1   // 服务端公告自增 id：同一公告只展示一次
-  let lastDiscardIdApplied = -1   // 出牌报牌：按服务端 lastDiscard.id 去重，重连不重复播
   let pendingRoundStart: RoundStartMessage | null = null
   const timers = new Set<number>()
 
@@ -153,6 +113,17 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     playSoundAndWait,
     send,
     onFinished: applyBufferedAfterOpening,
+  })
+  const snapshotReconciler = createSnapshotReconciler({
+    state,
+    getLocalSeat: () => mySeatLocal.value,
+    isShowingRoundResult,
+    opening: openingTimeline,
+    settlement: settlementTimeline,
+    clearCountdown,
+    onFinishedSnapshot: () => { pendingRequest = null },
+    playSound,
+    later,
   })
 
   const user = computed(() => players[0])
@@ -301,116 +272,6 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     return mapPlayersToLocal(snapshotPlayers, mySeatLocal.value)
   }
 
-  function applySnapshotAnnouncement(snap: ServerSnapshot) {
-    // 服务端把 announcement 保留为状态，随每份快照重复携带；客户端视为瞬时事件。
-    // 按服务端自增 id 去重：同一公告只在首见时展示 1.5s 后自动清除，不随快照反复弹出。
-    const serverAnnouncement = snap.announcement
-    if (!serverAnnouncement?.text) {
-      if (announcement.value) announcement.value = null
-      return
-    }
-    if (serverAnnouncement.id != null) {
-      if (serverAnnouncement.id === lastAnnouncementId) return
-      lastAnnouncementId = serverAnnouncement.id
-    } else if (announcement.value?.text === serverAnnouncement.text) {
-      return
-    }
-    announcement.value = {
-      text: serverAnnouncement.text,
-      tone: serverAnnouncement.tone ?? 'gold',
-      id: serverAnnouncement.id ?? Date.now(),
-    }
-    later(() => {
-      if (announcement.value?.text === serverAnnouncement.text) announcement.value = null
-    }, 1500)
-  }
-
-  function applyLastDiscard(snap: ServerSnapshot) {
-    // 快照是唯一真源：更新最近弃牌；新弃牌（id 变化）播「打牌 + 牌名报牌」音效，
-    // 同 id 重放（重连 / 冗余快照）不重复播。
-    const ld = snap.lastDiscard
-    if (!ld) {
-      lastDiscard.value = null
-      return
-    }
-    lastDiscard.value = mapLastDiscardToLocal(ld, mySeatLocal.value)
-    if (ld.id === lastDiscardIdApplied) return
-    lastDiscardIdApplied = ld.id
-    // 开局动画期间（对局开始/骰子音效播放中）不报牌：首家弃牌与开场音效重叠会刺耳
-    if (openingTimeline.isRunning()) return
-    playSound('dapai.mp3', 0.8)
-    const audio = tileAudioFile(ld.tile)
-    if (audio) later(() => playSound(audio), 80)
-  }
-
-  function mapAndApply(snap: ServerSnapshot) {
-    if (snap.matchFinished || snap.phase === 'finished') {
-      settlementTimeline.cancel()
-      pendingSnapshot = null
-      pendingRequest = null
-      matchFinished.value = true
-      phase.value = 'finished'
-      result.value = null
-      winEffect.value = null
-      winPresentation.value = null
-      revealHands.value = true
-      winningPlayerIndex.value = -1
-      players.splice(0, players.length, ...rotatePlayers(snap.players))
-      wall.value = snap.wall ?? []
-      wallHeadDrawn.value = snap.headDrawn ?? 0
-      return
-    }
-    if (snap.phase === 'settled' && snap.result) {
-      // 结算快照：触发赢牌动画 / 结算展示
-      players.splice(0, players.length, ...rotatePlayers(snap.players))
-      wall.value = snap.wall ?? []
-      wallHeadDrawn.value = snap.headDrawn ?? 0
-      wallCount.value = snap.wallCount
-      currentPlayer.value = snap.currentPlayer >= 0 ? toLocal(snap.currentPlayer) : -1
-      dealer.value = toLocal(snap.dealer)
-      honba.value = snap.honba
-      round.value = snap.round
-      applyLastDiscard(snap)
-      applySnapshotAnnouncement(snap)
-      settlementTimeline.start(snap)
-      return
-    }
-    // 普通进行中快照
-    selectedIndex.value = -1
-    players.splice(0, players.length, ...rotatePlayers(snap.players))
-    wall.value = snap.wall ?? []
-    wallHeadDrawn.value = snap.headDrawn ?? 0
-    wallCount.value = snap.wallCount
-    currentPlayer.value = snap.currentPlayer >= 0 ? toLocal(snap.currentPlayer) : -1
-    dealer.value = toLocal(snap.dealer)
-    honba.value = snap.honba
-    round.value = snap.round
-    applyLastDiscard(snap)
-    applySnapshotAnnouncement(snap)
-    winningPlayerIndex.value = snap.winningPlayerIndex >= 0 ? toLocal(snap.winningPlayerIndex) : -1
-    result.value = null
-    actionPrompt.value = null
-    clearCountdown()
-    // 预开局（WS 握手即广播一份 phase='lobby' 的快照）保持 lobby 面板，
-    // 只有真正的对局快照才进入 playing，否则房间面板会被顶掉无法准备/开局。
-    phase.value = snap.phase === 'lobby' ? 'lobby' : 'playing'
-  }
-
-  function applySnapshot(snap: ServerSnapshot) {
-    if (isShowingRoundResult()) {
-      pendingSnapshot = snap
-      return
-    }
-    if (openingTimeline.isRunning()) {
-      // 开局动画期间（对局开始/骰子/发牌）不填表：发牌动画结束后统一落地。
-      // 首份快照作为发牌动画数据源（各家手牌数/值），后续只保留最新待落地。
-      openingTimeline.captureSnapshot(snap)
-      pendingSnapshot = snap
-      return
-    }
-    mapAndApply(snap)
-  }
-
   // ── 开局序列（对局开始 / 骰子投掷，纯表现层）────────────
 
   function handleRoundStart(msg: RoundStartMessage) {
@@ -432,11 +293,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   // ── 开局动画结束后的统一落地：先应用最新快照，再激活回合/请求 ──
 
   function applyBufferedAfterOpening() {
-    if (pendingSnapshot) {
-      const snap = pendingSnapshot
-      pendingSnapshot = null
-      mapAndApply(snap)
-    }
+    snapshotReconciler.flush()
     if (pendingRequest) {
       const req = pendingRequest
       pendingRequest = null
@@ -542,22 +399,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   }
 
   function handleAnnouncement(msg: { kind: 'announcement'; text: string; tone: string; id?: number }) {
-    // 结算展示期间到达的公告（如下一局「开牌」）不弹出：避免盖住赢牌动画/结算窗。
-    // 开局动画期间也不弹：随发牌后落地的快照自然展示一次（快照同样携带该公告，由 id 去重兜底）。
-    if (isShowingRoundResult() || openingTimeline.isRunning()) return
-    if (msg.id != null) {
-      if (msg.id === lastAnnouncementId) return
-      lastAnnouncementId = msg.id
-    }
-    announcement.value = { text: msg.text, tone: msg.tone, id: msg.id ?? Date.now() }
-    later(() => {
-      if (announcement.value?.text === msg.text) announcement.value = null
-    }, 1500)
+    snapshotReconciler.showAnnouncement(msg)
   }
 
   function handleMatchFinished(msg: { kind: 'match_finished'; finalScores: Array<{ seat: number; name: string; score: number }> }) {
     settlementTimeline.cancel()
-    pendingSnapshot = null
+    snapshotReconciler.clearPending()
     pendingRequest = null
     matchFinished.value = true
     phase.value = 'finished'
@@ -583,90 +430,64 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   // ── 消息分发 ───────────────────────────────────────────
 
+  const serverMessageRouter = createServerMessageRouter({
+    rejoin_ok: (msg) => {
+      roomId.value = msg.roomId
+      mySeat.value = msg.seat
+      nickname.value = msg.nickname
+      rejoinCode.value = msg.rejoinCode
+      matchType.value = msg.mode
+      wsStatus.value = 'connected'
+      sessionStatus.value = 'connected'
+      sessionError.value = ''
+      roomSocket.confirmSession()
+      settlementTimeline.cancel()
+      snapshotReconciler.clearPending()
+      snapshotReconciler.resetDiscardDedup()
+      pendingRequest = null
+      pendingRoundStart = null
+      openingTimeline.cancel()
+      waitingNextRound.value = false
+      result.value = null
+      winEffect.value = null
+      winPresentation.value = null
+      revealHands.value = false
+      matchFinished.value = false
+    },
+    rejoin_err: (msg) => {
+      wsStatus.value = 'closed'
+      sessionError.value = msg.code
+      roomLifecycle.clearSession()
+    },
+    state_snapshot: (msg) => snapshotReconciler.apply(msg),
+    round_start: handleRoundStart,
+    turn_request: applyRequest,
+    claim_request: applyRequest,
+    rob_kong_request: applyRequest,
+    table_action: handleTableAction,
+    score_flow: handleScoreFlow,
+    announcement: handleAnnouncement,
+    hand_result: (msg) => {
+      // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
+      if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
+      phase.value = 'revealing'
+      revealHands.value = true
+      const mapped = mapResult(msg.result)
+      playSound('zimo.mp3')
+      later(() => {
+        phase.value = 'settled'
+        result.value = mapped
+      }, 600)
+    },
+    continue_prompt: () => {},
+    match_finished: handleMatchFinished,
+    room_closed: () => { void roomLifecycle.leaveRoom() },
+    pong: () => {},
+    error: (msg) => handleError(msg.code),
+  })
+
   function handleMessage(raw: unknown) {
-    const msg = raw as ServerMessage
-    switch (msg.kind) {
-      case 'rejoin_ok':
-        roomId.value = msg.roomId
-        mySeat.value = msg.seat
-        nickname.value = msg.nickname
-        rejoinCode.value = msg.rejoinCode
-        matchType.value = msg.mode
-        wsStatus.value = 'connected'
-        sessionStatus.value = 'connected'
-        sessionError.value = ''
-        roomSocket.confirmSession()
-        // 重连时清掉旧结算展示，避免误延迟新状态
-        settlementTimeline.cancel()
-        pendingSnapshot = null
-        pendingRequest = null
-        lastDiscardIdApplied = -1   // 允许重连后当前弃牌播一次报牌音效
-        pendingRoundStart = null
-        openingTimeline.cancel()
-        waitingNextRound.value = false
-        result.value = null
-        winEffect.value = null
-        winPresentation.value = null
-        revealHands.value = false
-        matchFinished.value = false
-        break
-      case 'rejoin_err':
-        wsStatus.value = 'closed'
-        sessionError.value = msg.code
-        // 重进码被服务端拒绝（房间没了 / 被封禁 / 码失效）：持久化会话作废
-        roomLifecycle.clearSession()
-        break
-      case 'state_snapshot':
-        applySnapshot(msg)
-        break
-      case 'round_start':
-        handleRoundStart(msg)
-        break
-      case 'turn_request':
-      case 'claim_request':
-      case 'rob_kong_request':
-        applyRequest(msg)
-        break
-      case 'table_action':
-        handleTableAction(msg)
-        break
-      case 'score_flow':
-        handleScoreFlow(msg)
-        break
-      case 'announcement':
-        handleAnnouncement(msg)
-        break
-      case 'hand_result':
-        // 冗余消息：settled 快照已触发结算展示；断线边缘快照丢失时兜底。
-        // 开局动画期间（如四红中立即和牌）忽略，等发牌后缓冲的 settled 快照统一展示。
-        if (!isShowingRoundResult() && !result.value && players.length && !openingTimeline.isRunning()) {
-          phase.value = 'revealing'
-          revealHands.value = true
-          const mapped = mapResult(msg.result)
-          // 兜底分支同样播胡牌音效（与结算表现时间线主路径对齐）
-          playSound('zimo.mp3')
-          later(() => {
-            phase.value = 'settled'
-            result.value = mapped
-          }, 600)
-        }
-        break
-      case 'match_finished':
-        handleMatchFinished(msg)
-        break
-      case 'room_closed':
-        // 房间被创建者解散：清理本地会话回大厅
-        void roomLifecycle.leaveRoom()
-        break
-      case 'pong':
-        // 心跳和信号质量由 transport/roomSocket 统一处理。
-        break
-      case 'error':
-        handleError(msg.code)
-        break
-      default:
-        break
-    }
+    serverMessageRouter(raw)
   }
 
   function closeConnection() {
@@ -678,10 +499,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
 
   function resetAll() {
     clearTimers()
-    pendingSnapshot = null
+    snapshotReconciler.reset()
     pendingRequest = null
-    lastAnnouncementId = -1   // 新会话公告 id 从 1 重新计数
-    lastDiscardIdApplied = -1
     pendingRoundStart = null
     openingTimeline.cancel()
     waitingNextRound.value = false
@@ -833,11 +652,12 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       waitingNextRound.value = false
       startOpeningRound(rs)
     }
+    const pendingSnapshot = snapshotReconciler.takePending()
     if (pendingSnapshot) {
-      const snap = pendingSnapshot
-      pendingSnapshot = null
       // 若仍处结算态会再次缓冲，随下一局发牌动画结束后统一落地；滞留的旧结算快照丢弃
-      if (!(snap.phase === 'settled' && snap.result)) applySnapshot(snap)
+      if (!(pendingSnapshot.phase === 'settled' && pendingSnapshot.result)) {
+        snapshotReconciler.apply(pendingSnapshot)
+      }
     }
     if (pendingRequest) {
       const req = pendingRequest

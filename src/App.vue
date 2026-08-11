@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import MahjongTile from './components/MahjongTile.vue'
-import MahjongTable3D from './components/MahjongTable3D.vue'
 import PlayerSeat from './components/PlayerSeat.vue'
-import RulesPanel from './components/RulesPanel.vue'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE, DISCLAIMER_VERSION } from './content/disclaimer'
 import { isHorse } from './game/core/tiles'
 import { BASE_SCORE } from './game/core/rules'
@@ -18,6 +16,10 @@ import { useAudio } from './game/core/useAudio'
 import { splitWinningTile } from './game/core/winEffect'
 import { defaultAvatarForSeat } from './game/core/avatar'
 import type { MatchType, TileType } from './game/core/types'
+
+// Three.js 牌桌只在进入对局后加载；规则面板只在首次打开时加载。
+const MahjongTable3D = defineAsyncComponent(() => import('./components/MahjongTable3D.vue'))
+const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
 
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
