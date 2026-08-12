@@ -63,6 +63,22 @@ describe('胡牌展示位', () => {
     expect(split.displayTile).toBe('east')
     expect(split.removedIndex).toBe(-1)
   })
+  it('point-ron winning tile stays outside the winner hand', () => {
+    const hand: TileType[] = ['m1', 'east', 'p2']
+    const split = splitWinningTile(hand, {
+      winnerIndex: 0,
+      tile: 'm9',
+      sourceIndex: 1,
+      robbedKong: false,
+      discardWin: true,
+      robbedKongPlayerIndex: -1,
+      robbedKongMeldIndex: -1,
+    })
+
+    expect(split.hand).toEqual(hand)
+    expect(split.displayTile).toBe('m9')
+    expect(split.removedIndex).toBe(-1)
+  })
 })
 
 describe('胡牌演出流程', () => {

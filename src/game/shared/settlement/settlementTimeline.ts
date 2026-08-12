@@ -148,20 +148,20 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
     const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
     const revealDuration = reducedMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
     const robbedKongPlayerIndex = endOptions.robbedKongPlayerIndex ?? -1
+    const isDiscardWin = !endOptions.selfDraw
+      && !endOptions.robbedKong
+      && Number.isInteger(endOptions.sourceFrom)
     const presentation: WinPresentation = {
       winnerIndex,
       tile: winTile,
       sourceIndex,
       robbedKong: Boolean(endOptions.robbedKong),
+      discardWin: isDiscardWin,
       robbedKongPlayerIndex,
       robbedKongMeldIndex,
     }
-    const isDiscardWin = !endOptions.selfDraw
-      && !endOptions.robbedKong
-      && Number.isInteger(endOptions.sourceFrom)
     if (isDiscardWin && Number.isInteger(endOptions.sourceFrom)) {
       // 点炮牌先从牌河消失，避免它在等待胡牌音效期间继续显示为最后一张弃牌。
-      options.settleWinningDiscard?.(endOptions.sourceFrom, winTile, winnerIndex)
     }
 
     state.winPresentation.value = null
@@ -169,6 +169,10 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
 
     const activateWinEffect = () => {
       if (serial !== currentSerial) return
+      if (isDiscardWin) {
+        // 点炮牌在牌名音效和过渡等待期间仍保留在牌河，特效启动时才移入独立胡牌区。
+        options.settleWinningDiscard?.(endOptions.sourceFrom, winTile, winnerIndex)
+      }
       state.winPresentation.value = presentation
       state.winEffect.value = {
         ...presentation,

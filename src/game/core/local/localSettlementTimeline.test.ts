@@ -69,9 +69,9 @@ describe('localSettlementTimeline', () => {
 
     timeline.endGame(0, { winTile: 'm9', sourceFrom: 1 })
 
-    expect(state.players[1].discards).toEqual([])
-    expect(state.players[0].hand.at(-1)).toBe('m9')
-    expect(state.lastDiscard.value).toBeNull()
+    expect(state.players[1].discards).toEqual(['m9'])
+    expect(state.players[0].hand).not.toContain('m9')
+    expect(state.lastDiscard.value).toMatchObject({ tile: 'm9', from: 1 })
     expect(state.winEffect.value).toBeNull()
     expect(scheduled).toHaveLength(0)
     expect(state.winEffect.value).toBeNull()
@@ -81,7 +81,10 @@ describe('localSettlementTimeline', () => {
     expect(scheduled).toHaveLength(1)
     expect(scheduled[0].delay).toBe(DISCARD_WIN_EFFECT_DELAY)
     scheduled[0].callback()
+    expect(state.players[1].discards).toEqual([])
+    expect(state.lastDiscard.value).toBeNull()
     expect(state.winEffect.value).toMatchObject({ winnerIndex: 0, tile: 'm9' })
+    expect(state.winPresentation.value).toMatchObject({ discardWin: true, tile: 'm9' })
     expect(playSound).toHaveBeenCalledWith('hu.mp3')
   })
 })

@@ -33,7 +33,8 @@ function checkTileConservation(game: LotusGame) {
   )
   const discards = game.players.reduce((sum, player) => sum + player.discards.length, 0)
   const inPlay = wall + hands + melds + discards
-  expect(inPlay, `牌数不守恒: wall=${wall} hands=${hands} melds=${melds} discards=${discards}`).toBe(134)
+  const winningDisplay = game.winPresentation.value?.discardWin ? 1 : 0
+  expect(inPlay + winningDisplay, `牌数不守恒: wall=${wall} hands=${hands} melds=${melds} discards=${discards} win=${winningDisplay}`).toBe(134)
   game.players.forEach((player) => {
     expect(player.hand.length).toBeLessThanOrEqual(20)
   })

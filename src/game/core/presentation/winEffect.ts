@@ -21,7 +21,7 @@ export function winDisplayLayout(playerIndex: number) {
 export function splitWinningTile(hand: TileType[] = [], presentation: WinPresentation | null = null) {
   const tiles = [...hand]
   if (!presentation?.tile) return { hand: tiles, displayTile: null, removedIndex: -1 }
-  if (presentation.robbedKong) {
+  if (presentation.robbedKong || presentation.discardWin) {
     return { hand: tiles, displayTile: presentation.tile, removedIndex: -1 }
   }
 

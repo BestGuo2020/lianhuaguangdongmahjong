@@ -65,6 +65,8 @@ export interface WinPresentation {
   tile: TileType
   sourceIndex: number
   robbedKong: boolean
+  /** 点炮牌来自牌河，直接进入胡牌展示区，不属于赢家普通手牌。 */
+  discardWin?: boolean
   robbedKongPlayerIndex: number
   robbedKongMeldIndex: number
 }

@@ -46,8 +46,6 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const source = state.players[from]
       if (!source || source.discards[source.discards.length - 1] !== tile) return
       removeLastDiscard(source.discards, tile)
-      state.players[winnerIndex]?.hand.push(tile)
-      state.players[winnerIndex].drawnTileIndex = -1
       state.lastDiscard.value = null
     },
     getSourceIndex: ({ winner, endOptions, winTile }) => (
