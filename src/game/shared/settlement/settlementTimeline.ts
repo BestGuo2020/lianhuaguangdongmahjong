@@ -10,6 +10,9 @@ import {
 } from '../../core/presentation/winEffect'
 import { makeRoundResult as buildRoundResult } from './roundResult'
 
+/** 牌名音效结束后，胡牌音效与视觉特效同时启动前的等待时间。 */
+export const DISCARD_WIN_EFFECT_DELAY = 500
+
 export interface SettlementEndOptions {
   winTile?: TileType
   winHand?: TileType[]
@@ -36,6 +39,7 @@ interface SettlementState {
   openingStage: RefLike<unknown>
   scoreFlowEvent: RefLike<unknown>
   tableActionEvent: RefLike<unknown>
+  lastDiscardSound?: RefLike<Promise<void> | null>
   result: RefLike<RoundResult | null>
   winEffect: RefLike<{
     winnerIndex: number
@@ -70,6 +74,8 @@ export interface SettlementTimelineOptions<E extends SettlementEndOptions, S ext
   clearTimers(): void
   later(callback: () => void, delay: number): number
   playSound(name: string, volume?: number): unknown
+  playSoundAndWait?(name: string, volume?: number): Promise<void>
+  settleWinningDiscard?(from: number | undefined, tile: TileType, winnerIndex: number): void
   showTableAction(
     type: TableActionType,
     actorIndex: number,
@@ -91,6 +97,7 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
   options: SettlementTimelineOptions<E, S>,
 ) {
   const { state } = options
+  let serial = 0
 
   function makeRoundResult(base: RoundResult, scoresBefore: number[]) {
     return buildRoundResult(
@@ -102,6 +109,8 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
 
   function endGame(winnerIndex: number, endOptions = {} as E) {
     if (['win-effect', 'revealing', 'settled', 'finished'].includes(state.phase.value)) return
+    serial += 1
+    const currentSerial = serial
     options.clearTimers()
     state.scoreFlowEvent.value = null
     state.tableActionEvent.value = null
@@ -147,32 +156,66 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       robbedKongPlayerIndex,
       robbedKongMeldIndex,
     }
-    state.winPresentation.value = presentation
-    state.winEffect.value = {
-      ...presentation,
-      duration: effectDuration,
-      reducedMotion,
-      id: Date.now(),
+    const isDiscardWin = !endOptions.selfDraw
+      && !endOptions.robbedKong
+      && Number.isInteger(endOptions.sourceFrom)
+    if (isDiscardWin && Number.isInteger(endOptions.sourceFrom)) {
+      // 点炮牌先从牌河消失，避免它在等待胡牌音效期间继续显示为最后一张弃牌。
+      options.settleWinningDiscard?.(endOptions.sourceFrom, winTile, winnerIndex)
     }
-    options.showTableAction(tableAction.type, winnerIndex, tableAction.sourceIndex, winTile, -1)
-    options.playSound(options.getWinSound?.(context) ?? (endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3'))
-    if (!reducedMotion) {
-      options.later(() => { options.playSound('hu_effect_sound.mp3', 0.72) }, WIN_EFFECT_SOUND_DELAY)
-    }
-    state.announcement.value = null
-    options.later(() => {
-      state.winEffect.value = null
-      state.revealHands.value = true
-      state.phase.value = 'revealing'
+
+    state.winPresentation.value = null
+    state.winEffect.value = null
+
+    const activateWinEffect = () => {
+      if (serial !== currentSerial) return
+      state.winPresentation.value = presentation
+      state.winEffect.value = {
+        ...presentation,
+        duration: effectDuration,
+        reducedMotion,
+        id: Date.now(),
+      }
+      options.showTableAction(tableAction.type, winnerIndex, tableAction.sourceIndex, winTile, -1)
+      const winSound = isDiscardWin
+        ? 'hu.mp3'
+        : (options.getWinSound?.(context) ?? (endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3'))
+      options.playSound(winSound)
+      if (!reducedMotion) {
+        options.later(() => {
+          if (serial === currentSerial) options.playSound('hu_effect_sound.mp3', 0.72)
+        }, WIN_EFFECT_SOUND_DELAY)
+      }
+      state.announcement.value = null
       options.later(() => {
-        const scoresBefore = state.players.map((player) => player.score)
-        state.result.value = makeRoundResult(options.finalizeWin({ ...context, scoresBefore }), scoresBefore)
-        state.phase.value = 'settled'
-      }, revealDuration)
-    }, effectDuration)
+        if (serial !== currentSerial) return
+        state.winEffect.value = null
+        state.revealHands.value = true
+        state.phase.value = 'revealing'
+        options.later(() => {
+          if (serial !== currentSerial) return
+          const scoresBefore = state.players.map((player) => player.score)
+          state.result.value = makeRoundResult(options.finalizeWin({ ...context, scoresBefore }), scoresBefore)
+          state.phase.value = 'settled'
+        }, revealDuration)
+      }, effectDuration)
+    }
+
+    if (isDiscardWin) {
+      // 等具体牌名音效播放结束，再留出约 1 秒过渡；到点时同一个回调内启动
+      // 胡音效与视觉特效。牌名音效由出牌流程提前创建，避免在这里重复播放。
+      void (state.lastDiscardSound?.value ?? Promise.resolve()).then(() => {
+        if (serial !== currentSerial) return
+        options.later(activateWinEffect, DISCARD_WIN_EFFECT_DELAY)
+      })
+      return
+    }
+
+    activateWinEffect()
   }
 
   function endDraw() {
+    serial += 1
     options.clearTimers()
     state.phase.value = 'settled'
     state.openingStage.value = null

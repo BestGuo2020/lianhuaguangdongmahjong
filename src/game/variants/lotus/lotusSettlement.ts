@@ -2,6 +2,7 @@ import type { RoundResult } from '../../core/contracts/gamePort'
 import type { TableActionType, TileType } from '../../core/contracts/types'
 import { scoreFan, waitingTiles } from './lotusRules'
 import { applyWinScore } from './lotusScoring'
+import { removeLastDiscard } from '../../core/rules/actions'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
 
@@ -10,6 +11,7 @@ interface LotusSettlementOptions {
   clearTimers(): void
   later(callback: () => void, delay: number): number
   playSound(name: string, volume?: number): unknown
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   showTableAction(
     type: TableActionType,
     actorIndex: number,
@@ -39,6 +41,15 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
   return createSettlementTimeline<LotusEndGameOptions>({
     ...options,
     takeRobbedKongTile,
+    settleWinningDiscard: (from, tile, winnerIndex) => {
+      if (!Number.isInteger(from)) return
+      const source = state.players[from]
+      if (!source || source.discards[source.discards.length - 1] !== tile) return
+      removeLastDiscard(source.discards, tile)
+      state.players[winnerIndex]?.hand.push(tile)
+      state.players[winnerIndex].drawnTileIndex = -1
+      state.lastDiscard.value = null
+    },
     getSourceIndex: ({ endOptions, winner, winTile }) => (
       endOptions.robbedKong
         ? -1

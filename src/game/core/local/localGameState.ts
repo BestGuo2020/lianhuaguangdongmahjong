@@ -34,6 +34,7 @@ export function createLocalGameState() {
     selectedIndex: ref(-1),
     turnSeconds: ref(12),
     lastDiscard: ref<LastDiscard | null>(null),
+    lastDiscardSound: ref<Promise<void> | null>(null),
     actionPrompt: ref<ActionPrompt | null>(null),
     pendingKong: ref<PendingKong | null>(null),
     announcement: ref<Announcement | null>(null),

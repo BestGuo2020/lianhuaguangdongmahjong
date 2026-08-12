@@ -10,6 +10,7 @@ interface LotusTileFlowOptions {
   getTurnOrchestrator(): ReturnType<typeof createLotusTurnOrchestrator>
   endDraw(): unknown
   playSound(name: string, volume?: number): unknown
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   later(callback: () => void, delay: number): number
   stopCountdown(): void
 }

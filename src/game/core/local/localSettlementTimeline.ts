@@ -1,6 +1,7 @@
 import type { RoundResult } from '../contracts/gamePort'
 import type { EndGameOptions, TableActionType, TileType } from '../contracts/types'
 import { applyWinScore, drawHorses, scoreHand, waitingTiles } from '../rules/rules'
+import { removeLastDiscard } from '../rules/actions'
 import type { LocalGameState } from './localGameState'
 import { resolveWinTile } from './matchProgress'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
@@ -10,6 +11,7 @@ interface LocalSettlementTimelineOptions {
   clearTimers(): void
   later(callback: () => void, delay: number): number
   playSound(name: string, volume?: number): unknown
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   showTableAction(
     type: TableActionType,
     actorIndex: number,
@@ -39,6 +41,15 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     ...options,
     resolveWinTile: (winner, endOptions) => resolveWinTile(winner, endOptions),
     takeRobbedKongTile: (playerIndex, tile) => takeRobbedKongTile(playerIndex, tile),
+    settleWinningDiscard: (from, tile, winnerIndex) => {
+      if (!Number.isInteger(from)) return
+      const source = state.players[from]
+      if (!source || source.discards[source.discards.length - 1] !== tile) return
+      removeLastDiscard(source.discards, tile)
+      state.players[winnerIndex]?.hand.push(tile)
+      state.players[winnerIndex].drawnTileIndex = -1
+      state.lastDiscard.value = null
+    },
     getSourceIndex: ({ winner, endOptions, winTile }) => (
       endOptions.robbedKong || endOptions.fourRed
         ? -1

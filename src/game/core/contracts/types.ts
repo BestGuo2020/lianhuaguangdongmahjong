@@ -71,6 +71,8 @@ export interface WinPresentation {
 
 export interface EndGameOptions {
   winTile?: TileType
+  /** 点炮胡的弃牌来源座位；自摸/抢杠胡不设置。 */
+  sourceFrom?: number
   fourRed?: boolean
   kongBloom?: boolean
   robbedKong?: boolean

@@ -8,6 +8,7 @@ interface TileFlowState {
   wallHeadDrawn: RefLike<number>
   phase: RefLike<GamePhase>
   lastDiscard: RefLike<LastDiscard | null>
+  lastDiscardSound: RefLike<Promise<void> | null>
 }
 interface TurnFlow {
   markDrawSource(playerIndex: number, fromTail: boolean): void
@@ -20,6 +21,7 @@ interface TileFlowOptions {
   getTurnFlow(): TurnFlow
   endDraw(): unknown
   playSound(name: string, volume?: number): unknown
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   later(callback: () => void, delay: number): number
   stopCountdown(): void
   handleSpecialDraw?: (
@@ -82,7 +84,23 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     options.controllers[playerIndex].onDiscarded?.()
     state.lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     options.playSound('dapai.mp3', 0.8)
-    options.later(() => { options.playSound(tileAudioFile(tile)) }, 80)
+    state.lastDiscardSound.value = new Promise<void>((resolve) => {
+      // 牌名音效原本通过 later 延迟 80ms；这里使用独立计时器，避免点炮结算
+      // 清理回合定时器时把“正在报牌”的音效一起取消。
+      globalThis.setTimeout(() => {
+        try {
+          const playback = options.playSoundAndWait?.(tileAudioFile(tile))
+          if (playback) {
+            void playback.then(resolve, resolve)
+            return
+          }
+          options.playSound(tileAudioFile(tile))
+        } catch {
+          // 音频资源异常不应阻塞牌局结算。
+        }
+        resolve()
+      }, 80)
+    })
     state.phase.value = 'checking'
     options.stopCountdown()
     options.getTurnFlow().routeDiscard(playerIndex, tile)

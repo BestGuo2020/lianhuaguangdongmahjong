@@ -76,6 +76,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     state.userDrewThisTurn.value = false
     state.selectedIndex.value = -1
     state.lastDiscard.value = null
+    state.lastDiscardSound.value = null
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
     state.openingStage.value = 'start'

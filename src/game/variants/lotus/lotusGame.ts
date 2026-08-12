@@ -111,6 +111,7 @@ export function useLotusGame({
     clearTimers: timer.clear,
     later: timer.later,
     playSound,
+    playSoundAndWait,
     showTableAction: transient.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
@@ -130,6 +131,7 @@ export function useLotusGame({
     getTurnOrchestrator: () => turnOrchestrator,
     endDraw,
     playSound,
+    playSoundAndWait,
     later: timer.later,
     stopCountdown: countdown.stop,
   })

@@ -226,7 +226,7 @@ function onAvatarError(entry: GamePlayer) {
     />
     <Transition name="flip-cue">
       <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
-        <span>精</span>
+        <span>正精</span>
         <em>{{ flipTile ? tileName(flipTile) : '' }}</em>
       </div>
     </Transition>
@@ -329,8 +329,8 @@ function onAvatarError(entry: GamePlayer) {
 /* 莲花麻将翻精指示牌（桌面右上角） */
 .flip-indicator {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 50px;
+  right: 18px;
   z-index: 30;
   display: flex;
   align-items: center;

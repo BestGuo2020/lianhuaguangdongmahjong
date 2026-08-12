@@ -100,6 +100,7 @@ export function useGame({
     clearTimers: scheduler.clear,
     later: scheduler.later,
     playSound,
+    playSoundAndWait,
     showTableAction: transientEvents.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
