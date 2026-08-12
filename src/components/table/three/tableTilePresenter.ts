@@ -412,7 +412,7 @@ function wallDrawHeadPos() {
     const slot = wallStackSlot(Math.floor(physical / 2))
     return { x: slot.x, z: slot.z }
   }
-  const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL, props.wall?.length ?? 0)
+  const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL, props.wall?.length ?? 0, headOffset)
   const slot = wallStackSlot(stackIndex)
   return { x: slot.x, z: slot.z }
 }
@@ -487,7 +487,7 @@ function addWall() {
           layer: 1 - (physical % 2),
         }
       })()
-      : wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length)
+      : wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length, headOffset)
     const slot = wallStackSlot(stackIndex)
     const y = .41 + layer * .47
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))

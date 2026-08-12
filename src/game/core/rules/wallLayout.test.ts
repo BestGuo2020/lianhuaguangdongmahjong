@@ -53,12 +53,12 @@ describe('wall tile placement', () => {
 
   it('has no fixed reserved tail; only the current tail stack is arranged for kong draws', () => {
     // 初始牌尾：pop() 先拿 index 135（顶），再拿 index 134（底）。
-    expect(wallTilePlacement(135, 0, 136)).toEqual({ stackIndex: 67, layer: 1 })
-    expect(wallTilePlacement(134, 0, 136)).toEqual({ stackIndex: 67, layer: 0 })
+    expect(wallTilePlacement(134, 0, 136)).toEqual({ stackIndex: 67, layer: 1 })
+    expect(wallTilePlacement(135, 0, 136)).toEqual({ stackIndex: 67, layer: 0 })
     // 补走一张后，同墩只剩底牌；补完一墩后，新的当前尾墩才翻成顶/底顺序。
-    expect(wallTilePlacement(134, 0, 135)).toEqual({ stackIndex: 67, layer: 0 })
-    expect(wallTilePlacement(133, 0, 134)).toEqual({ stackIndex: 66, layer: 1 })
-    expect(wallTilePlacement(132, 0, 134)).toEqual({ stackIndex: 66, layer: 0 })
+    expect(wallTilePlacement(134, 0, 135, 0)).toEqual({ stackIndex: 67, layer: 0 })
+    expect(wallTilePlacement(132, 0, 134, 0)).toEqual({ stackIndex: 66, layer: 1 })
+    expect(wallTilePlacement(133, 0, 134, 0)).toEqual({ stackIndex: 66, layer: 0 })
   })
 })
 

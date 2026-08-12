@@ -23,7 +23,7 @@ export const RULE_VARIANTS: readonly RuleVariantOption[] = [
     name: '莲花麻将',
     description: '旧版翻精规则',
     highlights: ['翻精癞子', '支持吃牌', '十三烂/七星/十三幺等胡型'],
-    badge: '旧版',
+    badge: '',
   },
 ]
 

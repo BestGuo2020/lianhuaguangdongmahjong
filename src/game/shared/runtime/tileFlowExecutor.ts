@@ -28,6 +28,22 @@ interface TileFlowOptions {
     drawAgain: () => Promise<boolean>,
   ) => Promise<boolean | undefined>
   takeTailTile?: (wall: TileType[], headDrawn: number) => TileType | null
+  initialWallSize?: number
+}
+
+/**
+ * 从当前牌尾按物理墩补摸：每墩数组顺序为「上、下」，所以首次取倒数第二张，
+ * 再取同墩最后一张。牌头、牌尾交汇到只剩一张时仍能正常取完，不保留王牌。
+ */
+export function takeStackTailTile(
+  wall: TileType[],
+  headDrawn: number,
+  initialWallSize: number,
+): TileType | null {
+  if (!wall.length) return null
+  const tailDrawn = Math.max(0, initialWallSize - headDrawn - wall.length)
+  const index = tailDrawn % 2 === 0 && wall.length >= 2 ? wall.length - 2 : wall.length - 1
+  return wall.splice(index, 1)[0] ?? null
 }
 
 export function createTileFlowExecutor(options: TileFlowOptions) {
@@ -37,8 +53,7 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     if (!fromTail) state.wallHeadDrawn.value += 1
     if (!fromTail) return state.wall.value.shift() ?? null
     return options.takeTailTile?.(state.wall.value, state.wallHeadDrawn.value)
-      ?? state.wall.value.pop()
-      ?? null
+      ?? takeStackTailTile(state.wall.value, state.wallHeadDrawn.value, options.initialWallSize ?? 136)
   }
   async function drawFor(playerIndex: number, fromTail = false): Promise<boolean> {
     const player = state.players[playerIndex]

@@ -1,7 +1,8 @@
 // 「莲花麻将」开局时间线：两次掷骰 → 翻精（亮指示牌）→ 发牌 → 天胡判定。
 import type { MatchType, TileType } from '../../core/contracts/types'
-import { sortTiles, tileName } from '../../core/rules/tiles'
-import { MATCH_HANDS, PLAYER_SEED } from '../../core/local/localGameConfig'
+import { tileName } from '../../core/rules/tiles'
+import { MATCH_HANDS } from '../../core/local/localGameConfig'
+import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
 import { isWinningHand } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import {
@@ -36,22 +37,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
   }
 
   function resetPlayers() {
-    const previousScores = state.players.map((player) => player.score)
-    state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => ({
-      ...player,
-      // 莲花麻将起始分 2000（文档 §1）
-      score: previousScores[index] ?? 2000,
-      seat: index,
-      hand: [],
-      discards: [],
-      melds: [],
-      redCount: 0,
-      drawnTileIndex: -1,
-    })))
-  }
-
-  function receiveDealtTile(playerIndex: number, tile: TileType | null) {
-    if (tile) state.players[playerIndex].hand.push(tile)
+    resetLocalPlayers(state, 2000)
   }
 
   async function start(mode?: MatchType) {
@@ -128,47 +114,14 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.wallBreakIndex.value = openingStack * 2
 
     state.openingStage.value = 'deal'
-    const seatOrder = state.players.map(
-      (_, offset) => (state.dealer.value + offset) % state.players.length,
-    )
-    const dealBatch = async (playerIndex: number, count: number) => {
-      if (count === 4) options.playSound('deal.mp3', 0.72)
-      for (let index = 0; index < count; index += 1) {
-        receiveDealtTile(playerIndex, options.takeTile(false))
-      }
-      state.dealAnimation.value = {
-        playerIndex,
-        count,
-        serial: state.dealAnimation.value.serial + 1,
-      }
-      await options.wait(count === 4 ? 260 : 150)
-    }
-
-    for (let batch = 0; batch < 3; batch += 1) {
-      for (const playerIndex of seatOrder) {
-        await dealBatch(playerIndex, 4)
-        if (currentSequence !== sequence) return
-      }
-    }
-
-    const jumpTiles = Array.from({ length: 5 }, () => options.takeTile(false))
-    const jumpOrder = [state.dealer.value, seatOrder[1], seatOrder[2], seatOrder[3], state.dealer.value]
-    jumpOrder.forEach((playerIndex, index) => receiveDealtTile(playerIndex, jumpTiles[index]))
-    state.dealAnimation.value = {
-      playerIndex: state.dealer.value,
-      count: 2,
-      serial: state.dealAnimation.value.serial + 1,
-    }
-    await options.wait(260)
-    for (const playerIndex of [seatOrder[1], seatOrder[2], seatOrder[3]]) {
-      state.dealAnimation.value = {
-        playerIndex,
-        count: 1,
-        serial: state.dealAnimation.value.serial + 1,
-      }
-      await options.wait(150)
-    }
-    if (currentSequence !== sequence) return
+    const dealt = await dealInitialHands({
+      state,
+      takeTile: options.takeTile,
+      wait: options.wait,
+      playSound: options.playSound,
+      isCancelled: () => currentSequence !== sequence,
+    })
+    if (!dealt) return
 
     state.phase.value = 'opening'
     state.openingStage.value = null
@@ -177,7 +130,6 @@ export function createLotusOpening(options: LotusOpeningOptions) {
       count: 0,
       serial: state.dealAnimation.value.serial + 1,
     }
-    state.players.forEach((player) => { player.hand = sortTiles(player.hand) })
     options.announce(`${options.getRoundLabel()} · 开牌`)
 
     // 天胡：庄家起手 14 张即满足胡牌条件

@@ -1,8 +1,9 @@
 import type { MatchType, TileType } from '../contracts/types'
 import { createWall, shuffle, sortTiles } from '../rules/tiles'
 import { wallBreakIndex } from '../rules/wallLayout'
-import { MATCH_HANDS, PLAYER_SEED } from './localGameConfig'
+import { MATCH_HANDS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
+import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
 
 interface LocalOpeningTimelineOptions {
   state: LocalGameState
@@ -28,25 +29,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
   }
 
   function resetPlayers() {
-    const previousScores = state.players.map((player) => player.score)
-    state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => ({
-      ...player,
-      score: previousScores[index] ?? player.score,
-      seat: index,
-      hand: [],
-      discards: [],
-      melds: [],
-      redCount: 0,
-      drawnTileIndex: -1,
-    })))
-  }
-
-  function receiveDealtTile(playerIndex: number, tile: TileType | null) {
-    if (tile) state.players[playerIndex].hand.push(tile)
-  }
-
-  function dealOne(playerIndex: number) {
-    receiveDealtTile(playerIndex, options.takeTile(false))
+    resetLocalPlayers(state)
   }
 
   function resolveDealtReds() {
@@ -114,45 +97,14 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
       ...state.wall.value.slice(0, breakIndex),
     ]
     state.openingStage.value = 'deal'
-    const seatOrder = state.players.map(
-      (_, offset) => (state.dealer.value + offset) % state.players.length,
-    )
-    const dealBatch = async (playerIndex: number, count: number) => {
-      if (count === 4) options.playSound('deal.mp3', 0.72)
-      for (let index = 0; index < count; index += 1) dealOne(playerIndex)
-      state.dealAnimation.value = {
-        playerIndex,
-        count,
-        serial: state.dealAnimation.value.serial + 1,
-      }
-      await options.wait(count === 4 ? 260 : 150)
-    }
-
-    for (let batch = 0; batch < 3; batch += 1) {
-      for (const playerIndex of seatOrder) {
-        await dealBatch(playerIndex, 4)
-        if (currentSequence !== sequence) return
-      }
-    }
-
-    const jumpTiles = Array.from({ length: 5 }, () => options.takeTile(false))
-    const jumpOrder = [state.dealer.value, seatOrder[1], seatOrder[2], seatOrder[3], state.dealer.value]
-    jumpOrder.forEach((playerIndex, index) => receiveDealtTile(playerIndex, jumpTiles[index]))
-    state.dealAnimation.value = {
-      playerIndex: state.dealer.value,
-      count: 2,
-      serial: state.dealAnimation.value.serial + 1,
-    }
-    await options.wait(260)
-    for (const playerIndex of [seatOrder[1], seatOrder[2], seatOrder[3]]) {
-      state.dealAnimation.value = {
-        playerIndex,
-        count: 1,
-        serial: state.dealAnimation.value.serial + 1,
-      }
-      await options.wait(150)
-    }
-    if (currentSequence !== sequence) return
+    const dealt = await dealInitialHands({
+      state,
+      takeTile: options.takeTile,
+      wait: options.wait,
+      playSound: options.playSound,
+      isCancelled: () => currentSequence !== sequence,
+    })
+    if (!dealt) return
 
     resolveDealtReds()
     state.phase.value = 'opening'

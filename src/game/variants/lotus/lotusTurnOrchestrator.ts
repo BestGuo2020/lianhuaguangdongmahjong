@@ -4,9 +4,11 @@ import { performDiscardGang, performPeng, type ActionContext } from '../../core/
 import { sortTiles } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
-import type { LotusController, LotusHuAction } from './lotusControllers'
+import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
 import { canChi, canRobKong, isJoker, isWinningHand, matchingCount, type ChiMeld } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
+import type { LotusTurnAction } from './lotusControllers'
+import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -32,7 +34,7 @@ interface LotusTurnOrchestratorOptions {
 
 export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOptions) {
   const { state } = options
-  let kongDrawPlayerIndex = -1
+  let runner!: ReturnType<typeof createTurnRunner<LotusGameState, LotusController, LotusTurnAction>>
 
   function hasSettled() {
     return state.phase.value === 'settled'
@@ -42,57 +44,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     return (to - from + state.players.length) % state.players.length
   }
 
-  async function beginTurn(
-    playerIndex: number,
-    turnOptions: { skipDraw?: boolean; fromTail?: boolean } = {},
-  ) {
-    if (hasSettled()) return
-    if (!state.wall.value.length) return options.endDraw()
-    state.currentPlayer.value = playerIndex
-    state.userDrewThisTurn.value = false
-    state.phase.value = 'drawing'
-    state.selectedIndex.value = -1
-    state.actionPrompt.value = null
-    if (turnOptions.skipDraw) kongDrawPlayerIndex = -1
-    const drawn = turnOptions.skipDraw
-      ? true
-      : await options.drawFor(playerIndex, turnOptions.fromTail)
-    if (!drawn || hasSettled()) return
-
-    state.phase.value = 'thinking'
-    const player = state.players[playerIndex]
-    const ctx = {
-      hand: player.hand,
-      melds: player.melds,
-      exposedMelds: options.structuralMeldCount(playerIndex),
-      kongBloom: kongDrawPlayerIndex === playerIndex,
-      skipDraw: Boolean(turnOptions.skipDraw),
-      isDealer: playerIndex === state.dealer.value,
-      jokers: state.jokerTiles.value,
-    }
-    const action = await options.controllers[playerIndex].requestTurn(ctx)
-    if (hasSettled() || state.currentPlayer.value !== playerIndex) return
-
-    switch (action.kind) {
-      case 'win':
-        return options.endGame(playerIndex, {
-          selfDraw: true,
-          kongBloom: kongDrawPlayerIndex === playerIndex,
-          winHand: [...player.hand],
-        })
-      case 'added-kong':
-        return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
-      case 'concealed-kong':
-        await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
-        if (hasSettled()) return
-        return beginTurn(playerIndex, { fromTail: true })
-      case 'wind-kong':
-        await options.performWindKong(playerIndex)
-        if (hasSettled()) return
-        return beginTurn(playerIndex, { fromTail: true })
-      case 'discard':
-        return options.discardTile(playerIndex, action.handIndex)
-    }
+  function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
+    return runner.beginTurn(playerIndex, turnOptions)
   }
 
   // ── 弃牌响应：胡 > 碰/明杠 > 吃（仅下家），单响 ─────────────────────────
@@ -372,16 +325,56 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   // ── 杠后补摸来源标记（杠上开花） ─────────────────────────────
 
   function markDrawSource(playerIndex: number, fromTail: boolean) {
-    kongDrawPlayerIndex = fromTail ? playerIndex : -1
+    runner.markDrawSource(playerIndex, fromTail)
   }
 
   function clearDrawSource() {
-    kongDrawPlayerIndex = -1
+    runner.clearDrawSource()
   }
 
   function isKongDraw(playerIndex: number) {
-    return kongDrawPlayerIndex === playerIndex
+    return runner.isKongDraw(playerIndex)
   }
+
+  runner = createTurnRunner<LotusGameState, LotusController, LotusTurnAction>({
+    state,
+    controllers: options.controllers,
+    drawFor: options.drawFor,
+    endDraw: options.endDraw,
+    buildContext: (player, playerIndex, turnOptions, kongBloom) => ({
+      hand: player.hand,
+      melds: player.melds,
+      exposedMelds: options.structuralMeldCount(playerIndex),
+      kongBloom,
+      skipDraw: Boolean(turnOptions.skipDraw),
+      isDealer: playerIndex === state.dealer.value,
+      jokers: state.jokerTiles.value,
+      afterKong: Boolean(turnOptions.fromTail),
+    }),
+    requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),
+    handleAction: async (action, playerIndex, player, _turnOptions, api) => {
+      switch (action.kind) {
+        case 'win':
+          return options.endGame(playerIndex, {
+            selfDraw: true,
+            kongBloom: api.isKongDraw(playerIndex),
+            winHand: [...player.hand],
+          })
+        case 'added-kong':
+          return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
+        case 'concealed-kong':
+          await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
+          if (api.hasSettled()) return
+          return beginTurn(playerIndex, { fromTail: true })
+        case 'wind-kong':
+          await options.performWindKong(playerIndex)
+          if (api.hasSettled()) return
+          return beginTurn(playerIndex, { fromTail: true })
+        case 'discard':
+          return options.discardTile(playerIndex, action.handIndex)
+      }
+    },
+  })
 
   return {
     beginTurn,

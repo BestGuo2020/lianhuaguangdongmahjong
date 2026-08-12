@@ -1,5 +1,8 @@
 import { TILE_TYPES, isHorse } from './tiles'
 import type { GamePlayer, Meld, ScoreDelta, TileType } from '../contracts/types'
+import { consumeTile, countTiles, firstRemainingTile, matchingCount } from '../../shared/rules/tileTools'
+
+export { matchingCount }
 
 const STANDARD_TILES = TILE_TYPES.filter((tile) => tile !== 'white' && tile !== 'red')
 const WINNING_DRAW_TILES: TileType[] = [...STANDARD_TILES, 'white']
@@ -43,29 +46,11 @@ export function applyWinScore(
   return totalWon
 }
 
-function countsFor(tiles: TileType[]) {
-  const counts = new Map<TileType, number>()
-  tiles.forEach((tile) => counts.set(tile, (counts.get(tile) || 0) + 1))
-  return counts
-}
-
-function firstRemaining(counts: Map<TileType, number>) {
-  return STANDARD_TILES.find((tile) => (counts.get(tile) || 0) > 0)
-}
-
-function consume(counts: Map<TileType, number>, tile: TileType, amount: number) {
-  const next = new Map(counts)
-  const left = (next.get(tile) || 0) - amount
-  if (left > 0) next.set(tile, left)
-  else next.delete(tile)
-  return next
-}
-
 function canMakeMelds(counts: Map<TileType, number>, jokers: number, needed: number, memo = new Map<string, boolean>()) {
   const signature = `${needed}|${jokers}|${STANDARD_TILES.map((tile) => counts.get(tile) || 0).join('')}`
   if (memo.has(signature)) return memo.get(signature)
 
-  const tile = firstRemaining(counts)
+  const tile = firstRemainingTile(counts, STANDARD_TILES)
   if (!tile) {
     const result = jokers === needed * 3
     memo.set(signature, result)
@@ -76,7 +61,7 @@ function canMakeMelds(counts: Map<TileType, number>, jokers: number, needed: num
   const amount = counts.get(tile) || 0
   const tripletReal = Math.min(3, amount)
   if (3 - tripletReal <= jokers) {
-    if (canMakeMelds(consume(counts, tile, tripletReal), jokers - (3 - tripletReal), needed - 1, memo)) {
+    if (canMakeMelds(consumeTile(counts, tile, tripletReal), jokers - (3 - tripletReal), needed - 1, memo)) {
       memo.set(signature, true)
       return true
     }
@@ -92,7 +77,7 @@ function canMakeMelds(counts: Map<TileType, number>, jokers: number, needed: num
       let missing = 0
       let next = new Map(counts)
       sequence.forEach((item) => {
-        if ((next.get(item) || 0) > 0) next = consume(next, item, 1)
+        if ((next.get(item) || 0) > 0) next = consumeTile(next, item, 1)
         else missing += 1
       })
       if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
@@ -113,24 +98,20 @@ export function isWinningHand(tiles: TileType[], exposedMeldCount = 0) {
 
   const jokers = redFiltered.filter((tile) => tile === 'white').length
   const naturals = redFiltered.filter((tile) => tile !== 'white')
-  const counts = countsFor(naturals)
+  const counts = countTiles(naturals)
 
   if (jokers >= 2 && canMakeMelds(counts, jokers - 2, neededMelds)) return true
 
   for (const tile of STANDARD_TILES) {
     const amount = counts.get(tile) || 0
-    if (amount >= 2 && canMakeMelds(consume(counts, tile, 2), jokers, neededMelds)) return true
-    if (amount >= 1 && jokers >= 1 && canMakeMelds(consume(counts, tile, 1), jokers - 1, neededMelds)) return true
+    if (amount >= 2 && canMakeMelds(consumeTile(counts, tile, 2), jokers, neededMelds)) return true
+    if (amount >= 1 && jokers >= 1 && canMakeMelds(consumeTile(counts, tile, 1), jokers - 1, neededMelds)) return true
   }
   return false
 }
 
 export function waitingTiles(tiles: TileType[], exposedMeldCount = 0) {
   return WINNING_DRAW_TILES.filter((tile) => isWinningHand([...tiles, tile], exposedMeldCount))
-}
-
-export function matchingCount(tiles: TileType[], tile: TileType) {
-  return tiles.filter((item) => item === tile).length
 }
 
 export function concealedKongs(tiles: TileType[]) {

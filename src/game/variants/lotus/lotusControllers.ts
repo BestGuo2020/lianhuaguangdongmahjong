@@ -10,6 +10,7 @@ import {
   decideTurn,
 } from './lotusAi'
 import type { LotusTurnDecision } from './lotusAi'
+import { createPendingAction } from '../../shared/runtime/pendingAction'
 
 // ── 动作与上下文类型 ──────────────────────────────────────────────
 
@@ -126,11 +127,11 @@ export const LOTUS_AI_DELAYS: ThinkDelays = { turn: 650, afterKong: 550, claim: 
 export class LotusHumanController implements LotusController {
   readonly delays: ThinkDelays = { turn: 0, afterKong: 0, claim: 0 }
 
-  private _resolveTurn: ((action: LotusTurnAction) => void) | null = null
-  private _resolveHu: ((action: LotusHuAction) => void) | null = null
-  private _resolveClaim: ((action: LotusClaimAction) => void) | null = null
-  private _resolveChi: ((action: LotusChiAction) => void) | null = null
-  private _resolveRobKong: ((action: LotusRobKongAction) => void) | null = null
+  private readonly turnAction = createPendingAction<LotusTurnAction>()
+  private readonly huAction = createPendingAction<LotusHuAction>()
+  private readonly claimAction = createPendingAction<LotusClaimAction>()
+  private readonly chiAction = createPendingAction<LotusChiAction>()
+  private readonly robKongAction = createPendingAction<LotusRobKongAction>()
 
   constructor(private bridge: LotusHumanBridge) {}
 
@@ -143,7 +144,7 @@ export class LotusHumanController implements LotusController {
     this.bridge.canKong.value = []
     this.bridge.canWindKong.value = false
     this.bridge.activateTurn()
-    return new Promise<LotusTurnAction>((resolve) => { this._resolveTurn = resolve })
+    return this.turnAction.request()
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
@@ -157,7 +158,7 @@ export class LotusHumanController implements LotusController {
       chiOptions: ctx.chiOptions,
     }
     this.bridge.activateHu()
-    return new Promise<LotusHuAction>((resolve) => { this._resolveHu = resolve })
+    return this.huAction.request()
   }
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
@@ -168,7 +169,7 @@ export class LotusHumanController implements LotusController {
       canGang: ctx.canGang,
     }
     this.bridge.activateClaim()
-    return new Promise<LotusClaimAction>((resolve) => { this._resolveClaim = resolve })
+    return this.claimAction.request()
   }
 
   async requestChi(ctx: LotusChiContext): Promise<LotusChiAction> {
@@ -179,13 +180,13 @@ export class LotusHumanController implements LotusController {
       chiOptions: ctx.chiOptions,
     }
     this.bridge.activateChi()
-    return new Promise<LotusChiAction>((resolve) => { this._resolveChi = resolve })
+    return this.chiAction.request()
   }
 
   async requestRobKong(ctx: LotusRobKongContext): Promise<LotusRobKongAction> {
     this.bridge.actionPrompt.value = { type: 'rob', tile: ctx.tile, from: ctx.from }
     this.bridge.activateRobKong()
-    return new Promise<LotusRobKongAction>((resolve) => { this._resolveRobKong = resolve })
+    return this.robKongAction.request()
   }
 
   onDiscarded(): void {
@@ -198,104 +199,87 @@ export class LotusHumanController implements LotusController {
     this.bridge.actionPrompt.value = null
     this.bridge.selectedIndex.value = -1
     this.bridge.drawnThisTurn.value = false
-    this._resolveTurn = null
-    this._resolveHu = null
-    this._resolveClaim = null
-    this._resolveChi = null
-    this._resolveRobKong = null
+    this.turnAction.clear()
+    this.huAction.clear()
+    this.claimAction.clear()
+    this.chiAction.clear()
+    this.robKongAction.clear()
   }
 
   // ── resolve 助手（供 lotusHuman 用户操作控制器调用）──
 
-  hasPendingTurn() { return this._resolveTurn !== null }
-  hasPendingHu() { return this._resolveHu !== null }
-  hasPendingClaim() { return this._resolveClaim !== null }
-  hasPendingChi() { return this._resolveChi !== null }
-  hasPendingRobKong() { return this._resolveRobKong !== null }
+  hasPendingTurn() { return this.turnAction.hasPending() }
+  hasPendingHu() { return this.huAction.hasPending() }
+  hasPendingClaim() { return this.claimAction.hasPending() }
+  hasPendingChi() { return this.chiAction.hasPending() }
+  hasPendingRobKong() { return this.robKongAction.hasPending() }
 
   resolveDiscard(index: number) {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'discard', handIndex: index })
+    if (!this.turnAction.resolve({ kind: 'discard', handIndex: index })) return
     this._cleanupTurn()
   }
   resolveWin() {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'win' })
+    if (!this.turnAction.resolve({ kind: 'win' })) return
     this._cleanupTurn()
   }
   resolveAddedKong(meldIndex: number) {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'added-kong', meldIndex })
+    if (!this.turnAction.resolve({ kind: 'added-kong', meldIndex })) return
     this._cleanupTurn()
   }
   resolveConcealedKong(tile: TileType) {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'concealed-kong', tile })
+    if (!this.turnAction.resolve({ kind: 'concealed-kong', tile })) return
     this._cleanupTurn()
   }
   resolveWindKong() {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'wind-kong' })
+    if (!this.turnAction.resolve({ kind: 'wind-kong' })) return
     this._cleanupTurn()
   }
   resolveHu(action: LotusHuAction) {
-    if (!this._resolveHu) return
-    this._resolveHu(action)
+    if (!this.huAction.resolve(action)) return
     this._cleanupHu()
   }
   resolveClaimPeng() {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'peng' })
+    if (!this.claimAction.resolve({ kind: 'peng' })) return
     this._cleanupClaim()
   }
   resolveClaimGang() {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'gang' })
+    if (!this.claimAction.resolve({ kind: 'gang' })) return
     this._cleanupClaim()
   }
   resolveClaimPass() {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'pass' })
+    if (!this.claimAction.resolve({ kind: 'pass' })) return
     this._cleanupClaim()
   }
   resolveChi(meld: ChiMeld) {
-    if (!this._resolveChi) return
-    this._resolveChi({ kind: 'chi', meld })
+    if (!this.chiAction.resolve({ kind: 'chi', meld })) return
     this._cleanupChi()
   }
   resolveChiPass() {
-    if (!this._resolveChi) return
-    this._resolveChi({ kind: 'pass' })
+    if (!this.chiAction.resolve({ kind: 'pass' })) return
     this._cleanupChi()
   }
   resolveRobKongAction(action: LotusRobKongAction) {
-    if (!this._resolveRobKong) return
-    this._resolveRobKong(action)
+    if (!this.robKongAction.resolve(action)) return
     this._cleanupRobKong()
   }
 
   private _cleanupTurn() {
-    this._resolveTurn = null
     this.bridge.isTurn.value = false
     this.bridge.deactivate()
   }
   private _cleanupHu() {
-    this._resolveHu = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }
   private _cleanupClaim() {
-    this._resolveClaim = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }
   private _cleanupChi() {
-    this._resolveChi = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }
   private _cleanupRobKong() {
-    this._resolveRobKong = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }

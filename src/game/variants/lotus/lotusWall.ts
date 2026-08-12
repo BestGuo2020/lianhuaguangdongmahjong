@@ -5,6 +5,7 @@ import type { TileType } from '../../core/contracts/types'
 import { WALL_STACKS } from '../../core/rules/wallLayout'
 import { createWall, shuffle } from '../../core/rules/tiles'
 import { computeJokers } from './lotusRules'
+import { takeStackTailTile } from '../../shared/runtime/tileFlowExecutor'
 
 /** 翻精墩（指示牌 + 底张）整体移出牌墙：牌山 136 → 可摸 134 张。 */
 export const FLIP_STACK_REMOVED = 2
@@ -71,10 +72,7 @@ export function buildDrawOrderWall(ring: TileType[], openingStack: number, flipS
  * 普通摸牌仍可从牌头一直摸到牌墙耗尽。
  */
 export function takeLotusTailTile(wall: TileType[], headDrawn: number): TileType | null {
-  if (!wall.length) return null
-  const tailDrawn = WALL_TOTAL_WITHOUT_FLIP - headDrawn - wall.length
-  const index = tailDrawn % 2 === 0 && wall.length >= 2 ? wall.length - 2 : wall.length - 1
-  return wall.splice(index, 1)[0] ?? null
+  return takeStackTailTile(wall, headDrawn, WALL_TOTAL_WITHOUT_FLIP)
 }
 
 export const WALL_TOTAL_WITHOUT_FLIP = WALL_STACKS * 2 - FLIP_STACK_REMOVED

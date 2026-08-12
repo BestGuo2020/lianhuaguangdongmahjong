@@ -3,12 +3,14 @@ import type {
   ClaimContext,
   PlayerController,
   RobKongContext,
+  TurnAction,
   TurnContext,
 } from '../controllers/playerController'
 import { performDiscardGang, performPeng, type ActionContext } from '../rules/actions'
 import { canRobKong, matchingCount } from '../rules/rules'
 import { PACE_MS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
+import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -33,54 +35,14 @@ interface LocalTurnOrchestratorOptions {
 
 export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOptions) {
   const { state } = options
-  let kongDrawPlayerIndex = -1
+  let runner!: ReturnType<typeof createTurnRunner<LocalGameState, PlayerController, TurnAction>>
 
   function hasSettled() {
-    return state.phase.value === 'settled'
+    return runner.hasSettled()
   }
 
-  async function beginTurn(
-    playerIndex: number,
-    turnOptions: { skipDraw?: boolean; fromTail?: boolean } = {},
-  ) {
-    if (hasSettled()) return
-    if (!state.wall.value.length) return options.endDraw()
-    state.currentPlayer.value = playerIndex
-    state.userDrewThisTurn.value = false
-    state.phase.value = 'drawing'
-    state.selectedIndex.value = -1
-    state.actionPrompt.value = null
-    if (turnOptions.skipDraw) kongDrawPlayerIndex = -1
-    const drawn = turnOptions.skipDraw
-      ? true
-      : await options.drawFor(playerIndex, turnOptions.fromTail)
-    if (!drawn || hasSettled()) return
-
-    state.phase.value = 'thinking'
-    const player = state.players[playerIndex]
-    const ctx: TurnContext = {
-      hand: player.hand,
-      melds: player.melds,
-      exposedMelds: options.structuralMeldCount(playerIndex),
-      kongBloom: kongDrawPlayerIndex === playerIndex,
-      skipDraw: Boolean(turnOptions.skipDraw),
-      afterKong: Boolean(turnOptions.fromTail),
-    }
-    const action = await options.controllers[playerIndex].requestTurn(ctx)
-    if (hasSettled() || state.currentPlayer.value !== playerIndex) return
-
-    switch (action.kind) {
-      case 'win':
-        return options.endGame(playerIndex, { kongBloom: kongDrawPlayerIndex === playerIndex })
-      case 'added-kong':
-        return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
-      case 'concealed-kong':
-        await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
-        if (hasSettled()) return
-        return beginTurn(playerIndex, { fromTail: true })
-      case 'discard':
-        return options.discardTile(playerIndex, action.handIndex)
-    }
+  function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
+    return runner.beginTurn(playerIndex, turnOptions)
   }
 
   function seatDistance(from: number, to: number) {
@@ -200,25 +162,50 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
     }, PACE_MS.betweenRobKongs)
   }
 
-  function markDrawSource(playerIndex: number, fromTail: boolean) {
-    kongDrawPlayerIndex = fromTail ? playerIndex : -1
-  }
-
-  function clearDrawSource() {
-    kongDrawPlayerIndex = -1
-  }
-
   function isKongDraw(playerIndex: number) {
-    return kongDrawPlayerIndex === playerIndex
+    return runner.isKongDraw(playerIndex)
   }
+
+  runner = createTurnRunner<LocalGameState, PlayerController, TurnAction>({
+    state,
+    controllers: options.controllers,
+    drawFor: options.drawFor,
+    endDraw: options.endDraw,
+    buildContext: (player, playerIndex, turnOptions, kongBloom) => ({
+      hand: player.hand,
+      melds: player.melds,
+      exposedMelds: options.structuralMeldCount(playerIndex),
+      kongBloom,
+      skipDraw: Boolean(turnOptions.skipDraw),
+      afterKong: Boolean(turnOptions.fromTail),
+    } satisfies TurnContext),
+    requestTurn: (controller, context) => controller.requestTurn(context as TurnContext),
+    handleAction: async (action, playerIndex, player, _turnOptions, api) => {
+      switch (action.kind) {
+        case 'win':
+          return options.endGame(playerIndex, { kongBloom: api.isKongDraw(playerIndex) })
+        case 'added-kong': {
+          return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
+        }
+        case 'concealed-kong': {
+          await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
+          if (api.hasSettled()) return
+          return beginTurn(playerIndex, { fromTail: true })
+        }
+        case 'discard': {
+          return options.discardTile(playerIndex, action.handIndex)
+        }
+      }
+    },
+  })
 
   return {
     beginTurn,
     routeDiscard,
     offerNextClaim,
     requestAddedKong,
-    markDrawSource,
-    clearDrawSource,
+    markDrawSource: runner.markDrawSource,
+    clearDrawSource: runner.clearDrawSource,
     isKongDraw,
   }
 }

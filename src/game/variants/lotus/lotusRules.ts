@@ -4,6 +4,9 @@
 // 不触碰任何游戏状态，因此可独立单元测试。
 import type { TileType } from '../../core/contracts/types'
 import { HONORS, SUITS, TILE_TYPES } from '../../core/rules/tiles'
+import { consumeTile, countTiles, firstRemainingTile, matchingCount } from '../../shared/rules/tileTools'
+
+export { matchingCount }
 
 // ── 癞子（精）判定 ──────────────────────────────────────────────
 
@@ -54,25 +57,7 @@ export function patternLabel(pattern: BasePattern) {
   return PATTERN_LABELS[pattern]
 }
 
-function countsOf(tiles: TileType[]): Map<TileType, number> {
-  const counts = new Map<TileType, number>()
-  tiles.forEach((tile) => counts.set(tile, (counts.get(tile) || 0) + 1))
-  return counts
-}
-
-function consume(counts: Map<TileType, number>, tile: TileType, amount: number): Map<TileType, number> {
-  const next = new Map(counts)
-  const left = (next.get(tile) || 0) - amount
-  if (left > 0) next.set(tile, left)
-  else next.delete(tile)
-  return next
-}
-
 /** 自然牌中序最低的一张（癞子面已从 naturals 中剔除，不会出现在 counts 中）。 */
-function firstRemaining(counts: Map<TileType, number>): TileType | null {
-  return TILE_TYPES.find((tile) => (counts.get(tile) || 0) > 0) ?? null
-}
-
 /**
  * 回溯分解：把自然牌拆成 needed 组面子，缺张用 jokers 张万能牌补齐。
  * 面子候选：①三张刻子（癞子补足）②数牌顺子（癞子补缺）③乱风顺（任意 3 种不同风）
@@ -88,7 +73,7 @@ export function canMakeMelds(
   const signature = `${needed}|${jokers}|${TILE_TYPES.map((tile) => counts.get(tile) || 0).join('')}`
   if (memo.has(signature)) return memo.get(signature)!
 
-  const tile = firstRemaining(counts)
+  const tile = firstRemainingTile(counts, TILE_TYPES)
   if (!tile) {
     const result = jokers === needed * 3
     memo.set(signature, result)
@@ -105,7 +90,7 @@ export function canMakeMelds(
   const realTriplet = Math.min(3, amount)
   if (
     3 - realTriplet <= jokers
-    && canMakeMelds(consume(counts, tile, realTriplet), jokers - (3 - realTriplet), needed - 1, memo)
+    && canMakeMelds(consumeTile(counts, tile, realTriplet), jokers - (3 - realTriplet), needed - 1, memo)
   ) {
     memo.set(signature, true)
     return true
@@ -123,7 +108,7 @@ export function canMakeMelds(
       let next = new Map(counts)
       let missing = 0
       sequence.forEach((item) => {
-        if ((next.get(item) || 0) > 0) next = consume(next, item, 1)
+        if ((next.get(item) || 0) > 0) next = consumeTile(next, item, 1)
         else missing += 1
       })
       if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
@@ -141,7 +126,7 @@ export function canMakeMelds(
         let next = new Map(counts)
         let missing = 0
         for (const wind of [tile, others[a], others[b]]) {
-          if ((next.get(wind) || 0) > 0) next = consume(next, wind, 1)
+          if ((next.get(wind) || 0) > 0) next = consumeTile(next, wind, 1)
           else missing += 1
         }
         if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
@@ -157,7 +142,7 @@ export function canMakeMelds(
     let next = new Map(counts)
     let missing = 0
     for (const dragon of DRAGONS) {
-      if ((next.get(dragon) || 0) > 0) next = consume(next, dragon, 1)
+      if ((next.get(dragon) || 0) > 0) next = consumeTile(next, dragon, 1)
       else missing += 1
     }
     if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
@@ -172,15 +157,15 @@ export function canMakeMelds(
 
 /** 平胡：4 - exposedMeldCount 组面子 + 1 对将。将可为自然对 / 单张+1癞 / 2癞。 */
 export function canMakePinghu(naturals: TileType[], jokerCount: number, neededMelds: number): boolean {
-  const counts = countsOf(naturals)
+  const counts = countTiles(naturals)
   for (const tile of TILE_TYPES) {
-    if ((counts.get(tile) || 0) >= 2 && canMakeMelds(consume(counts, tile, 2), jokerCount, neededMelds)) {
+    if ((counts.get(tile) || 0) >= 2 && canMakeMelds(consumeTile(counts, tile, 2), jokerCount, neededMelds)) {
       return true
     }
   }
   if (jokerCount >= 1) {
     for (const tile of TILE_TYPES) {
-      if ((counts.get(tile) || 0) >= 1 && canMakeMelds(consume(counts, tile, 1), jokerCount - 1, neededMelds)) {
+      if ((counts.get(tile) || 0) >= 1 && canMakeMelds(consumeTile(counts, tile, 1), jokerCount - 1, neededMelds)) {
         return true
       }
     }
@@ -197,7 +182,7 @@ export function isSevenPairs(hand: TileType[], jokers: TileType[]): boolean {
   const naturals = hand.filter((tile) => !isJoker(tile, jokers))
   let pairs = 0
   let singles = 0
-  for (const count of countsOf(naturals).values()) {
+  for (const count of countTiles(naturals).values()) {
     if (count === 2) pairs += 1
     else if (count === 4) pairs += 2
     else if (count === 3) { pairs += 1; singles += 1 }
@@ -243,7 +228,7 @@ const THIRTEEN_ORPHAN_TILES: TileType[] = [
 /** 十三幺：门前清，13 种幺九/字牌全有且其一成对（14 张内唯一重复）。 */
 export function isThirteenOrphans(hand: TileType[]): boolean {
   if (hand.length !== 14) return false
-  const counts = countsOf(hand)
+  const counts = countTiles(hand)
   if (THIRTEEN_ORPHAN_TILES.some((tile) => (counts.get(tile) || 0) < 1)) return false
   const doubled = [...counts.entries()].filter(([, count]) => count >= 2)
   return doubled.length === 1
@@ -432,10 +417,6 @@ export function computeTingInfo(
 }
 
 // ── 吃 / 碰 / 杠 合法性 ──────────────────────────────────────────────
-
-export function matchingCount(tiles: TileType[], tile: TileType): number {
-  return tiles.filter((item) => item === tile).length
-}
 
 /**
  * 碰：手中有至少两张与该弃牌相同的非精牌。

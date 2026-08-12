@@ -7,6 +7,7 @@ import { removeMatches } from '../rules/actions'
 import { concealedKongs, isWinningHand } from '../rules/rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
 import type { ActionPrompt } from '../contracts/gamePort'
+import { createPendingAction } from '../../shared/runtime/pendingAction'
 
 // ── 共享类型 ──
 
@@ -129,9 +130,9 @@ export interface HumanBridge {
 export class HumanController implements PlayerController {
   readonly delays: ThinkDelays = { turn: 0, afterKong: 0, claim: 0 }
 
-  private _resolveTurn: ((action: TurnAction) => void) | null = null
-  private _resolveClaim: ((action: ClaimAction) => void) | null = null
-  private _resolveRobKong: ((action: RobKongAction) => void) | null = null
+  private readonly turnAction = createPendingAction<TurnAction>()
+  private readonly claimAction = createPendingAction<ClaimAction>()
+  private readonly robKongAction = createPendingAction<RobKongAction>()
 
   constructor(private bridge: HumanBridge) {}
 
@@ -150,7 +151,7 @@ export class HumanController implements PlayerController {
         .map((meld) => meld.tile),
     ]
     this.bridge.activateTurn()
-    return new Promise<TurnAction>((resolve) => { this._resolveTurn = resolve })
+    return this.turnAction.request()
   }
 
   async requestClaim(ctx: ClaimContext): Promise<ClaimAction> {
@@ -161,13 +162,13 @@ export class HumanController implements PlayerController {
       canGang: ctx.canGang,
     }
     this.bridge.activateClaim()
-    return new Promise<ClaimAction>((resolve) => { this._resolveClaim = resolve })
+    return this.claimAction.request()
   }
 
   async requestRobKong(ctx: RobKongContext): Promise<RobKongAction> {
     this.bridge.actionPrompt.value = { type: 'rob', tile: ctx.tile, from: ctx.from }
     this.bridge.activateRobKong()
-    return new Promise<RobKongAction>((resolve) => { this._resolveRobKong = resolve })
+    return this.robKongAction.request()
   }
 
   onDiscarded(): void {
@@ -180,81 +181,70 @@ export class HumanController implements PlayerController {
     this.bridge.actionPrompt.value = null
     this.bridge.selectedIndex.value = -1
     this.bridge.drawnThisTurn.value = false
-    this._resolveTurn = null
-    this._resolveClaim = null
-    this._resolveRobKong = null
+    this.turnAction.clear()
+    this.claimAction.clear()
+    this.robKongAction.clear()
   }
 
   // ── 双模支持：供 useGame 的 user* 函数使用 ──
 
-  hasPendingTurn(): boolean { return this._resolveTurn !== null }
-  hasPendingClaim(): boolean { return this._resolveClaim !== null }
-  hasPendingRobKong(): boolean { return this._resolveRobKong !== null }
+  hasPendingTurn(): boolean { return this.turnAction.hasPending() }
+  hasPendingClaim(): boolean { return this.claimAction.hasPending() }
+  hasPendingRobKong(): boolean { return this.robKongAction.hasPending() }
 
   resolveDiscard(index: number): void {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'discard', handIndex: index })
+    if (!this.turnAction.resolve({ kind: 'discard', handIndex: index })) return
     this._cleanupTurn()
   }
 
   resolveWin(): void {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'win' })
+    if (!this.turnAction.resolve({ kind: 'win' })) return
     this._cleanupTurn()
   }
 
   resolveAddedKong(meldIndex: number): void {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'added-kong', meldIndex })
+    if (!this.turnAction.resolve({ kind: 'added-kong', meldIndex })) return
     this._cleanupTurn()
   }
 
   resolveConcealedKong(tile: TileType): void {
-    if (!this._resolveTurn) return
-    this._resolveTurn({ kind: 'concealed-kong', tile })
+    if (!this.turnAction.resolve({ kind: 'concealed-kong', tile })) return
     this._cleanupTurn()
   }
 
   resolveClaimPeng(): void {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'peng' })
+    if (!this.claimAction.resolve({ kind: 'peng' })) return
     this._cleanupClaim()
   }
 
   resolveClaimGang(): void {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'gang' })
+    if (!this.claimAction.resolve({ kind: 'gang' })) return
     this._cleanupClaim()
   }
 
   resolveClaimPass(): void {
-    if (!this._resolveClaim) return
-    this._resolveClaim({ kind: 'pass' })
+    if (!this.claimAction.resolve({ kind: 'pass' })) return
     this._cleanupClaim()
   }
 
   resolveRobKongAction(action: RobKongAction): void {
-    if (!this._resolveRobKong) return
-    this._resolveRobKong(action)
+    if (!this.robKongAction.resolve(action)) return
     this._cleanupRobKong()
   }
 
   // ── 内部清理 ──
 
   private _cleanupTurn(): void {
-    this._resolveTurn = null
     this.bridge.isTurn.value = false
     this.bridge.deactivate()
   }
 
   private _cleanupClaim(): void {
-    this._resolveClaim = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }
 
   private _cleanupRobKong(): void {
-    this._resolveRobKong = null
     this.bridge.actionPrompt.value = null
     this.bridge.deactivate()
   }
