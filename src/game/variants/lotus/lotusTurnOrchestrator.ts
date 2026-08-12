@@ -4,7 +4,7 @@ import { performDiscardGang, performPeng, type ActionContext } from '../../core/
 import { sortTiles } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
-import type { LotusController } from './lotusControllers'
+import type { LotusController, LotusHuAction } from './lotusControllers'
 import { canChi, canRobKong, isJoker, isWinningHand, matchingCount, type ChiMeld } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 
@@ -118,19 +118,29 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     state.roundFirstDiscard.value = false
     const huPlayers = findHu(from, tile)
     if (huPlayers.length) {
-      void offerHu(huPlayers, from, tile, isFirstDiscard)
+      void offerHu(huPlayers, from, tile, isFirstDiscard, new Map())
       return
     }
     continueClaims(from, tile)
   }
 
-  async function offerHu(list: number[], from: number, tile: TileType, isFirstDiscard: boolean) {
+  async function offerHu(
+    list: number[],
+    from: number,
+    tile: TileType,
+    isFirstDiscard: boolean,
+    decisions: Map<number, LotusHuAction>,
+  ) {
     const [playerIndex, ...remaining] = list
     if (playerIndex === undefined) {
-      continueClaims(from, tile)
+      continueClaims(from, tile, decisions)
       return
     }
     const player = state.players[playerIndex]
+    const count = isJoker(tile, state.jokerTiles.value) ? 0 : matchingCount(player.hand, tile)
+    const chiOptions = playerIndex === (from + 1) % state.players.length
+      ? canChi(player.hand, tile, state.jokerTiles.value)
+      : []
     const dihu = isFirstDiscard && from === state.dealer.value
     const ctx = {
       hand: player.hand,
@@ -139,11 +149,15 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       from,
       dihu,
       jokers: state.jokerTiles.value,
+      canPeng: count >= 2,
+      canGang: count >= 3,
+      chiOptions,
     }
     const action = await options.controllers[playerIndex].requestDiscardHu(ctx)
     if (hasSettled()) return
-    if (action === 'pass') {
-      void offerHu(remaining, from, tile, isFirstDiscard)
+    if (action.kind !== 'win') {
+      decisions.set(playerIndex, action)
+      void offerHu(remaining, from, tile, isFirstDiscard, decisions)
       return
     }
     options.announce(`${player.name} 胡!`, 'red')
@@ -151,17 +165,17 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   }
 
   /** 精弃牌不可被碰/吃/杠；否则按碰/明杠 → 吃（下家）顺序响应。 */
-  function continueClaims(from: number, tile: TileType) {
+  function continueClaims(from: number, tile: TileType, decisions = new Map<number, LotusHuAction>()) {
     if (isJoker(tile, state.jokerTiles.value)) {
       options.later(() => { void beginTurn((from + 1) % state.players.length) }, PACE_MS.afterDiscardToNextTurn)
       return
     }
     const claimants = findClaims(from, tile)
     if (claimants.length) {
-      void offerNextClaim(claimants, tile, from)
+      void offerNextClaim(claimants, tile, from, decisions)
       return
     }
-    offerChi(from, tile)
+    offerChi(from, tile, decisions)
   }
 
   function findClaims(from: number, tile: TileType): ClaimCandidate[] {
@@ -176,13 +190,32 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
   }
 
-  async function offerNextClaim(claimants: ClaimCandidate[], tile: TileType, from: number) {
+  async function offerNextClaim(
+    claimants: ClaimCandidate[],
+    tile: TileType,
+    from: number,
+    decisions = new Map<number, LotusHuAction>(),
+  ) {
     const [claimant, ...remainingClaims] = claimants
     if (!claimant) {
-      offerChi(from, tile)
+      offerChi(from, tile, decisions)
       return
     }
     const player = state.players[claimant.playerIndex]
+    const decided = decisions.get(claimant.playerIndex)
+    if (decided) {
+      if (decided.kind === 'gang') {
+        performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
+        options.later(() => { void beginTurn(claimant.playerIndex, { fromTail: true }) }, PACE_MS.afterClaimGang)
+        return
+      }
+      if (decided.kind === 'peng') {
+        performPeng(options.tableContext, claimant.playerIndex, tile, from)
+        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.skipDrawPengDelay)
+        return
+      }
+      return offerNextClaim(remainingClaims, tile, from, decisions)
+    }
     const ctx = {
       hand: player.hand,
       canGang: claimant.canGang,
@@ -195,7 +228,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
 
     switch (action.kind) {
       case 'pass':
-        return offerNextClaim(remainingClaims, tile, from)
+        return offerNextClaim(remainingClaims, tile, from, decisions)
       case 'gang':
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(
@@ -220,10 +253,20 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   }
 
   /** 吃：仅弃牌下家可吃。 */
-  function offerChi(from: number, tile: TileType) {
+  function offerChi(from: number, tile: TileType, decisions = new Map<number, LotusHuAction>()) {
     const nextPlayer = (from + 1) % state.players.length
     const player = state.players[nextPlayer]
     const chiOptions = canChi(player.hand, tile, state.jokerTiles.value)
+    const decided = decisions.get(nextPlayer)
+    if (decided) {
+      if (decided.kind === 'chi') {
+        performChi(nextPlayer, decided.meld, tile, from)
+        options.later(() => { void beginTurn(nextPlayer, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
+        return
+      }
+      options.later(() => { void beginTurn(nextPlayer) }, PACE_MS.afterDiscardToNextTurn)
+      return
+    }
     if (!chiOptions.length) {
       options.later(() => { void beginTurn(nextPlayer) }, PACE_MS.afterDiscardToNextTurn)
       return

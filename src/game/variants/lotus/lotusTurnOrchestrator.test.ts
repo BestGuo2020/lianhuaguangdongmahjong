@@ -69,4 +69,59 @@ describe('莲花麻将吃牌副露', () => {
       tiles: ['m4', 'm5', 'm6'],
     }])
   })
+
+  it('可胡且同时可碰杠吃时合并询问，并在胡牌优先级确认后执行所选动作', async () => {
+    const { state } = createOrchestrator()
+    state.players[0].hand = [
+      'm5', 'm5', 'm5', 'm3', 'm3', 'm4', 'm4',
+      'm6', 'm6', 'p1', 'p1', 's1', 's1',
+    ]
+    state.players[3].discards = ['m5']
+    state.jokerTiles.value = ['white']
+    let responseContext: Parameters<LotusController['requestDiscardHu']>[0] | null = null
+    const responseController: LotusController = {
+      requestTurn: async () => ({ kind: 'discard', handIndex: 0 }),
+      requestDiscardHu: async (context) => {
+        responseContext = context
+        return { kind: 'peng' }
+      },
+      requestClaim: async () => ({ kind: 'pass' }),
+      requestChi: async () => ({ kind: 'pass' }),
+      requestRobKong: async () => 'pass',
+    }
+    // createOrchestrator controllers are replaceable through their shared array only before construction,
+    // so build a fresh orchestrator with the response-aware controller.
+    const tableContext: ActionContext = {
+      players: state.players,
+      currentPlayer: state.currentPlayer,
+      showTableAction: vi.fn(),
+      showScoreFlow: vi.fn(),
+      playSound: vi.fn(),
+    }
+    const controllers = [responseController, responseController, responseController, responseController]
+    const responseOrchestrator = createLotusTurnOrchestrator({
+      state, controllers, tableContext,
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      performWindKong: async () => {},
+      declareAddedKong: () => {},
+      settleAddedKong: () => undefined,
+      discardTile: () => undefined,
+      endDraw: () => undefined,
+      endGame: () => undefined,
+      announce: () => {},
+      later: (callback) => { callback(); return 0 },
+    })
+
+    responseOrchestrator.routeDiscard(3, 'm5')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(responseContext).toMatchObject({ canPeng: true, canGang: true })
+    expect(responseContext?.chiOptions).toHaveLength(2)
+    expect(state.players[0].melds).toContainEqual({
+      type: 'peng', tile: 'm5', from: 3, tiles: ['m5', 'm5', 'm5'],
+    })
+  })
 })

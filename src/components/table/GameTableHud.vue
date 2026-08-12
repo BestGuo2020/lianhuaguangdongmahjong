@@ -73,6 +73,7 @@ const seatPosition = ['bottom', 'right', 'top', 'left']
 const waitsOpen = ref(false)
 const hoveredDiscard = ref<TileType | null>(null)
 const kongPickerOpen = ref(false)
+const chiPickerOpen = ref(false)
 const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
 let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
@@ -109,6 +110,7 @@ const userDrawnIndex = computed(() => {
 watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(value) })
 watch(() => props.isUserTurn, (value) => { if (!value) waitsOpen.value = false })
 watch(() => props.userKongs, (kongs) => { if (!kongs.length) kongPickerOpen.value = false })
+watch(() => props.actionPrompt, () => { chiPickerOpen.value = false })
 
 function usesFinePointer() {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches
@@ -192,6 +194,17 @@ function chooseKong(tile: TileType) {
   emit('gang', tile)
 }
 
+function toggleChiPicker() {
+  const options = props.actionPrompt?.chiOptions ?? []
+  if (options.length === 1) emit('chi', 0)
+  else if (options.length > 1) chiPickerOpen.value = !chiPickerOpen.value
+}
+
+function chooseChi(index: number) {
+  chiPickerOpen.value = false
+  emit('chi', index)
+}
+
 function onAvatarError(entry: GamePlayer) {
   const fallback = defaultAvatarForSeat(entry.seat)
   if (entry.avatar !== fallback) entry.avatar = fallback
@@ -261,11 +274,18 @@ function onAvatarError(entry: GamePlayer) {
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
-    <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen }">
+    <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
       <template v-if="actionPrompt?.type === 'claim'">
         <button class="action primary" @click="$emit('peng')"><b>碰</b></button>
         <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+      </template>
+      <template v-else-if="actionPrompt?.type === 'response'">
+        <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
+        <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+        <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
+        <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
       <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
@@ -273,10 +293,7 @@ function onAvatarError(entry: GamePlayer) {
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
       <template v-else-if="actionPrompt?.type === 'chi'">
-        <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="action primary chi-action" @click="$emit('chi', chiIndex)">
-          <b>吃</b>
-          <span class="chi-option-tiles"><MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" small disabled /></span>
-        </button>
+        <button class="action primary" @click="toggleChiPicker"><b>吃</b></button>
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
       <template v-else>
@@ -289,6 +306,18 @@ function onAvatarError(entry: GamePlayer) {
     <Transition name="modal">
       <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
         <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
+      </div>
+    </Transition>
+    <Transition name="modal">
+      <div v-if="chiPickerOpen && actionPrompt?.chiOptions?.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="chi-picker-title" @click.self="chiPickerOpen = false">
+        <section class="result-card kong-picker-card">
+          <h2 id="chi-picker-title">请选择吃牌组合</h2>
+          <div class="kong-picker-tiles chi-picker-options">
+            <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="chi-picker-option" @click="chooseChi(chiIndex)">
+              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" small disabled />
+            </button>
+          </div>
+        </section>
       </div>
     </Transition>
   </div>
@@ -327,4 +356,21 @@ function onAvatarError(entry: GamePlayer) {
 
 .chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
 .chi-action { gap: 2px; }
+.chi-picker-options { align-items: stretch; }
+.chi-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid rgba(212, 175, 55, .5);
+  border-radius: 10px;
+  background: rgba(4, 39, 28, .92);
+  cursor: pointer;
+}
+.chi-picker-option:hover,
+.chi-picker-option:focus-visible {
+  border-color: #f4cb63;
+  background: rgba(13, 66, 45, .96);
+  transform: translateY(-2px);
+}
 </style>

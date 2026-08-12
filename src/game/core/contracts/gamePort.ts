@@ -35,6 +35,8 @@ export interface ActionPrompt {
   tile: TileType
   from: number
   canGang?: boolean
+  canPeng?: boolean
+  canHu?: boolean
   remainingClaims?: Array<{ playerIndex: number; canGang: boolean }>
   /** 莲花麻将「吃」候选项（弃牌的下家可吃）。 */
   chiOptions?: ChiOption[]

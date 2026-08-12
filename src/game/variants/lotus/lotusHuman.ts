@@ -56,12 +56,13 @@ export function createLotusHuman(options: LotusHumanOptions) {
     if (!prompt) return
     options.playSound('click.mp3', 0.65)
     if (humanController.hasPendingRobKong()) return humanController.resolveRobKongAction('pass')
-    if (humanController.hasPendingHu()) return humanController.resolveHu('pass')
+    if (humanController.hasPendingHu()) return humanController.resolveHu({ kind: 'pass' })
     if (humanController.hasPendingChi()) return humanController.resolveChiPass()
     if (humanController.hasPendingClaim()) return humanController.resolveClaimPass()
   }
 
   function userPeng() {
+    if (humanController.hasPendingHu()) return humanController.resolveHu({ kind: 'peng' })
     if (humanController.hasPendingClaim()) return humanController.resolveClaimPeng()
     const prompt = state.actionPrompt.value
     if (prompt?.type !== 'claim') return
@@ -75,6 +76,7 @@ export function createLotusHuman(options: LotusHumanOptions) {
   }
 
   function userGangFromDiscard() {
+    if (humanController.hasPendingHu()) return humanController.resolveHu({ kind: 'gang' })
     if (humanController.hasPendingClaim()) return humanController.resolveClaimGang()
     const prompt = state.actionPrompt.value
     if (prompt?.type !== 'claim' || !prompt.canGang) return
@@ -111,6 +113,11 @@ export function createLotusHuman(options: LotusHumanOptions) {
   }
 
   function userChi(chiIndex = 0) {
+    if (humanController.hasPendingHu()) {
+      const option = state.actionPrompt.value?.chiOptions?.[chiIndex]
+      if (option) humanController.resolveHu({ kind: 'chi', meld: option })
+      return
+    }
     if (humanController.hasPendingChi()) {
       const option = state.actionPrompt.value?.chiOptions?.[chiIndex]
       if (option) humanController.resolveChi(option)
@@ -131,7 +138,7 @@ export function createLotusHuman(options: LotusHumanOptions) {
 
   function userHu() {
     if (humanController.hasPendingRobKong()) return humanController.resolveRobKongAction('win')
-    if (humanController.hasPendingHu()) return humanController.resolveHu('win')
+    if (humanController.hasPendingHu()) return humanController.resolveHu({ kind: 'win' })
     if (humanController.hasPendingTurn()) return humanController.resolveWin()
     if (state.actionPrompt.value?.type === 'rob') {
       const kongPlayerIndex = state.pendingKong.value?.playerIndex ?? state.actionPrompt.value.from

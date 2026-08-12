@@ -37,6 +37,9 @@ export interface LotusHuContext {
   from: number
   dihu: boolean
   jokers: TileType[]
+  canPeng: boolean
+  canGang: boolean
+  chiOptions: ChiMeld[]
 }
 
 export interface LotusClaimContext {
@@ -69,7 +72,12 @@ export type LotusClaimAction =
   | { kind: 'pass' }
 
 export type LotusChiAction = { kind: 'chi'; meld: ChiMeld } | { kind: 'pass' }
-export type LotusHuAction = 'win' | 'pass'
+export type LotusHuAction =
+  | { kind: 'win' }
+  | { kind: 'peng' }
+  | { kind: 'gang' }
+  | { kind: 'chi'; meld: ChiMeld }
+  | { kind: 'pass' }
 export type LotusRobKongAction = 'win' | 'pass'
 
 export interface LotusController {
@@ -139,7 +147,15 @@ export class LotusHumanController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
-    this.bridge.actionPrompt.value = { type: 'hu', tile: ctx.tile, from: ctx.from }
+    this.bridge.actionPrompt.value = {
+      type: 'response',
+      tile: ctx.tile,
+      from: ctx.from,
+      canHu: true,
+      canPeng: ctx.canPeng,
+      canGang: ctx.canGang,
+      chiOptions: ctx.chiOptions,
+    }
     this.bridge.activateHu()
     return new Promise<LotusHuAction>((resolve) => { this._resolveHu = resolve })
   }
@@ -306,7 +322,9 @@ export class LotusAiController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
-    return isWinningHand([...ctx.hand, ctx.tile], ctx.exposedMelds, ctx.jokers) ? 'win' : 'pass'
+    return isWinningHand([...ctx.hand, ctx.tile], ctx.exposedMelds, ctx.jokers)
+      ? { kind: 'win' }
+      : { kind: 'pass' }
   }
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
