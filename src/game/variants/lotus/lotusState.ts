@@ -1,7 +1,7 @@
 // 「莲花麻将」本地对局状态：复用核心状态形状，附加本局翻精/癞子/牌山断点字段。
 import { ref } from 'vue'
-import type { TileType } from '../core/contracts/types'
-import { createLocalGameState } from '../core/local/localGameState'
+import type { TileType } from '../../core/contracts/types'
+import { createLocalGameState } from '../../core/local/localGameState'
 
 /** 莲花麻将胡牌结算选项（winHand 为含胡牌张的完整 14 张手牌，供番数判定）。 */
 export interface LotusEndGameOptions {

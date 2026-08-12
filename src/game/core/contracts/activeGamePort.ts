@@ -80,7 +80,7 @@ export function createActiveGamePort(
     userTingOptions: state('userTingOptions'),
     userDiscardWaits: state('userDiscardWaits'),
     userKongs: state('userKongs'),
-    userHasWindKong: state('userHasWindKong'),
+    capabilities: state('capabilities'),
 
     startGame: action('startGame'),
     selectTile: action('selectTile'),
@@ -91,8 +91,6 @@ export function createActiveGamePort(
     userGangFromDiscard: action('userGangFromDiscard'),
     userGang: action('userGang'),
     userHu: action('userHu'),
-    userChi: action('userChi'),
-    userWindKong: action('userWindKong'),
     nextRound: action('nextRound'),
     returnToLobby: action('returnToLobby'),
     tileName: action('tileName'),

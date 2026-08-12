@@ -2,8 +2,8 @@
 // 与现行「莲花广麻」的 rules.ts 解耦：本局癞子（精）由开局翻牌动态决定，
 // 以 `jokers: TileType[]` 传入各判定函数。只做「看手牌 → 判定/番数」的纯函数，
 // 不触碰任何游戏状态，因此可独立单元测试。
-import type { TileType } from '../core/contracts/types'
-import { HONORS, SUITS, TILE_TYPES } from '../core/rules/tiles'
+import type { TileType } from '../../core/contracts/types'
+import { HONORS, SUITS, TILE_TYPES } from '../../core/rules/tiles'
 
 // ── 癞子（精）判定 ──────────────────────────────────────────────
 

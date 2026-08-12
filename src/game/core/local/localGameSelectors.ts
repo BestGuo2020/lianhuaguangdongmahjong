@@ -1,32 +1,19 @@
-import { computed } from 'vue'
 import { MATCH_NAMES } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import { createPlayerSelectors, structuralMeldCount } from '../selectors/playerSelectors'
+import { createCommonGameSelectors } from '../../shared/selectors/gameSelectors'
 
 export { structuralMeldCount }
 
 export function createLocalGameSelectors(state: LocalGameState) {
-  const user = computed(() => state.players[0])
-  const isUserTurn = computed(() => state.currentPlayer.value === 0 && state.phase.value === 'discard')
+  const common = createCommonGameSelectors(state, MATCH_NAMES)
   const playerSelectors = createPlayerSelectors({
     players: state.players,
-    user,
+    user: common.user,
     phase: state.phase,
-    isUserTurn,
+    isUserTurn: common.isUserTurn,
     userDrewThisTurn: state.userDrewThisTurn,
     selectedIndex: state.selectedIndex,
   })
-  const wallCount = computed(() => state.wall.value.length)
-  const windName = computed(() => (state.round.value > 4 ? '南' : '东'))
-  const handNumber = computed(() => ((state.round.value - 1) % 4) + 1)
-  const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
-  const matchName = computed(() => MATCH_NAMES[state.matchType.value])
-  const standings = computed(() => state.players
-    .map((player, index) => ({ ...player, playerIndex: index }))
-    .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
-    .map((player, index) => ({ ...player, rank: index + 1 })))
-
-  return {
-    user, isUserTurn, ...playerSelectors, wallCount, roundLabel, matchName, standings,
-  }
+  return { ...common, ...playerSelectors }
 }

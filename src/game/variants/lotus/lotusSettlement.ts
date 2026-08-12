@@ -1,7 +1,7 @@
 // 「莲花麻将」结算：胡牌动画 → 番数/收付结算；流局列出听牌玩家。
-import type { RoundResult } from '../core/contracts/gamePort'
-import type { TableActionType, TileType } from '../core/contracts/types'
-import { resolveWinTile } from '../core/local/matchProgress'
+import type { RoundResult } from '../../core/contracts/gamePort'
+import type { TableActionType, TileType } from '../../core/contracts/types'
+import { resolveWinTile } from '../../core/local/matchProgress'
 import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
@@ -9,10 +9,11 @@ import {
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
   WIN_REVEAL_DURATION,
-} from '../core/presentation/winEffect'
+} from '../../core/presentation/winEffect'
 import { scoreFan, waitingTiles } from './lotusRules'
 import { applyWinScore } from './lotusScoring'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
+import { makeRoundResult as buildRoundResult } from '../../shared/settlement/roundResult'
 
 interface LotusSettlementOptions {
   state: LotusGameState
@@ -47,23 +48,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
   }
 
   function makeRoundResult(base: RoundResult, scoresBefore: number[]): RoundResult {
-    const ranking = state.players
-      .map((player, playerIndex) => ({ playerIndex, score: player.score }))
-      .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
-    const ranks = new Map(ranking.map((item, index) => [item.playerIndex, index + 1]))
-    return {
-      ...base,
-      roundLabel: options.getRoundLabel(),
-      honba: state.honba.value,
-      scoreChanges: state.players.map((player, playerIndex) => ({
-        playerIndex,
-        name: player.name,
-        avatar: player.avatar,
-        score: player.score,
-        delta: player.score - scoresBefore[playerIndex],
-        rank: ranks.get(playerIndex),
-      })),
-    }
+    return buildRoundResult({ players: state.players, roundLabel: options.getRoundLabel(), honba: state.honba.value }, base, scoresBefore)
   }
 
   function finalizeWin(winnerIndex: number, endOptions: LotusEndGameOptions) {

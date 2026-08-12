@@ -1,9 +1,9 @@
 // 「莲花麻将」开局牌墙构造（旧版两次掷骰规则）。
 // 纯函数：把「立牌山 → 第一次掷骰翻精 → 第二次掷骰定开门 → 重排为发牌顺序」拆成独立步骤，
 // 供开局时间线在合适时机分别调用（掷骰前先立起牌山）。
-import type { TileType } from '../core/contracts/types'
-import { WALL_STACKS } from '../core/rules/wallLayout'
-import { createWall, shuffle } from '../core/rules/tiles'
+import type { TileType } from '../../core/contracts/types'
+import { WALL_STACKS } from '../../core/rules/wallLayout'
+import { createWall, shuffle } from '../../core/rules/tiles'
 import { computeJokers } from './lotusRules'
 
 /** 翻精墩（指示牌 + 底张）整体移出牌墙：牌山 136 → 可摸 134 张。 */
@@ -65,6 +65,19 @@ export function buildDrawOrderWall(ring: TileType[], openingStack: number, flipS
   }
   return wall
 }
+
+/**
+ * 莲花麻将不留王牌。杠后从当前牌尾补摸，同一墩先摸上层、再摸下层；
+ * 普通摸牌仍可从牌头一直摸到牌墙耗尽。
+ */
+export function takeLotusTailTile(wall: TileType[], headDrawn: number): TileType | null {
+  if (!wall.length) return null
+  const tailDrawn = WALL_TOTAL_WITHOUT_FLIP - headDrawn - wall.length
+  const index = tailDrawn % 2 === 0 && wall.length >= 2 ? wall.length - 2 : wall.length - 1
+  return wall.splice(index, 1)[0] ?? null
+}
+
+export const WALL_TOTAL_WITHOUT_FLIP = WALL_STACKS * 2 - FLIP_STACK_REMOVED
 
 // ── 兼容入口：给定两次骰子直接得出最终发牌顺序牌墙（单元测试 / 旧逻辑用）──
 

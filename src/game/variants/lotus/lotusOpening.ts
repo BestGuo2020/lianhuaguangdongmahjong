@@ -1,7 +1,7 @@
 // 「莲花麻将」开局时间线：两次掷骰 → 翻精（亮指示牌）→ 发牌 → 天胡判定。
-import type { MatchType, TileType } from '../core/contracts/types'
-import { sortTiles, tileName } from '../core/rules/tiles'
-import { MATCH_HANDS, PLAYER_SEED } from '../core/local/localGameConfig'
+import type { MatchType, TileType } from '../../core/contracts/types'
+import { sortTiles, tileName } from '../../core/rules/tiles'
+import { MATCH_HANDS, PLAYER_SEED } from '../../core/local/localGameConfig'
 import { isWinningHand } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import {

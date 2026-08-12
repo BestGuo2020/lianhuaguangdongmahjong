@@ -118,6 +118,17 @@ export interface WaitInfo {
   remaining: number
 }
 
+export interface GameCapabilities {
+  chi?: { choose(optionIndex: number): void }
+  windKong?: { available: boolean; execute(): void }
+  lotusTable?: {
+    flipTile: TileType | null
+    jokerTiles: TileType[]
+    wallBreakIndex: number
+    flipStack: number | null
+  }
+}
+
 export interface GamePort {
   phase: RefLike<GamePhase>
   players: GamePlayer[]
@@ -158,7 +169,7 @@ export interface GamePort {
   userDiscardWaits: RefLike<WaitInfo | null>
   userKongs: RefLike<TileType[]>
   /** 莲花麻将：手牌同时持有东南西北各 1 张可暗杠（乱风杠）。 */
-  userHasWindKong: RefLike<boolean>
+  capabilities: RefLike<GameCapabilities>
 
   startGame(mode?: MatchType): unknown
   selectTile(index: number): void
@@ -170,9 +181,7 @@ export interface GamePort {
   userGang(tile?: TileType): void
   userHu(): void
   /** 莲花麻将：从吃候选中选择第 chiIndex 组吃面子（现行玩法为 no-op）。 */
-  userChi(chiIndex: number): void
   /** 莲花麻将：暗杠（乱风杠）东南西北各 1 张（现行玩法为 no-op）。 */
-  userWindKong(): void
   nextRound(): void
   returnToLobby(): void
   tileName(tile: TileType): string
@@ -192,12 +201,12 @@ export const GAME_PORT_STATE_KEYS = [
   'winningPlayerIndex', 'round', 'dealer', 'user', 'isUserTurn', 'userCanHu', 'matchType',
   'matchName', 'matchFinished', 'honba', 'roundLabel', 'standings', 'dealAnimation',
   'openingStage', 'diceValues', 'diceThrowerIndex', 'userCurrentWaits', 'userTingOptions', 'userDiscardWaits',
-  'userKongs', 'userHasWindKong',
+  'userKongs', 'capabilities',
 ] as const satisfies ReadonlyArray<GamePortStateKey>
 
 export const GAME_PORT_ACTION_KEYS = [
   'startGame', 'selectTile', 'clearUserSelection', 'userDiscard', 'userPass', 'userPeng',
-  'userGangFromDiscard', 'userGang', 'userHu', 'userChi', 'userWindKong',
+  'userGangFromDiscard', 'userGang', 'userHu',
   'nextRound', 'returnToLobby', 'tileName',
 ] as const satisfies ReadonlyArray<GamePortActionKey>
 
@@ -213,6 +222,6 @@ void allActionKeysCovered
 /**
  * 编译期契约检查，同时保留实现自身的精确返回类型和扩展能力。
  */
-export function defineGamePort<T extends GamePort>(port: T): T {
+export function defineGamePort<T>(port: T & GamePort): T & GamePort {
   return port
 }

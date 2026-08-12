@@ -1,11 +1,14 @@
-// 「莲花麻将」计时调度：与核心 localTimerScheduler 等价，但控制器类型按本引擎定义。
-interface LotusTimerOptions {
-  controllers: Array<{ reset?: () => void }>
+export interface ResettableController {
+  reset?(): void
+}
+
+interface TimerSchedulerOptions {
+  controllers: ResettableController[]
   stopCountdown(): void
   cancelOpening(): void
 }
 
-export function createLotusTimer(options: LotusTimerOptions) {
+export function createTimerScheduler(options: TimerSchedulerOptions) {
   const timers = new Set<number>()
 
   function later(callback: () => void, delay = 600) {

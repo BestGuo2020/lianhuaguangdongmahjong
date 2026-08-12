@@ -11,6 +11,7 @@ import {
 } from '../presentation/winEffect'
 import type { LocalGameState } from './localGameState'
 import { resolveWinTile } from './matchProgress'
+import { makeRoundResult as buildRoundResult } from '../../shared/settlement/roundResult'
 
 interface LocalSettlementTimelineOptions {
   state: LocalGameState
@@ -43,23 +44,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
   }
 
   function makeRoundResult(base: RoundResult, scoresBefore: number[]): RoundResult {
-    const ranking = state.players
-      .map((player, playerIndex) => ({ playerIndex, score: player.score }))
-      .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
-    const ranks = new Map(ranking.map((item, index) => [item.playerIndex, index + 1]))
-    return {
-      ...base,
-      roundLabel: options.getRoundLabel(),
-      honba: state.honba.value,
-      scoreChanges: state.players.map((player, playerIndex) => ({
-        playerIndex,
-        name: player.name,
-        avatar: player.avatar,
-        score: player.score,
-        delta: player.score - scoresBefore[playerIndex],
-        rank: ranks.get(playerIndex),
-      })),
-    }
+    return buildRoundResult({ players: state.players, roundLabel: options.getRoundLabel(), honba: state.honba.value }, base, scoresBefore)
   }
 
   function finalizeWin(winnerIndex: number, endOptions: EndGameOptions) {

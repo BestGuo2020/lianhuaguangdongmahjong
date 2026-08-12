@@ -369,8 +369,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userCurrentWaits, userTingOptions, userDiscardWaits,
-    userKongs, userHasWindKong: ref(false), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
-    userGangFromDiscard, userGang, userHu, userChi: () => {}, userWindKong: () => {},
+    userKongs, capabilities: ref({}), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
+    userGangFromDiscard, userGang, userHu,
     nextRound, returnToLobby, tileName, debugPreviewWin,
   })
 }

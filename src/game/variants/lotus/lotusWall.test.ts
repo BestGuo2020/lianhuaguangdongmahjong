@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TileType } from '../../core/contracts/types'
 import { computeJokers } from './lotusRules'
 import {
   buildDrawOrderWall,
@@ -8,6 +9,7 @@ import {
   resolveFlip,
   resolveOpeningStack,
   seatSegmentStart,
+  takeLotusTailTile,
 } from './lotusWall'
 
 describe('莲花麻将开局分步构造（立牌山 → 翻精 → 开门）', () => {
@@ -33,6 +35,26 @@ describe('莲花麻将开局分步构造（立牌山 → 翻精 → 开门）', 
     expect(flipTile).toBe(combined.flipTile)
     expect(jokers).toEqual(combined.jokers)
     expect(openingStack).toBe(combined.openingStack)
+  })
+  it('杠后从当前尾墙先补摸顶层，再摸同墩底层', () => {
+    const ring = Array.from({ length: 136 }, (_, index) => `m${index}` as TileType)
+    const wall = buildDrawOrderWall(ring, 0, 10)
+    expect(takeLotusTailTile(wall, 0)).toBe(ring[67 * 2])
+    expect(takeLotusTailTile(wall, 0)).toBe(ring[67 * 2 + 1])
+    expect(takeLotusTailTile(wall, 0)).toBe(ring[66 * 2])
+    expect(takeLotusTailTile(wall, 0)).toBe(ring[66 * 2 + 1])
+  })
+  it('不保留王牌，牌头与杠尾合计可摸完全部 134 张', () => {
+    const ring = Array.from({ length: 136 }, (_, index) => `m${index}` as TileType)
+    const wall = buildDrawOrderWall(ring, 0, 10)
+    let headDrawn = 0
+    expect(takeLotusTailTile(wall, headDrawn)).not.toBeNull()
+    while (wall.length) {
+      wall.shift()
+      headDrawn += 1
+    }
+    expect(headDrawn + 1).toBe(134)
+    expect(takeLotusTailTile(wall, headDrawn)).toBeNull()
   })
 })
 

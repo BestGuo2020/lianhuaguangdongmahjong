@@ -1,12 +1,13 @@
 // 「莲花麻将」本地引擎组装：把规则/开局/回合/杠/结算/人类/AI 拼成 GamePort。
 // 结构仿 core/local/useGame.ts，但整体独立于「莲花广麻」，复用共享的计时/瞬态事件/音效模块。
-import { onBeforeUnmount, ref } from 'vue'
-import type { TileType } from '../core/contracts/types'
-import { defineGamePort } from '../core/contracts/gamePort'
-import { createLocalCountdownController } from '../core/local/localCountdownController'
-import { createLocalTransientEventPresenter } from '../core/local/localTransientEventPresenter'
-import { advanceMatchState } from '../core/local/matchProgress'
-import { tileName } from '../core/rules/tiles'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import type { TileType } from '../../core/contracts/types'
+import { defineGamePort } from '../../core/contracts/gamePort'
+import { createLocalCountdownController } from '../../core/local/localCountdownController'
+import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
+import { createMatchLifecycle } from '../../shared/runtime/matchLifecycle'
+import { createTimerScheduler } from '../../shared/runtime/timerScheduler'
+import { tileName } from '../../core/rules/tiles'
 import type { LotusController, LotusHumanBridge } from './lotusControllers'
 import { LotusAiController, LotusHumanController } from './lotusControllers'
 import { createLotusHuman } from './lotusHuman'
@@ -17,7 +18,6 @@ import { createLotusSettlement } from './lotusSettlement'
 import { structuralMeldCount } from './lotusSelectors'
 import { createLotusGameState, type LotusEndGameOptions } from './lotusState'
 import { createLotusTileFlow } from './lotusTileFlow'
-import { createLotusTimer } from './lotusTimer'
 import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 
 interface UseLotusGameOptions {
@@ -87,7 +87,7 @@ export function useLotusGame({
     new LotusAiController(),
   ]
 
-  const timer = createLotusTimer({
+  const timer = createTimerScheduler({
     controllers,
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
@@ -129,7 +129,6 @@ export function useLotusGame({
     controllers,
     getTurnOrchestrator: () => turnOrchestrator,
     endDraw,
-    endGame,
     playSound,
     later: timer.later,
     stopCountdown: countdown.stop,
@@ -204,38 +203,17 @@ export function useLotusGame({
     later: timer.later,
   })
 
-  function nextRound() {
-    if (!state.result.value || state.matchFinished.value) return
-    const next = advanceMatchState({
-      round: state.round.value,
-      dealer: state.dealer.value,
-      honba: state.honba.value,
-      matchType: state.matchType.value,
-      result: state.result.value,
-      playerCount: state.players.length,
-    })
-    state.round.value = next.round
-    state.dealer.value = next.dealer
-    state.honba.value = next.honba
-    if (next.finished) {
-      state.matchFinished.value = true
-      state.phase.value = 'finished'
-      return
-    }
-    startGame()
-  }
-
-  function returnToLobby() {
-    timer.clear()
-    state.phase.value = 'lobby'
-    state.result.value = null
-    state.winEffect.value = null
-    state.winPresentation.value = null
-    state.revealHands.value = false
-    state.winningPlayerIndex.value = -1
-    state.matchFinished.value = false
-    state.players.splice(0, state.players.length)
-  }
+  const matchLifecycle = createMatchLifecycle({ state, clearTimers: timer.clear, startGame })
+  const capabilities = computed(() => ({
+    chi: { choose: playerActions.userChi },
+    windKong: { available: selectors.userHasWindKong.value, execute: playerActions.userWindKong },
+    lotusTable: {
+      flipTile: state.flipTile.value,
+      jokerTiles: state.jokerTiles.value,
+      wallBreakIndex: state.wallBreakIndex.value,
+      flipStack: state.flipStack.value,
+    },
+  }))
 
   onBeforeUnmount(timer.clear)
 
@@ -277,7 +255,7 @@ export function useLotusGame({
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,
     userKongs: selectors.userKongs,
-    userHasWindKong: selectors.userHasWindKong,
+    capabilities,
     // 莲花麻将专属
     flipTile: state.flipTile,
     jokerTiles: state.jokerTiles,
@@ -285,8 +263,7 @@ export function useLotusGame({
     flipStack: state.flipStack,
     startGame,
     ...playerActions,
-    nextRound,
-    returnToLobby,
+    ...matchLifecycle,
     tileName,
     humanController,
   })

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ActionContext } from '../core/rules/actions'
-import type { GamePlayer, TileType } from '../core/contracts/types'
+import type { ActionContext } from '../../core/rules/actions'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { LotusController } from './lotusControllers'
 import { createLotusGameState } from './lotusState'
 import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'

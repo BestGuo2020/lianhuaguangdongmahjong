@@ -51,22 +51,22 @@ export function wallBreakIndex(dice: readonly [number, number] | number[], total
   return (segmentStart + n * 2) % total
 }
 
-/** 牌尾死墙预留（张数）：开杠补牌从牌尾摸，尾侧需保证"先抓上层"。 */
-const WALL_TAIL_RESERVE = 14
-
 /** 第 i 张当前牌（wall[i]）在固定环中的墩位与层（0=底牌，1=顶牌）。
- * 牌头侧：偶数物理位为顶（牌头先抓上层）；牌尾侧（最后 WALL_TAIL_RESERVE 张，供开杠补牌）：
- * 奇数物理位为顶（开杠补牌也从顶层开始摸，先抓上层再抓下层）。分界对齐到墩，避免同墩一顶一底被拆开。 */
-export function wallTilePlacement(tileIndex: number, headOffset: number, total = WALL_TOTAL) {
+ * 牌头正常按上、下层摸取；牌尾不设固定王牌区，只把当前最后一墩按杠后
+ * pop() 的顺序显示为上、下层。remainingCount 是当前尚未摸走的牌数。 */
+export function wallTilePlacement(tileIndex: number, headOffset: number, remainingCount = WALL_TOTAL) {
   const physical = (headOffset + tileIndex) % WALL_TOTAL
   const stackIndex = Math.floor(physical / 2)
-  const tailReserve = Math.min(WALL_TAIL_RESERVE, total)
-  let tailStart = total - tailReserve
-  // 让分界落在墩与墩之间（headOffset + tailStart 为偶数），保证同墩层一致
-  if ((headOffset + tailStart) % 2 !== 0) tailStart += 1
-  tailStart = Math.max(0, Math.min(total, tailStart))
-  const headSide = tileIndex < tailStart
-  const layer = headSide ? (1 - (physical % 2)) : (physical % 2)
+  const tailDrawn = Math.max(0, WALL_TOTAL - headOffset - remainingCount)
+  const lastIndex = remainingCount - 1
+  const inCurrentTailStack = tailDrawn % 2 === 0
+    ? tileIndex >= lastIndex - 1
+    : tileIndex === lastIndex
+  let layer = 1 - (physical % 2)
+  if (inCurrentTailStack) {
+    if (tailDrawn % 2 === 1) layer = 0
+    else layer = tileIndex === lastIndex ? 1 : 0
+  }
   return { stackIndex, layer }
 }
 

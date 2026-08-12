@@ -478,8 +478,14 @@ function addWall() {
   tiles.forEach((_, index) => {
     const { stackIndex, layer } = hasFlip
       ? (() => {
-        const physical = wallPhysicalIndex(index, (breakIndex + headOffset) % WALL_TOTAL)
-        return { stackIndex: Math.floor(physical / 2), layer: 1 - (physical % 2) }
+        const tailDrawn = Math.max(0, WALL_TOTAL - 2 - headOffset - tiles.length)
+        // 补走一张顶层牌后，同墩剩余的底层牌仍应留在原物理张位。
+        const physicalIndex = tailDrawn % 2 === 1 && index === tiles.length - 1 ? index + 1 : index
+        const physical = wallPhysicalIndex(physicalIndex, (breakIndex + headOffset) % WALL_TOTAL)
+        return {
+          stackIndex: Math.floor(physical / 2),
+          layer: 1 - (physical % 2),
+        }
       })()
       : wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length)
     const slot = wallStackSlot(stackIndex)

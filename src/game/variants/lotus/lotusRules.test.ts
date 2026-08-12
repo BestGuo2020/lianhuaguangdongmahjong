@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TileType } from '../core/contracts/types'
+import type { TileType } from '../../core/contracts/types'
 import {
   canChi,
   canPeng,

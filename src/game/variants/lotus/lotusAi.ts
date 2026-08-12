@@ -1,7 +1,7 @@
 // 「莲花麻将」AI 决策层（纯函数）：看手牌/局面 → 给出动作命令，不改任何状态。
 // 决策与执行分离，可独立单元测试。
-import type { Meld, TileType } from '../core/contracts/types'
-import { removeMatches } from '../core/rules/actions'
+import type { Meld, TileType } from '../../core/contracts/types'
+import { removeMatches } from '../../core/rules/actions'
 import { canPeng, concealedKongs, isJoker, isWinningHand, matchingCount, windKong, type ChiMeld } from './lotusRules'
 
 export type LotusTurnDecision =

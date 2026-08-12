@@ -1,7 +1,7 @@
 // 「莲花麻将」用户操作控制器：把 UI 事件（选牌/出牌/碰/吃/杠/胡/过/抢杠）转换为
 // HumanController 的 resolve 或直接驱动回合/杠执行。
-import { performDiscardGang, performPeng, type ActionContext } from '../core/rules/actions'
-import type { GamePlayer, TileType } from '../core/contracts/types'
+import { performDiscardGang, performPeng, type ActionContext } from '../../core/rules/actions'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { LotusHumanController } from './lotusControllers'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { createLotusKong } from './lotusKong'

@@ -8,8 +8,8 @@ import OrientationGate from './components/shell/OrientationGate.vue'
 import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
-import { useGame } from './game/core/local/useGame'
-import { useLotusGame } from './game/legacy/lotusGame'
+import { useGame } from './game/variants/guangma/game'
+import { useLotusGame } from './game/variants/lotus/lotusGame'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
@@ -61,16 +61,19 @@ const {
   actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
-  userKongs, userHasWindKong, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, diceThrowerIndex, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, userChi, userWindKong, nextRound, returnToLobby,
+  userKongs, capabilities, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, diceThrowerIndex, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
+  userGang, userHu, nextRound, returnToLobby,
 } = game
 
 // 莲花麻将专属：翻精指示牌 / 癞子集合 / 3D 牌山断点（仅本地莲花麻将模式有意义）。
-const legacyActive = computed(() => singlePlayerOnly.value && gameMode.value === 'local')
-const flipTile = computed(() => legacyActive.value ? lotusGame.flipTile.value : null)
-const jokerTiles = computed(() => legacyActive.value ? lotusGame.jokerTiles.value : undefined)
-const wallBreakIndex = computed(() => legacyActive.value ? lotusGame.wallBreakIndex.value : undefined)
-const flipStack = computed(() => legacyActive.value ? lotusGame.flipStack.value : undefined)
+const lotusTable = computed(() => capabilities.value.lotusTable)
+const userHasWindKong = computed(() => capabilities.value.windKong?.available ?? false)
+const userChi = (optionIndex: number) => capabilities.value.chi?.choose(optionIndex)
+const userWindKong = () => capabilities.value.windKong?.execute()
+const flipTile = computed(() => lotusTable.value?.flipTile ?? null)
+const jokerTiles = computed(() => lotusTable.value?.jokerTiles)
+const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
+const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
 
 // 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）；仅对莲花广麻生效。
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {

@@ -1,8 +1,8 @@
 // 「莲花麻将」结算：杠分与胡牌收付。杠分表与现行广麻相同（加杠 +3B / 明杠 +1B /
 // 暗杠 +6B / 风杠 +6B，B=100），直接复用 rules.applyKongScore；胡牌按 lotusRules 的
 // 收付表结算（未胡三家都要支付，庄家双倍）。
-import type { GamePlayer } from '../core/contracts/types'
-import { applyKongScore } from '../core/rules/rules'
+import type { GamePlayer } from '../../core/contracts/types'
+import { applyKongScore } from '../../core/rules/rules'
 import type { WinSettlement } from './lotusRules'
 
 export { applyKongScore }

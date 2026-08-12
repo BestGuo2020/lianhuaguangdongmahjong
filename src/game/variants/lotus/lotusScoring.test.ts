@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GamePlayer } from '../core/contracts/types'
+import type { GamePlayer } from '../../core/contracts/types'
 import { applyKongScore, applyWinScore } from './lotusScoring'
 import { winPayments } from './lotusRules'
 

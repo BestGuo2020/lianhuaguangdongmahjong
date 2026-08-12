@@ -1,8 +1,8 @@
 // 「莲花麻将」控制器：人类（Promise+UI 桥）与 AI（纯决策封装）。
 // 决策（做什么）在 lotusAi，回合编排（谁继续、何时继续）在 lotusGame/lotusTurnOrchestrator，
 // 这里把「某个玩家的回合/响应」转换成可执行的命令。
-import type { Meld, TileType } from '../core/contracts/types'
-import type { ActionPrompt } from '../core/contracts/gamePort'
+import type { Meld, TileType } from '../../core/contracts/types'
+import type { ActionPrompt } from '../../core/contracts/gamePort'
 import { isWinningHand, type ChiMeld } from './lotusRules'
 import {
   decideClaim,
