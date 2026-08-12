@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import RoomPanel from './RoomPanel.vue'
+import GameSettingsSummary from './GameSettingsSummary.vue'
+import LobbyDialog from './LobbyDialog.vue'
+import MatchTypePicker from './MatchTypePicker.vue'
+import RuleVariantPicker from './RuleVariantPicker.vue'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
+import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
 import type { RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
 
 interface Props {
   gameMode: GameMode
   selectedMatch: MatchType
+  selectedRule: RuleVariant
+  matchName: string
   storedSession: StoredSession | null
   roomId: string
   nicknameInput: string
@@ -26,10 +34,11 @@ interface Props {
   closing: boolean
 }
 
-defineProps<Props>()
-defineEmits<{
+const props = defineProps<Props>()
+const emit = defineEmits<{
   'update:gameMode': [value: GameMode]
   'update:selectedMatch': [value: MatchType]
+  'update:selectedRule': [value: RuleVariant]
   'update:nicknameInput': [value: string]
   'update:joinCode': [value: string]
   startLocal: []
@@ -44,6 +53,65 @@ defineEmits<{
   openStats: []
   openRules: []
 }>()
+
+type DialogName = 'create' | 'join' | 'match' | 'rule' | null
+const dialog = ref<DialogName>(null)
+const pickerReturn = ref<'create' | null>(null)
+
+const matchOption = computed(() => props.selectedMatch === 'east'
+  ? { name: '东风场', description: '一场 4 局' }
+  : { name: '半庄场', description: '一场 8 局' })
+const ruleOption = computed(() => getRuleVariant(props.selectedRule))
+const dialogTitle = computed(() => ({
+  create: '创建房间',
+  join: '加入房间',
+  match: '选择场次',
+  rule: '选择规则玩法',
+}[dialog.value ?? 'create']))
+
+function openPicker(name: 'match' | 'rule', fromCreate = false) {
+  pickerReturn.value = fromCreate ? 'create' : null
+  dialog.value = name
+}
+
+function closePicker() {
+  dialog.value = pickerReturn.value
+  pickerReturn.value = null
+}
+
+function selectMatch(value: MatchType) {
+  emit('update:selectedMatch', value)
+  closePicker()
+}
+
+function selectRule(value: RuleVariant) {
+  emit('update:selectedRule', value)
+  closePicker()
+}
+
+function confirmCreate() {
+  dialog.value = null
+  emit('createRoom')
+}
+
+function confirmJoin() {
+  dialog.value = null
+  emit('joinRoom')
+}
+
+function viewRules() {
+  dialog.value = null
+  pickerReturn.value = null
+  emit('openRules')
+}
+
+function closeDialog() {
+  if (dialog.value === 'match' || dialog.value === 'rule') {
+    closePicker()
+    return
+  }
+  dialog.value = null
+}
 </script>
 
 <template>
@@ -60,11 +128,15 @@ defineEmits<{
     </div>
 
     <template v-if="gameMode === 'local'">
-      <div class="match-selector" role="radiogroup" aria-label="场次选择">
-        <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="$emit('update:selectedMatch', 'east')"><b>东风场</b><span>一场4局（不含连庄）</span></button>
-        <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="$emit('update:selectedMatch', 'hanchan')"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
-      </div>
-      <button class="start-button" @click="$emit('startLocal')"><b>开始{{ selectedMatch === 'east' ? '东风场' : '半庄场' }}</b><span>四人对局</span></button>
+      <GameSettingsSummary
+        :match-name="matchOption.name"
+        :match-description="matchOption.description"
+        :rule-name="ruleOption.name"
+        :rule-description="ruleOption.highlights.slice(0, 2).join(' · ')"
+        @select-match="openPicker('match')"
+        @select-rule="openPicker('rule')"
+      />
+      <button class="start-button" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
     </template>
 
     <div v-else class="remote-lobby">
@@ -75,32 +147,19 @@ defineEmits<{
           maxlength="12"
           placeholder="输入昵称"
           @input="$emit('update:nicknameInput', ($event.target as HTMLInputElement).value)"
-          @keyup.enter="joinCode ? $emit('joinRoom') : $emit('createRoom')"
+          @keyup.enter="dialog = 'create'"
         />
       </label>
       <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
         剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
       </p>
-      <div v-if="!roomId" class="match-selector" role="radiogroup" aria-label="场次选择">
-        <button :class="{ active: selectedMatch === 'east' }" role="radio" :aria-checked="selectedMatch === 'east'" @click="$emit('update:selectedMatch', 'east')"><b>东风场</b><span>一场4局（不含连庄）</span></button>
-        <button :class="{ active: selectedMatch === 'hanchan' }" role="radio" :aria-checked="selectedMatch === 'hanchan'" @click="$emit('update:selectedMatch', 'hanchan')"><b>半庄场</b><span>一场8局（不含连庄）</span></button>
-      </div>
-      <div class="remote-actions">
-        <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating' || !!roomId" @click="$emit('createRoom')">
+      <div v-if="!roomId" class="remote-entry-actions">
+        <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
           {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
         </button>
-        <div class="remote-join">
-          <input
-            :value="joinCode"
-            maxlength="6"
-            placeholder="6 位房间码"
-            @input="$emit('update:joinCode', ($event.target as HTMLInputElement).value)"
-            @keyup.enter="$emit('joinRoom')"
-          />
-          <button class="remote-join-btn" :disabled="!nicknameInput.trim() || !joinCode.trim() || sessionStatus === 'joining' || !!roomId" @click="$emit('joinRoom')">
-            {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
-          </button>
-        </div>
+        <button class="remote-join-btn" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
+          {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
+        </button>
       </div>
       <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
 
@@ -117,6 +176,8 @@ defineEmits<{
         :copied="copied"
         :leaving="leaving"
         :closing="closing"
+        :match-name="matchName"
+        :rule-name="ruleOption.name"
         @copy="$emit('copyRoom')"
         @toggle-ready="$emit('toggleReady')"
         @start="$emit('startRemote')"
@@ -124,6 +185,45 @@ defineEmits<{
         @close="$emit('closeRoom')"
       />
     </div>
+
+    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule'" @close="closeDialog">
+      <template v-if="dialog === 'create'">
+        <GameSettingsSummary
+          :match-name="matchOption.name"
+          :match-description="matchOption.description"
+          :rule-name="ruleOption.name"
+          :rule-description="ruleOption.highlights.slice(0, 2).join(' · ')"
+          @select-match="openPicker('match', true)"
+          @select-rule="openPicker('rule', true)"
+        />
+        <div class="dialog-actions">
+          <button class="secondary" type="button" @click="dialog = null">取消</button>
+          <button class="primary" type="button" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="confirmCreate">确认创建</button>
+        </div>
+      </template>
+
+      <template v-else-if="dialog === 'join'">
+        <label class="join-dialog-field">
+          <span>房间码</span>
+          <input
+            :value="joinCode"
+            maxlength="6"
+            autofocus
+            placeholder="输入 6 位房间码"
+            @input="$emit('update:joinCode', ($event.target as HTMLInputElement).value.toUpperCase())"
+            @keyup.enter="joinCode.trim() && confirmJoin()"
+          />
+        </label>
+        <p class="dialog-hint">场次和规则玩法由房主设置，加入后可查看。</p>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" @click="dialog = null">取消</button>
+          <button class="primary" type="button" :disabled="!joinCode.trim() || sessionStatus === 'joining'" @click="confirmJoin">确认加入</button>
+        </div>
+      </template>
+
+      <MatchTypePicker v-else-if="dialog === 'match'" :model-value="selectedMatch" @close="closePicker" @confirm="selectMatch" />
+      <RuleVariantPicker v-else :model-value="selectedRule" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
+    </LobbyDialog>
 
     <div class="lobby-links">
       <button v-if="gameMode === 'remote'" class="text-button" @click="$emit('openStats')">我的战绩 →</button>

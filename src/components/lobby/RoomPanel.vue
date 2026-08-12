@@ -13,6 +13,8 @@ interface Props {
   copied: boolean
   leaving: boolean
   closing: boolean
+  matchName: string
+  ruleName: string
 }
 
 defineProps<Props>()
@@ -30,6 +32,7 @@ defineEmits<{
     <div class="room-code" title="点击复制房间码" role="button" tabindex="0" @click="$emit('copy')" @keyup.enter="$emit('copy')">
       房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
     </div>
+    <div class="room-game-config"><b>{{ matchName }}</b><span>·</span><b>{{ ruleName }}</b></div>
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>

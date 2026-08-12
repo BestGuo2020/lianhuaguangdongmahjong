@@ -36,7 +36,7 @@ function createHarness(savedSession: StoredSession | null = null) {
       timeLimitSeconds: 3600, seats: [null, null, null, null],
     })),
     getRoom: vi.fn(async () => ({
-      roomId: 'ABC123', mode: 'east' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 2,
+      roomId: 'ABC123', mode: 'hanchan' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 2,
       timeLimitSeconds: 3600,
       seats: [null, null, { seat: 2, nickname: '莲花', ready: false, connected: true }, null],
     })),
@@ -83,9 +83,9 @@ describe('remoteRoomLifecycle', () => {
     const harness = createHarness()
     harness.state.roomId.value = 'ABC123'
     harness.state.mySeat.value = 2
-
     await harness.lifecycle.refreshRoom()
     expect(harness.state.isCreator.value).toBe(true)
+    expect(harness.state.matchType.value).toBe('hanchan')
     expect(harness.state.roomSeats.value[2]?.nickname).toBe('莲花')
     expect(harness.state.roomTimeLimit.value).toBe(3600)
 

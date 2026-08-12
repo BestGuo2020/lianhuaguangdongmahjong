@@ -17,6 +17,7 @@ import { useRoomAvailability } from './game/online/session/useRoomAvailability'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType } from './game/core/contracts/types'
+import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -24,6 +25,7 @@ const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vu
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
+const selectedRule = ref<RuleVariant>(DEFAULT_RULE_VARIANT)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
@@ -200,10 +202,12 @@ const continueCountdown = useRemoteContinueCountdown({
           v-if="showLobby"
           v-model:game-mode="gameMode"
           v-model:selected-match="selectedMatch"
+          v-model:selected-rule="selectedRule"
           v-model:nickname-input="nicknameInput"
           v-model:join-code="joinCode"
           :stored-session="storedSession"
           :room-id="roomId"
+          :match-name="matchName"
           :room-meta="roomMeta"
           :session-status="sessionStatus"
           :session-error="sessionError"

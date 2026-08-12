@@ -115,6 +115,7 @@ export function createRemoteRoomLifecycle({
     if (!state.roomId.value || state.phase.value !== 'lobby') return
     try {
       const info = await api.getRoom(state.roomId.value)
+      state.matchType.value = info.mode
       state.roomSeats.value = info.seats ?? []
       state.creatorSeat.value = info.creatorSeat ?? null
       state.isCreator.value = state.creatorSeat.value != null
