@@ -32,6 +32,7 @@ export interface OpeningTimelineState {
   dealer: RefLike<number>
   honba: RefLike<number>
   diceValues: RefLike<number[]>
+  diceThrowerIndex: RefLike<number>
   openingStage: RefLike<OpeningStage | null>
   dealAnimation: RefLike<DealAnimation>
 }
@@ -147,6 +148,7 @@ export function createOpeningTimeline({
   async function run(currentSequence: number) {
     running = true
     state.openingStage.value = 'start'
+    state.diceThrowerIndex.value = state.dealer.value
     await Promise.all([playSoundAndWait('game_start.mp3'), wait(1250)])
     if (currentSequence !== sequence) return
     state.openingStage.value = 'dice'

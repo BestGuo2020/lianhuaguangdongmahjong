@@ -32,7 +32,7 @@ function harness() {
     wallCount: ref(0), wallHeadDrawn: ref(0), currentPlayer: ref(-1), selectedIndex: ref(-1),
     actionPrompt: ref(null), lastDiscard: ref(null), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
-    round: ref(1), dealer: ref(0), honba: ref(0), diceValues: ref<number[]>([1, 1]),
+    round: ref(1), dealer: ref(0), honba: ref(0), diceValues: ref<number[]>([1, 1]), diceThrowerIndex: ref(0),
     openingStage: ref<OpeningStage | null>(null), dealAnimation: ref({ playerIndex: -1, count: 0, serial: 0 }),
   }
   const sent: Array<Record<string, unknown>> = []

@@ -4,6 +4,7 @@ import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
+import { tileName } from '../../game/core/rules/tiles'
 import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 
@@ -37,10 +38,20 @@ interface Props {
   dealAnimation: DealAnimation
   openingStage: OpeningStage | null
   diceValues: number[]
+  diceThrowerIndex: number
   userCurrentWaits: WaitInfo | null
   userTingOptions: WaitInfo[]
   userDiscardWaits: WaitInfo | null
   userKongs: TileType[]
+  userHasWindKong: boolean
+  /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
+  jokerTiles?: TileType[]
+  /** 莲花麻将翻出的指示牌（精） */
+  flipTile?: TileType | null
+  /** 3D 牌山断点（莲花麻将由开局计算），未传按骰子计算 */
+  wallBreakIndex?: number
+  /** 翻精所在物理墩（0..67），供 3D 在牌山上翻出指示牌 */
+  flipStack?: number
 }
 
 const props = defineProps<Props>()
@@ -50,9 +61,11 @@ const emit = defineEmits<{
   discard: [index: number]
   pass: []
   peng: []
+  chi: [chiIndex: number]
   gangFromDiscard: []
   gang: [tile: TileType]
   hu: []
+  windKong: []
 }>()
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
@@ -66,10 +79,10 @@ let suppressTileClickUntil = 0
 
 const tableActionPosition = computed(() => props.tableActionEvent ? seatPosition[props.tableActionEvent.actorIndex] : 'bottom')
 const tableActionLabel = computed(() => ({
-  peng: '碰', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠',
-  'flower-gang': '杠', 'self-draw': '自摸', 'robbed-kong-win': '抢杠胡',
+  peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠',
+  'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '点炮', 'robbed-kong-win': '抢杠胡',
 }[props.tableActionEvent?.type ?? 'peng']))
-const tableActionIsWin = computed(() => ['self-draw', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
+const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
 const scoreDeltaFor = (playerIndex: number) => props.scoreFlowEvent?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
 const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
@@ -192,9 +205,18 @@ function onAvatarError(entry: GamePlayer) {
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
       :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"
       :win-effect="winEffect" :win-presentation="winPresentation" :deal-animation="dealAnimation"
-      :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer"
+      :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer" :dice-thrower-index="diceThrowerIndex"
       :table-action-event="tableActionEvent"
+      :wall-break-index="wallBreakIndex"
+      :flip-tile="flipTile"
+      :flip-stack="flipStack"
     />
+    <Transition name="flip-cue">
+      <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
+        <span>精</span>
+        <em>{{ flipTile ? tileName(flipTile) : '' }}</em>
+      </div>
+    </Transition>
     <PlayerSeat
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
@@ -229,7 +251,7 @@ function onAvatarError(entry: GamePlayer) {
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
@@ -246,12 +268,20 @@ function onAvatarError(entry: GamePlayer) {
         <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
-      <template v-else-if="actionPrompt?.type === 'rob'">
+      <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
         <button class="action hu" @click="$emit('hu')"><b>胡</b></button>
+        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+      </template>
+      <template v-else-if="actionPrompt?.type === 'chi'">
+        <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="action primary chi-action" @click="$emit('chi', chiIndex)">
+          <b>吃</b>
+          <span class="chi-option-tiles"><MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" small disabled /></span>
+        </button>
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
       <template v-else>
         <button v-if="userKongs.length" class="action primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
+        <button v-if="userHasWindKong" class="action primary" @click="$emit('windKong')"><b>风杠</b></button>
         <button v-if="userCanHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
       </template>
     </div>
@@ -266,4 +296,35 @@ function onAvatarError(entry: GamePlayer) {
 
 <style scoped>
 .game-table-hud { display: contents; }
+
+/* 莲花麻将翻精指示牌（桌面右上角） */
+.flip-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(28, 20, 8, 0.72);
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+.flip-indicator > span {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffd966;
+  letter-spacing: 2px;
+}
+.flip-indicator > em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3e5c3;
+}
+
+.chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.chi-action { gap: 2px; }
 </style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import { isHorse } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
@@ -21,7 +22,7 @@ interface Props {
   playerId: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 defineEmits<{
   'update:resultVisible': [value: boolean]
   nextRound: []
@@ -34,13 +35,28 @@ function onAvatarError(entry?: { avatar?: string; seat?: number; fallbackAvatar?
   const target = entry.fallbackAvatar ?? (entry.seat != null ? defaultAvatarForSeat(entry.seat) : '')
   if (target && entry.avatar !== target) entry.avatar = target
 }
+
+/** 结算标题：莲花麻将按 winType 展示（天胡/地胡/点炮），否则按旧逻辑。 */
+const winLabel = computed(() => {
+  const result = props.result
+  if (!result) return ''
+  if (result.draw) return '流局'
+  switch (result.winType) {
+    case 'tianhu': return '天胡'
+    case 'dihu': return '地胡'
+    case 'robbed-kong': return '抢杠胡'
+    case 'self-draw': return '自摸'
+    case 'discard': return '点炮'
+    default: return result.robbedKong ? '抢杠胡' : '自摸'
+  }
+})
 </script>
 
 <template>
   <Transition name="modal">
     <div v-if="result && resultVisible && !matchFinished" class="result-backdrop round-settlement">
       <section class="result-card settlement-card">
-        <h2>{{ result.roundLabel }} · {{ result.draw ? '流局' : (result.robbedKong ? '抢杠胡' : '自摸') }}</h2>
+        <h2>{{ result.roundLabel }} · {{ winLabel }}</h2>
         <div v-if="!result.draw" class="score-total"><span>总倍数</span><strong>×{{ result.totalMultiplier ?? result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
         <div v-if="result.details?.length" class="score-details">
           <span v-for="detail in result.details" :key="detail.label">

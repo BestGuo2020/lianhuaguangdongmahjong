@@ -10,7 +10,7 @@
 //
 // 结算展示：服务端无条件推进场次，客户端在赢牌动画 / 结算弹窗期间延迟应用
 // 后续快照与请求分别由 reconciler / requestCoordinator 缓冲，用户点「继续」后再落地。
-import { computed, getCurrentInstance, onBeforeUnmount } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
@@ -58,7 +58,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
-    dealAnimation, openingStage, diceValues, userDrewThisTurn, waitingNextRound,
+    dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,
   } = state
   const roomSocket = createRoomSocketTransport({
     getUrl: () => roomId.value && rejoinCode.value
@@ -99,7 +99,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     state: {
       phase, players, wall, wallCount, wallHeadDrawn, currentPlayer, selectedIndex,
       actionPrompt, lastDiscard, result, winEffect, winPresentation, revealHands,
-      winningPlayerIndex, round, dealer, honba, diceValues, openingStage, dealAnimation,
+      winningPlayerIndex, round, dealer, honba, diceValues, diceThrowerIndex, openingStage, dealAnimation,
     },
     toLocalSeat: toLocal,
     mapPlayers: (value) => rotatePlayers(value),
@@ -368,8 +368,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     winPresentation, revealHands, winningPlayerIndex,
     round, dealer, user, isUserTurn, userCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
-    dealAnimation, openingStage, diceValues, userCurrentWaits, userTingOptions, userDiscardWaits,
-    userKongs, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
-    userGangFromDiscard, userGang, userHu, nextRound, returnToLobby, tileName, debugPreviewWin,
+    dealAnimation, openingStage, diceValues, diceThrowerIndex, userCurrentWaits, userTingOptions, userDiscardWaits,
+    userKongs, userHasWindKong: ref(false), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
+    userGangFromDiscard, userGang, userHu, userChi: () => {}, userWindKong: () => {},
+    nextRound, returnToLobby, tileName, debugPreviewWin,
   })
 }

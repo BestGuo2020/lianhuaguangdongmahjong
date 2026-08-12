@@ -6,12 +6,14 @@ export type TileType = SuitedTile | HonorTile
 export type MatchType = 'east' | 'hanchan'
 
 export interface Meld {
-  type: 'peng' | 'gang' | 'angang' | 'flower'
+  type: 'peng' | 'gang' | 'angang' | 'flower' | 'chi'
   tile: TileType
   tiles: TileType[]
   from?: number
   added?: boolean
   pending?: boolean
+  /** 风杠（乱风杠）：东南西北各 1 张组成的亮明暗杠 */
+  windKong?: boolean
 }
 
 export interface GamePlayer {
@@ -30,11 +32,13 @@ export interface GamePlayer {
 
 export type TableActionType =
   | 'peng'
+  | 'chi'
   | 'discard-gang'
   | 'concealed-gang'
   | 'added-gang'
   | 'flower-gang'
   | 'self-draw'
+  | 'discard-win'
   | 'robbed-kong-win'
 
 export interface TableActionEvent {

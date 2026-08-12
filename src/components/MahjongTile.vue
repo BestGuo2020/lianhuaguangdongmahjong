@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   drawn?: boolean
   disabled?: boolean
   small?: boolean
+  /** 本局癞子集合；未传时按现行玩法「白板」高亮 */
+  jokerTiles?: TileType[]
 }>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false })
 
 const emit = defineEmits(['choose'])
@@ -19,6 +21,10 @@ const choose = (event?: Event) => {
 }
 const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)
+const isJoker = computed(() => {
+  if (props.tile === 'back') return false
+  return props.jokerTiles ? props.jokerTiles.includes(props.tile) : props.tile === 'white'
+})
 const tileStyle = computed(() => {
   if (shownTile.value === 'back') return {}
   // 优先用预加载的内存 blob URL；预加载未完成时回退网络地址（浏览器缓存兜底）
@@ -29,7 +35,7 @@ const tileStyle = computed(() => {
 <template>
   <div
     class="mahjong-tile"
-    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: tile === 'white' && !hidden, red: tile === 'red' && !hidden }"
+    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isJoker && !hidden, red: tile === 'red' && !hidden }"
     :style="tileStyle"
     role="button"
     :aria-label="meta.name"
@@ -39,6 +45,6 @@ const tileStyle = computed(() => {
     @keydown.enter="choose"
     @keydown.space.prevent="choose"
   >
-    <span v-if="tile === 'white' && !hidden" class="joker-mark">癞</span>
+    <span v-if="isJoker && !hidden" class="joker-mark">癞</span>
   </div>
 </template>

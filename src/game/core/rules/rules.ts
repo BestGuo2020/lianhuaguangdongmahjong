@@ -142,12 +142,32 @@ export function canRobKong(tiles: TileType[], kongTile: TileType, exposedMeldCou
 }
 
 export function meldSourceTileIndex(meld: Meld, playerIndex: number) {
-  if (!['peng', 'gang'].includes(meld.type) || !Number.isInteger(meld.from)) return -1
+  if (!['peng', 'gang', 'chi'].includes(meld.type)) return -1
+
+  // 吃牌的横置牌就是对方实际打出的那一张；来源座位只用于确定
+  // 横置方向，不能用来推算顺子中应横置左、中、右哪一张。
+  if (meld.type === 'chi') return meld.tiles.indexOf(meld.tile)
+
+  if (!Number.isInteger(meld.from)) return -1
   const relativeSource = (meld.from - playerIndex + 4) % 4
   if (relativeSource === 1) return 0
   if (relativeSource === 2) return Math.min(1, meld.tiles.length - 1)
   if (relativeSource === 3) return meld.tiles.length - 1
   return -1
+}
+
+/**
+ * 副露的桌面展示顺序。
+ * 国标/日麻的吃牌只允许取上家弃牌，因此把吃来的牌横置在该副露左侧，
+ * 再把手里的两张牌排在右侧；本项目副露轨道从玩家右手端向手牌方向排布，
+ * 所以渲染数组中“左侧”对应最后一项。meld.tiles 仍保留牌面组成顺序，便于规则计算。
+ */
+export function meldDisplayTiles(meld: Meld): TileType[] {
+  const tiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+  if (meld.type !== 'chi') return tiles
+  const sourceIndex = tiles.indexOf(meld.tile)
+  if (sourceIndex < 0) return tiles
+  return [...tiles.slice(0, sourceIndex), ...tiles.slice(sourceIndex + 1), meld.tile]
 }
 
 export function drawHorses(wall: TileType[], amount = 8) {

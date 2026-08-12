@@ -1,11 +1,19 @@
-import type { MatchType, TileType } from '../contracts/types'
-import { createWall, shuffle, sortTiles } from '../rules/tiles'
-import { wallBreakIndex } from '../rules/wallLayout'
-import { MATCH_HANDS, PLAYER_SEED } from './localGameConfig'
-import type { LocalGameState } from './localGameState'
+// 「莲花麻将」开局时间线：两次掷骰 → 翻精（亮指示牌）→ 发牌 → 天胡判定。
+import type { MatchType, TileType } from '../core/contracts/types'
+import { sortTiles, tileName } from '../core/rules/tiles'
+import { MATCH_HANDS, PLAYER_SEED } from '../core/local/localGameConfig'
+import { isWinningHand } from './lotusRules'
+import type { LotusEndGameOptions, LotusGameState } from './lotusState'
+import {
+  buildDrawOrderWall,
+  buildRingWall,
+  removeFlipStack,
+  resolveFlip,
+  resolveOpeningStack,
+} from './lotusWall'
 
-interface LocalOpeningTimelineOptions {
-  state: LocalGameState
+interface LotusOpeningOptions {
+  state: LotusGameState
   clearTimers(): void
   takeTile(fromTail?: boolean): TileType | null
   wait(delay: number): Promise<void>
@@ -15,10 +23,10 @@ interface LocalOpeningTimelineOptions {
   announce(text: string, tone?: string): void
   getRoundLabel(): string
   beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
-  endGame(winnerIndex: number, options: { fourRed: true }): unknown
+  endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
 }
 
-export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions) {
+export function createLotusOpening(options: LotusOpeningOptions) {
   const { state } = options
   let sequence = 0
 
@@ -31,7 +39,8 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     const previousScores = state.players.map((player) => player.score)
     state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => ({
       ...player,
-      score: previousScores[index] ?? player.score,
+      // 莲花麻将起始分 2000（文档 §1）
+      score: previousScores[index] ?? 2000,
       seat: index,
       hand: [],
       discards: [],
@@ -43,30 +52,6 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
 
   function receiveDealtTile(playerIndex: number, tile: TileType | null) {
     if (tile) state.players[playerIndex].hand.push(tile)
-  }
-
-  function dealOne(playerIndex: number) {
-    receiveDealtTile(playerIndex, options.takeTile(false))
-  }
-
-  function resolveDealtReds() {
-    const seatOrder = state.players.map(
-      (_, offset) => (state.dealer.value + offset) % state.players.length,
-    )
-    for (const playerIndex of seatOrder) {
-      const player = state.players[playerIndex]
-      while (player.hand.includes('red')) {
-        if (player.redCount >= 3) {
-          player.redCount += 1
-          break
-        }
-        player.hand.splice(player.hand.indexOf('red'), 1)
-        player.redCount += 1
-        player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
-        const replacement = options.takeTile(true)
-        if (replacement) player.hand.push(replacement)
-      }
-    }
   }
 
   async function start(mode?: MatchType) {
@@ -81,7 +66,9 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
     const currentSequence = sequence
     resetPlayers()
-    state.wall.value = shuffle(createWall())
+    // 先立起牌山（环序 136 张），掷骰前即可看到
+    const ring = buildRingWall()
+    state.wall.value = [...ring]
     state.wallHeadDrawn.value = 0
     state.result.value = null
     state.winEffect.value = null
@@ -96,30 +83,59 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
     state.openingStage.value = 'start'
+    // 第一次掷骰由庄家投掷；第二次会在翻精后切换为翻精目标方。
     state.diceThrowerIndex.value = state.dealer.value
+    state.flipTile.value = null
+    state.jokerTiles.value = []
+    state.flipStack.value = null
+    state.wallBreakIndex.value = 0
+    state.roundFirstDiscard.value = true
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
-    state.diceValues.value = [
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-    ]
+
+    // 第一次掷骰：定翻精方位与墩位
+    const firstDice: [number, number] = [roll(), roll()]
+    state.diceValues.value = firstDice
     state.openingStage.value = 'dice'
-    await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1150)])
+    await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
     if (currentSequence !== sequence) return
 
-    const breakIndex = wallBreakIndex(state.diceValues.value)
-    state.wall.value = [
-      ...state.wall.value.slice(breakIndex),
-      ...state.wall.value.slice(0, breakIndex),
-    ]
+    // 翻精：从牌山翻出指示牌（翻精墩整体移出，牌山空出该墩并立起指示牌）
+    const { flipSeat, flipStack, flipTile, jokers } = resolveFlip(ring, state.dealer.value, firstDice)
+    state.wall.value = removeFlipStack(ring, flipStack)
+    state.flipStack.value = flipStack
+    state.flipTile.value = flipTile
+    state.jokerTiles.value = jokers
+    state.openingStage.value = 'flip'
+    options.announce(`翻精 ${tileName(flipTile)}`)
+    await options.wait(1200)
+    if (currentSequence !== sequence) return
+
+    // 第二次掷骰由第一次点数确定的目标方位玩家投掷；必须先切换投掷者，
+    // 再写入第二次骰子值，确保骰子动画从一开始就显示正确的玩家。
+    state.diceThrowerIndex.value = flipSeat
+    // 第二次掷骰：两个骰子的点数和作为开牌依据。
+    const secondDice: [number, number] = [roll(), roll()]
+    state.diceValues.value = secondDice
+    state.openingStage.value = 'dice'
+    await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
+    if (currentSequence !== sequence) return
+
+    // 开门：从翻精墩顺时针数 T 墩为发牌起点，重排为发牌顺序（环序视觉不变）
+    const openingStack = resolveOpeningStack(flipStack, secondDice)
+    state.wall.value = buildDrawOrderWall(ring, openingStack, flipStack)
+    state.wallBreakIndex.value = openingStack * 2
+
     state.openingStage.value = 'deal'
     const seatOrder = state.players.map(
       (_, offset) => (state.dealer.value + offset) % state.players.length,
     )
     const dealBatch = async (playerIndex: number, count: number) => {
       if (count === 4) options.playSound('deal.mp3', 0.72)
-      for (let index = 0; index < count; index += 1) dealOne(playerIndex)
+      for (let index = 0; index < count; index += 1) {
+        receiveDealtTile(playerIndex, options.takeTile(false))
+      }
       state.dealAnimation.value = {
         playerIndex,
         count,
@@ -154,7 +170,6 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
     if (currentSequence !== sequence) return
 
-    resolveDealtReds()
     state.phase.value = 'opening'
     state.openingStage.value = null
     state.dealAnimation.value = {
@@ -163,10 +178,24 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
       serial: state.dealAnimation.value.serial + 1,
     }
     state.players.forEach((player) => { player.hand = sortTiles(player.hand) })
-    const fourRedWinner = state.players.findIndex((player) => player.redCount >= 4)
-    if (fourRedWinner >= 0) return options.endGame(fourRedWinner, { fourRed: true })
     options.announce(`${options.getRoundLabel()} · 开牌`)
-    options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true }), 650)
+
+    // 天胡：庄家起手 14 张即满足胡牌条件
+    const dealerIndex = state.dealer.value
+    const dealer = state.players[dealerIndex]
+    if (isWinningHand(dealer.hand, 0, state.jokerTiles.value)) {
+      return options.endGame(dealerIndex, {
+        tianhu: true,
+        selfDraw: true,
+        winHand: [...dealer.hand],
+        winTile: dealer.hand[dealer.drawnTileIndex] ?? dealer.hand[dealer.hand.length - 1],
+      })
+    }
+    options.later(() => options.beginTurn(dealerIndex, { skipDraw: true }), 650)
+  }
+
+  function roll() {
+    return Math.floor(Math.random() * 6) + 1
   }
 
   return { start, cancel, resetPlayers }

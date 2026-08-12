@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
-import { meldSourceTileIndex } from '../../../game/core/rules/rules'
+import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/presentation/winEffect'
 import type { WinEffect } from '../../../game/core/contracts/gamePort'
 import type { TileType } from '../../../game/core/contracts/types'
@@ -93,9 +93,9 @@ function robbedKongSourceTransform(effect: WinEffect) {
   let trackOffset = 0
   for (let meldIndex = 0; meldIndex < melds.length; meldIndex += 1) {
     const meld = melds[meldIndex]
-    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const laidTiles = meldDisplayTiles(meld)
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
-    const relativeSource = ['peng', 'gang'].includes(meld.type) && Number.isInteger(meld.from)
+    const relativeSource = ['peng', 'gang', 'chi'].includes(meld.type) && Number.isInteger(meld.from)
       ? (meld.from - playerIndex + 4) % 4
       : -1
     let sourcePlacement: TableTransform | null = null

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { isHorse, sortTiles } from '../../../game/core/rules/tiles'
-import { meldSourceTileIndex } from '../../../game/core/rules/rules'
+import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
@@ -101,7 +101,7 @@ function addConcealedHand(playerIndex) {
   // 牌面按每位玩家自身视角从左到右排列；副露固定在右手边，因此邻近副露的是字牌。
   const reverseRevealedFaces = position === 'top' || position === 'right' || melds.length > 0
   const exposedSpan = melds.reduce((span, meld, meldIndex) => {
-    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const laidTiles = meldDisplayTiles(meld)
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
     const meldSpan = laidTiles.reduce(
       (width, _, tileIndex) => width + (tileIndex === sourceTileIndex ? 1.025 : gap),
@@ -301,11 +301,12 @@ function alignMeldBottom(transform: TableTransform, playerIndex: number, rotated
 }
 
 function sourceTileRotationOffset(relativeSource: number) {
-  // 来源牌一律横摆 ±90°（视觉统一、一眼可辨）：
-  // - 相邻玩家 → 牌头指向出牌方：下家（1）→ -90°，上家（3）→ +90°
-  // - 对家（2）→ +90°：对家方向恰好 = 副露带方向，横摆后长轴只能指相邻一侧、
-  //   牌头指不到对家；头方向为任意值，保留 +90°（可调）
-  if (relativeSource === 1) return -Math.PI / 2
+  // 来源牌长轴指向「出牌方」（国标麻将约定）：
+  // - 下家（1，右侧出牌）→ +90°：长轴指向右侧
+  // - 上家（3，左侧出牌）→ -90°：长轴指向左侧
+  // - 对家（2）→ +90°：对家方向与副露带垂直，横摆后长轴只能指相邻一侧、指不到对家；保留近似
+  if (relativeSource === 1) return Math.PI / 2
+  if (relativeSource === 3) return -Math.PI / 2
   return Math.PI / 2
 }
 
@@ -315,9 +316,9 @@ function addMelds(playerIndex) {
   melds.forEach((meld, meldIndex) => {
     const animatesThisMeld = pendingTableActionAnimation?.actorIndex === playerIndex
       && pendingTableActionAnimation?.meldIndex === meldIndex
-    const laidTiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
+    const laidTiles = meldDisplayTiles(meld)
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
-    const relativeSource = ['peng', 'gang'].includes(meld.type) && Number.isInteger(meld.from)
+    const relativeSource = ['peng', 'gang', 'chi'].includes(meld.type) && Number.isInteger(meld.from)
       ? (meld.from - playerIndex + 4) % 4
       : -1
     let sourcePlacement = null
@@ -396,26 +397,91 @@ function addMelds(playerIndex) {
   })
 }
 
+// 牌山断点：莲花麻将由开局翻精计算（翻精墩移出、两次骰子定开门），
+// 现行玩法仍按骰子规则计算。
+function resolveBreakIndex() {
+  return props.wallBreakIndex ?? wallBreakIndex(props.diceValues)
+}
+
 // 牌山 head 位置 = 下一张要摸的牌所在处：wall[0] 经 wallHeadDrawn 沿环顺时针推进。
 function wallDrawHeadPos() {
   const headOffset = props.wallHeadDrawn ?? 0
-  const breakIndex = wallBreakIndex(props.diceValues)
+  const breakIndex = resolveBreakIndex()
+  if (props.flipStack != null) {
+    const physical = wallPhysicalIndex(headOffset, (breakIndex + headOffset) % WALL_TOTAL)
+    const slot = wallStackSlot(Math.floor(physical / 2))
+    return { x: slot.x, z: slot.z }
+  }
   const { stackIndex } = wallTilePlacement(0, (breakIndex + headOffset) % WALL_TOTAL, props.wall?.length ?? 0)
   const slot = wallStackSlot(stackIndex)
   return { x: slot.x, z: slot.z }
+}
+
+/**
+ * 莲花麻将牌山张位映射：从 head 沿环推进 index 张，跳过翻精墩的 2 个物理张位，
+ * 使翻精墩在环上留出空位（供指示牌翻出）。
+ */
+function wallPhysicalIndex(index: number, head: number): number {
+  const flip = props.flipStack
+  if (flip == null) return (head + index) % WALL_TOTAL
+  const skipA = flip * 2
+  let physical = head
+  for (let step = 0; step < index; step += 1) {
+    do { physical = (physical + 1) % WALL_TOTAL } while (physical === skipA || physical === skipA + 1)
+  }
+  return physical
+}
+
+/** 精指示牌：翻出牌面朝上，与牌墙顶层对齐（y=0.88）。
+ * 翻精墩底层牌仍保留显示（视觉上牌山完整）；翻精阶段（openingStage==='flip'）指示牌从墙内升起。 */
+function addFlipIndicator() {
+  const tile = props.flipTile
+  if (!tile || props.flipStack == null) return
+  const slot = wallStackSlot(props.flipStack)
+  // 翻精墩底层牌保留在牌山上（背朝上，与周围牌墙一致），避免翻出后少一张
+  const baseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
+  baseQuat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
+  addTableTile(new THREE.Vector3(slot.x, .41, slot.z), baseQuat, null)
+  // 指示牌翻出：牌面朝上，对齐牌墙顶层（y=0.88）
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
+  const pos = new THREE.Vector3(slot.x, .88, slot.z)
+  if (props.openingStage === 'flip') {
+    // 从墙内（底层之下）升起，模拟「翻出来」
+    const origin = new THREE.Vector3(slot.x, .1, slot.z)
+    const inst = addTableTile(pos, quat, tile, 1, origin)
+    dealTweens.push({
+      baseIndex: inst.baseIndex,
+      capIndex: inst.capIndex,
+      capMesh: inst.capMesh,
+      origin,
+      target: pos.clone(),
+      quat,
+      startedAt: performance.now(),
+      duration: 520,
+    })
+  } else {
+    addTableTile(pos, quat, tile)
+  }
 }
 
 // 四边环状牌山（参考欢乐麻将）：wall[i] → 物理槽 (breakIndex + headOffset + i) % 136。
 // 每墩 2 张上下叠，牌径向放置（长边指向桌中心），X-180° 翻转让绿色牌背朝上。
 // headOffset = wallHeadDrawn（从牌头累计摸走的张数），使 head 顺时针推进（抓牌顺时针）；
 // 开杠/红中从牌尾补张（pop）不计入，因此牌尾端会正确地随之缩短。
+// 莲花麻将：翻精墩整体移出牌墙，牌墙张位跳过翻精墩，并在该墩翻出指示牌。
 function addWall() {
   const tiles = props.wall || []
   if (!tiles.length) return
-  const breakIndex = wallBreakIndex(props.diceValues)
+  const breakIndex = resolveBreakIndex()
   const headOffset = props.wallHeadDrawn ?? 0
+  const hasFlip = props.flipStack != null
   tiles.forEach((_, index) => {
-    const { stackIndex, layer } = wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length)
+    const { stackIndex, layer } = hasFlip
+      ? (() => {
+        const physical = wallPhysicalIndex(index, (breakIndex + headOffset) % WALL_TOTAL)
+        return { stackIndex: Math.floor(physical / 2), layer: 1 - (physical % 2) }
+      })()
+      : wallTilePlacement(index, (breakIndex + headOffset) % WALL_TOTAL, tiles.length)
     const slot = wallStackSlot(stackIndex)
     const y = .41 + layer * .47
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
@@ -423,6 +489,7 @@ function addWall() {
     quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
     addTableTile(new THREE.Vector3(slot.x, y, slot.z), quat, null)
   })
+  addFlipIndicator()
 }
 
 // 买马：胡牌后把 8 张马牌显示到赢家牌河里（续接在赢家弃牌河之后）。

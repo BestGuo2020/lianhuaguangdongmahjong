@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
-  openingStage: null, diceValues: () => [1, 1], dealerIndex: 0,
+  openingStage: null, diceValues: () => [1, 1], dealerIndex: 0, diceThrowerIndex: 0,
   tableActionEvent: null,
 })
 
@@ -294,7 +294,7 @@ onMounted(async () => {
     own,
     getOpeningStage: () => props.openingStage,
     getValues: () => props.diceValues,
-    getDealerIndex: () => props.dealerIndex,
+    getThrowerIndex: () => props.diceThrowerIndex,
     tileLayerZ: TILE_LAYER_Z,
   })
 

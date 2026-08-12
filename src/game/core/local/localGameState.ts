@@ -52,6 +52,7 @@ export function createLocalGameState() {
     dealAnimation: ref({ playerIndex: -1, count: 0, serial: 0 }),
     openingStage: ref<OpeningStage | null>(null),
     diceValues: ref([1, 1]),
+    diceThrowerIndex: ref(0),
     userDrewThisTurn: ref(false),
   }
 }

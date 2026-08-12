@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyKongScore, applyWinScore, canRobKong, concealedKongs, drawHorses, isWinningHand, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
+import { applyKongScore, applyWinScore, canRobKong, concealedKongs, drawHorses, isWinningHand, meldDisplayTiles, meldSourceTileIndex, scoreHand, waitingTiles } from './rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
 
 describe('莲花广麻胡牌规则', () => {
@@ -181,5 +181,33 @@ describe('副露来源指向', () => {
 
   it('右侧玩家碰顶部玩家的牌时横置靠顶部的第一张', () => {
     expect(meldSourceTileIndex(peng(2), 1)).toBe(0)
+  })
+
+  it('吃副露横置实际被吃的弃牌，而不是按来源座位推算位置', () => {
+    const chi = (from: number, tiles: TileType[]): Meld => ({
+      type: 'chi', tile: 'm4', from, tiles,
+    })
+    // 吃牌者为 0、来源为 3 时，m4 分别是顺子的右、中、左张，
+    // 三种情况都必须横置实际被吃的 m4。
+    expect(meldSourceTileIndex(chi(3, ['m2', 'm3', 'm4']), 0)).toBe(2)
+    expect(meldSourceTileIndex(chi(3, ['m3', 'm4', 'm5']), 0)).toBe(1)
+    expect(meldSourceTileIndex(chi(3, ['m4', 'm5', 'm6']), 0)).toBe(0)
+    // 位置由 meld.tile 决定，与来源座位无关。
+    expect(meldSourceTileIndex(chi(1, ['m4', 'm5', 'm6']), 0)).toBe(0)
+    expect(meldSourceTileIndex({
+      type: 'chi', tile: 'south', from: 3, tiles: ['east', 'south', 'west'],
+    }, 0)).toBe(1)
+    expect(meldSourceTileIndex({
+      type: 'chi', tile: 's6', from: 3, tiles: ['s4', 's5', 's6'],
+    }, 0)).toBe(2)
+  })
+
+  it('吃副露展示时把实际被吃的牌放在玩家视角的左侧', () => {
+    expect(meldDisplayTiles({
+      type: 'chi', tile: 'm6', from: 3, tiles: ['m4', 'm5', 'm6'],
+    })).toEqual(['m4', 'm5', 'm6'])
+    expect(meldDisplayTiles({
+      type: 'chi', tile: 'm4', from: 3, tiles: ['m4', 'm5', 'm6'],
+    })).toEqual(['m5', 'm6', 'm4'])
   })
 })

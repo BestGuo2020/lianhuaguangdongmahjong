@@ -9,7 +9,7 @@ interface DicePresenterOptions {
   own<T extends DisposableResource>(resource: T): T
   getOpeningStage(): string | null
   getValues(): number[]
-  getDealerIndex(): number
+  getThrowerIndex(): number
   tileLayerZ: number
 }
 
@@ -76,18 +76,31 @@ export function createDicePresenter(options: DicePresenterOptions) {
   }
   options.scene.add(group)
 
+  let lastValuesKey = ''
+
   function setVisible(visible: boolean) {
     group.visible = visible
     if (visible) startedAt = performance.now()
   }
 
   function animate(time: number) {
-    if (!group.visible) return
+    const stage = options.getOpeningStage()
+    const valuesKey = options.getValues().join(',')
+    if (stage !== 'dice') {
+      if (group.visible) group.visible = false
+      return
+    }
+    // 重新进入骰子阶段，或骰子值变化（莲花麻将两次掷骰）时重新起势
+    if (!group.visible || valuesKey !== lastValuesKey) {
+      group.visible = true
+      startedAt = performance.now()
+      lastValuesKey = valuesKey
+    }
     const progress = Math.min(1, Math.max(0, (time - startedAt) / 1050))
     const travel = 1 - (1 - progress) ** 2
     group.children.forEach((die, index) => {
       const side = index === 0 ? -1 : 1
-      const throwPoint = pointFromSeat(options.getDealerIndex(), side * (.58 + .22 * travel), THREE.MathUtils.lerp(5.2, .2, travel) + side * .1)
+      const throwPoint = pointFromSeat(options.getThrowerIndex(), side * (.58 + .22 * travel), THREE.MathUtils.lerp(5.2, .2, travel) + side * .1)
       die.position.set(throwPoint.x, DICE_LANDING_Y, throwPoint.z + options.tileLayerZ)
       const arc = Math.sin(Math.PI * Math.min(progress / .82, 1)) * 2.6
       const bounceProgress = Math.max(0, (progress - .82) / .18)

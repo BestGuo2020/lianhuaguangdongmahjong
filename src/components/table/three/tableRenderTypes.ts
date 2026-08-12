@@ -17,7 +17,14 @@ export interface TableProps {
   openingStage?: OpeningStage | null
   diceValues?: number[]
   dealerIndex?: number
+  diceThrowerIndex?: number
   tableActionEvent?: TableActionEvent | null
+  /** 莲花麻将开局计算好的牌山断点；未传时回退按 diceValues 计算 */
+  wallBreakIndex?: number
+  /** 莲花麻将翻出的指示牌（精），需在牌山上翻出牌面 */
+  flipTile?: TileType | null
+  /** 翻精所在物理墩（0..67），指示牌在牌山上的位置 */
+  flipStack?: number
 }
 
 export type ResolvedTableProps = {

@@ -68,6 +68,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const dealAnimation = ref({ playerIndex: -1, count: 0, serial: 0 })
   const openingStage = ref<OpeningStage | null>(null)
   const diceValues = ref([1, 1])
+  const diceThrowerIndex = ref(0)
   const userDrewThisTurn = ref(false)
   const waitingNextRound = ref(false)
 
@@ -78,7 +79,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
-    dealAnimation, openingStage, diceValues, userDrewThisTurn, waitingNextRound,
+    dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,
   }
 }
 

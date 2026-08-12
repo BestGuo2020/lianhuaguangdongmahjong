@@ -25,13 +25,14 @@ export type ActiveGamePort = {
 /**
  * 在本地和远程 GamePort 之间建立稳定的响应式视图。
  * 状态始终读取当前模式，动作在调用瞬间委托，切换模式无需重新解构 UI 依赖。
+ * localGame 为解析函数：可按所选玩法（莲花广麻/莲花麻将）切换本地引擎。
  */
 export function createActiveGamePort(
   mode: RefLike<GameMode>,
-  localGame: GamePort,
+  localGame: () => GamePort,
   remoteGame: GamePort,
 ): ActiveGamePort {
-  const active = () => (mode.value === 'remote' ? remoteGame : localGame)
+  const active = () => (mode.value === 'remote' ? remoteGame : localGame())
 
   const state = <K extends RefStateKey>(key: K): ComputedRef<RefValue<GamePort[K]>> => (
     computed(() => active()[key].value) as ComputedRef<RefValue<GamePort[K]>>
@@ -74,10 +75,12 @@ export function createActiveGamePort(
     dealAnimation: state('dealAnimation'),
     openingStage: state('openingStage'),
     diceValues: state('diceValues'),
+    diceThrowerIndex: state('diceThrowerIndex'),
     userCurrentWaits: state('userCurrentWaits'),
     userTingOptions: state('userTingOptions'),
     userDiscardWaits: state('userDiscardWaits'),
     userKongs: state('userKongs'),
+    userHasWindKong: state('userHasWindKong'),
 
     startGame: action('startGame'),
     selectTile: action('selectTile'),
@@ -88,6 +91,8 @@ export function createActiveGamePort(
     userGangFromDiscard: action('userGangFromDiscard'),
     userGang: action('userGang'),
     userHu: action('userHu'),
+    userChi: action('userChi'),
+    userWindKong: action('userWindKong'),
     nextRound: action('nextRound'),
     returnToLobby: action('returnToLobby'),
     tileName: action('tileName'),

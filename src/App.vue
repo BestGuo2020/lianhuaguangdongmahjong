@@ -9,6 +9,7 @@ import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/core/local/useGame'
+import { useLotusGame } from './game/legacy/lotusGame'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
@@ -36,31 +37,52 @@ const localGame = useGame({
   // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
   countdownEnabled: false,
 })
+const lotusGame = useLotusGame({
+  playSound: playEffect,
+  playSoundAndWait: playEffectAndWait,
+  countdownEnabled: false,
+})
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
+// 莲花麻将为旧版翻精规则，仅支持单机对战（不实现联机）。
+const singlePlayerOnly = computed(() => selectedRule.value === 'lotus-legacy')
+watch(singlePlayerOnly, (value) => { if (value) gameMode.value = 'local' })
+
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
-const game = createActiveGamePort(gameMode, localGame, remoteGame)
+// local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎。
+const game = createActiveGamePort(
+  gameMode,
+  () => singlePlayerOnly.value ? lotusGame : localGame,
+  remoteGame,
+)
 
 const {
   phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
   actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
   round, dealer, user, isUserTurn, userCanHu,
   matchName, matchFinished, honba, roundLabel, standings,
-  userKongs, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
-  userGang, userHu, nextRound, returnToLobby,
+  userKongs, userHasWindKong, userCurrentWaits, userTingOptions, userDiscardWaits, dealAnimation, openingStage, diceValues, diceThrowerIndex, startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng, userGangFromDiscard,
+  userGang, userHu, userChi, userWindKong, nextRound, returnToLobby,
 } = game
 
-// 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）
+// 莲花麻将专属：翻精指示牌 / 癞子集合 / 3D 牌山断点（仅本地莲花麻将模式有意义）。
+const legacyActive = computed(() => singlePlayerOnly.value && gameMode.value === 'local')
+const flipTile = computed(() => legacyActive.value ? lotusGame.flipTile.value : null)
+const jokerTiles = computed(() => legacyActive.value ? lotusGame.jokerTiles.value : undefined)
+const wallBreakIndex = computed(() => legacyActive.value ? lotusGame.wallBreakIndex.value : undefined)
+const flipStack = computed(() => legacyActive.value ? lotusGame.flipStack.value : undefined)
+
+// 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）；仅对莲花广麻生效。
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {
-  if (gameMode.value !== 'local') return
+  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
   localGame.debugPreviewKong(mode)
 }
 const debugFourRed = () => {
-  if (gameMode.value !== 'local') return
+  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
   localGame.debugPreviewFourRed()
 }
 const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}) => {
-  if (gameMode.value !== 'local') return
+  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
   localGame.debugPreviewWin(winnerIndex, options)
 }
 
@@ -184,18 +206,26 @@ const continueCountdown = useRemoteContinueCountdown({
           :deal-animation="dealAnimation"
           :opening-stage="openingStage"
           :dice-values="diceValues"
+          :dice-thrower-index="diceThrowerIndex"
           :user-current-waits="userCurrentWaits"
           :user-ting-options="userTingOptions"
           :user-discard-waits="userDiscardWaits"
           :user-kongs="userKongs"
+          :user-has-wind-kong="userHasWindKong"
+          :joker-tiles="jokerTiles"
+          :flip-tile="flipTile"
+          :wall-break-index="wallBreakIndex"
+          :flip-stack="flipStack"
           @select-tile="selectTile"
           @clear-selection="clearUserSelection"
           @discard="userDiscard"
           @pass="userPass"
           @peng="userPeng"
+          @chi="userChi"
           @gang-from-discard="userGangFromDiscard"
           @gang="userGang"
           @hu="userHu"
+          @wind-kong="userWindKong"
         />
 
         <LobbyView
@@ -215,6 +245,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :room-seats="roomSeats"
           :my-seat="mySeat"
           :is-creator="isCreator"
+          :single-player-only="singlePlayerOnly"
           :all-occupied-ready="allOccupiedReady"
           :match-starting="matchStarting"
           :copied="copied"
@@ -267,6 +298,6 @@ const continueCountdown = useRemoteContinueCountdown({
         />
       </div>
     </div>
-    <RulesPanel :open="rulesOpen" @close="rulesOpen = false" />
+    <RulesPanel :open="rulesOpen" :variant="selectedRule" @close="rulesOpen = false" />
   </main>
 </template>

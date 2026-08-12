@@ -1018,6 +1018,7 @@ button { font: inherit; }
 .mode-selector button span { font-size: 11px; letter-spacing: .05em; }
 .mode-selector button.active { border-color: #d5ab54; background: linear-gradient(180deg, rgba(168,116,48,.34), rgba(18,54,39,.88)); box-shadow: 0 0 0 1px rgba(244,204,106,.16), 0 8px 24px rgba(0,0,0,.25); transform: translateY(-2px); }
 .mode-selector button.active b { color: #ffe6a5; }
+.single-player-hint { margin: 10px auto 0; width: min(390px, 86vw); color: #c9b06a; font-size: 12px; text-align: center; letter-spacing: .06em; }
 
 .remote-lobby { display: flex; flex-direction: column; gap: 12px; width: min(390px, 86vw); }
 .remote-field { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid rgba(211,174,87,.27); border-radius: 7px; background: rgba(3,18,13,.72); }
