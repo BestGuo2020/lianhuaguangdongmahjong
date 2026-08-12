@@ -124,4 +124,52 @@ describe('莲花麻将吃牌副露', () => {
       type: 'peng', tile: 'm5', from: 3, tiles: ['m5', 'm5', 'm5'],
     })
   })
+
+  it('精牌弃出后仍可按普通牌面被碰', async () => {
+    const state = createLotusGameState()
+    state.players.push(
+      player(0, ['m4', 'm4', 'p1']),
+      player(1),
+      player(2),
+      player(3, [], ['m4']),
+    )
+    state.jokerTiles.value = ['m4']
+    const responseController: LotusController = {
+      requestTurn: async () => ({ kind: 'discard', handIndex: 0 }),
+      requestDiscardHu: async () => ({ kind: 'pass' }),
+      requestClaim: async () => ({ kind: 'peng' }),
+      requestChi: async () => ({ kind: 'pass' }),
+      requestRobKong: async () => 'pass',
+    }
+    const controllers = [responseController, responseController, responseController, responseController]
+    const tableContext: ActionContext = {
+      players: state.players,
+      currentPlayer: state.currentPlayer,
+      showTableAction: vi.fn(),
+      showScoreFlow: vi.fn(),
+      playSound: vi.fn(),
+    }
+    const orchestrator = createLotusTurnOrchestrator({
+      state, controllers, tableContext,
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      performWindKong: async () => {},
+      declareAddedKong: () => {},
+      settleAddedKong: () => undefined,
+      discardTile: () => undefined,
+      endDraw: () => undefined,
+      endGame: () => undefined,
+      announce: () => {},
+      later: (callback) => { callback(); return 0 },
+    })
+
+    orchestrator.routeDiscard(3, 'm4')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.players[0].melds).toContainEqual({
+      type: 'peng', tile: 'm4', from: 3, tiles: ['m4', 'm4', 'm4'],
+    })
+  })
 })

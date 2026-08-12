@@ -194,17 +194,16 @@ export function isSevenPairs(hand: TileType[], jokers: TileType[]): boolean {
 
 /**
  * 十三烂：14 张、全不重复、同花色相邻点数至少相差 3。
- * 直接检查实际 14 张，不替代癞子（癞子按字面牌面参与）；字牌无点数，数量不限。
+ * 精牌可以替代任意一张尚未出现的牌；字牌无点数，数量不限。
  */
-export function isShiSanLan(hand: TileType[]): boolean {
-  if (hand.length !== 14) return false
+function hasShiSanLanSpacing(tiles: TileType[]): boolean {
   const seen = new Set<TileType>()
-  for (const tile of hand) {
+  for (const tile of tiles) {
     if (seen.has(tile)) return false
     seen.add(tile)
   }
   for (const suit of SUITS) {
-    const ranks = hand
+    const ranks = tiles
       .filter((tile) => tile.startsWith(suit))
       .map((tile) => Number(tile[1]))
       .sort((a, b) => a - b)
@@ -213,6 +212,34 @@ export function isShiSanLan(hand: TileType[]): boolean {
     }
   }
   return true
+}
+
+export function isShiSanLan(hand: TileType[], jokers: TileType[] = []): boolean {
+  if (hand.length !== 14) return false
+
+  const jokerSet = new Set(jokers)
+  const naturals = hand.filter((tile) => !jokerSet.has(tile))
+  if (!hasShiSanLanSpacing(naturals)) return false
+
+  const used = new Set<TileType>(naturals)
+  const memo = new Set<string>()
+
+  function fillJokers(remaining: number): boolean {
+    if (remaining === 0) return true
+    const key = `${remaining}:${[...used].sort().join(',')}`
+    if (memo.has(key)) return false
+    memo.add(key)
+
+    for (const candidate of TILE_TYPES) {
+      if (used.has(candidate)) continue
+      used.add(candidate)
+      if (hasShiSanLanSpacing([...used]) && fillJokers(remaining - 1)) return true
+      used.delete(candidate)
+    }
+    return false
+  }
+
+  return fillJokers(hand.length - naturals.length)
 }
 
 /** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有。 */
@@ -248,7 +275,7 @@ export function evaluateBasePattern(
   if (exposedMeldCount === 0 && hand.length === 14) {
     if (isThirteenOrphans(hand)) return { pattern: 'thirteenOrphans', fan: 8 }
     if (isQiXingShiSanLan(hand)) return { pattern: 'qiXing', fan: 4 }
-    if (isShiSanLan(hand)) return { pattern: 'shiSanLan', fan: 2 }
+    if (isShiSanLan(hand, jokers)) return { pattern: 'shiSanLan', fan: 2 }
     if (isSevenPairs(hand, jokers)) return { pattern: 'sevenPairs', fan: 2 }
   }
   const neededMelds = 4 - exposedMeldCount
@@ -418,12 +445,9 @@ export function computeTingInfo(
 
 // ── 吃 / 碰 / 杠 合法性 ──────────────────────────────────────────────
 
-/**
- * 碰：手中有至少两张与该弃牌相同的非精牌。
- * 精（癞子）被弃出后不可被碰/吃/杠：精是万能牌、无固定牌面，文档明确精不能碰/明杠/暗杠，吃同样排除。
- */
-export function canPeng(hand: TileType[], tile: TileType, jokers: TileType[]): boolean {
-  return !isJoker(tile, jokers) && matchingCount(hand, tile) >= 2
+/** 碰：手中有至少两张与该弃牌相同的牌；精牌在此按自身牌面作为普通牌使用。 */
+export function canPeng(hand: TileType[], tile: TileType, _jokers: TileType[]): boolean {
+  return matchingCount(hand, tile) >= 2
 }
 
 export interface ChiMeld {
@@ -434,10 +458,9 @@ export interface ChiMeld {
 /**
  * 吃：返回含被弃牌的具体吃面子（仅下家可吃，判定由回合层负责）。
  * 数牌顺子窗口 / 乱风吃（任意 3 种不同风）/ 箭牌吃（中发白）。吃面子为落地牌，
- * 同伴须是手牌中的非精字面牌（精不可作为固定牌面参与副露）。
+ * 精牌参与吃牌时按自身牌面作为普通牌使用，不再作为万能牌替代其他牌。
  */
-export function canChi(hand: TileType[], tile: TileType, jokers: TileType[]): ChiMeld[] {
-  if (isJoker(tile, jokers)) return []
+export function canChi(hand: TileType[], tile: TileType, _jokers: TileType[]): ChiMeld[] {
   const results: ChiMeld[] = []
   const suited = /^([mps])([1-9])$/.exec(tile)
   if (suited) {
@@ -445,7 +468,7 @@ export function canChi(hand: TileType[], tile: TileType, jokers: TileType[]): Ch
     for (let start = Math.max(1, rank - 2); start <= Math.min(7, rank); start += 1) {
       const meld = Array.from({ length: 3 }, (_, index) => `${suited[1]}${start + index}` as TileType)
       const companions = meld.filter((item) => item !== tile)
-      if (companions.every((item) => !isJoker(item, jokers) && matchingCount(hand, item) >= 1)) {
+      if (companions.every((item) => matchingCount(hand, item) >= 1)) {
         results.push({ kind: 'sequence', tiles: meld })
       }
     }
@@ -453,31 +476,28 @@ export function canChi(hand: TileType[], tile: TileType, jokers: TileType[]): Ch
     const others = WIND_CYCLE.filter((wind) => wind !== tile)
     for (let a = 0; a < others.length; a += 1) {
       for (let b = a + 1; b < others.length; b += 1) {
-        if (
-          !isJoker(others[a], jokers) && !isJoker(others[b], jokers)
-          && matchingCount(hand, others[a]) >= 1 && matchingCount(hand, others[b]) >= 1
-        ) {
+        if (matchingCount(hand, others[a]) >= 1 && matchingCount(hand, others[b]) >= 1) {
           results.push({ kind: 'wind', tiles: [tile, others[a], others[b]] })
         }
       }
     }
   } else if (DRAGONS.includes(tile)) {
     const others = DRAGONS.filter((dragon) => dragon !== tile)
-    if (others.every((dragon) => !isJoker(dragon, jokers) && matchingCount(hand, dragon) >= 1)) {
+    if (others.every((dragon) => matchingCount(hand, dragon) >= 1)) {
       results.push({ kind: 'dragon', tiles: [...DRAGONS] })
     }
   }
   return results
 }
 
-/** 暗杠候选：4 张相同的非精牌。 */
-export function concealedKongs(hand: TileType[], jokers: TileType[]): TileType[] {
-  return TILE_TYPES.filter((tile) => !isJoker(tile, jokers) && matchingCount(hand, tile) === 4)
+/** 暗杠候选：4 张相同的牌；精牌在此按自身牌面作为普通牌使用。 */
+export function concealedKongs(hand: TileType[], _jokers: TileType[]): TileType[] {
+  return TILE_TYPES.filter((tile) => matchingCount(hand, tile) === 4)
 }
 
-/** 风杠（乱风杠）：手牌同时持有东南西北各 1 张（风中有精则不可）。 */
-export function windKong(hand: TileType[], jokers: TileType[]): boolean {
-  return WIND_CYCLE.every((wind) => !isJoker(wind, jokers) && matchingCount(hand, wind) >= 1)
+/** 风杠（乱风杠）：手牌同时持有东南西北各 1 张；精牌按自身风牌面使用。 */
+export function windKong(hand: TileType[], _jokers: TileType[]): boolean {
+  return WIND_CYCLE.every((wind) => matchingCount(hand, wind) >= 1)
 }
 
 export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCount: number, jokers: TileType[]): boolean {

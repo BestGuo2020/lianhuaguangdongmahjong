@@ -131,6 +131,11 @@ describe('十三烂 / 七星十三烂', () => {
     const hand: TileType[] = ['m1', 'm2', 'm7', 'p2', 'p5', 'p8', 's1', 's4', 's7', 'east', 'south', 'west', 'north', 'red']
     expect(isShiSanLan(hand)).toBe(false)
   })
+  it('精牌可以替代冲突牌面', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm7', 'p2', 'p5', 'p8', 's1', 's4', 's7', 'east', 'south', 'west', 'north', 'white']
+    expect(isShiSanLan(hand, ['m2', 'white'])).toBe(true)
+    expect(isShiSanLan(hand)).toBe(false)
+  })
   it('重复牌不成立', () => {
     const hand: TileType[] = ['m1', 'm1', 'm7', 'p2', 'p5', 'p8', 's1', 's4', 's7', 'east', 'south', 'west', 'north', 'red']
     expect(isShiSanLan(hand)).toBe(false)
@@ -236,23 +241,27 @@ describe('吃 / 碰 / 杠合法性', () => {
   it('箭牌吃：中发白', () => {
     expect(canChi(['green', 'white'], 'red', OTHER)).toEqual([{ kind: 'dragon', tiles: ['red', 'green', 'white'] }])
   })
-  it('癞子弃牌不可吃，癞子不可作吃同伴', () => {
-    expect(canChi(['south', 'west'], 'north', ['north', 'white'])).toEqual([])
-    expect(canChi(['south', 'north'], 'east', ['north', 'white'])).toEqual([])
+  it('精牌可以按普通牌面参与吃', () => {
+    expect(canChi(['south', 'west'], 'north', ['north', 'white'])).toEqual([
+      { kind: 'wind', tiles: ['north', 'south', 'west'] },
+    ])
+    expect(canChi(['south', 'north'], 'east', ['north', 'white'])).toEqual([
+      { kind: 'wind', tiles: ['east', 'south', 'north'] },
+    ])
   })
-  it('碰：非精弃牌且手牌 ≥2', () => {
+  it('碰：精牌也按普通牌面处理', () => {
     expect(canPeng(['east', 'east'], 'east', JOKERS)).toBe(true)
     expect(canPeng(['east'], 'east', JOKERS)).toBe(false)
-    expect(canPeng(['east', 'east'], 'north', ['north', 'white'])).toBe(false)
+    expect(canPeng(['north', 'north'], 'north', ['north', 'white'])).toBe(true)
   })
-  it('暗杠排除癞子', () => {
-    expect(concealedKongs(['white', 'white', 'white', 'white', 'm1'], ['north', 'white'])).toEqual([])
+  it('暗杠允许精牌按普通牌面使用', () => {
+    expect(concealedKongs(['white', 'white', 'white', 'white', 'm1'], ['north', 'white'])).toEqual(['white'])
     expect(concealedKongs(['m1', 'm1', 'm1', 'm1'], ['north', 'white'])).toEqual(['m1'])
   })
-  it('风杠：东南西北各 1；风中有癞子则不可', () => {
+  it('风杠：精牌作为对应风牌使用', () => {
     expect(windKong(['east', 'south', 'west', 'north'], JOKERS)).toBe(true)
     expect(windKong(['east', 'south', 'west'], JOKERS)).toBe(false)
-    expect(windKong(['east', 'south', 'west', 'north'], ['north', 'white'])).toBe(false)
+    expect(windKong(['east', 'south', 'west', 'north'], ['north', 'white'])).toBe(true)
   })
   it('抢杠判定复用胡牌逻辑', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east']

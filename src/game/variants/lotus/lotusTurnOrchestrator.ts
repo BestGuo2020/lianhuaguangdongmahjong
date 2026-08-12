@@ -5,7 +5,7 @@ import { sortTiles } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
-import { canChi, canRobKong, isJoker, isWinningHand, matchingCount, type ChiMeld } from './lotusRules'
+import { canChi, canRobKong, isWinningHand, matchingCount, type ChiMeld } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
@@ -90,7 +90,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       return
     }
     const player = state.players[playerIndex]
-    const count = isJoker(tile, state.jokerTiles.value) ? 0 : matchingCount(player.hand, tile)
+    const count = matchingCount(player.hand, tile)
     const chiOptions = playerIndex === (from + 1) % state.players.length
       ? canChi(player.hand, tile, state.jokerTiles.value)
       : []
@@ -117,12 +117,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     options.endGame(playerIndex, { winTile: tile, dihu, winHand: [...player.hand, tile], sourceFrom: from })
   }
 
-  /** 精弃牌不可被碰/吃/杠；否则按碰/明杠 → 吃（下家）顺序响应。 */
+  /** 精牌弃出后按普通牌面参与碰/明杠 → 吃（下家）响应。 */
   function continueClaims(from: number, tile: TileType, decisions = new Map<number, LotusHuAction>()) {
-    if (isJoker(tile, state.jokerTiles.value)) {
-      options.later(() => { void beginTurn((from + 1) % state.players.length) }, PACE_MS.afterDiscardToNextTurn)
-      return
-    }
     const claimants = findClaims(from, tile)
     if (claimants.length) {
       void offerNextClaim(claimants, tile, from, decisions)

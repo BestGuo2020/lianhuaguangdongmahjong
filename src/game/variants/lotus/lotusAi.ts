@@ -2,7 +2,7 @@
 // 决策与执行分离，可独立单元测试。
 import type { Meld, TileType } from '../../core/contracts/types'
 import { removeMatches } from '../../core/rules/actions'
-import { canPeng, concealedKongs, isJoker, isWinningHand, matchingCount, windKong, type ChiMeld } from './lotusRules'
+import { canPeng, concealedKongs, isWinningHand, matchingCount, windKong, type ChiMeld } from './lotusRules'
 
 export type LotusTurnDecision =
   | { kind: 'win' }
@@ -51,7 +51,6 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
 
   const meldIndex = view.melds.findIndex(
     (meld) => meld.type === 'peng'
-      && !isJoker(meld.tile, view.jokers)
       && view.hand.includes(meld.tile),
   )
   if (meldIndex >= 0) return { kind: 'added-kong', meldIndex }
@@ -82,10 +81,10 @@ export function decideRobKong(_view: LotusRobKongView): LotusRobKongAction {
 }
 
 /**
- * 弃牌启发式：优先打出孤张/字牌，保手精（癞子）与有靠张的牌。
- * 评分越低越先打：同牌多 +4、有相邻靠张 +2、精（癞子）加大额惩罚避免弃出。
+ * 弃牌启发式：优先打出孤张/字牌；精牌作为普通牌参与出牌评分。
+ * 评分越低越先打：同牌多 +4、有相邻靠张 +2、字牌 +6。
  */
-export function chooseDiscardIndex(hand: TileType[], jokers: TileType[], random: () => number = Math.random): number {
+export function chooseDiscardIndex(hand: TileType[], _jokers: TileType[], random: () => number = Math.random): number {
   const scored = hand.map((tile, index) => {
     const same = matchingCount(hand, tile) - 1
     const suited = /^([mps])([1-9])$/.exec(tile)
@@ -95,9 +94,8 @@ export function chooseDiscardIndex(hand: TileType[], jokers: TileType[], random:
       neighbors += hand.includes(`${suited[1]}${rank - 1}` as TileType) ? 1 : 0
       neighbors += hand.includes(`${suited[1]}${rank + 1}` as TileType) ? 1 : 0
     }
-    const jokerPenalty = isJoker(tile, jokers) ? 100 : 0
     const honor = suited ? 0 : 6
-    return { index, score: same * 4 + neighbors * 2 + honor + jokerPenalty + random() }
+    return { index, score: same * 4 + neighbors * 2 + honor + random() }
   })
   scored.sort((a, b) => a.score - b.score)
   return scored[0]?.index ?? 0

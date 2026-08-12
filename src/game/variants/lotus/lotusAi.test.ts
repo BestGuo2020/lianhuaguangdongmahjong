@@ -21,7 +21,7 @@ describe('莲花麻将 AI 回合决策', () => {
     const decision = decideTurn(turnView(hand, melds))
     expect(decision.kind).toBe('added-kong')
   })
-  it('暗杠（非精）优先于弃牌', () => {
+  it('暗杠（包含精牌）优先于弃牌', () => {
     const hand: TileType[] = ['m1', 'm1', 'm1', 'm1', 'm2', 'm3']
     const decision = decideTurn(turnView(hand))
     expect(decision).toEqual({ kind: 'concealed-kong', tile: 'm1' })
@@ -31,10 +31,10 @@ describe('莲花麻将 AI 回合决策', () => {
     const decision = decideTurn(turnView(hand))
     expect(decision).toEqual({ kind: 'wind-kong' })
   })
-  it('精不能暗杠', () => {
+  it('精牌可以按普通牌面暗杠', () => {
     const hand: TileType[] = ['white', 'white', 'white', 'white', 'm2', 'm3']
     const decision = decideTurn(turnView(hand, [], 0, false, ['north', 'white']))
-    expect(decision.kind).toBe('discard')
+    expect(decision).toEqual({ kind: 'concealed-kong', tile: 'white' })
   })
 })
 
@@ -74,9 +74,9 @@ describe('弃牌启发式', () => {
     const index = chooseDiscardIndex(hand, ['north', 'white'], () => 0)
     expect(hand[index]).toBe('m1')
   })
-  it('癞子面不因字牌加罚而被优先打出', () => {
+  it('精牌可以被 AI 作为普通牌打出', () => {
     const hand: TileType[] = ['north', 'white', 'east']
     const index = chooseDiscardIndex(hand, ['north', 'white'], () => 0)
-    expect(hand[index]).toBe('east')
+    expect(hand[index]).toBe('north')
   })
 })
