@@ -128,8 +128,6 @@ function closeDialog() {
       <button :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
       <button v-if="!singlePlayerOnly" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>
     </div>
-    <p v-if="singlePlayerOnly" class="single-player-hint">莲花麻将（旧版翻精）仅支持单机对战</p>
-
     <template v-if="gameMode === 'local'">
       <GameSettingsSummary
         :match-name="matchOption.name"
