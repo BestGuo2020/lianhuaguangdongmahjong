@@ -81,11 +81,15 @@ export function decideRobKong(_view: LotusRobKongView): LotusRobKongAction {
 }
 
 /**
- * 弃牌启发式：优先打出孤张/字牌；精牌作为普通牌参与出牌评分。
+ * 弃牌启发式：优先打出孤张/字牌；精牌默认保留，只有手牌全是精牌时才兜底打出。
  * 评分越低越先打：同牌多 +4、有相邻靠张 +2、字牌 +6。
  */
-export function chooseDiscardIndex(hand: TileType[], _jokers: TileType[], random: () => number = Math.random): number {
-  const scored = hand.map((tile, index) => {
+export function chooseDiscardIndex(hand: TileType[], jokers: TileType[], random: () => number = Math.random): number {
+  const jokerSet = new Set(jokers)
+  const candidates = hand.some((tile) => !jokerSet.has(tile))
+    ? hand.map((tile, index) => ({ tile, index })).filter(({ tile }) => !jokerSet.has(tile))
+    : hand.map((tile, index) => ({ tile, index }))
+  const scored = candidates.map(({ tile, index }) => {
     const same = matchingCount(hand, tile) - 1
     const suited = /^([mps])([1-9])$/.exec(tile)
     let neighbors = 0

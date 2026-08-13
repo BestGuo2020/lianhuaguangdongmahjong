@@ -48,7 +48,7 @@ function makeBackTexture() {
 }
 
 // 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
-function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number) {
+function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, joker = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
   faceGradient.addColorStop(0, '#e9e8df')
@@ -67,14 +67,33 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.drawImage(image, x + insetX, y + insetY, w - insetX * 2, h - insetY * 2)
     ctx.restore()
   }
+  if (joker) {
+    ctx.save()
+    ctx.fillStyle = '#08a9dc'
+    ctx.beginPath()
+    ctx.moveTo(x + w * .48, y)
+    ctx.lineTo(x + w, y)
+    ctx.lineTo(x + w, y + h * .42)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.shadowColor = 'rgba(0,40,70,.85)'
+    ctx.shadowBlur = Math.max(1, w * .008)
+    ctx.font = `900 ${Math.max(16, Math.round(h * .15))}px sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('赖', x + w * .79, y + h * .15)
+    ctx.restore()
+  }
 }
 
-function makeFaceMaterial(tile: TileType) {
-  if (faceMaterials.has(tile)) return faceMaterials.get(tile)
+function makeFaceMaterial(tile: TileType, joker = false) {
+  const key = joker ? `joker:${tile}` : tile
+  if (faceMaterials.has(key)) return faceMaterials.get(key)
   const surface = document.createElement('canvas')
   surface.width = 384
   surface.height = 512
-  drawTileFace(surface.getContext('2d'), tile, 0, 0, 384, 512)
+  drawTileFace(surface.getContext('2d'), tile, 0, 0, 384, 512, joker)
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
@@ -97,7 +116,7 @@ function makeFaceMaterial(tile: TileType) {
     material.specularIntensity = 0
     material.ior = 1.5
   }
-  faceMaterials.set(tile, material)
+  faceMaterials.set(key, material)
   return material
 }
 
@@ -302,6 +321,51 @@ function getAtlasMaterial() {
   }
   atlasMaterial = mat
   return mat
+}
+
+function makeAtlasMaterial(joker: boolean) {
+  const canvas = document.createElement('canvas')
+  canvas.width = ATLAS_COLS * ATLAS_CELL_W
+  canvas.height = ATLAS_ROWS * ATLAS_CELL_H
+  const ctx = canvas.getContext('2d')
+  TILE_TYPES.forEach((tile, i) => {
+    const col = i % ATLAS_COLS
+    const row = Math.floor(i / ATLAS_COLS)
+    drawTileFace(ctx, tile, col * ATLAS_CELL_W, row * ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_CELL_H, joker)
+  })
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+  const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+    map: texture,
+    envMap: scene.userData.tileEnvironment,
+    color: 0xd8d7ce,
+    roughness: .4,
+    clearcoat: options.isGlossy() ? .56 : 0,
+    clearcoatRoughness: options.isGlossy() ? .24 : 0,
+    ior: 1.46,
+    specularIntensity: options.isGlossy() ? .36 : 0,
+    specularColor: new THREE.Color(0xfffdf4),
+    envMapIntensity: .3,
+  })))
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      `#include <uv_vertex>
+      #ifdef USE_MAP
+        vMapUv = aUvOffset + vMapUv * vec2(${ATLAS_CELL_U.toFixed(6)}, ${ATLAS_CELL_V.toFixed(6)});
+      #endif`,
+    )
+  }
+  mat.userData.atlasMaterial = true
+  return mat
+}
+
+let jokerAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+function getJokerAtlasMaterial() {
+  if (!jokerAtlasMaterial) jokerAtlasMaterial = makeAtlasMaterial(true)
+  return jokerAtlasMaterial
 }
 
 function makeMachineTexture() {
@@ -529,12 +593,14 @@ function addTable() {
     getAtlasCapGeometry,
     atlasCellUvFor,
     getAtlasMaterial,
+    getJokerAtlasMaterial,
     forEachFaceMaterial(callback: (material: THREE.MeshPhysicalMaterial) => void) {
       faceMaterials.forEach(callback)
     },
     invalidateTileFaces() {
       faceMaterials.clear()
       atlasMaterial = null
+      jokerAtlasMaterial = null
     },
   }
 }

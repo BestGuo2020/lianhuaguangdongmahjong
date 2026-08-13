@@ -4,7 +4,7 @@ import MahjongTile from '../MahjongTile.vue'
 import { isHorse } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import type { RoundResult } from '../../game/core/contracts/gamePort'
-import type { GamePlayer } from '../../game/core/contracts/types'
+import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
@@ -20,6 +20,7 @@ interface Props {
   matchName: string
   standings: Standing[]
   playerId: string
+  jokerTiles?: TileType[]
 }
 
 const props = defineProps<Props>()
@@ -65,7 +66,7 @@ const winLabel = computed(() => {
         </div>
         <div v-if="result.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :class="{ 'horse-hit': isHorse(tile) }" small disabled />
+            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :class="{ 'horse-hit': isHorse(tile) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TileType } from '../../core/contracts/types'
+import { sortTilesWithJokers } from '../../core/rules/tiles'
 import {
   canChi,
   canPeng,
@@ -24,6 +25,10 @@ const JOKERS: TileType[] = ['white', 'red']
 const OTHER: TileType[] = ['north', 'west']
 
 describe('癞子计算', () => {
+  it('精牌在手牌排序中固定排在最左侧', () => {
+    expect(sortTilesWithJokers(['m3', 'white', 'm1', 'red', 'p2'], ['white', 'red']))
+      .toEqual(['red', 'white', 'm1', 'm3', 'p2'])
+  })
   it('数牌 9 循环回 1', () => {
     expect(nextInSequence('m9')).toBe('m1')
     expect(nextInSequence('p3')).toBe('p4')
@@ -266,6 +271,14 @@ describe('吃 / 碰 / 杠合法性', () => {
   it('抢杠判定复用胡牌逻辑', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east']
     expect(canRobKong(hand, 'east', 0, JOKERS)).toBe(true)
+  })
+
+  it('外部进来的精牌只能按普通牌参与胡牌', () => {
+    const hand: TileType[] = [
+      'm1', 'm2', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east', 'north',
+    ]
+    expect(isWinningHand([...hand, 'white'], 0, ['north', 'white'])).toBe(true)
+    expect(isWinningHand([...hand, 'white'], 0, ['north', 'white'], ['white'])).toBe(false)
   })
 })
 

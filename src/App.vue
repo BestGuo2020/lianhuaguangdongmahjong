@@ -17,7 +17,7 @@ import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useRoomAvailability } from './game/online/session/useRoomAvailability'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
-import type { MatchType } from './game/core/contracts/types'
+import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -71,7 +71,8 @@ const userHasWindKong = computed(() => capabilities.value.windKong?.available ??
 const userChi = (optionIndex: number) => capabilities.value.chi?.choose(optionIndex)
 const userWindKong = () => capabilities.value.windKong?.execute()
 const flipTile = computed(() => lotusTable.value?.flipTile ?? null)
-const jokerTiles = computed(() => lotusTable.value?.jokerTiles)
+// 广麻固定以白板为癞子；莲花麻将使用本局翻出的动态精牌集合。
+const jokerTiles = computed<TileType[]>(() => lotusTable.value ? lotusTable.value.jokerTiles : ['white'])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
 
@@ -278,6 +279,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :match-name="matchName"
           :standings="standings"
           :player-id="playerId"
+          :joker-tiles="jokerTiles"
           @next-round="nextRound"
           @return-to-lobby="returnToLobby"
           @report="reportPlayer"

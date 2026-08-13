@@ -72,7 +72,16 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         tianhu: Boolean(endOptions.tianhu),
         dihu: Boolean(endOptions.dihu),
       }
-      const score = scoreFan(winHand, options.structuralMeldCount(winnerIndex), state.jokerTiles.value, flags)
+      const ordinaryJokers = !endOptions.selfDraw && endOptions.winTile && state.jokerTiles.value.includes(endOptions.winTile)
+        ? [endOptions.winTile]
+        : []
+      const score = scoreFan(
+        winHand,
+        options.structuralMeldCount(winnerIndex),
+        state.jokerTiles.value,
+        flags,
+        ordinaryJokers,
+      )
         ?? { fan: 1, baseFan: 1, patterns: [{ label: '平胡', multiplier: 1 }], settlement: { H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 } }
       const totalWon = applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value)
       const winType = endOptions.tianhu ? 'tianhu'

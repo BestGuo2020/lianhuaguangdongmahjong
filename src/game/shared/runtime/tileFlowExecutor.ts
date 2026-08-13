@@ -22,6 +22,7 @@ interface TileFlowOptions {
   endDraw(): unknown
   playSound(name: string, volume?: number): unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  sortHand?: (hand: TileType[]) => TileType[]
   later(callback: () => void, delay: number): number
   stopCountdown(): void
   handleSpecialDraw?: (
@@ -68,6 +69,8 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     const specialResult = await options.handleSpecialDraw?.(playerIndex, tile, () => drawFor(playerIndex, true))
     if (specialResult !== undefined) return specialResult
     player.hand = [...player.hand, tile]
+    // 摸牌必须先保留在最右侧，牌桌和 HUD 都据此绘制摸牌间隙；
+    // 等出牌/吃碰杠收尾时再统一整理手牌，避免相同牌排序后把间隙挪到牌组中间。
     player.drawnTileIndex = player.hand.length - 1
     options.playSound('give.mp3', 0.7)
     return true
@@ -77,7 +80,7 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     const handIndex = Math.min(requestedIndex, player.hand.length - 1)
     const [tile] = player.hand.splice(handIndex, 1)
     if (!tile) return
-    player.hand = sortTiles(player.hand)
+    player.hand = options.sortHand?.(player.hand) ?? sortTiles(player.hand)
     player.drawnTileIndex = -1
     options.getTurnFlow().clearDrawSource()
     player.discards.push(tile)

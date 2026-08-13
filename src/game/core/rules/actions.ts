@@ -24,6 +24,7 @@ export function removeLastDiscard(discards: TileType[], tile: TileType): void {
 export interface ActionContext {
   players: GamePlayer[]
   currentPlayer: { value: number }
+  sortHand?: (hand: TileType[]) => TileType[]
   showTableAction: (type: TableActionType, actorIndex: number, sourceIndex: number | null, tile: TileType, meldIndex: number) => void
   showScoreFlow: (deltas: ScoreDelta[]) => void
   playSound: (name: string, volume?: number) => void
@@ -38,6 +39,7 @@ export function performPeng(ctx: ActionContext, playerIndex: number, tile: TileT
   player.drawnTileIndex = -1
   removeLastDiscard(ctx.players[from].discards, tile)
   player.hand = removeMatches(player.hand, tile, 2)
+  if (ctx.sortHand) player.hand = ctx.sortHand(player.hand)
   player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
   ctx.currentPlayer.value = playerIndex
   ctx.showTableAction('peng', playerIndex, from, tile, player.melds.length - 1)
@@ -53,6 +55,7 @@ export function performDiscardGang(ctx: ActionContext, playerIndex: number, tile
   player.drawnTileIndex = -1
   removeLastDiscard(ctx.players[from].discards, tile)
   player.hand = removeMatches(player.hand, tile, 3)
+  if (ctx.sortHand) player.hand = ctx.sortHand(player.hand)
   player.melds.push({ type: 'gang', tile, from, tiles: [tile, tile, tile, tile] })
   const scoreDeltas = applyKongScore(ctx.players, playerIndex, 'discard', from)
   ctx.currentPlayer.value = playerIndex

@@ -39,6 +39,15 @@ export function tileAudioFile(tile: TileType) {
 
 export const tileOrder = (tile: TileType) => TILE_TYPES.indexOf(tile)
 export const sortTiles = (tiles: TileType[]) => [...tiles].sort((a, b) => tileOrder(a) - tileOrder(b))
+/** 莲花麻将手牌排序：精牌保持牌面顺序，但整体固定排在最左侧。 */
+export const sortTilesWithJokers = (tiles: TileType[], jokers: TileType[]) => {
+  const jokerSet = new Set(jokers)
+  return [...tiles].sort((a, b) => {
+    const aJoker = jokerSet.has(a) ? 0 : 1
+    const bJoker = jokerSet.has(b) ? 0 : 1
+    return aJoker - bJoker || tileOrder(a) - tileOrder(b)
+  })
+}
 export const tileName = (tile: TileType) => TILE_META[tile]?.name ?? tile
 
 export function createWall() {

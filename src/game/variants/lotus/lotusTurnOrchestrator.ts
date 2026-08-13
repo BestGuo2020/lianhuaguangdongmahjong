@@ -1,7 +1,7 @@
 // 「莲花麻将」回合/响应编排。弃牌响应优先级：胡 > 碰/明杠 > 吃（仅下家），单响拦胡。
 import { removeLastDiscard } from '../../core/rules/actions'
 import { performDiscardGang, performPeng, type ActionContext } from '../../core/rules/actions'
-import { sortTiles } from '../../core/rules/tiles'
+import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
@@ -59,6 +59,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
           [...player.hand, tile],
           options.structuralMeldCount(playerIndex),
           state.jokerTiles.value,
+          state.jokerTiles.value.includes(tile) ? [tile] : [],
         ),
       }))
       .filter(({ canHu }) => canHu)
@@ -253,7 +254,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       const index = player.hand.indexOf(item)
       if (index >= 0) player.hand.splice(index, 1)
     })
-    player.hand = sortTiles(player.hand)
+    player.hand = sortTilesWithJokers(player.hand, state.jokerTiles.value)
     player.melds.push({ type: 'chi', tile, from, tiles: meld.tiles })
     state.currentPlayer.value = playerIndex
     options.tableContext.showTableAction('chi', playerIndex, from, tile, player.melds.length - 1)

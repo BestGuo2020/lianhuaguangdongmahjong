@@ -2,6 +2,7 @@ import { createTileFlowExecutor } from '../../shared/runtime/tileFlowExecutor'
 import type { LotusController } from './lotusControllers'
 import type { LotusGameState } from './lotusState'
 import type { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
+import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { takeLotusTailTile } from './lotusWall'
 
 interface LotusTileFlowOptions {
@@ -18,6 +19,7 @@ interface LotusTileFlowOptions {
 export function createLotusTileFlow(options: LotusTileFlowOptions) {
   return createTileFlowExecutor({
     ...options,
+    sortHand: (hand) => sortTilesWithJokers(hand, options.state.jokerTiles.value),
     getTurnFlow: options.getTurnOrchestrator,
     takeTailTile: takeLotusTailTile,
   })

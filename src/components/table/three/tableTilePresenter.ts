@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { isHorse, sortTiles } from '../../../game/core/rules/tiles'
+import { isHorse, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
@@ -97,7 +97,7 @@ function addConcealedHand(playerIndex) {
   const drawnGap = .28
   const arrangedTotal = layoutDrawnTileIndex >= 0 ? total - 1 : total
   const melds = props.players[playerIndex]?.melds || []
-  const revealedHand = props.revealHands ? sortTiles(displayedHand) : []
+  const revealedHand = props.revealHands ? sortTilesWithJokers(displayedHand, props.jokerTiles) : []
   // 牌面按每位玩家自身视角从左到右排列；副露固定在右手边，因此邻近副露的是字牌。
   const reverseRevealedFaces = position === 'top' || position === 'right' || melds.length > 0
   const exposedSpan = melds.reduce((span, meld, meldIndex) => {

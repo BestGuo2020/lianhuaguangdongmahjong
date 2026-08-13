@@ -77,6 +77,11 @@ describe('弃牌启发式', () => {
   it('精牌可以被 AI 作为普通牌打出', () => {
     const hand: TileType[] = ['north', 'white', 'east']
     const index = chooseDiscardIndex(hand, ['north', 'white'], () => 0)
+    expect(hand[index]).toBe('east')
+  })
+  it('手里全是精牌时允许兜底打出精牌', () => {
+    const hand: TileType[] = ['north', 'white']
+    const index = chooseDiscardIndex(hand, ['north', 'white'], () => 0)
     expect(hand[index]).toBe('north')
   })
 })

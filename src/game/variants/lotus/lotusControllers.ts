@@ -306,7 +306,12 @@ export class LotusAiController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
-    return isWinningHand([...ctx.hand, ctx.tile], ctx.exposedMelds, ctx.jokers)
+    return isWinningHand(
+      [...ctx.hand, ctx.tile],
+      ctx.exposedMelds,
+      ctx.jokers,
+      ctx.jokers.includes(ctx.tile) ? [ctx.tile] : [],
+    )
       ? { kind: 'win' }
       : { kind: 'pass' }
   }

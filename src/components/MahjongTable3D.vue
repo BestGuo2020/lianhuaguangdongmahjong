@@ -16,6 +16,7 @@ import type { TableProps } from './table/three/tableRenderTypes'
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
+  jokerTiles: () => [],
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0, diceThrowerIndex: 0,
   tableActionEvent: null,
@@ -104,7 +105,7 @@ function makeTableTile(topMaterial) {
 }
 
 function makeFaceTile(tileName) {
-  return makeTableTile(tableScene.makeFaceMaterial(tileName))
+  return makeTableTile(tableScene.makeFaceMaterial(tileName, props.jokerTiles.includes(tileName)))
 }
 
 const scratchVector = new THREE.Vector3()
@@ -256,6 +257,8 @@ onMounted(async () => {
     getAtlasMaterial: tableScene.getAtlasMaterial,
     getAtlasCapGeometry: tableScene.getAtlasCapGeometry,
     atlasCellUvFor: tableScene.atlasCellUvFor,
+    getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
+    isJoker: (tile) => props.jokerTiles.includes(tile),
   })
   tableTiles = createTableTilePresenter({
     props,
@@ -345,6 +348,7 @@ watch(
     props.dealAnimation.serial,
     props.wall?.length,
     props.horses?.length,
+    props.jokerTiles?.join(','),
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。

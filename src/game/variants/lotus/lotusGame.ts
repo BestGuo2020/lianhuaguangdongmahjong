@@ -12,6 +12,7 @@ import type { LotusController, LotusHumanBridge } from './lotusControllers'
 import { LotusAiController, LotusHumanController } from './lotusControllers'
 import { createLotusHuman } from './lotusHuman'
 import { createLotusKong } from './lotusKong'
+import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { createLotusOpening } from './lotusOpening'
 import { createLotusSelectors } from './lotusSelectors'
 import { createLotusSettlement } from './lotusSettlement'
@@ -154,6 +155,7 @@ export function useLotusGame({
   const tableContext = {
     players: state.players,
     currentPlayer: state.currentPlayer,
+    sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
     showTableAction: transient.showTableAction,
     showScoreFlow: transient.showScoreFlow,
     playSound,

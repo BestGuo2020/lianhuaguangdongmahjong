@@ -9,6 +9,8 @@ export interface TableProps {
   wallHeadDrawn?: number
   wallCount?: number
   horses?: TileType[]
+  /** 本局精牌集合，用于 3D 牌面标记和亮牌排序。 */
+  jokerTiles?: TileType[]
   revealHands?: boolean
   winnerIndex?: number
   winEffect?: WinEffect | null

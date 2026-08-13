@@ -1,6 +1,6 @@
 // 「莲花麻将」开局时间线：两次掷骰 → 翻精（亮指示牌）→ 发牌 → 天胡判定。
 import type { MatchType, TileType } from '../../core/contracts/types'
-import { tileName } from '../../core/rules/tiles'
+import { sortTilesWithJokers, tileName } from '../../core/rules/tiles'
 import { MATCH_HANDS } from '../../core/local/localGameConfig'
 import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
 import { isWinningHand } from './lotusRules'
@@ -120,6 +120,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
       takeTile: options.takeTile,
       wait: options.wait,
       playSound: options.playSound,
+      sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
       isCancelled: () => currentSequence !== sequence,
     })
     if (!dealt) return

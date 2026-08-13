@@ -10,6 +10,7 @@ interface KongState {
 
 interface KongActionExecutorOptions {
   state: KongState
+  sortHand?: (hand: TileType[]) => TileType[]
   scoreKong(players: GamePlayer[], playerIndex: number, kind: 'concealed' | 'added'): ScoreDelta[]
   showTableAction(type: TableActionType, actorIndex: number, sourceIndex: number | null, tile: TileType, meldIndex: number): void
   showScoreFlow(deltas: ScoreDelta[]): void
@@ -28,6 +29,7 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
   ) {
     const player = state.players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 4)
+    if (options.sortHand) player.hand = options.sortHand(player.hand)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
     options.showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
@@ -38,6 +40,7 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
   function declareAddedKong(playerIndex: number, meldIndex: number, tile: TileType) {
     const player = state.players[playerIndex]
     player.hand = removeMatches(player.hand, tile, 1)
+    if (options.sortHand) player.hand = options.sortHand(player.hand)
     player.drawnTileIndex = -1
     player.melds[meldIndex] = {
       ...player.melds[meldIndex], type: 'gang', added: true, pending: true,

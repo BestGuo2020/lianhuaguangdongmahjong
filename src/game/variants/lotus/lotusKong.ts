@@ -5,6 +5,7 @@ import { PACE_MS } from '../../core/local/localGameConfig'
 import { applyKongScore } from './lotusScoring'
 import type { LotusGameState } from './lotusState'
 import { createKongActionExecutor } from '../../shared/runtime/kongActionExecutor'
+import { sortTilesWithJokers } from '../../core/rules/tiles'
 
 const WIND_MELD_TILES: TileType[] = ['east', 'south', 'west', 'north']
 
@@ -21,6 +22,7 @@ export function createLotusKong(options: LotusKongOptions) {
   const { state } = options
   const common = createKongActionExecutor({
     ...options,
+    sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
     scoreKong: applyKongScore,
     addedKongDelay: PACE_MS.afterKongSettle,
   })
@@ -32,6 +34,7 @@ export function createLotusKong(options: LotusKongOptions) {
       const index = player.hand.indexOf(wind)
       if (index >= 0) player.hand.splice(index, 1)
     })
+    player.hand = sortTilesWithJokers(player.hand, state.jokerTiles.value)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile: 'east', tiles: [...WIND_MELD_TILES], windKong: true })
     const scoreDeltas = applyKongScore(state.players, playerIndex, 'concealed')

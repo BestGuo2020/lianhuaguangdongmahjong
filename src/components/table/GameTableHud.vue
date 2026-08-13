@@ -217,6 +217,7 @@ function onAvatarError(entry: GamePlayer) {
       :players="players" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
       :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"
+      :joker-tiles="jokerTiles"
       :win-effect="winEffect" :win-presentation="winPresentation" :deal-animation="dealAnimation"
       :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer" :dice-thrower-index="diceThrowerIndex"
       :table-action-event="tableActionEvent"
@@ -234,7 +235,7 @@ function onAvatarError(entry: GamePlayer) {
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
-      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false"
+      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles"
     />
 
     <Transition name="table-action" mode="out-in">
@@ -272,7 +273,7 @@ function onAvatarError(entry: GamePlayer) {
     <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
-      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
+      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
     <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
@@ -305,7 +306,7 @@ function onAvatarError(entry: GamePlayer) {
 
     <Transition name="modal">
       <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
-        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
+        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
       </div>
     </Transition>
     <Transition name="modal">

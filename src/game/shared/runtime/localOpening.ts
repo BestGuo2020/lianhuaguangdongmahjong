@@ -32,6 +32,7 @@ export interface InitialDealOptions<S extends OpeningState> {
   takeTile(fromTail?: boolean): TileType | null
   wait(delay: number): Promise<void>
   playSound(name: string, volume?: number): unknown
+  sortHand?: (hand: TileType[]) => TileType[]
   isCancelled?(): boolean
 }
 
@@ -85,6 +86,7 @@ export async function dealInitialHands<S extends OpeningState>(options: InitialD
   }
   if (options.isCancelled?.()) return false
 
-  state.players.forEach((player) => { player.hand = sortTiles(player.hand) })
+  const sortHand = options.sortHand ?? sortTiles
+  state.players.forEach((player) => { player.hand = sortHand(player.hand) })
   return true
 }
