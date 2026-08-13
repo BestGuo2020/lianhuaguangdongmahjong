@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TileType } from '../../core/contracts/types'
 import { chooseDiscardIndex, decideClaim, decideRobKong, decideTurn } from './lotusAi'
 import type { LotusClaimView, LotusTurnView } from './lotusAi'
-import type { ChiMeld } from './lotusRules'
+import { waitingTiles, type ChiMeld } from './lotusRules'
 
 const JOKERS: TileType[] = ['white', 'red']
 
@@ -40,24 +40,65 @@ describe('莲花麻将 AI 回合决策', () => {
 
 describe('莲花麻将 AI 吃碰杠决策', () => {
   const claimView = (overrides: Partial<LotusClaimView> = {}): LotusClaimView => ({
-    hand: [], tile: 'm4', from: 1, canGang: false, chiOptions: [], jokers: JOKERS, ...overrides,
+    hand: [], exposedMelds: 0, canPeng: false, tile: 'm4', from: 1, canGang: false, chiOptions: [], jokers: JOKERS, ...overrides,
   })
   it('能杠必杠', () => {
     expect(decideClaim(claimView({ canGang: true }))).toEqual({ kind: 'gang' })
   })
-  it('能碰必碰并给出后续弃牌索引', () => {
-    const decision = decideClaim(claimView({ hand: ['m4', 'm4', 's1', 's9'] }))
+  it('碰后没有提升听牌时选择过', () => {
+    const decision = decideClaim(claimView({
+      hand: ['m4', 'm4', 'm1', 'm2', 'm3', 'm7', 'm8', 'm9', 'p1', 'p2', 'p3', 'p5', 'p6'],
+      canPeng: true,
+    }))
+    expect(decision).toEqual({ kind: 'pass' })
+  })
+  it('碰后能提升听牌时才碰并给出后续弃牌索引', () => {
+    const decision = decideClaim(claimView({
+      hand: ['m4', 'm4', 'm1', 'm2', 'm3', 'm7', 'm8', 'm9', 'p1', 'p2', 'p3', 'p5', 's5'],
+      canPeng: true,
+    }))
     expect(decision.kind).toBe('peng')
-    if (decision.kind === 'peng') {
-      expect(decision.discardIndex).toBeGreaterThanOrEqual(0)
-    }
+    if (decision.kind === 'peng') expect(decision.discardIndex).toBeGreaterThanOrEqual(0)
   })
   it('能吃则吃', () => {
     const chiOptions: ChiMeld[] = [{ kind: 'sequence', tiles: ['m2', 'm3', 'm4'] }]
-    const decision = decideClaim(claimView({ chiOptions }))
+    const decision = decideClaim(claimView({
+      hand: ['m2', 'm3', 'm5', 'm6', 'm7', 'p1', 'p2', 'p3', 'p5', 'p6', 'p7', 's1', 's2'],
+      chiOptions,
+    }))
     expect(decision).toEqual({ kind: 'chi', meld: chiOptions[0] })
   })
-  it('否则过', () => {
+  it('吃完不听牌时选择过', () => {
+    const chiOptions: ChiMeld[] = [{ kind: 'sequence', tiles: ['m2', 'm3', 'm4'] }]
+    expect(decideClaim(claimView({
+      hand: ['m2', 'm3', 'p1', 'p5', 's2'],
+      chiOptions,
+    }))).toEqual({ kind: 'pass' })
+  })
+  it('多种吃法选择吃后听牌最多的组合', () => {
+    const chiOptions: ChiMeld[] = [
+      { kind: 'sequence', tiles: ['m2', 'm3', 'm4'] },
+      { kind: 'sequence', tiles: ['m3', 'm4', 'm5'] },
+    ]
+    const hand: TileType[] = ['m2', 'm3', 'm5', 'p1', 'p2', 'p3', 'p5', 'p6', 'p7', 's1', 's2', 's3', 's5']
+    const waitsAfterChi = (meld: ChiMeld) => {
+      const remaining = [...hand]
+      meld.tiles.forEach((meldTile) => {
+        if (meldTile === 'm4') return
+        remaining.splice(remaining.indexOf(meldTile), 1)
+      })
+      return Math.max(...remaining.map((_, index) => waitingTiles(
+        remaining.filter((__, candidateIndex) => candidateIndex !== index),
+        1,
+        JOKERS,
+      ).length))
+    }
+    const expected = waitsAfterChi(chiOptions[1]) > waitsAfterChi(chiOptions[0]) ? chiOptions[1] : chiOptions[0]
+    const decision = decideClaim(claimView({ hand, chiOptions }))
+    expect(decision.kind).toBe('chi')
+    if (decision.kind === 'chi') expect(decision.meld).toEqual(expected)
+  })
+  it('没有任何可改善听牌的动作时过', () => {
     expect(decideClaim(claimView())).toEqual({ kind: 'pass' })
   })
 })
@@ -83,5 +124,12 @@ describe('弃牌启发式', () => {
     const hand: TileType[] = ['north', 'white']
     const index = chooseDiscardIndex(hand, ['north', 'white'], () => 0)
     expect(hand[index]).toBe('north')
+  })
+
+  it('开局阶段优先保留字牌，不因为孤张直接打出', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'm5', 'm6', 'm7', 'p1', 'p2', 'p3', 'p5', 'p6', 'east', 'south', 'white']
+    const index = chooseDiscardIndex(hand, ['white'], () => 0, { exposedMelds: 0, earlyRound: true })
+    expect(hand[index]).not.toBe('east')
+    expect(hand[index]).not.toBe('south')
   })
 })

@@ -150,6 +150,16 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       }))
   }
 
+  function visibleTilesFor(playerIndex: number) {
+    return state.players.flatMap((player, index) => index === playerIndex
+      ? [...player.hand, ...player.melds.flatMap((meld) => meld.tiles), ...player.discards]
+      : [...player.discards, ...player.melds.flatMap((meld) => meld.tiles)])
+  }
+
+  function earlyRoundFor(playerIndex: number) {
+    return state.players[playerIndex]?.discards.length < 2
+  }
+
   async function offerNextClaim(
     claimants: ClaimCandidate[],
     tile: TileType,
@@ -183,12 +193,15 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     }
       const ctx = {
         hand: player.hand,
+        exposedMelds: options.structuralMeldCount(claimant.playerIndex),
         canPeng: claimant.canPeng,
         canGang: claimant.canGang,
         tile,
         from,
         chiOptions: claimant.chiOptions,
         jokers: state.jokerTiles.value,
+        visibleTiles: visibleTilesFor(claimant.playerIndex),
+        earlyRound: earlyRoundFor(claimant.playerIndex),
       }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return
@@ -371,6 +384,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       skipDraw: Boolean(turnOptions.skipDraw),
       isDealer: playerIndex === state.dealer.value,
       jokers: state.jokerTiles.value,
+      visibleTiles: visibleTilesFor(playerIndex),
+      earlyRound: earlyRoundFor(playerIndex),
       afterKong: Boolean(turnOptions.fromTail),
     }),
     requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),

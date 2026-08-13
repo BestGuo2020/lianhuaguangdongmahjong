@@ -29,6 +29,8 @@ export interface LotusTurnContext {
   skipDraw: boolean
   isDealer: boolean
   jokers: TileType[]
+  visibleTiles?: TileType[]
+  earlyRound?: boolean
 }
 
 export interface LotusHuContext {
@@ -45,12 +47,15 @@ export interface LotusHuContext {
 
 export interface LotusClaimContext {
   hand: TileType[]
+  exposedMelds: number
   canPeng: boolean
   canGang: boolean
   tile: TileType
   from: number
   chiOptions: ChiMeld[]
   jokers: TileType[]
+  visibleTiles?: TileType[]
+  earlyRound?: boolean
 }
 
 export interface LotusChiContext {
@@ -327,7 +332,18 @@ export class LotusAiController implements LotusController {
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
     await this.wait(this.delays.claim)
-    const decision = decideClaim({ hand: ctx.hand, canGang: ctx.canGang, tile: ctx.tile, from: ctx.from, chiOptions: ctx.chiOptions, jokers: ctx.jokers })
+    const decision = decideClaim({
+      hand: ctx.hand,
+      exposedMelds: ctx.exposedMelds,
+      canPeng: ctx.canPeng,
+      canGang: ctx.canGang,
+      tile: ctx.tile,
+      from: ctx.from,
+      chiOptions: ctx.chiOptions,
+      jokers: ctx.jokers,
+      visibleTiles: ctx.visibleTiles,
+      earlyRound: ctx.earlyRound,
+    })
     if (decision.kind === 'gang') return { kind: 'gang' }
     if (decision.kind === 'peng') return { kind: 'peng', discardIndex: decision.discardIndex }
     if (decision.kind === 'chi') return { kind: 'chi', meld: decision.meld }
