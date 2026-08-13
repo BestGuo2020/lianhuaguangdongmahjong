@@ -67,12 +67,35 @@ describe('莲花广麻胡牌规则', () => {
 })
 
 describe('买马与计分', () => {
-  it('159 与红中均算中马', () => {
-    const wall: TileType[] = ['m1', 'p2', 's5', 'red', 'east', 'm9', 's3', 'white', 'p7']
-    const { horses, hits } = drawHorses(wall)
-    expect(horses).toHaveLength(8)
-    expect(hits).toBe(4)
-    expect(wall).toEqual(['p7'])
+  it('从牌墙末尾摸马', () => {
+    const wall: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'p1']
+    const { horses } = drawHorses(wall, 8, 0)
+    expect(horses).toEqual(['m3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'p1'])
+    expect(wall).toEqual(['m1', 'm2'])
+  })
+
+  it('庄家(A)中马为 1/5/9 与东', () => {
+    const wall: TileType[] = ['m1', 'p5', 's9', 'east', 'red', 'south', 'm2', 'p4']
+    const { hits } = drawHorses(wall, 8, 0)
+    expect(hits).toBe(4) // m1、p5、s9、东
+  })
+
+  it('下家(B)中马为 2/6、红中、南', () => {
+    const wall: TileType[] = ['m2', 'p6', 'red', 'south', 'm1', 'east', 's3', 'west']
+    const { hits } = drawHorses(wall, 8, 1)
+    expect(hits).toBe(4) // m2、p6、红中、南
+  })
+
+  it('对家(C)中马为 3/7、发、西', () => {
+    const wall: TileType[] = ['m3', 's7', 'green', 'west', 'm1', 'red', 'm2', 'north']
+    const { hits } = drawHorses(wall, 8, 2)
+    expect(hits).toBe(4) // m3、s7、发、西
+  })
+
+  it('上家(D)中马为 4/8、白、北', () => {
+    const wall: TileType[] = ['m4', 'p8', 'white', 'north', 'm1', 'red', 'm2', 'east']
+    const { hits } = drawHorses(wall, 8, 3)
+    expect(hits).toBe(4) // m4、p8、白、北
   })
 
   it('倍数累乘后，中马按张数乘底分加算', () => {

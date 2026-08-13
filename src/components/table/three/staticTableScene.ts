@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { isHorse, TILE_TYPES } from '../../../game/core/rules/tiles'
+import { TILE_TYPES } from '../../../game/core/rules/tiles'
 import { windForSeat } from '../../../game/core/presentation/tableLayout'
 import type { TileType } from '../../../game/core/contracts/types'
 

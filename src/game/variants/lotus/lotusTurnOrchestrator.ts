@@ -156,6 +156,18 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       : [...player.discards, ...player.melds.flatMap((meld) => meld.tiles)])
   }
 
+  function publicTilesFor(_playerIndex: number) {
+    return state.players.flatMap((player) => [
+      ...player.discards,
+      ...player.melds.flatMap((meld) => meld.tiles),
+    ])
+  }
+
+  function upperLastDiscardFor(playerIndex: number) {
+    const upperIndex = (playerIndex - 1 + state.players.length) % state.players.length
+    return state.players[upperIndex]?.discards.at(-1)
+  }
+
   function earlyRoundFor(playerIndex: number) {
     return state.players[playerIndex]?.discards.length < 2
   }
@@ -201,6 +213,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         chiOptions: claimant.chiOptions,
         jokers: state.jokerTiles.value,
         visibleTiles: visibleTilesFor(claimant.playerIndex),
+        publicTiles: publicTilesFor(claimant.playerIndex),
+        upperLastDiscard: upperLastDiscardFor(claimant.playerIndex),
         earlyRound: earlyRoundFor(claimant.playerIndex),
       }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
@@ -385,6 +399,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       isDealer: playerIndex === state.dealer.value,
       jokers: state.jokerTiles.value,
       visibleTiles: visibleTilesFor(playerIndex),
+      publicTiles: publicTilesFor(playerIndex),
+      upperLastDiscard: upperLastDiscardFor(playerIndex),
       earlyRound: earlyRoundFor(playerIndex),
       afterKong: Boolean(turnOptions.fromTail),
     }),

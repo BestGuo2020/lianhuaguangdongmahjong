@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
-import { isHorse } from '../../game/core/rules/tiles'
+import { isHorseForSeat } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import type { RoundResult } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../game/core/contracts/types'
@@ -51,6 +51,13 @@ const winLabel = computed(() => {
     default: return result.robbedKong ? '抢杠胡' : '自摸'
   }
 })
+
+/** 胡牌者相对庄家的座位：0=庄家(A) / 1=下家(B) / 2=对家(C) / 3=上家(D)。 */
+const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
+  const winner = props.result?.winnerIndex
+  if (winner == null) return 0
+  return ((winner - props.dealer + 4) % 4) as 0 | 1 | 2 | 3
+})
 </script>
 
 <template>
@@ -66,7 +73,7 @@ const winLabel = computed(() => {
         </div>
         <div v-if="result.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :class="{ 'horse-hit': isHorse(tile) }" small disabled />
+            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">

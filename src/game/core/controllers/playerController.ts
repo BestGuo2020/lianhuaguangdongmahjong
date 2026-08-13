@@ -28,6 +28,8 @@ export interface TurnContext {
 /** 吃碰杠响应上下文 */
 export interface ClaimContext {
   hand: TileType[]
+  /** 手中至少有两张与弃牌相同的牌时可碰 */
+  canPeng: boolean
   canGang: boolean
   /** 被弃出的牌 */
   tile: TileType
@@ -159,6 +161,7 @@ export class HumanController implements PlayerController {
       type: 'claim',
       tile: ctx.tile,
       from: ctx.from,
+      canPeng: ctx.canPeng,
       canGang: ctx.canGang,
     }
     this.bridge.activateClaim()

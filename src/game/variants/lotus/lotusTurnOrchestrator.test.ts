@@ -224,4 +224,55 @@ describe('莲花麻将吃牌副露', () => {
       { kind: 'sequence', tiles: ['m7', 'm8', 'm9'] },
     ])
   })
+  it('AI 策略上下文只提供牌河和明牌，不包含其他玩家暗手', async () => {
+    const state = createLotusGameState()
+    state.players.push(
+      player(0, ['m8', 'm9', 'p1']),
+      player(1, ['s9']),
+      player(2, ['p9']),
+      player(3, [], ['m7']),
+    )
+    let claimContext: Parameters<LotusController['requestClaim']>[0] | null = null
+    const responseController: LotusController = {
+      requestTurn: async () => ({ kind: 'discard', handIndex: 0 }),
+      requestDiscardHu: async () => ({ kind: 'pass' }),
+      requestClaim: async (context) => {
+        claimContext = context
+        return { kind: 'pass' }
+      },
+      requestChi: async () => ({ kind: 'pass' }),
+      requestRobKong: async () => 'pass',
+    }
+    const tableContext: ActionContext = {
+      players: state.players,
+      currentPlayer: state.currentPlayer,
+      showTableAction: vi.fn(),
+      showScoreFlow: vi.fn(),
+      playSound: vi.fn(),
+    }
+    const orchestrator = createLotusTurnOrchestrator({
+      state,
+      controllers: [responseController, responseController, responseController, responseController],
+      tableContext,
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      performWindKong: async () => {},
+      declareAddedKong: () => {},
+      settleAddedKong: () => undefined,
+      discardTile: () => undefined,
+      endDraw: () => undefined,
+      endGame: () => undefined,
+      announce: () => {},
+      later: () => 0,
+    })
+
+    orchestrator.routeDiscard(3, 'm7')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(claimContext?.publicTiles).toEqual(['m7'])
+    expect(claimContext?.publicTiles).not.toContain('s9')
+    expect(claimContext?.publicTiles).not.toContain('p9')
+  })
 })

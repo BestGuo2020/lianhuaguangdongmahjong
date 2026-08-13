@@ -59,4 +59,48 @@ describe('localTurnOrchestrator', () => {
     expect(state.players[2].melds).toEqual([])
     expect(later).toHaveBeenCalledOnce()
   })
+
+  it('手中有对子时，给本地玩家传递可碰状态', async () => {
+    const state = createLocalGameState()
+    state.players.push(
+      player(0, []),
+      player(1, ['m9', 'm9', 'p2']),
+      player(2, []),
+      player(3, []),
+    )
+    state.players[0].discards.push('m9')
+    const requestClaim = vi.fn(async () => ({ kind: 'pass' as const }))
+    const controllers = state.players.map((_, index) => ({
+      requestTurn: vi.fn(),
+      requestClaim: index === 1 ? requestClaim : vi.fn(),
+      requestRobKong: vi.fn(),
+    })) as unknown as PlayerController[]
+    const orchestrator = createLocalTurnOrchestrator({
+      state,
+      controllers,
+      tableContext: {
+        players: state.players,
+        currentPlayer: state.currentPlayer,
+        showTableAction: vi.fn(),
+        showScoreFlow: vi.fn(),
+        playSound: vi.fn(),
+      },
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      declareAddedKong: vi.fn(),
+      settleAddedKong: vi.fn(),
+      discardTile: vi.fn(),
+      endDraw: vi.fn(),
+      endGame: vi.fn(),
+      announce: vi.fn(),
+      later: vi.fn(() => 1),
+    })
+
+    orchestrator.routeDiscard(0, 'm9')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(requestClaim).toHaveBeenCalledWith(expect.objectContaining({ canPeng: true, canGang: false }))
+  })
 })

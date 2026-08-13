@@ -26,6 +26,8 @@ export interface LotusTurnView {
   kongBloom: boolean
   jokers: TileType[]
   visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType
   earlyRound?: boolean
 }
 
@@ -40,6 +42,8 @@ export interface LotusClaimView {
   chiOptions: ChiMeld[]
   jokers: TileType[]
   visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType
   earlyRound?: boolean
 }
 
@@ -71,6 +75,8 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
     handIndex: chooseDiscardIndex(view.hand, view.jokers, Math.random, {
       exposedMelds: view.exposedMelds,
       visibleTiles: view.visibleTiles,
+      publicTiles: view.publicTiles,
+      upperLastDiscard: view.upperLastDiscard,
       earlyRound: view.earlyRound,
     }),
   }
@@ -82,7 +88,14 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   // 因此继续保留杠的最高优先级；碰与吃则必须比较动作后的听牌质量。
   if (view.canGang) return { kind: 'gang' }
 
-  const baseline = currentHandQuality(view.hand, view.exposedMelds, view.jokers, view.visibleTiles)
+  const baseline = currentHandQuality(
+    view.hand,
+    view.exposedMelds,
+    view.jokers,
+    view.visibleTiles,
+    view.publicTiles,
+    view.upperLastDiscard,
+  )
   const candidates: Array<{
     action: Exclude<LotusClaimAction, { kind: 'pass' }>
     quality: DiscardQuality
@@ -90,7 +103,15 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
 
   if (view.canPeng && canPeng(view.hand, view.tile, view.jokers)) {
     const afterPeng = removeMatches(view.hand, view.tile, 2)
-    const discard = bestDiscardAfterClaim(afterPeng, view.exposedMelds + 1, view.jokers, view.visibleTiles, view.earlyRound)
+    const discard = bestDiscardAfterClaim(
+      afterPeng,
+      view.exposedMelds + 1,
+      view.jokers,
+      view.visibleTiles,
+      view.earlyRound,
+      view.publicTiles,
+      view.upperLastDiscard,
+    )
     if (discard) candidates.push({
       action: { kind: 'peng', discardIndex: discard.index },
       quality: discard.quality,
@@ -100,7 +121,15 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   for (const meld of view.chiOptions) {
     const afterChi = removeClaimedMeldTiles(view.hand, meld, view.tile)
     if (!afterChi) continue
-    const discard = bestDiscardAfterClaim(afterChi, view.exposedMelds + 1, view.jokers, view.visibleTiles, view.earlyRound)
+    const discard = bestDiscardAfterClaim(
+      afterChi,
+      view.exposedMelds + 1,
+      view.jokers,
+      view.visibleTiles,
+      view.earlyRound,
+      view.publicTiles,
+      view.upperLastDiscard,
+    )
     if (discard) candidates.push({ action: { kind: 'chi', meld }, quality: discard.quality })
   }
 
@@ -131,10 +160,20 @@ interface DiscardQuality {
   effectiveRemaining: number
   specialScore: number
   heuristic: number
+  safetyScore: number
+  netScore: number
 }
 
 function emptyQuality(): DiscardQuality {
-  return { ready: false, waits: [], effectiveRemaining: 0, specialScore: 0, heuristic: Number.POSITIVE_INFINITY }
+  return {
+    ready: false,
+    waits: [],
+    effectiveRemaining: 0,
+    specialScore: 0,
+    heuristic: Number.POSITIVE_INFINITY,
+    safetyScore: 0,
+    netScore: Number.NEGATIVE_INFINITY,
+  }
 }
 
 function currentHandQuality(
@@ -142,22 +181,30 @@ function currentHandQuality(
   exposedMelds: number,
   jokers: TileType[],
   visibleTiles: TileType[] = hand,
+  _publicTiles: TileType[] = [],
+  _upperLastDiscard?: TileType,
 ): DiscardQuality {
   const waits = waitingTiles(hand, exposedMelds, jokers)
+  const specialScore = specialPatternScore(hand, exposedMelds, jokers)
+  const attackScore = handQualityAttackScore(waits, waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0), specialScore)
   return {
     ready: waits.length > 0,
     waits,
     effectiveRemaining: waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0),
-    specialScore: specialPatternScore(hand, exposedMelds, jokers),
+    specialScore,
     heuristic: 0,
+    safetyScore: 0,
+    netScore: attackScore,
   }
 }
 
 function compareQuality(a: DiscardQuality, b: DiscardQuality): number {
   if (a.ready !== b.ready) return a.ready ? 1 : -1
+  if (a.netScore !== b.netScore) return a.netScore - b.netScore
   if (a.effectiveRemaining !== b.effectiveRemaining) return a.effectiveRemaining - b.effectiveRemaining
   if (a.waits.length !== b.waits.length) return a.waits.length - b.waits.length
   if (a.specialScore !== b.specialScore) return a.specialScore - b.specialScore
+  if (a.safetyScore !== b.safetyScore) return a.safetyScore - b.safetyScore
   return b.heuristic - a.heuristic
 }
 
@@ -167,6 +214,8 @@ function bestDiscardAfterClaim(
   jokers: TileType[],
   visibleTiles: TileType[] = hand,
   earlyRound = false,
+  publicTiles: TileType[] = [],
+  upperLastDiscard?: TileType,
 ) {
   if (!hand.length) return null
   const jokerSet = new Set(jokers)
@@ -179,7 +228,16 @@ function bestDiscardAfterClaim(
       return {
         index,
         tile,
-        quality: discardQuality(afterDiscard, tile, exposedMelds, jokers, visibleTiles, earlyRound),
+        quality: discardQuality(
+          afterDiscard,
+          tile,
+          exposedMelds,
+          jokers,
+          visibleTiles,
+          earlyRound,
+          publicTiles,
+          upperLastDiscard,
+        ),
       }
     })
   return candidates
@@ -193,16 +251,44 @@ function discardQuality(
   jokers: TileType[],
   visibleTiles: TileType[],
   earlyRound: boolean,
+  publicTiles: TileType[] = [],
+  upperLastDiscard?: TileType,
 ): DiscardQuality {
   const waits = waitingTiles(afterDiscard, exposedMelds, jokers)
   const effectiveRemaining = waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0)
+  const specialScore = specialPatternScore(afterDiscard, exposedMelds, jokers)
+  const safetyScore = publicSafetyScore(discarded, publicTiles, upperLastDiscard)
+  const attackScore = handQualityAttackScore(waits, effectiveRemaining, specialScore)
   return {
     ready: waits.length > 0,
     waits,
     effectiveRemaining,
-    specialScore: specialPatternScore(afterDiscard, exposedMelds, jokers),
+    specialScore,
     heuristic: discardHeuristic(afterDiscard, discarded, jokers, earlyRound),
+    safetyScore,
+    netScore: attackScore + safetyScore * 2,
   }
+}
+
+function handQualityAttackScore(waits: TileType[], effectiveRemaining: number, specialScore: number) {
+  return (waits.length > 0 ? 80 : 0) + waits.length * 10 + effectiveRemaining * 2 + specialScore * 3
+}
+
+/**
+ * 只根据牌河和公开副露评估安全度：公开出现越多越安全；上家刚打过的牌优先跟打。
+ * 147 只作为软提示，不把一四七关系当成绝对安全。
+ */
+function publicSafetyScore(tile: TileType, publicTiles: TileType[], upperLastDiscard?: TileType) {
+  const publicCount = matchingCount(publicTiles, tile)
+  let score = publicCount >= 3 ? 24 : publicCount >= 2 ? 12 : publicCount >= 1 ? 4 : 0
+  if (upperLastDiscard === tile) score += 12
+
+  const suited = /^([mps])([1-9])$/.exec(tile)
+  if (suited && (suited[2] === '1' || suited[2] === '7')) {
+    const middle = `${suited[1]}4` as TileType
+    if (publicTiles.includes(middle)) score += 5
+  }
+  return score
 }
 
 function remainingCount(tile: TileType, visibleTiles: TileType[]) {
@@ -277,6 +363,8 @@ export function decideRobKong(_view: LotusRobKongView): LotusRobKongAction {
 interface DiscardOptions {
   exposedMelds?: number
   visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType
   earlyRound?: boolean
 }
 
@@ -310,6 +398,8 @@ export function chooseDiscardIndex(
         jokers,
         options.visibleTiles ?? hand,
         options.earlyRound ?? false,
+        options.publicTiles ?? [],
+        options.upperLastDiscard,
       )
     return { index, score, quality }
   })

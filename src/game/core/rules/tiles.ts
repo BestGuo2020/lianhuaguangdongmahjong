@@ -63,6 +63,26 @@ export function shuffle<T>(items: T[], random = Math.random): T[] {
   return copy
 }
 
-export function isHorse(tile: TileType) {
-  return tile === 'red' || /^[mps][159]$/.test(tile)
+/** 广东麻将买马座位：0=庄家(A) / 1=下家(B) / 2=对家(C) / 3=上家(D)。 */
+export type HorseSeat = 0 | 1 | 2 | 3
+
+// 以庄家为起点逆时针，各座位对应的中马数字（覆盖万/筒/条三色）。
+const HORSE_RANKS: readonly (readonly number[])[] = [
+  [1, 5, 9], // A 庄家
+  [2, 6],    // B 下家
+  [3, 7],    // C 对家
+  [4, 8],    // D 上家
+]
+// 各座位对应的中马字牌（按位置固定分配）。
+const HORSE_HONORS: readonly (readonly HonorTile[])[] = [
+  ['east'],           // A 庄家
+  ['red', 'south'],   // B 下家
+  ['green', 'west'],  // C 对家
+  ['white', 'north'], // D 上家
+]
+
+export function isHorseForSeat(tile: TileType, seat: HorseSeat) {
+  const suited = /^([mps])([1-9])$/.exec(tile)
+  if (suited) return HORSE_RANKS[seat].includes(Number(suited[2]))
+  return (HORSE_HONORS[seat] as readonly string[]).includes(tile)
 }

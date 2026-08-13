@@ -1,4 +1,4 @@
-import { TILE_TYPES, isHorse } from './tiles'
+import { TILE_TYPES, isHorseForSeat, type HorseSeat } from './tiles'
 import type { GamePlayer, Meld, ScoreDelta, TileType } from '../contracts/types'
 import { consumeTile, countTiles, firstRemainingTile, matchingCount } from '../../shared/rules/tileTools'
 
@@ -151,9 +151,11 @@ export function meldDisplayTiles(meld: Meld): TileType[] {
   return [...tiles.slice(0, sourceIndex), ...tiles.slice(sourceIndex + 1), meld.tile]
 }
 
-export function drawHorses(wall: TileType[], amount = 8) {
-  const horses = wall.splice(0, Math.min(amount, wall.length))
-  return { horses, hits: horses.filter(isHorse).length }
+export function drawHorses(wall: TileType[], amount = 8, seat: HorseSeat = 0) {
+  // 广东麻将买马：胡牌后从牌墙末尾摸马（与旧版从牌头摸相反），中马按胡牌者座位判定。
+  const count = Math.min(amount, wall.length)
+  const horses = wall.splice(wall.length - count, count)
+  return { horses, hits: horses.filter((tile) => isHorseForSeat(tile, seat)).length }
 }
 
 export function scoreHand({ dealer = false, noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false }) {

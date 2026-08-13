@@ -14,6 +14,7 @@ import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRun
 
 interface ClaimCandidate {
   playerIndex: number
+  canPeng?: boolean
   canGang: boolean
 }
 
@@ -59,7 +60,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       }))
       .filter(({ playerIndex, count }) => playerIndex !== from && count >= 2)
       .sort((a, b) => a.distance - b.distance)
-      .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
+      .map(({ playerIndex, count }) => ({ playerIndex, canPeng: count >= 2, canGang: count >= 3 }))
   }
 
   function routeDiscard(from: number, tile: TileType) {
@@ -78,7 +79,13 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       return
     }
     const player = state.players[claimant.playerIndex]
-    const ctx: ClaimContext = { hand: player.hand, canGang: claimant.canGang, tile, from }
+    const ctx: ClaimContext = {
+      hand: player.hand,
+      canPeng: claimant.canPeng ?? matchingCount(player.hand, tile) >= 2,
+      canGang: claimant.canGang,
+      tile,
+      from,
+    }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return
 

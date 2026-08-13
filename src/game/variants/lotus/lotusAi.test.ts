@@ -36,6 +36,37 @@ describe('莲花麻将 AI 回合决策', () => {
     const decision = decideTurn(turnView(hand, [], 0, false, ['north', 'white']))
     expect(decision).toEqual({ kind: 'concealed-kong', tile: 'white' })
   })
+
+  it('公开牌河中已经出现较多的牌优先作为安全弃牌', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'south', 'west', 'north', 'red']
+    const index = chooseDiscardIndex(hand, ['white', 'red'], () => 0, {
+      exposedMelds: 0,
+      visibleTiles: [...hand, 'east'],
+      publicTiles: ['east', 'east', 'east'],
+    })
+    expect(hand[index]).toBe('east')
+  })
+
+  it('上家刚打出的牌获得跟牌偏好', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'south', 'west', 'north', 'red']
+    const index = chooseDiscardIndex(hand, ['white', 'red'], () => 0, {
+      exposedMelds: 0,
+      visibleTiles: [...hand, 'east'],
+      publicTiles: ['east'],
+      upperLastDiscard: 'east',
+    })
+    expect(hand[index]).toBe('east')
+  })
+
+  it('四牌出现在牌河时，一七牌获得一四七软安全提示', () => {
+    const hand: TileType[] = ['m1', 'p9', 'white', 'red', 'white', 'red', 'white', 'red', 'white', 'red', 'white', 'red', 'white', 'red']
+    const index = chooseDiscardIndex(hand, ['white', 'red'], () => 0, {
+      exposedMelds: 0,
+      visibleTiles: [...hand, 'm1'],
+      publicTiles: ['m4', 'm4', 'p9'],
+    })
+    expect(hand[index]).toBe('m1')
+  })
 })
 
 describe('莲花麻将 AI 吃碰杠决策', () => {

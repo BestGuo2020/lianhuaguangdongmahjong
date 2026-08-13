@@ -30,6 +30,8 @@ export interface LotusTurnContext {
   isDealer: boolean
   jokers: TileType[]
   visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType
   earlyRound?: boolean
 }
 
@@ -55,6 +57,8 @@ export interface LotusClaimContext {
   chiOptions: ChiMeld[]
   jokers: TileType[]
   visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType
   earlyRound?: boolean
 }
 
@@ -316,6 +320,10 @@ export class LotusAiController implements LotusController {
       exposedMelds: ctx.exposedMelds,
       kongBloom: ctx.kongBloom,
       jokers: ctx.jokers,
+      visibleTiles: ctx.visibleTiles,
+      publicTiles: ctx.publicTiles,
+      upperLastDiscard: ctx.upperLastDiscard,
+      earlyRound: ctx.earlyRound,
     }))
   }
 
@@ -342,6 +350,8 @@ export class LotusAiController implements LotusController {
       chiOptions: ctx.chiOptions,
       jokers: ctx.jokers,
       visibleTiles: ctx.visibleTiles,
+      publicTiles: ctx.publicTiles,
+      upperLastDiscard: ctx.upperLastDiscard,
       earlyRound: ctx.earlyRound,
     })
     if (decision.kind === 'gang') return { kind: 'gang' }

@@ -17,6 +17,7 @@ function makeTurnCtx(hand: TileType[], overrides: Partial<TurnContext> = {}): Tu
 function makeClaimCtx(hand: TileType[], overrides: Partial<ClaimContext> = {}): ClaimContext {
   return {
     hand,
+    canPeng: overrides.canPeng ?? hand.filter((tile) => tile === (overrides.tile ?? 'east')).length >= 2,
     canGang: overrides.canGang ?? false,
     tile: overrides.tile ?? 'east',
     from: overrides.from ?? 1,

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { isHorse, sortTilesWithJokers } from '../../../game/core/rules/tiles'
+import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
@@ -499,15 +499,16 @@ function addWall() {
 }
 
 // 买马：胡牌后把 8 张马牌显示到赢家牌河里（续接在赢家弃牌河之后）。
-// 中马（红中/1/5/9）正常牌面 + 四周金光（金色发光边框）；未中则牌面正常渲染但整牌 75% 透明。
+// 中马按胡牌者相对庄家的座位判定；中马牌正常牌面 + 四周金光（金色发光边框），未中则整牌 75% 透明。
 function addHorses() {
   const horses = props.horses || []
   if (!horses.length) return
   const winnerIndex = props.winnerIndex
   if (winnerIndex < 0) return
+  const relativeSeat = (((winnerIndex - props.dealerIndex) + 4) % 4) as 0 | 1 | 2 | 3
   const discardCount = props.players[winnerIndex]?.discards.length ?? 0
   horses.forEach((tile, index) => {
-    const hit = isHorse(tile)
+    const hit = isHorseForSeat(tile, relativeSeat)
     const transform = discardTransform(winnerIndex, discardCount + index)
     const pos = new THREE.Vector3(transform.x, .28, transform.z + PLAY_AREA_OFFSET_Z)
     const tileObj = hit ? makeFaceTile(tile) : tableScene.makeDimmedHorseTile(tile)
