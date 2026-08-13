@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref } from 'vue'
+import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import { defineGamePort } from '../contracts/gamePort'
 import type { EndGameOptions, TileType } from '../contracts/types'
 import { AiController, HumanController, type HumanBridge, type PlayerController } from '../controllers/playerController'
@@ -210,7 +210,8 @@ export function useGame({
     beginTurn: (playerIndex) => beginTurn(playerIndex),
   })
 
-  onBeforeUnmount(scheduler.clear)
+  // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
+  if (getCurrentInstance()) onBeforeUnmount(scheduler.clear)
 
   return defineGamePort({
     phase: state.phase,

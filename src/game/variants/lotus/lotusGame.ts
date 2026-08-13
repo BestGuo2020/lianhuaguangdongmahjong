@@ -1,6 +1,6 @@
 // 「莲花麻将」本地引擎组装：把规则/开局/回合/杠/结算/人类/AI 拼成 GamePort。
 // 结构仿 core/local/useGame.ts，但整体独立于「莲花广麻」，复用共享的计时/瞬态事件/音效模块。
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import type { TileType } from '../../core/contracts/types'
 import { defineGamePort } from '../../core/contracts/gamePort'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
@@ -228,7 +228,8 @@ export function useLotusGame({
     },
   }))
 
-  onBeforeUnmount(timer.clear)
+  // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
+  if (getCurrentInstance()) onBeforeUnmount(timer.clear)
 
   return defineGamePort({
     phase: state.phase,
