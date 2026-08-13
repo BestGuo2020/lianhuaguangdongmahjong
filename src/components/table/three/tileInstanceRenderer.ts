@@ -7,9 +7,11 @@ interface TileInstanceRendererOptions {
   dynamicGroups: THREE.Object3D[]
   getAtlasMaterial(): THREE.Material
   getJokerAtlasMaterial?: () => THREE.Material
+  getWildcardAtlasMaterial?: () => THREE.Material
   getAtlasCapGeometry(): THREE.BufferGeometry
   atlasCellUvFor(tile: TileType): { u: number; v: number }
   isJoker?: (tile: TileType) => boolean
+  isWildcard?: (tile: TileType) => boolean
 }
 
 const INSTANCE_CAPACITY = 260
@@ -21,13 +23,17 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
   let backCapMesh: THREE.InstancedMesh | null = null
   let atlasCapMesh: THREE.InstancedMesh | null = null
   let jokerAtlasCapMesh: THREE.InstancedMesh | null = null
+  let wildcardAtlasCapMesh: THREE.InstancedMesh | null = null
   let atlasUvAttribute: THREE.InstancedBufferAttribute | null = null
   let atlasUvData: Float32Array | null = null
   let jokerAtlasUvAttribute: THREE.InstancedBufferAttribute | null = null
   let jokerAtlasUvData: Float32Array | null = null
+  let wildcardAtlasUvAttribute: THREE.InstancedBufferAttribute | null = null
+  let wildcardAtlasUvData: Float32Array | null = null
   let backCapCount = 0
   let atlasCapCount = 0
   let jokerAtlasCapCount = 0
+  let wildcardAtlasCapCount = 0
   let instanceCount = 0
   const matrix = new THREE.Matrix4()
   const scaleVector = new THREE.Vector3()
@@ -52,7 +58,8 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
       baseMesh?.parent === options.scene
       && backCapMesh?.parent === options.scene
       && atlasCapMesh?.parent === options.scene
-      && jokerAtlasCapMesh?.parent === options.scene,
+      && jokerAtlasCapMesh?.parent === options.scene
+      && wildcardAtlasCapMesh?.parent === options.scene,
     )
   }
 
@@ -75,16 +82,24 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
         options.getJokerAtlasMaterial?.() ?? options.getAtlasMaterial(),
         options.ownDynamic(options.getAtlasCapGeometry().clone()),
       )
+      wildcardAtlasCapMesh = createCap(
+        options.getWildcardAtlasMaterial?.() ?? options.getAtlasMaterial(),
+        options.ownDynamic(options.getAtlasCapGeometry().clone()),
+      )
       atlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
       atlasUvAttribute = new THREE.InstancedBufferAttribute(atlasUvData, 2)
       atlasCapMesh.geometry.setAttribute('aUvOffset', atlasUvAttribute)
       jokerAtlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
       jokerAtlasUvAttribute = new THREE.InstancedBufferAttribute(jokerAtlasUvData, 2)
       jokerAtlasCapMesh.geometry.setAttribute('aUvOffset', jokerAtlasUvAttribute)
+      wildcardAtlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
+      wildcardAtlasUvAttribute = new THREE.InstancedBufferAttribute(wildcardAtlasUvData, 2)
+      wildcardAtlasCapMesh.geometry.setAttribute('aUvOffset', wildcardAtlasUvAttribute)
     }
     backCapCount = 0
     atlasCapCount = 0
     jokerAtlasCapCount = 0
+    wildcardAtlasCapCount = 0
     instanceCount = 0
   }
 
@@ -103,11 +118,12 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
   function add(position: THREE.Vector3, quaternion: THREE.Quaternion, face: TileType | null, scale = 1, initialPosition: THREE.Vector3 | null = null, initialScale: number | null = null) {
     const baseIndex = instanceCount++
     const joker = Boolean(face && options.isJoker?.(face))
-    const capMesh = !face ? backCapMesh! : joker ? jokerAtlasCapMesh! : atlasCapMesh!
-    const capIndex = !face ? backCapCount++ : joker ? jokerAtlasCapCount++ : atlasCapCount++
+    const wildcard = Boolean(face && !joker && options.isWildcard?.(face))
+    const capMesh = !face ? backCapMesh! : joker ? jokerAtlasCapMesh! : wildcard ? wildcardAtlasCapMesh! : atlasCapMesh!
+    const capIndex = !face ? backCapCount++ : joker ? jokerAtlasCapCount++ : wildcard ? wildcardAtlasCapCount++ : atlasCapCount++
     if (face) {
       const uv = options.atlasCellUvFor(face)
-      const uvData = joker ? jokerAtlasUvData! : atlasUvData!
+      const uvData = joker ? jokerAtlasUvData! : wildcard ? wildcardAtlasUvData! : atlasUvData!
       uvData[capIndex * 2] = uv.u
       uvData[capIndex * 2 + 1] = uv.v
     }
@@ -120,12 +136,15 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     backCapMesh!.count = backCapCount
     atlasCapMesh!.count = atlasCapCount
     jokerAtlasCapMesh!.count = jokerAtlasCapCount
+    wildcardAtlasCapMesh!.count = wildcardAtlasCapCount
     baseMesh!.instanceMatrix.needsUpdate = true
     backCapMesh!.instanceMatrix.needsUpdate = true
     atlasCapMesh!.instanceMatrix.needsUpdate = true
     jokerAtlasCapMesh!.instanceMatrix.needsUpdate = true
+    wildcardAtlasCapMesh!.instanceMatrix.needsUpdate = true
     if (atlasUvAttribute) atlasUvAttribute.needsUpdate = true
     if (jokerAtlasUvAttribute) jokerAtlasUvAttribute.needsUpdate = true
+    if (wildcardAtlasUvAttribute) wildcardAtlasUvAttribute.needsUpdate = true
   }
 
   return { begin, canReuse, add, set, finish }

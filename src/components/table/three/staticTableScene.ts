@@ -48,7 +48,7 @@ function makeBackTexture() {
 }
 
 // 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
-function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, joker = false) {
+function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | false = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
   faceGradient.addColorStop(0, '#e9e8df')
@@ -67,7 +67,7 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.drawImage(image, x + insetX, y + insetY, w - insetX * 2, h - insetY * 2)
     ctx.restore()
   }
-  if (joker) {
+  if (marker) {
     ctx.save()
     ctx.fillStyle = '#08a9dc'
     ctx.beginPath()
@@ -82,18 +82,18 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.font = `900 ${Math.max(16, Math.round(h * .15))}px sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('赖', x + w * .79, y + h * .15)
+    ctx.fillText(marker === 'wildcard' ? '替' : '精', x + w * .79, y + h * .15)
     ctx.restore()
   }
 }
 
-function makeFaceMaterial(tile: TileType, joker = false) {
-  const key = joker ? `joker:${tile}` : tile
+function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | false = false) {
+  const key = marker ? `${marker}:${tile}` : tile
   if (faceMaterials.has(key)) return faceMaterials.get(key)
   const surface = document.createElement('canvas')
   surface.width = 384
   surface.height = 512
-  drawTileFace(surface.getContext('2d'), tile, 0, 0, 384, 512, joker)
+  drawTileFace(surface.getContext('2d'), tile, 0, 0, 384, 512, marker)
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
@@ -323,7 +323,7 @@ function getAtlasMaterial() {
   return mat
 }
 
-function makeAtlasMaterial(joker: boolean) {
+function makeAtlasMaterial(marker: 'joker' | 'wildcard') {
   const canvas = document.createElement('canvas')
   canvas.width = ATLAS_COLS * ATLAS_CELL_W
   canvas.height = ATLAS_ROWS * ATLAS_CELL_H
@@ -331,7 +331,7 @@ function makeAtlasMaterial(joker: boolean) {
   TILE_TYPES.forEach((tile, i) => {
     const col = i % ATLAS_COLS
     const row = Math.floor(i / ATLAS_COLS)
-    drawTileFace(ctx, tile, col * ATLAS_CELL_W, row * ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_CELL_H, joker)
+    drawTileFace(ctx, tile, col * ATLAS_CELL_W, row * ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_CELL_H, marker)
   })
   const texture = own(new THREE.CanvasTexture(canvas))
   texture.colorSpace = THREE.SRGBColorSpace
@@ -364,8 +364,14 @@ function makeAtlasMaterial(joker: boolean) {
 
 let jokerAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
 function getJokerAtlasMaterial() {
-  if (!jokerAtlasMaterial) jokerAtlasMaterial = makeAtlasMaterial(true)
+  if (!jokerAtlasMaterial) jokerAtlasMaterial = makeAtlasMaterial('joker')
   return jokerAtlasMaterial
+}
+
+let wildcardAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+function getWildcardAtlasMaterial() {
+  if (!wildcardAtlasMaterial) wildcardAtlasMaterial = makeAtlasMaterial('wildcard')
+  return wildcardAtlasMaterial
 }
 
 function makeMachineTexture() {
@@ -594,6 +600,7 @@ function addTable() {
     atlasCellUvFor,
     getAtlasMaterial,
     getJokerAtlasMaterial,
+    getWildcardAtlasMaterial,
     forEachFaceMaterial(callback: (material: THREE.MeshPhysicalMaterial) => void) {
       faceMaterials.forEach(callback)
     },
@@ -601,6 +608,7 @@ function addTable() {
       faceMaterials.clear()
       atlasMaterial = null
       jokerAtlasMaterial = null
+      wildcardAtlasMaterial = null
     },
   }
 }

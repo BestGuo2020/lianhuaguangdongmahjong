@@ -226,7 +226,7 @@ function onAvatarError(entry: GamePlayer) {
       :players="players" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
       :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"
-      :joker-tiles="jokerTiles"
+      :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
       :win-effect="winEffect" :win-presentation="winPresentation" :deal-animation="dealAnimation"
       :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer" :dice-thrower-index="diceThrowerIndex"
       :table-action-event="tableActionEvent"
@@ -236,10 +236,6 @@ function onAvatarError(entry: GamePlayer) {
     />
     <Transition name="flip-cue">
       <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
-        <div class="flip-indicator-head">
-          <span>正精</span>
-          <em>{{ tileName(flipTile) }}</em>
-        </div>
         <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
           <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>
           <div><strong>白板替代：</strong>{{ jokerGuide.wildcard }}</div>
@@ -250,7 +246,7 @@ function onAvatarError(entry: GamePlayer) {
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
-      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles"
+      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
     />
 
     <Transition name="table-action" mode="out-in">

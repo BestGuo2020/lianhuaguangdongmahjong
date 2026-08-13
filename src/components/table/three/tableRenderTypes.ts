@@ -11,6 +11,8 @@ export interface TableProps {
   horses?: TileType[]
   /** 本局精牌集合，用于 3D 牌面标记和亮牌排序。 */
   jokerTiles?: TileType[]
+  /** 可替代精牌的实体牌；不计入精牌集合。 */
+  wildcardTiles?: TileType[]
   revealHands?: boolean
   winnerIndex?: number
   winEffect?: WinEffect | null

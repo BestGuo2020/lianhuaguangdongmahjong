@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
   revealHands: false, winnerIndex: -1, winEffect: null, winPresentation: null,
   jokerTiles: () => [],
+  wildcardTiles: () => [],
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0, diceThrowerIndex: 0,
   tableActionEvent: null,
@@ -105,7 +106,10 @@ function makeTableTile(topMaterial) {
 }
 
 function makeFaceTile(tileName) {
-  return makeTableTile(tableScene.makeFaceMaterial(tileName, props.jokerTiles.includes(tileName)))
+  const marker = props.jokerTiles.includes(tileName)
+    ? 'joker'
+    : props.wildcardTiles.includes(tileName) ? 'wildcard' : false
+  return makeTableTile(tableScene.makeFaceMaterial(tileName, marker))
 }
 
 const scratchVector = new THREE.Vector3()
@@ -258,7 +262,9 @@ onMounted(async () => {
     getAtlasCapGeometry: tableScene.getAtlasCapGeometry,
     atlasCellUvFor: tableScene.atlasCellUvFor,
     getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
+    getWildcardAtlasMaterial: tableScene.getWildcardAtlasMaterial,
     isJoker: (tile) => props.jokerTiles.includes(tile),
+    isWildcard: (tile) => props.wildcardTiles.includes(tile),
   })
   tableTiles = createTableTilePresenter({
     props,
