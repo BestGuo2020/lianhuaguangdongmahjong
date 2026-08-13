@@ -239,12 +239,13 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     mockSocket!.receive(makeSnapshot())
     mockSocket!.receive({
       kind: 'claim_request',
-      ctx: { hand: [], canGang: true, tile: 'm5', from: 3 },
+      ctx: { hand: ['m5', 'm5'], canGang: true, tile: 'm5', from: 3 },
     })
 
     expect(game.phase.value).toBe('prompt')
     expect(game.actionPrompt.value?.type).toBe('claim')
     expect(game.actionPrompt.value?.canGang).toBe(true)
+    expect(game.actionPrompt.value?.canPeng).toBe(true)
     expect(game.actionPrompt.value?.from).toBe(1)   // 服务端 3 → 本地 1
 
     game.userPeng()

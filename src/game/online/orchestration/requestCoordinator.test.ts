@@ -40,6 +40,20 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('requestCoordinator', () => {
+  it('claim_request 根据手牌补算可碰状态，确保多人模式显示碰按钮', () => {
+    const { state, coordinator } = setup()
+    coordinator.apply({
+      kind: 'claim_request',
+      ctx: { hand: ['m9', 'm9', 'p1'], canGang: false, tile: 'm9', from: 3 },
+    })
+
+    expect(state.actionPrompt.value).toMatchObject({
+      type: 'claim',
+      canPeng: true,
+      canGang: false,
+    })
+  })
+
   it('应用出牌请求并在倒计时到期后打出末张', async () => {
     const { state, actions, playSound, coordinator } = setup()
     coordinator.apply(TURN_REQUEST)

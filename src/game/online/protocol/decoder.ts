@@ -160,6 +160,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isBoolean(raw.ctx.afterKong)
       case 'claim_request':
         return isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
+          && isOptional(raw.ctx.canPeng, isBoolean)
           && isBoolean(raw.ctx.canGang) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)
       case 'rob_kong_request':
         return isObject(raw.ctx) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)

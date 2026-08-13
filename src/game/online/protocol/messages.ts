@@ -19,7 +19,7 @@ export interface RoundStartMessage {
 
 export type ServerRequest =
   | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: ServerMeldDto[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean } }
-  | { kind: 'claim_request'; ctx: { hand: TileType[]; canGang: boolean; tile: TileType; from: number } }
+  | { kind: 'claim_request'; ctx: { hand: TileType[]; canPeng?: boolean; canGang: boolean; tile: TileType; from: number } }
   | { kind: 'rob_kong_request'; ctx: { tile: TileType; from: number; hand: TileType[]; exposedMelds: number } }
 
 export type ServerMessage =

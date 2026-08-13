@@ -1,5 +1,6 @@
 import type { RemoteGameState } from '../state/remoteGameState'
 import type { ServerRequest } from '../protocol/messages'
+import { matchingCount } from '../../core/rules/rules'
 
 type RequestState = Pick<RemoteGameState,
   | 'phase' | 'currentPlayer' | 'userDrewThisTurn' | 'actionPrompt'
@@ -92,6 +93,7 @@ export function createRequestCoordinator({
         type: 'claim',
         tile: message.ctx.tile,
         from: toLocalSeat(message.ctx.from),
+        canPeng: message.ctx.canPeng ?? matchingCount(message.ctx.hand, message.ctx.tile) >= 2,
         canGang: message.ctx.canGang,
       }
       state.phase.value = 'prompt'
