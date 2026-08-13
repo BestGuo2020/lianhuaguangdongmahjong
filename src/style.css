@@ -544,7 +544,7 @@ button { font: inherit; }
 .match-selector button.active b { color: #ffe6a5; }
 
 /* 大厅只展示设置摘要，详细选择放进覆盖层，避免主界面纵向膨胀。 */
-.game-settings { width: min(390px, 86vw); margin: 0 auto 14px; overflow: hidden; border: 1px solid rgba(211,174,87,.3); border-radius: 9px; background: rgba(3,18,13,.68); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.game-settings { width: min(390px, 86vw); margin: 0 auto 14px; flex-shrink: 0; overflow: hidden; border: 1px solid rgba(211,174,87,.3); border-radius: 9px; background: rgba(3,18,13,.68); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .game-settings-title { margin: 0; padding: 6px 14px 5px; border-bottom: 1px solid rgba(211,174,87,.14); color: #8ca296; font-size: 10px; letter-spacing: .22em; text-align: left; }
 .game-settings > button { display: grid; width: 100%; grid-template-columns: 48px minmax(80px, auto) minmax(0, 1fr) 14px; align-items: center; gap: 8px; min-height: 46px; padding: 7px 13px; border: 0; border-bottom: 1px solid rgba(211,174,87,.12); background: transparent; color: #d0c39e; text-align: left; cursor: pointer; }
 .game-settings > button:last-child { border-bottom: 0; }
@@ -1000,25 +1000,8 @@ button { font: inherit; }
   .lobby-rules { gap: 7px; font-size: 11px; }
 }
 
-/* ── 联机大厅移动适配：小屏压缩纵向空间 + 始终可从顶部滚动 ──
-   手机横屏下 16:9 视口高度仅 ~390px，而联机面板（昵称/场次/按钮/房间面板）
-   远超该高度；取消居中缩放改为顶部对齐可滚动，加入/创建房间可达。 */
-@media (max-width: 700px), (max-height: 460px) {
-  .lobby { justify-content: flex-start; padding: 14px 0 22px; transform: none; inset: 0; }
-  .eyebrow { margin-bottom: 3px; font-size: 10px; }
-  .lobby h1 { font-size: clamp(26px, 8vh, 38px); }
-  .subtitle { margin: 5px 0 12px; font-size: 12px; letter-spacing: .2em; }
-  .mode-selector { margin-bottom: 12px; gap: 8px; }
-  .mode-selector button { padding: 9px 10px 8px; }
-  .mode-selector button b { margin-bottom: 2px; font-size: 14px; }
-  .mode-selector button span { font-size: 10px; }
-  .match-selector { margin-bottom: 10px; gap: 8px; }
-  .match-selector button { padding: 9px 10px 8px; }
-  .match-selector button b { font-size: 15px; }
-  .remote-lobby { gap: 8px; }
-  .room-panel { gap: 9px; padding: 10px; }
-  .lobby-links { margin-top: 10px; }
-}
+/* ── 移动端大厅适配已迁移到文件末尾（Phase 7 基础规则之后），
+   见 @media (max-width: 700px), (max-height: 460px) 一节 ── */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -1096,3 +1079,41 @@ button { font: inherit; }
 /* 房间号已并入 base-score-badge（顶栏下方），原顶栏 room-badge 移除 */
 .remote-banner { position: absolute; z-index: 120; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 20px; background: rgba(30,22,10,.92); border: 1px solid #d2aa58; color: #ffe6a5; font-size: 13px; letter-spacing: .08em; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
 .remote-banner.error { border-color: #c07a4a; color: #f0b088; }
+
+/* ── 移动端大厅适配：置于全部基础规则之后，保证压缩规则生效 ──
+   手机横屏 16:9 视口高度仅 ~390px，需压缩纵向空间让内容一屏可见。
+   此块必须位于 Phase 7 基础规则（.mode-selector/.remote-lobby/.room-panel）之后，
+   否则同优先级下后者会覆盖掉这里的移动端压缩。 */
+@media (max-width: 700px), (max-height: 460px) {
+  .lobby { justify-content: space-around; padding: 10px 0 14px; transform: none; inset: 0; }
+  .eyebrow { margin-bottom: 2px; font-size: 9px; }
+  .lobby h1 { font-size: clamp(24px, 6.5vh, 34px); line-height: 1.15; }
+  .subtitle { margin: 3px 0 10px; font-size: 11px; letter-spacing: .18em; }
+  .mode-selector { margin-bottom: 8px; gap: 6px; }
+  .mode-selector button { padding: 7px 9px 6px; }
+  .mode-selector button b { margin-bottom: 1px; font-size: 13px; }
+  .mode-selector button span { font-size: 9px; }
+  .match-selector { margin-bottom: 8px; gap: 6px; }
+  .match-selector button { padding: 7px 9px 6px; }
+  .match-selector button b { font-size: 14px; }
+  /* 窄屏下玩法/场次描述换行而非省略截断，保证设置信息完整可见 */
+  .game-settings { margin-bottom: 10px; }
+  .game-settings-title { padding: 4px 12px 3px; font-size: 9px; }
+  .game-settings > button { min-height: 38px; padding: 5px 12px; gap: 6px; }
+  .game-settings > button > small { white-space: normal; text-align: right; line-height: 1.35; }
+  .start-button { min-width: 200px; padding: 8px 24px 7px; }
+  .start-button b { font-size: 17px; }
+  .start-button span { margin-top: 2px; font-size: 10px; }
+  .remote-lobby { gap: 7px; }
+  .room-panel { gap: 8px; padding: 10px; }
+  .lobby-links { margin-top: 6px; }
+}
+
+/* 极矮横屏：隐藏装饰性英文标识，压缩品牌区，保证 320px 高的小屏手机也能一屏放下 */
+@media (max-height: 420px) {
+  .lobby { padding-bottom: 8px; }
+  .lobby .eyebrow { display: none; }
+  .lobby h1 { font-size: 24px; }
+  .subtitle { margin: 2px 0 8px; }
+  .start-button { min-width: 180px; padding: 6px 20px 6px; }
+}
