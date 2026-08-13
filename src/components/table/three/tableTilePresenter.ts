@@ -408,7 +408,7 @@ function wallDrawHeadPos() {
   const headOffset = props.wallHeadDrawn ?? 0
   const breakIndex = resolveBreakIndex()
   if (props.flipStack != null) {
-    const physical = wallPhysicalIndex(headOffset, (breakIndex + headOffset) % WALL_TOTAL)
+    const physical = wallPhysicalIndex(headOffset, breakIndex)
     const slot = wallStackSlot(Math.floor(physical / 2))
     return { x: slot.x, z: slot.z }
   }
@@ -426,6 +426,9 @@ function wallPhysicalIndex(index: number, head: number): number {
   if (flip == null) return (head + index) % WALL_TOTAL
   const skipA = flip * 2
   let physical = head
+  while (physical === skipA || physical === skipA + 1) {
+    physical = (physical + 1) % WALL_TOTAL
+  }
   for (let step = 0; step < index; step += 1) {
     do { physical = (physical + 1) % WALL_TOTAL } while (physical === skipA || physical === skipA + 1)
   }
@@ -481,7 +484,7 @@ function addWall() {
         const tailDrawn = Math.max(0, WALL_TOTAL - 2 - headOffset - tiles.length)
         // 补走一张顶层牌后，同墩剩余的底层牌仍应留在原物理张位。
         const physicalIndex = tailDrawn % 2 === 1 && index === tiles.length - 1 ? index + 1 : index
-        const physical = wallPhysicalIndex(physicalIndex, (breakIndex + headOffset) % WALL_TOTAL)
+        const physical = wallPhysicalIndex(headOffset + physicalIndex, breakIndex)
         return {
           stackIndex: Math.floor(physical / 2),
           layer: 1 - (physical % 2),

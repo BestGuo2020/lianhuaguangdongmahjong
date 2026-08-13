@@ -10,6 +10,7 @@ import {
   resolveOpeningStack,
   seatSegmentStart,
   takeLotusTailTile,
+  wallBreakIndexForOpeningStack,
 } from './lotusWall'
 
 describe('莲花麻将开局分步构造（立牌山 → 翻精 → 开门）', () => {
@@ -35,6 +36,12 @@ describe('莲花麻将开局分步构造（立牌山 → 翻精 → 开门）', 
     expect(flipTile).toBe(combined.flipTile)
     expect(jokers).toEqual(combined.jokers)
     expect(openingStack).toBe(combined.openingStack)
+    expect(wallBreakIndexForOpeningStack(openingStack)).toBe(combined.wallBreakIndex)
+  })
+
+  it('第二次骰子从翻精墩向后数 T+1 墩，而不是 T 墩', () => {
+    expect(resolveOpeningStack(10, [1, 1])).toBe(13)
+    expect(resolveOpeningStack(66, [6, 6])).toBe(11)
   })
   it('杠后从当前尾墙先补摸顶层，再摸同墩底层', () => {
     const ring = Array.from({ length: 136 }, (_, index) => `m${index}` as TileType)
@@ -104,5 +111,28 @@ describe('莲花麻将牌墙构造', () => {
     // wall[0]/wall[1] 是开门墩（55）的顶层/底层
     expect(result.wallBreakIndex).toBe(110)
     expect(result.wall).toHaveLength(134)
+  })
+
+  it('发牌顺序从开门墩顺时针展开，并整墩跳过翻精墩', () => {
+    const ring = Array.from({ length: 136 }, (_, index) => `m${index}` as TileType)
+    const wall = buildDrawOrderWall(ring, 66, 1)
+
+    expect(wall.slice(0, 8)).toEqual([
+      ring[66 * 2], ring[66 * 2 + 1],
+      ring[67 * 2], ring[67 * 2 + 1],
+      ring[0], ring[1],
+      ring[2 * 2], ring[2 * 2 + 1],
+    ])
+    expect(wall).not.toContain(ring[2])
+    expect(wall).not.toContain(ring[3])
+    expect(wall).toHaveLength(134)
+  })
+
+  it('3D 断点指向开门墩的物理上层张位，并按 136 张环回', () => {
+    expect(wallBreakIndexForOpeningStack(0)).toBe(0)
+    expect(wallBreakIndexForOpeningStack(55)).toBe(110)
+    expect(wallBreakIndexForOpeningStack(68)).toBe(0)
+    expect(wallBreakIndexForOpeningStack(-1)).toBe(134)
+    expect(wallBreakIndexForOpeningStack(52, 52)).toBe(106)
   })
 })

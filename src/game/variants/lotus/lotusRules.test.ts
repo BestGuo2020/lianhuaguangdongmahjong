@@ -48,6 +48,12 @@ describe('癞子计算', () => {
 })
 
 describe('平胡面子分解', () => {
+  it('白板只能替代精牌或白板本身，不能替代普通牌', () => {
+    const ordinaryGap: TileType[] = ['m1', 'm2', 'white', 'm4', 'm5', 'm6', 'p3', 'p4', 'p5', 's7', 's7', 's7', 'east', 'east']
+    const jokerGap: TileType[] = ['m1', 'm2', 'white', 'm4', 'm5', 'm6', 'p3', 'p4', 's7', 's7', 's7', 'east', 'east', 'p1']
+    expect(isWinningHand(ordinaryGap, 0, ['p1', 'p2'], [], ['white'])).toBe(false)
+    expect(isWinningHand(jokerGap, 0, ['p1', 'p2'], [], ['white'])).toBe(true)
+  })
   it('标准 4 面子 + 对子（无癞子）', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east', 'east']
     expect(isWinningHand(hand, 0, JOKERS)).toBe(true)
@@ -292,6 +298,12 @@ describe('吃 / 碰 / 杠合法性', () => {
 })
 
 describe('听牌', () => {
+  it('截图手牌在白板受限替代下的听口', () => {
+    const hand: TileType[] = ['m3', 'm4', 'm5', 's2', 's3', 's4', 'east', 'south', 'red', 'white', 's5']
+    expect(waitingTiles(hand.filter((_, index) => index !== 3), 1, ['p1', 'p2'], ['white'])).toEqual([])
+    expect(waitingTiles(hand.filter((_, index) => index !== 8), 1, ['p1', 'p2'], ['white'])).toEqual([])
+    expect(waitingTiles(hand.filter((_, index) => index !== 10), 1, ['p1', 'p2'], ['white'])).toEqual([])
+  })
   it('列出补入后能胡的牌（单骑听东，或补入癞子与东成对）', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east']
     expect(waitingTiles(hand, 0, JOKERS)).toEqual(['east', 'red', 'white'])

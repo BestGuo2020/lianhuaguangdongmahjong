@@ -11,6 +11,7 @@ import { createStaticTableScene } from './table/three/staticTableScene'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
+import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
 
 const props = withDefaults(defineProps<TableProps>(), {
@@ -106,9 +107,7 @@ function makeTableTile(topMaterial) {
 }
 
 function makeFaceTile(tileName) {
-  const marker = props.jokerTiles.includes(tileName)
-    ? 'joker'
-    : props.wildcardTiles.includes(tileName) ? 'wildcard' : false
+  const marker = tileMarkerFor(tileName, props.jokerTiles, props.wildcardTiles)
   return makeTableTile(tableScene.makeFaceMaterial(tileName, marker))
 }
 
@@ -263,8 +262,8 @@ onMounted(async () => {
     atlasCellUvFor: tableScene.atlasCellUvFor,
     getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
     getWildcardAtlasMaterial: tableScene.getWildcardAtlasMaterial,
-    isJoker: (tile) => props.jokerTiles.includes(tile),
-    isWildcard: (tile) => props.wildcardTiles.includes(tile),
+    isJoker: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'joker',
+    isWildcard: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'wildcard',
   })
   tableTiles = createTableTilePresenter({
     props,
@@ -355,6 +354,7 @@ watch(
     props.wall?.length,
     props.horses?.length,
     props.jokerTiles?.join(','),
+    props.wildcardTiles?.join(','),
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。

@@ -68,8 +68,11 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.restore()
   }
   if (marker) {
+    const markerLabel = marker === 'wildcard' ? '\u66ff' : '\u7cbe'
+    const markerColor = marker === 'wildcard' ? '#b88220' : '#08a9dc'
+    const markerShadow = marker === 'wildcard' ? 'rgba(75,45,0,.85)' : 'rgba(0,40,70,.85)'
     ctx.save()
-    ctx.fillStyle = '#08a9dc'
+    ctx.fillStyle = markerColor
     ctx.beginPath()
     ctx.moveTo(x + w * .48, y)
     ctx.lineTo(x + w, y)
@@ -77,12 +80,12 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.closePath()
     ctx.fill()
     ctx.fillStyle = '#fff'
-    ctx.shadowColor = 'rgba(0,40,70,.85)'
+    ctx.shadowColor = markerShadow
     ctx.shadowBlur = Math.max(1, w * .008)
     ctx.font = `900 ${Math.max(16, Math.round(h * .15))}px sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(marker === 'wildcard' ? '替' : '精', x + w * .79, y + h * .15)
+    ctx.fillText(markerLabel, x + w * .79, y + h * .15)
     ctx.restore()
   }
 }

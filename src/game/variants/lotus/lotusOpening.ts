@@ -12,6 +12,7 @@ import {
   removeFlipStack,
   resolveFlip,
   resolveOpeningStack,
+  wallBreakIndexForOpeningStack,
 } from './lotusWall'
 
 interface LotusOpeningOptions {
@@ -116,7 +117,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 开门：从翻精所在墩顺时针向后数 T+1 墩为发牌/正常摸牌起点，重排为发牌顺序
     const openingStack = resolveOpeningStack(flipStack, secondDice)
     state.wall.value = buildDrawOrderWall(ring, openingStack, flipStack)
-    state.wallBreakIndex.value = openingStack * 2
+    state.wallBreakIndex.value = wallBreakIndexForOpeningStack(openingStack, flipStack)
 
     state.openingStage.value = 'deal'
     const dealt = await dealInitialHands({

@@ -38,6 +38,32 @@ function effectiveJokers(jokers: TileType[], jokerSubstitutes: TileType[] = []) 
   return [...new Set([...jokers, ...jokerSubstitutes])]
 }
 
+function countAvailableTiles(hand: TileType[], candidates: TileType[], ordinaryJokers: TileType[] = []) {
+  const ordinaryCounts = new Map<TileType, number>()
+  ordinaryJokers.forEach((tile) => ordinaryCounts.set(tile, (ordinaryCounts.get(tile) ?? 0) + 1))
+  let count = 0
+  for (let index = hand.length - 1; index >= 0; index -= 1) {
+    const tile = hand[index]
+    const ordinary = ordinaryCounts.get(tile) ?? 0
+    if (ordinary > 0) {
+      ordinaryCounts.set(tile, ordinary - 1)
+    } else if (candidates.includes(tile)) {
+      count += 1
+    }
+  }
+  return count
+}
+
+function wildcardCounts(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[], jokerSubstitutes: TileType[]) {
+  const physicalSubstitutes = jokerSubstitutes.filter((tile) => !jokers.includes(tile))
+  return {
+    unrestricted: countAvailableTiles(hand, jokers, ordinaryJokers),
+    limited: countAvailableTiles(hand, physicalSubstitutes, ordinaryJokers),
+    // 白板可替代两张精牌及白板本身；精牌自身仍由 unrestricted 处理。
+    limitedTiles: [...new Set([...jokers, ...physicalSubstitutes])],
+  }
+}
+
 /** Keep selected joker instances as natural tiles (for a discard/robbed-kong tile). */
 function naturalTiles(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []) {
   const allJokers = effectiveJokers(jokers, jokerSubstitutes)
@@ -91,14 +117,16 @@ export function canMakeMelds(
   counts: Map<TileType, number>,
   jokers: number,
   needed: number,
+  limitedJokers = 0,
+  limitedTiles: TileType[] = [],
   memo = new Map<string, boolean>(),
 ): boolean {
-  const signature = `${needed}|${jokers}|${TILE_TYPES.map((tile) => counts.get(tile) || 0).join('')}`
+  const signature = `${needed}|${jokers}|${limitedJokers}|${TILE_TYPES.map((tile) => counts.get(tile) || 0).join('')}`
   if (memo.has(signature)) return memo.get(signature)!
 
   const tile = firstRemainingTile(counts, TILE_TYPES)
   if (!tile) {
-    const result = jokers === needed * 3
+    const result = jokers + limitedJokers === needed * 3
     memo.set(signature, result)
     return result
   }
@@ -109,11 +137,22 @@ export function canMakeMelds(
 
   const amount = counts.get(tile) || 0
 
+  const fillMissing = (missing: TileType[], next: Map<TileType, number>) => {
+    const limitedMissing = missing.filter((item) => limitedTiles.includes(item)).length
+    const minLimited = Math.max(0, missing.length - jokers)
+    const maxLimited = Math.min(limitedJokers, limitedMissing)
+    for (let usedLimited = minLimited; usedLimited <= maxLimited; usedLimited += 1) {
+      const usedJokers = missing.length - usedLimited
+      if (canMakeMelds(next, jokers - usedJokers, needed - 1, limitedJokers - usedLimited, limitedTiles, memo)) return true
+    }
+    return false
+  }
+
   // (1) 刻子：三张相同，癞子补足
   const realTriplet = Math.min(3, amount)
   if (
-    3 - realTriplet <= jokers
-    && canMakeMelds(consumeTile(counts, tile, realTriplet), jokers - (3 - realTriplet), needed - 1, memo)
+    3 - realTriplet <= jokers + limitedJokers
+    && fillMissing(Array.from({ length: 3 - realTriplet }, () => tile), consumeTile(counts, tile, realTriplet))
   ) {
     memo.set(signature, true)
     return true
@@ -129,12 +168,12 @@ export function canMakeMelds(
         (_, index) => `${suited[1]}${start + index}` as TileType,
       )
       let next = new Map(counts)
-      let missing = 0
+      const missing: TileType[] = []
       sequence.forEach((item) => {
         if ((next.get(item) || 0) > 0) next = consumeTile(next, item, 1)
-        else missing += 1
+        else missing.push(item)
       })
-      if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
+      if (missing.length <= jokers + limitedJokers && fillMissing(missing, next)) {
         memo.set(signature, true)
         return true
       }
@@ -147,12 +186,12 @@ export function canMakeMelds(
     for (let a = 0; a < others.length; a += 1) {
       for (let b = a + 1; b < others.length; b += 1) {
         let next = new Map(counts)
-        let missing = 0
+        const missing: TileType[] = []
         for (const wind of [tile, others[a], others[b]]) {
           if ((next.get(wind) || 0) > 0) next = consumeTile(next, wind, 1)
-          else missing += 1
+          else missing.push(wind)
         }
-        if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
+        if (missing.length <= jokers + limitedJokers && fillMissing(missing, next)) {
           memo.set(signature, true)
           return true
         }
@@ -163,12 +202,12 @@ export function canMakeMelds(
   // (4) 三元顺：中发白组成一组面子
   if (DRAGONS.includes(tile)) {
     let next = new Map(counts)
-    let missing = 0
+    const missing: TileType[] = []
     for (const dragon of DRAGONS) {
       if ((next.get(dragon) || 0) > 0) next = consumeTile(next, dragon, 1)
-      else missing += 1
+      else missing.push(dragon)
     }
-    if (missing <= jokers && canMakeMelds(next, jokers - missing, needed - 1, memo)) {
+    if (missing.length <= jokers + limitedJokers && fillMissing(missing, next)) {
       memo.set(signature, true)
       return true
     }
@@ -179,21 +218,22 @@ export function canMakeMelds(
 }
 
 /** 平胡：4 - exposedMeldCount 组面子 + 1 对将。将可为自然对 / 单张+1癞 / 2癞。 */
-export function canMakePinghu(naturals: TileType[], jokerCount: number, neededMelds: number): boolean {
+export function canMakePinghu(naturals: TileType[], jokerCount: number, neededMelds: number, limitedJokerCount = 0, limitedTiles: TileType[] = []): boolean {
   const counts = countTiles(naturals)
   for (const tile of TILE_TYPES) {
-    if ((counts.get(tile) || 0) >= 2 && canMakeMelds(consumeTile(counts, tile, 2), jokerCount, neededMelds)) {
-      return true
-    }
+    const naturalPair = Math.min(2, counts.get(tile) || 0)
+    const missing = 2 - naturalPair
+    const limitedForPair = limitedTiles.includes(tile) ? Math.min(missing, limitedJokerCount) : 0
+    const unrestrictedForPair = missing - limitedForPair
+    if (unrestrictedForPair <= jokerCount && canMakeMelds(
+      consumeTile(counts, tile, naturalPair),
+      jokerCount - unrestrictedForPair,
+      neededMelds,
+      limitedJokerCount - limitedForPair,
+      limitedTiles,
+    )) return true
   }
-  if (jokerCount >= 1) {
-    for (const tile of TILE_TYPES) {
-      if ((counts.get(tile) || 0) >= 1 && canMakeMelds(consumeTile(counts, tile, 1), jokerCount - 1, neededMelds)) {
-        return true
-      }
-    }
-  }
-  return jokerCount >= 2 && canMakeMelds(counts, jokerCount - 2, neededMelds)
+  return false
 }
 
 // ── 特殊牌型 ─────────────────────────────────────────────────────
@@ -202,17 +242,30 @@ export function canMakePinghu(naturals: TileType[], jokerCount: number, neededMe
 export function isSevenPairs(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
   if (hand.length !== 14) return false
   const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
-  const jokerCount = hand.length - naturals.length
+  const { unrestricted, limited, limitedTiles } = wildcardCounts(hand, jokers, ordinaryJokers, jokerSubstitutes)
   let pairs = 0
   let singles = 0
+  let eligibleSingles = 0
   for (const count of countTiles(naturals).values()) {
     if (count === 2) pairs += 1
     else if (count === 4) pairs += 2
     else if (count === 3) { pairs += 1; singles += 1 }
     else if (count === 1) singles += 1
   }
-  if (jokerCount < singles) return false
-  return (jokerCount - singles) % 2 === 0
+  for (const [tile, count] of countTiles(naturals)) {
+    if ((count === 1 || count === 3) && limitedTiles.includes(tile)) eligibleSingles += 1
+  }
+  for (let limitedForSingles = 0; limitedForSingles <= Math.min(limited, eligibleSingles); limitedForSingles += 1) {
+    const requiredUnrestricted = singles - limitedForSingles
+    if (requiredUnrestricted > unrestricted) continue
+    const remainingUnrestricted = unrestricted - requiredUnrestricted
+    const remainingLimited = limited - limitedForSingles
+    const remainingWildcards = remainingUnrestricted + remainingLimited
+    if (remainingWildcards % 2 !== 0) continue
+    if (remainingUnrestricted === 0 && remainingLimited === 1) continue
+    return true
+  }
+  return false
 }
 
 /**
@@ -243,25 +296,29 @@ export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJ
   const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
   if (!hasShiSanLanSpacing(naturals)) return false
 
+  const { unrestricted, limited, limitedTiles } = wildcardCounts(hand, jokers, ordinaryJokers, jokerSubstitutes)
   const used = new Set<TileType>(naturals)
   const memo = new Set<string>()
 
-  function fillJokers(remaining: number): boolean {
-    if (remaining === 0) return true
-    const key = `${remaining}:${[...used].sort().join(',')}`
+  function fillJokers(unrestrictedRemaining: number, limitedRemaining: number): boolean {
+    if (unrestrictedRemaining === 0 && limitedRemaining === 0) return true
+    const key = `${unrestrictedRemaining}:${limitedRemaining}:${[...used].sort().join(',')}`
     if (memo.has(key)) return false
     memo.add(key)
 
-    for (const candidate of TILE_TYPES) {
+    const candidates = limitedRemaining > 0 ? limitedTiles : TILE_TYPES
+    for (const candidate of candidates) {
       if (used.has(candidate)) continue
       used.add(candidate)
-      if (hasShiSanLanSpacing([...used]) && fillJokers(remaining - 1)) return true
+      if (hasShiSanLanSpacing([...used])
+        && fillJokers(unrestrictedRemaining - (limitedRemaining > 0 ? 0 : 1), limitedRemaining - (limitedRemaining > 0 ? 1 : 0))) return true
       used.delete(candidate)
     }
     return false
   }
 
-  return fillJokers(hand.length - naturals.length)
+  // Limited whiteboards are tried first; unrestricted jokers can still fill any remaining slot.
+  return fillJokers(unrestricted, limited)
 }
 
 /** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有。 */
@@ -305,8 +362,8 @@ export function evaluateBasePattern(
   const neededMelds = 4 - exposedMeldCount
   if (hand.length !== neededMelds * 3 + 2) return null
   const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
-  const jokerCount = hand.length - naturals.length
-  return canMakePinghu(naturals, jokerCount, neededMelds)
+  const { unrestricted, limited, limitedTiles } = wildcardCounts(hand, jokers, ordinaryJokers, jokerSubstitutes)
+  return canMakePinghu(naturals, unrestricted, neededMelds, limited, limitedTiles)
     ? { pattern: 'pinghu', fan: 1 }
     : null
 }

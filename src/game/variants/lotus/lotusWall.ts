@@ -56,6 +56,21 @@ export function resolveOpeningStack(flipStack: number, secondDice: readonly [num
   return (flipStack + T + 1) % WALL_STACKS
 }
 
+/**
+ * 开门墩对应的 3D 物理断点：wall[0] 是开门后第一张实际可摸牌。
+ * 若开门墩恰好是翻精墩，必须顺时针跳过整墩后再断开。
+ */
+export function wallBreakIndexForOpeningStack(openingStack: number, flipStack?: number): number {
+  const normalizedOpening = ((openingStack % WALL_STACKS) + WALL_STACKS) % WALL_STACKS
+  const normalizedFlip = flipStack == null
+    ? null
+    : ((flipStack % WALL_STACKS) + WALL_STACKS) % WALL_STACKS
+  const firstDrawStack = normalizedFlip === normalizedOpening
+    ? (normalizedOpening + 1) % WALL_STACKS
+    : normalizedOpening
+  return firstDrawStack * 2
+}
+
 /** 移出翻精墩（2 张）后的可摸牌墙（保持环序）。 */
 export function removeFlipStack(ring: TileType[], flipStack: number): TileType[] {
   return ring.filter((_, index) => index !== flipStack * 2 && index !== flipStack * 2 + 1)
@@ -117,6 +132,6 @@ export function buildLotusWall(options: LotusWallOptions): LotusWallResult {
     jokers,
     flipStack,
     openingStack,
-    wallBreakIndex: openingStack * 2,
+    wallBreakIndex: wallBreakIndexForOpeningStack(openingStack, flipStack),
   }
 }
