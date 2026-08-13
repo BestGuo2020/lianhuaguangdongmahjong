@@ -46,6 +46,7 @@ interface Props {
   userHasWindKong: boolean
   /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
   jokerTiles?: TileType[]
+  wildcardTiles?: TileType[]
   /** 莲花麻将翻出的指示牌（精） */
   flipTile?: TileType | null
   /** 3D 牌山断点（莲花麻将由开局计算），未传按骰子计算 */
@@ -93,6 +94,14 @@ const tingDiscardTiles = computed(() => new Set(props.userTingOptions.map((optio
 const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
   return splitWinningTile(props.user.hand, props.winPresentation).hand
+})
+const jokerGuide = computed(() => {
+  if (!props.flipTile || !props.jokerTiles?.length) return null
+  const precisionNames = props.jokerTiles.map(tileName).join('、')
+  return {
+    precision: precisionNames,
+    wildcard: [...new Set([...props.jokerTiles, 'white' as TileType])].map(tileName).join('、'),
+  }
 })
 // 摸牌位：手牌比基准（13 - 3×非花副露数）多一张时，把多出的那张视为「摸牌」并留间隙。
 // 与 3D 牌桌 tableTilePresenter 规则一致：drawnTileIndex 有效时用它，否则取末张。
@@ -227,8 +236,14 @@ function onAvatarError(entry: GamePlayer) {
     />
     <Transition name="flip-cue">
       <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
-        <span>正精</span>
-        <em>{{ flipTile ? tileName(flipTile) : '' }}</em>
+        <div class="flip-indicator-head">
+          <span>正精</span>
+          <em>{{ tileName(flipTile) }}</em>
+        </div>
+        <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
+          <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>
+          <div><strong>白板替代：</strong>{{ jokerGuide.wildcard }}</div>
+        </div>
       </div>
     </Transition>
     <PlayerSeat
@@ -265,7 +280,7 @@ function onAvatarError(entry: GamePlayer) {
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
@@ -273,7 +288,7 @@ function onAvatarError(entry: GamePlayer) {
     <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
-      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
+      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
     <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
@@ -307,7 +322,7 @@ function onAvatarError(entry: GamePlayer) {
 
     <Transition name="modal">
       <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
-        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
+        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
       </div>
     </Transition>
     <Transition name="modal">
@@ -316,7 +331,7 @@ function onAvatarError(entry: GamePlayer) {
           <h2 id="chi-picker-title">请选择吃牌组合</h2>
           <div class="kong-picker-tiles chi-picker-options">
             <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="chi-picker-option" @click="chooseChi(chiIndex)">
-              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" small disabled />
+              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
             </button>
           </div>
         </section>
@@ -334,26 +349,42 @@ function onAvatarError(entry: GamePlayer) {
   top: 50px;
   right: 18px;
   z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  gap: 5px;
   padding: 6px 10px;
   border-radius: 10px;
   background: rgba(28, 20, 8, 0.72);
   border: 1px solid rgba(212, 175, 55, 0.6);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
-.flip-indicator > span {
+.flip-indicator-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.flip-indicator-head > span {
   font-size: 14px;
   font-weight: 700;
   color: #ffd966;
   letter-spacing: 2px;
 }
-.flip-indicator > em {
+.flip-indicator-head > em {
   font-style: normal;
   font-size: 13px;
   font-weight: 600;
   color: #f3e5c3;
+}
+.joker-guide {
+  display: grid;
+  gap: 2px;
+  color: #f3e5c3;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.joker-guide strong {
+  color: #7ce6ff;
+  font-weight: 800;
 }
 
 .chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }

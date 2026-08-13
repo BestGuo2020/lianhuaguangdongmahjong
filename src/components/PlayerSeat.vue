@@ -15,7 +15,8 @@ const props = withDefaults(defineProps<{
   renderHand?: boolean
   renderMelds?: boolean
   jokerTiles?: TileType[]
-}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined })
+  wildcardTiles?: TileType[]
+}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
 const avatarSrc = ref(props.player.avatar)
@@ -56,7 +57,7 @@ function onAvatarError() {
     </div>
     <div v-if="renderMelds && player.melds.length" class="seat-melds">
       <div v-for="(meld, index) in player.melds" :key="`${meld.type}-${index}`" class="mini-meld">
-        <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" small disabled />
+        <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
       </div>
     </div>
   </section>

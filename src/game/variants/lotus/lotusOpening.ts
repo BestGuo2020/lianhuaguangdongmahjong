@@ -77,6 +77,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.diceThrowerIndex.value = state.dealer.value
     state.flipTile.value = null
     state.jokerTiles.value = []
+    state.wildcardTiles.value = ['white']
     state.flipStack.value = null
     state.wallBreakIndex.value = 0
     state.roundFirstDiscard.value = true
@@ -112,7 +113,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
     if (currentSequence !== sequence) return
 
-    // 开门：从翻精墩顺时针数 T 墩为发牌起点，重排为发牌顺序（环序视觉不变）
+    // 开门：从翻精所在墩顺时针向后数 T+1 墩为发牌/正常摸牌起点，重排为发牌顺序
     const openingStack = resolveOpeningStack(flipStack, secondDice)
     state.wall.value = buildDrawOrderWall(ring, openingStack, flipStack)
     state.wallBreakIndex.value = openingStack * 2
@@ -140,7 +141,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 天胡：庄家起手 14 张即满足胡牌条件
     const dealerIndex = state.dealer.value
     const dealer = state.players[dealerIndex]
-    if (ruleset.win.isWinningHand(dealer.hand, 0, { jokers: state.jokerTiles.value })) {
+    if (ruleset.win.isWinningHand(dealer.hand, 0, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value })) {
       return options.endGame(dealerIndex, {
         tianhu: true,
         selfDraw: true,

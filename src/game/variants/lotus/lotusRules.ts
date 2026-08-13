@@ -26,29 +26,34 @@ export function nextInSequence(tile: TileType): TileType {
 }
 
 /** 本局癞子 = [指示牌, 同序下一张]（恰 2 张，二者不同）。 */
-export function computeJokers(flipTile: TileType): [TileType, TileType] {
-  return [flipTile, nextInSequence(flipTile)]
+export function computeJokers(flipTile: TileType): TileType[] {
+  return [...new Set([flipTile, nextInSequence(flipTile)])].filter((tile) => tile !== 'white')
 }
 
 export function isJoker(tile: TileType, jokers: TileType[]): boolean {
   return jokers.includes(tile)
 }
 
+function effectiveJokers(jokers: TileType[], jokerSubstitutes: TileType[] = []) {
+  return [...new Set([...jokers, ...jokerSubstitutes])]
+}
+
 /** Keep selected joker instances as natural tiles (for a discard/robbed-kong tile). */
-function naturalTiles(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = []) {
+function naturalTiles(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []) {
+  const allJokers = effectiveJokers(jokers, jokerSubstitutes)
   const ordinaryCounts = new Map<TileType, number>()
   ordinaryJokers.forEach((tile) => ordinaryCounts.set(tile, (ordinaryCounts.get(tile) ?? 0) + 1))
   const ordinaryIndexes = new Set<number>()
   // 外部加入的牌在 winHand 末尾，倒序消费才能保留手牌中原有精牌的万能身份。
   for (let index = hand.length - 1; index >= 0; index -= 1) {
     const tile = hand[index]
-    if (!isJoker(tile, jokers)) continue
+    if (!isJoker(tile, allJokers)) continue
     const remaining = ordinaryCounts.get(tile) ?? 0
     if (remaining <= 0) continue
     ordinaryCounts.set(tile, remaining - 1)
     ordinaryIndexes.add(index)
   }
-  return hand.filter((tile, index) => !isJoker(tile, jokers) || ordinaryIndexes.has(index))
+  return hand.filter((tile, index) => !isJoker(tile, allJokers) || ordinaryIndexes.has(index))
 }
 
 // ── 平胡面子分解（乱风顺 / 三元顺 / 癞子补缺）──────────────────────────
@@ -194,9 +199,9 @@ export function canMakePinghu(naturals: TileType[], jokerCount: number, neededMe
 // ── 特殊牌型 ─────────────────────────────────────────────────────
 
 /** 七对子：恰好 14 张；单张可与 1 张癞子配对，余下癞子须两两成对。 */
-export function isSevenPairs(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = []): boolean {
+export function isSevenPairs(hand: TileType[], jokers: TileType[], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
   if (hand.length !== 14) return false
-  const naturals = naturalTiles(hand, jokers, ordinaryJokers)
+  const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
   const jokerCount = hand.length - naturals.length
   let pairs = 0
   let singles = 0
@@ -232,10 +237,10 @@ function hasShiSanLanSpacing(tiles: TileType[]): boolean {
   return true
 }
 
-export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJokers: TileType[] = []): boolean {
+export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
   if (hand.length !== 14) return false
 
-  const naturals = naturalTiles(hand, jokers, ordinaryJokers)
+  const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
   if (!hasShiSanLanSpacing(naturals)) return false
 
   const used = new Set<TileType>(naturals)
@@ -289,24 +294,25 @@ export function evaluateBasePattern(
   exposedMeldCount: number,
   jokers: TileType[],
   ordinaryJokers: TileType[] = [],
+  jokerSubstitutes: TileType[] = [],
 ): PatternResult | null {
   if (exposedMeldCount === 0 && hand.length === 14) {
     if (isThirteenOrphans(hand)) return { pattern: 'thirteenOrphans', fan: 8 }
     if (isQiXingShiSanLan(hand)) return { pattern: 'qiXing', fan: 4 }
-    if (isShiSanLan(hand, jokers, ordinaryJokers)) return { pattern: 'shiSanLan', fan: 2 }
-    if (isSevenPairs(hand, jokers, ordinaryJokers)) return { pattern: 'sevenPairs', fan: 2 }
+    if (isShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'shiSanLan', fan: 2 }
+    if (isSevenPairs(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'sevenPairs', fan: 2 }
   }
   const neededMelds = 4 - exposedMeldCount
   if (hand.length !== neededMelds * 3 + 2) return null
-  const naturals = naturalTiles(hand, jokers, ordinaryJokers)
+  const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
   const jokerCount = hand.length - naturals.length
   return canMakePinghu(naturals, jokerCount, neededMelds)
     ? { pattern: 'pinghu', fan: 1 }
     : null
 }
 
-export function isWinningHand(hand: TileType[], exposedMeldCount: number, jokers: TileType[], ordinaryJokers: TileType[] = []): boolean {
-  return evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers) !== null
+export function isWinningHand(hand: TileType[], exposedMeldCount: number, jokers: TileType[], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
+  return evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers, jokerSubstitutes) !== null
 }
 
 // ── 番数与收付 ──────────────────────────────────────────────────────
@@ -374,6 +380,7 @@ export function scoreFan(
   jokers: TileType[],
   flags: ScoreFlags,
   ordinaryJokers: TileType[] = [],
+  jokerSubstitutes: TileType[] = [],
 ): FanResult | null {
   if (flags.tianhu || flags.dihu) {
     const label = flags.tianhu ? '天胡' : '地胡'
@@ -384,7 +391,7 @@ export function scoreFan(
       settlement: winPayments(8, { winnerIsDealer: flags.tianhu, selfDrawStyle: true }),
     }
   }
-  const base = evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers)
+  const base = evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers, jokerSubstitutes)
   if (!base) return null
   let fan = base.fan
   const patterns: FanPattern[] = [{ label: PATTERN_LABELS[base.pattern], multiplier: base.fan }]
@@ -416,8 +423,8 @@ export function scoreFan(
 // ── 听牌 ─────────────────────────────────────────────────────────
 
 /** 列出补入后能胡的牌（34 种候选；癞子面也可是听口，因为会增加癞子数）。 */
-export function waitingTiles(hand: TileType[], exposedMeldCount: number, jokers: TileType[]): TileType[] {
-  return TILE_TYPES.filter((tile) => isWinningHand([...hand, tile], exposedMeldCount, jokers))
+export function waitingTiles(hand: TileType[], exposedMeldCount: number, jokers: TileType[], jokerSubstitutes: TileType[] = ['white']): TileType[] {
+  return TILE_TYPES.filter((tile) => isWinningHand([...hand, tile], exposedMeldCount, jokers, [], jokerSubstitutes))
 }
 
 export interface TingEntry {
@@ -437,6 +444,7 @@ export function computeTingInfo(
   exposedMeldCount: number,
   jokers: TileType[],
   visibleCounts: ReadonlyMap<TileType, number>,
+  jokerSubstitutes: TileType[] = [],
 ): Map<TileType, TingEntry[]> {
   const result = new Map<TileType, TingEntry[]>()
   const seen = new Set<TileType>()
@@ -447,7 +455,7 @@ export function computeTingInfo(
     const entries: TingEntry[] = []
     for (const winTile of TILE_TYPES) {
       const completed = [...remaining, winTile]
-      const base = evaluateBasePattern(completed, exposedMeldCount, jokers)
+      const base = evaluateBasePattern(completed, exposedMeldCount, jokers, [], jokerSubstitutes)
       if (!base) continue
       const held = matchingCount(remaining, winTile)
       const visible = visibleCounts.get(winTile) ?? 0
@@ -519,12 +527,14 @@ export function windKong(hand: TileType[], _jokers: TileType[]): boolean {
   return WIND_CYCLE.every((wind) => matchingCount(hand, wind) >= 1)
 }
 
-export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCount: number, jokers: TileType[]): boolean {
+export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCount: number, jokers: TileType[], jokerSubstitutes: TileType[] = []): boolean {
+  const allJokers = effectiveJokers(jokers, jokerSubstitutes)
   return isWinningHand(
     [...hand, kongTile],
     exposedMeldCount,
     jokers,
-    jokers.includes(kongTile) ? [kongTile] : [],
+    allJokers.includes(kongTile) ? [kongTile] : [],
+    jokerSubstitutes,
   )
 }
 
@@ -543,17 +553,17 @@ export const LOTUS_RULESET: RuleSet = {
   },
   win: {
     isWinningHand: (tiles, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
-      isWinningHand(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])])
+      isWinningHand(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])], [...(context?.jokerSubstitutes ?? ['white'])])
     ),
     waitingTiles: (tiles, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
-      waitingTiles(tiles, exposedMeldCount, [...(context?.jokers ?? [])])
+      waitingTiles(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.jokerSubstitutes ?? ['white'])])
     ),
     canRobKong: (tiles, kongTile, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
-      canRobKong(tiles, kongTile, exposedMeldCount, [...(context?.jokers ?? [])])
+      canRobKong(tiles, kongTile, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.jokerSubstitutes ?? ['white'])])
     ),
     concealedKongs: (tiles) => concealedKongs(tiles, []),
     evaluatePattern: (tiles, exposedMeldCount, context?: RuleEvaluationContext) => (
-      evaluateBasePattern(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])])
+      evaluateBasePattern(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])], [...(context?.jokerSubstitutes ?? ['white'])])
     ),
   },
   fan: {
@@ -563,6 +573,7 @@ export const LOTUS_RULESET: RuleSet = {
       [...(context?.jokers ?? [])],
       flags,
       [...(context?.ordinaryJokers ?? [])],
+      [...(context?.jokerSubstitutes ?? ['white'])],
     ),
   },
   score: {

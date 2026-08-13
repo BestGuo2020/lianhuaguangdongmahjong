@@ -18,9 +18,9 @@ export function createLotusSelectors(state: LotusGameState, ruleset: RuleSet = L
     userDrewThisTurn: state.userDrewThisTurn,
     selectedIndex: state.selectedIndex,
     availableWaitTiles: () => TILE_TYPES.filter((tile) => !state.jokerTiles.value.includes(tile)),
-    isWinningHand: (hand, meldCount) => ruleset.win.isWinningHand(hand, meldCount, { jokers: state.jokerTiles.value }),
+    isWinningHand: (hand, meldCount) => ruleset.win.isWinningHand(hand, meldCount, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
     concealedKongs: (hand) => ruleset.win.concealedKongs(hand, { jokers: state.jokerTiles.value }),
-    waitingTiles: (hand, meldCount) => ruleset.win.waitingTiles(hand, meldCount, { jokers: state.jokerTiles.value }),
+    waitingTiles: (hand, meldCount) => ruleset.win.waitingTiles(hand, meldCount, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
     matchingCount,
   })
   const userHasWindKong = computed(() => Boolean(common.user.value)

@@ -75,14 +75,15 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         tianhu: Boolean(endOptions.tianhu),
         dihu: Boolean(endOptions.dihu),
       }
-      const ordinaryJokers = !endOptions.selfDraw && endOptions.winTile && state.jokerTiles.value.includes(endOptions.winTile)
+      const ordinaryJokers = !endOptions.selfDraw && endOptions.winTile
+        && (state.jokerTiles.value.includes(endOptions.winTile) || state.wildcardTiles.value.includes(endOptions.winTile))
         ? [endOptions.winTile]
         : []
       const score = ruleset.fan?.scoreFan(
         winHand,
         options.structuralMeldCount(winnerIndex),
         flags,
-        { jokers: state.jokerTiles.value, ordinaryJokers },
+        { jokers: state.jokerTiles.value, ordinaryJokers, jokerSubstitutes: state.wildcardTiles.value },
       )
         ?? { fan: 1, baseFan: 1, patterns: [{ label: '平胡', multiplier: 1 }], settlement: { H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 } }
       const totalWon = ruleset.score.applyWinSettlement
@@ -109,7 +110,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const tenpai = state.players
         .map((player, playerIndex) => ({
           playerIndex,
-        waits: ruleset.win.waitingTiles(player.hand, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value }),
+        waits: ruleset.win.waitingTiles(player.hand, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
         }))
         .filter((item) => item.waits.length > 0)
         .map((item) => item.playerIndex)

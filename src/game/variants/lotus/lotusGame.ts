@@ -222,6 +222,7 @@ export function useLotusGame({
     lotusTable: {
       flipTile: state.flipTile.value,
       jokerTiles: state.jokerTiles.value,
+      wildcardTiles: state.wildcardTiles.value,
       wallBreakIndex: state.wallBreakIndex.value,
       flipStack: state.flipStack.value,
     },
@@ -271,6 +272,7 @@ export function useLotusGame({
     // 莲花麻将专属
     flipTile: state.flipTile,
     jokerTiles: state.jokerTiles,
+    wildcardTiles: state.wildcardTiles,
     wallBreakIndex: state.wallBreakIndex,
     flipStack: state.flipStack,
     startGame,

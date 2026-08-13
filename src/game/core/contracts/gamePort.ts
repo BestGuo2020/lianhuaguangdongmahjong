@@ -126,6 +126,7 @@ export interface GameCapabilities {
   lotusTable?: {
     flipTile: TileType | null
     jokerTiles: TileType[]
+    wildcardTiles: TileType[]
     wallBreakIndex: number
     flipStack: number | null
   }

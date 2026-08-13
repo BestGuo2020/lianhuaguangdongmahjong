@@ -41,6 +41,9 @@ describe('癞子计算', () => {
   })
   it('翻精 = 指示牌 + 同序下一张', () => {
     expect(computeJokers('m5')).toEqual(['m5', 'm6'])
+    expect(computeJokers('white')).toEqual(['red'])
+    expect(sortTilesWithJokers(['white', 'm1', 'm5', 'm6'], computeJokers('m5')))
+      .toEqual(['m5', 'm6', 'm1', 'white'])
   })
 })
 
@@ -271,6 +274,12 @@ describe('吃 / 碰 / 杠合法性', () => {
   it('抢杠判定复用胡牌逻辑', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east']
     expect(canRobKong(hand, 'east', 0, JOKERS)).toBe(true)
+  })
+
+  it('白板可替代精牌，但不进入精牌集合', () => {
+    const hand: TileType[] = ['m1', 'm2', 'white', 'm5', 'm6', 'm7', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east', 'east']
+    expect(isWinningHand(hand, 0, ['m3', 'm4'], [], ['white'])).toBe(true)
+    expect(isWinningHand(hand, 0, ['m3', 'm4'])).toBe(false)
   })
 
   it('外部进来的精牌只能按普通牌参与胡牌', () => {

@@ -71,8 +71,9 @@ const userHasWindKong = computed(() => capabilities.value.windKong?.available ??
 const userChi = (optionIndex: number) => capabilities.value.chi?.choose(optionIndex)
 const userWindKong = () => capabilities.value.windKong?.execute()
 const flipTile = computed(() => lotusTable.value?.flipTile ?? null)
-// 广麻固定以白板为癞子；莲花麻将使用本局翻出的动态精牌集合。
-const jokerTiles = computed<TileType[]>(() => lotusTable.value ? lotusTable.value.jokerTiles : ['white'])
+// 广麻固定以白板为癞子；莲花麻将将精牌与白板替代能力分开传给界面。
+const jokerTiles = computed<TileType[]>(() => lotusTable.value?.jokerTiles ?? ['white'])
+const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
 
@@ -217,6 +218,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :user-kongs="userKongs"
           :user-has-wind-kong="userHasWindKong"
           :joker-tiles="jokerTiles"
+          :wildcard-tiles="wildcardTiles"
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
           :flip-stack="flipStack"
@@ -280,6 +282,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :standings="standings"
           :player-id="playerId"
           :joker-tiles="jokerTiles"
+          :wildcard-tiles="wildcardTiles"
           @next-round="nextRound"
           @return-to-lobby="returnToLobby"
           @report="reportPlayer"

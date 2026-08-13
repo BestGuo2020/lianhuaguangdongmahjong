@@ -158,7 +158,7 @@ export class LotusHumanController implements LotusController {
     this.bridge.selectedIndex.value = -1
     this.bridge.actionPrompt.value = null
     this.bridge.canHu.value = !ctx.skipDraw
-      && (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(ctx.hand, ctx.exposedMelds, { jokers: ctx.jokers })
+      && (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(ctx.hand, ctx.exposedMelds, { jokers: ctx.jokers, jokerSubstitutes: ['white'] })
     this.bridge.canKong.value = []
     this.bridge.canWindKong.value = false
     this.bridge.activateTurn()
@@ -338,7 +338,7 @@ export class LotusAiController implements LotusController {
     return (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(
       [...ctx.hand, ctx.tile],
       ctx.exposedMelds,
-      { jokers: ctx.jokers, ordinaryJokers: ctx.jokers.includes(ctx.tile) ? [ctx.tile] : [] },
+      { jokers: ctx.jokers, ordinaryJokers: (ctx.jokers.includes(ctx.tile) || ctx.tile === 'white') ? [ctx.tile] : [], jokerSubstitutes: ['white'] },
     )
       ? { kind: 'win' }
       : { kind: 'pass' }

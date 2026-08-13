@@ -30,7 +30,7 @@ export interface FlipResolution {
   /** 翻精所在物理墩（0..67） */
   flipStack: number
   flipTile: TileType
-  jokers: [TileType, TileType]
+  jokers: TileType[]
 }
 
 /**
@@ -42,13 +42,18 @@ export function resolveFlip(ring: TileType[], dealer: number, dice: readonly [nu
   const flipSeat = (dealer + S - 1) % 4
   const flipStack = seatSegmentStart(flipSeat) + (S - 1)
   const flipTile = ring[flipStack * 2]
-  return { flipSeat, flipStack, flipTile, jokers: computeJokers(flipTile) }
+  return {
+    flipSeat,
+    flipStack,
+    flipTile,
+    jokers: computeJokers(flipTile),
+  }
 }
 
-/** 第二次掷骰 T：从翻精墩顺时针（墩号递增）数 T 墩为开门位置。 */
+/** 第二次掷骰 T：从翻精所在墩顺时针向后数 T+1 墩为开门位置。 */
 export function resolveOpeningStack(flipStack: number, secondDice: readonly [number, number]): number {
   const T = secondDice[0] + secondDice[1]
-  return (flipStack + T) % WALL_STACKS
+  return (flipStack + T + 1) % WALL_STACKS
 }
 
 /** 移出翻精墩（2 张）后的可摸牌墙（保持环序）。 */
@@ -83,7 +88,7 @@ export interface LotusWallOptions {
   dealer: number
   /** 第一次掷骰（决定翻精方位与第 S 墩） */
   dice: readonly [number, number]
-  /** 第二次掷骰（决定开门位置，从翻精墩顺时针数 T 墩） */
+  /** 第二次掷骰（决定开门位置，从翻精所在墩顺时针向后数 T+1 墩） */
   secondDice: readonly [number, number]
   random?: () => number
 }
@@ -93,7 +98,7 @@ export interface LotusWallResult {
   wall: TileType[]
   /** 翻出的指示牌（精），桌面亮出 */
   flipTile: TileType
-  jokers: [TileType, TileType]
+  jokers: TileType[]
   /** 翻精所在物理墩（0..67） */
   flipStack: number
   /** 开门（发牌起点）所在物理墩 */

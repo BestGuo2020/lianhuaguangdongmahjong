@@ -13,6 +13,8 @@ const props = withDefaults(defineProps<{
   small?: boolean
   /** 本局癞子集合；未传时按现行玩法「白板」高亮 */
   jokerTiles?: TileType[]
+  /** 可替代精牌的实体牌；不参与精牌排序。 */
+  wildcardTiles?: TileType[]
 }>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false })
 
 const emit = defineEmits(['choose'])
@@ -21,9 +23,21 @@ const choose = (event?: Event) => {
 }
 const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)
-const isJoker = computed(() => {
-  if (props.tile === 'back') return false
-  return props.jokerTiles ? props.jokerTiles.includes(props.tile) : props.tile === 'white'
+const isPrecision = computed(() => (
+  props.tile !== 'back'
+  && props.tile !== 'white'
+  && Boolean(props.jokerTiles?.includes(props.tile))
+))
+const isWildcard = computed(() => {
+  if (props.tile === 'back' || isPrecision.value) return false
+  if (props.wildcardTiles?.length) return props.wildcardTiles.includes(props.tile)
+  return props.tile === 'white' && Boolean(props.jokerTiles?.includes(props.tile))
+})
+const isJoker = computed(() => isPrecision.value || isWildcard.value)
+const tileMarker = computed(() => isPrecision.value ? '精' : '替')
+const tileLabel = computed(() => {
+  if (!isJoker.value || shownTile.value === 'back') return meta.value.name
+  return `${meta.value.name}，${isPrecision.value ? '精牌' : '万能牌'}${isWildcard.value ? '，可代本局精牌' : ''}`
 })
 const tileStyle = computed(() => {
   if (shownTile.value === 'back') return {}
@@ -35,16 +49,16 @@ const tileStyle = computed(() => {
 <template>
   <div
     class="mahjong-tile"
-    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isJoker && !hidden, red: tile === 'red' && !hidden }"
+    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isPrecision && !hidden, wildcard: isJoker && !isPrecision && !hidden, red: tile === 'red' && !hidden }"
     :style="tileStyle"
     role="button"
-    :aria-label="meta.name"
+    :aria-label="tileLabel"
     :aria-disabled="disabled"
     :tabindex="disabled ? -1 : 0"
     @click="choose"
     @keydown.enter="choose"
     @keydown.space.prevent="choose"
   >
-    <span v-if="isJoker && !hidden" class="joker-mark">癞</span>
+    <span v-if="isJoker && !hidden" class="joker-mark">{{ tileMarker }}</span>
   </div>
 </template>

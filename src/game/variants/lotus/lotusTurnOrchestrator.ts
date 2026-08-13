@@ -63,7 +63,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         canHu: playerIndex !== from && ruleset.win.isWinningHand(
           [...player.hand, tile],
           options.structuralMeldCount(playerIndex),
-          { jokers: state.jokerTiles.value, ordinaryJokers: state.jokerTiles.value.includes(tile) ? [tile] : [] },
+          { jokers: state.jokerTiles.value, ordinaryJokers: (state.jokerTiles.value.includes(tile) || state.wildcardTiles.value.includes(tile)) ? [tile] : [], jokerSubstitutes: state.wildcardTiles.value },
         ),
       }))
       .filter(({ canHu }) => canHu)
@@ -325,7 +325,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         playerIndex,
         distance: seatDistance(kongPlayerIndex, playerIndex),
         canRob: playerIndex !== kongPlayerIndex
-          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value }),
+          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
       }))
       .filter(({ canRob }) => canRob)
       .sort((a, b) => a.distance - b.distance)

@@ -4,6 +4,8 @@ import { CLASSIC_RULESET } from './rules'
 export interface RuleEvaluationContext {
   /** Variant-specific wild tiles. The classic ruleset ignores this value. */
   jokers?: readonly TileType[]
+  /** Physical tiles that may substitute for the configured jokers; they are not joker tiles themselves. */
+  jokerSubstitutes?: readonly TileType[]
   /** Tiles that must be evaluated by face value instead of as wild tiles. */
   ordinaryJokers?: readonly TileType[]
 }

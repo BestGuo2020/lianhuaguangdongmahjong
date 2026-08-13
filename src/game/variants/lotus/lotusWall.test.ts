@@ -68,24 +68,25 @@ describe('莲花麻将牌墙构造', () => {
 
   it('第一次掷骰定翻精方位，第二次定开门位置', () => {
     // dealer=0, S=5 → 翻精方位 (0+5-1)%4=0（庄），右数第 5 墩 → stack 0+4
-    // T=8 → 开门 stack (4+8)%68=12
+    // T=8 → 从翻精墩向后数 T+1 墩，开门 stack (4+8+1)%68=13
     const result = buildLotusWall({ dealer: 0, dice: [2, 3], secondDice: [4, 4], random: () => 0 })
     expect(result.flipStack).toBe(4)
-    expect(result.openingStack).toBe(12)
-    expect(result.wallBreakIndex).toBe(24)
+    expect(result.openingStack).toBe(13)
+    expect(result.wallBreakIndex).toBe(26)
   })
 
   it('翻精方位可能落到上家', () => {
     // dealer=2, S=10 → (2+10-1)%4=3（上家），段起始 17，右数第 10 墩 → 17+9=26
-    // T=7 → 开门 (26+7)%68=33
+    // T=7 → 从翻精墩向后数 T+1 墩，开门 (26+7+1)%68=34
     const result = buildLotusWall({ dealer: 2, dice: [5, 5], secondDice: [1, 6], random: () => 0 })
     expect(result.flipStack).toBe(26)
-    expect(result.openingStack).toBe(33)
+    expect(result.openingStack).toBe(34)
   })
 
   it('指示牌 + 同序下一张 = 癞子', () => {
     const result = buildLotusWall({ dealer: 0, dice: [1, 1], secondDice: [1, 1], random: () => 0 })
     expect(result.jokers).toEqual(computeJokers(result.flipTile))
+    expect(result.jokers).not.toContain('white')
   })
 
   it('翻精墩整体跳过，牌墙 134 张且每种不超过 4 张', () => {
@@ -99,9 +100,9 @@ describe('莲花麻将牌墙构造', () => {
   it('开门墩为牌墙头：wall[0] 为该墩顶层', () => {
     const result = buildLotusWall({ dealer: 0, dice: [1, 1], secondDice: [1, 1], random: () => 0 })
     expect(result.flipStack).toBe(52)
-    expect(result.openingStack).toBe(54)
-    // wall[0]/wall[1] 是开门墩（54）的顶层/底层
-    expect(result.wallBreakIndex).toBe(108)
+    expect(result.openingStack).toBe(55)
+    // wall[0]/wall[1] 是开门墩（55）的顶层/底层
+    expect(result.wallBreakIndex).toBe(110)
     expect(result.wall).toHaveLength(134)
   })
 })

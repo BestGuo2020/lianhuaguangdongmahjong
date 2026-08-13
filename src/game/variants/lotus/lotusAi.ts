@@ -5,6 +5,10 @@ import { removeMatches } from '../../core/rules/actions'
 import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 
+function wildcardSet(jokers: TileType[]) {
+  return new Set<TileType>([...jokers, 'white'])
+}
+
 export type LotusTurnDecision =
   | { kind: 'win' }
   | { kind: 'added-kong'; meldIndex: number }
@@ -220,7 +224,7 @@ function bestDiscardAfterClaim(
   upperLastDiscard?: TileType,
 ) {
   if (!hand.length) return null
-  const jokerSet = new Set(jokers)
+  const jokerSet = wildcardSet(jokers)
   const hasNatural = hand.some((tile) => !jokerSet.has(tile))
   const candidates = hand
     .map((tile, index) => ({ tile, index }))
@@ -299,13 +303,14 @@ function remainingCount(tile: TileType, visibleTiles: TileType[]) {
 
 function specialPatternScore(hand: TileType[], exposedMelds: number, jokers: TileType[]) {
   if (exposedMelds > 0) return -20
-  const lanDefects = shiSanLanDefects(hand, jokers)
+  const effectiveJokers = [...wildcardSet(jokers)]
+  const lanDefects = shiSanLanDefects(hand, effectiveJokers)
   const lanScore = lanDefects <= 3 ? (4 - lanDefects) * 4 : 0
-  return lanScore + pairPotential(hand, jokers) * 2
+  return lanScore + pairPotential(hand, effectiveJokers) * 2
 }
 
 function shiSanLanDefects(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = new Set(jokers)
+  const jokerSet = wildcardSet(jokers)
   const natural = hand.filter((tile) => !jokerSet.has(tile))
   let defects = natural.length - new Set(natural).size
   for (const suit of ['m', 'p', 's']) {
@@ -321,7 +326,7 @@ function shiSanLanDefects(hand: TileType[], jokers: TileType[]) {
 }
 
 function pairPotential(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = new Set(jokers)
+  const jokerSet = wildcardSet(jokers)
   const counts = new Map<TileType, number>()
   let jokerCount = 0
   hand.forEach((tile) => {
@@ -349,7 +354,7 @@ function discardHeuristic(hand: TileType[], discarded: TileType, jokers: TileTyp
     edgePenalty = rank === 1 || rank === 9 ? 0 : 1
   }
   const honorPenalty = suited ? 0 : (earlyRound ? 12 : 3)
-  const jokerPenalty = jokers.includes(discarded) ? 100 : 0
+  const jokerPenalty = wildcardSet(jokers).has(discarded) ? 100 : 0
   return same * 4 + neighbors * 2 + edgePenalty + honorPenalty + jokerPenalty
 }
 
@@ -376,7 +381,7 @@ export function chooseDiscardIndex(
   random: () => number = Math.random,
   options: DiscardOptions = {},
 ): number {
-  const jokerSet = new Set(jokers)
+  const jokerSet = wildcardSet(jokers)
   const candidates = hand.some((tile) => !jokerSet.has(tile))
     ? hand.map((tile, index) => ({ tile, index })).filter(({ tile }) => !jokerSet.has(tile))
     : hand.map((tile, index) => ({ tile, index }))

@@ -10,7 +10,7 @@ export const TILE_META = {
   s2: { name: '二条', col: 0, row: 1 }, south: { name: '南风', col: 1, row: 1 }, m3: { name: '三万', col: 2, row: 1 },
   p3: { name: '三筒', col: 3, row: 1 }, s3: { name: '三条', col: 4, row: 1 }, west: { name: '西风', col: 5, row: 1 }, m4: { name: '四万', col: 6, row: 1 },
   p4: { name: '四筒', col: 0, row: 2 }, s4: { name: '四条', col: 1, row: 2 }, north: { name: '北风', col: 2, row: 2 },
-  m5: { name: '五万', col: 3, row: 2 }, p5: { name: '五筒', col: 4, row: 2 }, s5: { name: '五条', col: 5, row: 2 }, white: { name: '白板（癞子）', col: 6, row: 2 },
+  m5: { name: '五万', col: 3, row: 2 }, p5: { name: '五筒', col: 4, row: 2 }, s5: { name: '五条', col: 5, row: 2 }, white: { name: '白板', col: 6, row: 2 },
   m6: { name: '六万', col: 0, row: 3 }, p6: { name: '六筒', col: 1, row: 3 }, s6: { name: '六条', col: 2, row: 3 }, green: { name: '发财', col: 3, row: 3 },
   m7: { name: '七万', col: 4, row: 3 }, p7: { name: '七筒', col: 5, row: 3 }, s7: { name: '七条', col: 6, row: 3 },
   red: { name: '红中', col: 0, row: 4 }, m8: { name: '八万', col: 1, row: 4 }, p8: { name: '八筒', col: 2, row: 4 }, s8: { name: '八条', col: 3, row: 4 },
