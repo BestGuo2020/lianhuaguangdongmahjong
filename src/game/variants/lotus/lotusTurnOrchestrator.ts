@@ -12,7 +12,9 @@ import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRun
 
 interface ClaimCandidate {
   playerIndex: number
+  canPeng: boolean
   canGang: boolean
+  chiOptions: ChiMeld[]
 }
 
 interface LotusTurnOrchestratorOptions {
@@ -125,7 +127,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       void offerNextClaim(claimants, tile, from, decisions)
       return
     }
-    offerChi(from, tile, decisions)
+    options.later(() => { void beginTurn((from + 1) % state.players.length) }, PACE_MS.afterDiscardToNextTurn)
   }
 
   function findClaims(from: number, tile: TileType): ClaimCandidate[] {
@@ -133,11 +135,19 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       .map((player, playerIndex) => ({
         playerIndex,
         count: matchingCount(player.hand, tile),
+        chiOptions: playerIndex === (from + 1) % state.players.length
+          ? canChi(player.hand, tile, state.jokerTiles.value)
+          : [],
         distance: seatDistance(from, playerIndex),
       }))
-      .filter(({ playerIndex, count }) => playerIndex !== from && count >= 2)
+      .filter(({ playerIndex, count, chiOptions }) => playerIndex !== from && (count >= 2 || chiOptions.length > 0))
       .sort((a, b) => a.distance - b.distance)
-      .map(({ playerIndex, count }) => ({ playerIndex, canGang: count >= 3 }))
+      .map(({ playerIndex, count, chiOptions }) => ({
+        playerIndex,
+        canPeng: count >= 2,
+        canGang: count >= 3,
+        chiOptions,
+      }))
   }
 
   async function offerNextClaim(
@@ -148,7 +158,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   ) {
     const [claimant, ...remainingClaims] = claimants
     if (!claimant) {
-      offerChi(from, tile, decisions)
+      options.later(() => { void beginTurn((from + 1) % state.players.length) }, PACE_MS.afterDiscardToNextTurn)
       return
     }
     const player = state.players[claimant.playerIndex]
@@ -164,15 +174,22 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.skipDrawPengDelay)
         return
       }
+      if (decided.kind === 'chi') {
+        performChi(claimant.playerIndex, decided.meld, tile, from)
+        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
+        return
+      }
       return offerNextClaim(remainingClaims, tile, from, decisions)
     }
-    const ctx = {
-      hand: player.hand,
-      canGang: claimant.canGang,
-      tile,
-      from,
-      jokers: state.jokerTiles.value,
-    }
+      const ctx = {
+        hand: player.hand,
+        canPeng: claimant.canPeng,
+        canGang: claimant.canGang,
+        tile,
+        from,
+        chiOptions: claimant.chiOptions,
+        jokers: state.jokerTiles.value,
+      }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return
 
@@ -199,6 +216,14 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
             PACE_MS.skipDrawPengDelay,
           )
         }
+        return
+      case 'chi':
+        performChi(claimant.playerIndex, action.meld, tile, from)
+        options.later(
+          () => { void beginTurn(claimant.playerIndex, { skipDraw: true }) },
+          PACE_MS.afterClaimPeng,
+        )
+        return
     }
   }
 

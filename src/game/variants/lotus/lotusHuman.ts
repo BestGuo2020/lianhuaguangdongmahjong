@@ -118,6 +118,11 @@ export function createLotusHuman(options: LotusHumanOptions) {
       if (option) humanController.resolveHu({ kind: 'chi', meld: option })
       return
     }
+    if (humanController.hasPendingClaim()) {
+      const option = state.actionPrompt.value?.chiOptions?.[chiIndex]
+      if (option) humanController.resolveClaimChi(option)
+      return
+    }
     if (humanController.hasPendingChi()) {
       const option = state.actionPrompt.value?.chiOptions?.[chiIndex]
       if (option) humanController.resolveChi(option)

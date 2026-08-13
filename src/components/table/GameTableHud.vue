@@ -278,8 +278,9 @@ function onAvatarError(entry: GamePlayer) {
     <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
       <template v-if="actionPrompt?.type === 'claim'">
-        <button class="action primary" @click="$emit('peng')"><b>碰</b></button>
+        <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
         <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+        <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
         <button class="action pass" @click="$emit('pass')"><b>过</b></button>
       </template>
       <template v-else-if="actionPrompt?.type === 'response'">

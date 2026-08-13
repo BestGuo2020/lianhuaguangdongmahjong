@@ -45,9 +45,11 @@ export interface LotusHuContext {
 
 export interface LotusClaimContext {
   hand: TileType[]
+  canPeng: boolean
   canGang: boolean
   tile: TileType
   from: number
+  chiOptions: ChiMeld[]
   jokers: TileType[]
 }
 
@@ -70,6 +72,7 @@ export interface LotusRobKongContext {
 export type LotusClaimAction =
   | { kind: 'gang' }
   | { kind: 'peng'; discardIndex?: number }
+  | { kind: 'chi'; meld: ChiMeld }
   | { kind: 'pass' }
 
 export type LotusChiAction = { kind: 'chi'; meld: ChiMeld } | { kind: 'pass' }
@@ -166,7 +169,9 @@ export class LotusHumanController implements LotusController {
       type: 'claim',
       tile: ctx.tile,
       from: ctx.from,
+      canPeng: ctx.canPeng,
       canGang: ctx.canGang,
+      chiOptions: ctx.chiOptions,
     }
     this.bridge.activateClaim()
     return this.claimAction.request()
@@ -250,6 +255,10 @@ export class LotusHumanController implements LotusController {
     if (!this.claimAction.resolve({ kind: 'pass' })) return
     this._cleanupClaim()
   }
+  resolveClaimChi(meld: ChiMeld) {
+    if (!this.claimAction.resolve({ kind: 'chi', meld })) return
+    this._cleanupClaim()
+  }
   resolveChi(meld: ChiMeld) {
     if (!this.chiAction.resolve({ kind: 'chi', meld })) return
     this._cleanupChi()
@@ -318,10 +327,10 @@ export class LotusAiController implements LotusController {
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
     await this.wait(this.delays.claim)
-    // 吃由 requestChi 单独询问，这里 chiOptions 恒为空 → decideClaim 不会返回 chi
-    const decision = decideClaim({ hand: ctx.hand, canGang: ctx.canGang, tile: ctx.tile, from: ctx.from, chiOptions: [], jokers: ctx.jokers })
+    const decision = decideClaim({ hand: ctx.hand, canGang: ctx.canGang, tile: ctx.tile, from: ctx.from, chiOptions: ctx.chiOptions, jokers: ctx.jokers })
     if (decision.kind === 'gang') return { kind: 'gang' }
     if (decision.kind === 'peng') return { kind: 'peng', discardIndex: decision.discardIndex }
+    if (decision.kind === 'chi') return { kind: 'chi', meld: decision.meld }
     return { kind: 'pass' }
   }
 
