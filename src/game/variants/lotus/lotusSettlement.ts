@@ -1,6 +1,7 @@
 import type { RoundResult } from '../../core/contracts/gamePort'
 import type { TableActionType, TileType } from '../../core/contracts/types'
-import { scoreFan, waitingTiles } from './lotusRules'
+import { LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 import { applyWinScore } from './lotusScoring'
 import { removeLastDiscard } from '../../core/rules/actions'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
@@ -21,10 +22,12 @@ interface LotusSettlementOptions {
   ): void
   structuralMeldCount(playerIndex: number): number
   getRoundLabel(): string
+  ruleset?: RuleSet
 }
 
 export function createLotusSettlement(options: LotusSettlementOptions) {
   const { state } = options
+  const ruleset = options.ruleset ?? LOTUS_RULESET
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -75,15 +78,16 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const ordinaryJokers = !endOptions.selfDraw && endOptions.winTile && state.jokerTiles.value.includes(endOptions.winTile)
         ? [endOptions.winTile]
         : []
-      const score = scoreFan(
+      const score = ruleset.fan?.scoreFan(
         winHand,
         options.structuralMeldCount(winnerIndex),
-        state.jokerTiles.value,
         flags,
-        ordinaryJokers,
+        { jokers: state.jokerTiles.value, ordinaryJokers },
       )
         ?? { fan: 1, baseFan: 1, patterns: [{ label: '平胡', multiplier: 1 }], settlement: { H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 } }
-      const totalWon = applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value)
+      const totalWon = ruleset.score.applyWinSettlement
+        ? ruleset.score.applyWinSettlement(state.players, winnerIndex, score.settlement, state.dealer.value)
+        : applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value)
       const winType = endOptions.tianhu ? 'tianhu'
         : endOptions.dihu ? 'dihu'
         : endOptions.robbedKong ? 'robbed-kong'
@@ -105,7 +109,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const tenpai = state.players
         .map((player, playerIndex) => ({
           playerIndex,
-          waits: waitingTiles(player.hand, options.structuralMeldCount(playerIndex), state.jokerTiles.value),
+        waits: ruleset.win.waitingTiles(player.hand, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value }),
         }))
         .filter((item) => item.waits.length > 0)
         .map((item) => item.playerIndex)

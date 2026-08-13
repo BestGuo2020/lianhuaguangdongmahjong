@@ -3,7 +3,8 @@
 // 这里把「某个玩家的回合/响应」转换成可执行的命令。
 import type { Meld, TileType } from '../../core/contracts/types'
 import type { ActionPrompt } from '../../core/contracts/gamePort'
-import { isWinningHand, type ChiMeld } from './lotusRules'
+import { type ChiMeld, LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 import {
   decideClaim,
   decideRobKong,
@@ -33,6 +34,7 @@ export interface LotusTurnContext {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  ruleset?: RuleSet
 }
 
 export interface LotusHuContext {
@@ -45,6 +47,7 @@ export interface LotusHuContext {
   canPeng: boolean
   canGang: boolean
   chiOptions: ChiMeld[]
+  ruleset?: RuleSet
 }
 
 export interface LotusClaimContext {
@@ -68,6 +71,7 @@ export interface LotusChiContext {
   from: number
   chiOptions: ChiMeld[]
   jokers: TileType[]
+  ruleset?: RuleSet
 }
 
 export interface LotusRobKongContext {
@@ -76,6 +80,7 @@ export interface LotusRobKongContext {
   tile: TileType
   from: number
   jokers: TileType[]
+  ruleset?: RuleSet
 }
 
 export type LotusClaimAction =
@@ -152,7 +157,8 @@ export class LotusHumanController implements LotusController {
     this.bridge.drawnThisTurn.value = !ctx.skipDraw
     this.bridge.selectedIndex.value = -1
     this.bridge.actionPrompt.value = null
-    this.bridge.canHu.value = !ctx.skipDraw && isWinningHand(ctx.hand, ctx.exposedMelds, ctx.jokers)
+    this.bridge.canHu.value = !ctx.skipDraw
+      && (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(ctx.hand, ctx.exposedMelds, { jokers: ctx.jokers })
     this.bridge.canKong.value = []
     this.bridge.canWindKong.value = false
     this.bridge.activateTurn()
@@ -324,15 +330,15 @@ export class LotusAiController implements LotusController {
       publicTiles: ctx.publicTiles,
       upperLastDiscard: ctx.upperLastDiscard,
       earlyRound: ctx.earlyRound,
+      ruleset: ctx.ruleset,
     }))
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
-    return isWinningHand(
+    return (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(
       [...ctx.hand, ctx.tile],
       ctx.exposedMelds,
-      ctx.jokers,
-      ctx.jokers.includes(ctx.tile) ? [ctx.tile] : [],
+      { jokers: ctx.jokers, ordinaryJokers: ctx.jokers.includes(ctx.tile) ? [ctx.tile] : [] },
     )
       ? { kind: 'win' }
       : { kind: 'pass' }

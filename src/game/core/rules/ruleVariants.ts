@@ -6,6 +6,8 @@ export interface RuleVariantOption {
   description: string
   highlights: string[]
   badge?: string
+  /** Stable ruleset key used by local/remote engines and future modes. */
+  rulesetId?: string
 }
 
 export const DEFAULT_RULE_VARIANT: RuleVariant = 'lotus-classic'
@@ -17,6 +19,7 @@ export const RULE_VARIANTS: readonly RuleVariantOption[] = [
     description: '莲花广麻现行规则',
     highlights: ['白板癞子', '仅自摸或抢杠胡', '胡后买 8 马'],
     badge: '默认',
+    rulesetId: 'lotus-classic',
   },
   {
     id: 'lotus-legacy',
@@ -24,6 +27,7 @@ export const RULE_VARIANTS: readonly RuleVariantOption[] = [
     description: '旧版翻精规则',
     highlights: ['翻精癞子', '支持吃牌', '十三烂/七星/十三幺等胡型'],
     badge: '',
+    rulesetId: 'lotus-legacy',
   },
 ]
 

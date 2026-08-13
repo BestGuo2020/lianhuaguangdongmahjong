@@ -1,7 +1,8 @@
 // AI 玩家的纯决策层：只负责「看状态 → 给出动作命令」，不修改任何游戏状态、
 // 不触发表现副作用，因此可以独立单元测试。动作的「执行」仍由 useGame 完成。
-import { concealedKongs, isWinningHand, matchingCount } from '../rules/rules'
+import { matchingCount } from '../rules/rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
+import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 /** AI 回合内的动作命令 */
 export type TurnDecision =
@@ -32,6 +33,7 @@ export interface AITurnView {
   exposedMelds: number
   /** 是否从牌墙尾补摸（杠后），用于杠上开花判断 */
   kongBloom: boolean
+  ruleset?: RuleSet
 }
 
 /** 吃碰杠响应输入 */
@@ -46,14 +48,15 @@ export interface AIClaimView {
  * 自摸胡 → 补杠 → 暗杠 → 弃牌。
  */
 export function decideTurn(view: AITurnView): TurnDecision {
-  if (isWinningHand(view.hand, view.exposedMelds)) return { kind: 'win' }
+  const ruleset = view.ruleset ?? DEFAULT_RULESET
+  if (ruleset.win.isWinningHand(view.hand, view.exposedMelds)) return { kind: 'win' }
 
   const meldIndex = view.melds.findIndex(
     (meld) => meld.type === 'peng' && view.hand.includes(meld.tile),
   )
   if (meldIndex >= 0) return { kind: 'added-kong', meldIndex }
 
-  const kong = concealedKongs(view.hand)[0]
+  const kong = ruleset.win.concealedKongs(view.hand)[0]
   if (kong) return { kind: 'concealed-kong', tile: kong }
 
   return { kind: 'discard', handIndex: chooseDiscardIndex(view.hand, Math.random) }
@@ -92,6 +95,6 @@ export function chooseDiscardIndex(hand: TileType[], random: () => number = Math
 }
 
 // 供 useGame 构造决策快照的辅助函数，避免各调用点重复拼装视图。
-export function makeTurnView(player: GamePlayer, exposedMelds: number, kongBloom: boolean): AITurnView {
-  return { hand: player.hand, melds: player.melds, exposedMelds, kongBloom }
+export function makeTurnView(player: GamePlayer, exposedMelds: number, kongBloom: boolean, ruleset?: RuleSet): AITurnView {
+  return { hand: player.hand, melds: player.melds, exposedMelds, kongBloom, ruleset }
 }

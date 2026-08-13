@@ -3,7 +3,8 @@ import type { MatchType, TileType } from '../../core/contracts/types'
 import { sortTilesWithJokers, tileName } from '../../core/rules/tiles'
 import { MATCH_HANDS } from '../../core/local/localGameConfig'
 import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
-import { isWinningHand } from './lotusRules'
+import { LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import {
   buildDrawOrderWall,
@@ -25,9 +26,11 @@ interface LotusOpeningOptions {
   getRoundLabel(): string
   beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
   endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
+  ruleset?: RuleSet
 }
 
 export function createLotusOpening(options: LotusOpeningOptions) {
+  const ruleset = options.ruleset ?? LOTUS_RULESET
   const { state } = options
   let sequence = 0
 
@@ -137,7 +140,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 天胡：庄家起手 14 张即满足胡牌条件
     const dealerIndex = state.dealer.value
     const dealer = state.players[dealerIndex]
-    if (isWinningHand(dealer.hand, 0, state.jokerTiles.value)) {
+    if (ruleset.win.isWinningHand(dealer.hand, 0, { jokers: state.jokerTiles.value })) {
       return options.endGame(dealerIndex, {
         tianhu: true,
         selfDraw: true,

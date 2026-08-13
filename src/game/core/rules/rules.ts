@@ -1,6 +1,7 @@
 import { TILE_TYPES, isHorseForSeat, type HorseSeat } from './tiles'
 import type { GamePlayer, Meld, ScoreDelta, TileType } from '../contracts/types'
 import { consumeTile, countTiles, firstRemainingTile, matchingCount } from '../../shared/rules/tileTools'
+import type { RuleSet, ScoreHandOptions, ScoreHandResult } from './ruleset'
 
 export { matchingCount }
 
@@ -158,7 +159,7 @@ export function drawHorses(wall: TileType[], amount = 8, seat: HorseSeat = 0) {
   return { horses, hits: horses.filter((tile) => isHorseForSeat(tile, seat)).length }
 }
 
-export function scoreHand({ dealer = false, noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false }) {
+export function scoreHand({ dealer = false, noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false }: ScoreHandOptions): ScoreHandResult {
   const details: Array<{ label: string; multiplier?: number; points?: number }> = [
     { label: robbedKong ? '抢杠胡' : '自摸', multiplier: 1 },
   ]
@@ -176,3 +177,34 @@ export function scoreHand({ dealer = false, noJoker = false, fourRed = false, ko
   const points = multiplier * BASE_SCORE + horsePoints
   return { multiplier, totalMultiplier, horsePoints, points, details }
 }
+
+/**
+ * The default Guangma ruleset. Keep the standalone exports above for callers
+ * that predate ruleset injection; both paths execute the same implementation.
+ */
+export const CLASSIC_RULESET: RuleSet = {
+  id: 'lotus-classic',
+  baseScore: BASE_SCORE,
+  flow: {
+    mode: 'single-win',
+    continueAfterWin: false,
+    allowMultipleWinners: false,
+  },
+  win: {
+    isWinningHand,
+    waitingTiles,
+    canRobKong,
+    concealedKongs,
+  },
+  score: {
+    scoreHand,
+    applyKongScore,
+    applyWinScore,
+  },
+  extension: {
+    patternProviders: [],
+    settlementHooks: [],
+  },
+}
+
+export const DEFAULT_RULESET = CLASSIC_RULESET

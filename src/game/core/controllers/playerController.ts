@@ -4,10 +4,10 @@
 import { decideClaim, decideRobKong, decideTurn, makeTurnView, chooseDiscardIndex } from './ai'
 import type { AITurnView, ClaimDecision, RobKongView, TurnDecision } from './ai'
 import { removeMatches } from '../rules/actions'
-import { concealedKongs, isWinningHand } from '../rules/rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
 import type { ActionPrompt } from '../contracts/gamePort'
 import { createPendingAction } from '../../shared/runtime/pendingAction'
+import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 // ── 共享类型 ──
 
@@ -23,6 +23,7 @@ export interface TurnContext {
   skipDraw: boolean
   /** 是否是杠后补摸的回合（用于 AI 选择更短的思考延迟） */
   afterKong: boolean
+  ruleset?: RuleSet
 }
 
 /** 吃碰杠响应上下文 */
@@ -145,9 +146,10 @@ export class HumanController implements PlayerController {
     this.bridge.drawnThisTurn.value = !ctx.skipDraw
     this.bridge.selectedIndex.value = -1
     this.bridge.actionPrompt.value = null
-    this.bridge.canHu.value = !ctx.skipDraw && isWinningHand(ctx.hand, ctx.exposedMelds)
+    this.bridge.canHu.value = !ctx.skipDraw
+      && (ctx.ruleset ?? DEFAULT_RULESET).win.isWinningHand(ctx.hand, ctx.exposedMelds)
     this.bridge.canKong.value = [
-      ...concealedKongs(ctx.hand),
+      ...(ctx.ruleset ?? DEFAULT_RULESET).win.concealedKongs(ctx.hand),
       ...ctx.melds
         .filter((meld) => meld.type === 'peng' && ctx.hand.includes(meld.tile))
         .map((meld) => meld.tile),
@@ -292,6 +294,7 @@ export class AiController implements PlayerController {
       { hand: ctx.hand, melds: ctx.melds } as GamePlayer,
       ctx.exposedMelds,
       ctx.kongBloom,
+      ctx.ruleset,
     )
     const decision: TurnDecision = decideTurn(view)
     return this.mapTurnDecision(decision)

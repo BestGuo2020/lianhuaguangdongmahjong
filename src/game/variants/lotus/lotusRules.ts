@@ -5,6 +5,7 @@
 import type { TileType } from '../../core/contracts/types'
 import { HONORS, SUITS, TILE_TYPES } from '../../core/rules/tiles'
 import { consumeTile, countTiles, firstRemainingTile, matchingCount } from '../../shared/rules/tileTools'
+import type { RuleEvaluationContext, RuleSet } from '../../core/rules/ruleset'
 
 export { matchingCount }
 
@@ -525,4 +526,96 @@ export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCoun
     jokers,
     jokers.includes(kongTile) ? [kongTile] : [],
   )
+}
+
+/**
+ * Adapter used by the core engine. The legacy Lotus implementation keeps its
+ * explicit joker arguments for backwards compatibility, while the ruleset
+ * boundary carries them in a context object.
+ */
+export const LOTUS_RULESET: RuleSet = {
+  id: 'lotus-legacy',
+  baseScore: 100,
+  flow: {
+    mode: 'single-win',
+    continueAfterWin: false,
+    allowMultipleWinners: false,
+  },
+  win: {
+    isWinningHand: (tiles, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
+      isWinningHand(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])])
+    ),
+    waitingTiles: (tiles, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
+      waitingTiles(tiles, exposedMeldCount, [...(context?.jokers ?? [])])
+    ),
+    canRobKong: (tiles, kongTile, exposedMeldCount = 0, context?: RuleEvaluationContext) => (
+      canRobKong(tiles, kongTile, exposedMeldCount, [...(context?.jokers ?? [])])
+    ),
+    concealedKongs: (tiles) => concealedKongs(tiles, []),
+    evaluatePattern: (tiles, exposedMeldCount, context?: RuleEvaluationContext) => (
+      evaluateBasePattern(tiles, exposedMeldCount, [...(context?.jokers ?? [])], [...(context?.ordinaryJokers ?? [])])
+    ),
+  },
+  fan: {
+    scoreFan: (tiles, exposedMeldCount, flags, context?: RuleEvaluationContext) => scoreFan(
+      tiles,
+      exposedMeldCount,
+      [...(context?.jokers ?? [])],
+      flags,
+      [...(context?.ordinaryJokers ?? [])],
+    ),
+  },
+  score: {
+    // Legacy scoring has its own settlement adapter; these hooks are supplied
+    // so generic core consumers can still use the ruleset contract.
+    scoreHand: ({ dealer = false }) => ({
+      multiplier: dealer ? 2 : 1,
+      totalMultiplier: dealer ? 2 : 1,
+      horsePoints: 0,
+      points: dealer ? 200 : 100,
+      details: [{ label: '平胡', multiplier: 1 }],
+    }),
+    applyKongScore: (players, kongPlayerIndex, type, fromIndex = null) => {
+      const payers = type === 'discard'
+        ? [fromIndex]
+        : players.map((_, index) => index).filter((index) => index !== kongPlayerIndex)
+      const payment = type === 'concealed' ? 200 : 100
+      const validPayers = payers.filter((index): index is number => Number.isInteger(index) && index !== kongPlayerIndex)
+      validPayers.forEach((index) => {
+        players[index].score -= payment
+        players[kongPlayerIndex].score += payment
+      })
+      return [
+        { playerIndex: kongPlayerIndex, amount: payment * validPayers.length },
+        ...validPayers.map((playerIndex) => ({ playerIndex, amount: -payment })),
+      ].filter(({ amount }) => amount !== 0)
+    },
+    applyWinScore: (players, winnerIndex, points, _payerIndex = null, dealerIndex = null) => {
+      let total = 0
+      players.forEach((player, index) => {
+        if (index === winnerIndex) return
+        const payment = index === dealerIndex ? points * 2 : points
+        player.score -= payment
+        total += payment
+      })
+      players[winnerIndex].score += total
+      return total
+    },
+    applyWinSettlement: (players, winnerIndex, settlement, dealerIndex) => {
+      let total = 0
+      players.forEach((player, index) => {
+        if (index === winnerIndex) return
+        const payment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
+        if (payment <= 0) return
+        player.score -= payment
+        total += payment
+      })
+      players[winnerIndex].score += total
+      return total
+    },
+  },
+  extension: {
+    patternProviders: [],
+    settlementHooks: [],
+  },
 }

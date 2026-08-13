@@ -1,10 +1,11 @@
 import type { RoundResult } from '../contracts/gamePort'
 import type { EndGameOptions, TableActionType, TileType } from '../contracts/types'
-import { applyWinScore, drawHorses, scoreHand, waitingTiles } from '../rules/rules'
+import { drawHorses } from '../rules/rules'
 import { removeLastDiscard } from '../rules/actions'
 import type { LocalGameState } from './localGameState'
 import { resolveWinTile } from './matchProgress'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
+import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 interface LocalSettlementTimelineOptions {
   state: LocalGameState
@@ -21,10 +22,12 @@ interface LocalSettlementTimelineOptions {
   ): void
   structuralMeldCount(playerIndex: number): number
   getRoundLabel(): string
+  ruleset?: RuleSet
 }
 
 export function createLocalSettlementTimeline(options: LocalSettlementTimelineOptions) {
   const { state } = options
+  const ruleset = options.ruleset ?? DEFAULT_RULESET
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -62,7 +65,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3
       const { horses, hits } = drawHorses(state.wall.value, 8, relativeSeat)
       // 买马从牌墙末尾摸走，不推进牌头计数。
-      const score = scoreHand({
+      const score = ruleset.score.scoreHand({
         dealer: winnerIndex === state.dealer.value,
         noJoker: !winner.hand.includes('white'),
         fourRed: Boolean(endOptions.fourRed),
@@ -70,7 +73,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
         horseHits: hits,
         robbedKong: Boolean(endOptions.robbedKong),
       })
-      const totalWon = applyWinScore(
+      const totalWon = ruleset.score.applyWinScore(
         state.players,
         winnerIndex,
         score.points,
@@ -91,7 +94,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const tenpai = state.players
         .map((player, playerIndex) => ({
           playerIndex,
-          waits: waitingTiles(player.hand, options.structuralMeldCount(playerIndex)),
+        waits: ruleset.win.waitingTiles(player.hand, options.structuralMeldCount(playerIndex)),
         }))
         .filter((item) => item.waits.length > 0)
         .map((item) => item.playerIndex)

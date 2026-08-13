@@ -2,7 +2,8 @@
 // 决策与执行分离，可独立单元测试。
 import type { Meld, TileType } from '../../core/contracts/types'
 import { removeMatches } from '../../core/rules/actions'
-import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld } from './lotusRules'
+import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 
 export type LotusTurnDecision =
   | { kind: 'win' }
@@ -29,6 +30,7 @@ export interface LotusTurnView {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  ruleset?: RuleSet
 }
 
 export interface LotusClaimView {
@@ -57,7 +59,7 @@ export interface LotusRobKongView {
 
 /** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌。 */
 export function decideTurn(view: LotusTurnView): LotusTurnDecision {
-  if (isWinningHand(view.hand, view.exposedMelds, view.jokers)) return { kind: 'win' }
+  if ((view.ruleset ?? LOTUS_RULESET).win.isWinningHand(view.hand, view.exposedMelds, { jokers: view.jokers })) return { kind: 'win' }
 
   const meldIndex = view.melds.findIndex(
     (meld) => meld.type === 'peng'
@@ -65,7 +67,7 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
   )
   if (meldIndex >= 0) return { kind: 'added-kong', meldIndex }
 
-  const kong = concealedKongs(view.hand, view.jokers)[0]
+  const kong = (view.ruleset ?? LOTUS_RULESET).win.concealedKongs(view.hand, { jokers: view.jokers })[0]
   if (kong) return { kind: 'concealed-kong', tile: kong }
 
   if (windKong(view.hand, view.jokers)) return { kind: 'wind-kong' }

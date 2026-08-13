@@ -20,12 +20,15 @@ import { structuralMeldCount } from './lotusSelectors'
 import { createLotusGameState, type LotusEndGameOptions } from './lotusState'
 import { createLotusTileFlow } from './lotusTileFlow'
 import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
+import { LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 
 interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: LotusController[]
   countdownEnabled?: boolean
+  ruleset?: RuleSet
 }
 
 export function useLotusGame({
@@ -33,9 +36,10 @@ export function useLotusGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   countdownEnabled = true,
+  ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
   const state = createLotusGameState()
-  const selectors = createLotusSelectors(state)
+  const selectors = createLotusSelectors(state, ruleset)
 
   let openingTimeline!: ReturnType<typeof createLotusOpening>
   let settlementTimeline!: ReturnType<typeof createLotusSettlement>
@@ -116,6 +120,7 @@ export function useLotusGame({
     showTableAction: transient.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
+    ruleset,
   })
 
   countdown = createLocalCountdownController({
@@ -148,6 +153,7 @@ export function useLotusGame({
     announce: transient.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
+    ruleset,
     endGame,
   })
   const startGame = openingTimeline.start
@@ -167,6 +173,7 @@ export function useLotusGame({
     showScoreFlow: transient.showScoreFlow,
     playSound,
     later: timer.later,
+    ruleset,
     beginTurn,
   })
   turnOrchestrator = createLotusTurnOrchestrator({
@@ -184,6 +191,7 @@ export function useLotusGame({
     endGame,
     announce: transient.announce,
     later: timer.later,
+    ruleset,
   })
 
   playerActions = createLotusHuman({

@@ -5,10 +5,11 @@ import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
-import { canChi, canRobKong, isWinningHand, matchingCount, type ChiMeld } from './lotusRules'
+import { canChi, matchingCount, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
+import type { RuleSet } from '../../core/rules/ruleset'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -32,10 +33,12 @@ interface LotusTurnOrchestratorOptions {
   endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
   announce(text: string, tone?: string): void
   later(callback: () => void, delay: number): number
+  ruleset?: RuleSet
 }
 
 export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOptions) {
   const { state } = options
+  const ruleset = options.ruleset ?? LOTUS_RULESET
   let runner!: ReturnType<typeof createTurnRunner<LotusGameState, LotusController, LotusTurnAction>>
 
   function hasSettled() {
@@ -57,11 +60,10 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       .map((player, playerIndex) => ({
         playerIndex,
         distance: seatDistance(from, playerIndex),
-        canHu: playerIndex !== from && isWinningHand(
+        canHu: playerIndex !== from && ruleset.win.isWinningHand(
           [...player.hand, tile],
           options.structuralMeldCount(playerIndex),
-          state.jokerTiles.value,
-          state.jokerTiles.value.includes(tile) ? [tile] : [],
+          { jokers: state.jokerTiles.value, ordinaryJokers: state.jokerTiles.value.includes(tile) ? [tile] : [] },
         ),
       }))
       .filter(({ canHu }) => canHu)
@@ -108,6 +110,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       canPeng: count >= 2,
       canGang: count >= 3,
       chiOptions,
+      ruleset,
     }
     const action = await options.controllers[playerIndex].requestDiscardHu(ctx)
     if (hasSettled()) return
@@ -284,6 +287,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       from,
       chiOptions,
       jokers: state.jokerTiles.value,
+      ruleset,
     })
     if (hasSettled()) return
     if (action.kind === 'pass') {
@@ -321,7 +325,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         playerIndex,
         distance: seatDistance(kongPlayerIndex, playerIndex),
         canRob: playerIndex !== kongPlayerIndex
-          && canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex), state.jokerTiles.value),
+          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value }),
       }))
       .filter(({ canRob }) => canRob)
       .sort((a, b) => a.distance - b.distance)
@@ -403,6 +407,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       upperLastDiscard: upperLastDiscardFor(playerIndex),
       earlyRound: earlyRoundFor(playerIndex),
       afterKong: Boolean(turnOptions.fromTail),
+      ruleset,
     }),
     requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),
     handleAction: async (action, playerIndex, player, _turnOptions, api) => {

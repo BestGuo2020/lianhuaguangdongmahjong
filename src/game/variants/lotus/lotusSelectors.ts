@@ -2,12 +2,13 @@ import { computed } from 'vue'
 import { TILE_TYPES } from '../../core/rules/tiles'
 import { MATCH_NAMES } from '../../core/local/localGameConfig'
 import { createCommonGameSelectors, createRulePlayerSelectors, structuralMeldCount } from '../../shared/selectors/gameSelectors'
-import { concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong } from './lotusRules'
+import { matchingCount, windKong, LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 import type { LotusGameState } from './lotusState'
 
 export { structuralMeldCount }
 
-export function createLotusSelectors(state: LotusGameState) {
+export function createLotusSelectors(state: LotusGameState, ruleset: RuleSet = LOTUS_RULESET) {
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const playerSelectors = createRulePlayerSelectors({
     players: state.players,
@@ -17,9 +18,9 @@ export function createLotusSelectors(state: LotusGameState) {
     userDrewThisTurn: state.userDrewThisTurn,
     selectedIndex: state.selectedIndex,
     availableWaitTiles: () => TILE_TYPES.filter((tile) => !state.jokerTiles.value.includes(tile)),
-    isWinningHand: (hand, meldCount) => isWinningHand(hand, meldCount, state.jokerTiles.value),
-    concealedKongs: (hand) => concealedKongs(hand, state.jokerTiles.value),
-    waitingTiles: (hand, meldCount) => waitingTiles(hand, meldCount, state.jokerTiles.value),
+    isWinningHand: (hand, meldCount) => ruleset.win.isWinningHand(hand, meldCount, { jokers: state.jokerTiles.value }),
+    concealedKongs: (hand) => ruleset.win.concealedKongs(hand, { jokers: state.jokerTiles.value }),
+    waitingTiles: (hand, meldCount) => ruleset.win.waitingTiles(hand, meldCount, { jokers: state.jokerTiles.value }),
     matchingCount,
   })
   const userHasWindKong = computed(() => Boolean(common.user.value)

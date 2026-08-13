@@ -7,10 +7,11 @@ import type {
   TurnContext,
 } from '../controllers/playerController'
 import { performDiscardGang, performPeng, type ActionContext } from '../rules/actions'
-import { canRobKong, matchingCount } from '../rules/rules'
+import { matchingCount } from '../rules/rules'
 import { PACE_MS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
+import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -32,10 +33,12 @@ interface LocalTurnOrchestratorOptions {
   endGame(winnerIndex: number, options?: EndGameOptions): unknown
   announce(text: string, tone?: string): void
   later(callback: () => void, delay: number): number
+  ruleset?: RuleSet
 }
 
 export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOptions) {
   const { state } = options
+  const ruleset = options.ruleset ?? DEFAULT_RULESET
   let runner!: ReturnType<typeof createTurnRunner<LocalGameState, PlayerController, TurnAction>>
 
   function hasSettled() {
@@ -121,7 +124,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
         playerIndex,
         distance: seatDistance(kongPlayerIndex, playerIndex),
         canRob: playerIndex !== kongPlayerIndex
-          && canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex)),
+          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex)),
       }))
       .filter(({ canRob }) => canRob)
       .sort((a, b) => a.distance - b.distance)
@@ -185,6 +188,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       kongBloom,
       skipDraw: Boolean(turnOptions.skipDraw),
       afterKong: Boolean(turnOptions.fromTail),
+      ruleset,
     } satisfies TurnContext),
     requestTurn: (controller, context) => controller.requestTurn(context as TurnContext),
     handleAction: async (action, playerIndex, player, _turnOptions, api) => {

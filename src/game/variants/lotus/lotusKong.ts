@@ -6,6 +6,8 @@ import { applyKongScore } from './lotusScoring'
 import type { LotusGameState } from './lotusState'
 import { createKongActionExecutor } from '../../shared/runtime/kongActionExecutor'
 import { sortTilesWithJokers } from '../../core/rules/tiles'
+import { LOTUS_RULESET } from './lotusRules'
+import type { RuleSet } from '../../core/rules/ruleset'
 
 const WIND_MELD_TILES: TileType[] = ['east', 'south', 'west', 'north']
 
@@ -16,6 +18,7 @@ interface LotusKongOptions {
   playSound(name: string, volume?: number): unknown
   later(callback: () => void, delay: number): number
   beginTurn(playerIndex: number, options: { fromTail: true }): unknown
+  ruleset?: RuleSet
 }
 
 export function createLotusKong(options: LotusKongOptions) {
@@ -23,7 +26,7 @@ export function createLotusKong(options: LotusKongOptions) {
   const common = createKongActionExecutor({
     ...options,
     sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
-    scoreKong: applyKongScore,
+    scoreKong: (options.ruleset ?? LOTUS_RULESET).score.applyKongScore,
     addedKongDelay: PACE_MS.afterKongSettle,
   })
 
@@ -37,7 +40,7 @@ export function createLotusKong(options: LotusKongOptions) {
     player.hand = sortTilesWithJokers(player.hand, state.jokerTiles.value)
     player.drawnTileIndex = -1
     player.melds.push({ type: 'angang', tile: 'east', tiles: [...WIND_MELD_TILES], windKong: true })
-    const scoreDeltas = applyKongScore(state.players, playerIndex, 'concealed')
+    const scoreDeltas = (options.ruleset ?? LOTUS_RULESET).score.applyKongScore(state.players, playerIndex, 'concealed')
     options.showTableAction('concealed-gang', playerIndex, null, 'east', player.melds.length - 1)
     options.showScoreFlow(scoreDeltas)
     options.playSound('gang.mp3')

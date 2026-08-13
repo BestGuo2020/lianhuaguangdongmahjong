@@ -17,6 +17,7 @@ import { createLocalTileFlowExecutor } from './localTileFlowExecutor'
 import { createLocalTimerScheduler } from './localTimerScheduler'
 import { createLocalTransientEventPresenter } from './localTransientEventPresenter'
 import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
+import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -24,6 +25,7 @@ interface UseGameOptions {
   controllers?: PlayerController[]
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
+  ruleset?: RuleSet
 }
 
 export function useGame({
@@ -31,9 +33,10 @@ export function useGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   countdownEnabled = true,
+  ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
   const state = createLocalGameState()
-  const selectors = createLocalGameSelectors(state)
+  const selectors = createLocalGameSelectors(state, ruleset)
   let openingTimeline!: ReturnType<typeof createLocalOpeningTimeline>
   let settlementTimeline!: ReturnType<typeof createLocalSettlementTimeline>
   let kongActionExecutor!: ReturnType<typeof createLocalKongActionExecutor>
@@ -104,6 +107,7 @@ export function useGame({
     showTableAction: transientEvents.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
+    ruleset,
   })
 
   countdown = createLocalCountdownController({
@@ -157,6 +161,7 @@ export function useGame({
     playSound,
     later: scheduler.later,
     beginTurn,
+    ruleset,
   })
   turnOrchestrator = createLocalTurnOrchestrator({
     state,
@@ -172,6 +177,7 @@ export function useGame({
     endGame,
     announce: transientEvents.announce,
     later: scheduler.later,
+    ruleset,
   })
 
   playerActions = createLocalPlayerActionController({
