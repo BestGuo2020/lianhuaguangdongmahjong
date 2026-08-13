@@ -90,6 +90,16 @@ export function createRemoteMatchLifecycle({
     state.wall.value = []
     state.wallHeadDrawn.value = 0
     state.wallCount.value = 0
+    state.rulesetId.value = 'lotus-classic'
+    state.secondDice.value = [1, 1]
+    state.flipTile.value = null
+    state.jokerTiles.value = []
+    state.wildcardTiles.value = []
+    state.flipStack.value = null
+    state.openingStack.value = null
+    state.wallBreakIndex.value = 0
+    state.turnCanHu.value = false
+    state.turnCanWindKong.value = false
     state.currentPlayer.value = -1
     state.selectedIndex.value = -1
     state.turnSeconds.value = 12

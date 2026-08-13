@@ -7,8 +7,8 @@ type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'aut
 export type RemotePlayerActionMessage =
   | { type: 'discard'; handIndex: number }
   | { type: 'pass' }
-  | { type: 'claim'; action: 'peng' | 'gang' }
-  | { type: 'gang'; kind: 'added' | 'concealed'; tile: TileType }
+  | { type: 'claim'; action: 'peng' | 'gang' | 'chi'; optionIndex?: number }
+  | { type: 'gang'; kind: 'added' | 'concealed' | 'wind'; tile?: TileType }
   | { type: 'hu' }
 
 export interface RemoteActionControllerOptions {
@@ -97,6 +97,14 @@ export function createRemoteActionController({
     send({ type: 'claim', action: 'peng' })
   }
 
+  function userChi(optionIndex = 0) {
+    if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
+    clearCountdown()
+    state.actionPrompt.value = null
+    playSound('click.mp3', 0.65)
+    send({ type: 'claim', action: 'chi', optionIndex })
+  }
+
   function userGangFromDiscard() {
     if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.canGang) return
     clearCountdown()
@@ -114,7 +122,20 @@ export function createRemoteActionController({
     send({ type: 'gang', kind: hasPengMeld ? 'added' : 'concealed', tile })
   }
 
+  function userWindKong() {
+    clearCountdown()
+    playSound('click.mp3', 0.65)
+    send({ type: 'gang', kind: 'wind' })
+  }
+
   function userHu() {
+    if (state.actionPrompt.value?.type === 'claim' && state.actionPrompt.value.canHu) {
+      clearCountdown()
+      state.actionPrompt.value = null
+      playSound('click.mp3', 0.65)
+      send({ type: 'hu' })
+      return
+    }
     if (state.actionPrompt.value?.type === 'rob') {
       clearCountdown()
       state.actionPrompt.value = null
@@ -135,8 +156,10 @@ export function createRemoteActionController({
     toggleAutoPlay,
     userPass,
     userPeng,
+    userChi,
     userGangFromDiscard,
     userGang,
+    userWindKong,
     userHu,
   }
 }

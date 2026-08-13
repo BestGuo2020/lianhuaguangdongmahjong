@@ -27,6 +27,7 @@ describe('remoteSessionStore', () => {
       nickname: '莲花',
       playerId: 'guest-1',
       mode: 'hanchan',
+      rulesetId: 'lotus-classic',
     }
 
     store.saveGuestId('guest-1')

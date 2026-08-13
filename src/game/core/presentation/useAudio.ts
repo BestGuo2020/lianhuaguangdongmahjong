@@ -22,6 +22,7 @@ const EFFECT_AUDIO_FILES = [
   'zimo.mp3',
   'didu.ogg',
 ]
+const EFFECT_WAIT_TIMEOUT_MS = 4_000
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
 
@@ -98,8 +99,21 @@ export function useAudio() {
   function playEffectAndWait(name: string, volume = 1): Promise<void> {
     if (!soundOn.value || !name) return Promise.resolve()
     return new Promise<void>((resolve) => {
-      const audio = playEffect(name, volume, resolve)
-      if (!audio) resolve()
+      let timeoutId: number | undefined
+      const finish = () => {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+        resolve()
+      }
+      const audio = playEffect(name, volume, finish)
+      if (!audio) {
+        finish()
+        return
+      }
+      // Audio loading/decoding is decorative and must never block the game timeline.
+      timeoutId = window.setTimeout(() => {
+        audio.__releaseEffect?.()
+        finish()
+      }, EFFECT_WAIT_TIMEOUT_MS)
     })
   }
 

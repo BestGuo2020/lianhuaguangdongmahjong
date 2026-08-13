@@ -32,7 +32,7 @@ interface Props {
   copied: boolean
   leaving: boolean
   closing: boolean
-  /** 莲花麻将旧版规则仅支持单机对战：隐藏联机入口 */
+  /** 可按产品策略隐藏联机入口；当前莲花旧版也支持联机。 */
   singlePlayerOnly?: boolean
 }
 

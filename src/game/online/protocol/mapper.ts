@@ -15,6 +15,7 @@ function mapMeldToLocal(meld: ServerMeldDto, localServerSeat: number): Meld {
     ...(meld.from != null ? { from: toLocalSeat(meld.from, localServerSeat) } : {}),
     ...(meld.added != null ? { added: meld.added } : {}),
     ...(meld.pending != null ? { pending: meld.pending } : {}),
+    ...(meld.windKong != null ? { windKong: meld.windKong } : {}),
   }
 }
 

@@ -4,7 +4,7 @@ import { matchingCount } from '../../core/rules/rules'
 
 type RequestState = Pick<RemoteGameState,
   | 'phase' | 'currentPlayer' | 'userDrewThisTurn' | 'actionPrompt'
-  | 'turnSeconds' | 'autoPlay'
+  | 'turnSeconds' | 'autoPlay' | 'turnCanHu' | 'turnCanWindKong'
 >
 
 export interface RequestCoordinatorOptions {
@@ -73,6 +73,8 @@ export function createRequestCoordinator({
     if (message.kind === 'turn_request') {
       state.currentPlayer.value = 0
       state.userDrewThisTurn.value = !message.ctx.skipDraw
+      state.turnCanHu.value = message.ctx.canHu ?? false
+      state.turnCanWindKong.value = message.ctx.canWindKong ?? false
       state.actionPrompt.value = null
       state.phase.value = 'discard'
       if (!message.ctx.skipDraw) playSound('give.mp3', 0.7)
@@ -89,12 +91,16 @@ export function createRequestCoordinator({
     }
 
     if (message.kind === 'claim_request') {
+      state.turnCanHu.value = false
+      state.turnCanWindKong.value = false
       state.actionPrompt.value = {
         type: 'claim',
         tile: message.ctx.tile,
         from: toLocalSeat(message.ctx.from),
+        canHu: message.ctx.canHu ?? false,
         canPeng: message.ctx.canPeng ?? matchingCount(message.ctx.hand, message.ctx.tile) >= 2,
         canGang: message.ctx.canGang,
+        chiOptions: message.ctx.chiOptions,
       }
       state.phase.value = 'prompt'
       startCountdown(() => {
@@ -112,6 +118,8 @@ export function createRequestCoordinator({
       from: toLocalSeat(message.ctx.from),
     }
     state.phase.value = 'prompt'
+    state.turnCanHu.value = false
+    state.turnCanWindKong.value = false
     announce('可抢杠胡', 'red')
     startCountdown(() => {
       if (state.actionPrompt.value?.type === 'rob') actions.pass()

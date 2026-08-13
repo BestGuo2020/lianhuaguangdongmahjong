@@ -1,4 +1,5 @@
 import type { MatchType } from '../../core/contracts/types'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
 import { request } from './httpClient'
 
 export interface RoomSeatState {
@@ -11,6 +12,7 @@ export interface RoomSeatState {
 export interface RoomInfo {
   roomId: string
   mode: MatchType
+  rulesetId?: RuleVariant
   capacity: number
   status: 'lobby' | 'playing' | 'finished' | 'error' | 'closed'
   creatorSeat: number | null
@@ -54,10 +56,11 @@ export interface RoomMeta {
   max: number
 }
 
-export function createRoom(mode: MatchType, capacity: number, playerId?: string): Promise<RoomInfo> {
+export function createRoom(mode: MatchType, capacity: number, playerId?: string,
+  rulesetId: RuleVariant = 'lotus-classic'): Promise<RoomInfo> {
   return request<RoomInfo>('/api/rooms', {
     method: 'POST',
-    body: JSON.stringify({ mode, capacity, playerId }),
+    body: JSON.stringify({ mode, capacity, playerId, rulesetId }),
   })
 }
 

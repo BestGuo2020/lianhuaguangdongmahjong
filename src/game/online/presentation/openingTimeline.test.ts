@@ -23,6 +23,7 @@ function snapshot(): ServerSnapshot {
     currentPlayer: 2, players: [player(0, 13, true), player(1, 13, true), player(2, 14), player(3, 13, true)],
     seat: 2, result: null, announcement: null, matchFinished: false, lastDiscard: null,
     winPresentation: null, winningPlayerIndex: -1,
+    flipTile: 'm1', flipStack: 4,
   }
 }
 
@@ -32,7 +33,7 @@ function harness() {
     wallCount: ref(0), wallHeadDrawn: ref(0), currentPlayer: ref(-1), selectedIndex: ref(-1),
     actionPrompt: ref(null), lastDiscard: ref(null), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
-    round: ref(1), dealer: ref(0), honba: ref(0), diceValues: ref<number[]>([1, 1]), diceThrowerIndex: ref(0),
+    round: ref(1), dealer: ref(0), honba: ref(0), diceValues: ref<number[]>([1, 1]), secondDice: ref<[number, number]>([1, 1]), flipTile: ref<TileType | null>(null), jokerTiles: ref<TileType[]>([]), wildcardTiles: ref<TileType[]>([]), flipStack: ref<number | null>(null), openingStack: ref<number | null>(null), wallBreakIndex: ref(0), diceThrowerIndex: ref(0),
     openingStage: ref<OpeningStage | null>(null), dealAnimation: ref({ playerIndex: -1, count: 0, serial: 0 }),
   }
   const sent: Array<Record<string, unknown>> = []
@@ -67,8 +68,55 @@ describe('openingTimeline', () => {
     expect(state.players.map((item) => item.concealedTileCount)).toEqual([14, 13, 13, 13])
     expect(state.wallCount.value).toBe(83)
     expect(state.wallHeadDrawn.value).toBe(53)
+    expect(state.wallBreakIndex.value).toBe(0)
     expect(finished).toHaveBeenCalledOnce()
     expect(sent).toContainEqual({ type: 'opening_done' })
+  })
+
+  it('shows the second dice before dealing when round_start provides it', async () => {
+    const { state, timeline } = harness()
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5], secondDice: [4, 6] })
+    expect(state.diceValues.value).toEqual([2, 5])
+    await vi.advanceTimersByTimeAsync(1250 + 1600)
+    expect(state.diceValues.value).toEqual([4, 6])
+  })
+
+  it('shows the authoritative flip stage and switches thrower before second dice', async () => {
+    const { state, timeline } = harness()
+    timeline.start({
+      kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
+      dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
+    })
+    await vi.advanceTimersByTimeAsync(1250 + 1600)
+    expect(state.openingStage.value).toBe('flip')
+    expect(state.flipTile.value).toBe('m1')
+    expect(state.flipStack.value).toBe(4)
+    await vi.advanceTimersByTimeAsync(1200)
+    expect(state.diceThrowerIndex.value).toBe(3)
+    expect(state.diceValues.value).toEqual([4, 6])
+  })
+
+  it('uses the Lotus wall size and authoritative snapshot metadata during opening', async () => {
+    const { state, timeline } = harness()
+    timeline.start({
+      kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
+      dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
+    })
+    timeline.captureSnapshot({
+      ...snapshot(), rulesetId: 'lotus-legacy', wallCount: 83,
+      wall: Array<TileType>(83).fill('s1'), secondDice: [4, 6], flipTile: 'p2',
+      jokerTiles: ['p2', 'p3'], wildcardTiles: ['white'], flipStack: 7,
+      openingStack: 18, wallBreakIndex: 36,
+    })
+
+    expect(state.wallCount.value).toBe(134)
+    expect(state.wall.value).toHaveLength(134)
+    expect(state.flipTile.value).toBe('p2')
+    expect(state.jokerTiles.value).toEqual(['p2', 'p3'])
+    expect(state.wildcardTiles.value).toEqual(['white'])
+    expect(state.flipStack.value).toBe(7)
+    expect(state.openingStack.value).toBe(18)
+    expect(state.wallBreakIndex.value).toBe(36)
   })
 
   it('cancels pending animation without sending readiness', async () => {
@@ -79,5 +127,18 @@ describe('openingTimeline', () => {
 
     expect(sent).toEqual([])
     expect(timeline.isRunning()).toBe(false)
+  })
+
+  it('does not block opening readiness on a stalled audio promise', async () => {
+    const { sent, timeline } = harness()
+    timeline.start({
+      kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
+      dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
+    })
+    timeline.captureSnapshot(snapshot())
+
+    await vi.advanceTimersByTimeAsync(10000)
+
+    expect(sent).toContainEqual({ type: 'opening_done' })
   })
 })

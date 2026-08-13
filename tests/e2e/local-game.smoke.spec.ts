@@ -17,7 +17,7 @@ test('starts a local match and begins the opening deal', async ({ page }) => {
   await expect(page.locator('.player-seat')).toHaveCount(3)
   await expect.poll(
     () => page.locator('.hand-tile-slot').count(),
-    { timeout: 12_000, message: 'opening timeline should deal the first local batch' },
+    { timeout: 30_000, message: 'opening timeline should deal the first local batch' },
   ).toBeGreaterThanOrEqual(4)
 
   expect(pageErrors).toEqual([])

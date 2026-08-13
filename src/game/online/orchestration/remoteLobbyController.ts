@@ -4,9 +4,10 @@ import type { GamePhase } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
 import { reportPlayer, type ReportRequest } from '../api/moderationApi'
 import type { RoomSeatState } from '../api/roomApi'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
 
 export interface RemoteLobbyActions {
-  createRoom(mode: MatchType, capacity: number): Promise<void>
+  createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant): Promise<void>
   joinRoom(code: string): Promise<void>
   toggleReady(): Promise<void>
   startMatch(): Promise<void>
@@ -26,6 +27,7 @@ interface RemoteLobbyEnvironment {
 interface RemoteLobbyControllerOptions {
   gameMode: Ref<GameMode>
   selectedMatch: Ref<MatchType>
+  selectedRule?: Ref<RuleVariant>
   phase: Ref<GamePhase>
   roomId: Ref<string>
   nickname: Ref<string>
@@ -95,7 +97,9 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     const name = nicknameInput.value.trim()
     if (!name) return
     options.nickname.value = name
-    void options.guardEntry(() => void options.actions.createRoom(options.selectedMatch.value, 4))
+    void options.guardEntry(() => void options.actions.createRoom(
+      options.selectedMatch.value, 4, options.selectedRule?.value ?? 'lotus-classic',
+    ))
   }
 
   function joinRoom() {

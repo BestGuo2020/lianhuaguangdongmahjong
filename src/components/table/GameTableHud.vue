@@ -44,6 +44,8 @@ interface Props {
   userDiscardWaits: WaitInfo | null
   userKongs: TileType[]
   userHasWindKong: boolean
+  rulesetId?: 'lotus-classic' | 'lotus-legacy'
+  secondDice?: [number, number]
   /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
@@ -81,7 +83,7 @@ let suppressTileClickUntil = 0
 
 const tableActionPosition = computed(() => props.tableActionEvent ? seatPosition[props.tableActionEvent.actorIndex] : 'bottom')
 const tableActionLabel = computed(() => ({
-  peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠',
+  peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠', 'wind-kong': '风杠',
   'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '点炮', 'robbed-kong-win': '抢杠胡',
 }[props.tableActionEvent?.type ?? 'peng']))
 const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
@@ -236,6 +238,14 @@ function onAvatarError(entry: GamePlayer) {
     />
     <Transition name="flip-cue">
       <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
+        <div class="flip-indicator-head">
+          <span>翻精</span>
+          <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
+          <em>{{ tileName(flipTile) }}</em>
+        </div>
+        <div v-if="rulesetId === 'lotus-legacy' && secondDice" class="second-dice-note">
+          二骰 {{ secondDice[0] }} + {{ secondDice[1] }} · 王牌 {{ wildcardTiles?.length ? '白板' : '—' }}
+        </div>
         <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
           <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>
           <div><strong>白板替代：</strong>{{ jokerGuide.wildcard }}</div>
@@ -289,6 +299,7 @@ function onAvatarError(entry: GamePlayer) {
     <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
       <template v-if="actionPrompt?.type === 'claim'">
+        <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
         <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
         <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
         <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>

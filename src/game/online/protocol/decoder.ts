@@ -11,10 +11,10 @@ const GAME_PHASES = new Set<GamePhase>([
 ])
 const MATCH_TYPES = new Set(['east', 'hanchan'])
 const HONORS = new Set(['east', 'south', 'west', 'north', 'red', 'green', 'white'])
-const MELD_TYPES = new Set(['peng', 'gang', 'angang', 'flower'])
+const MELD_TYPES = new Set(['peng', 'gang', 'angang', 'flower', 'chi'])
 const TABLE_ACTION_TYPES = new Set([
-  'peng', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
-  'self-draw', 'robbed-kong-win',
+  'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
+  'wind-kong', 'self-draw', 'discard-win', 'robbed-kong-win',
 ])
 
 function isObject(value: unknown): value is JsonObject {
@@ -58,6 +58,7 @@ function isMeld(value: unknown): value is ServerMeldDto {
     && isOptional(value.from, (candidate): candidate is number | null => isNullable(candidate, isNumber))
     && isOptional(value.added, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
     && isOptional(value.pending, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
+    && isOptional(value.windKong, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
 }
 
 function isPlayer(value: unknown): value is ServerPlayerDto {
@@ -125,9 +126,17 @@ function isDice(value: unknown): value is [number, number] {
 function isSnapshot(message: JsonObject): boolean {
   return isString(message.roomId)
     && isString(message.mode) && MATCH_TYPES.has(message.mode)
+    && isOptional(message.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
     && isString(message.phase) && GAME_PHASES.has(message.phase as GamePhase)
     && isNumber(message.round) && isNumber(message.dealer) && isNumber(message.honba)
     && isOptional(message.dice, isDice)
+    && isOptional(message.secondDice, isDice)
+    && isOptional(message.flipTile, isTile)
+    && isOptional(message.jokerTiles, (value): value is TileType[] => isArrayOf(value, isTile))
+    && isOptional(message.wildcardTiles, (value): value is TileType[] => isArrayOf(value, isTile))
+    && isOptional(message.flipStack, isNumber)
+    && isOptional(message.openingStack, isNumber)
+    && isOptional(message.wallBreakIndex, isNumber)
     && isNumber(message.wallCount) && isArrayOf(message.wall, isTile)
     && isNumber(message.headDrawn) && isNumber(message.currentPlayer)
     && isArrayOf(message.players, isPlayer) && isNumber(message.seat)
@@ -147,9 +156,14 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
       case 'round_start':
         return isBoolean(raw.matchStarted) && isNumber(raw.round) && isNumber(raw.dealer)
           && isNumber(raw.honba) && isDice(raw.dice)
+          && isOptional(raw.secondDice, isDice)
+          && isOptional(raw.flipTile, isTile)
+          && isOptional(raw.flipStack, isNumber)
+          && isOptional(raw.flipSeat, isNumber)
       case 'rejoin_ok':
         return isNumber(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
+          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
           && isString(raw.nickname) && isString(raw.rejoinCode)
       case 'rejoin_err':
       case 'error': return isString(raw.code)
@@ -158,10 +172,18 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isArrayOf(raw.ctx.melds, isMeld) && isNumber(raw.ctx.exposedMelds)
           && isBoolean(raw.ctx.kongBloom) && isBoolean(raw.ctx.skipDraw)
           && isBoolean(raw.ctx.afterKong)
+          && isOptional(raw.ctx.jokers, (item): item is TileType[] => isArrayOf(item, isTile))
+          && isOptional(raw.ctx.canHu, isBoolean)
+          && isOptional(raw.ctx.canWindKong, isBoolean)
       case 'claim_request':
         return isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
           && isOptional(raw.ctx.canPeng, isBoolean)
+          && isOptional(raw.ctx.canHu, isBoolean)
           && isBoolean(raw.ctx.canGang) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)
+          && isOptional(raw.ctx.chiOptions, (items): items is JsonObject[] => isArrayOf(items, (item): item is JsonObject => (
+            isObject(item) && isArrayOf(item.tiles, isTile)
+            && isString(item.kind) && ['sequence', 'wind', 'dragon'].includes(item.kind)
+          )))
       case 'rob_kong_request':
         return isObject(raw.ctx) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)
           && isArrayOf(raw.ctx.hand, isTile) && isNumber(raw.ctx.exposedMelds)

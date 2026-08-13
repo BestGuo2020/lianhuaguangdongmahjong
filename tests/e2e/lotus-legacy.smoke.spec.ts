@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 
-test('莲花麻将（旧版翻精）仅单机：选择玩法、开始对局并亮出精指示牌', async ({ page }) => {
+test('莲花麻将（旧版翻精）本地开局并亮出精指示牌', async ({ page }) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
@@ -12,10 +12,6 @@ test('莲花麻将（旧版翻精）仅单机：选择玩法、开始对局并�
   await page.locator('.game-settings button', { hasText: '玩法' }).click()
   await page.getByRole('button', { name: /莲花麻将/ }).click()
   await page.getByRole('button', { name: '确定' }).click()
-
-  // 单机专用提示 + 联机入口被隐藏
-  await expect(page.getByText('莲花麻将（旧版翻精）仅支持单机对战')).toBeVisible()
-  await expect(page.getByRole('button', { name: /联机对战/ })).toHaveCount(0)
 
   // 开始对局
   await page.getByRole('button', { name: /开始东风场/ }).click()

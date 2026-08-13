@@ -44,15 +44,18 @@ const lotusGame = useLotusGame({
 })
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
-// 莲花麻将为旧版翻精规则，仅支持单机对战（不实现联机）。
-const singlePlayerOnly = computed(() => selectedRule.value === 'lotus-legacy')
-watch(singlePlayerOnly, (value) => { if (value) gameMode.value = 'local' })
+// 莲花麻将旧版翻精规则同时支持本地与联机对战。
+const singlePlayerOnly = computed(() => false)
+const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
+watch(() => remoteGame.rulesetId.value, (value) => {
+  if (value === 'lotus-classic' || value === 'lotus-legacy') selectedRule.value = value
+})
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
 // local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎。
 const game = createActiveGamePort(
   gameMode,
-  () => singlePlayerOnly.value ? lotusGame : localGame,
+  () => usesLotusLocalEngine.value ? lotusGame : localGame,
   remoteGame,
 )
 
@@ -76,6 +79,8 @@ const jokerTiles = computed<TileType[]>(() => lotusTable.value?.jokerTiles ?? ['
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
+const remoteRulesetId = computed(() => remoteGame.rulesetId.value)
+const remoteSecondDice = computed(() => remoteGame.secondDice.value)
 
 // 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）；仅对莲花广麻生效。
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {
@@ -109,6 +114,7 @@ function startGameWithAudio() {
 const lobbyController = createRemoteLobbyController({
   gameMode,
   selectedMatch,
+  selectedRule,
   phase,
   roomId,
   nickname,
@@ -219,6 +225,8 @@ const continueCountdown = useRemoteContinueCountdown({
           :user-has-wind-kong="userHasWindKong"
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
+          :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
+          :second-dice="gameMode === 'remote' ? remoteSecondDice : undefined"
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
           :flip-stack="flipStack"

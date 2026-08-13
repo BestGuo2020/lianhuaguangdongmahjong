@@ -29,6 +29,7 @@ coverage
 # Playwright output
 test-results/
 playwright-report/
+tmp/
 
 # nyc test coverage
 .nyc_output

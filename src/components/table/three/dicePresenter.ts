@@ -77,10 +77,21 @@ export function createDicePresenter(options: DicePresenterOptions) {
   options.scene.add(group)
 
   let lastValuesKey = ''
+  let lastStage: string | null = null
 
   function setVisible(visible: boolean) {
     group.visible = visible
-    if (visible) startedAt = performance.now()
+    if (!visible) {
+      // 即使中间阶段没有机会渲染出一帧，下一次 visible 也必须被视为新的投骰。
+      lastStage = null
+      return
+    }
+    // Vue watcher 可能在下一帧才触发；只有从其它阶段进入骰子阶段时才重置，
+    // 避免同一段动画因重复通知而从中途重新开始。
+    if (lastStage !== 'dice') {
+      startedAt = performance.now()
+      lastValuesKey = ''
+    }
   }
 
   function animate(time: number) {
@@ -88,14 +99,17 @@ export function createDicePresenter(options: DicePresenterOptions) {
     const valuesKey = options.getValues().join(',')
     if (stage !== 'dice') {
       if (group.visible) group.visible = false
+      lastStage = stage
       return
     }
+    const enteredDice = lastStage !== 'dice'
     // 重新进入骰子阶段，或骰子值变化（莲花麻将两次掷骰）时重新起势
-    if (!group.visible || valuesKey !== lastValuesKey) {
+    if (!group.visible || enteredDice || valuesKey !== lastValuesKey) {
       group.visible = true
       startedAt = performance.now()
       lastValuesKey = valuesKey
     }
+    lastStage = 'dice'
     const progress = Math.min(1, Math.max(0, (time - startedAt) / 1050))
     const travel = 1 - (1 - progress) ** 2
     group.children.forEach((die, index) => {

@@ -16,6 +16,7 @@ function createHarness(savedSession: StoredSession | null = null) {
     isCreator: ref(false),
     roomSeats: ref([]),
     roomTimeLimit: ref(null),
+    rulesetId: ref('lotus-classic'),
     storedSession: ref(savedSession),
     phase: ref('lobby'),
     matchType: ref('east'),
@@ -33,12 +34,12 @@ function createHarness(savedSession: StoredSession | null = null) {
   const api: RemoteRoomApi = {
     createRoom: vi.fn(async () => ({
       roomId: 'ABC123', mode: 'east' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 0,
-      timeLimitSeconds: 3600, seats: [null, null, null, null],
+      timeLimitSeconds: 3600, rulesetId: 'lotus-classic' as const, seats: [null, null, null, null],
     })),
     getRoom: vi.fn(async () => ({
       roomId: 'ABC123', mode: 'hanchan' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 2,
       timeLimitSeconds: 3600,
-      seats: [null, null, { seat: 2, nickname: '莲花', ready: false, connected: true }, null],
+      rulesetId: 'lotus-legacy' as const, seats: [null, null, { seat: 2, nickname: '莲花', ready: false, connected: true }, null],
     })),
     joinRoom: vi.fn(async () => ({
       roomId: 'ABC123', seat: 2, nickname: '莲花', rejoinCode: 'AAAA-BBBB',
@@ -68,7 +69,7 @@ describe('remoteRoomLifecycle', () => {
     await harness.lifecycle.createRoom('east', 4)
 
     expect(harness.state.playerId.value).not.toBe('')
-    expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value)
+    expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value, 'lotus-classic')
     expect(harness.state.roomId.value).toBe('ABC123')
     expect(harness.state.rejoinCode.value).toBe('AAAA-BBBB')
     expect(harness.state.sessionStatus.value).toBe('connected')
@@ -97,6 +98,7 @@ describe('remoteRoomLifecycle', () => {
   it('resumes a persisted session without rejoining through REST', async () => {
     const saved: StoredSession = {
       roomId: 'OLD123', rejoinCode: 'OLD-CODE', nickname: '旧玩家', playerId: 'guest-old', mode: 'hanchan',
+      rulesetId: 'lotus-legacy',
     }
     const harness = createHarness(saved)
 

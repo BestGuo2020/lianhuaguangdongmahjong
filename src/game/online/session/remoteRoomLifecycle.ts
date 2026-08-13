@@ -1,6 +1,7 @@
 import { type Ref } from 'vue'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import type { GamePlayer, MatchType } from '../../core/contracts/types'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
 import {
   closeRoom,
   createRoom,
@@ -27,6 +28,7 @@ export interface RemoteRoomState {
   isCreator: Ref<boolean>
   roomSeats: Ref<Array<RoomSeatState | null>>
   roomTimeLimit: Ref<number | null>
+  rulesetId: Ref<RuleVariant>
   storedSession: Ref<StoredSession | null>
   phase: Ref<GamePhase>
   matchType: Ref<MatchType>
@@ -100,6 +102,7 @@ export function createRemoteRoomLifecycle({
       nickname: state.nickname.value,
       playerId: state.playerId.value,
       mode: state.matchType.value,
+      rulesetId: state.rulesetId.value,
     }
     sessionStore.saveSession(session)
     state.storedSession.value = session
@@ -116,6 +119,7 @@ export function createRemoteRoomLifecycle({
     try {
       const info = await api.getRoom(state.roomId.value)
       state.matchType.value = info.mode
+      state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
       state.roomSeats.value = info.seats ?? []
       state.creatorSeat.value = info.creatorSeat ?? null
       state.isCreator.value = state.creatorSeat.value != null
@@ -147,6 +151,7 @@ export function createRemoteRoomLifecycle({
   async function enterRoom(id: string, name: string, mode: MatchType, code: string) {
     state.roomId.value = id
     state.matchType.value = mode
+    state.rulesetId.value = state.rulesetId.value || 'lotus-classic'
     state.nickname.value = name
     state.rejoinCode.value = code
     state.mySeat.value = -1
@@ -168,6 +173,7 @@ export function createRemoteRoomLifecycle({
     state.nickname.value = session.nickname
     state.playerId.value = session.playerId || state.playerId.value
     state.matchType.value = session.mode || 'east'
+    state.rulesetId.value = session.rulesetId || 'lotus-classic'
     state.phase.value = 'lobby'
     state.matchFinished.value = false
     state.players.splice(0, state.players.length)
@@ -176,11 +182,13 @@ export function createRemoteRoomLifecycle({
     socket.open()
   }
 
-  async function createRemoteRoom(mode: MatchType, capacity: number) {
+  async function createRemoteRoom(mode: MatchType, capacity: number,
+    rulesetId: RuleVariant = state.rulesetId.value) {
     state.sessionError.value = ''
     state.sessionStatus.value = 'creating'
     try {
-      const info = await api.createRoom(mode, capacity, state.playerId.value)
+      const info = await api.createRoom(mode, capacity, state.playerId.value, rulesetId)
+      state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
       state.isCreator.value = true
       state.roomTimeLimit.value = info.timeLimitSeconds ?? null
       ensurePlayerId()
@@ -199,13 +207,15 @@ export function createRemoteRoomLifecycle({
     try {
       ensurePlayerId()
       const joined = await api.joinRoom(code.trim().toUpperCase(), state.nickname.value, state.playerId.value)
+      const info = await api.getRoom(joined.roomId)
       state.isCreator.value = false
       await enterRoom(
         joined.roomId,
         joined.nickname,
-        joined.rejoin ? state.matchType.value : 'east',
+        info.mode,
         joined.rejoinCode,
       )
+    state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
     } catch (error) {
       state.sessionError.value = readableError(error, '加入房间失败')
       state.sessionStatus.value = 'idle'

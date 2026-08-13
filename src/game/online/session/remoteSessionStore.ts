@@ -1,4 +1,5 @@
 import type { MatchType } from '../../core/contracts/types'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
 
 export interface StoredSession {
   roomId: string
@@ -6,6 +7,7 @@ export interface StoredSession {
   nickname: string
   playerId: string
   mode: MatchType
+  rulesetId?: RuleVariant
 }
 
 export interface StorageLike {
@@ -75,12 +77,15 @@ export function createRemoteSessionStore(
         const session = JSON.parse(raw) as Partial<StoredSession>
         if (!session.roomId || !session.rejoinCode) return null
         if (session.mode !== 'east' && session.mode !== 'hanchan') return null
+        const rulesetId = session.rulesetId ?? 'lotus-classic'
+        if (rulesetId !== 'lotus-classic' && rulesetId !== 'lotus-legacy') return null
         return {
           roomId: session.roomId,
           rejoinCode: session.rejoinCode,
           nickname: session.nickname ?? '',
           playerId: session.playerId ?? '',
           mode: session.mode,
+          rulesetId,
         }
       } catch {
         return null

@@ -11,6 +11,7 @@ import type {
 } from '../../core/contracts/types'
 import type { RemoteSessionStatus } from '../session/remoteRoomLifecycle'
 import type { StoredSession } from '../session/remoteSessionStore'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
 
 export type RemoteClientPhase = GamePhase
 
@@ -38,6 +39,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
   const roomTimeLimit = ref<number | null>(null)
+  const rulesetId = ref<RuleVariant>('lotus-classic')
   const autoPlay = ref(options.autoPlay ?? autoPlayFromUrl())
   const storedSession = ref<StoredSession | null>(options.storedSession ?? null)
 
@@ -71,15 +73,26 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const diceThrowerIndex = ref(0)
   const userDrewThisTurn = ref(false)
   const waitingNextRound = ref(false)
+  const secondDice = ref<[number, number]>([1, 1])
+  const flipTile = ref<TileType | null>(null)
+  const jokerTiles = ref<TileType[]>([])
+  const wildcardTiles = ref<TileType[]>([])
+  const flipStack = ref<number | null>(null)
+  const openingStack = ref<number | null>(null)
+  const wallBreakIndex = ref(0)
+  const turnCanHu = ref(false)
+  const turnCanWindKong = ref(false)
 
   return {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, autoPlay, storedSession,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,
+    secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
+    turnCanHu, turnCanWindKong,
   }
 }
 

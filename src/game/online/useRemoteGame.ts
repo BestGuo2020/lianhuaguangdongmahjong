@@ -15,7 +15,8 @@ import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
-import type { MatchType, WinPresentation } from '../core/contracts/types'
+import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
+import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
 import { createPlayerSelectors } from '../core/selectors/playerSelectors'
 import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
@@ -53,12 +54,14 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   })
   const {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, autoPlay, storedSession,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,
+    secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
+    turnCanHu, turnCanWindKong,
   } = state
   const roomSocket = createRoomSocketTransport({
     getUrl: () => roomId.value && rejoinCode.value
@@ -75,7 +78,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const roomLifecycle = createRemoteRoomLifecycle({
     state: {
       sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-      creatorSeat, isCreator, roomSeats, roomTimeLimit, storedSession,
+      creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, storedSession,
       phase, matchType, matchFinished, players,
     },
     sessionStore,
@@ -99,7 +102,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     state: {
       phase, players, wall, wallCount, wallHeadDrawn, currentPlayer, selectedIndex,
       actionPrompt, lastDiscard, result, winEffect, winPresentation, revealHands,
-      winningPlayerIndex, round, dealer, honba, diceValues, diceThrowerIndex, openingStage, dealAnimation,
+      winningPlayerIndex, round, dealer, honba, diceValues, secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex, diceThrowerIndex, openingStage, dealAnimation,
     },
     toLocalSeat: toLocal,
     mapPlayers: (value) => rotatePlayers(value),
@@ -138,6 +141,19 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     userDrewThisTurn,
     selectedIndex,
   })
+  const remoteUserKongs = computed<TileType[]>(() => {
+    if (!user.value || !isUserTurn.value || !userDrewThisTurn.value) return []
+    const concealed = rulesetId.value === 'lotus-legacy'
+      ? LOTUS_RULESET.win.concealedKongs(user.value.hand, { jokers: jokerTiles.value })
+      : userKongs.value
+    const added = user.value.melds
+      .filter((meld) => meld.type === 'peng' && user.value!.hand.includes(meld.tile))
+      .map((meld) => meld.tile)
+    return [...new Set([...concealed, ...added])]
+  })
+  const remoteUserCanHu = computed(() => (
+    rulesetId.value === 'lotus-legacy' ? turnCanHu.value : (turnCanHu.value || userCanHu.value)
+  ))
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
   const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
@@ -149,9 +165,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const remoteActionController = createRemoteActionController({
     state,
     isUserTurn: () => isUserTurn.value,
-    canUserHu: () => userCanHu.value,
+    canUserHu: () => remoteUserCanHu.value,
     getUser: () => user.value,
-    getUserKongs: () => userKongs.value,
+    getUserKongs: () => remoteUserKongs.value,
     clearCountdown,
     playSound,
     send: roomSocket.send,
@@ -164,8 +180,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     toggleAutoPlay,
     userPass,
     userPeng,
+    userChi,
     userGangFromDiscard,
     userGang,
+    userWindKong,
     userHu,
   } = remoteActionController
 
@@ -173,7 +191,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     state,
     isBlocked: () => isShowingRoundResult() || openingTimeline.isRunning(),
     isUserTurn: () => isUserTurn.value,
-    canUserHu: () => userCanHu.value,
+    canUserHu: () => remoteUserCanHu.value,
     getUserHandLength: () => user.value?.hand.length ?? 0,
     toLocalSeat: toLocal,
     announce: transientEventPresenter.announce,
@@ -271,6 +289,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       nickname.value = msg.nickname
       rejoinCode.value = msg.rejoinCode
       matchType.value = msg.mode
+      rulesetId.value = msg.rulesetId ?? 'lotus-classic'
       wsStatus.value = 'connected'
       sessionStatus.value = 'connected'
       sessionError.value = ''
@@ -358,6 +377,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
     playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, waitingNextRound,
+    rulesetId,
+    secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality,   // 0-3 信号质量（越大连接越好）
     storedSession,   // 上次未完成对局（「继续对局」入口；null = 无）
     autoPlay, toggleAutoPlay,   // 自动打牌开关（多窗口联机测试/观战）
@@ -366,11 +387,22 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect,
     winPresentation, revealHands, winningPlayerIndex,
-    round, dealer, user, isUserTurn, userCanHu,
+    round, dealer, user, isUserTurn, userCanHu: remoteUserCanHu,
     matchType, matchName, matchFinished, honba, roundLabel, standings,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userCurrentWaits, userTingOptions, userDiscardWaits,
-    userKongs, capabilities: ref({}), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
-    userGangFromDiscard, userGang, userHu,
+    userKongs: remoteUserKongs,
+    capabilities: computed(() => ({
+      chi: { choose: userChi },
+      windKong: { available: turnCanWindKong.value, execute: userWindKong },
+      lotusTable: {
+        flipTile: flipTile.value,
+        jokerTiles: jokerTiles.value,
+        wildcardTiles: wildcardTiles.value,
+        wallBreakIndex: wallBreakIndex.value,
+        flipStack: flipStack.value,
+      },
+    })), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
+    userGangFromDiscard, userGang, userChi, userWindKong, userHu,
     nextRound, returnToLobby, tileName, debugPreviewWin,
   })
 }

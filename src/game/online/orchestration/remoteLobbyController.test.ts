@@ -51,7 +51,7 @@ describe('remoteLobbyController', () => {
     controller.createRoom()
     expect(actions.createRoom).not.toHaveBeenCalled()
     runPending()
-    expect(actions.createRoom).toHaveBeenCalledWith('hanchan', 4)
+  expect(actions.createRoom).toHaveBeenCalledWith('hanchan', 4, 'lotus-classic')
   })
 
   it('blocks duplicate leave/close operations while one is in flight', async () => {

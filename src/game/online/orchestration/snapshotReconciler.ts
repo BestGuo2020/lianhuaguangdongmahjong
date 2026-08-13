@@ -13,6 +13,8 @@ type SnapshotState = Pick<RemoteGameState,
   | 'announcement' | 'result' | 'winEffect' | 'winPresentation'
   | 'revealHands' | 'winningPlayerIndex' | 'round' | 'dealer' | 'honba'
   | 'matchFinished'
+  | 'rulesetId' | 'secondDice' | 'flipTile' | 'jokerTiles' | 'wildcardTiles'
+  | 'flipStack' | 'openingStack' | 'wallBreakIndex'
 >
 
 export interface SnapshotReconcilerOptions {
@@ -104,6 +106,14 @@ export function createSnapshotReconciler({
     )
     state.wall.value = snapshot.wall ?? []
     state.wallHeadDrawn.value = snapshot.headDrawn ?? 0
+    state.rulesetId.value = snapshot.rulesetId ?? 'lotus-classic'
+    state.secondDice.value = snapshot.secondDice ?? snapshot.dice ?? [1, 1]
+    state.flipTile.value = snapshot.flipTile ?? null
+    state.jokerTiles.value = snapshot.jokerTiles ?? []
+    state.wildcardTiles.value = snapshot.wildcardTiles ?? []
+    state.flipStack.value = snapshot.flipStack ?? null
+    state.openingStack.value = snapshot.openingStack ?? null
+    state.wallBreakIndex.value = snapshot.wallBreakIndex ?? 0
   }
 
   function applyNow(snapshot: ServerSnapshot) {
