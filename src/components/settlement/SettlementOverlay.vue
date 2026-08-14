@@ -20,6 +20,8 @@ interface Props {
   matchName: string
   standings: Standing[]
   playerId: string
+  /** 真人座位集合：仅这些座位在多人结算页显示举报按钮（AI 补位不显示）。 */
+  humanSeats?: number[]
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
 }
@@ -114,7 +116,10 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
             <div class="final-name">
               <strong>{{ entry.name }}</strong>
               <small v-if="entry.playerIndex === 0">你</small>
-              <button v-if="entry.playerIndex !== 0 && playerId" class="report-link" @click="$emit('report', entry.name)">举报</button>
+              <button
+                v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
+                class="report-link" @click="$emit('report', entry.name)"
+              >举报</button>
             </div>
             <em>{{ entry.score }}</em>
           </article>

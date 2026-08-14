@@ -148,6 +148,13 @@ const showLobby = computed(() => (
   phase.value === 'lobby'
   || (gameMode.value === 'remote' && Boolean(roomId.value) && players.value.length === 0)
 ))
+// 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
+// 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
+const humanSeats = computed(() => (
+  gameMode.value === 'remote'
+    ? roomSeats.value.filter(Boolean).map((seat) => seat.seat)
+    : [0]
+))
 
 watch(result, (value) => {
   resultVisible.value = Boolean(value)
@@ -294,6 +301,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :match-name="matchName"
           :standings="standings"
           :player-id="playerId"
+          :human-seats="humanSeats"
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
           @next-round="nextRound"
