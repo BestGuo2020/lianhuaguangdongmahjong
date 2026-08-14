@@ -22,6 +22,7 @@ import { createLotusTileFlow } from './lotusTileFlow'
 import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
+import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -99,6 +100,17 @@ export function useLotusGame({
   })
   transient = createLocalTransientEventPresenter({ state, later: timer.later })
 
+  // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
+  const followDealer = createFollowDealerTracker({
+    players: state.players,
+    dealerIndex: () => state.dealer.value,
+    baseScore: ruleset.baseScore,
+    onTrigger: (deltas) => {
+      transient.showScoreFlow(deltas)
+      transient.announce('跟庄')
+    },
+  })
+
   function endGame(winnerIndex: number, options: LotusEndGameOptions = {}) {
     return settlementTimeline.endGame(winnerIndex, options)
   }
@@ -140,6 +152,7 @@ export function useLotusGame({
     playSoundAndWait,
     later: timer.later,
     stopCountdown: countdown.stop,
+    followDealer,
   })
 
   openingTimeline = createLotusOpening({
@@ -156,7 +169,11 @@ export function useLotusGame({
     ruleset,
     endGame,
   })
-  const startGame = openingTimeline.start
+  // 每局开局先复位跟庄窗口，再走开局时间线。
+  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {
+    followDealer.reset()
+    return openingTimeline.start(mode)
+  }
 
   const tableContext = {
     players: state.players,
@@ -192,6 +209,7 @@ export function useLotusGame({
     announce: transient.announce,
     later: timer.later,
     ruleset,
+    followDealer,
   })
 
   playerActions = createLotusHuman({

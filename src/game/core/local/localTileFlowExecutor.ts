@@ -4,6 +4,7 @@ import { createTileFlowExecutor } from '../../shared/runtime/tileFlowExecutor'
 import { PACE_MS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import type { createLocalTurnOrchestrator } from './localTurnOrchestrator'
+import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface LocalTileFlowExecutorOptions {
   state: LocalGameState
@@ -17,6 +18,7 @@ interface LocalTileFlowExecutorOptions {
   later(callback: () => void, delay: number): number
   wait(delay: number): Promise<void>
   stopCountdown(): void
+  followDealer?: FollowDealerTracker
 }
 
 export function createLocalTileFlowExecutor(options: LocalTileFlowExecutorOptions) {

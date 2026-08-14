@@ -12,6 +12,7 @@ import { PACE_MS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
+import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -34,6 +35,8 @@ interface LocalTurnOrchestratorOptions {
   announce(text: string, tone?: string): void
   later(callback: () => void, delay: number): number
   ruleset?: RuleSet
+  /** 跟庄跟踪器：吃/碰/杠/胡等打断第一圈的动作发生时使其失效。 */
+  followDealer?: FollowDealerTracker
 }
 
 export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOptions) {
@@ -43,6 +46,10 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
 
   function hasSettled() {
     return runner.hasSettled()
+  }
+
+  function interruptFollow() {
+    options.followDealer?.interrupt()
   }
 
   function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
@@ -103,6 +110,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       case 'pass':
         return offerNextClaim(remainingClaims, tile, from)
       case 'gang':
+        interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(
           () => { void beginTurn(claimant.playerIndex, { fromTail: true }) },
@@ -110,6 +118,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
         )
         return
       case 'peng':
+        interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         if (action.discardIndex !== undefined) {
           options.later(
@@ -201,11 +210,14 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
     handleAction: async (action, playerIndex, player, _turnOptions, api) => {
       switch (action.kind) {
         case 'win':
+          interruptFollow()
           return options.endGame(playerIndex, { kongBloom: api.isKongDraw(playerIndex) })
         case 'added-kong': {
+          interruptFollow()
           return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
         }
         case 'concealed-kong': {
+          interruptFollow()
           await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })

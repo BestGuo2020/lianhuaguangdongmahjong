@@ -1,6 +1,7 @@
 import type { GamePhase, LastDiscard, RefLike } from '../../core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import { sortTiles, tileAudioFile } from '../../core/rules/tiles'
+import type { FollowDealerTracker } from './followDealer'
 
 interface TileFlowState {
   players: GamePlayer[]
@@ -32,6 +33,8 @@ interface TileFlowOptions {
   ) => Promise<boolean | undefined>
   takeTailTile?: (wall: TileType[], headDrawn: number) => TileType | null
   initialWallSize?: number
+  /** 跟庄规则跟踪器：每次出牌后、响应编排前调用（可选）。 */
+  followDealer?: FollowDealerTracker
 }
 
 /**
@@ -106,6 +109,8 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     })
     state.phase.value = 'checking'
     options.stopCountdown()
+    // 跟庄：出牌已落定，先做跟庄检测（可能触发庄家给付），再进入响应编排。
+    options.followDealer?.onDiscard(playerIndex, tile)
     options.getTurnFlow().routeDiscard(playerIndex, tile)
   }
   return { takeTile, drawFor, discardTile }

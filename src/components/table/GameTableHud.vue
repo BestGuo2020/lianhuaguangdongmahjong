@@ -87,7 +87,7 @@ let suppressTileClickUntil = 0
 const tableActionPosition = computed(() => props.tableActionEvent ? seatPosition[props.tableActionEvent.actorIndex] : 'bottom')
 const tableActionLabel = computed(() => ({
   peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠', 'wind-kong': '风杠',
-  'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '点炮', 'robbed-kong-win': '抢杠胡',
+  'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '胡', 'robbed-kong-win': '抢杠胡',
 }[props.tableActionEvent?.type ?? 'peng']))
 const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
 const scoreDeltaFor = (playerIndex: number) => props.scoreFlowEvent?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0

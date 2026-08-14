@@ -10,6 +10,7 @@ import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 import type { RuleSet } from '../../core/rules/ruleset'
+import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -34,6 +35,8 @@ interface LotusTurnOrchestratorOptions {
   announce(text: string, tone?: string): void
   later(callback: () => void, delay: number): number
   ruleset?: RuleSet
+  /** 跟庄跟踪器：吃/碰/杠/胡等打断第一圈的动作发生时使其失效。 */
+  followDealer?: FollowDealerTracker
 }
 
 export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOptions) {
@@ -43,6 +46,10 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
 
   function hasSettled() {
     return state.phase.value === 'settled'
+  }
+
+  function interruptFollow() {
+    options.followDealer?.interrupt()
   }
 
   function seatDistance(from: number, to: number) {
@@ -119,6 +126,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       void offerHu(remaining, from, tile, isFirstDiscard, decisions)
       return
     }
+    interruptFollow()
     options.announce(`${player.name} 胡!`, 'red')
     options.endGame(playerIndex, { winTile: tile, dihu, winHand: [...player.hand, tile], sourceFrom: from })
   }
@@ -195,11 +203,13 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     const decided = decisions.get(claimant.playerIndex)
     if (decided) {
       if (decided.kind === 'gang') {
+        interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(() => { void beginTurn(claimant.playerIndex, { fromTail: true }) }, PACE_MS.afterClaimGang)
         return
       }
       if (decided.kind === 'peng') {
+        interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.skipDrawPengDelay)
         return
@@ -233,6 +243,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       case 'pass':
         return offerNextClaim(remainingClaims, tile, from, decisions)
       case 'gang':
+        interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(
           () => { void beginTurn(claimant.playerIndex, { fromTail: true }) },
@@ -240,6 +251,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         )
         return
       case 'peng':
+        interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         if (action.discardIndex !== undefined) {
           options.later(
@@ -308,6 +320,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   }
 
   function performChi(playerIndex: number, meld: ChiMeld, tile: TileType, from: number) {
+    interruptFollow()
     const player = state.players[playerIndex]
     player.drawnTileIndex = -1
     removeLastDiscard(state.players[from].discards, tile)
@@ -420,18 +433,22 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     handleAction: async (action, playerIndex, player, _turnOptions, api) => {
       switch (action.kind) {
         case 'win':
+          interruptFollow()
           return options.endGame(playerIndex, {
             selfDraw: true,
             kongBloom: api.isKongDraw(playerIndex),
             winHand: [...player.hand],
           })
         case 'added-kong':
+          interruptFollow()
           return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
         case 'concealed-kong':
+          interruptFollow()
           await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })
         case 'wind-kong':
+          interruptFollow()
           await options.performWindKong(playerIndex)
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })

@@ -4,6 +4,7 @@ import type { LotusGameState } from './lotusState'
 import type { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { takeLotusTailTile } from './lotusWall'
+import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface LotusTileFlowOptions {
   state: LotusGameState
@@ -14,6 +15,7 @@ interface LotusTileFlowOptions {
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   later(callback: () => void, delay: number): number
   stopCountdown(): void
+  followDealer?: FollowDealerTracker
 }
 
 export function createLotusTileFlow(options: LotusTileFlowOptions) {

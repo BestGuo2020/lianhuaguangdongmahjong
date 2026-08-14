@@ -18,6 +18,7 @@ import { createLocalTimerScheduler } from './localTimerScheduler'
 import { createLocalTransientEventPresenter } from './localTransientEventPresenter'
 import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
+import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -86,6 +87,17 @@ export function useGame({
   })
   transientEvents = createLocalTransientEventPresenter({ state, later: scheduler.later })
 
+  // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
+  const followDealer = createFollowDealerTracker({
+    players: state.players,
+    dealerIndex: () => state.dealer.value,
+    baseScore: ruleset.baseScore,
+    onTrigger: (deltas) => {
+      transientEvents.showScoreFlow(deltas)
+      transientEvents.announce('跟庄')
+    },
+  })
+
   function endGame(winnerIndex: number, options: EndGameOptions = {}) {
     return settlementTimeline.endGame(winnerIndex, options)
   }
@@ -130,6 +142,7 @@ export function useGame({
     later: scheduler.later,
     wait: scheduler.wait,
     stopCountdown: countdown.stop,
+    followDealer,
   })
 
   openingTimeline = createLocalOpeningTimeline({
@@ -145,7 +158,11 @@ export function useGame({
     beginTurn,
     endGame,
   })
-  const startGame = openingTimeline.start
+  // 每局开局先复位跟庄窗口，再走开局时间线。
+  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {
+    followDealer.reset()
+    return openingTimeline.start(mode)
+  }
 
   const tableContext: ActionContext = {
     players: state.players,
@@ -178,6 +195,7 @@ export function useGame({
     announce: transientEvents.announce,
     later: scheduler.later,
     ruleset,
+    followDealer,
   })
 
   playerActions = createLocalPlayerActionController({
