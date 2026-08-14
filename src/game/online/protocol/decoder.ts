@@ -131,11 +131,13 @@ function isSnapshot(message: JsonObject): boolean {
     && isNumber(message.round) && isNumber(message.dealer) && isNumber(message.honba)
     && isOptional(message.dice, isDice)
     && isOptional(message.secondDice, isDice)
-    && isOptional(message.flipTile, isTile)
+    // lotus-classic（莲花广麻，默认规则）无翻精：后端这三个字段发送 null 而非省略，
+    // 故用 isNullable（接受 null）而非 isOptional（仅接受 undefined），否则整条快照解码失败。
+    && isNullable(message.flipTile, isTile)
     && isOptional(message.jokerTiles, (value): value is TileType[] => isArrayOf(value, isTile))
     && isOptional(message.wildcardTiles, (value): value is TileType[] => isArrayOf(value, isTile))
-    && isOptional(message.flipStack, isNumber)
-    && isOptional(message.openingStack, isNumber)
+    && isNullable(message.flipStack, isNumber)
+    && isNullable(message.openingStack, isNumber)
     && isOptional(message.wallBreakIndex, isNumber)
     && isNumber(message.wallCount) && isArrayOf(message.wall, isTile)
     && isNumber(message.headDrawn) && isNumber(message.currentPlayer)

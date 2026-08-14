@@ -64,4 +64,26 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, wallBreakIndex: '36' })).toBeNull()
     expect(decodeServerMessage({ ...message, jokerTiles: ['m10'] })).toBeNull()
   })
+
+  it('accepts null flip metadata on lotus-classic snapshots (no joker flip)', () => {
+    // 莲花广麻（lotus-classic，默认规则）无翻精：后端快照中 flipTile / flipStack /
+    // openingStack 发送 null 而非省略。此前用 isOptional（仅接受 undefined）校验，
+    // null 会使整条 state_snapshot 解码失败 → 前端停留在房间面板，无法进入对局界面。
+    const message = {
+      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', rulesetId: 'lotus-classic',
+      phase: 'opening', round: 1, dealer: 0, honba: 0, dice: [3, 6],
+      secondDice: [1, 1], flipTile: null, jokerTiles: [], wildcardTiles: [],
+      flipStack: null, openingStack: null, wallBreakIndex: 6, wallCount: 80,
+      wall: ['white'], headDrawn: 52, currentPlayer: -1, seat: 0,
+      players: [{
+        name: 'P0', avatar: '', score: 2000, seat: 0, hand: ['m1'], discards: [],
+        melds: [], redCount: 0, drawnTileIndex: -1,
+      }],
+      result: null, announcement: null, matchFinished: false, lastDiscard: null,
+      winPresentation: null, winningPlayerIndex: -1,
+    }
+    expect(decodeServerMessage(message)).toBe(message)
+    expect(decodeServerMessage({ ...message, flipTile: 'm10' })).toBeNull()
+    expect(decodeServerMessage({ ...message, flipStack: '4' })).toBeNull()
+  })
 })
