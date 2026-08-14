@@ -444,7 +444,7 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     expect(game.phase.value).toBe('dealing')
 
     // 开局动画结束（未发开局快照 → 跳过发牌）→ 缓冲的下一局快照落地
-    await vi.advanceTimersByTimeAsync(1250 + 1150 + 650)
+    await vi.advanceTimersByTimeAsync(1250 + 1500 + 650)
     expect(game.round.value).toBe(2)
     expect(game.lastDiscard.value?.from).toBe(2) // 服务端 0 → 本地 (0-2+4)%4=2
   })
@@ -550,7 +550,7 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     // 等齐后 round_start 到达 → 开下一局，缓冲快照落地 → 公告展示一次
     mockSocket!.receive({ kind: 'round_start', matchStarted: false, round: 2, dealer: 1, honba: 0, dice: [2, 2] })
     expect(game.result.value).toBeNull()
-    await vi.advanceTimersByTimeAsync(1250 + 1150 + 650)
+    await vi.advanceTimersByTimeAsync(1250 + 1500 + 650)
     expect(game.round.value).toBe(2)
     expect(game.announcement.value?.text).toBe('东2局 · 开牌')
 
@@ -634,8 +634,8 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.diceValues.value).toEqual([3, 5])
     expect(sounds).toContain('dice.mp3')
 
-    // 1.15s 后骰子结束 → 发牌动画（三家手牌从空逐步填充）
-    await vi.advanceTimersByTimeAsync(1150)
+    // 1.5s 后骰子结束 → 发牌动画（三家手牌从空逐步填充）
+    await vi.advanceTimersByTimeAsync(1500)
     expect(game.openingStage.value).toBe('deal')
     expect(game.phase.value).toBe('dealing')
 

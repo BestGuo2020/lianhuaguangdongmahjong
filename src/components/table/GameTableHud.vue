@@ -9,6 +9,9 @@ import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard,
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
+// 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
+// 与骰子动画竞争首帧，导致骰子动画被压缩/跳过。应用启动即预取。
+void import('../MahjongTable3D.vue')
 
 interface Props {
   players: GamePlayer[]
@@ -244,7 +247,7 @@ function onAvatarError(entry: GamePlayer) {
           <em>{{ tileName(flipTile) }}</em>
         </div>
         <div v-if="rulesetId === 'lotus-legacy' && secondDice" class="second-dice-note">
-          二骰 {{ secondDice[0] }} + {{ secondDice[1] }} · 王牌 {{ wildcardTiles?.length ? '白板' : '—' }}
+          二骰 {{ secondDice[0] }} + {{ secondDice[1] }}
         </div>
         <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
           <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>

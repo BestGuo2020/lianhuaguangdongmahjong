@@ -80,7 +80,7 @@ describe('openingTimeline', () => {
     expect(state.diceValues.value).toEqual([1, 1])
     await vi.advanceTimersByTimeAsync(1250)
     expect(state.diceValues.value).toEqual([2, 5])
-    await vi.advanceTimersByTimeAsync(1600)
+    await vi.advanceTimersByTimeAsync(1900)
     expect(state.diceValues.value).toEqual([4, 6])
   })
 
@@ -90,7 +90,7 @@ describe('openingTimeline', () => {
       kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
       dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
     })
-    await vi.advanceTimersByTimeAsync(1250 + 1600)
+    await vi.advanceTimersByTimeAsync(1250 + 1900)
     expect(state.openingStage.value).toBe('flip')
     expect(state.flipTile.value).toBe('m1')
     expect(state.flipStack.value).toBe(4)

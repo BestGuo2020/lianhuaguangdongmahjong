@@ -262,8 +262,10 @@ onMounted(async () => {
     atlasCellUvFor: tableScene.atlasCellUvFor,
     getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
     getWildcardAtlasMaterial: tableScene.getWildcardAtlasMaterial,
+    getLaiziAtlasMaterial: tableScene.getLaiziAtlasMaterial,
     isJoker: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'joker',
     isWildcard: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'wildcard',
+    isLaizi: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'laizi',
   })
   tableTiles = createTableTilePresenter({
     props,

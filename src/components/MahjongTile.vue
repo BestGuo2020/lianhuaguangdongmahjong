@@ -28,16 +28,24 @@ const isPrecision = computed(() => (
   && props.tile !== 'white'
   && Boolean(props.jokerTiles?.includes(props.tile))
 ))
+// 替牌 = 莲花麻将中可替代精牌的实体牌（白板出现在 wildcardTiles）；
+// 莲花广麻无 wildcardTiles，白板癞子走 isLaizi，不在此列。
 const isWildcard = computed(() => {
   if (props.tile === 'back' || isPrecision.value) return false
-  if (props.wildcardTiles?.length) return props.wildcardTiles.includes(props.tile)
-  return props.tile === 'white' && Boolean(props.jokerTiles?.includes(props.tile))
+  return Boolean(props.wildcardTiles?.includes(props.tile))
 })
-const isJoker = computed(() => isPrecision.value || isWildcard.value)
-const tileMarker = computed(() => isPrecision.value ? '精' : '替')
+const isLaizi = computed(() => (
+  !isPrecision.value
+  && !isWildcard.value
+  && props.tile === 'white'
+  && Boolean(props.jokerTiles?.includes(props.tile))
+))
+const isJoker = computed(() => isPrecision.value || isWildcard.value || isLaizi.value)
+const tileMarker = computed(() => (isPrecision.value ? '精' : isLaizi.value ? '癞' : '替'))
 const tileLabel = computed(() => {
   if (!isJoker.value || shownTile.value === 'back') return meta.value.name
-  return `${meta.value.name}，${isPrecision.value ? '精牌' : '万能牌'}${isWildcard.value ? '，可代本局精牌' : ''}`
+  const role = isPrecision.value ? '精牌' : isLaizi.value ? '癞子' : '万能牌'
+  return `${meta.value.name}，${role}${isWildcard.value ? '，可代本局精牌' : ''}`
 })
 const tileStyle = computed(() => {
   if (shownTile.value === 'back') return {}
@@ -49,7 +57,7 @@ const tileStyle = computed(() => {
 <template>
   <div
     class="mahjong-tile"
-    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isPrecision && !hidden, wildcard: isJoker && !isPrecision && !hidden, red: tile === 'red' && !hidden }"
+    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isPrecision && !hidden, wildcard: isWildcard && !hidden, laizi: isLaizi && !hidden, red: tile === 'red' && !hidden }"
     :style="tileStyle"
     role="button"
     :aria-label="tileLabel"

@@ -129,6 +129,8 @@ export function createOpeningTimeline({
     // 的 pendingSnapshot 中，不能重建正在播放的手牌/牌墙，否则动画会回到首批牌。
     if (dealStarted) return
     openingSnapshot = snapshot
+    // 立即填充座位骨架（players 非空 → GameTableHud/3D 场景挂载），
+    // 让骰子 presenter 在开局动画开始前就绪；手牌留空由发牌动画填充。
     const wallTotal = snapshot.rulesetId === 'lotus-legacy' ? WALL_TOTAL - 2 : WALL_TOTAL
     state.wallCount.value = wallTotal
     const snapshotWall = snapshot.wall ?? []
@@ -196,9 +198,10 @@ export function createOpeningTimeline({
   }
 
   async function run(currentSequence: number) {
-    // 莲花开局需要给 3D 骰子完整的起势、翻滚和落地时间；与单机莲花流程保持一致。
-    // 经典规则仍保持原有节奏，避免改变只有一次投骰子的远端开局。
-    const diceWait = hasSecondDice || hasFlip ? 1600 : 1150
+    // 骰子动画（dicePresenter 1050ms）+ 渲染余量：3D 场景在首次开局时需完成
+    // WebGL 初始化和首帧渲染，等待过短会让骰子看起来"还没播完就进入下一步"。
+    // 莲花开局有两次掷骰与翻精，经典只有一次投骰。
+    const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
     running = true
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value

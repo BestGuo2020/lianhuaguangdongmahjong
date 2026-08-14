@@ -48,7 +48,7 @@ function makeBackTexture() {
 }
 
 // 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
-function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | false = false) {
+function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
   faceGradient.addColorStop(0, '#e9e8df')
@@ -68,9 +68,10 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.restore()
   }
   if (marker) {
-    const markerLabel = marker === 'wildcard' ? '\u66ff' : '\u7cbe'
-    const markerColor = marker === 'wildcard' ? '#b88220' : '#08a9dc'
-    const markerShadow = marker === 'wildcard' ? 'rgba(75,45,0,.85)' : 'rgba(0,40,70,.85)'
+    // 癞：莲花广麻的白板万能牌；替：莲花麻将中可替代精牌的实体牌；精：精牌本身。
+    const markerLabel = marker === 'wildcard' ? '\u66ff' : marker === 'laizi' ? '\u764d' : '\u7cbe'
+    const markerColor = marker === 'wildcard' ? '#b88220' : marker === 'laizi' ? '#c0342e' : '#08a9dc'
+    const markerShadow = marker === 'wildcard' ? 'rgba(75,45,0,.85)' : marker === 'laizi' ? 'rgba(90,10,12,.85)' : 'rgba(0,40,70,.85)'
     ctx.save()
     ctx.fillStyle = markerColor
     ctx.beginPath()
@@ -90,7 +91,7 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
   }
 }
 
-function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | false = false) {
+function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
   const key = marker ? `${marker}:${tile}` : tile
   if (faceMaterials.has(key)) return faceMaterials.get(key)
   const surface = document.createElement('canvas')
@@ -326,7 +327,7 @@ function getAtlasMaterial() {
   return mat
 }
 
-function makeAtlasMaterial(marker: 'joker' | 'wildcard') {
+function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
   const canvas = document.createElement('canvas')
   canvas.width = ATLAS_COLS * ATLAS_CELL_W
   canvas.height = ATLAS_ROWS * ATLAS_CELL_H
@@ -375,6 +376,12 @@ let wildcardAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
 function getWildcardAtlasMaterial() {
   if (!wildcardAtlasMaterial) wildcardAtlasMaterial = makeAtlasMaterial('wildcard')
   return wildcardAtlasMaterial
+}
+
+let laiziAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+function getLaiziAtlasMaterial() {
+  if (!laiziAtlasMaterial) laiziAtlasMaterial = makeAtlasMaterial('laizi')
+  return laiziAtlasMaterial
 }
 
 function makeMachineTexture() {
@@ -604,6 +611,7 @@ function addTable() {
     getAtlasMaterial,
     getJokerAtlasMaterial,
     getWildcardAtlasMaterial,
+    getLaiziAtlasMaterial,
     forEachFaceMaterial(callback: (material: THREE.MeshPhysicalMaterial) => void) {
       faceMaterials.forEach(callback)
     },
@@ -612,6 +620,7 @@ function addTable() {
       atlasMaterial = null
       jokerAtlasMaterial = null
       wildcardAtlasMaterial = null
+      laiziAtlasMaterial = null
     },
   }
 }

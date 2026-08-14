@@ -75,7 +75,12 @@ const userChi = (optionIndex: number) => capabilities.value.chi?.choose(optionIn
 const userWindKong = () => capabilities.value.windKong?.execute()
 const flipTile = computed(() => lotusTable.value?.flipTile ?? null)
 // 广麻固定以白板为癞子；莲花麻将将精牌与白板替代能力分开传给界面。
-const jokerTiles = computed<TileType[]>(() => lotusTable.value?.jokerTiles ?? ['white'])
+// 联机 lotus-classic 快照不下发精牌（jokerTiles 为空数组），需兜底为白板癞子，
+// 否则多人模式下白板无「癞」标记。莲花麻将（lotus-legacy）的精牌由快照下发，不受影响。
+const jokerTiles = computed<TileType[]>(() => {
+  const jokers = lotusTable.value?.jokerTiles
+  return jokers && jokers.length ? jokers : ['white']
+})
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
