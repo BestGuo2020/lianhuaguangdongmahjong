@@ -154,10 +154,21 @@ describe('十三烂 / 七星十三烂', () => {
     const hand: TileType[] = ['m1', 'm1', 'm7', 'p2', 'p5', 'p8', 's1', 's4', 's7', 'east', 'south', 'west', 'north', 'red']
     expect(isShiSanLan(hand)).toBe(false)
   })
+  it('字牌 south 不误判为数牌（s1-s3 差 2 应判不成立）', () => {
+    const hand: TileType[] = ['m1', 'm4', 'm7', 'p2', 'p5', 'p8', 's1', 's3', 's6', 's9', 'east', 'south', 'red', 'green']
+    expect(isShiSanLan(hand)).toBe(false)
+  })
   it('七星十三烂：七字全有', () => {
     const hand: TileType[] = ['east', 'south', 'west', 'north', 'red', 'green', 'white', 'm1', 'm4', 'm7', 'p2', 'p5', 'p8', 's1']
     expect(isQiXingShiSanLan(hand)).toBe(true)
     expect(evaluateBasePattern(hand, 0, JOKERS)).toEqual({ pattern: 'qiXing', fan: 4 })
+  })
+  it('七星十三烂：精牌可替补冲突牌面（七字仍须物理齐全）', () => {
+    const hand: TileType[] = ['east', 'south', 'west', 'north', 'red', 'green', 'white', 'm1', 'm2', 'm7', 'p2', 'p5', 'p8', 's1']
+    const jokers: TileType[] = ['m2', 'm3']
+    // m1-m2 差 1 冲突，但 m2 是精牌可替补 → 仍成立七星。
+    expect(isQiXingShiSanLan(hand, jokers, [], ['white'])).toBe(true)
+    expect(evaluateBasePattern(hand, 0, jokers, [], ['white'])).toEqual({ pattern: 'qiXing', fan: 4 })
   })
   it('缺一字时仍算十三烂（2 番）', () => {
     const hand: TileType[] = ['east', 'south', 'west', 'north', 'red', 'green', 'm1', 'm4', 'm7', 'p2', 'p5', 'p8', 's1', 's4']

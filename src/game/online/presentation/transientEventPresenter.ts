@@ -23,6 +23,7 @@ export interface TransientEventPresenterOptions {
 
 const ACTION_SOUNDS: Partial<Record<TableActionMessage['event']['type'], string>> = {
   peng: 'peng.mp3',
+  chi: 'chi.mp3',
   'discard-gang': 'gang.mp3',
   'concealed-gang': 'gang.mp3',
   'added-gang': 'gang.mp3',

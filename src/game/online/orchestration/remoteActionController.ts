@@ -1,8 +1,9 @@
 import { waitingTiles } from '../../core/rules/rules'
+import { waitingTiles as lotusWaitingTiles } from '../../variants/lotus/lotusRules'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { RemoteGameState } from '../state/remoteGameState'
 
-type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay'>
+type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles'>
 
 export type RemotePlayerActionMessage =
   | { type: 'discard'; handIndex: number }
@@ -67,7 +68,10 @@ export function createRemoteActionController({
       if (seen.has(tile)) continue
       seen.add(tile)
       const afterDiscard = hand.filter((_, candidate) => candidate !== index)
-      const waits = waitingTiles(afterDiscard, meldCount).length
+      // 莲花麻将按精牌/白板算听口；经典规则用无精的 waitingTiles。
+      const waits = state.rulesetId.value === 'lotus-legacy'
+        ? lotusWaitingTiles(afterDiscard, meldCount, state.jokerTiles.value).length
+        : waitingTiles(afterDiscard, meldCount).length
       if (waits > bestWaits) {
         bestWaits = waits
         bestIndex = index

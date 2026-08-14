@@ -102,7 +102,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     state: {
       phase, players, wall, wallCount, wallHeadDrawn, currentPlayer, selectedIndex,
       actionPrompt, lastDiscard, result, winEffect, winPresentation, revealHands,
-      winningPlayerIndex, round, dealer, honba, diceValues, secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex, diceThrowerIndex, openingStage, dealAnimation,
+      winningPlayerIndex, round, dealer, honba, diceValues, secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex, diceThrowerIndex, openingStage, dealAnimation, announcement,
     },
     toLocalSeat: toLocal,
     mapPlayers: (value) => rotatePlayers(value),
@@ -140,6 +140,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     isUserTurn,
     userDrewThisTurn,
     selectedIndex,
+    getRuleset: () => (rulesetId.value === 'lotus-legacy' ? LOTUS_RULESET : undefined),
+    getJokers: () => jokerTiles.value,
+    getWildcards: () => wildcardTiles.value,
   })
   const remoteUserKongs = computed<TileType[]>(() => {
     if (!user.value || !isUserTurn.value || !userDrewThisTurn.value) return []
@@ -326,7 +329,10 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
       phase.value = 'revealing'
       revealHands.value = true
       const mapped = mapResult(msg.result)
-      playSound('zimo.mp3')
+      // 点炮/抢杠/地胡播 hu，自摸/天胡播 zimo（对齐结算时间线的音效逻辑）。
+      const winType = mapped?.winType
+      const isDiscardStyle = winType === 'discard' || winType === 'robbed-kong' || winType === 'dihu'
+      playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
       later(() => {
         phase.value = 'settled'
         result.value = mapped

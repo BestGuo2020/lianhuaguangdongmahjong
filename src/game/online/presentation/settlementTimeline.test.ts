@@ -58,13 +58,12 @@ describe('settlementTimeline', () => {
     expect(state.result.value?.winnerIndex).toBe(0)
   })
 
-  it('uses the short reveal path for a draw', async () => {
+  it('settles a draw immediately without a reveal pause', async () => {
     const { state, timeline } = harness()
     timeline.start(snapshot({ result: { draw: true }, winPresentation: null, winningPlayerIndex: -1 }))
 
-    expect(state.phase.value).toBe('revealing')
-    await vi.advanceTimersByTimeAsync(600)
     expect(state.phase.value).toBe('settled')
+    expect(state.revealHands.value).toBe(true)
     expect(state.result.value?.draw).toBe(true)
   })
 

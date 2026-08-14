@@ -39,6 +39,15 @@ describe('transientEventPresenter', () => {
     expect(state.tableActionEvent.value).toBeNull()
   })
 
+  it('吃牌播放 chi.mp3 音效', () => {
+    const { presenter, playSound } = setup()
+    presenter.handleTableAction({
+      kind: 'table_action',
+      event: { id: 8, type: 'chi', actorIndex: 2, sourceIndex: 1, tile: 'm1', meldIndex: 0 },
+    })
+    expect(playSound).toHaveBeenCalledWith('chi.mp3')
+  })
+
   it('开局期间忽略桌面动作，胡牌动作不重复播放结算音效', () => {
     const { state, presenter, playSound, setOpening } = setup()
     setOpening(true)

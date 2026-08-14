@@ -144,7 +144,12 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         distance: seatDistance(from, playerIndex),
       }))
       .filter(({ playerIndex, count, chiOptions }) => playerIndex !== from && (count >= 2 || chiOptions.length > 0))
-      .sort((a, b) => a.distance - b.distance)
+      // 全局优先级：碰/明杠(1) > 吃(2)，同级再按座位距离（对齐后端 find_claims）。
+      .sort((a, b) => {
+        const pa = a.count >= 2 ? 1 : 2
+        const pb = b.count >= 2 ? 1 : 2
+        return pa !== pb ? pa - pb : a.distance - b.distance
+      })
       .map(({ playerIndex, count, chiOptions }) => ({
         playerIndex,
         canPeng: count >= 2,

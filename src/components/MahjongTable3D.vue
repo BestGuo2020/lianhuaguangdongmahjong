@@ -355,6 +355,9 @@ watch(
     props.horses?.length,
     props.jokerTiles?.join(','),
     props.wildcardTiles?.join(','),
+    props.flipStack,
+    props.flipTile,
+    props.wallBreakIndex,
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。

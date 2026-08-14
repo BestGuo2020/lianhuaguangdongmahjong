@@ -1,4 +1,5 @@
 import type {
+  Announcement,
   DealAnimation,
   ActionPrompt,
   GamePhase,
@@ -10,6 +11,7 @@ import type {
 } from '../../core/contracts/gamePort'
 import type { GamePlayer, TileType, WinPresentation } from '../../core/contracts/types'
 import { WALL_TOTAL } from '../../core/rules/wallLayout'
+import { tileName } from '../../core/rules/tiles'
 import type { ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
 import type { RoundStartMessage } from '../protocol/messages'
 
@@ -42,6 +44,7 @@ export interface OpeningTimelineState {
   diceThrowerIndex: RefLike<number>
   openingStage: RefLike<OpeningStage | null>
   dealAnimation: RefLike<DealAnimation>
+  announcement: RefLike<Announcement | null>
 }
 
 export interface OpeningTimelineOptions {
@@ -70,6 +73,9 @@ export function createOpeningTimeline({
   let hasFlip = false
   let flipSeat = -1
   let dealStarted = false
+  let firstDice: number[] = []
+  let flipTileValue: TileType | null = null
+  let flipStackValue: number | null = null
   const timers = new Set<number>()
 
   function wait(delay: number): Promise<void> {
@@ -87,6 +93,16 @@ export function createOpeningTimeline({
     void playSoundAndWait(name).catch(() => {})
   }
 
+  function announce(text: string, tone: string = 'gold') {
+    // 开局期间的「翻精」由客户端在翻精阶段播报（对齐单机，用中文牌名）；
+    // 服务端在 round_start 阶段广播的公告会因 opening.isRunning 被丢弃。
+    state.announcement.value = { text, tone, id: Date.now() }
+    const id = state.announcement.value.id
+    void wait(1500).then(() => {
+      if (state.announcement.value?.id === id) state.announcement.value = null
+    })
+  }
+
   function cancel() {
     sequence += 1
     timers.forEach((timer) => globalThis.clearTimeout(timer))
@@ -97,6 +113,9 @@ export function createOpeningTimeline({
     hasFlip = false
     flipSeat = -1
     dealStarted = false
+    firstDice = []
+    flipTileValue = null
+    flipStackValue = null
     state.openingStage.value = null
   }
 
@@ -117,7 +136,6 @@ export function createOpeningTimeline({
     state.wall.value = [...Array<TileType>(placeholders).fill('m1'), ...snapshotWall]
     state.wallHeadDrawn.value = 0
     state.secondDice.value = snapshot.secondDice ?? snapshot.dice ?? [1, 1]
-    state.flipTile.value = snapshot.flipTile ?? null
     state.jokerTiles.value = snapshot.jokerTiles ?? []
     state.wildcardTiles.value = snapshot.wildcardTiles ?? []
     state.flipStack.value = snapshot.flipStack ?? null
@@ -188,22 +206,31 @@ export function createOpeningTimeline({
     await wait(1250)
     if (currentSequence !== sequence) return
     state.openingStage.value = 'dice'
+    state.diceValues.value = [...firstDice]
     playOpeningSound('dice.mp3')
     await wait(diceWait)
     if (currentSequence !== sequence) return
     if (hasFlip) {
       state.openingStage.value = 'flip'
+      state.flipTile.value = flipTileValue
+      state.flipStack.value = flipStackValue
+      if (flipTileValue) announce(`翻精 ${tileName(flipTileValue)}`)
       await wait(1200)
       if (currentSequence !== sequence) return
     }
     if (hasSecondDice) {
       if (flipSeat >= 0) state.diceThrowerIndex.value = toLocalSeat(flipSeat)
+      // 第二次掷骰要切回骰子阶段，dicePresenter 才会显示并起势（对齐单机 lotusOpening）。
+      state.openingStage.value = 'dice'
       state.diceValues.value = [...state.secondDice.value]
       playOpeningSound('dice.mp3')
       await wait(diceWait)
       if (currentSequence !== sequence) return
     }
     if (openingSnapshot && !(await deal(currentSequence))) return
+    // 开牌后留出 650ms 停顿再放行首回合（对齐单机 lotusOpening/localOpening 节奏）。
+    await wait(650)
+    if (currentSequence !== sequence) return
     state.openingStage.value = null
     running = false
     send({ type: 'opening_done' })
@@ -215,15 +242,20 @@ export function createOpeningTimeline({
     state.round.value = message.round
     state.dealer.value = toLocalSeat(message.dealer)
     state.honba.value = message.honba
-    state.diceValues.value = message.dice
+    firstDice = [...message.dice]
+    flipTileValue = message.flipTile ?? null
+    flipStackValue = message.flipStack ?? null
     hasSecondDice = message.secondDice != null
     hasFlip = message.flipTile != null && message.flipStack != null
     flipSeat = message.flipSeat ?? -1
     state.secondDice.value = message.secondDice ?? [1, 1]
-    state.flipTile.value = message.flipTile ?? null
+    // 骰子值 / 指示牌在对应阶段才展示；翻精墩（flipStack）从开局就保留（补足 136 张牌山），
+    // 指示牌仅在翻精阶段翻出（面朝上），故此处只复位 diceValues 与 flipTile。
+    state.diceValues.value = [1, 1]
+    state.flipTile.value = null
     state.jokerTiles.value = []
     state.wildcardTiles.value = []
-    state.flipStack.value = message.flipStack ?? null
+    state.flipStack.value = flipStackValue
     state.openingStack.value = null
     state.wallBreakIndex.value = 0
     state.players.forEach((player) => {

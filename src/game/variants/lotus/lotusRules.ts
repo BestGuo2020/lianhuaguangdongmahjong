@@ -279,8 +279,9 @@ function hasShiSanLanSpacing(tiles: TileType[]): boolean {
     seen.add(tile)
   }
   for (const suit of SUITS) {
+    // 必须精确匹配数牌（2 字符且首字为花色）：startsWith('s') 会误把 'south' 当数牌。
     const ranks = tiles
-      .filter((tile) => tile.startsWith(suit))
+      .filter((tile) => tile.length === 2 && tile[0] === suit)
       .map((tile) => Number(tile[1]))
       .sort((a, b) => a - b)
     for (let i = 1; i < ranks.length; i += 1) {
@@ -321,9 +322,15 @@ export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJ
   return fillJokers(unrestricted, limited)
 }
 
-/** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有。 */
-export function isQiXingShiSanLan(hand: TileType[]): boolean {
-  return isShiSanLan(hand) && HONORS.every((honor) => hand.includes(honor))
+/** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有（允许精牌替补，七字须物理齐全）。 */
+export function isQiXingShiSanLan(
+  hand: TileType[],
+  jokers: TileType[] = [],
+  ordinaryJokers: TileType[] = [],
+  jokerSubstitutes: TileType[] = [],
+): boolean {
+  return isShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)
+    && HONORS.every((honor) => hand.includes(honor))
 }
 
 const THIRTEEN_ORPHAN_TILES: TileType[] = [
@@ -355,7 +362,7 @@ export function evaluateBasePattern(
 ): PatternResult | null {
   if (exposedMeldCount === 0 && hand.length === 14) {
     if (isThirteenOrphans(hand)) return { pattern: 'thirteenOrphans', fan: 8 }
-    if (isQiXingShiSanLan(hand)) return { pattern: 'qiXing', fan: 4 }
+    if (isQiXingShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'qiXing', fan: 4 }
     if (isShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'shiSanLan', fan: 2 }
     if (isSevenPairs(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'sevenPairs', fan: 2 }
   }

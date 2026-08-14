@@ -64,15 +64,12 @@ export function createSettlementTimeline({
     const isDraw = Boolean(snapshot.result?.draw) || !presentation
 
     if (isDraw) {
-      state.phase.value = 'revealing'
+      // 流局直接结算并亮牌（对齐单机 endDraw），不加 600ms revealing 停顿。
+      state.phase.value = 'settled'
       state.revealHands.value = true
       state.winPresentation.value = null
       state.winEffect.value = null
-      later(() => {
-        if (serial !== currentSerial) return
-        state.phase.value = 'settled'
-        state.result.value = mappedResult
-      }, 600)
+      state.result.value = mappedResult
       return
     }
 
@@ -92,7 +89,7 @@ export function createSettlementTimeline({
       reducedMotion: reduceMotion,
       id: Date.now(),
     }
-    playSound(presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+    playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     if (!reduceMotion) {
       later(() => {
         if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)

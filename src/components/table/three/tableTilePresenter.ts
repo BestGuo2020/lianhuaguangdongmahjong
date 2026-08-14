@@ -438,16 +438,21 @@ function wallPhysicalIndex(index: number, head: number): number {
 /** 精指示牌：翻出牌面朝上，与牌墙顶层对齐（y=0.88）。
  * 翻精墩底层牌仍保留显示（视觉上牌山完整）；翻精阶段（openingStage==='flip'）指示牌从墙内升起。 */
 function addFlipIndicator() {
-  const tile = props.flipTile
-  if (!tile || props.flipStack == null) return
+  if (props.flipStack == null) return
   const slot = wallStackSlot(props.flipStack)
-  // 翻精墩底层牌保留在牌山上（背朝上，与周围牌墙一致），避免翻出后少一张
+  // 翻精墩底层牌保留在牌山上（背朝上，与周围牌墙一致）
   const baseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
   baseQuat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
   addTableTile(new THREE.Vector3(slot.x, .41, slot.z), baseQuat, null)
+  // 顶层牌：翻精前背朝上占位（补足 136 张牌山），翻精后翻出指示牌（面朝上）
+  const tile = props.flipTile
+  const pos = new THREE.Vector3(slot.x, .88, slot.z)
+  if (!tile) {
+    addTableTile(pos, baseQuat, null)
+    return
+  }
   // 指示牌翻出：牌面朝上，对齐牌墙顶层（y=0.88）
   const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
-  const pos = new THREE.Vector3(slot.x, .88, slot.z)
   if (props.openingStage === 'flip') {
     // 从墙内（底层之下）升起，模拟「翻出来」
     const origin = new THREE.Vector3(slot.x, .1, slot.z)

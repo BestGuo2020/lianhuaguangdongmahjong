@@ -314,8 +314,9 @@ function shiSanLanDefects(hand: TileType[], jokers: TileType[]) {
   const natural = hand.filter((tile) => !jokerSet.has(tile))
   let defects = natural.length - new Set(natural).size
   for (const suit of ['m', 'p', 's']) {
+    // 必须精确匹配数牌（2 字符且首字为花色）：startsWith('s') 会误把 'south' 当数牌。
     const ranks = natural
-      .filter((tile) => tile.startsWith(suit))
+      .filter((tile) => tile.length === 2 && tile[0] === suit)
       .map((tile) => Number(tile[1]))
       .sort((a, b) => a - b)
     for (let index = 1; index < ranks.length; index += 1) {
