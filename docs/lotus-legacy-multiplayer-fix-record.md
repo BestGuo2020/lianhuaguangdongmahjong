@@ -6,7 +6,7 @@
 
 ## 0. 用户拍板的规则解释权（以调整后的后端为主）
 
-1. **七星十三烂允许精牌替补**（精牌可替补十三烂冲突牌面，但东南西北中发白七字必须物理齐全）。
+1. **七星十三烂允许精牌替补**（精牌可替补十三烂冲突牌面；东南西北中发白七字同样允许精牌替补，不要求物理齐全）。
 2. **吃/碰/杠全局优先级以后端为准**：胡 > 碰或明杠 > 吃（而非单机原先的"按座位距离"）。
 
 这两条规则结论意味着 **A1、A4 的修复方向是改前端**（向后端对齐），其余 bug 修后端。
@@ -32,7 +32,7 @@
 
 | 编号 | 问题 | 修复 | 文件 |
 | --- | --- | --- | --- |
-| A1 | 七星十三烂不允许精牌替补（与后端规则不一致） | `isQiXingShiSanLan` 增加 `jokers/ordinaryJokers/jokerSubstitutes` 参数并传入 `isShiSanLan`；`evaluateBasePattern` 调用处同步传入 | [lotusRules.ts](src/game/variants/lotus/lotusRules.ts) |
+| A1 | 七星十三烂不允许精牌替补（与后端规则不一致） | `isQiXingShiSanLan` 增加 `jokers/ordinaryJokers/jokerSubstitutes` 参数并传入 `isShiSanLan`；`evaluateBasePattern` 调用处同步传入。后续按用户拍板修正为「七字同样允许精牌替补、不要求物理齐全」：前端抽出共用骨架 `hasShiSanLanShape`，七星判定在精牌填完后要求最终 14 张含七字；后端 `is_thirteen_lan` 增加 `require_seven_honors`，`evaluate_pattern` 以该标志判定七星 | [lotusRules.ts](src/game/variants/lotus/lotusRules.ts) |
 | A4 | 吃/碰/杠按座位距离而非"碰杠>吃" | `findClaims` 排序改为「碰/杠(1) > 吃(2)，同级按距离」，对齐后端 `find_claims` | [lotusTurnOrchestrator.ts](src/game/variants/lotus/lotusTurnOrchestrator.ts) |
 | C2 | 点炮胡误播"自摸"音效 | 联机结算时间线 `robbedKong ? hu : zimo` → `discardWin \|\| robbedKong ? hu : zimo` | [settlementTimeline.ts](src/game/online/presentation/settlementTimeline.ts) |
 | C4 | 翻精墩空位/指示牌从第 0 帧就露出 | `start()`/`captureSnapshot()` 不再提前写 `flipTile/flipStack`，改在 `run()` 翻精阶段写入 | [openingTimeline.ts](src/game/online/presentation/openingTimeline.ts) |

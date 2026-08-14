@@ -291,7 +291,19 @@ function hasShiSanLanSpacing(tiles: TileType[]): boolean {
   return true
 }
 
-export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
+/**
+ * 十三烂 / 七星十三烂的共用判定骨架。
+ * naturals 先剔除精面/白板面并满足数牌间距；精牌（含白板 limited）随后填入
+ * 未占用的牌面。requireSevenHonors 时，最终 14 张牌须包含东南西北中发白 7 个字
+ * ——七字允许由精牌替补，不要求物理齐全。
+ */
+function hasShiSanLanShape(
+  hand: TileType[],
+  jokers: TileType[],
+  ordinaryJokers: TileType[],
+  jokerSubstitutes: TileType[],
+  requireSevenHonors: boolean,
+): boolean {
   if (hand.length !== 14) return false
 
   const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
@@ -302,7 +314,9 @@ export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJ
   const memo = new Set<string>()
 
   function fillJokers(unrestrictedRemaining: number, limitedRemaining: number): boolean {
-    if (unrestrictedRemaining === 0 && limitedRemaining === 0) return true
+    if (unrestrictedRemaining === 0 && limitedRemaining === 0) {
+      return !requireSevenHonors || HONORS.every((honor) => used.has(honor))
+    }
     const key = `${unrestrictedRemaining}:${limitedRemaining}:${[...used].sort().join(',')}`
     if (memo.has(key)) return false
     memo.add(key)
@@ -322,15 +336,18 @@ export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJ
   return fillJokers(unrestricted, limited)
 }
 
-/** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有（允许精牌替补，七字须物理齐全）。 */
+export function isShiSanLan(hand: TileType[], jokers: TileType[] = [], ordinaryJokers: TileType[] = [], jokerSubstitutes: TileType[] = []): boolean {
+  return hasShiSanLanShape(hand, jokers, ordinaryJokers, jokerSubstitutes, false)
+}
+
+/** 七星十三烂 = 十三烂 + 东南西北中发白 七字全有（七字允许精牌替补，不要求物理齐全）。 */
 export function isQiXingShiSanLan(
   hand: TileType[],
   jokers: TileType[] = [],
   ordinaryJokers: TileType[] = [],
   jokerSubstitutes: TileType[] = [],
 ): boolean {
-  return isShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)
-    && HONORS.every((honor) => hand.includes(honor))
+  return hasShiSanLanShape(hand, jokers, ordinaryJokers, jokerSubstitutes, true)
 }
 
 const THIRTEEN_ORPHAN_TILES: TileType[] = [
