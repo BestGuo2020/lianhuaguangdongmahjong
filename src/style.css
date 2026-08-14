@@ -774,7 +774,7 @@ button { font: inherit; }
 .edge-left, .edge-right { top: 13%; bottom: 13%; width: 10px; }
 
 .mahjong-tile { --tile-width: clamp(44px, 4.75vw, 86px); box-shadow: 0 5px 0 #d8ddd2, 0 9px 0 #4e9b43, 0 13px 9px rgba(0,0,0,.54), inset 0 1px rgba(255,255,255,.9); }
-.mahjong-tile.small { --tile-width: clamp(25px, 2.45vw, 42px); box-shadow: 0 3px 0 #d5dbd0, 0 6px 0 #4c9341, 0 8px 5px rgba(0,0,0,.5); }
+.mahjong-tile.small { --tile-width: clamp(25px, 2.45vw, 42px); box-shadow: 0 3px 0 #d5dbd0, 0 6px 0 #4c9341, 0 8px 5px rgba(0,0,0,.5); position: relative; top: -3px; }
 
 .seat-top { top: 13%; transform: translateX(calc(115% - 140px)); }
 .seat-top .avatar-wrap { width: clamp(210px, 18vw, 286px); min-width: 0; }

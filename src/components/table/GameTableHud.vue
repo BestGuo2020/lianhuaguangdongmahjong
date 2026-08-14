@@ -80,6 +80,10 @@ const waitsOpen = ref(false)
 const hoveredDiscard = ref<TileType | null>(null)
 const kongPickerOpen = ref(false)
 const chiPickerOpen = ref(false)
+// 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
+const flipOpen = ref(false)
+// 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
+watch(() => props.flipTile, () => { flipOpen.value = false })
 const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
 let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
@@ -240,18 +244,25 @@ function onAvatarError(entry: GamePlayer) {
       :flip-stack="flipStack"
     />
     <Transition name="flip-cue">
-      <div v-if="flipTile" key="flip" class="flip-indicator" aria-label="翻精指示牌">
+      <div
+        v-if="flipTile" key="flip" class="flip-indicator" :class="{ 'flip-open': flipOpen }"
+        role="button" tabindex="0" aria-label="翻精指示牌" :aria-expanded="flipOpen"
+        @click="flipOpen = !flipOpen" @keydown.enter="flipOpen = !flipOpen" @keydown.space.prevent="flipOpen = !flipOpen"
+      >
         <div class="flip-indicator-head">
           <span>翻精</span>
           <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
           <em>{{ tileName(flipTile) }}</em>
+          <i class="flip-chevron" aria-hidden="true"></i>
         </div>
-        <div v-if="rulesetId === 'lotus-legacy' && secondDice" class="second-dice-note">
-          二骰 {{ secondDice[0] }} + {{ secondDice[1] }}
-        </div>
-        <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
-          <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>
-          <div><strong>白板替代：</strong>{{ jokerGuide.wildcard }}</div>
+        <div class="flip-indicator-body">
+          <div v-if="rulesetId === 'lotus-legacy' && secondDice" class="second-dice-note">
+            二骰 {{ secondDice[0] }} + {{ secondDice[1] }}
+          </div>
+          <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
+            <div><strong>精牌：</strong>{{ jokerGuide.precision }}</div>
+            <div><strong>白板替代：</strong>{{ jokerGuide.wildcard }}</div>
+          </div>
         </div>
       </div>
     </Transition>
@@ -353,7 +364,7 @@ function onAvatarError(entry: GamePlayer) {
 <style scoped>
 .game-table-hud { display: contents; }
 
-/* 莲花麻将翻精指示牌（桌面右上角） */
+/* 莲花麻将翻精指示牌（桌面右上角；桌面端始终完整显示） */
 .flip-indicator {
   position: absolute;
   top: 50px;
@@ -366,6 +377,7 @@ function onAvatarError(entry: GamePlayer) {
   background: rgba(28, 20, 8, 0.72);
   border: 1px solid rgba(212, 175, 55, 0.6);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
 }
 .flip-indicator-head {
   display: flex;
@@ -384,6 +396,21 @@ function onAvatarError(entry: GamePlayer) {
   font-weight: 600;
   color: #f3e5c3;
 }
+.flip-indicator-body {
+  display: grid;
+  gap: 5px;
+}
+/* 展开提示箭头：桌面端常显完整卡片，无需提示 */
+.flip-chevron {
+  display: none;
+  font-style: normal;
+  font-size: 10px;
+  color: #ffd966;
+  transition: transform 0.2s;
+}
+.flip-open .flip-chevron {
+  transform: rotate(180deg);
+}
 .joker-guide {
   display: grid;
   gap: 2px;
@@ -395,6 +422,30 @@ function onAvatarError(entry: GamePlayer) {
 .joker-guide strong {
   color: #7ce6ff;
   font-weight: 800;
+}
+
+/* 移动端（窄屏/矮屏）：翻精指示牌折叠为一行小徽章，不遮挡任何座位；
+   点击徽章展开二骰/精牌说明（.flip-open），再点收起。 */
+@media (max-width: 700px), (max-height: 460px) {
+  .flip-indicator {
+    top: 40px;
+    right: 12px;
+    left: auto;
+    gap: 3px;
+    padding: 5px 8px;
+    border-radius: 8px;
+  }
+  .flip-indicator-head { gap: 4px; }
+  .flip-indicator-head > span { font-size: 12px; letter-spacing: 1px; }
+  .flip-indicator-head > em { font-size: 11px; }
+  .flip-chevron { display: block; }
+  .flip-indicator-body { display: none; }
+  .flip-open .flip-indicator-body {
+    display: grid;
+    gap: 3px;
+  }
+  .joker-guide { font-size: 10px; }
+  .joker-guide div { max-width: 150px; white-space: normal; }
 }
 
 .chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
