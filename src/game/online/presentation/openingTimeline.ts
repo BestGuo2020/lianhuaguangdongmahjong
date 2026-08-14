@@ -90,6 +90,7 @@ export function createOpeningTimeline({
 
   function playOpeningSound(name: string) {
     // 音频是装饰层；资源加载或浏览器自动播放策略不能阻塞开局协议。
+    // 例外：game_start 在 run() 中单独 await（对齐单机，等播完再掷骰）。
     void playSoundAndWait(name).catch(() => {})
   }
 
@@ -205,8 +206,9 @@ export function createOpeningTimeline({
     running = true
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
-    playOpeningSound('game_start.mp3')
-    await wait(1250)
+    // 等 game_start 播完再掷骰（与单机 lotusOpening/localOpening 对齐）。
+    // playEffectAndWait 自带 4s 兜底超时、静音/异常时立即返回，不会阻塞开局协议。
+    await Promise.all([playSoundAndWait('game_start.mp3').catch(() => {}), wait(1250)])
     if (currentSequence !== sequence) return
     state.openingStage.value = 'dice'
     state.diceValues.value = [...firstDice]

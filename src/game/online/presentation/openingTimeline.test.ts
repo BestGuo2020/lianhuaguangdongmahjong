@@ -4,7 +4,7 @@ import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { GamePhase, OpeningStage } from '../../core/contracts/gamePort'
 import type { ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
 import { mapPlayersToLocal } from '../protocol/mapper'
-import { createOpeningTimeline } from './openingTimeline'
+import { createOpeningTimeline, type OpeningTimelineOptions } from './openingTimeline'
 
 function player(seat: number, count: number, hidden = false): ServerPlayerDto {
   return {
@@ -27,7 +27,7 @@ function snapshot(): ServerSnapshot {
   }
 }
 
-function harness() {
+function harness(overrides: Partial<OpeningTimelineOptions> = {}) {
   const state = {
     phase: ref<GamePhase>('lobby'), players: reactive<GamePlayer[]>([]), wall: ref<TileType[]>([]),
     wallCount: ref(0), wallHeadDrawn: ref(0), currentPlayer: ref(-1), selectedIndex: ref(-1),
@@ -46,6 +46,7 @@ function harness() {
     playSoundAndWait: async () => {},
     send: (message) => sent.push(message),
     onFinished: finished,
+    ...overrides,
   })
   return { state, sent, finished, timeline }
 }
@@ -134,8 +135,30 @@ describe('openingTimeline', () => {
     expect(timeline.isRunning()).toBe(false)
   })
 
-  it('does not block opening readiness on a stalled audio promise', async () => {
-    const { sent, timeline } = harness()
+  it('waits for game_start audio to finish before rolling the dice', async () => {
+    let releaseGameStart: (() => void) | undefined
+    const gameStartDone = new Promise<void>((resolve) => { releaseGameStart = resolve })
+    const { state, timeline } = harness({
+      playSoundAndWait: async (name) => { if (name === 'game_start.mp3') await gameStartDone },
+    })
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+
+    // 音效未播完：即使超过原 1250ms 等待，仍停留在 start 阶段，骰子不展示。
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(state.openingStage.value).toBe('start')
+    expect(state.diceValues.value).toEqual([1, 1])
+
+    // 音效播完后才进入骰子阶段。
+    releaseGameStart?.()
+    await vi.advanceTimersByTimeAsync(1250)
+    expect(state.openingStage.value).toBe('dice')
+    expect(state.diceValues.value).toEqual([2, 5])
+  })
+
+  it('does not block opening on a rejected game_start audio', async () => {
+    const { state, sent, timeline } = harness({
+      playSoundAndWait: async () => { throw new Error('audio unavailable') },
+    })
     timeline.start({
       kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
       dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
@@ -144,6 +167,7 @@ describe('openingTimeline', () => {
 
     await vi.advanceTimersByTimeAsync(11000)
 
+    expect(state.openingStage.value).toBeNull()
     expect(sent).toContainEqual({ type: 'opening_done' })
   })
 })
