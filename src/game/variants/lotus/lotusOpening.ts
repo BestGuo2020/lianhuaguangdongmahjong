@@ -80,6 +80,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.jokerTiles.value = []
     state.wildcardTiles.value = ['white']
     state.flipStack.value = null
+    state.secondDice.value = null
     state.wallBreakIndex.value = 0
     state.roundFirstDiscard.value = true
 
@@ -110,6 +111,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 第二次掷骰：两个骰子的点数和作为开牌依据。
     const secondDice: [number, number] = [roll(), roll()]
     state.diceValues.value = secondDice
+    state.secondDice.value = secondDice
     state.openingStage.value = 'dice'
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
     if (currentSequence !== sequence) return

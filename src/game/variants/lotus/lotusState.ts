@@ -31,6 +31,8 @@ export function createLotusGameState() {
     wallBreakIndex: ref(0),
     /** 翻精所在物理墩（0..67），供 3D 在牌山上翻出指示牌；翻精前为 null */
     flipStack: ref<number | null>(null),
+    /** 第二次掷骰点数（开牌依据），翻精后由目标方位玩家投出；掷出前为 null */
+    secondDice: ref<[number, number] | null>(null),
     /** 本局是否尚未打出第一张牌（庄家首弃 = 地胡判定窗口） */
     roundFirstDiscard: ref(false),
   }

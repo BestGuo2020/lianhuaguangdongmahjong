@@ -265,6 +265,7 @@ export function useLotusGame({
     openingStage: state.openingStage,
     diceValues: state.diceValues,
     diceThrowerIndex: state.diceThrowerIndex,
+    secondDice: state.secondDice,
     userCurrentWaits: selectors.userCurrentWaits,
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,

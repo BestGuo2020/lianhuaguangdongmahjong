@@ -436,7 +436,7 @@ function wallPhysicalIndex(index: number, head: number): number {
   return physical
 }
 
-/** 精指示牌：翻出牌面朝上，与牌墙顶层对齐（y=0.88）。
+/** 精指示牌：翻出牌面朝上，图案面与牌墙顶层表面平齐（不凸起）。
  * 翻精墩底层牌仍保留显示（视觉上牌山完整）；翻精阶段（openingStage==='flip'）指示牌从墙内升起。 */
 function addFlipIndicator() {
   if (props.flipStack == null) return
@@ -447,12 +447,15 @@ function addFlipIndicator() {
   addTableTile(new THREE.Vector3(slot.x, .41, slot.z), baseQuat, null)
   // 顶层牌：翻精前背朝上占位（补足 136 张牌山），翻精后翻出指示牌（面朝上）
   const tile = props.flipTile
-  const pos = new THREE.Vector3(slot.x, .88, slot.z)
   if (!tile) {
-    addTableTile(pos, baseQuat, null)
+    addTableTile(new THREE.Vector3(slot.x, .88, slot.z), baseQuat, null)
     return
   }
-  // 指示牌翻出：牌面朝上，对齐牌墙顶层（y=0.88）
+  // 指示牌翻出：牌面朝上。面朝上的 base/cap 偏移与背朝上的牌墙方向相反：
+  // 若沿用占位牌位置 y=.88，图案面顶面（y+.13+.17=1.18）会比牌墙顶层表面
+  // （0.88+.06+.11=1.05）凸出 0.13；降到 y=.75 使图案面顶面（.75+.30=1.05）
+  // 与牌墙第一层（顶层）平齐。
+  const pos = new THREE.Vector3(slot.x, .75, slot.z)
   const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
   if (props.openingStage === 'flip') {
     // 从墙内（底层之下）升起，模拟「翻出来」

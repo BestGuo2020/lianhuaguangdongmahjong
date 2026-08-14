@@ -86,6 +86,8 @@ const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
 const remoteRulesetId = computed(() => remoteGame.rulesetId.value)
 const remoteSecondDice = computed(() => remoteGame.secondDice.value)
+// 单机莲花麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
+const lotusSecondDice = computed<[number, number] | undefined>(() => lotusGame.secondDice.value ?? undefined)
 
 // 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）；仅对莲花广麻生效。
 const debugKong = (mode: 'concealed' | 'added' | 'both') => {
@@ -238,7 +240,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
           :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
-          :second-dice="gameMode === 'remote' ? remoteSecondDice : undefined"
+          :second-dice="gameMode === 'remote' ? remoteSecondDice : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
           :flip-stack="flipStack"
