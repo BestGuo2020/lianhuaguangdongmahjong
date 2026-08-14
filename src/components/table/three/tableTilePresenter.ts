@@ -82,7 +82,11 @@ function addConcealedHand(playerIndex) {
     ? props.winPresentation
     : null
   const displayedHand = splitWinningTile(rawHand, presentation).hand
-  const concealedCount = props.players[playerIndex]?.concealedTileCount ?? displayedHand.length
+  // 赢家：和牌张已移入胡牌区（splitWinningTile 移除），暗手按 split 后的张数显示，
+  // 避免结算快照的 concealedTileCount（含和牌）让和牌在暗手与胡牌区重复出现（对齐单机）。
+  const concealedCount = presentation
+    ? displayedHand.length
+    : (props.players[playerIndex]?.concealedTileCount ?? displayedHand.length)
   const total = Math.min(props.revealHands ? displayedHand.length : concealedCount, 14)
   const gap = TILE_GAP_OFFSET // 三家手牌间隙
   // 摸牌位：只要手牌比基准（13 - 3×非花副露数）多出一张，就把多出的那张视为「摸牌」并留间隙。
