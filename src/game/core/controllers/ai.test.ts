@@ -68,6 +68,14 @@ describe('chooseDiscardIndex 弃牌启发式', () => {
     const index = chooseDiscardIndex(hand, () => 0)
     expect(hand[index]).toBe('north')
   })
+
+  it('已听牌时优先保留听口（不打听牌所需的关键张）', () => {
+    // 13 张：m1m2m3 + p4p5p6 + s7s8s9 + east 对 + 孤张 north
+    // 打出 north 后听 east（单骑/对倒）；打出 east 会破坏听口。
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'north', 'white']
+    const index = chooseDiscardIndex(hand, () => 0, 0)
+    expect(hand[index]).toBe('north')
+  })
 })
 
 describe('decideClaim 吃碰杠响应', () => {
@@ -75,8 +83,44 @@ describe('decideClaim 吃碰杠响应', () => {
     expect(decideClaim({ hand: ['east', 'east', 'east', 'm1'], canGang: true })).toBe('gang')
   })
 
-  it('canGang 为假时选择 peng', () => {
+  it('canGang 为假且无 tile 信息时默认 peng（向后兼容）', () => {
     expect(decideClaim({ hand: ['east', 'east', 'm1'], canGang: false })).toBe('peng')
+  })
+
+  it('碰后听口更优时选择 peng', () => {
+    // 现状：无听口（13 张怎么打都没听）；碰 east 后打出 north → 单骑 north 听任意（白板癞子）→ 更优
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'north', 'white']
+    const decision = decideClaim({ hand, canGang: false, tile: 'east', exposedMelds: 0 })
+    expect(decision).toBe('peng')
+  })
+
+  it('碰后听口未提升时 pass', () => {
+    // 现状与碰后都无听口（散手），碰 east 不接近胡牌 → pass
+    const hand: TileType[] = ['east', 'east', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 'north', 'south', 'west']
+    const decision = decideClaim({ hand, canGang: false, tile: 'east', exposedMelds: 0 })
+    expect(decision).toBe('pass')
+  })
+})
+
+describe('decideTurn 杠决策评估', () => {
+  it('已听牌时放弃暗杠（避免拆散成形手牌）', () => {
+    // 含 4 张 east 可暗杠，但剩余手牌已接近听牌
+    const hand: TileType[] = ['east', 'east', 'east', 'east', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north']
+    const decision = decideTurn(view(hand))
+    expect(decision.kind).not.toBe('concealed-kong')
+  })
+
+  it('未听牌时仍暗杠', () => {
+    const hand: TileType[] = ['s7', 's7', 's7', 's7', 'm1', 'm2', 'm3', 'p4', 'p5', 'east', 'east']
+    const decision = decideTurn(view(hand))
+    expect(decision).toEqual({ kind: 'concealed-kong', tile: 's7' })
+  })
+
+  it('已听牌时放弃补杠', () => {
+    const melds: Meld[] = [{ type: 'peng', tile: 'east', from: 1, tiles: ['east', 'east', 'east'] }]
+    const hand: TileType[] = ['east', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north']
+    const decision = decideTurn(view(hand, melds, 1))
+    expect(decision.kind).not.toBe('added-kong')
   })
 })
 

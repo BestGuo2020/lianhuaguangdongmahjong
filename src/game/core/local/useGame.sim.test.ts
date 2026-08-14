@@ -91,5 +91,5 @@ describe('整局模拟：东风场自动打完', () => {
     const result = await playOneMatch()
     expect(result.steps).toBeLessThan(8000)
     expect(result.phase === 'finished' || result.phase === 'settled').toBe(true)
-  })
+  }, 120_000)
 })

@@ -93,6 +93,8 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       canGang: claimant.canGang,
       tile,
       from,
+      exposedMelds: options.structuralMeldCount(claimant.playerIndex),
+      ruleset,
     }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return

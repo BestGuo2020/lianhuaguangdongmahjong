@@ -36,6 +36,9 @@ export interface ClaimContext {
   tile: TileType
   /** 弃牌来源座位 */
   from: number
+  /** 结构性副露数（碰后 +1，用于听口评估） */
+  exposedMelds?: number
+  ruleset?: RuleSet
 }
 
 /** 抢杠响应上下文 */
@@ -301,7 +304,14 @@ export class AiController implements PlayerController {
   }
 
   private decideClaim(ctx: ClaimContext): ClaimAction {
-    const decision: ClaimDecision = decideClaim({ hand: ctx.hand, canGang: ctx.canGang })
+    const decision: ClaimDecision = decideClaim({
+      hand: ctx.hand,
+      canGang: ctx.canGang,
+      tile: ctx.tile,
+      from: ctx.from,
+      exposedMelds: ctx.exposedMelds,
+      ruleset: ctx.ruleset,
+    })
     if (decision === 'gang') return { kind: 'gang' }
     if (decision === 'peng') {
       // 碰后无牌可打（手牌恰好只剩这 2 张）：真实规则下不能碰，
@@ -310,7 +320,7 @@ export class AiController implements PlayerController {
       const afterPeng = removeMatches(ctx.hand, ctx.tile, 2)
       if (!afterPeng.length) return { kind: 'pass' }
       // 预计算碰后弃牌索引，实现 AI 的单次碰+出牌闭环
-      const discardIndex = chooseDiscardIndex(afterPeng, this.random)
+      const discardIndex = chooseDiscardIndex(afterPeng, this.random, ctx.exposedMelds + 1, ctx.ruleset ?? DEFAULT_RULESET)
       return { kind: 'peng', discardIndex }
     }
     return { kind: 'pass' }

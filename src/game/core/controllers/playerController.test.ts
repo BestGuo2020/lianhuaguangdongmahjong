@@ -91,9 +91,20 @@ describe('AiController.requestClaim', () => {
     expect(action).toEqual({ kind: 'gang' })
   })
 
-  it('无 gang 时返回 peng 并携带 discardIndex', async () => {
+  it('碰后听口未提升时 pass（不再无脑碰）', async () => {
+    // hand 太散：碰 east 后仍不成形，听口无提升 → pass
     const controller = new AiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn(), () => 0)
     const action = await controller.requestClaim(makeClaimCtx(['east', 'east', 'm1', 'm2'], { canGang: false, tile: 'east' }))
+    expect(action.kind).toBe('pass')
+  })
+
+  it('碰后听口提升时返回 peng 并携带 discardIndex', async () => {
+    // 碰 east 后打出 north → 单骑 north 听任意（白板癞子），现状无听口 → 碰
+    const controller = new AiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn(), () => 0)
+    const action = await controller.requestClaim(makeClaimCtx(
+      ['east', 'east', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'north', 'white'],
+      { canGang: false, tile: 'east' },
+    ))
     expect(action.kind).toBe('peng')
     if (action.kind === 'peng') {
       expect(action.discardIndex).toBeGreaterThanOrEqual(0)
@@ -101,14 +112,17 @@ describe('AiController.requestClaim', () => {
   })
 
   it('peng 的 discardIndex 基于碰后手牌计算', async () => {
-    // hand = ['east', 'east', 'p5', 'p5', 'm1']，碰 east 后剩余 ['p5', 'p5', 'm1']
-    // m1 是孤张（无对无靠），评分最低，应被优先弃掉 → index 2
+    // hand = ['east', 'east', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'north', 'white']
+    // 碰 east 后剩余 11 张；north 是孤张且打出后单骑听任意，应被优先弃掉
     const controller = new AiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn(), () => 0)
-    const action = await controller.requestClaim(makeClaimCtx(['east', 'east', 'p5', 'p5', 'm1'], { canGang: false, tile: 'east' }))
+    const action = await controller.requestClaim(makeClaimCtx(
+      ['east', 'east', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'north', 'white'],
+      { canGang: false, tile: 'east' },
+    ))
     expect(action.kind).toBe('peng')
     if (action.kind === 'peng') {
-      // discardIndex 对应碰后手牌中的位置：['p5', 'p5', 'm1'] → m1 在 index 2
-      expect(action.discardIndex).toBe(2)
+      const afterPeng = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'north', 'white']
+      expect(afterPeng[action.discardIndex]).toBe('north')
     }
   })
 
