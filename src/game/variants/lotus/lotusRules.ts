@@ -355,15 +355,43 @@ const THIRTEEN_ORPHAN_TILES: TileType[] = [
   'east', 'south', 'west', 'north', 'red', 'green', 'white',
 ]
 
-/** 十三幺：门前清，13 种幺九/字牌全有且其一成对（14 张内唯一重复）。 */
-export function isThirteenOrphans(hand: TileType[]): boolean {
+/** 十三幺：门前清，13 种幺九/字牌全有且其一成对（14 张内唯一重复）。精牌可替补缺失的幺九牌。 */
+export function isThirteenOrphans(
+  hand: TileType[],
+  jokers: TileType[] = [],
+  ordinaryJokers: TileType[] = [],
+  jokerSubstitutes: TileType[] = [],
+): boolean {
   if (hand.length !== 14) return false
-  const counts = countTiles(hand)
-  if (THIRTEEN_ORPHAN_TILES.some((tile) => (counts.get(tile) || 0) < 1)) return false
-  const doubled = [...counts.entries()].filter(([, count]) => count >= 2)
-  return doubled.length === 1
-    && doubled[0][1] === 2
-    && THIRTEEN_ORPHAN_TILES.includes(doubled[0][0])
+  const naturals = naturalTiles(hand, jokers, ordinaryJokers, jokerSubstitutes)
+  // 非幺九牌不能混入；每种幺九牌最多 2 张（唯一一对）。
+  if (naturals.some((tile) => !THIRTEEN_ORPHAN_TILES.includes(tile))) return false
+  const counts = countTiles(naturals)
+  if (THIRTEEN_ORPHAN_TILES.some((tile) => (counts.get(tile) || 0) > 2)) return false
+
+  const { unrestricted, limited, limitedTiles } = wildcardCounts(hand, jokers, ordinaryJokers, jokerSubstitutes)
+  // 白板（limited）只能替补精牌面或白板本身；只有属于幺九牌的候选才可用。
+  const limitedCandidates = limitedTiles.filter((tile) => THIRTEEN_ORPHAN_TILES.includes(tile))
+
+  // 缺失的幺九牌种类必须由精牌补齐。
+  const missing = THIRTEEN_ORPHAN_TILES.filter((tile) => (counts.get(tile) || 0) === 0)
+  // 已有成对（count === 2）时，精牌只需补缺；否则还需一张精牌补成对子。
+  const alreadyPaired = THIRTEEN_ORPHAN_TILES.some((tile) => (counts.get(tile) || 0) === 2)
+  const totalWildcards = unrestricted + limited
+  if (missing.length > totalWildcards) return false
+  const spare = totalWildcards - missing.length
+  if (alreadyPaired ? spare !== 0 : spare !== 1) return false
+
+  // limited 只能补 limitedCandidates 中的种类：缺字中不属于 limitedCandidates 的必须用 unrestricted。
+  const missingLimitedEligible = missing.filter((tile) => limitedCandidates.includes(tile)).length
+  const missingUnrestrictedOnly = missing.length - missingLimitedEligible
+  if (missingUnrestrictedOnly > unrestricted) return false
+  // 成对那张：unrestricted 补缺后仍有余量可直接补任意已有 1 张的种类；
+  // 否则需 limited 补缺后仍有余量，且该 limited 能补到某个最终为 1 张的 limitedCandidates 种类。
+  if (alreadyPaired) return true
+  if (unrestricted - missingUnrestrictedOnly >= 1) return true
+  return limited >= missingLimitedEligible + 1
+    && (missingLimitedEligible >= 1 || limitedCandidates.some((tile) => (counts.get(tile) || 0) === 1))
 }
 
 /**
@@ -378,7 +406,7 @@ export function evaluateBasePattern(
   jokerSubstitutes: TileType[] = [],
 ): PatternResult | null {
   if (exposedMeldCount === 0 && hand.length === 14) {
-    if (isThirteenOrphans(hand)) return { pattern: 'thirteenOrphans', fan: 8 }
+    if (isThirteenOrphans(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'thirteenOrphans', fan: 8 }
     if (isQiXingShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'qiXing', fan: 4 }
     if (isShiSanLan(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'shiSanLan', fan: 2 }
     if (isSevenPairs(hand, jokers, ordinaryJokers, jokerSubstitutes)) return { pattern: 'sevenPairs', fan: 2 }

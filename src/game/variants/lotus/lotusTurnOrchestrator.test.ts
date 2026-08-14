@@ -224,6 +224,62 @@ describe('莲花麻将吃牌副露', () => {
       { kind: 'sequence', tiles: ['m7', 'm8', 'm9'] },
     ])
   })
+  it('全局优先级：杠 > 碰 > 吃（远家杠优先于近家碰，近家碰优先于吃）', async () => {
+    const state = createLotusGameState()
+    state.players.push(
+      player(0, ['m5', 'm5', 'p1']),       // 下家（距离1）：能碰
+      player(1, ['m3', 'm4', 'p9']),       // 距离2：能吃 m3+m4+m5
+      player(2, ['m5', 'm5', 'm5', 'p9']), // 距离3：能明杠
+      player(3, [], ['m5']),               // 弃牌者
+    )
+    state.jokerTiles.value = ['white']
+    const claimCalls: number[] = []
+    const controllerFor = (index: number): LotusController => ({
+      requestTurn: async () => ({ kind: 'discard', handIndex: 0 }),
+      requestDiscardHu: async () => ({ kind: 'pass' }),
+      requestClaim: async () => {
+        claimCalls.push(index)
+        return index === 2 ? { kind: 'gang' } : index === 0 ? { kind: 'peng' } : { kind: 'pass' }
+      },
+      requestChi: async () => ({ kind: 'pass' }),
+      requestRobKong: async () => 'pass',
+    })
+    const tableContext: ActionContext = {
+      players: state.players,
+      currentPlayer: state.currentPlayer,
+      showTableAction: vi.fn(),
+      showScoreFlow: vi.fn(),
+      playSound: vi.fn(),
+    }
+    const orchestrator = createLotusTurnOrchestrator({
+      state,
+      controllers: [controllerFor(0), controllerFor(1), controllerFor(2), controllerFor(3)],
+      tableContext,
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      performWindKong: async () => {},
+      declareAddedKong: () => {},
+      settleAddedKong: () => undefined,
+      discardTile: () => undefined,
+      endDraw: () => undefined,
+      endGame: () => undefined,
+      announce: () => {},
+      later: () => 0,
+    })
+
+    orchestrator.routeDiscard(3, 'm5')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // 远家（座位2）杠优先：只有它被询问并完成杠，近家碰/吃玩家未被问到。
+    expect(claimCalls).toEqual([2])
+    expect(state.players[2].melds).toContainEqual({
+      type: 'gang', tile: 'm5', from: 3, tiles: ['m5', 'm5', 'm5', 'm5'],
+    })
+    expect(state.players[0].melds).toEqual([])
+  })
+
   it('AI 策略上下文只提供牌河和明牌，不包含其他玩家暗手', async () => {
     const state = createLotusGameState()
     state.players.push(

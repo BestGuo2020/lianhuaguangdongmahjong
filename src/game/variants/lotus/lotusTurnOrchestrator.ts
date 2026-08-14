@@ -1,4 +1,4 @@
-// 「莲花麻将」回合/响应编排。弃牌响应优先级：胡 > 碰/明杠 > 吃（仅下家），单响拦胡。
+// 「莲花麻将」回合/响应编排。弃牌响应优先级：胡 > 杠 > 碰 > 吃（仅下家），单响拦胡。
 import { removeLastDiscard } from '../../core/rules/actions'
 import { performDiscardGang, performPeng, type ActionContext } from '../../core/rules/actions'
 import { sortTilesWithJokers } from '../../core/rules/tiles'
@@ -53,7 +53,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     return runner.beginTurn(playerIndex, turnOptions)
   }
 
-  // ── 弃牌响应：胡 > 碰/明杠 > 吃（仅下家），单响 ─────────────────────────
+  // ── 弃牌响应：胡 > 杠 > 碰 > 吃（仅下家），单响 ─────────────────────────
 
   function findHu(from: number, tile: TileType): number[] {
     return state.players
@@ -123,7 +123,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     options.endGame(playerIndex, { winTile: tile, dihu, winHand: [...player.hand, tile], sourceFrom: from })
   }
 
-  /** 精牌弃出后按普通牌面参与碰/明杠 → 吃（下家）响应。 */
+  /** 精牌弃出后按普通牌面参与杠 → 碰 → 吃（下家）响应。 */
   function continueClaims(from: number, tile: TileType, decisions = new Map<number, LotusHuAction>()) {
     const claimants = findClaims(from, tile)
     if (claimants.length) {
@@ -144,10 +144,10 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         distance: seatDistance(from, playerIndex),
       }))
       .filter(({ playerIndex, count, chiOptions }) => playerIndex !== from && (count >= 2 || chiOptions.length > 0))
-      // 全局优先级：碰/明杠(1) > 吃(2)，同级再按座位距离（对齐后端 find_claims）。
+      // 全局优先级：杠(1) > 碰(2) > 吃(3)，同级再按座位距离（对齐后端 find_claims）。
       .sort((a, b) => {
-        const pa = a.count >= 2 ? 1 : 2
-        const pb = b.count >= 2 ? 1 : 2
+        const pa = a.count >= 3 ? 1 : a.count >= 2 ? 2 : 3
+        const pb = b.count >= 3 ? 1 : b.count >= 2 ? 2 : 3
         return pa !== pb ? pa - pb : a.distance - b.distance
       })
       .map(({ playerIndex, count, chiOptions }) => ({

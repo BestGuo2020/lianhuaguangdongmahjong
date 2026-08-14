@@ -192,9 +192,16 @@ describe('十三幺', () => {
     expect(isThirteenOrphans([...terminals, 'm1'])).toBe(true)
     expect(evaluateBasePattern([...terminals, 'm1'], 0, JOKERS)).toEqual({ pattern: 'thirteenOrphans', fan: 8 })
   })
-  it('缺一种幺九不成立', () => {
-    const hand: TileType[] = terminals.filter((tile) => tile !== 's9')
-    expect(isThirteenOrphans([...hand, 'm2'])).toBe(false)
+  it('十三幺：精牌可替补缺失的幺九牌', () => {
+    // 缺 s9，由精牌 m2 替补成 s9；m3 替补成对子。
+    const hand: TileType[] = [...terminals.filter((tile) => tile !== 's9'), 'm2', 'm3']
+    const jokers: TileType[] = ['m2', 'm3']
+    expect(isThirteenOrphans(hand, jokers, [], ['white'])).toBe(true)
+    expect(evaluateBasePattern(hand, 0, jokers, [], ['white'])).toEqual({ pattern: 'thirteenOrphans', fan: 8 })
+  })
+  it('缺一种幺九且无精可替补不成立', () => {
+    const hand: TileType[] = [...terminals.filter((tile) => tile !== 's9'), 'east', 'west']
+    expect(isThirteenOrphans(hand)).toBe(false)
   })
   it('重复的非幺九牌不成立', () => {
     expect(isThirteenOrphans([...terminals, 'm2'])).toBe(false)

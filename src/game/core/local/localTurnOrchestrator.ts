@@ -62,7 +62,12 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
         distance: seatDistance(from, playerIndex),
       }))
       .filter(({ playerIndex, count }) => playerIndex !== from && count >= 2)
-      .sort((a, b) => a.distance - b.distance)
+      // 全局优先级：杠(1) > 碰(2)，同级再按座位距离（对齐后端 find_claims）。
+      .sort((a, b) => {
+        const pa = a.count >= 3 ? 1 : 2
+        const pb = b.count >= 3 ? 1 : 2
+        return pa !== pb ? pa - pb : a.distance - b.distance
+      })
       .map(({ playerIndex, count }) => ({ playerIndex, canPeng: count >= 2, canGang: count >= 3 }))
   }
 
