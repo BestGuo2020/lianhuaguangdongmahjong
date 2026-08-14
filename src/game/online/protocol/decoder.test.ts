@@ -38,6 +38,8 @@ describe('decodeServerMessage', () => {
       kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'thinking',
       round: 1, dealer: 0, honba: 0, dice: [2, 5], wallCount: 80,
       wall: ['m1'], headDrawn: 52, currentPlayer: 0, seat: 0,
+      // lotus-classic 无翻精时后端发送 null 而非省略；decoder 用 isNullable 校验。
+      flipTile: null, flipStack: null, openingStack: null,
       players: [{
         name: 'P0', avatar: '', score: 1000, seat: 0, hand: [null], discards: [],
         melds: [{ type: 'flower', tile: 'red', tiles: ['red'], from: null, added: null, pending: null }],

@@ -2,6 +2,7 @@
 // 决策与执行分离，可独立单元测试。
 import type { Meld, TileType } from '../../core/contracts/types'
 import { removeMatches } from '../../core/rules/actions'
+import { HONORS } from '../../core/rules/tiles'
 import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 
@@ -34,6 +35,8 @@ export interface LotusTurnView {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  /** 剩余牌墙张数（残局节奏用） */
+  wallCount?: number
   ruleset?: RuleSet
 }
 
@@ -51,6 +54,8 @@ export interface LotusClaimView {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  /** 剩余牌墙张数（残局节奏用） */
+  wallCount?: number
 }
 
 export interface LotusRobKongView {
@@ -61,7 +66,7 @@ export interface LotusRobKongView {
   jokers: TileType[]
 }
 
-/** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌。 */
+/** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌（杠前评估是否破坏听牌/被抢杠）。 */
 export function decideTurn(view: LotusTurnView): LotusTurnDecision {
   if ((view.ruleset ?? LOTUS_RULESET).win.isWinningHand(view.hand, view.exposedMelds, { jokers: view.jokers })) return { kind: 'win' }
 
@@ -69,12 +74,12 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
     (meld) => meld.type === 'peng'
       && view.hand.includes(meld.tile),
   )
-  if (meldIndex >= 0) return { kind: 'added-kong', meldIndex }
+  if (meldIndex >= 0 && shouldTakeAddedKong(view)) return { kind: 'added-kong', meldIndex }
 
   const kong = (view.ruleset ?? LOTUS_RULESET).win.concealedKongs(view.hand, { jokers: view.jokers })[0]
-  if (kong) return { kind: 'concealed-kong', tile: kong }
+  if (kong && shouldTakeConcealedKong(view, kong)) return { kind: 'concealed-kong', tile: kong }
 
-  if (windKong(view.hand, view.jokers)) return { kind: 'wind-kong' }
+  if (windKong(view.hand, view.jokers) && shouldTakeWindKong(view)) return { kind: 'wind-kong' }
 
   return {
     kind: 'discard',
@@ -84,8 +89,41 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
       publicTiles: view.publicTiles,
       upperLastDiscard: view.upperLastDiscard,
       earlyRound: view.earlyRound,
+      wallCount: view.wallCount,
     }),
   }
+}
+
+/** 当前手牌是否已听牌（存在打出某张后听口非空）。 */
+function isTenpai(hand: TileType[], exposedMelds: number, jokers: TileType[]): boolean {
+  const jokerSet = wildcardSet(jokers)
+  const hasNatural = hand.some((tile) => !jokerSet.has(tile))
+  return hand.some((tile, index) => {
+    if (hasNatural && jokerSet.has(tile)) return false
+    return waitingTiles(hand.filter((_, candidateIndex) => candidateIndex !== index), exposedMelds, jokers).length > 0
+  })
+}
+
+/**
+ * 补杠：把第 4 张亮出后别家可抢杠胡。牌河该牌出现越少，别家听它的可能性越高；
+ * 若手牌已听牌，补杠会破坏手牌结构且暴露被抢风险 → 放弃。
+ */
+function shouldTakeAddedKong(view: LotusTurnView): boolean {
+  const meld = view.melds.find((item) => item.type === 'peng')
+  if (!meld) return true
+  const publicCount = matchingCount(view.publicTiles ?? [], meld.tile)
+  if (publicCount >= 1) return true
+  return !isTenpai(view.hand, view.exposedMelds, view.jokers)
+}
+
+/** 暗杠：移除 4 张后结构大变；已听牌时杠会破坏听牌 → 放弃，未听牌则杠（+6B 收益）。 */
+function shouldTakeConcealedKong(view: LotusTurnView, _tile: TileType): boolean {
+  return !isTenpai(view.hand, view.exposedMelds, view.jokers)
+}
+
+/** 风杠：同样移除 4 张；已听牌时放弃。 */
+function shouldTakeWindKong(view: LotusTurnView): boolean {
+  return !isTenpai(view.hand, view.exposedMelds, view.jokers)
 }
 
 /** 面对弃牌：能杠必杠 → 能碰必碰 → 能吃则吃 → 过。 */
@@ -101,6 +139,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
     view.visibleTiles,
     view.publicTiles,
     view.upperLastDiscard,
+    view.wallCount,
   )
   const candidates: Array<{
     action: Exclude<LotusClaimAction, { kind: 'pass' }>
@@ -117,6 +156,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.earlyRound,
       view.publicTiles,
       view.upperLastDiscard,
+      view.wallCount,
     )
     if (discard) candidates.push({
       action: { kind: 'peng', discardIndex: discard.index },
@@ -135,6 +175,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.earlyRound,
       view.publicTiles,
       view.upperLastDiscard,
+      view.wallCount,
     )
     if (discard) candidates.push({ action: { kind: 'chi', meld }, quality: discard.quality })
   }
@@ -189,10 +230,12 @@ function currentHandQuality(
   visibleTiles: TileType[] = hand,
   _publicTiles: TileType[] = [],
   _upperLastDiscard?: TileType,
+  wallCount?: number,
 ): DiscardQuality {
   const waits = waitingTiles(hand, exposedMelds, jokers)
   const specialScore = specialPatternScore(hand, exposedMelds, jokers)
-  const attackScore = handQualityAttackScore(waits, waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0), specialScore)
+  const lateGame = (wallCount ?? 99) <= 8
+  const attackScore = handQualityAttackScore(waits, waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0), specialScore, lateGame)
   return {
     ready: waits.length > 0,
     waits,
@@ -222,6 +265,7 @@ function bestDiscardAfterClaim(
   earlyRound = false,
   publicTiles: TileType[] = [],
   upperLastDiscard?: TileType,
+  wallCount?: number,
 ) {
   if (!hand.length) return null
   const jokerSet = wildcardSet(jokers)
@@ -243,6 +287,7 @@ function bestDiscardAfterClaim(
           earlyRound,
           publicTiles,
           upperLastDiscard,
+          wallCount,
         ),
       }
     })
@@ -259,12 +304,14 @@ function discardQuality(
   earlyRound: boolean,
   publicTiles: TileType[] = [],
   upperLastDiscard?: TileType,
+  wallCount?: number,
 ): DiscardQuality {
   const waits = waitingTiles(afterDiscard, exposedMelds, jokers)
   const effectiveRemaining = waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0)
   const specialScore = specialPatternScore(afterDiscard, exposedMelds, jokers)
   const safetyScore = publicSafetyScore(discarded, publicTiles, upperLastDiscard)
-  const attackScore = handQualityAttackScore(waits, effectiveRemaining, specialScore)
+  const lateGame = (wallCount ?? 99) <= 8
+  const attackScore = handQualityAttackScore(waits, effectiveRemaining, specialScore, lateGame)
   return {
     ready: waits.length > 0,
     waits,
@@ -272,12 +319,15 @@ function discardQuality(
     specialScore,
     heuristic: discardHeuristic(afterDiscard, discarded, jokers, earlyRound),
     safetyScore,
-    netScore: attackScore + safetyScore * 2,
+    netScore: attackScore + safetyScore * (lateGame && waits.length ? 4 : 2),
   }
 }
 
-function handQualityAttackScore(waits: TileType[], effectiveRemaining: number, specialScore: number) {
-  return (waits.length > 0 ? 80 : 0) + waits.length * 10 + effectiveRemaining * 2 + specialScore * 3
+function handQualityAttackScore(waits: TileType[], effectiveRemaining: number, specialScore: number, lateGame = false) {
+  // 残局未听牌时更看重听口（冲牌）：攻击分整体上调。
+  const readyBonus = waits.length > 0 ? 80 : 0
+  const lateBonus = lateGame && waits.length > 0 ? 20 : 0
+  return readyBonus + lateBonus + waits.length * 10 + effectiveRemaining * 2 + specialScore * 3
 }
 
 /**
@@ -301,20 +351,29 @@ function remainingCount(tile: TileType, visibleTiles: TileType[]) {
   return Math.max(0, 4 - matchingCount(visibleTiles, tile))
 }
 
+const THIRTEEN_ORPHAN_TERMINALS: TileType[] = [
+  'm1', 'm9', 'p1', 'p9', 's1', 's9',
+  'east', 'south', 'west', 'north', 'red', 'green', 'white',
+]
+
+/** 特殊牌型潜力：十三烂/七星十三烂、十三幺、七对子，取最高方向。 */
 function specialPatternScore(hand: TileType[], exposedMelds: number, jokers: TileType[]) {
   if (exposedMelds > 0) return -20
   const effectiveJokers = [...wildcardSet(jokers)]
-  const lanDefects = shiSanLanDefects(hand, effectiveJokers)
-  const lanScore = lanDefects <= 3 ? (4 - lanDefects) * 4 : 0
-  return lanScore + pairPotential(hand, effectiveJokers) * 2
+  return Math.max(
+    shiSanLanPotential(hand, effectiveJokers),
+    thirteenOrphansPotential(hand, effectiveJokers),
+    sevenPairsPotential(hand, effectiveJokers),
+  )
 }
 
-function shiSanLanDefects(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = wildcardSet(jokers)
+/** 十三烂/七星十三烂潜力：缺陷越少、字牌越齐、精牌越多越接近。 */
+function shiSanLanPotential(hand: TileType[], jokers: TileType[]) {
+  const jokerSet = new Set(jokers)
   const natural = hand.filter((tile) => !jokerSet.has(tile))
+  // 数牌间隔缺陷 + 重复缺陷（与规则判定同口径）
   let defects = natural.length - new Set(natural).size
   for (const suit of ['m', 'p', 's']) {
-    // 必须精确匹配数牌（2 字符且首字为花色）：startsWith('s') 会误把 'south' 当数牌。
     const ranks = natural
       .filter((tile) => tile.length === 2 && tile[0] === suit)
       .map((tile) => Number(tile[1]))
@@ -323,11 +382,33 @@ function shiSanLanDefects(hand: TileType[], jokers: TileType[]) {
       if (ranks[index] - ranks[index - 1] < 3) defects += 1
     }
   }
-  return defects
+  // 字牌进度：物理持有的字牌种类（精牌可替补缺字）
+  const honorsHeld = HONORS.filter((honor) => natural.includes(honor)).length
+  const jokerCount = hand.length - natural.length
+  const honorShortfall = Math.max(0, 7 - honorsHeld)
+  const jokersAfterHonors = Math.max(0, jokerCount - honorShortfall)
+  const defectsAfterJokers = Math.max(0, defects - jokersAfterHonors)
+  if (defectsAfterJokers > 3) return 0
+  return (4 - defectsAfterJokers) * 4 + honorsHeld + jokerCount
 }
 
-function pairPotential(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = wildcardSet(jokers)
+/** 十三幺潜力：13 种幺九/字牌持有进度 + 精牌可替补 + 对子可成。 */
+function thirteenOrphansPotential(hand: TileType[], jokers: TileType[]) {
+  const jokerSet = new Set(jokers)
+  const natural = hand.filter((tile) => !jokerSet.has(tile))
+  const heldKinds = THIRTEEN_ORPHAN_TERMINALS.filter((tile) => natural.includes(tile)).length
+  const jokerCount = hand.length - natural.length
+  const kindsAfterJokers = heldKinds + jokerCount
+  if (kindsAfterJokers < 10) return 0
+  // 成对条件：任一幺九牌物理成对，或剩余精牌可补一对
+  const hasPair = THIRTEEN_ORPHAN_TERMINALS.some((tile) => matchingCount(natural, tile) >= 2)
+  const pairScore = hasPair || jokerCount >= 2 ? 8 : 0
+  return (kindsAfterJokers - 10) * 3 + pairScore
+}
+
+/** 七对子潜力：已有对子数 + 精牌可补单张成对。 */
+function sevenPairsPotential(hand: TileType[], jokers: TileType[]) {
+  const jokerSet = new Set(jokers)
   const counts = new Map<TileType, number>()
   let jokerCount = 0
   hand.forEach((tile) => {
@@ -340,7 +421,9 @@ function pairPotential(hand: TileType[], jokers: TileType[]) {
     pairs += Math.floor(count / 2)
     singles += count % 2
   })
-  return pairs + Math.min(singles, jokerCount)
+  const nearSeven = pairs + Math.min(singles, jokerCount)
+  if (nearSeven < 5) return 0
+  return nearSeven * 4
 }
 
 function discardHeuristic(hand: TileType[], discarded: TileType, jokers: TileType[], earlyRound: boolean) {
@@ -374,6 +457,7 @@ interface DiscardOptions {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  wallCount?: number
 }
 
 export function chooseDiscardIndex(
@@ -408,6 +492,7 @@ export function chooseDiscardIndex(
         options.earlyRound ?? false,
         options.publicTiles ?? [],
         options.upperLastDiscard,
+        options.wallCount,
       )
     return { index, score, quality }
   })

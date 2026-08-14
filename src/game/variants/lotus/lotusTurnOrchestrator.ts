@@ -224,6 +224,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         publicTiles: publicTilesFor(claimant.playerIndex),
         upperLastDiscard: upperLastDiscardFor(claimant.playerIndex),
         earlyRound: earlyRoundFor(claimant.playerIndex),
+        wallCount: state.wall.value.length,
       }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return
@@ -411,6 +412,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       publicTiles: publicTilesFor(playerIndex),
       upperLastDiscard: upperLastDiscardFor(playerIndex),
       earlyRound: earlyRoundFor(playerIndex),
+      wallCount: state.wall.value.length,
       afterKong: Boolean(turnOptions.fromTail),
       ruleset,
     }),

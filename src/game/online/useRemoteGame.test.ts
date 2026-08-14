@@ -130,6 +130,10 @@ function makeSnapshot(overrides: Record<string, unknown> = {}) {
     wall: [],
     headDrawn: 0,
     currentPlayer: 2,
+    // 服务端快照始终携带这三个字段（lotus-classic 无翻精时为 null），decoder 用 isNullable 校验。
+    flipTile: null,
+    flipStack: null,
+    openingStack: null,
     players: SERVER_PLAYERS,
     seat: 2,
     result: null,
@@ -701,7 +705,8 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     await vi.advanceTimersByTimeAsync(1250)
     expect(game.openingStage.value).toBe('dice')
     expect(game.diceValues.value).toEqual([2, 6])
-    await vi.advanceTimersByTimeAsync(1150 + 650)
+    // 发牌动画（14 张逐张播放）需要远多于 1150+650ms，这里大额推进等待整个开局序列结束。
+    await vi.advanceTimersByTimeAsync(12000)
     expect(game.openingStage.value).toBeNull()
   })
 

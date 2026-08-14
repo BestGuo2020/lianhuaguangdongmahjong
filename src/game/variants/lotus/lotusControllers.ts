@@ -34,6 +34,8 @@ export interface LotusTurnContext {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  /** 剩余牌墙张数（残局节奏用） */
+  wallCount?: number
   ruleset?: RuleSet
 }
 
@@ -63,6 +65,8 @@ export interface LotusClaimContext {
   publicTiles?: TileType[]
   upperLastDiscard?: TileType
   earlyRound?: boolean
+  /** 剩余牌墙张数（残局节奏用） */
+  wallCount?: number
 }
 
 export interface LotusChiContext {
@@ -330,6 +334,7 @@ export class LotusAiController implements LotusController {
       publicTiles: ctx.publicTiles,
       upperLastDiscard: ctx.upperLastDiscard,
       earlyRound: ctx.earlyRound,
+      wallCount: ctx.wallCount,
       ruleset: ctx.ruleset,
     }))
   }
@@ -359,6 +364,7 @@ export class LotusAiController implements LotusController {
       publicTiles: ctx.publicTiles,
       upperLastDiscard: ctx.upperLastDiscard,
       earlyRound: ctx.earlyRound,
+      wallCount: ctx.wallCount,
     })
     if (decision.kind === 'gang') return { kind: 'gang' }
     if (decision.kind === 'peng') return { kind: 'peng', discardIndex: decision.discardIndex }

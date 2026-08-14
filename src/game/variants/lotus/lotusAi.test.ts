@@ -164,3 +164,54 @@ describe('弃牌启发式', () => {
     expect(hand[index]).not.toBe('south')
   })
 })
+
+describe('莲花麻将 AI 杠决策评估', () => {
+  it('已听牌时放弃暗杠（避免拆散成形手牌）', () => {
+    // 手牌接近成形（含 4 张 east 可暗杠，但剩余手牌已是 3 面子 + 将对）
+    const hand: TileType[] = ['east', 'east', 'east', 'east', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north']
+    const decision = decideTurn(turnView(hand))
+    expect(decision.kind).not.toBe('concealed-kong')
+  })
+  it('未听牌时仍暗杠（+6B 收益）', () => {
+    // 手牌松散，暗杠不破坏成形结构
+    const hand: TileType[] = ['m1', 'm1', 'm1', 'm1', 'm5', 'm6', 'p3', 'p4', 's7', 's8', 'east', 'south', 'west', 'north']
+    const decision = decideTurn(turnView(hand))
+    expect(decision).toEqual({ kind: 'concealed-kong', tile: 'm1' })
+  })
+  it('已听牌时放弃补杠（暴露第 4 张有被抢杠风险）', () => {
+    // 1 副露时手牌 11 张：打出 east 后 10 张听 north（north 成对作将）。
+    const hand: TileType[] = ['east', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north']
+    const melds = [{ type: 'peng', tile: 'east', tiles: ['east', 'east', 'east'] }]
+    const decision = decideTurn(turnView(hand, melds, 1))
+    expect(decision.kind).not.toBe('added-kong')
+  })
+  it('未听牌且牌河已见该牌时补杠', () => {
+    const hand: TileType[] = ['east', 'm5', 'm6', 'p3', 'p4', 's7', 's8', 's9', 'north', 'south', 'west', 'red', 'green']
+    const melds = [{ type: 'peng', tile: 'east', tiles: ['east', 'east', 'east'] }]
+    const publicTiles: TileType[] = ['east']
+    const decision = decideTurn({ ...turnView(hand, melds, 1), publicTiles })
+    expect(decision.kind).toBe('added-kong')
+  })
+})
+
+describe('莲花麻将 AI 特殊牌型潜力', () => {
+  it('持有多种幺九牌时弃牌保留（十三幺方向）', () => {
+    // 13 种幺九 + 孤张 m4：打出 m4 后剩 13 种各 1 张 → 听任意幺九成对（13 张听口），应打 m4。
+    const hand: TileType[] = ['m1', 'm9', 'p1', 'p9', 's1', 's9', 'east', 'south', 'west', 'north', 'red', 'green', 'white', 'm4']
+    const index = chooseDiscardIndex(hand, [], () => 0, {
+      exposedMelds: 0,
+      visibleTiles: [...hand, 'm4'],
+      publicTiles: ['m4', 'm4', 'm4'],
+    })
+    expect(hand[index]).toBe('m4')
+  })
+  it('字牌齐全且数牌间隔好时朝十三烂/七星方向保留字牌', () => {
+    const hand: TileType[] = ['east', 'south', 'west', 'north', 'red', 'green', 'white', 'm1', 'm4', 'm7', 'p2', 'p5', 'p8', 's1']
+    const index = chooseDiscardIndex(hand, [], () => 0, {
+      exposedMelds: 0,
+      visibleTiles: [...hand, 's1'],
+      publicTiles: ['s1', 's1', 's1'],
+    })
+    expect(hand[index]).toBe('s1')
+  })
+})

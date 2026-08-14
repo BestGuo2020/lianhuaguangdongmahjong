@@ -22,6 +22,8 @@ const VALID_MESSAGES: ServerMessage[] = [
   {
     kind: 'state_snapshot', roomId: 'ROOM', mode: 'east', phase: 'playing', round: 1,
     dealer: 0, honba: 0, wallCount: 1, wall: ['m2'], headDrawn: 0,
+    // lotus-classic 无翻精时后端发送 null；decoder 用 isNullable 校验。
+    flipTile: null, flipStack: null, openingStack: null,
     currentPlayer: 0, players: [{ ...player, hand: [...player.hand], discards: [], melds: [] }],
     seat: 0, result: null, announcement: null, matchFinished: false,
     lastDiscard: null, winPresentation: null, winningPlayerIndex: -1,
