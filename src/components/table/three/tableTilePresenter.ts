@@ -323,7 +323,8 @@ function addMelds(playerIndex) {
       : -1
     let sourcePlacement = null
     laidTiles.forEach((tileName, tileIndex) => {
-      const concealed = meld.type === 'angang' && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
+      // 风杠（乱风杠）为亮明暗杠：四张全部亮出；普通暗杠首尾两张背朝上。
+      const concealed = meld.type === 'angang' && !meld.windKong && (tileIndex === 0 || tileIndex === laidTiles.length - 1)
       const pointsToSource = tileIndex === sourceTileIndex
       const face = concealed ? null : tileName
       const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
