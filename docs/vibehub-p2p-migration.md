@@ -73,3 +73,18 @@ SDK 没有「座位 / rejoinCode / ready / start」这些 REST 概念，需重�
 - [ ] Phase 3 — 房主权威引擎（`remotePlayerController` + `hostGameRunner` + 快照序列化）
 - [ ] Phase 4 — 承诺洗牌 + 公开状态复算 + 战绩走 `vibe.save`
 - [ ] Phase 5 — 删后端 + 清理代理/e2e
+
+## 7. 引擎控制器接口 vs wire 协议的分歧（Phase 3 关键）
+
+房主桥接远端玩家时，本地引擎控制器接口与线上 wire 不一致，分两条线：
+
+- **广麻（`core/local/useGame`，`PlayerController`）**：`requestTurn`/`requestClaim`/`requestRobKong`
+  三类，与 wire 的 `turn_request`/`claim_request`/`rob_kong_request` 一一对应。
+  `src/game/online/host/remotePlayerController.ts` 已实现该桥接（复用现有 wire，客户端零改动）。
+  - 广麻 `requestClaim` 只返回 `peng/gang/pass`（`ClaimAction` 无 `win`），对应 wire `claim` 无 `canHu`。
+  - `added-kong`：客户端发 `{type:'gang',kind:'added',tile}`，房主按 `tile` 反查 `ctx.melds` 的 peng `meldIndex`。
+
+- **莲花麻将（`variants/lotus/useLotusGame`，`LotusController`）**：把「点炮胡/碰杠/吃」拆成
+  `requestDiscardHu` / `requestClaim` / `requestChi` 三个独立方法，而 wire 是**合并式** `claim_request`
+  （含 `canHu/canPeng/canGang/chiOptions`）。二者不一一对应，需另建 `LotusRemotePlayerController`
+  （或在客户端 `requestCoordinator` 侧加莲花专用消息），待 Phase 3 接入莲花引擎时处理。
