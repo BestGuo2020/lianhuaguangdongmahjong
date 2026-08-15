@@ -6,12 +6,23 @@ interface TimerSchedulerOptions {
   controllers: ResettableController[]
   stopCountdown(): void
   cancelOpening(): void
+  /** 无头模式：later 立即（0ms）触发、wait 立即 resolve，用于权威引擎即时推进逻辑。 */
+  instant?: boolean
 }
 
 export function createTimerScheduler(options: TimerSchedulerOptions) {
   const timers = new Set<number>()
+  const { instant = false } = options
 
   function later(callback: () => void, delay = 600) {
+    if (instant) {
+      const id = window.setTimeout(() => {
+        timers.delete(id)
+        callback()
+      }, 0)
+      timers.add(id)
+      return id
+    }
     const id = window.setTimeout(() => {
       timers.delete(id)
       callback()
@@ -21,6 +32,7 @@ export function createTimerScheduler(options: TimerSchedulerOptions) {
   }
 
   function wait(delay: number): Promise<void> {
+    if (instant) return Promise.resolve()
     return new Promise((resolve) => { later(resolve, delay) })
   }
 

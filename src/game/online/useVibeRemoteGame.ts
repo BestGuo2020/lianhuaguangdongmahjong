@@ -7,14 +7,15 @@
 // - 无 rejoin_ok/rejoin_err 握手：mySeat 由大厅 roster 分配（vibeRoomSession）。
 // - 座位表用 LobbySeat（含 peerId），isHost 取代 isCreator/creatorSeat。
 // - 传输层在 join 后由 vibeRoomTransport 绑定一次（getRoom 返回已加入的 Room）。
-import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { defineGamePort, type GamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
 import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
 import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
 import { createPlayerSelectors } from '../core/selectors/playerSelectors'
-import type { ServerPlayerDto } from './protocol/dto'
+import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
+import type { ServerMessage } from './protocol/messages'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createVibeRoomSession } from './vibe/vibeRoomSession'
 import { createVibeRoomTransport } from './transport/vibeRoomTransport'
@@ -24,7 +25,7 @@ import { createRemoteGameState } from './state/remoteGameState'
 import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
 import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import { createRequestCoordinator } from './orchestration/requestCoordinator'
-import { createRemoteActionController } from './orchestration/remoteActionController'
+import { createRemoteActionController, type RemotePlayerActionMessage } from './orchestration/remoteActionController'
 import { createTransientEventPresenter } from './presentation/transientEventPresenter'
 import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle'
 import type { LobbySeat } from './vibe/vibeLobby'
@@ -42,6 +43,30 @@ import {
 } from './protocol/mapper'
 
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+
+/** 房主自视：把远程动作消息映射到本地权威引擎的动作方法（房主自己就是权威，不走网络）。 */
+function sendToEngine(game: GamePort, message: RemotePlayerActionMessage) {
+  switch (message.type) {
+    case 'discard':
+      game.userDiscard(message.handIndex)
+      return
+    case 'pass':
+      game.userPass()
+      return
+    case 'claim':
+      if (message.action === 'peng') game.userPeng()
+      else if (message.action === 'gang') game.userGangFromDiscard()
+      else if (message.action === 'chi') game.capabilities.value.chi?.choose(message.optionIndex ?? 0)
+      return
+    case 'gang':
+      if (message.kind === 'wind') game.capabilities.value.windKong?.execute()
+      else game.userGang(message.tile)
+      return
+    case 'hu':
+      game.userHu()
+      return
+  }
+}
 
 interface UseVibeRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -89,6 +114,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         seatNames.set(seat.seat, seat.nickname)
         if (seat.seat > 0) seatByPeer.set(seat.peerId, seat.seat)
       }
+      // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
+      const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
+      const onLocalEvent = (message: ServerMessage) => handleMessage(message)
       if (rulesetId.value === 'lotus-legacy') {
         hostGame.value = startHostGame({
           room,
@@ -97,7 +125,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatByPeer,
           seatNames,
           createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
-          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true, instantOpening: true }),
+          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true, headless: true }),
+          onLocalSnapshot,
+          onLocalEvent,
         })
       } else {
         hostGame.value = startHostGame({
@@ -107,8 +137,18 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatByPeer,
           seatNames,
           createController: (r, peerId, onPending) => new RemotePlayerController(r, peerId, onPending),
-          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true, instantOpening: true }),
+          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true, headless: true }),
+          onLocalSnapshot,
+          onLocalEvent,
         })
+      }
+      // 房主动作改道本地权威引擎。
+      sendAction = (message) => {
+        const game = hostGame.value?.game
+        if (game) sendToEngine(game, message)
+      }
+      continueAction = () => {
+        hostGame.value?.game.nextRound()
       }
     },
     onClosed: () => {
@@ -123,6 +163,18 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   })
   const wsStatus = transport.status
   const signalQuality = transport.signalQuality
+
+  // 动作发送：客户端走传输层；房主在 onStart 后改道本地引擎（房主自己就是权威）。
+  let sendAction: (message: RemotePlayerActionMessage) => void = (message) => transport.send(message)
+
+  // 房主自视：快照不带 actionPrompt/turnSeconds，这两个「本家回合态」由引擎镜像进本地 viewer。
+  // 客户端由 requestCoordinator 驱动，此 watch 仅在房主侧生效（isHost 守卫）。
+  watch(() => hostGame.value?.game.actionPrompt.value, (prompt) => {
+    if (isHost.value) actionPrompt.value = prompt ?? null
+  })
+  watch(() => hostGame.value?.game.turnSeconds.value, (seconds) => {
+    if (isHost.value) turnSeconds.value = seconds ?? 0
+  })
 
   // ── 内部：定时器 / 延迟队列 ──
   const timers = new Set<number>()
@@ -161,6 +213,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     onFinishedSnapshot: clearPendingRequest,
     playSound,
     later,
+    isLocalAuthority: () => isHost.value,
   })
   const transientEventPresenter = createTransientEventPresenter({
     state,
@@ -213,7 +266,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     getUserKongs: () => remoteUserKongs.value,
     clearCountdown,
     playSound,
-    send: transport.send,
+    send: (message) => sendAction(message),
   })
   const {
     selectTile,
@@ -247,6 +300,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       pickDiscard: remoteActionController.pickDiscard,
     },
   })
+  // 回合续接：客户端发 continue 给房主；房主直接推进本地引擎。
+  let continueAction: () => void = () => transport.send({ type: 'continue' })
   const matchLifecycle = createRemoteMatchLifecycle({
     state,
     isShowingRoundResult,
@@ -256,10 +311,14 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     snapshots: snapshotReconciler,
     requests: requestCoordinator,
     transientEvents: transientEventPresenter,
-    sendContinue: () => transport.send({ type: 'continue' }),
+    sendContinue: () => continueAction(),
     refreshRoom: () => {},
   })
-  const { nextRound, returnToLobby } = matchLifecycle
+  const { nextRound, returnToLobby: lifecycleReturnToLobby } = matchLifecycle
+  function returnToLobby() {
+    if (isHost.value) hostGame.value?.game.returnToLobby()
+    lifecycleReturnToLobby()
+  }
 
   function clearPendingRequest() {
     requestCoordinator.clearPending()

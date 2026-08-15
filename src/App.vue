@@ -55,15 +55,12 @@ watch(() => vibeRemoteGame.rulesetId.value, (value) => {
 })
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
-// local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎；远程槽在房主（本地引擎）与
-// 客户端（快照驱动）之间切换。
+// local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎；远程槽房主与客户端统一用
+// vibeRemoteGame 的快照驱动表现层（房主自视快照/事件在 useVibeRemoteGame 内本地喂入）。
 const game = createActiveGamePort(
   gameMode,
   () => usesLotusLocalEngine.value ? lotusGame : localGame,
-  () => {
-    const host = vibeRemoteGame.hostGame.value
-    return vibeRemoteGame.isHost.value && host ? host.game : vibeRemoteGame
-  },
+  () => vibeRemoteGame,
 )
 
 const {

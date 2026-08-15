@@ -13,7 +13,8 @@ import { watch } from 'vue'
 import type { GamePort } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
 import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
-import type { RoundStartMessage } from '../protocol/messages'
+import type { RoundStartMessage, ServerMessage } from '../protocol/messages'
+import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 
 export interface HostGameRunnerOptions<TController> {
@@ -31,10 +32,14 @@ export interface HostGameRunnerOptions<TController> {
   seatNames?: Map<number, string>
   /** 快照广播间隔（ms）。 */
   broadcastIntervalMs?: number
+  /** 房主自视快照（seat 0 脱敏视图）：喂给房主自己的表现层 viewer。 */
+  onLocalSnapshot?: (snapshot: ServerSnapshot) => void
+  /** 房主自视事件（round_start/table_action/score_flow）：喂给房主自己的表现层 viewer。 */
+  onLocalEvent?: (message: ServerMessage) => void
 }
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, broadcastIntervalMs = 200 } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
   let waitingCount = 0
@@ -58,27 +63,27 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     for (const [peerId, seat] of seatByPeer) {
       room.send(serializeStateToSnapshot(game, seat, context), peerId)
     }
+    onLocalSnapshot?.(serializeStateToSnapshot(game, 0, context))
   }
 
-  // ── 瞬时事件广播：碰/杠/吃/胡 音效与动画 ──
+  // ── 瞬时事件广播：碰/杠/吃 音效与动画（胡牌走 settled 快照 → settlement 时间线）──
   let lastTableActionId = -1
   let lastScoreFlowId = -1
   const stopEventWatchers = [
     watch(() => game.tableActionEvent.value, (event) => {
       if (!event || event.id === lastTableActionId) return
       lastTableActionId = event.id
-      room.send({ kind: 'table_action', event })
+      const message: ServerMessage = { kind: 'table_action', event }
+      room.send(message)
+      onLocalEvent?.(message)
       broadcastAll()
     }),
     watch(() => game.scoreFlowEvent.value, (event) => {
       if (!event || event.id === lastScoreFlowId) return
       lastScoreFlowId = event.id
-      room.send({ kind: 'score_flow', deltas: event.deltas })
-    }),
-    watch(() => game.result.value, (result) => {
-      if (!result) return
-      room.send({ kind: 'hand_result', result })
-      broadcastAll()
+      const message: ServerMessage = { kind: 'score_flow', deltas: event.deltas }
+      room.send(message)
+      onLocalEvent?.(message)
     }),
   ]
 
@@ -96,6 +101,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       flipStack: game.flipStack?.value ?? undefined,
     }
     room.send(message)
+    onLocalEvent?.(message)
     broadcastAll()
   }
 

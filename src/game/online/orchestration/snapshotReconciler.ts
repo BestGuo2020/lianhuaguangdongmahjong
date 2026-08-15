@@ -33,6 +33,8 @@ export interface SnapshotReconcilerOptions {
   onFinishedSnapshot(): void
   playSound(name: string, volume?: number): unknown
   later(callback: () => void, delay: number): void
+  /** 房主视图：快照 phase 里的 discard/prompt 是房主自己的回合/提示，直接保留（客户端则折叠为 playing）。 */
+  isLocalAuthority?(): boolean
 }
 
 export type ServerAnnouncement = Pick<Announcement, 'text' | 'tone'> & { id?: number }
@@ -47,6 +49,7 @@ export function createSnapshotReconciler({
   onFinishedSnapshot,
   playSound,
   later,
+  isLocalAuthority,
 }: SnapshotReconcilerOptions) {
   let pendingSnapshot: ServerSnapshot | null = null
   let lastAnnouncementId = -1
@@ -151,13 +154,19 @@ export function createSnapshotReconciler({
       ? toLocal(snapshot.winningPlayerIndex)
       : -1
     state.result.value = null
-    state.actionPrompt.value = null
-    clearCountdown()
+    const localAuthority = isLocalAuthority?.() ?? false
+    if (!localAuthority) {
+      state.actionPrompt.value = null
+      clearCountdown()
+    }
     // A room snapshot without players cannot render a game table. Keep it in the
     // room lobby even if an inconsistent/stale server phase says otherwise.
+    // 房主视图：discard/prompt 是房主自己的回合/提示，保留；客户端统一折叠为 playing。
     state.phase.value = snapshot.phase === 'lobby' || snapshot.players.length === 0
       ? 'lobby'
-      : 'playing'
+      : (localAuthority && (snapshot.phase === 'discard' || snapshot.phase === 'prompt')
+        ? snapshot.phase
+        : 'playing')
   }
 
   function apply(snapshot: ServerSnapshot) {

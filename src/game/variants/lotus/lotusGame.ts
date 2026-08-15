@@ -33,6 +33,8 @@ interface UseLotusGameOptions {
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
   instantOpening?: boolean
+  /** 无头权威引擎：即时节奏（PACE_MS/结算动画归零）+ 即时开局，逻辑即时推进、表现层交给 viewer。 */
+  headless?: boolean
   ruleset?: RuleSet
 }
 
@@ -43,8 +45,13 @@ export function useLotusGame({
   remoteControllers,
   countdownEnabled = true,
   instantOpening = false,
+  headless = false,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
+  const sound = headless ? () => {} : playSound
+  const soundAndWait = headless ? async () => {} : playSoundAndWait
+  const openingInstant = headless || instantOpening
+
   const state = createLotusGameState()
   const selectors = createLotusSelectors(state, ruleset)
 
@@ -103,6 +110,7 @@ export function useLotusGame({
     controllers,
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
+    instant: headless,
   })
   transient = createLocalTransientEventPresenter({ state, later: timer.later })
 
@@ -133,8 +141,8 @@ export function useLotusGame({
     state,
     clearTimers: timer.clear,
     later: timer.later,
-    playSound,
-    playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: soundAndWait,
     showTableAction: transient.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
@@ -143,7 +151,7 @@ export function useLotusGame({
 
   countdown = createLocalCountdownController({
     state,
-    playSound,
+    playSound: sound,
     enabled: countdownEnabled,
     onDiscard: () => playerActions.userDiscard(),
     onPass: () => playerActions.userPass(),
@@ -154,8 +162,8 @@ export function useLotusGame({
     controllers,
     getTurnOrchestrator: () => turnOrchestrator,
     endDraw,
-    playSound,
-    playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: soundAndWait,
     later: timer.later,
     stopCountdown: countdown.stop,
     followDealer,
@@ -165,10 +173,10 @@ export function useLotusGame({
     state,
     clearTimers: timer.clear,
     takeTile: tileFlowExecutor.takeTile,
-    wait: instantOpening ? async () => {} : timer.wait,
+    wait: openingInstant ? async () => {} : timer.wait,
     later: timer.later,
-    playSound,
-    playSoundAndWait: instantOpening ? async () => {} : playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: openingInstant ? async () => {} : soundAndWait,
     announce: transient.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -187,14 +195,14 @@ export function useLotusGame({
     sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
     showTableAction: transient.showTableAction,
     showScoreFlow: transient.showScoreFlow,
-    playSound,
+    playSound: sound,
   }
 
   kong = createLotusKong({
     state,
     showTableAction: transient.showTableAction,
     showScoreFlow: transient.showScoreFlow,
-    playSound,
+    playSound: sound,
     later: timer.later,
     ruleset,
     beginTurn,
@@ -235,7 +243,7 @@ export function useLotusGame({
     beginTurn: (playerIndex, options) => beginTurn(playerIndex, options),
     endGame,
     announce: transient.announce,
-    playSound,
+    playSound: sound,
     later: timer.later,
   })
 

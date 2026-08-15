@@ -30,6 +30,8 @@ export interface SnapshotSource {
   matchType: RefLike<MatchType>
   matchFinished: RefLike<boolean>
   diceValues: RefLike<number[]>
+  /** 结算亮牌：为 true 时不再对非目标座位脱敏，让客户端/房主 viewer 都能看到各家手牌。 */
+  revealHands?: RefLike<boolean>
   // 莲花麻将（lotus-legacy）专属字段；广麻引擎无这些字段。
   secondDice?: RefLike<[number, number] | null>
   flipTile?: RefLike<TileType | null>
@@ -65,6 +67,7 @@ export function serializeStateToSnapshot(
   context: SnapshotContext,
 ): ServerSnapshot {
   const dice = source.diceValues.value
+  const reveal = source.revealHands?.value ?? false
   return {
     kind: 'state_snapshot',
     roomId: context.roomId,
@@ -87,7 +90,7 @@ export function serializeStateToSnapshot(
     wall: [...source.wall.value],
     headDrawn: source.wallHeadDrawn.value,
     currentPlayer: source.currentPlayer.value,
-    players: source.players.map((player, seat) => toServerPlayer(player, seat === targetSeat)),
+    players: source.players.map((player, seat) => toServerPlayer(player, seat === targetSeat || reveal)),
     seat: targetSeat,
     result: source.result.value,
     announcement: source.announcement.value,

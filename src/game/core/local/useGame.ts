@@ -30,6 +30,8 @@ interface UseGameOptions {
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
   instantOpening?: boolean
+  /** 无头权威引擎：即时节奏（PACE_MS/结算动画归零）+ 即时开局，逻辑即时推进、表现层交给 viewer。 */
+  headless?: boolean
   ruleset?: RuleSet
 }
 
@@ -40,8 +42,13 @@ export function useGame({
   remoteControllers,
   countdownEnabled = true,
   instantOpening = false,
+  headless = false,
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
+  const sound = headless ? () => {} : playSound
+  const soundAndWait = headless ? async () => {} : playSoundAndWait
+  const openingInstant = headless || instantOpening
+
   const state = createLocalGameState()
   const selectors = createLocalGameSelectors(state, ruleset)
   let openingTimeline!: ReturnType<typeof createLocalOpeningTimeline>
@@ -90,6 +97,7 @@ export function useGame({
     controllers,
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
+    instant: headless,
   })
   transientEvents = createLocalTransientEventPresenter({ state, later: scheduler.later })
 
@@ -120,8 +128,8 @@ export function useGame({
     state,
     clearTimers: scheduler.clear,
     later: scheduler.later,
-    playSound,
-    playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: soundAndWait,
     showTableAction: transientEvents.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
@@ -130,7 +138,7 @@ export function useGame({
 
   countdown = createLocalCountdownController({
     state,
-    playSound,
+    playSound: sound,
     enabled: countdownEnabled,
     onDiscard: () => playerActions.userDiscard(),
     onPass: () => playerActions.userPass(),
@@ -143,8 +151,8 @@ export function useGame({
     endDraw,
     endGame,
     showTableAction: transientEvents.showTableAction,
-    playSound,
-    playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: soundAndWait,
     later: scheduler.later,
     wait: scheduler.wait,
     stopCountdown: countdown.stop,
@@ -155,10 +163,10 @@ export function useGame({
     state,
     clearTimers: scheduler.clear,
     takeTile: tileFlowExecutor.takeTile,
-    wait: instantOpening ? async () => {} : scheduler.wait,
+    wait: openingInstant ? async () => {} : scheduler.wait,
     later: scheduler.later,
-    playSound,
-    playSoundAndWait: instantOpening ? async () => {} : playSoundAndWait,
+    playSound: sound,
+    playSoundAndWait: openingInstant ? async () => {} : soundAndWait,
     announce: transientEvents.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -175,13 +183,13 @@ export function useGame({
     currentPlayer: state.currentPlayer,
     showTableAction: transientEvents.showTableAction,
     showScoreFlow: transientEvents.showScoreFlow,
-    playSound,
+    playSound: sound,
   }
   kongActionExecutor = createLocalKongActionExecutor({
     state,
     showTableAction: transientEvents.showTableAction,
     showScoreFlow: transientEvents.showScoreFlow,
-    playSound,
+    playSound: sound,
     later: scheduler.later,
     beginTurn,
     ruleset,
@@ -220,7 +228,7 @@ export function useGame({
     beginTurn: (playerIndex, options) => beginTurn(playerIndex, options),
     endGame,
     announce: transientEvents.announce,
-    playSound,
+    playSound: sound,
     later: scheduler.later,
   })
 
