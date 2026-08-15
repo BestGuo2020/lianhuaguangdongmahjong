@@ -68,6 +68,18 @@ describe('requestCoordinator', () => {
     expect(actions.discard).toHaveBeenCalledWith(3)
   })
 
+  it('turn_request 同步本家手牌与摸牌位（快照暂停期间手牌由请求带入）', () => {
+    const { state, coordinator } = setup()
+    state.players.push({
+      name: 'me', avatar: '', score: 0, seat: 0,
+      hand: ['m1', 'm2'], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+    })
+    coordinator.apply(TURN_REQUEST)
+
+    expect(state.players[0].hand).toEqual(['m1'])
+    expect(state.players[0].drawnTileIndex).toBe(0)
+  })
+
   it('自动操作时优先胡牌，否则采用选牌策略弃牌', async () => {
     const first = setup({ autoPlay: true, canHu: true })
     first.coordinator.apply(TURN_REQUEST)

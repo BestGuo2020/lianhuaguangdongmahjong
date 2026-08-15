@@ -5,6 +5,7 @@ import { matchingCount } from '../../core/rules/rules'
 type RequestState = Pick<RemoteGameState,
   | 'phase' | 'currentPlayer' | 'userDrewThisTurn' | 'actionPrompt'
   | 'turnSeconds' | 'autoPlay' | 'turnCanHu' | 'turnCanWindKong'
+  | 'players' | 'selectedIndex'
 >
 
 export interface RequestCoordinatorOptions {
@@ -76,6 +77,12 @@ export function createRequestCoordinator({
       state.turnCanHu.value = message.ctx.canHu ?? false
       state.turnCanWindKong.value = message.ctx.canWindKong ?? false
       state.actionPrompt.value = null
+      state.selectedIndex.value = -1
+      // 同步本家手牌（含刚摸的牌）：房主在等待响应期间暂停快照广播，手牌只能由 turn_request 带入。
+      if (state.players[0]) {
+        state.players[0].hand = [...message.ctx.hand]
+        state.players[0].drawnTileIndex = message.ctx.skipDraw ? -1 : message.ctx.hand.length - 1
+      }
       state.phase.value = 'discard'
       if (!message.ctx.skipDraw) playSound('give.mp3', 0.7)
       startCountdown(() => {
