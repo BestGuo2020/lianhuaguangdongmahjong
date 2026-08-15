@@ -30,6 +30,11 @@ export function isLoggedIn(): boolean {
   return vibeUser.value != null
 }
 
+/** 取当前已初始化的 SDK 客户端（未登录/未初始化时为 null）。后续阶段用它访问 rooms/room/save/global。 */
+export function getVibeClient(): VibeHubSDK.Client | null {
+  return client
+}
+
 export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
   if (initPromise) return initPromise
   if (!isVibeHost || typeof window === 'undefined' || !('VibeHub' in window)) {
