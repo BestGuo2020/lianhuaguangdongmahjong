@@ -44,14 +44,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
   function broadcastAll() {
+    // 等待玩家决策（本地引擎 phase 为 thinking）时不广播周期快照：否则快照 applyNow 会
+    // clearCountdown 并把 phase 重置为 playing，覆盖客户端 requestCoordinator 刚设的
+    // discard 相位与倒计时，导致闲家出不了牌、倒计时不显示。
+    if (game.phase.value === 'thinking') return
     for (const [peerId, seat] of seatByPeer) {
-      const snapshot = serializeStateToSnapshot(game, seat, context)
-      // 远端玩家回合：本地引擎 phase 是 thinking（等待其响应），但客户端需要 discard 才能出牌
-      // （其 isUserTurn = currentPlayer===0 && phase==='discard'）。覆盖该玩家的快照相位。
-      if (game.currentPlayer.value === seat && snapshot.phase === 'thinking') {
-        snapshot.phase = 'discard'
-      }
-      room.send(snapshot, peerId)
+      room.send(serializeStateToSnapshot(game, seat, context), peerId)
     }
   }
 
