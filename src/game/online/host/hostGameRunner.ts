@@ -41,15 +41,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   }
 
   const game = createGame(remoteControllers)
-  // 启动本地引擎：开始开局时间线（掷骰/发牌），否则房主永远停留在 lobby。
-  game.startGame(mode)
-  // 用真实昵称覆盖默认 PLAYER_SEED（房主 + 远端真人；空席 AI 保留默认名）。
-  if (seatNames) {
-    for (const [seat, name] of seatNames) {
-      const player = game.players[seat]
-      if (player) player.name = name
-    }
-  }
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
   function broadcastAll() {
@@ -64,31 +55,46 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     }
   }
 
+  function sendRoundStart() {
+    const dice = game.diceValues.value
+    const message: RoundStartMessage = {
+      kind: 'round_start',
+      matchStarted: game.round.value === 1,
+      round: game.round.value,
+      dealer: game.dealer.value,
+      honba: game.honba.value,
+      dice: [dice[0] ?? 1, dice[1] ?? 1] as [number, number],
+      secondDice: game.secondDice?.value ?? undefined,
+      flipTile: game.flipTile?.value ?? undefined,
+      flipStack: game.flipStack?.value ?? undefined,
+    }
+    room.send(message)
+    broadcastAll()
+  }
+
+  // round_start：发牌完成后（phase 进入 opening，此时手牌已齐）广播，触发客户端发牌/骰点动画。
+  // watch 须在 startGame 之前注册；用 phase 而非 round（round 首局恒为 1）或 openingStage
+  // （instantOpening 下阶段瞬变，watch 会错过中间态）。
+  let lastPhase = game.phase.value
+  const stopWatch = watch(() => game.phase.value, (phase) => {
+    if (phase === 'opening' && lastPhase !== 'opening') {
+      sendRoundStart()
+    }
+    lastPhase = phase
+  })
+
+  // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。
+  game.startGame(mode)
+  // 用真实昵称覆盖默认 PLAYER_SEED（房主 + 远端真人；空席 AI 保留默认名）。
+  if (seatNames) {
+    for (const [seat, name] of seatNames) {
+      const player = game.players[seat]
+      if (player) player.name = name
+    }
+  }
+
   // 周期快照广播：对局状态下每帧兜底同步（客户端 reconciler 取最新快照，幂等）。
   const intervalId = window.setInterval(broadcastAll, broadcastIntervalMs)
-
-  // round_start：开局掷骰完成（openingStage 进入 dice）时广播，触发客户端发牌/骰点动画。
-  // 用 openingStage 而非 round 变化触发：round 在第 1 局恒为 1，round 变化会漏掉首局。
-  let lastStage = game.openingStage.value
-  const stopWatch = watch(() => game.openingStage.value, (stage) => {
-    if (stage === 'dice' && lastStage !== 'dice') {
-      const dice = game.diceValues.value
-      const message: RoundStartMessage = {
-        kind: 'round_start',
-        matchStarted: game.round.value === 1,
-        round: game.round.value,
-        dealer: game.dealer.value,
-        honba: game.honba.value,
-        dice: [dice[0] ?? 1, dice[1] ?? 1] as [number, number],
-        secondDice: game.secondDice?.value ?? undefined,
-        flipTile: game.flipTile?.value ?? undefined,
-        flipStack: game.flipStack?.value ?? undefined,
-      }
-      room.send(message)
-      broadcastAll()
-    }
-    lastStage = stage
-  })
 
   return {
     game,

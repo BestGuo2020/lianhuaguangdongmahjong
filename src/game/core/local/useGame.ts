@@ -28,6 +28,8 @@ interface UseGameOptions {
   remoteControllers?: Array<PlayerController | undefined>
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
+  /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
+  instantOpening?: boolean
   ruleset?: RuleSet
 }
 
@@ -37,6 +39,7 @@ export function useGame({
   controllers: suppliedControllers,
   remoteControllers,
   countdownEnabled = true,
+  instantOpening = false,
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
   const state = createLocalGameState()
@@ -152,10 +155,10 @@ export function useGame({
     state,
     clearTimers: scheduler.clear,
     takeTile: tileFlowExecutor.takeTile,
-    wait: scheduler.wait,
+    wait: instantOpening ? async () => {} : scheduler.wait,
     later: scheduler.later,
     playSound,
-    playSoundAndWait,
+    playSoundAndWait: instantOpening ? async () => {} : playSoundAndWait,
     announce: transientEvents.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,

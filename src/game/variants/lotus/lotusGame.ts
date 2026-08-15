@@ -31,6 +31,8 @@ interface UseLotusGameOptions {
   /** 房主权威联机：非本家座位（seat 1-3）的控制器，索引 0→seat1、1→seat2、2→seat3；未提供的座位回退 AI。 */
   remoteControllers?: Array<LotusController | undefined>
   countdownEnabled?: boolean
+  /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
+  instantOpening?: boolean
   ruleset?: RuleSet
 }
 
@@ -40,6 +42,7 @@ export function useLotusGame({
   controllers: suppliedControllers,
   remoteControllers,
   countdownEnabled = true,
+  instantOpening = false,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
   const state = createLotusGameState()
@@ -162,10 +165,10 @@ export function useLotusGame({
     state,
     clearTimers: timer.clear,
     takeTile: tileFlowExecutor.takeTile,
-    wait: timer.wait,
+    wait: instantOpening ? async () => {} : timer.wait,
     later: timer.later,
     playSound,
-    playSoundAndWait,
+    playSoundAndWait: instantOpening ? async () => {} : playSoundAndWait,
     announce: transient.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
