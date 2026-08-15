@@ -51,7 +51,7 @@ describe('verifySnapshot', () => {
 
   it('手牌半透明（混 null 与真实牌）→ 违规', () => {
     const players = snapshot().players
-    players[0] = { ...players[0], hand: ['m1', null] as (string | null)[] }
+    players[0] = { ...players[0], hand: ['m1', null] }
     const violations = verifySnapshot(snapshot({ players }))
     expect(violations.some((v) => v.code === 'HAND_MIX')).toBe(true)
   })

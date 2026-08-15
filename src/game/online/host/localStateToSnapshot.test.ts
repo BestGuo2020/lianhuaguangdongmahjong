@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
 import { serializeStateToSnapshot, type SnapshotSource } from './localStateToSnapshot'
-import type { GamePlayer } from '../../core/contracts/types'
+import type { GamePlayer, TileType } from '../../core/contracts/types'
 
-function player(seat: number, hand: string[]): GamePlayer {
+function player(seat: number, hand: TileType[]): GamePlayer {
   return {
     name: `P${seat}`, avatar: '', score: 1000, seat, hand,
     discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
@@ -14,7 +14,7 @@ function makeSource(players: GamePlayer[]): SnapshotSource {
   return {
     phase: ref('discard'),
     players,
-    wall: ref(['m1', 'm2', 'm3']),
+    wall: ref<TileType[]>(['m1', 'm2', 'm3']),
     wallHeadDrawn: ref(1),
     currentPlayer: ref(0),
     lastDiscard: ref(null),
@@ -58,7 +58,7 @@ describe('serializeStateToSnapshot', () => {
 
   it('墙与 wallCount 一致性', () => {
     const source = makeSource([player(0, []), player(1, []), player(2, []), player(3, [])])
-    source.wall = ref(['m1', 'm2', 'm3'])
+    source.wall = ref<TileType[]>(['m1', 'm2', 'm3'])
     const snapshot = serializeStateToSnapshot(source, 0, { roomId: 'R', rulesetId: 'lotus-classic' })
     expect(snapshot.wallCount).toBe(3)
     expect(snapshot.wall).toEqual(['m1', 'm2', 'm3'])
