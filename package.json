@@ -9,7 +9,6 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:fakedomain": "vite --host local.lumigrav.space",
     "typecheck": "vue-tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
