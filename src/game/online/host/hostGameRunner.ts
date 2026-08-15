@@ -60,6 +60,17 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   const game = createGame(remoteControllers)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
+  // 用真实昵称覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
+  // 因此必须在「opening」（重开局）时重新覆盖，否则过庄后昵称回退成默认名。
+  function applySeatNames() {
+    if (!seatNames) return
+    for (const [seat, name] of seatNames) {
+      const player = game.players[seat]
+      if (player) player.name = name
+    }
+  }
+
+
   // 状态签名去重：同一帧状态不重复广播。否则 200ms 兜底轮询 + 多个状态 watch
   // 会反复发送幂等快照，客户端 3D 牌桌每次 rebuild 都会清掉进行中的出牌飞行动画（360ms）。
   let lastBroadcastKey = ''
@@ -133,6 +144,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   let lastPhase = game.phase.value
   const stopWatch = watch(() => game.phase.value, (phase) => {
     if (phase === 'opening' && lastPhase !== 'opening') {
+      applySeatNames()
       sendRoundStart()
     }
     lastPhase = phase
@@ -149,13 +161,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。
   game.startGame(mode)
-  // 用真实昵称覆盖默认 PLAYER_SEED（房主 + 远端真人；空席 AI 保留默认名）。
-  if (seatNames) {
-    for (const [seat, name] of seatNames) {
-      const player = game.players[seat]
-      if (player) player.name = name
-    }
-  }
+  // 首局覆盖昵称（后续每局由 phase→opening 的 watch 重新覆盖）。
+  applySeatNames()
 
   // 周期快照广播：对局状态下每帧兜底同步（客户端 reconciler 取最新快照，幂等）。
   const intervalId = window.setInterval(broadcastAll, broadcastIntervalMs)

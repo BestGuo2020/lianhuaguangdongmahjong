@@ -147,9 +147,27 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         const game = hostGame.value?.game
         if (game) sendToEngine(game, message)
       }
-      continueAction = () => {
-        hostGame.value?.game.nextRound()
+      // 回合续接：房主等所有玩家确认「下一局」后才推进，不能无视其它人直接开下一局。
+      const continueReady = new Set<string>()
+      let hostReadyNext = false
+      function maybeAdvanceRound() {
+        const peers = [...seatByPeer.keys()]
+        if (hostReadyNext && peers.every((peerId) => continueReady.has(peerId))) {
+          hostReadyNext = false
+          continueReady.clear()
+          hostGame.value?.game.nextRound()
+        }
       }
+      continueAction = () => {
+        hostReadyNext = true
+        maybeAdvanceRound()
+      }
+      room.onMessage((message, fromPeerId) => {
+        if (message && typeof message === 'object' && (message as { type?: unknown }).type === 'continue') {
+          continueReady.add(fromPeerId)
+          maybeAdvanceRound()
+        }
+      })
     },
     onClosed: () => {
       void leaveRoom()
