@@ -283,9 +283,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       .map((meld) => meld.tile)
     return [...new Set([...concealed, ...added])]
   })
-  const remoteUserCanHu = computed(() => (
-    rulesetId.value === 'lotus-legacy' ? turnCanHu.value : (turnCanHu.value || userCanHu.value)
-  ))
+  const remoteUserCanHu = computed(() => (turnCanHu.value || userCanHu.value))
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
   const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
