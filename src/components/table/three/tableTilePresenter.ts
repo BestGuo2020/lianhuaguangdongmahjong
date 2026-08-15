@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
-import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
+import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
 import type { TileInstanceRenderer } from './tileInstanceRenderer'
@@ -407,7 +407,7 @@ function addMelds(playerIndex) {
 function resolveBreakIndex() {
   // wallBreakIndex 是房主维护的绝对物理牌墙坐标；牌桌上的玩家和牌山
   // 都要按当前客户端的绝对座位旋转到本地视角。每个座位占 17 墩 / 34 张牌。
-  const base = props.wallBreakIndex ?? wallBreakIndex(props.diceValues)
+  const base = props.wallBreakIndex ?? wallBreakIndexForDealer(props.diceValues, props.dealerIndex ?? 0)
   const localSeat = ((props.localSeat ?? 0) % 4 + 4) % 4
   return (base + localSeat * (WALL_TOTAL / 4)) % WALL_TOTAL
 }

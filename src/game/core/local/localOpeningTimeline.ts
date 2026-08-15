@@ -1,6 +1,6 @@
 import type { MatchType, TileType } from '../contracts/types'
 import { createWall, shuffle, sortTiles } from '../rules/tiles'
-import { wallBreakIndex } from '../rules/wallLayout'
+import { wallBreakIndexForDealer } from '../rules/wallLayout'
 import { MATCH_HANDS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
@@ -93,7 +93,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1150)])
     if (currentSequence !== sequence) return
 
-    const breakIndex = wallBreakIndex(state.diceValues.value)
+    const breakIndex = wallBreakIndexForDealer(state.diceValues.value, state.dealer.value)
     // 记录拆墙断点，供房主快照下发（联机模式 3D 牌山开口位置与单人模式一致）。
     state.wallBreakIndex.value = breakIndex
     state.wall.value = [

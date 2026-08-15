@@ -30,7 +30,8 @@ const selectedRule = ref<RuleVariant>(DEFAULT_RULE_VARIANT)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
-// 仅在 lumigrav.space 生产域初始化 VibeHub SDK；本地/开发保持匿名联机。
+// 联机 SDK 初始化：生产用真实 VibeHub（仅 lumigrav.space 域可用）；本地开发用
+// 内置 mock（BroadcastChannel 模拟房间/对端），不发布即可双窗口联调联机逻辑。
 void initVibeHub()
 
 const gameMode = ref<GameMode>('local')

@@ -14,5 +14,8 @@ export default defineConfig({
   base: './',
   server: {
     port: 4173,
+    // 本地联调 WebRTC：通过 hosts 把 127.0.0.1 伪装成 *.lumigrav.space 域名
+    // （VibeHub SDK 只给该域提供服务），因此放开 Vite 的 Host 头校验。
+    allowedHosts: true,
   },
 })

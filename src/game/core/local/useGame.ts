@@ -1,4 +1,4 @@
-import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import { defineGamePort } from '../contracts/gamePort'
 import type { EndGameOptions, TileType } from '../contracts/types'
 import { AiController, HumanController, type HumanBridge, type PlayerController } from '../controllers/playerController'
@@ -288,7 +288,16 @@ export function useGame({
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,
     userKongs: selectors.userKongs,
-    capabilities: ref({}),
+    capabilities: computed(() => ({
+      // 经典莲花广麻没有翻精，但仍需把拆墙断点暴露给牌桌和房主快照。
+      lotusTable: {
+        flipTile: null,
+        jokerTiles: [],
+        wildcardTiles: [],
+        wallBreakIndex: state.wallBreakIndex.value,
+        flipStack: null,
+      },
+    })),
     startGame,
     ...playerActions,
     ...matchLifecycle,

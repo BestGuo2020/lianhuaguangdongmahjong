@@ -168,6 +168,17 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     watch(() => game.lastDiscard.value, () => broadcastAll()),
     watch(() => game.currentPlayer.value, () => broadcastAll()),
     watch(() => game.wallHeadDrawn.value, () => broadcastAll()),
+    // 摸牌瞬间广播：drawFor 在 phase='drawing' 阶段就把摸到的牌推入本家手牌并设置
+    // drawnTileIndex，该 Vue flush 先于 beginTurn 把 phase 切成 'thinking'，因此这里
+    // 的广播能通过 thinking 守卫。否则各端永远只看到出牌后的 13 张（及碰/杠后的
+    // 13-3k），看不到别人摸上来的第 14 张。仅当有人持有摸牌位（drawnTileIndex >= 0）
+    // 时广播；换庄复位（全部 -1）不广播，避免把上一局的 settled 结果带回新开局。
+    watch(
+      () => game.players.map((player) => player.drawnTileIndex).join(','),
+      (value) => {
+        if (value !== '-1,-1,-1,-1') broadcastAll()
+      },
+    ),
   ]
 
   // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。

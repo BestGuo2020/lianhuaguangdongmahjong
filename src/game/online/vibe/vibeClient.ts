@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { createMockVibeClient } from './mockVibeHub'
 
 export interface VibeUser {
   id: string
@@ -15,12 +16,26 @@ export type VibeStatus = 'idle' | 'initializing' | 'ready' | 'unavailable' | 'er
 export const isVibeHost = typeof window !== 'undefined'
   && window.location.hostname.endsWith('lumigrav.space')
 
+/**
+ * 是否允许初始化 VibeHub SDK：生产域 + 本地开发。
+ * 本地（vite dev 任意主机名，或 localhost/127.0.0.1 的 preview）保持匿名联机，
+ * 不上线即可本地联调 WebRTC；loginRequired 仍只由 isVibeHost 决定（本地不强制登录）。
+ */
+export const canInitVibeHub = isVibeHost
+  || import.meta.env.DEV
+  || (typeof window !== 'undefined'
+    && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+
 export const vibeStatus = ref<VibeStatus>('idle')
 export const vibeError = ref('')
 export const vibeUser = ref<VibeUser | null>(null)
 
-/** 是否要求登录：仅在 lumigrav.space 且尚未登录时为 true。 */
-export const loginRequired = computed(() => isVibeHost && !vibeUser.value)
+/** 是否要求登录：仅生产域（且非本地开发）且尚未登录时为 true；本地开发保持匿名联机。 */
+export const loginRequired = computed(() => (
+  !import.meta.env.DEV
+  && isVibeHost
+  && !vibeUser.value
+))
 
 let client: VibeHubSDK.Client | null = null
 let initPromise: Promise<VibeHubSDK.Client | null> | null = null
@@ -37,12 +52,26 @@ export function getVibeClient(): VibeHubSDK.Client | null {
 
 export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
   if (initPromise) return initPromise
-  if (!isVibeHost || typeof window === 'undefined' || !('VibeHub' in window)) {
+  if (typeof window === 'undefined') {
     vibeStatus.value = 'unavailable'
     return Promise.resolve(null)
   }
-  vibeStatus.value = 'initializing'
   initPromise = (async () => {
+    // 本地开发：真实 VibeHub 云端对本地来源有 CORS + 来源校验（浏览器无法绕过），
+    // 直接使用本地 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可
+    // 联调全部联机逻辑，无需发布。生产构建不受影响（DEV=false 走真实 SDK）。
+    if (import.meta.env.DEV) {
+      const mock = createMockVibeClient()
+      client = mock
+      vibeUser.value = null
+      vibeStatus.value = 'ready'
+      return mock
+    }
+    if (!canInitVibeHub || !('VibeHub' in window)) {
+      vibeStatus.value = 'unavailable'
+      return null
+    }
+    vibeStatus.value = 'initializing'
     try {
       const instance = await window.VibeHub.init({ work: VIBE_WORK_SLUG })
       client = instance
