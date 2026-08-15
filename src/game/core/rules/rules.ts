@@ -153,9 +153,9 @@ export function meldDisplayTiles(meld: Meld): TileType[] {
 }
 
 export function drawHorses(wall: TileType[], amount = 8, seat: HorseSeat = 0) {
-  // 广东麻将买马：胡牌后从牌墙末尾摸马（与旧版从牌头摸相反），中马按胡牌者座位判定。
+  // 广东麻将买马：胡牌后从牌头摸马（连取接下来要摸的牌），中马按胡牌者座位判定。
   const count = Math.min(amount, wall.length)
-  const horses = wall.splice(wall.length - count, count)
+  const horses = wall.splice(0, count)
   return { horses, hits: horses.filter((tile) => isHorseForSeat(tile, seat)).length }
 }
 

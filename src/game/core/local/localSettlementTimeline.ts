@@ -64,7 +64,8 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3
       const { horses, hits } = drawHorses(state.wall.value, 8, relativeSeat)
-      // 买马从牌墙末尾摸走，不推进牌头计数。
+      // 买马从牌头摸走：头部物理消耗，推进牌头计数保持 3D 牌山一致。
+      state.wallHeadDrawn.value += horses.length
       const score = ruleset.score.scoreHand({
         dealer: winnerIndex === state.dealer.value,
         noJoker: !winner.hand.includes('white'),

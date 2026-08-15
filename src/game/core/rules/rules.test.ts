@@ -67,11 +67,11 @@ describe('莲花广麻胡牌规则', () => {
 })
 
 describe('买马与计分', () => {
-  it('从牌墙末尾摸马', () => {
+  it('从牌头摸马', () => {
     const wall: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'p1']
     const { horses } = drawHorses(wall, 8, 0)
-    expect(horses).toEqual(['m3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'p1'])
-    expect(wall).toEqual(['m1', 'm2'])
+    expect(horses).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'])
+    expect(wall).toEqual(['m9', 'p1'])
   })
 
   it('庄家(A)中马为 1/5/9 与东', () => {
