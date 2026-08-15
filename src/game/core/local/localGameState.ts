@@ -54,6 +54,9 @@ export function createLocalGameState() {
     openingStage: ref<OpeningStage | null>(null),
     diceValues: ref([1, 1]),
     diceThrowerIndex: ref(0),
+    // 骰子确定的拆墙断点（3D 牌山开口位置，0..135）。与莲花引擎 lotusState.wallBreakIndex 对齐，
+    // 让房主快照能下发真实断点，联机模式 3D 不再恒用 0（否则开口位置无视骰子）。
+    wallBreakIndex: ref(0),
     userDrewThisTurn: ref(false),
   }
 }

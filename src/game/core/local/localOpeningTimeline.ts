@@ -81,6 +81,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
+    state.wallBreakIndex.value = 0
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
@@ -93,6 +94,8 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     if (currentSequence !== sequence) return
 
     const breakIndex = wallBreakIndex(state.diceValues.value)
+    // 记录拆墙断点，供房主快照下发（联机模式 3D 牌山开口位置与单人模式一致）。
+    state.wallBreakIndex.value = breakIndex
     state.wall.value = [
       ...state.wall.value.slice(breakIndex),
       ...state.wall.value.slice(0, breakIndex),

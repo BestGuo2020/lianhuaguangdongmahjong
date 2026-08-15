@@ -307,7 +307,13 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       .map((meld) => meld.tile)
     return [...new Set([...concealed, ...added])]
   })
-  const remoteUserCanHu = computed(() => (turnCanHu.value || userCanHu.value))
+  // 房主自己的回合不会经过 requestCoordinator，因此快照状态里没有
+  // turn_request 携带的 drawnThisTurn/canHu。换庄重新开局后，若继续用
+  // viewer 的 userCanHu，房主可能看不到胡按钮，点击也会被拦截；房主
+  // 必须直接读取权威引擎的判定。客户端则继续使用请求/快照状态。
+  const remoteUserCanHu = computed(() => isHost.value
+    ? (hostGame.value?.game.userCanHu.value ?? false)
+    : (turnCanHu.value || userCanHu.value))
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
   const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)

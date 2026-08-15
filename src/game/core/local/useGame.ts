@@ -283,6 +283,7 @@ export function useGame({
     openingStage: state.openingStage,
     diceValues: state.diceValues,
     diceThrowerIndex: state.diceThrowerIndex,
+    wallBreakIndex: state.wallBreakIndex,
     userCurrentWaits: selectors.userCurrentWaits,
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,

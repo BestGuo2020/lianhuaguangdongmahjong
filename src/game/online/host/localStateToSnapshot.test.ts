@@ -71,4 +71,14 @@ describe('serializeStateToSnapshot', () => {
     const snapshot = serializeStateToSnapshot(makeSource(players), 0, { roomId: 'R', rulesetId: 'lotus-classic' })
     expect(decodeServerMessage(snapshot)).not.toBeNull()
   })
+
+  it('引擎记录 wallBreakIndex 时快照下发真实断点（联机广麻 3D 开口位置修复）', () => {
+    // 回归：广麻引擎此前无 wallBreakIndex 字段，快照恒发 0，客户端 3D 的
+    // `props.wallBreakIndex ?? wallBreakIndex(dice)` 把 0 当有效值，开口位置无视骰子。
+    // 引擎补字段后，快照必须携带真实断点。
+    const source = makeSource([player(0, []), player(1, []), player(2, []), player(3, [])])
+    source.wallBreakIndex = ref(104)
+    const snapshot = serializeStateToSnapshot(source, 0, { roomId: 'R', rulesetId: 'lotus-classic' })
+    expect(snapshot.wallBreakIndex).toBe(104)
+  })
 })
