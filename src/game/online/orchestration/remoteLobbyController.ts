@@ -5,6 +5,7 @@ import type { MatchType } from '../../core/contracts/types'
 import { reportPlayer, type ReportRequest } from '../api/moderationApi'
 import type { RoomSeatState } from '../api/roomApi'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import { login, loginRequired } from '../vibe/vibeClient'
 
 export interface RemoteLobbyActions {
   createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant): Promise<void>
@@ -94,6 +95,7 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
 
   function createRoom() {
     if (options.roomId.value) return
+    if (loginRequired.value) { void login(); return }
     const name = nicknameInput.value.trim()
     if (!name) return
     options.nickname.value = name
@@ -104,6 +106,7 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
 
   function joinRoom() {
     if (options.roomId.value) return
+    if (loginRequired.value) { void login(); return }
     const name = nicknameInput.value.trim()
     const code = joinCode.value.trim()
     if (!name || !code) return

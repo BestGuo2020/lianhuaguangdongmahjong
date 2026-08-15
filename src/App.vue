@@ -19,6 +19,7 @@ import { useRemoteContinueCountdown } from './game/online/presentation/useRemote
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
+import { initVibeHub, vibeUser } from './game/online/vibe/vibeClient'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -29,6 +30,9 @@ const selectedMatch = ref<MatchType>('east')
 const selectedRule = ref<RuleVariant>(DEFAULT_RULE_VARIANT)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
+
+// 仅在 lumigrav.space 生产域初始化 VibeHub SDK；本地/开发保持匿名联机。
+void initVibeHub()
 
 const gameMode = ref<GameMode>('local')
 const localGame = useGame({
@@ -144,6 +148,16 @@ const {
   report: reportPlayer,
   toggleReady,
 } = lobbyController
+
+// 登录后以 VibeHub 账号 id 作为联机 playerId，昵称取公开资料。
+watch(vibeUser, (user) => {
+  if (!user) return
+  playerId.value = user.id
+  if (user.name) {
+    nickname.value = user.name
+    nicknameInput.value = user.name
+  }
+})
 
 const statsOpen = ref(false)
 const showLobby = computed(() => (
