@@ -21,6 +21,8 @@ import type {
 import type { RemotePlayerActionMessage } from '../orchestration/remoteActionController'
 import type { ServerRequest } from '../protocol/messages'
 import { windKong } from '../../variants/lotus/lotusRules'
+import { LotusAiController } from '../../variants/lotus/lotusControllers'
+import type { DisconnectableController } from './remotePlayerController'
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
@@ -28,21 +30,44 @@ function isActionMessage(message: unknown): message is RemotePlayerActionMessage
   return type === 'discard' || type === 'pass' || type === 'claim' || type === 'gang' || type === 'hu'
 }
 
-export class LotusRemotePlayerController implements LotusController {
+export class LotusRemotePlayerController implements LotusController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
+  private aiMode = false
+  private peerId: string
+  private readonly ai: LotusAiController
 
   constructor(
     private readonly room: VibeHubSDK.Room,
-    private readonly peerId: string,
+    peerId: string,
     private readonly onPending?: (pending: boolean) => void,
+    ai: LotusAiController = new LotusAiController(),
   ) {
+    this.ai = ai
+    this.peerId = peerId
     room.onMessage((message, fromPeerId) => {
-      if (fromPeerId !== peerId || this.pending === null || !isActionMessage(message)) return
+      if (fromPeerId !== this.peerId || this.pending === null || !isActionMessage(message)) return
       const resolve = this.pending
       this.pending = null
       this.onPending?.(false)
       resolve(message)
     })
+  }
+
+  enableAI(): void {
+    this.aiMode = true
+    this.reset()
+  }
+
+  disableAI(): void {
+    this.aiMode = false
+  }
+
+  isAIControlled(): boolean {
+    return this.aiMode
+  }
+
+  retargetPeer(peerId: string): void {
+    this.peerId = peerId
   }
 
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
@@ -54,6 +79,7 @@ export class LotusRemotePlayerController implements LotusController {
   }
 
   async requestTurn(ctx: LotusTurnContext): Promise<LotusTurnAction> {
+    if (this.aiMode) return this.ai.requestTurn(ctx)
     const response = await this.request({
       kind: 'turn_request',
       ctx: {
@@ -90,6 +116,7 @@ export class LotusRemotePlayerController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
+    if (this.aiMode) return this.ai.requestDiscardHu(ctx)
     const response = await this.request({
       kind: 'claim_request',
       ctx: {
@@ -106,6 +133,7 @@ export class LotusRemotePlayerController implements LotusController {
   }
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
+    if (this.aiMode) return this.ai.requestClaim(ctx)
     const response = await this.request({
       kind: 'claim_request',
       ctx: {
@@ -131,6 +159,7 @@ export class LotusRemotePlayerController implements LotusController {
   }
 
   async requestChi(ctx: LotusChiContext): Promise<LotusChiAction> {
+    if (this.aiMode) return this.ai.requestChi(ctx)
     const response = await this.request({
       kind: 'claim_request',
       ctx: {
@@ -149,6 +178,7 @@ export class LotusRemotePlayerController implements LotusController {
   }
 
   async requestRobKong(ctx: LotusRobKongContext): Promise<LotusRobKongAction> {
+    if (this.aiMode) return this.ai.requestRobKong(ctx)
     const response = await this.request({
       kind: 'rob_kong_request',
       ctx: { tile: ctx.tile, from: ctx.from, hand: ctx.hand, exposedMelds: ctx.exposedMelds },
@@ -181,5 +211,6 @@ export class LotusRemotePlayerController implements LotusController {
       this.onPending?.(false)
       resolve({ type: 'pass' })
     }
+    this.ai.reset?.()
   }
 }

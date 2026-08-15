@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
 import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
@@ -137,6 +137,11 @@ const lobbyController = createRemoteLobbyController({
   guardEntry: disclaimerGate.guard,
   startBgm,
 })
+
+// P1 重连：刷新页面自动重进上次的房间（对局进行中则快照重同步 + rejoin_ok 恢复座位）。
+onMounted(() => {
+  if (vibeRemoteGame.savedSessionExists) lobbyController.resumeSession()
+})
 const {
   nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,
   createRoom: createRemoteRoom,
@@ -159,6 +164,11 @@ watch(vibeUser, (user) => {
     nicknameInput.value = user.name
   }
   if (user.image) avatar.value = user.image
+  // 刷新页面后 SDK 需重新授权（token 仅驻内存）；登录完成后若存在保存的房间会话
+  // 且尚未在房间中 → 自动重进（对局进行中则快照重同步 + 座位恢复）。
+  if (vibeRemoteGame.savedSessionExists && !roomId.value) {
+    lobbyController.resumeSession()
+  }
 })
 
 const statsOpen = ref(false)

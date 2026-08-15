@@ -31,6 +31,8 @@ export interface VibeRoomSessionOptions {
   onStart: (room: VibeHubSDK.Room) => void
   /** 房主关闭房间时的回调（客户端收到 lobby_closed）。 */
   onClosed: () => void
+  /** 上次的会话（刷新页面重进用）；返回 null 表示无会话。 */
+  loadSavedRoom?: () => { roomId: string; nickname?: string } | null
 }
 
 const ERROR_TEXT: Record<string, string> = {
@@ -43,7 +45,7 @@ function readableError(error: unknown, fallback: string): string {
   return ERROR_TEXT[error.message] ?? error.message
 }
 
-export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSessionOptions) {
+export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom }: VibeRoomSessionOptions) {
   let room: VibeHubSDK.Room | null = null
   let hostLobby: ReturnType<typeof createHostLobby> | null = null
   let clientLobby: ReturnType<typeof createClientLobby> | null = null
@@ -151,7 +153,12 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
   }
 
   async function resumeSession(): Promise<void> {
-    // SDK 无「继续对局」概念（无 localStorage 重连），保留空实现对齐 RemoteLobbyActions。
+    // 刷新页面重进：用上次保存的房间码重新加入（对局进行中则经快照重同步 + rejoin_ok 恢复座位）。
+    const saved = loadSavedRoom?.()
+    if (saved?.roomId) {
+      if (saved.nickname) state.nickname.value = saved.nickname
+      await joinRoom(saved.roomId)
+    }
   }
 
   return {

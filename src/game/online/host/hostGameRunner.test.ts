@@ -102,14 +102,19 @@ describe('startHostGame 无头权威', () => {
   it('莲花麻将：远端 turn_request 的 canWindKong 按手牌实算，且只定向发给远端', async () => {
     // 两个 BroadcastChannel mock 客户端 = 同浏览器两个窗口（房主 + 一个远端玩家）。
     // 注意：join 内部有 setTimeout 等待，须在开 fake timers 之前完成。
-    const hostClient = createMockVibeClient({ settleMs: 10 })
-    const guestClient = createMockVibeClient({ settleMs: 10 })
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
     const hostRoom = await hostClient.room.join('LOTUS1')
     const guestRoom = await guestClient.room.join('LOTUS1')
     stubWindow()
     const guestMessages: Array<{ kind?: string; ctx?: { canWindKong?: boolean; hand?: TileType[]; jokers?: TileType[] } }> = []
     const hostRaw: unknown[] = []
     guestRoom.onMessage((message) => guestMessages.push(message as never))
+    // 若闲家先被问碰/杠/吃：自动过，确保能推进到闲家自己的回合（否则不响应会被
+    // 15s 掉线超时 AI 接管，turn_request 不再走 wire，测试抓不到）。
+    guestRoom.onMessage((message) => {
+      if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
+    })
     hostRoom.onMessage((message) => hostRaw.push(message))
 
     const runner = startHostGame<LotusController>({
@@ -144,8 +149,8 @@ describe('startHostGame 无头权威', () => {
   }, 20000)
 
   it('莲花麻将：round_start 的一骰取 firstDice（与单人模式一致，不是二骰）', async () => {
-    const hostClient = createMockVibeClient({ settleMs: 10 })
-    const guestClient = createMockVibeClient({ settleMs: 10 })
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
     const hostRoom = await hostClient.room.join('LOTUS2')
     const guestRoom = await guestClient.room.join('LOTUS2')
     stubWindow()
@@ -172,6 +177,125 @@ describe('startHostGame 无头权威', () => {
     // 回归：diceValues 在第二次掷骰时被覆盖成二骰，一骰必须来自引擎保留的 firstDice。
     expect(runner.game.firstDice?.value).not.toBeNull()
     expect(roundStart!.dice).toEqual(runner.game.firstDice?.value)
+    runner.stop()
+  })
+
+  it('客户端不响应 → 房主超时 AI 接管，游戏继续（P1）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const hostRoom = await hostClient.room.join('TIMEOUT1')
+    const guestRoom = await guestClient.room.join('TIMEOUT1')
+    stubWindow()
+    const guestMessages: Array<{ kind?: string }> = []
+    guestRoom.onMessage((message) => guestMessages.push(message as never))
+    // 闲家先被问碰/杠/吃时自动过，确保能轮到自己的回合（否则不响应被超时 AI 接管）。
+    guestRoom.onMessage((message) => {
+      if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
+    })
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    // 推进到闲家回合（turn_request 已发给客人），然后客人不再响应。
+    let sawTurnRequest = false
+    for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
+    }
+    expect(sawTurnRequest).toBe(true)
+
+    // 客人不响应 → 超过房主 15s 超时 → AI 接管座位。
+    await vi.advanceTimersByTimeAsync(16000)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    // AI 接管后游戏继续推进，不再卡死。
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(runner.game.phase.value).not.toBe('lobby')
+    runner.stop()
+  }, 20000)
+
+  it('客户端掉线 → AI 接管；同 peerId 重连 → 恢复真人并补发 rejoin_ok（P1）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestA = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-x' })
+    const hostRoom = await hostClient.room.join('REJOIN1')
+    const guestRoomA = await guestA.room.join('REJOIN1')
+    stubWindow()
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoomA.peerId, 1]]),
+      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    // 掉线：直接关闭标签页（leave）→ 房主 AI 接管座位。
+    guestRoomA.leave()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+
+    // 重连：同一 peerId 的新窗口重新加入 → 房主恢复真人并补发座位身份。
+    const guestB = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-x' })
+    // fake timers 下 join 内部有 setTimeout 等待：先发起，再推进时钟完成 settle。
+    const guestBJoin = guestB.room.join('REJOIN1')
+    await vi.advanceTimersByTimeAsync(200)
+    const guestRoomB = await guestBJoin
+    const rejoinMessages: Array<{ kind?: string; seat?: number }> = []
+    guestRoomB.onMessage((message) => rejoinMessages.push(message as never))
+    // 客户端 join 完成、处理链挂好后发 hello，房主据此补发 rejoin_ok（避免 join
+    // settle 期间直发的 rejoin_ok 因处理器未挂载被漏掉）。
+    guestRoomB.send({ type: 'lobby_hello', nickname: '重连客', avatar: '' })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    const rejoinOk = rejoinMessages.find((message) => message?.kind === 'rejoin_ok')
+    expect(rejoinOk?.seat).toBe(1)
+    runner.stop()
+  })
+
+  it('刷新后 peerId 变化时按昵称兜底恢复座位（P1 兜底）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestA = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-x' })
+    const hostRoom = await hostClient.room.join('FALLBACK1')
+    const guestRoomA = await guestA.room.join('FALLBACK1')
+    stubWindow()
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoomA.peerId, 1]]),
+      seatNames: new Map([[1, '重连客A']]),
+      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    guestRoomA.leave()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+
+    // 重连：peerId 变了（新标签页无 sessionStorage），但昵称相同 → 房主按昵称兜底恢复座位。
+    const guestB = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-y' })
+    const guestBJoin = guestB.room.join('FALLBACK1')
+    await vi.advanceTimersByTimeAsync(200)
+    const guestRoomB = await guestBJoin
+    const rejoinMessages: Array<{ kind?: string; seat?: number }> = []
+    guestRoomB.onMessage((message) => rejoinMessages.push(message as never))
+    guestRoomB.send({ type: 'lobby_hello', nickname: '重连客A', avatar: '' })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    const rejoinOk = rejoinMessages.find((message) => message?.kind === 'rejoin_ok')
+    expect(rejoinOk?.seat).toBe(1)
     runner.stop()
   })
 })

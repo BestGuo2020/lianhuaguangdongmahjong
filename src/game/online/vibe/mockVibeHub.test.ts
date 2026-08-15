@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { createMockVibeClient } from './mockVibeHub'
 
@@ -65,6 +65,33 @@ describe('mockVibeHub 本地假 SDK', () => {
     await client.save.set('player-stats', { matches: 1, wins: 1 })
     const stats = await client.save.get<{ matches: number; wins: number }>('player-stats')
     expect(stats).toEqual({ matches: 1, wins: 1 })
+  })
+
+  it('心跳超时判定掉线（模拟标签页关闭）', async () => {
+    vi.useFakeTimers()
+    try {
+      // 房主开启心跳检测；客人关闭心跳（模拟已关闭的标签页不再发任何消息）。
+      const host = createMockVibeClient({ settleMs: 20, pingIntervalMs: 100, leaveTimeoutMs: 300 })
+      const guest = createMockVibeClient({ settleMs: 20, pingIntervalMs: 0 })
+      const hostJoin = host.room.join('HB1')
+      await vi.advanceTimersByTimeAsync(100)
+      const hostRoom = await hostJoin
+      // 监听必须在客人 join 之前注册（join 事件在客人 settle 期间就触发了）。
+      const events: Array<`${string}:${string}`> = []
+      hostRoom.onPeer((event) => {
+        if (event.type === 'join' || event.type === 'leave') events.push(`${event.type}:${event.id}`)
+      })
+      const guestJoin = guest.room.join('HB1')
+      await vi.advanceTimersByTimeAsync(100)
+      const guestRoom = await guestJoin
+      await vi.advanceTimersByTimeAsync(200)
+      expect(events.some((event) => event.startsWith('join:'))).toBe(true)
+      // 客人不发任何消息 → 超过 leaveTimeoutMs 后房主判定其掉线。
+      await vi.advanceTimersByTimeAsync(500)
+      expect(events.some((event) => event === `leave:${guestRoom.peerId}`)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('send 支持 Vue reactive 代理等非结构化克隆对象（内部 JSON 序列化）', async () => {

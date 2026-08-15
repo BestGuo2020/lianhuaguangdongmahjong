@@ -68,6 +68,15 @@ function sendToEngine(game: GamePort, message: RemotePlayerActionMessage) {
   }
 }
 
+/** 仍需等待「下一局确认」的远端 peer：排除已被 AI 接管（掉线）的座位——
+ * 否则掉线玩家永远不会发 continue，全员卡死在「已确认，等待其他玩家」。 */
+export function liveContinuePeers(seatByPeer: Map<string, number>, aiControlledSeats: Set<number>): string[] {
+  return [...seatByPeer.keys()].filter((peerId) => {
+    const seat = seatByPeer.get(peerId)
+    return !(seat != null && aiControlledSeats.has(seat))
+  })
+}
+
 interface UseVibeRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
@@ -95,17 +104,31 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const lobbySeats = ref<LobbySeat[]>([])
 
   // 房主对局引擎（开局后懒创建）：房主 UI 直接用它；客户端 UI 用快照状态。
-  const hostGame = shallowRef<{ game: GamePort & SnapshotSource; stop(): void } | null>(null)
+  const hostGame = shallowRef<{ game: GamePort & SnapshotSource; stop(): void; aiControlledSeats: Set<number> } | null>(null)
 
   const roomSession = createVibeRoomSession({
     state: {
       roomId, mySeat, nickname, avatar, playerId,
       roomSeats: lobbySeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
     },
+    loadSavedRoom: () => sessionStore.loadSession(),
     onStart: (room) => {
       if (!isHost.value) {
         // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
         transport.open()
+        // P2：房主掉线（刷新页面前为「离开」）→ 用当前分数结束对局，展示最终排名后可回大厅。
+        room.onPeer((event) => {
+          if (event.type !== 'leave') return
+          const hostSeat = lobbySeats.value.find((seat) => seat.seat === 0)
+          if (!hostSeat || event.id !== hostSeat.peerId) return
+          if (state.matchFinished.value || phase.value === 'lobby') return
+          matchLifecycle.finishMatch(players.map((player) => ({
+            seat: player.seat,
+            name: player.name,
+            score: player.score,
+          })))
+          transientEventPresenter.announce('房主掉线，对局结束', 'gold')
+        })
         return
       }
       const seatByPeer = new Map<string, number>()
@@ -153,12 +176,14 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         const game = hostGame.value?.game
         if (game) sendToEngine(game, message)
       }
-      // 回合续接：房主等所有玩家确认「下一局」后才推进，不能无视其它人直接开下一局。
+      // 回合续接：房主等所有「在线」玩家确认「下一局」后才推进；掉线被 AI 接管的
+      // 座位不再要求确认（否则永远等不到，卡在「已确认，等待其他玩家」）。
       const continueReady = new Set<string>()
       let hostReadyNext = false
       function maybeAdvanceRound() {
-        const peers = [...seatByPeer.keys()]
-        if (hostReadyNext && peers.every((peerId) => continueReady.has(peerId))) {
+        const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
+        const livePeers = liveContinuePeers(seatByPeer, aiSeats)
+        if (hostReadyNext && livePeers.every((peerId) => continueReady.has(peerId))) {
           hostReadyNext = false
           continueReady.clear()
           hostGame.value?.game.nextRound()
@@ -443,9 +468,34 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     sessionError.value = code
   }
 
+  // 加入房间后保存会话（刷新页面据此自动重进）；模式/规则由快照/元数据校准后刷新。
+  watch([roomId, matchType, rulesetId], () => {
+    if (!roomId.value) return
+    sessionStore.saveSession({
+      roomId: roomId.value,
+      rejoinCode: '',
+      nickname: nickname.value,
+      playerId: playerId.value,
+      mode: matchType.value,
+      rulesetId: rulesetId.value,
+    })
+  })
+
+  // 重连/加入后绑定传输层：对局进行中刷新页面重进时没有 lobby_start（onStart 里的
+  // transport.open() 不触发），必须在此挂上 room.onMessage 才能收到快照/turn_request。
+  // 客户端角色有效；房主保持不绑定（房主自视走 onLocalSnapshot/onLocalEvent）。
+  watch(roomId, (value) => {
+    if (value && !isHost.value) transport.open()
+  })
+
   // ── 消息分发（客户端：无 rejoin 握手，mySeat 由大厅 roster 分配）──
   const serverMessageRouter = createServerMessageRouter({
-    rejoin_ok: () => {},
+    rejoin_ok: (msg) => {
+      // 刷新页面重进：房主补发的座位身份 → 恢复本家座位映射（对局进行中快照即重同步）。
+      state.mySeat.value = msg.seat
+      if (msg.roomId) state.roomId.value = msg.roomId
+      state.sessionStatus.value = 'connected'
+    },
     rejoin_err: () => {},
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
     round_start: matchLifecycle.handleRoundStart,
@@ -506,6 +556,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
+    savedSessionExists: sessionStore.loadSession() != null,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
     remoteActions: roomSession,

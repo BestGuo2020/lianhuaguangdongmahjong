@@ -75,7 +75,8 @@ export function createRemoteSessionStore(
       if (!raw) return null
       try {
         const session = JSON.parse(raw) as Partial<StoredSession>
-        if (!session.roomId || !session.rejoinCode) return null
+        // SDK 版（VibeHub）无 rejoinCode：房号重进，rejoinCode 允许空串。
+        if (!session.roomId) return null
         if (session.mode !== 'east' && session.mode !== 'hanchan') return null
         const rulesetId = session.rulesetId ?? 'lotus-classic'
         if (rulesetId !== 'lotus-classic' && rulesetId !== 'lotus-legacy') return null

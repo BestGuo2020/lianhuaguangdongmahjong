@@ -21,8 +21,20 @@ import type {
   TurnAction,
   TurnContext,
 } from '../../core/controllers/playerController'
+import { AiController } from '../../core/controllers/playerController'
 import type { RemotePlayerActionMessage } from '../orchestration/remoteActionController'
 import type { ServerRequest } from '../protocol/messages'
+
+/** 可被房主「掉线接管 / 重连归还」的控制器：掉线后请求改由内部 AI 决策，游戏不卡死。 */
+export interface DisconnectableController {
+  /** 掉线接管：清除挂起请求（自动过/弃），此后请求改由 AI 决策。 */
+  enableAI(): void
+  /** 重连归还：恢复远端真人决策。 */
+  disableAI(): void
+  isAIControlled(): boolean
+  /** 重连后身份可能变化（刷新页面 peerId 改变）：把消息过滤改绑到新 peerId。 */
+  retargetPeer(peerId: string): void
+}
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
@@ -30,21 +42,45 @@ function isActionMessage(message: unknown): message is RemotePlayerActionMessage
   return type === 'discard' || type === 'pass' || type === 'claim' || type === 'gang' || type === 'hu'
 }
 
-export class RemotePlayerController implements PlayerController {
+export class RemotePlayerController implements PlayerController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
+  private aiMode = false
+  private peerId: string
+  private readonly ai: AiController
 
   constructor(
     private readonly room: VibeHubSDK.Room,
-    private readonly peerId: string,
+    peerId: string,
     private readonly onPending?: (pending: boolean) => void,
+    ai: AiController = new AiController(),
   ) {
+    this.ai = ai
+    this.peerId = peerId
     room.onMessage((message, fromPeerId) => {
-      if (fromPeerId !== peerId || this.pending === null || !isActionMessage(message)) return
+      if (fromPeerId !== this.peerId || this.pending === null || !isActionMessage(message)) return
       const resolve = this.pending
       this.pending = null
       this.onPending?.(false)
       resolve(message)
     })
+  }
+
+  enableAI(): void {
+    this.aiMode = true
+    // 清除挂起请求：claim → 自动过；turn → 回退弃最后一张，引擎不卡死。
+    this.reset()
+  }
+
+  disableAI(): void {
+    this.aiMode = false
+  }
+
+  isAIControlled(): boolean {
+    return this.aiMode
+  }
+
+  retargetPeer(peerId: string): void {
+    this.peerId = peerId
   }
 
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
@@ -56,6 +92,7 @@ export class RemotePlayerController implements PlayerController {
   }
 
   async requestTurn(ctx: TurnContext): Promise<TurnAction> {
+    if (this.aiMode) return this.ai.requestTurn(ctx)
     const response = await this.request({
       kind: 'turn_request',
       ctx: {
@@ -87,6 +124,7 @@ export class RemotePlayerController implements PlayerController {
   }
 
   async requestClaim(ctx: ClaimContext): Promise<ClaimAction> {
+    if (this.aiMode) return this.ai.requestClaim(ctx)
     const response = await this.request({
       kind: 'claim_request',
       ctx: {
@@ -105,6 +143,7 @@ export class RemotePlayerController implements PlayerController {
   }
 
   async requestRobKong(ctx: RobKongContext): Promise<RobKongAction> {
+    if (this.aiMode) return this.ai.requestRobKong(ctx)
     const response = await this.request({
       kind: 'rob_kong_request',
       ctx: { tile: ctx.tile, from: ctx.from, hand: ctx.hand, exposedMelds: ctx.exposedMelds },
@@ -124,5 +163,6 @@ export class RemotePlayerController implements PlayerController {
       this.onPending?.(false)
       resolve({ type: 'pass' })
     }
+    this.ai.reset?.()
   }
 }

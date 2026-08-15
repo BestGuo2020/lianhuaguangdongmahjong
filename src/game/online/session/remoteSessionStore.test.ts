@@ -43,13 +43,16 @@ describe('remoteSessionStore', () => {
     expect(store.loadGuestId()).toBe('guest-1')
   })
 
-  it('rejects malformed, incomplete and unknown-mode sessions', () => {
+  it('rejects malformed and unknown-mode sessions；SDK 版允许无 rejoinCode', () => {
     const storage = memoryStorage()
     const store = createRemoteSessionStore(() => storage)
 
     storage.data[REMOTE_STORAGE_KEYS.session] = '{broken'
     expect(store.loadSession()).toBeNull()
+    // SDK 版（VibeHub）无 rejoinCode：仅 roomId + 合法 mode 即为有效会话（刷新页面重进）。
     storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ roomId: 'A', mode: 'east' })
+    expect(store.loadSession()).toEqual({ roomId: 'A', rejoinCode: undefined, nickname: '', playerId: '', mode: 'east', rulesetId: 'lotus-classic' })
+    storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ rejoinCode: 'B', mode: 'east' })
     expect(store.loadSession()).toBeNull()
     storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ roomId: 'A', rejoinCode: 'B', mode: 'unknown' })
     expect(store.loadSession()).toBeNull()

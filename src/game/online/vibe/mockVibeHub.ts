@@ -16,6 +16,7 @@ type Wire =
   | { __mock: true; kind: 'msg'; roomId: string; from: string; to?: string; payload: unknown }
   | { __mock: true; kind: 'meta_req'; roomId: string; from: string }
   | { __mock: true; kind: 'meta'; roomId: string; from: string; meta: VibeHubSDK.RoomMetadata | null }
+  | { __mock: true; kind: 'ping'; roomId: string; peerId: string; ts: number }
 
 const CHANNEL_NAME = 'lianhua-vibe-mock'
 const META_WAIT_MS = 600
@@ -29,6 +30,9 @@ function getPeerId(): string {
       : `peer-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
   }
   try {
+    // 本地重连测试：?mockPeer=<id> 覆盖身份；关标签页重开带同一参数即可恢复座位。
+    const url = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('mockPeer') : null
+    if (url) return url
     if (typeof globalThis.sessionStorage === 'undefined') return fallback()
     const existing = globalThis.sessionStorage.getItem('lianhua_mock_peer')
     if (existing) return existing
@@ -142,15 +146,23 @@ function delay(ms: number): Promise<void> {
 export interface MockVibeOptions {
   /** 加入房间后等待其它对端出现的时间窗口；测试可调小。 */
   settleMs?: number
+  /** 心跳间隔；0 表示关闭心跳（不检测掉线）。默认 1000ms。 */
+  pingIntervalMs?: number
+  /** 超过该时长未收到某成员任何消息则判定掉线（触发 onPeer leave）。默认 4000ms。 */
+  leaveTimeoutMs?: number
+  /** 注入固定 peerId（模拟刷新页面重进的同一身份）；缺省按 sessionStorage/随机生成。 */
+  peerId?: string
 }
 
 export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.Client {
   const settleMs = options.settleMs ?? 250
+  const pingIntervalMs = options.pingIntervalMs ?? 1000
+  const leaveTimeoutMs = options.leaveTimeoutMs ?? 4000
   const channel = new BroadcastChannel(CHANNEL_NAME)
   const rooms = new Map<string, MockRoom>()
   const metaCache = new Map<string, VibeHubSDK.RoomMetadata>()
   const authHandlers = new Set<(user: VibeHubSDK.User | null) => void>()
-  const peerId = getPeerId()
+  const peerId = options.peerId ?? getPeerId()
   // 真实 SDK 走网络（JSON 序列化），应用层消息按设计是 JSON 安全的；这里同样先
   // JSON 序列化再投递，避免 Vue reactive Proxy 等对象无法被 structured clone 克隆
   // （DataCloneError）——与真实数据通道的行为一致。
@@ -168,6 +180,20 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     rooms.get(wire.roomId)?.handleWire(wire)
   }
 
+  // 心跳 + 掉线检测：模拟「标签页关闭」——窗口关闭后不再发 ping，其余端超时
+  // 判定其掉线（触发 onPeer leave）。真实 SDK 由底层连接状态驱动，这里是模拟。
+  if (pingIntervalMs > 0) {
+    setInterval(() => {
+      const now = Date.now()
+      for (const room of rooms.values()) {
+        if (!room.isLeft()) {
+          post({ __mock: true, kind: 'ping', roomId: room.roomId, peerId, ts: now })
+        }
+        room.checkStale(now, leaveTimeoutMs)
+      }
+    }, pingIntervalMs)
+  }
+
   class MockRoom implements VibeHubSDK.Room {
     readonly roomId: string
     readonly peerId: string
@@ -179,6 +205,7 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     readonly sync: VibeHubSDK.SnapshotInterpolator = createMockSync()
 
     private readonly members = new Map<string, number>() // peerId -> joinTs
+    private readonly lastSeen = new Map<string, number>() // peerId -> 最近消息时间（心跳/任何消息）
     private meta: VibeHubSDK.RoomMetadata | null = null
     private readonly messageHandlers: Array<(message: unknown, fromPeerId: string) => void> = []
     private readonly peerHandlers: Array<(event: VibeHubSDK.PeerEvent) => void> = []
@@ -188,7 +215,9 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
       this.roomId = roomId
       this.peerId = peerId
       this.data = createLocalDataStore(`room:${roomId}`)
-      this.members.set(peerId, Date.now())
+      const now = Date.now()
+      this.members.set(peerId, now)
+      this.lastSeen.set(peerId, now)
     }
 
     onMessage(callback: (message: unknown, fromPeerId: string) => void): this {
@@ -294,6 +323,7 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
       if (wire.kind === 'join') {
         if (wire.peerId === this.peerId || this.members.has(wire.peerId)) return
         this.members.set(wire.peerId, wire.ts)
+        this.lastSeen.set(wire.peerId, wire.ts)
         this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.peerId }))
         // 本窗口是房主（最早加入者）：欢迎新人（携带房主身份，供对方完成选举）。
         if (this.isEarliestMember()) {
@@ -310,20 +340,42 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
         if (wire.hostId === this.peerId) return
         if (this.members.has(wire.hostId)) return
         this.members.set(wire.hostId, wire.hostTs)
+        this.lastSeen.set(wire.hostId, wire.hostTs)
         this.hostId = wire.hostId
         this.isHost = false
         this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.hostId }))
       } else if (wire.kind === 'leave') {
         if (wire.peerId === this.peerId) return
         if (!this.members.delete(wire.peerId)) return
+        this.lastSeen.delete(wire.peerId)
         this.peerHandlers.forEach((cb) => cb({ type: 'leave', id: wire.peerId }))
       } else if (wire.kind === 'msg') {
         if (wire.to != null && wire.to !== this.peerId) return
+        this.lastSeen.set(wire.from, Date.now())
         this.messageHandlers.forEach((cb) => cb(wire.payload, wire.from))
+      } else if (wire.kind === 'ping') {
+        // 心跳：仅刷新 lastSeen，不下发给业务 handler。
+        if (wire.peerId !== this.peerId && this.members.has(wire.peerId)) {
+          this.lastSeen.set(wire.peerId, wire.ts)
+        }
       } else if (wire.kind === 'meta_req') {
         // 只有房主补发房间元数据（announce 的 mode/rulesetId 等）。
         if (!this.isEarliestMember() || !this.meta || wire.from === this.peerId) return
         post({ __mock: true, kind: 'meta', roomId: this.roomId, from: this.peerId, meta: this.meta })
+      }
+    }
+
+    /** 掉线检测：成员超过 leaveTimeoutMs 未发任何消息 → 判定掉线（模拟标签页关闭）。 */
+    checkStale(now: number, leaveTimeoutMs: number): void {
+      if (this.left) return
+      for (const [id, last] of this.lastSeen) {
+        if (id === this.peerId) continue
+        if (!this.members.has(id)) continue
+        if (now - last > leaveTimeoutMs) {
+          this.members.delete(id)
+          this.lastSeen.delete(id)
+          this.peerHandlers.forEach((cb) => cb({ type: 'leave', id }))
+        }
       }
     }
 

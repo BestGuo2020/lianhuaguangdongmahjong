@@ -16,6 +16,7 @@ import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } f
 import type { RoundStartMessage, ServerMessage } from '../protocol/messages'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import type { DisconnectableController } from './remotePlayerController'
 
 export interface HostGameRunnerOptions<TController> {
   room: VibeHubSDK.Room
@@ -40,27 +41,145 @@ export interface HostGameRunnerOptions<TController> {
   onLocalEvent?: (message: ServerMessage) => void
 }
 
-export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void } {
+export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void; aiControlledSeats: Set<number> } {
   const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
+
+  // 远端玩家请求超时（客户端 12s 回合倒计时 + 余量）：超时判定掉线 → AI 接管，游戏不卡死。
+  const REMOTE_REQUEST_TIMEOUT_MS = 15000
+  // 被 AI 接管的座位（seat 1-3），供 UI 标记「AI 代打」。
+  const aiControlledSeats = new Set<number>()
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
   let waitingCount = 0
+  let game!: GamePort & SnapshotSource
   const remoteControllers: Array<TController | undefined> = [undefined, undefined, undefined]
+  const seatStates: Array<{
+    peerId: string
+    seat: number
+    controller: TController | undefined
+    timeout: ReturnType<typeof setTimeout> | null
+  }> = []
+  const asDisconnectable = (controller: TController) => controller as TController & DisconnectableController
   for (const [peerId, seat] of seatByPeer) {
     if (seat >= 1 && seat <= 3) {
-      remoteControllers[seat - 1] = createController(room, peerId, (pending) => {
+      const seatState = {
+        peerId,
+        seat,
+        controller: undefined as TController | undefined,
+        timeout: null as ReturnType<typeof setTimeout> | null,
+      }
+      seatStates.push(seatState)
+      remoteControllers[seat - 1] = seatState.controller = createController(room, peerId, (pending) => {
         if (pending) {
           // 等待远端响应前，先把当前状态广播出去（含刚发生的弃牌/杠），
           // 否则客户端会先收到 claim/turn_request 却看不到触发它的那张牌。
           broadcastAll()
+          // 掉线超时：客户端消失（不响应）→ 超时后 AI 接管该座位。
+          if (seatState.timeout != null) window.clearTimeout(seatState.timeout)
+          seatState.timeout = window.setTimeout(() => {
+            seatState.timeout = null
+            const controller = asDisconnectable(seatState.controller!)
+            if (controller && !controller.isAIControlled()) {
+              controller.enableAI()
+              aiControlledSeats.add(seat)
+              sendAnnouncement(`玩家「${seatName(seat)}」掉线，AI 代打`, 'gold')
+            }
+          }, REMOTE_REQUEST_TIMEOUT_MS)
+        } else if (seatState.timeout != null) {
+          window.clearTimeout(seatState.timeout)
+          seatState.timeout = null
         }
         waitingCount += pending ? 1 : -1
       })
     }
   }
 
-  const game = createGame(remoteControllers)
+  game = createGame(remoteControllers)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
+
+  function seatName(seat: number): string {
+    return game.players[seat]?.name ?? `座位${seat}`
+  }
+
+  function sendAnnouncement(text: string, tone: string) {
+    const message: ServerMessage = { kind: 'announcement', text, tone, id: Date.now() }
+    room.send(message)
+    onLocalEvent?.(message)
+  }
+
+  // 掉线接管 / 重连恢复：对局中 peer 离开 → AI 接管；peer 重新加入（刷新页面重进）→
+  // 恢复真人决策 + 补发座位身份（rejoin_ok），客户端据此恢复本家座位映射。
+  room.onPeer((event) => {
+    if (event.type === 'leave') {
+      const seatState = seatStates.find((state) => state.peerId === event.id)
+      if (!seatState?.controller) return
+      const controller = asDisconnectable(seatState.controller)
+      if (!controller.isAIControlled()) {
+        controller.enableAI()
+        aiControlledSeats.add(seatState.seat)
+        sendAnnouncement(`玩家「${seatName(seatState.seat)}」掉线，AI 代打`, 'gold')
+      }
+      return
+    }
+    if (event.type === 'join') {
+      const seatState = seatStates.find((state) => state.peerId === event.id)
+      if (!seatState?.controller) return
+      const controller = asDisconnectable(seatState.controller)
+      if (controller.isAIControlled()) {
+        controller.disableAI()
+        aiControlledSeats.delete(seatState.seat)
+        sendAnnouncement(`玩家「${seatName(seatState.seat)}」已重连`, 'gold')
+      }
+      room.send({
+        kind: 'rejoin_ok',
+        seat: seatState.seat,
+        rejoin: true,
+        roomId: room.roomId,
+        mode,
+        rulesetId,
+        nickname: seatName(seatState.seat),
+        rejoinCode: '',
+      } satisfies ServerMessage, event.id)
+    }
+  })
+
+  // 客户端 join 完成（消息处理链挂好后）会发 lobby_hello；房主据此再补发一次
+  // rejoin_ok，避免 join 事件（发生在客户端 join settle 期间、其处理器挂载前）时
+  // 直发的 rejoin_ok 被漏掉（刷新页面重进的客户端会因漏收而丢失本家座位）。
+  // 同时做 peerId 兜底：刷新后 peerId 可能变化（新标签页），按昵称匹配 AI 接管中的座位。
+  room.onMessage((message, fromPeerId) => {
+    if (typeof message !== 'object' || message === null) return
+    if ((message as { type?: unknown }).type !== 'lobby_hello') return
+    let seatState = seatStates.find((state) => state.peerId === fromPeerId)
+    if (!seatState) {
+      const nickname = (message as { nickname?: unknown }).nickname
+      const fallback = seatStates.find((state) => {
+        if (!state.controller || state.peerId === fromPeerId) return false
+        const controller = asDisconnectable(state.controller)
+        return controller.isAIControlled() && seatName(state.seat) === nickname
+      })
+      if (fallback) {
+        seatState = fallback
+        const controller = asDisconnectable(fallback.controller!)
+        controller.disableAI()
+        controller.retargetPeer(fromPeerId)
+        fallback.peerId = fromPeerId
+        aiControlledSeats.delete(fallback.seat)
+        sendAnnouncement(`玩家「${seatName(fallback.seat)}」已重连`, 'gold')
+      }
+    }
+    if (!seatState) return
+    room.send({
+      kind: 'rejoin_ok',
+      seat: seatState.seat,
+      rejoin: true,
+      roomId: room.roomId,
+      mode,
+      rulesetId,
+      nickname: seatName(seatState.seat),
+      rejoinCode: '',
+    } satisfies ServerMessage, fromPeerId)
+  })
 
   // 用真实昵称/头像覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
   // 因此必须在「opening」（重开局）时重新覆盖，否则过庄后昵称/头像回退成默认。
@@ -195,6 +314,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   return {
     game,
+    aiControlledSeats,
     stop() {
       window.clearInterval(intervalId)
       stopWatch()
