@@ -2,8 +2,10 @@
 //
 // - 用 createGame 工厂创建本地引擎（useGame/useLotusGame），传入 remoteControllers（seat 1-3）
 //   给远端真人座位；其余空席由引擎回退 AI。
-// - 周期广播：把本地状态按「目标座位」脱敏后发给每个远端 peer（state-sync 模型）。
+// - 快照广播：把本地状态按「目标座位」脱敏后发给每个远端 peer（state-sync 模型）。
 // - round_start：轮次变化时广播，触发客户端的发牌/骰点动画。
+// - table_action / score_flow / hand_result：瞬时事件广播，客户端据此播放碰杠吃/胡音效与动画
+//   （这些事件不进快照，且会被本地 presenter 在 ~1s 后清空，必须变化瞬间立即发出）。
 //
 // 诚实说明：本模块是 host-authority 的核心骨架；hand_result / match_finished 等事件消息
 // 与广播时机需在真机联调阶段按实际 phase 转换校准（详见 docs/vibehub-p2p-migration.md）。
@@ -58,6 +60,28 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     }
   }
 
+  // ── 瞬时事件广播：碰/杠/吃/胡 音效与动画 ──
+  let lastTableActionId = -1
+  let lastScoreFlowId = -1
+  const stopEventWatchers = [
+    watch(() => game.tableActionEvent.value, (event) => {
+      if (!event || event.id === lastTableActionId) return
+      lastTableActionId = event.id
+      room.send({ kind: 'table_action', event })
+      broadcastAll()
+    }),
+    watch(() => game.scoreFlowEvent.value, (event) => {
+      if (!event || event.id === lastScoreFlowId) return
+      lastScoreFlowId = event.id
+      room.send({ kind: 'score_flow', deltas: event.deltas })
+    }),
+    watch(() => game.result.value, (result) => {
+      if (!result) return
+      room.send({ kind: 'hand_result', result })
+      broadcastAll()
+    }),
+  ]
+
   function sendRoundStart() {
     const dice = game.diceValues.value
     const message: RoundStartMessage = {
@@ -84,7 +108,16 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       sendRoundStart()
     }
     lastPhase = phase
+    // 相位变化立即广播（waiting/thinking 由 broadcastAll 守卫拦截）。
+    broadcastAll()
   })
+
+  // 关键状态变化立即广播快照，降低 200ms 兜底轮询带来的「两边不同步」延迟。
+  const stopImmediateWatchers = [
+    watch(() => game.lastDiscard.value, () => broadcastAll()),
+    watch(() => game.currentPlayer.value, () => broadcastAll()),
+    watch(() => game.wallHeadDrawn.value, () => broadcastAll()),
+  ]
 
   // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。
   game.startGame(mode)
@@ -104,6 +137,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     stop() {
       window.clearInterval(intervalId)
       stopWatch()
+      stopEventWatchers.forEach((stop) => stop())
+      stopImmediateWatchers.forEach((stop) => stop())
     },
   }
 }

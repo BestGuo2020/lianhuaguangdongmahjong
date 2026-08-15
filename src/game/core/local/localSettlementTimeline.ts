@@ -81,6 +81,10 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
         endOptions.robbedKong ? (endOptions.robbedKongPlayerIndex ?? null) : null,
         state.dealer.value,
       )
+      // 联机客户端据 winType 区分点炮胡(hu.mp3)与自摸(zimo.mp3)；单机无此需要。
+      const winType: RoundResult['winType'] = endOptions.robbedKong
+        ? 'robbed-kong'
+        : (Number.isInteger(endOptions.sourceFrom) ? 'discard' : 'self-draw')
       return {
         winnerIndex,
         winner: winner.name,
@@ -88,6 +92,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
         hits,
         ...score,
         totalWon,
+        winType,
         ...endOptions,
       }
     },
