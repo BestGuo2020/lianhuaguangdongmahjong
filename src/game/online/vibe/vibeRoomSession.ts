@@ -53,6 +53,8 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
   }
 
   function clearSession() {
+    // 客户端主动离开时先通知房主释放座位（比依赖 SDK 断连检测更可靠、更即时）。
+    if (!state.isHost.value) clientLobby?.leave()
     room?.leave()
     room = null
     hostLobby = null

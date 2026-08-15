@@ -18,6 +18,7 @@ export interface LobbySeat {
 export type ClientLobbyMessage =
   | { type: 'lobby_hello'; nickname: string }
   | { type: 'lobby_ready'; ready: boolean }
+  | { type: 'lobby_leave' }
 
 // host → client
 export type HostLobbyMessage =
@@ -28,7 +29,7 @@ export type HostLobbyMessage =
 export function isClientLobbyMessage(message: unknown): message is ClientLobbyMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
   const type = (message as { type?: unknown }).type
-  return type === 'lobby_hello' || type === 'lobby_ready'
+  return type === 'lobby_hello' || type === 'lobby_ready' || type === 'lobby_leave'
 }
 
 export function isHostLobbyMessage(message: unknown): message is HostLobbyMessage {
@@ -109,6 +110,13 @@ export function createHostLobby({ room, capacity, hostNickname, onRoster, onStar
         seat.ready = message.ready
         broadcast()
       }
+    } else if (message.type === 'lobby_leave') {
+      const seat = peers.get(fromPeerId)
+      if (seat) {
+        peers.delete(fromPeerId)
+        occupied.delete(seat.seat)
+        broadcast()
+      }
     }
   })
 
@@ -140,6 +148,16 @@ export interface ClientLobbyOptions {
 }
 
 export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientLobbyOptions) {
+  let nickname = ''
+
+  // 连接就绪后（重新）发送 hello：join 后立即 send 可能因 DataChannel 尚未建立而丢失，
+  // 导致房主收不到 hello、roster 缺该玩家（进而 mySeat 恒为 -1、无准备按钮、无法开局）。
+  room.onPeer((event) => {
+    if (event.type === 'join' && nickname) {
+      room.send({ type: 'lobby_hello', nickname } satisfies ClientLobbyMessage)
+    }
+  })
+
   room.onMessage((message) => {
     if (!isHostLobbyMessage(message)) return
     if (message.type === 'lobby_roster') onRoster(message.hostSeat, message.seats)
@@ -148,11 +166,15 @@ export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientL
   })
 
   return {
-    hello(nickname: string) {
-      room.send({ type: 'lobby_hello', nickname } satisfies ClientLobbyMessage)
+    hello(name: string) {
+      nickname = name
+      room.send({ type: 'lobby_hello', nickname: name } satisfies ClientLobbyMessage)
     },
     setReady(ready: boolean) {
       room.send({ type: 'lobby_ready', ready } satisfies ClientLobbyMessage)
+    },
+    leave() {
+      room.send({ type: 'lobby_leave' } satisfies ClientLobbyMessage)
     },
   }
 }

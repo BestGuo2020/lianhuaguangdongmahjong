@@ -45,6 +45,22 @@ describe('vibeLobby', () => {
     expect(started).toBe(true)
   })
 
+  it('房主收到 lobby_leave 后释放座位', () => {
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1' })
+    expect(rosters[rosters.length - 1]).toHaveLength(2)
+    room.emit('peer1', { type: 'lobby_leave' })
+    expect(rosters[rosters.length - 1]).toEqual([
+      { seat: 0, peerId: 'host-peer', nickname: '房主', ready: false },
+    ])
+  })
+
   it('客户端：hello/ready 发送、roster 接收', () => {
     const room = createMockVibeRoom(false)
     const received: LobbySeat[][] = []
