@@ -1,0 +1,97 @@
+// 房主权威快照序列化：把本地引擎状态（LocalGameState / LotusGameState）映射成
+// ServerSnapshot（P2P 广播用）。房主本地下标即绝对座位（localOpening 里 seat=index），
+// 因此座位字段无需旋转；只对「非目标座位」的暗牌做脱敏（置 null，长度不变）。
+import type {
+  Announcement,
+  GamePhase,
+  LastDiscard,
+  RefLike,
+  RoundResult,
+} from '../../core/contracts/gamePort'
+import type { GamePlayer, MatchType, TileType, WinPresentation } from '../../core/contracts/types'
+import type { ServerMeldDto, ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
+import type { RuleVariant } from '../../core/rules/ruleVariants'
+
+/** 快照数据源：本地引擎状态的最小公共形状（广麻/莲花引擎都满足）。 */
+export interface SnapshotSource {
+  phase: RefLike<GamePhase>
+  players: GamePlayer[]
+  wall: RefLike<TileType[]>
+  wallHeadDrawn: RefLike<number>
+  currentPlayer: RefLike<number>
+  lastDiscard: RefLike<LastDiscard | null>
+  result: RefLike<RoundResult | null>
+  announcement: RefLike<Announcement | null>
+  winPresentation: RefLike<WinPresentation | null>
+  winningPlayerIndex: RefLike<number>
+  round: RefLike<number>
+  dealer: RefLike<number>
+  honba: RefLike<number>
+  matchType: RefLike<MatchType>
+  matchFinished: RefLike<boolean>
+  diceValues: RefLike<number[]>
+  // 莲花麻将（lotus-legacy）专属字段；广麻引擎无这些字段。
+  secondDice?: RefLike<[number, number] | null>
+  flipTile?: RefLike<TileType | null>
+  jokerTiles?: RefLike<TileType[]>
+  wildcardTiles?: RefLike<TileType[]>
+  flipStack?: RefLike<number | null>
+  wallBreakIndex?: RefLike<number>
+}
+
+export interface SnapshotContext {
+  roomId: string
+  rulesetId: RuleVariant
+}
+
+function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
+  return {
+    name: player.name,
+    avatar: player.avatar,
+    score: player.score,
+    seat: player.seat,
+    discards: [...player.discards],
+    redCount: player.redCount,
+    drawnTileIndex: player.drawnTileIndex,
+    // 暗牌脱敏：仅目标座位可见手牌；其余座位保留张数、置 null。
+    hand: visible ? [...player.hand] : player.hand.map(() => null),
+    melds: player.melds.map((meld) => ({ ...meld }) as ServerMeldDto),
+  }
+}
+
+export function serializeStateToSnapshot(
+  source: SnapshotSource,
+  targetSeat: number,
+  context: SnapshotContext,
+): ServerSnapshot {
+  const dice = source.diceValues.value
+  return {
+    kind: 'state_snapshot',
+    roomId: context.roomId,
+    mode: source.matchType.value,
+    rulesetId: context.rulesetId,
+    phase: source.phase.value,
+    round: source.round.value,
+    dealer: source.dealer.value,
+    honba: source.honba.value,
+    dice: [dice[0] ?? 1, dice[1] ?? 1] as [number, number],
+    secondDice: source.secondDice?.value ?? undefined,
+    flipTile: source.flipTile?.value ?? null,
+    jokerTiles: source.jokerTiles?.value ?? [],
+    wildcardTiles: source.wildcardTiles?.value ?? [],
+    flipStack: source.flipStack?.value ?? null,
+    wallBreakIndex: source.wallBreakIndex?.value ?? 0,
+    wallCount: source.wall.value.length,
+    wall: [...source.wall.value],
+    headDrawn: source.wallHeadDrawn.value,
+    currentPlayer: source.currentPlayer.value,
+    players: source.players.map((player, seat) => toServerPlayer(player, seat === targetSeat)),
+    seat: targetSeat,
+    result: source.result.value,
+    announcement: source.announcement.value,
+    matchFinished: source.matchFinished.value,
+    lastDiscard: source.lastDiscard.value,
+    winPresentation: source.winPresentation.value,
+    winningPlayerIndex: source.winningPlayerIndex.value,
+  }
+}
