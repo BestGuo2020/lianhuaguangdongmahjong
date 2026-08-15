@@ -303,6 +303,95 @@ describe('startHostGame 无头权威', () => {
     runner.stop()
   })
 
+  it('刷新重进：新 peerId 按大厅座位表恢复，新窗口收到快照并正常响应（不被 AI 反复接管）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestA = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-x' })
+    const hostRoom = await hostClient.room.join('REFRESH1')
+    const guestRoomA = await guestA.room.join('REFRESH1')
+    stubWindow()
+    // 模拟 hostLobby 的实时座位表：旧 peerId 先占座位 1，刷新后换成新 peerId（昵称也换了，
+    // 昵称兜底必然失配，必须靠大厅座位表恢复——复刻生产「3 次提示回来 3 次 AI 接管」）。
+    const roster = new Map<string, number>([[guestRoomA.peerId, 1]])
+    const guestMessagesA: Array<{ kind?: string }> = []
+    guestRoomA.onMessage((message) => guestMessagesA.push(message as never))
+    guestRoomA.onMessage((message) => {
+      if ((message as { kind?: string })?.kind === 'claim_request') guestRoomA.send({ type: 'pass' })
+    })
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoomA.peerId, 1]]),
+      seatNames: new Map([[1, '刷新客']]),
+      getSeatByPeer: () => roster,
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    // 推进到闲家回合，不响应 → 15s 超时 AI 接管。
+    let sawTurnRequest = false
+    for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      sawTurnRequest = guestMessagesA.some((message) => message?.kind === 'turn_request')
+    }
+    expect(sawTurnRequest).toBe(true)
+    await vi.advanceTimersByTimeAsync(16000)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+
+    // 刷新：旧窗口关闭；新窗口 peerId 变化（新标签页），昵称与座位表记录不同。
+    guestRoomA.leave()
+    await vi.advanceTimersByTimeAsync(200)
+    const guestB = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-y' })
+    const guestBJoin = guestB.room.join('REFRESH1')
+    await vi.advanceTimersByTimeAsync(200)
+    const guestRoomB = await guestBJoin
+    roster.delete(guestRoomA.peerId)
+    roster.set(guestRoomB.peerId, 1)
+    const rejoinMessages: Array<{ kind?: string; seat?: number }> = []
+    guestRoomB.onMessage((message) => rejoinMessages.push(message as never))
+    guestRoomB.onMessage((message) => {
+      if ((message as { kind?: string })?.kind === 'claim_request') guestRoomB.send({ type: 'pass' })
+    })
+    guestRoomB.send({ type: 'lobby_hello', nickname: '全新昵称', avatar: '' })
+    await vi.advanceTimersByTimeAsync(300)
+
+    // 座位恢复 + rejoin_ok + 对局快照（此前按静态 seatByPeer 广播，新 peerId 永远收不到）。
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    const rejoinOk = rejoinMessages.find((message) => message?.kind === 'rejoin_ok')
+    expect(rejoinOk?.seat).toBe(1)
+    const snapshot = rejoinMessages.find((message) => message?.kind === 'state_snapshot')
+    expect(snapshot).toBeTruthy()
+
+    // 新窗口收到回合请求并能正常响应 → 引擎接受弃牌，座位不再被 AI 反复接管。
+    let responded = false
+    for (let i = 0; i < 400 && !responded; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      if (rejoinMessages.some((message) => message?.kind === 'turn_request')) {
+        guestRoomB.send({ type: 'discard', handIndex: 0 })
+        responded = true
+      }
+    }
+    expect(responded).toBe(true)
+    // 弃牌被接受 → 回合推进到下一家（不再停留在座位 1）。
+    for (let i = 0; i < 200; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value !== 1) break
+    }
+    expect(runner.game.currentPlayer.value).not.toBe(1)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    runner.stop()
+  }, 20000)
+
   it('AI 接管后玩家恢复响应 → 归还座位（不再永久代打）', async () => {
     const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
     const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })

@@ -35,6 +35,7 @@ const REMOTE_FALLBACK_MS = 14000
 
 export class LotusRemotePlayerController implements LotusController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
+  private pendingPayload: ServerRequest | null = null
   private aiMode = false
   private peerId: string
   private readonly ai: LotusAiController
@@ -58,6 +59,7 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
       if (this.pending === null) return
       const resolve = this.pending
       this.pending = null
+      this.pendingPayload = null
       this.onPending?.(false)
       resolve(message)
     })
@@ -84,9 +86,15 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     this.peerId = peerId
   }
 
+  resendPending(): void {
+    if (this.pending === null || this.pendingPayload === null) return
+    this.room.send(this.pendingPayload, this.peerId)
+  }
+
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
     return new Promise((resolve) => {
       this.pending = resolve
+      this.pendingPayload = payload
       this.onPending?.(true)
       this.room.send(payload, this.peerId)
     })
@@ -111,6 +119,7 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
       if (this.pending) {
         const resolve = this.pending
         this.pending = null
+        this.pendingPayload = null
         this.onPending?.(false)
         resolve({ type: 'pass' })
       }
@@ -271,6 +280,7 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     if (this.pending) {
       const resolve = this.pending
       this.pending = null
+      this.pendingPayload = null
       this.onPending?.(false)
       resolve({ type: 'pass' })
     }

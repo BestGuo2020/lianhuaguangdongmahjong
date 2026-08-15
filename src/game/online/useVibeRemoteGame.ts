@@ -177,6 +177,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatAvatars,
           createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
           createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+          getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
         })
@@ -190,6 +191,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatAvatars,
           createController: (r, peerId, onPending, onAI) => new RemotePlayerController(r, peerId, onPending, undefined, onAI),
           createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+          getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
         })
@@ -207,7 +209,10 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       let hostReadyNext = false
       function maybeAdvanceRound() {
         const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
-        const livePeers = liveContinuePeers(seatByPeer, aiSeats)
+        // 用实时大厅座位表（重连的客户端 peerId 会变，静态 seatByPeer 是开局快照，
+        // 若按它判定，重连后座位既不在 AI 名单也等不到确认 → 下一局永远卡住）。
+        const currentSeatByPeer = new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat]))
+        const livePeers = liveContinuePeers(currentSeatByPeer, aiSeats)
         if (hostReadyNext && livePeers.every((peerId) => continueReady.has(peerId))) {
           hostReadyNext = false
           continueReady.clear()
@@ -461,20 +466,22 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   }
 
   // ── 刷新重进的自愈：SDK 刷新后可能残留旧 RTCPeerConnection（setRemoteDescription
-  // on closed PC 报错），数据通道建不起来 → 收不到任何对局数据。检测到「已加入房间但
-  // 一段时间仍在 lobby（无快照/round_start）」→ 自动 leave + 重新 join，最多重试几次。
+  // on closed PC 报错），数据通道建不起来 → 收不到任何消息。检测「已加入房间但连座位
+  // 都没拿到（mySeat < 0，即完全没收到过房主消息）」→ 自动 leave + 重新 join（最多 2 次）。
+  // 注意：拿到座位（mySeat >= 0）说明通道可用、已正常进房，绝不能重试（每次重试会换
+  // 新 peerId，反而打断昵称兜底恢复）。房主在大厅时客户端本就停在 lobby，也属正常。
   let rejoinRetries = 0
   function scheduleRejoinRetry() {
     const retry = () => {
-      if (!roomId.value || phase.value !== 'lobby' || state.matchFinished.value) return
+      if (!roomId.value || mySeat.value >= 0 || state.matchFinished.value) return
       rejoinRetries += 1
-      if (rejoinRetries > 3) return
-      console.warn(`[client] 重进后未收到对局数据（数据通道可能未建立），重新加入（第 ${rejoinRetries} 次）`)
+      if (rejoinRetries > 2) return
+      console.warn(`[client] 重进后连座位都没收到（数据通道可能未建立），重新加入（第 ${rejoinRetries} 次）`)
       void roomSession.leaveRoom()
       later(() => { void roomSession.resumeSession() }, 1500)
-      later(retry, 6000)
+      later(retry, 8000)
     }
-    later(retry, 6000)
+    later(retry, 8000)
   }
   function resetRejoinRetry() {
     rejoinRetries = 0

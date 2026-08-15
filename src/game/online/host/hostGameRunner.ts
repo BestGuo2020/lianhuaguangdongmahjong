@@ -34,6 +34,8 @@ export interface HostGameRunnerOptions<TController> {
   seatNames?: Map<number, string>
   /** seat → 头像（SDK 用户头像；房主 + 远端真人）。 */
   seatAvatars?: Map<number, string>
+  /** 当前大厅座位表（peerId → seat）：重连恢复时优先按大厅分配恢复（比昵称可靠）。 */
+  getSeatByPeer?: () => Map<string, number>
   /** 快照广播间隔（ms）。 */
   broadcastIntervalMs?: number
   /** 房主自视快照（seat 0 脱敏视图）：喂给房主自己的表现层 viewer。 */
@@ -130,6 +132,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       if (!seatState?.controller) return
       const controller = asDisconnectable(seatState.controller)
       if (controller.isAIControlled()) controller.disableAI()
+      // 同 peerId 刷新重连：旧窗口没收到/未响应的挂起请求要重发（新窗口才刚开始）。
+      controller.resendPending()
       room.send({
         kind: 'rejoin_ok',
         seat: seatState.seat,
@@ -140,17 +144,38 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         nickname: seatName(seatState.seat),
         rejoinCode: '',
       } satisfies ServerMessage, event.id)
+      // 立即补发一帧快照：等待中的座位 pending 会挡住周期广播，不主动补发的话
+      // 重连客户端只能干等下一次状态变化（甚至永远等不到）才能看到牌桌。
+      broadcastAll(true)
     }
   })
 
   // 客户端 join 完成（消息处理链挂好后）会发 lobby_hello；房主据此再补发一次
   // rejoin_ok，避免 join 事件（发生在客户端 join settle 期间、其处理器挂载前）时
   // 直发的 rejoin_ok 被漏掉（刷新页面重进的客户端会因漏收而丢失本家座位）。
-  // 同时做 peerId 兜底：刷新后 peerId 可能变化（新标签页），按昵称匹配 AI 接管中的座位。
+  // 同时做 peerId 兜底：刷新后 peerId 可能变化（新标签页），优先按大厅座位表恢复
   room.onMessage((message, fromPeerId) => {
     if (typeof message !== 'object' || message === null) return
     if ((message as { type?: unknown }).type !== 'lobby_hello') return
     let seatState = seatStates.find((state) => state.peerId === fromPeerId)
+    if (!seatState) {
+      // 大厅座位表是权威（hostLobby 已把该座位分配给新 peerId，旧 peerId 已退场），
+      // 无需等 AI 接管即可重定向——否则掉线未满 15s（座位还没被 AI 接管）时重连
+      // 的新 peerId 永远对不上控制器，直到超时被 AI 接管才恢复，白挨一次代打。
+      const assignedSeat = options.getSeatByPeer?.().get(fromPeerId)
+      if (assignedSeat !== undefined) {
+        const bySeat = seatStates.find((state) => state.seat === assignedSeat)
+        const controller = bySeat?.controller ? asDisconnectable(bySeat.controller) : null
+        if (bySeat && controller) {
+          seatState = bySeat
+          controller.disableAI()
+          controller.retargetPeer(fromPeerId)
+          bySeat.peerId = fromPeerId
+          // 挂起请求重发给新 peerId（旧窗口的 turn/claim 请求新窗口收不到）。
+          controller.resendPending()
+        }
+      }
+    }
     if (!seatState) {
       const nickname = (message as { nickname?: unknown }).nickname
       const fallback = seatStates.find((state) => {
@@ -164,6 +189,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         controller.disableAI()
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
+        controller.resendPending()
       }
     }
     if (!seatState) return
@@ -177,6 +203,21 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       nickname: seatName(seatState.seat),
       rejoinCode: '',
     } satisfies ServerMessage, fromPeerId)
+    // 同上：补发一帧全量快照，让重连客户端立即看到牌桌（含正在等待中的请求局面）。
+    broadcastAll(true)
+  })
+
+  // 临时诊断：定位「刷新重进后操作回不去」——客户端动作是否到达房主、是否对上座位。
+  room.onMessage((message, fromPeerId) => {
+    if (typeof message !== 'object' || message === null) return
+    const type = (message as { type?: unknown }).type
+    if (type !== 'discard' && type !== 'pass' && type !== 'claim' && type !== 'gang' && type !== 'hu') return
+    const known = seatStates.some((state) => state.peerId === fromPeerId)
+    if (!known) {
+      console.warn(
+        `[host] 收到动作 ${String(type)} 来自未知 peer ${fromPeerId}（座位表: ${seatStates.map((s) => `${s.seat}=${s.peerId}`).join(' | ')}）——客户端动作没对上任何真人座位`,
+      )
+    }
   })
 
   // 用真实昵称/头像覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
@@ -202,11 +243,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   // 状态签名去重：同一帧状态不重复广播。否则 200ms 兜底轮询 + 多个状态 watch
   // 会反复发送幂等快照，客户端 3D 牌桌每次 rebuild 都会清掉进行中的出牌飞行动画（360ms）。
   let lastBroadcastKey = ''
-  function broadcastAll() {
+  function broadcastAll(force = false) {
     // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播周期快照：
     // 否则快照 applyNow 会 clearCountdown、清空 actionPrompt 并把 phase 重置为 playing，
     // 覆盖客户端 requestCoordinator 刚设的 discard/prompt 相位、倒计时与碰杠胡按钮。
-    if (waitingCount > 0 || game.phase.value === 'thinking') return
+    // force（重连补发）除外：新 peerId 必须立刻拿到当前局面，否则永远看不到牌桌。
+    if (!force && (waitingCount > 0 || game.phase.value === 'thinking')) return
     const key = [
       game.phase.value,
       game.currentPlayer.value,
@@ -219,10 +261,17 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       game.revealHands.value ? 1 : 0,
       game.players.map((p) => `${p.hand.join('')}|${p.discards.join('')}|${p.melds.map((m) => m.type + m.tiles.join('')).join('')}|${p.score}|${p.redCount}`).join('~'),
     ].join('#')
-    if (key === lastBroadcastKey) return
+    if (!force && key === lastBroadcastKey) return
     lastBroadcastKey = key
-    for (const [peerId, seat] of seatByPeer) {
-      room.send(serializeStateToSnapshot(game, seat, context), peerId)
+    // 用 seatStates 而非开局静态 seatByPeer：刷新重连的客户端 peerId 会变化，
+    // seatState.peerId 在恢复时被 retarget 更新。若按旧 map 发送，重连后的新 peerId
+    // 永远收不到快照（客户端 players 为空 → 无法响应 turn_request → 14s 被 AI 接管）。
+    const sent = new Set<number>()
+    for (const state of seatStates) {
+      if (state.peerId && !sent.has(state.seat)) {
+        sent.add(state.seat)
+        room.send(serializeStateToSnapshot(game, state.seat, context), state.peerId)
+      }
     }
     onLocalSnapshot?.(serializeStateToSnapshot(game, 0, context))
   }

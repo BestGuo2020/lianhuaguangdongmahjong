@@ -34,6 +34,8 @@ export interface DisconnectableController {
   isAIControlled(): boolean
   /** 重连后身份可能变化（刷新页面 peerId 改变）：把消息过滤改绑到新 peerId。 */
   retargetPeer(peerId: string): void
+  /** 重连恢复时重发当前挂起的请求（发给旧 peerId 的 turn/claim 请求新窗口收不到）。 */
+  resendPending(): void
 }
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
@@ -47,6 +49,7 @@ const REMOTE_FALLBACK_MS = 14000
 
 export class RemotePlayerController implements PlayerController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
+  private pendingPayload: ServerRequest | null = null
   private aiMode = false
   private peerId: string
   private readonly ai: AiController
@@ -70,6 +73,7 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
       if (this.pending === null) return
       const resolve = this.pending
       this.pending = null
+      this.pendingPayload = null
       this.onPending?.(false)
       resolve(message)
     })
@@ -97,9 +101,15 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
     this.peerId = peerId
   }
 
+  resendPending(): void {
+    if (this.pending === null || this.pendingPayload === null) return
+    this.room.send(this.pendingPayload, this.peerId)
+  }
+
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
     return new Promise((resolve) => {
       this.pending = resolve
+      this.pendingPayload = payload
       this.onPending?.(true)
       this.room.send(payload, this.peerId)
     })
@@ -124,6 +134,7 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
       if (this.pending) {
         const resolve = this.pending
         this.pending = null
+        this.pendingPayload = null
         this.onPending?.(false)
         resolve({ type: 'pass' })
       }
@@ -258,6 +269,7 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
     if (this.pending) {
       const resolve = this.pending
       this.pending = null
+      this.pendingPayload = null
       this.onPending?.(false)
       resolve({ type: 'pass' })
     }
