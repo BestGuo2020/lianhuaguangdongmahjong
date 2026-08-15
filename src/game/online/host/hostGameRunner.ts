@@ -60,11 +60,28 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   const game = createGame(remoteControllers)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
+  // 状态签名去重：同一帧状态不重复广播。否则 200ms 兜底轮询 + 多个状态 watch
+  // 会反复发送幂等快照，客户端 3D 牌桌每次 rebuild 都会清掉进行中的出牌飞行动画（360ms）。
+  let lastBroadcastKey = ''
   function broadcastAll() {
     // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播周期快照：
     // 否则快照 applyNow 会 clearCountdown、清空 actionPrompt 并把 phase 重置为 playing，
     // 覆盖客户端 requestCoordinator 刚设的 discard/prompt 相位、倒计时与碰杠胡按钮。
     if (waitingCount > 0 || game.phase.value === 'thinking') return
+    const key = [
+      game.phase.value,
+      game.currentPlayer.value,
+      game.lastDiscard.value?.id ?? 0,
+      game.wallHeadDrawn.value,
+      game.wall.value.length,
+      game.announcement.value?.text ?? '',
+      game.result.value?.winnerIndex ?? -1,
+      game.winPresentation.value?.winnerIndex ?? -1,
+      game.revealHands.value ? 1 : 0,
+      game.players.map((p) => `${p.hand.join('')}|${p.discards.join('')}|${p.melds.map((m) => m.type + m.tiles.join('')).join('')}|${p.score}|${p.redCount}`).join('~'),
+    ].join('#')
+    if (key === lastBroadcastKey) return
+    lastBroadcastKey = key
     for (const [peerId, seat] of seatByPeer) {
       room.send(serializeStateToSnapshot(game, seat, context), peerId)
     }
