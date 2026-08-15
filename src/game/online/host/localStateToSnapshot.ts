@@ -80,6 +80,8 @@ export function serializeStateToSnapshot(
     jokerTiles: source.jokerTiles?.value ?? [],
     wildcardTiles: source.wildcardTiles?.value ?? [],
     flipStack: source.flipStack?.value ?? null,
+    // 本地引擎不追踪 openingStack（远端表现层字段），发 null 以满足 decoder 的 isNullable 校验。
+    openingStack: null,
     wallBreakIndex: source.wallBreakIndex?.value ?? 0,
     wallCount: source.wall.value.length,
     wall: [...source.wall.value],

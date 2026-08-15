@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
 import { serializeStateToSnapshot, type SnapshotSource } from './localStateToSnapshot'
+import { decodeServerMessage } from '../protocol/decoder'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 
 function player(seat: number, hand: TileType[]): GamePlayer {
@@ -63,5 +64,11 @@ describe('serializeStateToSnapshot', () => {
     expect(snapshot.wallCount).toBe(3)
     expect(snapshot.wall).toEqual(['m1', 'm2', 'm3'])
     expect(snapshot.headDrawn).toBe(1)
+  })
+
+  it('序列化结果能通过客户端解码器校验（含 openingStack 等必填字段）', () => {
+    const players = [player(0, ['m1']), player(1, []), player(2, []), player(3, [])]
+    const snapshot = serializeStateToSnapshot(makeSource(players), 0, { roomId: 'R', rulesetId: 'lotus-classic' })
+    expect(decodeServerMessage(snapshot)).not.toBeNull()
   })
 })

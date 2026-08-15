@@ -84,7 +84,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         return
       }
       const seatByPeer = new Map<string, number>()
+      const seatNames = new Map<number, string>()
       for (const seat of lobbySeats.value) {
+        seatNames.set(seat.seat, seat.nickname)
         if (seat.seat > 0) seatByPeer.set(seat.peerId, seat.seat)
       }
       if (rulesetId.value === 'lotus-legacy') {
@@ -93,6 +95,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           rulesetId: rulesetId.value,
           mode: matchType.value,
           seatByPeer,
+          seatNames,
           createController: (r, peerId) => new LotusRemotePlayerController(r, peerId),
           createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true }),
         })
@@ -102,6 +105,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           rulesetId: rulesetId.value,
           mode: matchType.value,
           seatByPeer,
+          seatNames,
           createController: (r, peerId) => new RemotePlayerController(r, peerId),
           createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true }),
         })
