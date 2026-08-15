@@ -54,7 +54,13 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   function broadcastAll() {
     for (const [peerId, seat] of seatByPeer) {
-      room.send(serializeStateToSnapshot(game, seat, context), peerId)
+      const snapshot = serializeStateToSnapshot(game, seat, context)
+      // 远端玩家回合：本地引擎 phase 是 thinking（等待其响应），但客户端需要 discard 才能出牌
+      // （其 isUserTurn = currentPlayer===0 && phase==='discard'）。覆盖该玩家的快照相位。
+      if (game.currentPlayer.value === seat && snapshot.phase === 'thinking') {
+        snapshot.phase = 'discard'
+      }
+      room.send(snapshot, peerId)
     }
   }
 
