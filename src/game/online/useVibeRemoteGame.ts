@@ -146,6 +146,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           onLocalEvent,
         })
       }
+      // 临时诊断：定位「闲家方位是房主方位」的座位映射问题。
+      console.log('[host] mySeat:', mySeat.value, 'seatByPeer:', [...seatByPeer.entries()].map(([p, s]) => `${p}->${s}`).join(' | '))
       // 房主动作改道本地权威引擎。
       sendAction = (message) => {
         const game = hostGame.value?.game

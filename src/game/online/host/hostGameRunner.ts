@@ -77,6 +77,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         if (player) player.avatar = avatar
       }
     }
+    // 临时诊断：定位「闲家方位是房主方位」的座位映射问题。
+    console.log('[host] engine seats:', game.players.map((p) => `${p.seat}:${p.name}`).join(' | '))
   }
 
 

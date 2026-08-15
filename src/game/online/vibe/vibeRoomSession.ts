@@ -114,6 +114,8 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
           state.roomSeats.value = seats
           const own = seats.find((seat) => seat.peerId === joined.peerId)
           if (own) state.mySeat.value = own.seat
+          // 临时诊断：定位「闲家方位是房主方位」的座位分配问题。
+          console.log('[client] mySeat:', state.mySeat.value, 'joined.peerId:', joined.peerId, 'seats:', seats.map((s) => `${s.seat}:${s.peerId}`).join(' | '))
         },
         onStart: () => onStart(joined),
         onClosed: () => onClosed(),

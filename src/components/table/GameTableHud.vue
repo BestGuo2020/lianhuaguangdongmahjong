@@ -232,7 +232,7 @@ function onAvatarError(entry: GamePlayer) {
 <template>
   <div class="game-table-hud" @pointerdown="clearMobileSelection">
     <MahjongTable3D
-      :players="players" :current-player="currentPlayer" :last-discard="lastDiscard"
+      :players="players" :local-seat="user.seat" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
       :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"
       :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
