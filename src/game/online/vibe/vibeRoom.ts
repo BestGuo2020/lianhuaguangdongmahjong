@@ -54,3 +54,8 @@ export async function joinRoom(roomId: string): Promise<VibeHubSDK.Room> {
   const client = requireClient()
   return client.room.join(roomId.toUpperCase(), { topology: 'host' })
 }
+
+/** 读房间元数据（announce 字段 mode/rulesetId 等），供加入方获知场次与规则。 */
+export async function getRoomMeta(roomId: string): Promise<VibeHubSDK.RoomMetadata | null> {
+  return requireClient().rooms.get(roomId.toUpperCase())
+}
