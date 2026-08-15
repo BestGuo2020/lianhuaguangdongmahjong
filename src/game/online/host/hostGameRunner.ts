@@ -47,6 +47,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   for (const [peerId, seat] of seatByPeer) {
     if (seat >= 1 && seat <= 3) {
       remoteControllers[seat - 1] = createController(room, peerId, (pending) => {
+        if (pending) {
+          // 等待远端响应前，先把当前状态广播出去（含刚发生的弃牌/杠），
+          // 否则客户端会先收到 claim/turn_request 却看不到触发它的那张牌。
+          broadcastAll()
+        }
         waitingCount += pending ? 1 : -1
       })
     }

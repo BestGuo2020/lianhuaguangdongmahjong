@@ -167,13 +167,49 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // 动作发送：客户端走传输层；房主在 onStart 后改道本地引擎（房主自己就是权威）。
   let sendAction: (message: RemotePlayerActionMessage) => void = (message) => transport.send(message)
 
-  // 房主自视：快照不带 actionPrompt/turnSeconds，这两个「本家回合态」由引擎镜像进本地 viewer。
-  // 客户端由 requestCoordinator 驱动，此 watch 仅在房主侧生效（isHost 守卫）。
+  // 房主自视：快照不带 actionPrompt，本家「碰/杠/胡/吃」提示由引擎镜像进本地 viewer。
   watch(() => hostGame.value?.game.actionPrompt.value, (prompt) => {
     if (isHost.value) actionPrompt.value = prompt ?? null
   })
-  watch(() => hostGame.value?.game.turnSeconds.value, (seconds) => {
-    if (isHost.value) turnSeconds.value = seconds ?? 0
+
+  // 房主自视：引擎无头不计时，本家回合/提示倒计时由 viewer 表现层计时（超时自动出牌/过牌），
+  // 与客户端 requestCoordinator 的 12s 倒计时对齐（发牌动画结束后才真正看到回合，故不能在引擎里起跑）。
+  let hostCountdownHandle: number | null = null
+  function clearHostCountdown() {
+    if (hostCountdownHandle != null) {
+      globalThis.clearInterval(hostCountdownHandle)
+      hostCountdownHandle = null
+    }
+    turnSeconds.value = 0
+  }
+  function startHostCountdown(onExpire: () => void) {
+    clearHostCountdown()
+    turnSeconds.value = 12
+    hostCountdownHandle = globalThis.setInterval(() => {
+      if (!isHost.value) {
+        clearHostCountdown()
+        return
+      }
+      turnSeconds.value -= 1
+      if (turnSeconds.value === 3) playSound('didu.ogg')
+      if (turnSeconds.value <= 0) {
+        clearHostCountdown()
+        onExpire()
+      }
+    }, 1000)
+  }
+  watch(() => [phase.value, currentPlayer.value, actionPrompt.value] as const, () => {
+    if (!isHost.value) return
+    const hostTurn = phase.value === 'discard' && currentPlayer.value === 0
+    const hostPrompt = phase.value === 'prompt' && actionPrompt.value != null
+    if (hostTurn) {
+      const last = Math.max(0, (players[0]?.hand.length ?? 1) - 1)
+      startHostCountdown(() => sendAction({ type: 'discard', handIndex: last }))
+    } else if (hostPrompt) {
+      startHostCountdown(() => sendAction({ type: 'pass' }))
+    } else {
+      clearHostCountdown()
+    }
   })
 
   // ── 内部：定时器 / 延迟队列 ──
@@ -343,6 +379,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   function clearCountdown() {
     requestCoordinator.clearCountdown()
+    clearHostCountdown()
   }
 
   function isShowingRoundResult() {

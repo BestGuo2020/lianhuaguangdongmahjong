@@ -110,8 +110,11 @@ export function useLotusGame({
     controllers,
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
-    instant: headless,
   })
+  // 无头仅让「结算动画」即时，出牌/碰杠的 PACE_MS 节奏保留（否则出牌动画消失）。
+  const settlementLater = headless
+    ? (callback: () => void) => timer.later(callback, 0)
+    : timer.later
   transient = createLocalTransientEventPresenter({ state, later: timer.later })
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
@@ -140,7 +143,7 @@ export function useLotusGame({
   settlementTimeline = createLotusSettlement({
     state,
     clearTimers: timer.clear,
-    later: timer.later,
+    later: settlementLater,
     playSound: sound,
     playSoundAndWait: soundAndWait,
     showTableAction: transient.showTableAction,

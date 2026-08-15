@@ -97,8 +97,12 @@ export function useGame({
     controllers,
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
-    instant: headless,
   })
+  // 无头仅让「结算动画」即时（胡牌特效/亮牌等待归零），出牌/碰杠的 PACE_MS 节奏保留，
+  // 否则玩家看不清弃牌，出牌动画消失。
+  const settlementLater = headless
+    ? (callback: () => void) => scheduler.later(callback, 0)
+    : scheduler.later
   transientEvents = createLocalTransientEventPresenter({ state, later: scheduler.later })
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
@@ -127,7 +131,7 @@ export function useGame({
   settlementTimeline = createLocalSettlementTimeline({
     state,
     clearTimers: scheduler.clear,
-    later: scheduler.later,
+    later: settlementLater,
     playSound: sound,
     playSoundAndWait: soundAndWait,
     showTableAction: transientEvents.showTableAction,
