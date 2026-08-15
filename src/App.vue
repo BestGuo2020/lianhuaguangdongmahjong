@@ -18,7 +18,7 @@ import { useRemoteContinueCountdown } from './game/online/presentation/useRemote
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
-import { initVibeHub, vibeUser } from './game/online/vibe/vibeClient'
+import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -139,8 +139,10 @@ const lobbyController = createRemoteLobbyController({
 })
 
 // P1 重连：刷新页面自动重进上次的房间（对局进行中则快照重同步 + rejoin_ok 恢复座位）。
+// 生产环境需先登录（SDK token 不落盘），未登录就 join 会失败或留下半状态（只响声音
+// 进不去游戏）；本地（mock 匿名）无需登录，立即重进。登录后的重进由 vibeUser watch 触发。
 onMounted(() => {
-  if (vibeRemoteGame.savedSessionExists) lobbyController.resumeSession()
+  if (vibeRemoteGame.savedSessionExists && !loginRequired.value) lobbyController.resumeSession()
 })
 const {
   nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,

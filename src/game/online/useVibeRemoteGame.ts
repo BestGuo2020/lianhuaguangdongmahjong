@@ -116,11 +116,10 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       if (!isHost.value) {
         // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
         transport.open()
-        // P2：房主掉线（刷新页面前为「离开」）→ 用当前分数结束对局，展示最终排名后可回大厅。
-        room.onPeer((event) => {
-          if (event.type !== 'leave') return
-          const hostSeat = lobbySeats.value.find((seat) => seat.seat === 0)
-          if (!hostSeat || event.id !== hostSeat.peerId) return
+        // P2：房主掉线 → 用当前分数结束对局，展示最终排名后可回大厅。
+        // 真实 SDK 对「房主关闭页面」通常只报 reconnecting（重连中）而非立即 leave，
+        // 因此持续失联超过阈值也判定房主掉线（leave 则立即判定）。
+        const hostGoneAfter = (ms: number) => window.setTimeout(() => {
           if (state.matchFinished.value || phase.value === 'lobby') return
           matchLifecycle.finishMatch(players.map((player) => ({
             seat: player.seat,
@@ -128,6 +127,32 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             score: player.score,
           })))
           transientEventPresenter.announce('房主掉线，对局结束', 'gold')
+        }, ms)
+        let hostGoneTimer: ReturnType<typeof setTimeout> | null = null
+        room.onPeer((event) => {
+          if (event.type === 'error' || event.type === 'relay') return
+          const hostSeat = lobbySeats.value.find((seat) => seat.seat === 0)
+          if (!hostSeat || event.id !== hostSeat.peerId) return
+          if (state.matchFinished.value || phase.value === 'lobby') return
+          if (event.type === 'leave') {
+            if (hostGoneTimer != null) { window.clearTimeout(hostGoneTimer); hostGoneTimer = null }
+            matchLifecycle.finishMatch(players.map((player) => ({
+              seat: player.seat,
+              name: player.name,
+              score: player.score,
+            })))
+            transientEventPresenter.announce('房主掉线，对局结束', 'gold')
+            return
+          }
+          if (event.type === 'reconnecting') {
+            // 房主失联：进入重连等待，超过阈值仍无恢复即判定掉线。
+            if (hostGoneTimer == null) hostGoneTimer = hostGoneAfter(8000)
+            return
+          }
+          if (event.type === 'join' || event.type === 'connecting') {
+            // 房主恢复 → 取消掉线判定。
+            if (hostGoneTimer != null) { window.clearTimeout(hostGoneTimer); hostGoneTimer = null }
+          }
         })
         return
       }
