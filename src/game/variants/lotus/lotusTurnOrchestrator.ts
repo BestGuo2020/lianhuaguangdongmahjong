@@ -418,7 +418,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       melds: player.melds,
       exposedMelds: options.structuralMeldCount(playerIndex),
       kongBloom,
-      skipDraw: Boolean(turnOptions.skipDraw),
+      // 庄家首回合 preDrawn：引擎跳摸，但对远端视作已摸牌（天胡判定）。
+      skipDraw: Boolean(turnOptions.skipDraw) && !Boolean(turnOptions.preDrawn),
       isDealer: playerIndex === state.dealer.value,
       jokers: state.jokerTiles.value,
       visibleTiles: visibleTilesFor(playerIndex),

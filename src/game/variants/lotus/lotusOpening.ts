@@ -25,7 +25,7 @@ interface LotusOpeningOptions {
   playSoundAndWait(name: string, volume?: number): Promise<void>
   announce(text: string, tone?: string): void
   getRoundLabel(): string
-  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
+  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
   ruleset?: RuleSet
 }
@@ -152,7 +152,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
         winTile: dealer.hand[dealer.drawnTileIndex] ?? dealer.hand[dealer.hand.length - 1],
       })
     }
-    options.later(() => options.beginTurn(dealerIndex, { skipDraw: true }), 650)
+    options.later(() => options.beginTurn(dealerIndex, { skipDraw: true, preDrawn: true }), 650)
   }
 
   function roll() {

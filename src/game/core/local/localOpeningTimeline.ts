@@ -15,7 +15,7 @@ interface LocalOpeningTimelineOptions {
   playSoundAndWait(name: string, volume?: number): Promise<void>
   announce(text: string, tone?: string): void
   getRoundLabel(): string
-  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
+  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options: { fourRed: true }): unknown
 }
 
@@ -119,7 +119,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     const fourRedWinner = state.players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return options.endGame(fourRedWinner, { fourRed: true })
     options.announce(`${options.getRoundLabel()} · 开牌`)
-    options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true }), 650)
+    options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true, preDrawn: true }), 650)
   }
 
   return { start, cancel, resetPlayers }
