@@ -168,8 +168,10 @@ watch(vibeUser, (user) => {
   if (user.image) avatar.value = user.image
   // 刷新页面后 SDK 需重新授权（token 仅驻内存）；登录完成后若存在保存的房间会话
   // 且尚未在房间中 → 自动重进（对局进行中则快照重同步 + 座位恢复）。
+  // 重进后若数据通道建不起来（SDK 残留旧 RTCPeerConnection）→ 自动重试加入。
   if (vibeRemoteGame.savedSessionExists && !roomId.value) {
     lobbyController.resumeSession()
+    vibeRemoteGame.scheduleRejoinRetry()
   }
 })
 

@@ -460,6 +460,26 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     settlementTimeline.cancel()
   }
 
+  // ── 刷新重进的自愈：SDK 刷新后可能残留旧 RTCPeerConnection（setRemoteDescription
+  // on closed PC 报错），数据通道建不起来 → 收不到任何对局数据。检测到「已加入房间但
+  // 一段时间仍在 lobby（无快照/round_start）」→ 自动 leave + 重新 join，最多重试几次。
+  let rejoinRetries = 0
+  function scheduleRejoinRetry() {
+    const retry = () => {
+      if (!roomId.value || phase.value !== 'lobby' || state.matchFinished.value) return
+      rejoinRetries += 1
+      if (rejoinRetries > 3) return
+      console.warn(`[client] 重进后未收到对局数据（数据通道可能未建立），重新加入（第 ${rejoinRetries} 次）`)
+      void roomSession.leaveRoom()
+      later(() => { void roomSession.resumeSession() }, 1500)
+      later(retry, 6000)
+    }
+    later(retry, 6000)
+  }
+  function resetRejoinRetry() {
+    rejoinRetries = 0
+  }
+
   function clearCountdown() {
     requestCoordinator.clearCountdown()
     clearHostCountdown()
@@ -582,6 +602,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
     savedSessionExists: sessionStore.loadSession() != null,
+    scheduleRejoinRetry,
+    resetRejoinRetry,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
     remoteActions: roomSession,

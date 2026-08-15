@@ -105,7 +105,12 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
       room = joined
       state.isHost.value = false
       state.roomId.value = joined.roomId
-      const meta = await getRoomMeta(joined.roomId)
+      // 元数据非致命：失败不应让客户端停在「房间已设但无座位」的半状态
+      // （对局进行中的重进靠快照提供 mode/rulesetId，元数据只是锦上添花）。
+      let meta: Awaited<ReturnType<typeof getRoomMeta>> = null
+      try { meta = await getRoomMeta(joined.roomId) } catch (error) {
+        console.warn('[client] 读房间元数据失败（忽略）:', error)
+      }
       if (meta) {
         if (meta.mode === 'east' || meta.mode === 'hanchan') state.matchType.value = meta.mode
         if (meta.rulesetId === 'lotus-classic' || meta.rulesetId === 'lotus-legacy') state.rulesetId.value = meta.rulesetId
@@ -127,6 +132,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
     } catch (error) {
       state.sessionError.value = readableError(error, '加入房间失败')
       state.sessionStatus.value = 'idle'
+      console.error('[client] 加入/重进房间失败:', error)
       throw error
     }
   }
