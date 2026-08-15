@@ -52,7 +52,8 @@ export function createVibeRoomTransport({ getRoom, onMessage }: VibeRoomTranspor
   }
 
   function close() {
-    getRoom()?.leave()
+    // 不调用 room.leave()：离开房间由 vibeRoomSession.clearSession() 统一负责，
+    // 避免重复 leave 在 SDK 仍协商 relay 时关闭连接、触发 setRemoteDescription 竞态。
     boundRoom = null
     status.value = 'idle'
     signalQuality.value = 0
