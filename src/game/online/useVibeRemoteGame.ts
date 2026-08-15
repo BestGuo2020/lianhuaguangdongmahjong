@@ -125,7 +125,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatByPeer,
           seatNames,
           createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
-          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true, headless: true }),
+          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
           onLocalSnapshot,
           onLocalEvent,
         })
@@ -137,7 +137,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatByPeer,
           seatNames,
           createController: (r, peerId, onPending) => new RemotePlayerController(r, peerId, onPending),
-          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true, headless: true }),
+          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
           onLocalSnapshot,
           onLocalEvent,
         })

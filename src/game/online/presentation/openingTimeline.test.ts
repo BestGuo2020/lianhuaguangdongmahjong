@@ -55,6 +55,25 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('openingTimeline', () => {
+  it('keeps the first captured snapshot and ignores later fast-host snapshots', async () => {
+    const { state, timeline } = harness()
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+    timeline.captureSnapshot(snapshot()) // 开局：本家(seat 2)14 张、其余 13 张
+
+    // 无头房主推进极快，发牌动画等待期间会陆续到达 drawing/checking 快照，不能覆盖开局手牌。
+    timeline.captureSnapshot({
+      ...snapshot(),
+      phase: 'checking',
+      players: [player(0, 13, true), player(1, 13, true), player(2, 13), player(3, 13, true)],
+    } as ServerSnapshot)
+
+    await vi.advanceTimersByTimeAsync(10000)
+
+    // 仍按第一份快照发牌：本家 14 张，其余 13 张（隐藏）。
+    expect(state.players.map((item) => item.hand.length)).toEqual([14, 0, 0, 0])
+    expect(state.players.map((item) => item.concealedTileCount)).toEqual([14, 13, 13, 13])
+  })
+
   it('runs start, dice and authoritative deal animation before opening_done', async () => {
     const { state, sent, finished, timeline } = harness()
     timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })

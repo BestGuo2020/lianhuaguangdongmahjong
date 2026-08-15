@@ -129,6 +129,9 @@ export function createOpeningTimeline({
     // 发牌动画开始后，普通回合快照可能已经到达；它们应留在 reconciler
     // 的 pendingSnapshot 中，不能重建正在播放的手牌/牌墙，否则动画会回到首批牌。
     if (dealStarted) return
+    // 只保留「开局后第一份」快照（opening 全量手牌）；无头房主推进极快，
+    // 等待发牌动画期间会陆续到达 drawing/checking 等快照，若继续覆盖会把发牌手牌冲掉。
+    if (openingSnapshot) return
     openingSnapshot = snapshot
     // 立即填充座位骨架（players 非空 → GameTableHud/3D 场景挂载），
     // 让骰子 presenter 在开局动画开始前就绪；手牌留空由发牌动画填充。
