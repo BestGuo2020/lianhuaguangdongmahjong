@@ -53,13 +53,16 @@ SDK 没有「座位 / rejoinCode / ready / start」这些 REST 概念，需重�
   `remoteActionController` 发动作，几乎不改。
 - AI 空席：房主端 `AiController` 代打。
 
-## 5. 传输层要点（Phase 2，已踩到的坑）
+## 5. 传输层要点（Phase 2，已核实 vibehub.js 源码）
 
-- `room.onMessage(cb)` / `room.onPeer(cb)` **返回 `this`（Room），没有退订函数**。
-  → transport 须在 `join` 之后绑定一次，不能像 WebSocket 那样反复 open/close 重绑。
-- 因此 `roomSocket.ts` 的 `SocketLike`「可重开」语义要改为「join 后创建 transport」，
+- `room.onMessage(cb)` / `room.onPeer(cb)` 实现为 `this._handlers.message.push(cb)`：
+  **push 多监听**（每次调用追加一个 handler），返回 `this` 仅用于链式调用，**没有退订函数**。
+- 因此每个 handler 都会收到**每条**消息，须按自己的消息类型过滤；不同模块（大厅/传输/游戏）
+  可各自注册监听互不冲突。本仓库大厅消息用 `type: 'lobby_*'`，游戏消息用 `kind: 'state_snapshot'` 等，天然隔离。
+- 因无退订：transport/lobby handler 在 `join` 之后创建一次即可，不要反复重建（会累积重复 handler）。
+- `roomSocket.ts` 的 `SocketLike`「可重开」语义要改为「join 后创建 transport」，
   `useRemoteGame` 里 `roomId && rejoinCode` 决定 URL 的逻辑替换为「已 join 的 Room 对象」。
-- 消息透传：`room.send(obj)` 广播 / `room.send(obj, peerId)` 定向；`onMessage(msg, fromPeerId)`。
+- 消息透传：`room.send(obj)` 广播（不含自己）/ `room.send(obj, peerId)` 定向；`onMessage(msg, fromPeerId)` 收他人消息。
 - 状态：`room.peers()`/`room.networkStats()` 驱动 `signalQuality`；`onPeer` 事件驱动连接状态。
 
 ## 6. 阶段状态
