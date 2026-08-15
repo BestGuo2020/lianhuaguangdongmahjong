@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { getPlayerStats, getPlayerStatsById, type PlayerStats } from '../../game/online/api/accountApi'
+import { getPlayerStats, type PlayerStats } from '../../game/online/vibe/vibeStats'
 
 interface Props {
   open: boolean
@@ -24,14 +24,7 @@ watch(() => props.open, async (open) => {
   loading.value = true
   stats.value = null
   try {
-    let next = await getPlayerStatsById(props.playerId)
-    if (next.matches === 0) {
-      const name = props.nickname || props.fallbackNickname.trim()
-      if (name) {
-        const byName = await getPlayerStats(name)
-        if (byName.matches > 0) next = byName
-      }
-    }
+    const next = await getPlayerStats()
     if (serial === requestSerial) stats.value = next
   } catch {
     if (serial === requestSerial) stats.value = null

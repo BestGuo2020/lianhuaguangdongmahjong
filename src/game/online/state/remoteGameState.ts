@@ -1,5 +1,4 @@
 import { reactive, ref } from 'vue'
-import type { RoomSeatState } from '../api/roomApi'
 import type { ActionPrompt, Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
 import type {
   GamePlayer,
@@ -9,15 +8,13 @@ import type {
   TileType,
   WinPresentation,
 } from '../../core/contracts/types'
-import type { RemoteSessionStatus } from '../session/remoteRoomLifecycle'
-import type { StoredSession } from '../session/remoteSessionStore'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 
+export type RemoteSessionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing'
 export type RemoteClientPhase = GamePhase
 
 export interface RemoteGameStateOptions {
   guestId?: string
-  storedSession?: StoredSession | null
   autoPlay?: boolean
 }
 
@@ -27,23 +24,18 @@ function autoPlayFromUrl(): boolean {
 }
 
 export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
-  // 房间与连接会话。
+  // 房间与连接会话（SDK 版：无 rejoinCode / 服务端座位，座位由大厅 roster 管理）。
   const sessionStatus = ref<RemoteSessionStatus>('idle')
   const sessionError = ref('')
   const roomId = ref('')
   const mySeat = ref(-1)
   const nickname = ref('')
-  const rejoinCode = ref('')
   const playerId = ref(options.guestId ?? '')
-  const creatorSeat = ref<number | null>(null)
-  const isCreator = ref(false)
-  const roomSeats = ref<Array<RoomSeatState | null>>([])
   const roomTimeLimit = ref<number | null>(null)
   const rulesetId = ref<RuleVariant>('lotus-classic')
   const autoPlay = ref(options.autoPlay ?? autoPlayFromUrl())
-  const storedSession = ref<StoredSession | null>(options.storedSession ?? null)
 
-  // 服务端权威对局状态与客户端表现状态。
+  // 对局状态与客户端表现状态（快照驱动）。
   const phase = ref<RemoteClientPhase>('lobby')
   const players = reactive<GamePlayer[]>([])
   const wallCount = ref(0)
@@ -84,8 +76,8 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const turnCanWindKong = ref(false)
 
   return {
-    sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, autoPlay, storedSession,
+    sessionStatus, sessionError, roomId, mySeat, nickname, playerId,
+    roomTimeLimit, rulesetId, autoPlay,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,

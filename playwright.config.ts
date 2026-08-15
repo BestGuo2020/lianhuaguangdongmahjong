@@ -2,9 +2,6 @@ import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.E2E_PORT || 4173)
 const baseURL = `http://127.0.0.1:${port}`
-const backendPort = Number(process.env.E2E_BACKEND_PORT || 8000)
-const backendURL = `http://127.0.0.1:${backendPort}`
-const backendPython = process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : '.venv/bin/python'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -27,16 +24,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `${backendPython} -m uvicorn app.main:app --host 127.0.0.1 --port ${backendPort}`,
-      cwd: 'backend',
-      url: `${backendURL}/api/health`,
-      timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
-    },
-    {
       command: `npm run dev -- --port ${port}`,
       url: baseURL,
-      env: { ...process.env, VITE_API_BASE: backendURL },
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

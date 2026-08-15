@@ -8,7 +8,6 @@ import RuleVariantPicker from './RuleVariantPicker.vue'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import type { RoomMeta } from '../../game/online/api/roomApi'
 import { loginRequired } from '../../game/online/vibe/vibeClient'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import LoginButton from '../account/LoginButton.vue'
@@ -21,7 +20,6 @@ interface Props {
   roomId: string
   nicknameInput: string
   joinCode: string
-  roomMeta: RoomMeta | null
   sessionStatus: string
   sessionError: string
   roomTimeLimit: number | null
@@ -153,9 +151,6 @@ function closeDialog() {
             @keyup.enter="dialog = 'create'"
           />
         </label>
-        <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
-          剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
-        </p>
         <div v-if="!roomId" class="remote-entry-actions">
           <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
             {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}

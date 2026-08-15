@@ -119,10 +119,6 @@ export function createRemoteMatchLifecycle({
     state.roomId.value = ''
     state.mySeat.value = -1
     state.nickname.value = ''
-    state.rejoinCode.value = ''
-    state.creatorSeat.value = null
-    state.isCreator.value = false
-    state.roomSeats.value = []
     state.roomTimeLimit.value = null
     state.sessionStatus.value = 'idle'
     state.sessionError.value = ''

@@ -4,7 +4,8 @@
 // 与 WebSocket 的关键差异：room.onMessage/onPeer 返回 `this`（Room）而非退订函数，
 // 因此 transport 在 join 完成后绑定一次，之后不复绑；SDK 自行处理断线重连与中继切换。
 import { ref } from 'vue'
-import type { RoomSocketStatus } from './roomSocket'
+
+export type RoomSocketStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'
 
 export interface VibeRoomTransportOptions {
   /** 返回当前已加入的 SDK 房间；未加入时为 null。 */

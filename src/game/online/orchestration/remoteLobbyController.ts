@@ -2,7 +2,6 @@ import { computed, ref, watch, type Ref } from 'vue'
 import type { GameMode } from '../../core/contracts/activeGamePort'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
-import { reportPlayer, type ReportRequest } from '../api/moderationApi'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { LobbySeat } from '../vibe/vibeLobby'
 import { login, loginRequired } from '../vibe/vibeClient'
@@ -15,6 +14,14 @@ export interface RemoteLobbyActions {
   leaveRoom(): Promise<void>
   closeRoom(): Promise<void>
   resumeSession(): Promise<void>
+}
+
+interface ReportRequest {
+  roomId: string
+  reporterPlayerId: string
+  targetPlayerId?: string
+  targetName: string
+  reason: string
 }
 
 interface RemoteLobbyEnvironment {
@@ -81,7 +88,7 @@ const BROWSER_ENVIRONMENT: RemoteLobbyEnvironment = {
 
 export function createRemoteLobbyController(options: RemoteLobbyControllerOptions) {
   const environment = options.environment ?? BROWSER_ENVIRONMENT
-  const sendReport = options.report ?? reportPlayer
+  const sendReport = options.report
   const nicknameInput = ref(readStoredNickname())
   const joinCode = ref('')
   const copied = ref(false)
