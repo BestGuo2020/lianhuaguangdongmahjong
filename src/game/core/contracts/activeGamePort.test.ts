@@ -21,7 +21,7 @@ describe('ActiveGamePort', () => {
       hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
     })
 
-    const active = createActiveGamePort(mode, () => local, remote)
+    const active = createActiveGamePort(mode, () => local, () => remote)
 
     expect(active.phase.value).toBe('drawing')
     expect(active.currentPlayer.value).toBe(1)
@@ -39,7 +39,7 @@ describe('ActiveGamePort', () => {
     const remote = useGame()
     const localDiscard = vi.spyOn(local, 'userDiscard').mockImplementation(() => {})
     const remoteDiscard = vi.spyOn(remote, 'userDiscard').mockImplementation(() => {})
-    const active = createActiveGamePort(mode, () => local, remote)
+    const active = createActiveGamePort(mode, () => local, () => remote)
 
     active.userDiscard(4)
     expect(localDiscard).toHaveBeenCalledWith(4)
@@ -52,7 +52,7 @@ describe('ActiveGamePort', () => {
   })
 
   it('only exposes the shared production contract', () => {
-    const active = createActiveGamePort(ref<GameMode>('local'), () => useGame(), useGame())
+    const active = createActiveGamePort(ref<GameMode>('local'), () => useGame(), () => useGame())
 
     expect(active).not.toHaveProperty('debugPreviewKong')
     expect(active).not.toHaveProperty('humanController')

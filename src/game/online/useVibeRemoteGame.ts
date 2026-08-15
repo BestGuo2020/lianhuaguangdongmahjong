@@ -7,8 +7,8 @@
 // - 无 rejoin_ok/rejoin_err 握手：mySeat 由大厅 roster 分配（vibeRoomSession）。
 // - 座位表用 LobbySeat（含 peerId），isHost 取代 isCreator/creatorSeat。
 // - 传输层在 join 后由 vibeRoomTransport 绑定一次（getRoom 返回已加入的 Room）。
-import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
-import { defineGamePort } from '../core/contracts/gamePort'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef } from 'vue'
+import { defineGamePort, type GamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
 import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
@@ -28,6 +28,12 @@ import { createRemoteActionController } from './orchestration/remoteActionContro
 import { createTransientEventPresenter } from './presentation/transientEventPresenter'
 import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle'
 import type { LobbySeat } from './vibe/vibeLobby'
+import { useGame } from '../core/local/useGame'
+import { useLotusGame } from '../variants/lotus/lotusGame'
+import { startHostGame } from './host/hostGameRunner'
+import { RemotePlayerController } from './host/remotePlayerController'
+import { LotusRemotePlayerController } from './host/lotusRemotePlayerController'
+import type { SnapshotSource } from './host/localStateToSnapshot'
 import {
   mapPlayersToLocal,
   mapRoundResultToLocal,
@@ -63,14 +69,41 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const isHost = ref(false)
   const lobbySeats = ref<LobbySeat[]>([])
 
+  // 房主对局引擎（开局后懒创建）：房主 UI 直接用它；客户端 UI 用快照状态。
+  const hostGame = shallowRef<{ game: GamePort & SnapshotSource; stop(): void } | null>(null)
+
   const roomSession = createVibeRoomSession({
     state: {
       roomId, mySeat, nickname, playerId,
       roomSeats: lobbySeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
     },
-    onStart: () => {
-      // 开局：客户端由 round_start/state_snapshot 驱动（见 message router）；房主分支后续接入。
-      transport.open()
+    onStart: (room) => {
+      if (!isHost.value) {
+        // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
+        transport.open()
+        return
+      }
+      const seatByPeer = new Map<string, number>()
+      for (const seat of lobbySeats.value) {
+        if (seat.seat > 0) seatByPeer.set(seat.peerId, seat.seat)
+      }
+      if (rulesetId.value === 'lotus-legacy') {
+        hostGame.value = startHostGame({
+          room,
+          rulesetId: rulesetId.value,
+          seatByPeer,
+          createController: (r, peerId) => new LotusRemotePlayerController(r, peerId),
+          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true }),
+        })
+      } else {
+        hostGame.value = startHostGame({
+          room,
+          rulesetId: rulesetId.value,
+          seatByPeer,
+          createController: (r, peerId) => new RemotePlayerController(r, peerId),
+          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true }),
+        })
+      }
     },
     onClosed: () => {
       void leaveRoom()
@@ -327,6 +360,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   }
 
   function cleanup() {
+    hostGame.value?.stop()
     closeConnection()
     clearTimers()
   }
@@ -336,7 +370,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   return defineGamePort({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId,
-    isHost, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
+    isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
     remoteActions: roomSession,

@@ -60,7 +60,7 @@ watch(() => remoteGame.rulesetId.value, (value) => {
 const game = createActiveGamePort(
   gameMode,
   () => usesLotusLocalEngine.value ? lotusGame : localGame,
-  remoteGame,
+  () => remoteGame,
 )
 
 const {

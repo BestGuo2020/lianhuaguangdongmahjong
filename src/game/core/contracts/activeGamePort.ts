@@ -30,9 +30,9 @@ export type ActiveGamePort = {
 export function createActiveGamePort(
   mode: RefLike<GameMode>,
   localGame: () => GamePort,
-  remoteGame: GamePort,
+  remoteGame: () => GamePort,
 ): ActiveGamePort {
-  const active = () => (mode.value === 'remote' ? remoteGame : localGame())
+  const active = () => (mode.value === 'remote' ? remoteGame() : localGame())
 
   const state = <K extends RefStateKey>(key: K): ComputedRef<RefValue<GamePort[K]>> => (
     computed(() => active()[key].value) as ComputedRef<RefValue<GamePort[K]>>
