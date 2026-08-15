@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { RoomSeatState } from '../../game/online/api/roomApi'
+import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 
 interface Props {
   roomId: string
   roomTimeLimit: number | null
-  roomSeats: Array<RoomSeatState | null>
+  roomSeats: LobbySeat[]
   mySeat: number
-  isCreator: boolean
+  isHost: boolean
   sessionStatus: string
   allOccupiedReady: boolean
   matchStarting: boolean
@@ -37,17 +37,17 @@ defineEmits<{
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>
     <div class="room-seats">
-      <div v-for="(seat, index) in roomSeats" :key="index" class="room-seat" :class="{ occupied: !!seat }">
-        <span class="room-seat-no">{{ index + 1 }}</span>
-        <b>{{ seat?.nickname || '等待加入…' }}</b>
-        <em v-if="seat?.ready">已准备</em>
-        <em v-else-if="seat" class="unready">未准备</em>
+      <div v-for="seat in roomSeats" :key="seat.seat" class="room-seat occupied">
+        <span class="room-seat-no">{{ seat.seat + 1 }}</span>
+        <b>{{ seat.nickname || '等待加入…' }}</b>
+        <em v-if="seat.ready">已准备</em>
+        <em v-else class="unready">未准备</em>
       </div>
     </div>
     <div class="room-owner-actions">
       <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button
-        v-if="isCreator"
+        v-if="isHost"
         class="start-button room-start"
         :disabled="!allOccupiedReady || matchStarting"
         @click="$emit('start')"
@@ -55,7 +55,7 @@ defineEmits<{
     </div>
     <div class="room-actions-row">
       <button class="text-button room-leave" :disabled="leaving || closing" @click="$emit('leave')">{{ leaving ? '离开中…' : '离开房间' }}</button>
-      <button v-if="isCreator" class="text-button room-close" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
+      <button v-if="isHost" class="text-button room-close" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
     </div>
   </div>
 </template>

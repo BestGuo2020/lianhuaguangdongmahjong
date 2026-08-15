@@ -8,9 +8,9 @@ import RuleVariantPicker from './RuleVariantPicker.vue'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import type { RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
-import type { StoredSession } from '../../game/online/session/remoteSessionStore'
+import type { RoomMeta } from '../../game/online/api/roomApi'
 import { loginRequired } from '../../game/online/vibe/vibeClient'
+import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import LoginButton from '../account/LoginButton.vue'
 
 interface Props {
@@ -18,7 +18,6 @@ interface Props {
   selectedMatch: MatchType
   selectedRule: RuleVariant
   matchName: string
-  storedSession: StoredSession | null
   roomId: string
   nicknameInput: string
   joinCode: string
@@ -26,9 +25,9 @@ interface Props {
   sessionStatus: string
   sessionError: string
   roomTimeLimit: number | null
-  roomSeats: Array<RoomSeatState | null>
+  roomSeats: LobbySeat[]
   mySeat: number
-  isCreator: boolean
+  isHost: boolean
   allOccupiedReady: boolean
   matchStarting: boolean
   copied: boolean
@@ -48,7 +47,6 @@ const emit = defineEmits<{
   startLocal: []
   createRoom: []
   joinRoom: []
-  resumeSession: []
   copyRoom: []
   toggleReady: []
   startRemote: []
@@ -123,9 +121,6 @@ function closeDialog() {
     <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
     <h1>莲花<span>广麻</span></h1>
     <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
-    <button v-if="storedSession && !roomId" class="continue-session" @click="$emit('resumeSession')">
-      ⏵ 继续对局<template v-if="storedSession.roomId">（房间 {{ storedSession.roomId }}）</template>
-    </button>
     <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
       <button :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
       <button v-if="!singlePlayerOnly" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>
@@ -177,7 +172,7 @@ function closeDialog() {
           :room-time-limit="roomTimeLimit"
           :room-seats="roomSeats"
           :my-seat="mySeat"
-          :is-creator="isCreator"
+          :is-host="isHost"
           :session-status="sessionStatus"
           :all-occupied-ready="allOccupiedReady"
           :match-starting="matchStarting"

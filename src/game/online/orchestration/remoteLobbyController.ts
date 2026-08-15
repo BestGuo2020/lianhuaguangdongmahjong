@@ -3,8 +3,8 @@ import type { GameMode } from '../../core/contracts/activeGamePort'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
 import { reportPlayer, type ReportRequest } from '../api/moderationApi'
-import type { RoomSeatState } from '../api/roomApi'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import type { LobbySeat } from '../vibe/vibeLobby'
 import { login, loginRequired } from '../vibe/vibeClient'
 
 export interface RemoteLobbyActions {
@@ -33,7 +33,7 @@ interface RemoteLobbyControllerOptions {
   roomId: Ref<string>
   nickname: Ref<string>
   playerId: Ref<string>
-  roomSeats: Ref<Array<RoomSeatState | null>>
+  roomSeats: Ref<LobbySeat[]>
   actions: RemoteLobbyActions
   guardEntry(action: () => void): void | Promise<void>
   startBgm(): void
@@ -89,8 +89,8 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
   const leaving = ref(false)
   const closing = ref(false)
   const allOccupiedReady = computed(() => {
-    const occupied = options.roomSeats.value.filter(Boolean)
-    return occupied.length > 0 && occupied.every((seat) => seat?.ready)
+    const seats = options.roomSeats.value
+    return seats.length > 0 && seats.every((seat) => seat.ready)
   })
 
   function createRoom() {

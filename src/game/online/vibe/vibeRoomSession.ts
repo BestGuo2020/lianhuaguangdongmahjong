@@ -123,7 +123,7 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
     }
   }
 
-  function toggleReady() {
+  async function toggleReady(): Promise<void> {
     if (!room) return
     const own = ownSeat()
     const next = !(own?.ready ?? false)
@@ -131,18 +131,21 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
     else clientLobby?.setReady(next)
   }
 
-  function startMatch(): boolean {
-    if (!state.isHost.value || !hostLobby) return false
-    return hostLobby.requestStart()
+  async function startMatch(): Promise<void> {
+    if (state.isHost.value) hostLobby?.requestStart()
   }
 
-  function leaveRoom() {
+  async function leaveRoom(): Promise<void> {
     clearSession()
   }
 
-  function closeRoom() {
+  async function closeRoom(): Promise<void> {
     if (state.isHost.value) hostLobby?.close()
     clearSession()
+  }
+
+  async function resumeSession(): Promise<void> {
+    // SDK 无「继续对局」概念（无 localStorage 重连），保留空实现对齐 RemoteLobbyActions。
   }
 
   return {
@@ -152,6 +155,7 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
     startMatch,
     leaveRoom,
     closeRoom,
+    resumeSession,
     getRoom: () => room,
   }
 }

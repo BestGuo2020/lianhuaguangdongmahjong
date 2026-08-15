@@ -1,7 +1,7 @@
 import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { createRemoteLobbyController, type RemoteLobbyActions } from './remoteLobbyController'
-import type { RoomSeatState } from '../api/roomApi'
+import type { LobbySeat } from '../vibe/vibeLobby'
 import type { GamePhase } from '../../core/contracts/gamePort'
 
 function setup() {
@@ -23,11 +23,9 @@ function setup() {
     roomId: ref(''),
     nickname: ref(''),
     playerId: ref('guest-1'),
-    roomSeats: ref<Array<RoomSeatState | null>>([
-      { seat: 0, nickname: 'A', ready: true, connected: true },
-      { seat: 1, nickname: 'B', ready: true, connected: true },
-      null,
-      null,
+    roomSeats: ref<LobbySeat[]>([
+      { seat: 0, peerId: 'host-peer', nickname: 'A', ready: true },
+      { seat: 1, peerId: 'peer1', nickname: 'B', ready: true },
     ]),
     actions,
     guardEntry: (action) => { pendingEntry = action },

@@ -11,10 +11,9 @@ import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
-import { useRemoteGame } from './game/online/useRemoteGame'
+import { useVibeRemoteGame } from './game/online/useVibeRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
-import { useRoomAvailability } from './game/online/session/useRoomAvailability'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
@@ -46,21 +45,25 @@ const lotusGame = useLotusGame({
   playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
 })
-const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+const vibeRemoteGame = useVibeRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
 const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
-watch(() => remoteGame.rulesetId.value, (value) => {
+watch(() => vibeRemoteGame.rulesetId.value, (value) => {
   if (value === 'lotus-classic' || value === 'lotus-legacy') selectedRule.value = value
 })
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
-// local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎。
+// local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎；远程槽在房主（本地引擎）与
+// 客户端（快照驱动）之间切换。
 const game = createActiveGamePort(
   gameMode,
   () => usesLotusLocalEngine.value ? lotusGame : localGame,
-  () => remoteGame,
+  () => {
+    const host = vibeRemoteGame.hostGame.value
+    return vibeRemoteGame.isHost.value && host ? host.game : vibeRemoteGame
+  },
 )
 
 const {
@@ -88,8 +91,8 @@ const jokerTiles = computed<TileType[]>(() => {
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
-const remoteRulesetId = computed(() => remoteGame.rulesetId.value)
-const remoteSecondDice = computed(() => remoteGame.secondDice.value)
+const remoteRulesetId = computed(() => vibeRemoteGame.rulesetId.value)
+const remoteSecondDice = computed(() => vibeRemoteGame.secondDice.value)
 // 单机莲花麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
 const lotusSecondDice = computed<[number, number] | undefined>(() => lotusGame.secondDice.value ?? undefined)
 
@@ -109,10 +112,11 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
-} = remoteGame
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+} = vibeRemoteGame
 
-const { roomMeta } = useRoomAvailability(gameMode, roomId)
+// SDK 无服务端房间容量元数据，「剩余房间」不再展示。
+const roomMeta = ref(null)
 
 const disclaimerGate = useDisclaimerGate(playerId)
 
@@ -139,7 +143,6 @@ const {
   nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,
   createRoom: createRemoteRoom,
   joinRoom: joinRemoteRoom,
-  resumeSession: resumeRemoteSession,
   copyRoomCode,
   startMatch: startRemoteMatch,
   quitMatch,
@@ -168,7 +171,7 @@ const showLobby = computed(() => (
 // 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
 const humanSeats = computed(() => (
   gameMode.value === 'remote'
-    ? roomSeats.value.filter(Boolean).map((seat) => seat.seat)
+    ? roomSeats.value.map((seat) => seat.seat)
     : [0]
 ))
 
@@ -277,7 +280,6 @@ const continueCountdown = useRemoteContinueCountdown({
           v-model:selected-rule="selectedRule"
           v-model:nickname-input="nicknameInput"
           v-model:join-code="joinCode"
-          :stored-session="storedSession"
           :room-id="roomId"
           :match-name="matchName"
           :room-meta="roomMeta"
@@ -286,7 +288,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :room-time-limit="roomTimeLimit"
           :room-seats="roomSeats"
           :my-seat="mySeat"
-          :is-creator="isCreator"
+          :is-host="isHost"
           :single-player-only="singlePlayerOnly"
           :all-occupied-ready="allOccupiedReady"
           :match-starting="matchStarting"
@@ -296,7 +298,6 @@ const continueCountdown = useRemoteContinueCountdown({
           @start-local="startGameWithAudio"
           @create-room="createRemoteRoom"
           @join-room="joinRemoteRoom"
-          @resume-session="resumeRemoteSession"
           @copy-room="copyRoomCode"
           @toggle-ready="toggleReady"
           @start-remote="startRemoteMatch"
