@@ -132,7 +132,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   ]
 
   function sendRoundStart() {
-    const dice = game.diceValues.value
+    // 莲花麻将 diceValues 在第二次掷骰时被覆盖，一骰须取 firstDice（对齐单人模式）；
+    // 广麻无 firstDice，回退 diceValues（单骰）。
+    // 莲花麻将 diceValues 在第二次掷骰时被覆盖，一骰须取 firstDice（对齐单人模式）；
+    // 广麻无 firstDice，回退 diceValues（单骰）。
+    const dice = game.firstDice?.value ?? game.diceValues.value
     const message: RoundStartMessage = {
       kind: 'round_start',
       matchStarted: game.round.value === 1,

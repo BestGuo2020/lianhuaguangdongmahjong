@@ -300,6 +300,7 @@ export function useLotusGame({
     openingStage: state.openingStage,
     diceValues: state.diceValues,
     diceThrowerIndex: state.diceThrowerIndex,
+    firstDice: state.firstDice,
     secondDice: state.secondDice,
     userCurrentWaits: selectors.userCurrentWaits,
     userTingOptions: selectors.userTingOptions,

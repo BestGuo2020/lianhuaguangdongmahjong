@@ -20,6 +20,7 @@ import type {
 } from '../../variants/lotus/lotusControllers'
 import type { RemotePlayerActionMessage } from '../orchestration/remoteActionController'
 import type { ServerRequest } from '../protocol/messages'
+import { windKong } from '../../variants/lotus/lotusRules'
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
@@ -63,7 +64,8 @@ export class LotusRemotePlayerController implements LotusController {
         skipDraw: ctx.skipDraw,
         afterKong: ctx.kongBloom,
         jokers: ctx.jokers,
-        canWindKong: true,
+        // 风杠可用性按手牌实算（东南西北各 1），不能恒 true——否则客户端每个回合都显示风杠按钮。
+        canWindKong: windKong(ctx.hand, ctx.jokers ?? []),
       },
     })
     switch (response.type) {
@@ -110,6 +112,9 @@ export class LotusRemotePlayerController implements LotusController {
         hand: ctx.hand,
         canPeng: ctx.canPeng,
         canGang: ctx.canGang,
+        // 吃仅下家可吃：只在手牌可吃时给 chiOptions，客户端据此显示「吃」按钮；
+        // 此前漏传导致只能吃（不能碰/杠）的下家吃牌按钮消失。
+        chiOptions: ctx.chiOptions,
         tile: ctx.tile,
         from: ctx.from,
       },
@@ -117,6 +122,10 @@ export class LotusRemotePlayerController implements LotusController {
     if (response.type === 'claim') {
       if (response.action === 'peng') return { kind: 'peng' }
       if (response.action === 'gang') return { kind: 'gang' }
+      if (response.action === 'chi') {
+        const meld = ctx.chiOptions[response.optionIndex ?? 0]
+        if (meld) return { kind: 'chi', meld }
+      }
     }
     return { kind: 'pass' }
   }

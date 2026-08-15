@@ -5,6 +5,12 @@ import type { ServerSnapshot } from '../protocol/dto'
 import type { ServerMessage } from '../protocol/messages'
 import { startHostGame } from './hostGameRunner'
 import { createMockVibeRoom } from './mockVibeRoom'
+import { createMockVibeClient } from '../vibe/mockVibeHub'
+import { useLotusGame } from '../../variants/lotus/lotusGame'
+import { LotusRemotePlayerController } from './lotusRemotePlayerController'
+import { windKong } from '../../variants/lotus/lotusRules'
+import type { LotusController } from '../../variants/lotus/lotusControllers'
+import type { TileType } from '../../core/contracts/types'
 
 function stubWindow() {
   vi.useFakeTimers()
@@ -90,6 +96,82 @@ describe('startHostGame 无头权威', () => {
       if (drawn) break
     }
     expect(drawn).toBeTruthy()
+    runner.stop()
+  })
+
+  it('莲花麻将：远端 turn_request 的 canWindKong 按手牌实算，且只定向发给远端', async () => {
+    // 两个 BroadcastChannel mock 客户端 = 同浏览器两个窗口（房主 + 一个远端玩家）。
+    // 注意：join 内部有 setTimeout 等待，须在开 fake timers 之前完成。
+    const hostClient = createMockVibeClient({ settleMs: 10 })
+    const guestClient = createMockVibeClient({ settleMs: 10 })
+    const hostRoom = await hostClient.room.join('LOTUS1')
+    const guestRoom = await guestClient.room.join('LOTUS1')
+    stubWindow()
+    const guestMessages: Array<{ kind?: string; ctx?: { canWindKong?: boolean; hand?: TileType[]; jokers?: TileType[] } }> = []
+    const hostRaw: unknown[] = []
+    guestRoom.onMessage((message) => guestMessages.push(message as never))
+    hostRoom.onMessage((message) => hostRaw.push(message))
+
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    let turnRequest: typeof guestMessages[number] | undefined
+    for (let i = 0; i < 300 && !turnRequest; i += 1) {
+      await vi.advanceTimersByTimeAsync(250)
+      // 庄家（房主 seat 0）回合无人操作会卡住；测试代为出牌推进到闲家回合。
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      turnRequest = guestMessages.find((message) => message?.kind === 'turn_request')
+    }
+    expect(turnRequest).toBeTruthy()
+    // 回归：风杠可用性按手牌实算（东南西北各 1），不能恒 true（否则每个回合都显示风杠按钮）。
+    expect(turnRequest!.ctx!.canWindKong).toBe(
+      windKong(turnRequest!.ctx!.hand as TileType[], turnRequest!.ctx!.jokers as TileType[]),
+    )
+    // turn_request 是定向发给远端的消息，房主 viewer 不应收到（否则房主的风杠状态会被污染）。
+    expect(hostRaw.some((message) => (message as { kind?: string })?.kind === 'turn_request')).toBe(false)
+    runner.stop()
+  }, 20000)
+
+  it('莲花麻将：round_start 的一骰取 firstDice（与单人模式一致，不是二骰）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10 })
+    const guestClient = createMockVibeClient({ settleMs: 10 })
+    const hostRoom = await hostClient.room.join('LOTUS2')
+    const guestRoom = await guestClient.room.join('LOTUS2')
+    stubWindow()
+    const events: ServerMessage[] = []
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: (message) => events.push(message),
+    })
+
+    let roundStart: Extract<ServerMessage, { kind: 'round_start' }> | undefined
+    for (let i = 0; i < 200 && !roundStart; i += 1) {
+      await vi.advanceTimersByTimeAsync(50)
+      roundStart = events.find((event): event is Extract<ServerMessage, { kind: 'round_start' }> => (
+        event.kind === 'round_start'
+      ))
+    }
+    expect(roundStart).toBeTruthy()
+    // 回归：diceValues 在第二次掷骰时被覆盖成二骰，一骰必须来自引擎保留的 firstDice。
+    expect(runner.game.firstDice?.value).not.toBeNull()
+    expect(roundStart!.dice).toEqual(runner.game.firstDice?.value)
     runner.stop()
   })
 })

@@ -27,6 +27,16 @@ function structuralMeldCount(player: GamePlayer): number {
   return player.melds.filter((meld) => meld.type !== 'flower').length
 }
 
+/**
+ * 弃牌响应提示类型：wire 客户端收到的是 'claim'（requestCoordinator 设置），
+ * 房主 viewer 的提示来自引擎桥（LotusHumanController.requestDiscardHu → 'response'）。
+ * 两者的按钮完全一致，动作守卫必须同时接受，否则房主「胡/吃/碰/杠」按钮点了没反应
+ * （只有不检查类型的「过」能用）。
+ */
+function isClaimPrompt(prompt: { type?: string } | null | undefined): boolean {
+  return prompt?.type === 'claim' || prompt?.type === 'response'
+}
+
 export function createRemoteActionController({
   state,
   isUserTurn,
@@ -94,7 +104,7 @@ export function createRemoteActionController({
   }
 
   function userPeng() {
-    if (state.actionPrompt.value?.type !== 'claim') return
+    if (!isClaimPrompt(state.actionPrompt.value)) return
     clearCountdown()
     state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
@@ -102,7 +112,7 @@ export function createRemoteActionController({
   }
 
   function userChi(optionIndex = 0) {
-    if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
+    if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
     clearCountdown()
     state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
@@ -110,7 +120,7 @@ export function createRemoteActionController({
   }
 
   function userGangFromDiscard() {
-    if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.canGang) return
+    if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.canGang) return
     clearCountdown()
     state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
@@ -133,7 +143,7 @@ export function createRemoteActionController({
   }
 
   function userHu() {
-    if (state.actionPrompt.value?.type === 'claim' && state.actionPrompt.value.canHu) {
+    if (isClaimPrompt(state.actionPrompt.value) && state.actionPrompt.value.canHu) {
       clearCountdown()
       state.actionPrompt.value = null
       playSound('click.mp3', 0.65)

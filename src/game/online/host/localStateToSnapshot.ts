@@ -33,6 +33,7 @@ export interface SnapshotSource {
   /** 结算亮牌：为 true 时不再对非目标座位脱敏，让客户端/房主 viewer 都能看到各家手牌。 */
   revealHands?: RefLike<boolean>
   // 莲花麻将（lotus-legacy）专属字段；广麻引擎无这些字段。
+  firstDice?: RefLike<[number, number] | null>
   secondDice?: RefLike<[number, number] | null>
   flipTile?: RefLike<TileType | null>
   jokerTiles?: RefLike<TileType[]>
@@ -67,6 +68,9 @@ export function serializeStateToSnapshot(
   context: SnapshotContext,
 ): ServerSnapshot {
   const dice = source.diceValues.value
+  // 莲花麻将 diceValues 在第二次掷骰时被覆盖；一骰必须取 firstDice，否则客户端
+  // 一骰阶段会显示成二骰（与单人模式不一致）。
+  const firstDice = source.firstDice?.value
   const reveal = source.revealHands?.value ?? false
   return {
     kind: 'state_snapshot',
@@ -77,7 +81,7 @@ export function serializeStateToSnapshot(
     round: source.round.value,
     dealer: source.dealer.value,
     honba: source.honba.value,
-    dice: [dice[0] ?? 1, dice[1] ?? 1] as [number, number],
+    dice: firstDice ?? [dice[0] ?? 1, dice[1] ?? 1] as [number, number],
     secondDice: source.secondDice?.value ?? undefined,
     flipTile: source.flipTile?.value ?? null,
     jokerTiles: source.jokerTiles?.value ?? [],

@@ -69,4 +69,20 @@ describe('LotusRemotePlayerController', () => {
     room.emit('peer1', { type: 'pass' })
     await expect(promise).resolves.toEqual({ kind: 'pass' })
   })
+
+  it('requestClaim 携带 chiOptions 且 chi 响应映射为 chi(meld)（修复下家吃牌按钮消失）', async () => {
+    const room = createMockVibeRoom()
+    const controller = new LotusRemotePlayerController(room, 'peer1')
+    const promise = controller.requestClaim({
+      hand: ['m1', 'm2'], exposedMelds: 0, tile: 'm3', from: 0,
+      canPeng: false, canGang: false,
+      chiOptions: [{ kind: 'sequence', tiles: ['m1', 'm2', 'm3'] }], jokers: [],
+    })
+    const sent = room.sent[0].message as { kind: string; ctx: { chiOptions?: unknown[] } }
+    expect(sent.kind).toBe('claim_request')
+    // 回归：此前 chiOptions 漏传，只能吃（不能碰/杠）的下家看不到「吃」按钮。
+    expect(sent.ctx.chiOptions).toHaveLength(1)
+    room.emit('peer1', { type: 'claim', action: 'chi', optionIndex: 0 })
+    await expect(promise).resolves.toEqual({ kind: 'chi', meld: { kind: 'sequence', tiles: ['m1', 'm2', 'm3'] } })
+  })
 })

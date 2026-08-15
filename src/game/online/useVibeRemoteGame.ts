@@ -314,6 +314,11 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const remoteUserCanHu = computed(() => isHost.value
     ? (hostGame.value?.game.userCanHu.value ?? false)
     : (turnCanHu.value || userCanHu.value))
+  // 房主自己的回合同样不走 requestCoordinator，风杠可用性必须镜像权威引擎的判定
+  // （否则房主永远收不到 turn_request 的 canWindKong，风杠按钮要么不出现要么乱出现）。
+  const remoteUserHasWindKong = computed(() => isHost.value
+    ? (hostGame.value?.game.capabilities.value.windKong?.available ?? false)
+    : turnCanWindKong.value)
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
   const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
@@ -514,7 +519,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     userKongs: remoteUserKongs,
     capabilities: computed(() => ({
       chi: { choose: userChi },
-      windKong: { available: turnCanWindKong.value, execute: userWindKong },
+      windKong: { available: remoteUserHasWindKong.value, execute: userWindKong },
       lotusTable: {
         flipTile: flipTile.value,
         jokerTiles: jokerTiles.value,

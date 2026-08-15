@@ -12,7 +12,7 @@ type SnapshotState = Pick<RemoteGameState,
   | 'currentPlayer' | 'selectedIndex' | 'lastDiscard' | 'actionPrompt'
   | 'announcement' | 'result' | 'winEffect' | 'winPresentation'
   | 'revealHands' | 'winningPlayerIndex' | 'round' | 'dealer' | 'honba'
-  | 'matchFinished'
+  | 'matchFinished' | 'waitingNextRound'
   | 'rulesetId' | 'secondDice' | 'flipTile' | 'jokerTiles' | 'wildcardTiles'
   | 'flipStack' | 'openingStack' | 'wallBreakIndex'
 >
@@ -120,12 +120,22 @@ export function createSnapshotReconciler({
   }
 
   function applyNow(snapshot: ServerSnapshot) {
+    // 房主「返回大厅」会广播 lobby 快照（空玩家）；客户端若正在展示最终排名页
+    // （matchFinished 为 true），保持现状不落地——否则最终对局排行会被房主的
+    // 返回动作冲掉（players 清空 → standings 消失）。客户端自己点「返回大厅」时
+    // 会先经 matchLifecycle.returnToLobby 清掉 matchFinished，此后快照正常落地。
+    if (state.matchFinished.value && (snapshot.phase === 'lobby' || snapshot.players.length === 0)) {
+      return
+    }
     if (snapshot.matchFinished || snapshot.phase === 'finished') {
       settlement.cancel()
       pendingSnapshot = null
       onFinishedSnapshot()
       state.matchFinished.value = true
       state.phase.value = 'finished'
+      // 匹配结束走快照分支（房主不发 match_finished 消息），必须清掉「已确认，
+      // 等待其他玩家」标记，否则东四局/南四局打完会永远卡在等待确认提示上。
+      state.waitingNextRound.value = false
       state.result.value = null
       state.winEffect.value = null
       state.winPresentation.value = null
@@ -170,6 +180,13 @@ export function createSnapshotReconciler({
   }
 
   function apply(snapshot: ServerSnapshot) {
+    // 匹配结束快照（房主只广播快照、不发 match_finished 消息）必须立即落地：
+    // 最后一局打完时结算页仍在展示（phase='settled'+result），若走缓冲，
+    // 没有下一局 round_start 触发 flush，最终排名页永远不出现、等待确认横幅永远挂着。
+    if (snapshot.matchFinished || snapshot.phase === 'finished') {
+      applyNow(snapshot)
+      return
+    }
     if (isShowingRoundResult()) {
       pendingSnapshot = snapshot
       return

@@ -115,4 +115,51 @@ describe('snapshotReconciler', () => {
     expect(state.phase.value).toBe('finished')
     expect(state.revealHands.value).toBe(true)
   })
+
+  it('匹配结束（快照路径）清除「已确认，等待其他玩家」标记', () => {
+    // 回归：房主只广播快照、不发 match_finished 消息；东四局/南四局打完若不清
+    // waitingNextRound，所有端都会永远显示「等待其他玩家确认」。
+    const { state, reconciler } = setup()
+    state.waitingNextRound.value = true
+    reconciler.applyNow(snapshot({ phase: 'finished', matchFinished: true }))
+    expect(state.waitingNextRound.value).toBe(false)
+    expect(state.matchFinished.value).toBe(true)
+  })
+
+  it('结算展示期间到达的匹配结束快照不被缓冲，立即落地（最终排名页正常出现）', () => {
+    // 回归：最后一局打完、玩家点继续后，客户端仍处于「结算展示中」（phase='settled'+result），
+    // 匹配结束快照若被缓冲，将没有 round_start 触发 flush，最终排名页永远不出现。
+    const { state, reconciler, setShowingResult } = setup()
+    setShowingResult(true)
+    state.phase.value = 'settled'
+    state.result.value = {
+      winnerIndex: 2, winner: 'P2', roundLabel: '东4局', honba: 0,
+      horses: [], hits: 0, multiplier: 1, totalMultiplier: 1,
+      points: 100, totalWon: 300, details: [], scoreChanges: [],
+    }
+    state.waitingNextRound.value = true
+
+    reconciler.apply(snapshot({ phase: 'finished', matchFinished: true }))
+
+    expect(state.matchFinished.value).toBe(true)
+    expect(state.phase.value).toBe('finished')
+    expect(state.waitingNextRound.value).toBe(false)
+  })
+
+  it('房主返回大厅（lobby 快照）不清掉客户端正在展示的最终排名', () => {
+    // 回归：客户端 matchFinished=true 展示最终排名时，房主「返回大厅」广播的
+    // lobby 快照（空玩家）不得落地——否则 players 被清空、standings 消失。
+    const { state, reconciler } = setup()
+    state.matchFinished.value = true
+    state.phase.value = 'finished'
+    state.round.value = 4
+    state.players.splice(0, state.players.length, player(0))
+
+    reconciler.applyNow(snapshot({ phase: 'lobby', players: [], matchFinished: false, round: 1 }))
+
+    // 最终排名数据保留：players 未被清空、matchFinished/phase 保持展示态。
+    expect(state.players).toHaveLength(1)
+    expect(state.matchFinished.value).toBe(true)
+    expect(state.phase.value).toBe('finished')
+  })
 })
