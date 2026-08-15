@@ -9,6 +9,7 @@
 // 与广播时机需在真机联调阶段按实际 phase 转换校准（详见 docs/vibehub-p2p-migration.md）。
 import { watch } from 'vue'
 import type { GamePort } from '../../core/contracts/gamePort'
+import type { MatchType } from '../../core/contracts/types'
 import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
 import type { RoundStartMessage } from '../protocol/messages'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
@@ -16,6 +17,8 @@ import type { RuleVariant } from '../../core/rules/ruleVariants'
 export interface HostGameRunnerOptions<TController> {
   room: VibeHubSDK.Room
   rulesetId: RuleVariant
+  /** 场次（east / hanchan）。 */
+  mode: MatchType
   /** peerId → 座位（seat 0 为房主自己，不在本映射中）。 */
   seatByPeer: Map<string, number>
   /** 远端控制器工厂：广麻用 RemotePlayerController，莲花用 LotusRemotePlayerController。 */
@@ -27,7 +30,7 @@ export interface HostGameRunnerOptions<TController> {
 }
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void } {
-  const { room, rulesetId, seatByPeer, createController, createGame, broadcastIntervalMs = 200 } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, broadcastIntervalMs = 200 } = options
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
   const remoteControllers: Array<TController | undefined> = [undefined, undefined, undefined]
@@ -36,6 +39,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   }
 
   const game = createGame(remoteControllers)
+  // 启动本地引擎：开始开局时间线（掷骰/发牌），否则房主永远停留在 lobby。
+  game.startGame(mode)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
   function broadcastAll() {

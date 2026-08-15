@@ -91,6 +91,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
+          mode: matchType.value,
           seatByPeer,
           createController: (r, peerId) => new LotusRemotePlayerController(r, peerId),
           createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true }),
@@ -99,6 +100,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
+          mode: matchType.value,
           seatByPeer,
           createController: (r, peerId) => new RemotePlayerController(r, peerId),
           createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true }),

@@ -33,6 +33,18 @@ describe('vibeLobby', () => {
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_start')).toBe(true)
   })
 
+  it('房主独玩（无 peer）也能开局：空席 AI 补位', () => {
+    const room = createMockVibeRoom(true)
+    let started = false
+    const host = createHostLobby({
+      room, capacity: 4, hostNickname: '房主',
+      onStart: () => { started = true },
+    })
+    host.setHostReady(true)
+    expect(host.requestStart()).toBe(true)
+    expect(started).toBe(true)
+  })
+
   it('客户端：hello/ready 发送、roster 接收', () => {
     const room = createMockVibeRoom(false)
     const received: LobbySeat[][] = []

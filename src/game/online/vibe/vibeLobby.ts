@@ -75,7 +75,8 @@ export function createHostLobby({ room, capacity, hostNickname, onRoster, onStar
   }
 
   function allReady(): boolean {
-    return hostReady && peers.size > 0 && [...peers.values()].every((seat) => seat.ready)
+    // 允许无 peer（房主独玩，空席 AI 补位）；有 peer 时须全员就绪。
+    return hostReady && [...peers.values()].every((seat) => seat.ready)
   }
 
   room.onPeer((event) => {
