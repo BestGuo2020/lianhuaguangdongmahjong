@@ -35,6 +35,7 @@ export interface SnapshotSource {
   // 莲花麻将（lotus-legacy）专属字段；广麻引擎无这些字段。
   firstDice?: RefLike<[number, number] | null>
   secondDice?: RefLike<[number, number] | null>
+  flipSeat?: RefLike<number | null>
   flipTile?: RefLike<TileType | null>
   jokerTiles?: RefLike<TileType[]>
   wildcardTiles?: RefLike<TileType[]>

@@ -122,7 +122,7 @@ describe('startHostGame 无头权威', () => {
       rulesetId: 'lotus-legacy',
       mode: 'east',
       seatByPeer: new Map([[guestRoom.peerId, 1]]),
-      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
@@ -160,7 +160,7 @@ describe('startHostGame 无头权威', () => {
       rulesetId: 'lotus-legacy',
       mode: 'east',
       seatByPeer: new Map([[guestRoom.peerId, 1]]),
-      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: (message) => events.push(message),
@@ -177,6 +177,10 @@ describe('startHostGame 无头权威', () => {
     // 回归：diceValues 在第二次掷骰时被覆盖成二骰，一骰必须来自引擎保留的 firstDice。
     expect(runner.game.firstDice?.value).not.toBeNull()
     expect(roundStart!.dice).toEqual(runner.game.firstDice?.value)
+    // 回归：二骰投掷方位 = 翻精目标方 flipSeat（对齐单人模式），必须随 round_start 下发，
+    // 否则客户端两骰都显示庄家投。
+    expect(runner.game.flipSeat?.value).not.toBeNull()
+    expect(roundStart!.flipSeat).toBe(runner.game.flipSeat?.value)
     runner.stop()
   })
 
@@ -197,7 +201,7 @@ describe('startHostGame 无头权威', () => {
       rulesetId: 'lotus-legacy',
       mode: 'east',
       seatByPeer: new Map([[guestRoom.peerId, 1]]),
-      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
@@ -235,7 +239,7 @@ describe('startHostGame 无头权威', () => {
       rulesetId: 'lotus-legacy',
       mode: 'east',
       seatByPeer: new Map([[guestRoomA.peerId, 1]]),
-      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
@@ -275,7 +279,7 @@ describe('startHostGame 无头权威', () => {
       mode: 'east',
       seatByPeer: new Map([[guestRoomA.peerId, 1]]),
       seatNames: new Map([[1, '重连客A']]),
-      createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
@@ -298,4 +302,61 @@ describe('startHostGame 无头权威', () => {
     expect(rejoinOk?.seat).toBe(1)
     runner.stop()
   })
+
+  it('AI 接管后玩家恢复响应 → 归还座位（不再永久代打）', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const hostRoom = await hostClient.room.join('RECLAIM1')
+    const guestRoom = await guestClient.room.join('RECLAIM1')
+    stubWindow()
+    const guestMessages: Array<{ kind?: string }> = []
+    guestRoom.onMessage((message) => guestMessages.push(message as never))
+    guestRoom.onMessage((message) => {
+      if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
+    })
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    // 推进到闲家回合，客人不响应 → 15s 超时 AI 接管。
+    let sawTurnRequest = false
+    for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
+    }
+    expect(sawTurnRequest).toBe(true)
+    await vi.advanceTimersByTimeAsync(16000)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+
+    // 接管后 AI 只是兜底，仍持续给玩家发请求；玩家恢复响应 → 归还座位。
+    const beforeCount = guestMessages.filter((message) => message?.kind === 'turn_request').length
+    let reclaimed = false
+    for (let i = 0; i < 400 && !reclaimed; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+        const handLength = runner.game.players[0]?.hand.length ?? 1
+        runner.game.userDiscard(handLength - 1)
+      }
+      const count = guestMessages.filter((message) => message?.kind === 'turn_request').length
+      if (count > beforeCount) {
+        guestRoom.send({ type: 'discard', handIndex: 0 })
+        reclaimed = true
+      }
+    }
+    expect(reclaimed).toBe(true)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    runner.stop()
+  }, 20000)
 })

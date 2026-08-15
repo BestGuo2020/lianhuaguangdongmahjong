@@ -25,8 +25,9 @@ export interface HostGameRunnerOptions<TController> {
   mode: MatchType
   /** peerId → 座位（seat 0 为房主自己，不在本映射中）。 */
   seatByPeer: Map<string, number>
-  /** 远端控制器工厂：广麻用 RemotePlayerController，莲花用 LotusRemotePlayerController。 */
-  createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void) => TController
+  /** 远端控制器工厂：广麻用 RemotePlayerController，莲花用 LotusRemotePlayerController。
+   * onAIControlledChange 在「AI 接管/归还」变化时回调（true=接管，false=归还）。 */
+  createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void, onAIControlledChange: (ai: boolean) => void) => TController
   /** 本地引擎工厂：传入非本家座位控制器，返回 GamePort（同时作为快照源）。 */
   createGame: (remoteControllers: Array<TController | undefined>) => GamePort & SnapshotSource
   /** seat → 昵称（覆盖默认 PLAYER_SEED；房主 + 远端真人）。 */
@@ -69,6 +70,17 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         timeout: null as ReturnType<typeof setTimeout> | null,
       }
       seatStates.push(seatState)
+      // AI 接管/归还状态变化：同步 aiControlledSeats（下一局确认关卡据此跳过掉线座位）
+      // 并播报。玩家恢复响应（控制器内部兜底归还）也会走到这里。
+      const onAIControlledChange = (ai: boolean) => {
+        if (ai) {
+          aiControlledSeats.add(seat)
+          sendAnnouncement(`玩家「${seatName(seat)}」掉线，AI 代打`, 'gold')
+        } else {
+          aiControlledSeats.delete(seat)
+          sendAnnouncement(`玩家「${seatName(seat)}」已重连`, 'gold')
+        }
+      }
       remoteControllers[seat - 1] = seatState.controller = createController(room, peerId, (pending) => {
         if (pending) {
           // 等待远端响应前，先把当前状态广播出去（含刚发生的弃牌/杠），
@@ -79,18 +91,14 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           seatState.timeout = window.setTimeout(() => {
             seatState.timeout = null
             const controller = asDisconnectable(seatState.controller!)
-            if (controller && !controller.isAIControlled()) {
-              controller.enableAI()
-              aiControlledSeats.add(seat)
-              sendAnnouncement(`玩家「${seatName(seat)}」掉线，AI 代打`, 'gold')
-            }
+            if (controller && !controller.isAIControlled()) controller.enableAI()
           }, REMOTE_REQUEST_TIMEOUT_MS)
         } else if (seatState.timeout != null) {
           window.clearTimeout(seatState.timeout)
           seatState.timeout = null
         }
         waitingCount += pending ? 1 : -1
-      })
+      }, onAIControlledChange)
     }
   }
 
@@ -114,22 +122,14 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
       const controller = asDisconnectable(seatState.controller)
-      if (!controller.isAIControlled()) {
-        controller.enableAI()
-        aiControlledSeats.add(seatState.seat)
-        sendAnnouncement(`玩家「${seatName(seatState.seat)}」掉线，AI 代打`, 'gold')
-      }
+      if (!controller.isAIControlled()) controller.enableAI()
       return
     }
     if (event.type === 'join') {
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
       const controller = asDisconnectable(seatState.controller)
-      if (controller.isAIControlled()) {
-        controller.disableAI()
-        aiControlledSeats.delete(seatState.seat)
-        sendAnnouncement(`玩家「${seatName(seatState.seat)}」已重连`, 'gold')
-      }
+      if (controller.isAIControlled()) controller.disableAI()
       room.send({
         kind: 'rejoin_ok',
         seat: seatState.seat,
@@ -164,8 +164,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         controller.disableAI()
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
-        aiControlledSeats.delete(fallback.seat)
-        sendAnnouncement(`玩家「${seatName(fallback.seat)}」已重连`, 'gold')
       }
     }
     if (!seatState) return
@@ -252,9 +250,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   function sendRoundStart() {
     // 莲花麻将 diceValues 在第二次掷骰时被覆盖，一骰须取 firstDice（对齐单人模式）；
-    // 广麻无 firstDice，回退 diceValues（单骰）。
-    // 莲花麻将 diceValues 在第二次掷骰时被覆盖，一骰须取 firstDice（对齐单人模式）；
-    // 广麻无 firstDice，回退 diceValues（单骰）。
+    // 广麻无 firstDice，回退 diceValues（单骰）。flipSeat 让客户端二骰由翻精目标方
+    // 投出（对齐单人模式），否则两骰都显示庄家投。
     const dice = game.firstDice?.value ?? game.diceValues.value
     const message: RoundStartMessage = {
       kind: 'round_start',
@@ -266,6 +263,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       secondDice: game.secondDice?.value ?? undefined,
       flipTile: game.flipTile?.value ?? undefined,
       flipStack: game.flipStack?.value ?? undefined,
+      flipSeat: game.flipSeat?.value ?? undefined,
     }
     room.send(message)
     onLocalEvent?.(message)

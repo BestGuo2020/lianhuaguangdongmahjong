@@ -30,6 +30,9 @@ function isActionMessage(message: unknown): message is RemotePlayerActionMessage
   return type === 'discard' || type === 'pass' || type === 'claim' || type === 'gang' || type === 'hu'
 }
 
+/** AI 兜底等待：超过该时长玩家未响应则由 AI 决策本请求（仍持续提示玩家，响应即归还）。 */
+const REMOTE_FALLBACK_MS = 14000
+
 export class LotusRemotePlayerController implements LotusController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
   private aiMode = false
@@ -41,11 +44,18 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     peerId: string,
     private readonly onPending?: (pending: boolean) => void,
     ai: LotusAiController = new LotusAiController(),
+    private readonly onAIControlledChange?: (ai: boolean) => void,
   ) {
     this.ai = ai
     this.peerId = peerId
     room.onMessage((message, fromPeerId) => {
-      if (fromPeerId !== this.peerId || this.pending === null || !isActionMessage(message)) return
+      if (fromPeerId !== this.peerId || !isActionMessage(message)) return
+      // 玩家消息回来了 → 立即归还真人决策（AI 只是兜底，不是永久接管）。
+      if (this.aiMode) {
+        this.aiMode = false
+        this.onAIControlledChange?.(false)
+      }
+      if (this.pending === null) return
       const resolve = this.pending
       this.pending = null
       this.onPending?.(false)
@@ -54,12 +64,16 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
   }
 
   enableAI(): void {
+    if (this.aiMode) return
     this.aiMode = true
+    this.onAIControlledChange?.(true)
     this.reset()
   }
 
   disableAI(): void {
+    if (!this.aiMode) return
     this.aiMode = false
+    this.onAIControlledChange?.(false)
   }
 
   isAIControlled(): boolean {
@@ -78,10 +92,43 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     })
   }
 
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => { setTimeout(resolve, ms) })
+  }
+
+  /**
+   * AI 兜底：仍向玩家发送请求（玩家响应即归还并采用其操作）；超时无响应则由 AI
+   * 决策本请求。这样 AI 接管不是永久性的——玩家的下一条消息就能夺回座位。
+   */
+  private requestWithAIFallback<T>(
+    payload: ServerRequest,
+    ai: () => Promise<T>,
+    mapWire: (response: RemotePlayerActionMessage) => T,
+  ): Promise<T> {
+    const wire = this.request(payload)
+    const fallback = this.wait(REMOTE_FALLBACK_MS).then(() => {
+      // 解除挂起（防止迟到响应重复生效），并由 AI 决策本请求。
+      if (this.pending) {
+        const resolve = this.pending
+        this.pending = null
+        this.onPending?.(false)
+        resolve({ type: 'pass' })
+      }
+      this.enableAI()
+      return ai()
+    })
+    return Promise.race([
+      wire.then((response) => {
+        this.disableAI()
+        return mapWire(response)
+      }),
+      fallback,
+    ])
+  }
+
   async requestTurn(ctx: LotusTurnContext): Promise<LotusTurnAction> {
-    if (this.aiMode) return this.ai.requestTurn(ctx)
-    const response = await this.request({
-      kind: 'turn_request',
+    const payload = {
+      kind: 'turn_request' as const,
       ctx: {
         hand: ctx.hand,
         melds: ctx.melds,
@@ -93,32 +140,35 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
         // 风杠可用性按手牌实算（东南西北各 1），不能恒 true——否则客户端每个回合都显示风杠按钮。
         canWindKong: windKong(ctx.hand, ctx.jokers ?? []),
       },
-    })
-    switch (response.type) {
-      case 'discard':
-        return { kind: 'discard', handIndex: response.handIndex }
-      case 'hu':
-        return { kind: 'win' }
-      case 'gang':
-        if (response.kind === 'concealed' && response.tile) {
-          return { kind: 'concealed-kong', tile: response.tile }
-        }
-        if (response.kind === 'added' && response.tile) {
-          const meldIndex = ctx.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === response.tile)
-          return { kind: 'added-kong', meldIndex: Math.max(0, meldIndex) }
-        }
-        if (response.kind === 'wind') {
-          return { kind: 'wind-kong' }
-        }
-        break
     }
-    return { kind: 'discard', handIndex: ctx.hand.length - 1 }
+    const mapWire = (response: RemotePlayerActionMessage): LotusTurnAction => {
+      switch (response.type) {
+        case 'discard':
+          return { kind: 'discard', handIndex: response.handIndex }
+        case 'hu':
+          return { kind: 'win' }
+        case 'gang':
+          if (response.kind === 'concealed' && response.tile) {
+            return { kind: 'concealed-kong', tile: response.tile }
+          }
+          if (response.kind === 'added' && response.tile) {
+            const meldIndex = ctx.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === response.tile)
+            return { kind: 'added-kong', meldIndex: Math.max(0, meldIndex) }
+          }
+          if (response.kind === 'wind') {
+            return { kind: 'wind-kong' }
+          }
+          break
+      }
+      return { kind: 'discard', handIndex: ctx.hand.length - 1 }
+    }
+    if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestTurn(ctx), mapWire)
+    return mapWire(await this.request(payload))
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
-    if (this.aiMode) return this.ai.requestDiscardHu(ctx)
-    const response = await this.request({
-      kind: 'claim_request',
+    const payload = {
+      kind: 'claim_request' as const,
       ctx: {
         hand: ctx.hand,
         canPeng: ctx.canPeng,
@@ -128,14 +178,17 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
         tile: ctx.tile,
         from: ctx.from,
       },
-    })
-    return this.mapCombinedClaim(response, ctx.chiOptions)
+    }
+    const mapWire = (response: RemotePlayerActionMessage): LotusHuAction => (
+      this.mapCombinedClaim(response, ctx.chiOptions)
+    )
+    if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestDiscardHu(ctx), mapWire)
+    return mapWire(await this.request(payload))
   }
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
-    if (this.aiMode) return this.ai.requestClaim(ctx)
-    const response = await this.request({
-      kind: 'claim_request',
+    const payload = {
+      kind: 'claim_request' as const,
       ctx: {
         hand: ctx.hand,
         canPeng: ctx.canPeng,
@@ -146,22 +199,25 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
         tile: ctx.tile,
         from: ctx.from,
       },
-    })
-    if (response.type === 'claim') {
-      if (response.action === 'peng') return { kind: 'peng' }
-      if (response.action === 'gang') return { kind: 'gang' }
-      if (response.action === 'chi') {
-        const meld = ctx.chiOptions[response.optionIndex ?? 0]
-        if (meld) return { kind: 'chi', meld }
-      }
     }
-    return { kind: 'pass' }
+    const mapWire = (response: RemotePlayerActionMessage): LotusClaimAction => {
+      if (response.type === 'claim') {
+        if (response.action === 'peng') return { kind: 'peng' }
+        if (response.action === 'gang') return { kind: 'gang' }
+        if (response.action === 'chi') {
+          const meld = ctx.chiOptions[response.optionIndex ?? 0]
+          if (meld) return { kind: 'chi', meld }
+        }
+      }
+      return { kind: 'pass' }
+    }
+    if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestClaim(ctx), mapWire)
+    return mapWire(await this.request(payload))
   }
 
   async requestChi(ctx: LotusChiContext): Promise<LotusChiAction> {
-    if (this.aiMode) return this.ai.requestChi(ctx)
-    const response = await this.request({
-      kind: 'claim_request',
+    const payload = {
+      kind: 'claim_request' as const,
       ctx: {
         hand: ctx.hand,
         canGang: false,
@@ -169,21 +225,28 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
         tile: ctx.tile,
         from: ctx.from,
       },
-    })
-    if (response.type === 'claim' && response.action === 'chi') {
-      const meld = ctx.chiOptions[response.optionIndex ?? 0]
-      if (meld) return { kind: 'chi', meld }
     }
-    return { kind: 'pass' }
+    const mapWire = (response: RemotePlayerActionMessage): LotusChiAction => {
+      if (response.type === 'claim' && response.action === 'chi') {
+        const meld = ctx.chiOptions[response.optionIndex ?? 0]
+        if (meld) return { kind: 'chi', meld }
+      }
+      return { kind: 'pass' }
+    }
+    if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestChi(ctx), mapWire)
+    return mapWire(await this.request(payload))
   }
 
   async requestRobKong(ctx: LotusRobKongContext): Promise<LotusRobKongAction> {
-    if (this.aiMode) return this.ai.requestRobKong(ctx)
-    const response = await this.request({
-      kind: 'rob_kong_request',
+    const payload = {
+      kind: 'rob_kong_request' as const,
       ctx: { tile: ctx.tile, from: ctx.from, hand: ctx.hand, exposedMelds: ctx.exposedMelds },
-    })
-    return response.type === 'hu' ? 'win' : 'pass'
+    }
+    const mapWire = (response: RemotePlayerActionMessage): LotusRobKongAction => (
+      response.type === 'hu' ? 'win' : 'pass'
+    )
+    if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestRobKong(ctx), mapWire)
+    return mapWire(await this.request(payload))
   }
 
   private mapCombinedClaim(

@@ -42,6 +42,9 @@ function isActionMessage(message: unknown): message is RemotePlayerActionMessage
   return type === 'discard' || type === 'pass' || type === 'claim' || type === 'gang' || type === 'hu'
 }
 
+/** AI 兜底等待：超过该时长玩家未响应则由 AI 决策本请求（仍持续提示玩家，响应即归还）。 */
+const REMOTE_FALLBACK_MS = 14000
+
 export class RemotePlayerController implements PlayerController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null
   private aiMode = false
@@ -53,11 +56,18 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
     peerId: string,
     private readonly onPending?: (pending: boolean) => void,
     ai: AiController = new AiController(),
+    private readonly onAIControlledChange?: (ai: boolean) => void,
   ) {
     this.ai = ai
     this.peerId = peerId
     room.onMessage((message, fromPeerId) => {
-      if (fromPeerId !== this.peerId || this.pending === null || !isActionMessage(message)) return
+      if (fromPeerId !== this.peerId || !isActionMessage(message)) return
+      // 玩家消息回来了 → 立即归还真人决策（AI 只是兜底，不是永久接管）。
+      if (this.aiMode) {
+        this.aiMode = false
+        this.onAIControlledChange?.(false)
+      }
+      if (this.pending === null) return
       const resolve = this.pending
       this.pending = null
       this.onPending?.(false)
@@ -66,13 +76,17 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
   }
 
   enableAI(): void {
+    if (this.aiMode) return
     this.aiMode = true
+    this.onAIControlledChange?.(true)
     // 清除挂起请求：claim → 自动过；turn → 回退弃最后一张，引擎不卡死。
     this.reset()
   }
 
   disableAI(): void {
+    if (!this.aiMode) return
     this.aiMode = false
+    this.onAIControlledChange?.(false)
   }
 
   isAIControlled(): boolean {
@@ -91,8 +105,58 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
     })
   }
 
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => { setTimeout(resolve, ms) })
+  }
+
+  /**
+   * AI 兜底：仍向玩家发送请求（玩家响应即归还并采用其操作）；超时无响应则由 AI
+   * 决策本请求。这样 AI 接管不是永久性的——玩家的下一条消息就能夺回座位。
+   */
+  private requestWithAIFallback<T>(
+    payload: ServerRequest,
+    ai: () => Promise<T>,
+    mapWire: (response: RemotePlayerActionMessage) => T,
+  ): Promise<T> {
+    const wire = this.request(payload)
+    const fallback = this.wait(REMOTE_FALLBACK_MS).then(() => {
+      // 解除挂起（防止迟到响应重复生效），并由 AI 决策本请求。
+      if (this.pending) {
+        const resolve = this.pending
+        this.pending = null
+        this.onPending?.(false)
+        resolve({ type: 'pass' })
+      }
+      this.enableAI()
+      return ai()
+    })
+    return Promise.race([
+      wire.then((response) => {
+        this.disableAI()
+        return mapWire(response)
+      }),
+      fallback,
+    ])
+  }
+
   async requestTurn(ctx: TurnContext): Promise<TurnAction> {
-    if (this.aiMode) return this.ai.requestTurn(ctx)
+    if (this.aiMode) {
+      return this.requestWithAIFallback(
+        {
+          kind: 'turn_request',
+          ctx: {
+            hand: ctx.hand,
+            melds: ctx.melds,
+            exposedMelds: ctx.exposedMelds,
+            kongBloom: ctx.kongBloom,
+            skipDraw: ctx.skipDraw,
+            afterKong: ctx.afterKong,
+          },
+        },
+        () => this.ai.requestTurn(ctx),
+        (response) => this.mapTurnAction(response, ctx),
+      )
+    }
     const response = await this.request({
       kind: 'turn_request',
       ctx: {
@@ -104,6 +168,10 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
         afterKong: ctx.afterKong,
       },
     })
+    return this.mapTurnAction(response, ctx)
+  }
+
+  private mapTurnAction(response: RemotePlayerActionMessage, ctx: TurnContext): TurnAction {
     switch (response.type) {
       case 'discard':
         return { kind: 'discard', handIndex: response.handIndex }
@@ -119,12 +187,33 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
         }
         break
     }
-    // 意外/超时回退：弃最后一张（保证引擎不卡死；超时策略后续细化）。
+    // 意外/超时回退：弃最后一张（保证引擎不卡死）。
     return { kind: 'discard', handIndex: ctx.hand.length - 1 }
   }
 
   async requestClaim(ctx: ClaimContext): Promise<ClaimAction> {
-    if (this.aiMode) return this.ai.requestClaim(ctx)
+    if (this.aiMode) {
+      return this.requestWithAIFallback(
+        {
+          kind: 'claim_request',
+          ctx: {
+            hand: ctx.hand,
+            canPeng: ctx.canPeng,
+            canGang: ctx.canGang,
+            tile: ctx.tile,
+            from: ctx.from,
+          },
+        },
+        () => this.ai.requestClaim(ctx),
+        (response) => {
+          if (response.type === 'claim') {
+            if (response.action === 'peng') return { kind: 'peng' }
+            if (response.action === 'gang') return { kind: 'gang' }
+          }
+          return { kind: 'pass' }
+        },
+      )
+    }
     const response = await this.request({
       kind: 'claim_request',
       ctx: {
@@ -143,7 +232,16 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
   }
 
   async requestRobKong(ctx: RobKongContext): Promise<RobKongAction> {
-    if (this.aiMode) return this.ai.requestRobKong(ctx)
+    if (this.aiMode) {
+      return this.requestWithAIFallback(
+        {
+          kind: 'rob_kong_request',
+          ctx: { tile: ctx.tile, from: ctx.from, hand: ctx.hand, exposedMelds: ctx.exposedMelds },
+        },
+        () => this.ai.requestRobKong(ctx),
+        (response) => (response.type === 'hu' ? 'win' : 'pass'),
+      )
+    }
     const response = await this.request({
       kind: 'rob_kong_request',
       ctx: { tile: ctx.tile, from: ctx.from, hand: ctx.hand, exposedMelds: ctx.exposedMelds },

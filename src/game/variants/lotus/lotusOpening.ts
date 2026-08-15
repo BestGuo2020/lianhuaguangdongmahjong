@@ -80,6 +80,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.jokerTiles.value = []
     state.wildcardTiles.value = ['white']
     state.flipStack.value = null
+    state.flipSeat.value = null
     state.firstDice.value = null
     state.secondDice.value = null
     state.wallBreakIndex.value = 0
@@ -99,6 +100,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
 
     // 翻精：从牌山翻出指示牌（翻精墩整体移出，牌山空出该墩并立起指示牌）
     const { flipSeat, flipStack, flipTile, jokers } = resolveFlip(ring, state.dealer.value, firstDice)
+    state.flipSeat.value = flipSeat
     state.wall.value = removeFlipStack(ring, flipStack)
     state.flipStack.value = flipStack
     state.flipTile.value = flipTile

@@ -313,6 +313,7 @@ export function useLotusGame({
     wildcardTiles: state.wildcardTiles,
     wallBreakIndex: state.wallBreakIndex,
     flipStack: state.flipStack,
+    flipSeat: state.flipSeat,
     startGame,
     ...playerActions,
     ...matchLifecycle,
