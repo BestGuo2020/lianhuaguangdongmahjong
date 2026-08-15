@@ -36,11 +36,13 @@ export class RemotePlayerController implements PlayerController {
   constructor(
     private readonly room: VibeHubSDK.Room,
     private readonly peerId: string,
+    private readonly onPending?: (pending: boolean) => void,
   ) {
     room.onMessage((message, fromPeerId) => {
       if (fromPeerId !== peerId || this.pending === null || !isActionMessage(message)) return
       const resolve = this.pending
       this.pending = null
+      this.onPending?.(false)
       resolve(message)
     })
   }
@@ -48,6 +50,7 @@ export class RemotePlayerController implements PlayerController {
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
     return new Promise((resolve) => {
       this.pending = resolve
+      this.onPending?.(true)
       this.room.send(payload, this.peerId)
     })
   }
@@ -118,6 +121,7 @@ export class RemotePlayerController implements PlayerController {
     if (this.pending) {
       const resolve = this.pending
       this.pending = null
+      this.onPending?.(false)
       resolve({ type: 'pass' })
     }
   }

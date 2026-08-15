@@ -22,7 +22,7 @@ export interface HostGameRunnerOptions<TController> {
   /** peerId → 座位（seat 0 为房主自己，不在本映射中）。 */
   seatByPeer: Map<string, number>
   /** 远端控制器工厂：广麻用 RemotePlayerController，莲花用 LotusRemotePlayerController。 */
-  createController: (room: VibeHubSDK.Room, peerId: string) => TController
+  createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void) => TController
   /** 本地引擎工厂：传入非本家座位控制器，返回 GamePort（同时作为快照源）。 */
   createGame: (remoteControllers: Array<TController | undefined>) => GamePort & SnapshotSource
   /** seat → 昵称（覆盖默认 PLAYER_SEED；房主 + 远端真人）。 */
@@ -35,19 +35,24 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, broadcastIntervalMs = 200 } = options
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
+  let waitingCount = 0
   const remoteControllers: Array<TController | undefined> = [undefined, undefined, undefined]
   for (const [peerId, seat] of seatByPeer) {
-    if (seat >= 1 && seat <= 3) remoteControllers[seat - 1] = createController(room, peerId)
+    if (seat >= 1 && seat <= 3) {
+      remoteControllers[seat - 1] = createController(room, peerId, (pending) => {
+        waitingCount += pending ? 1 : -1
+      })
+    }
   }
 
   const game = createGame(remoteControllers)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
   function broadcastAll() {
-    // 等待玩家决策（本地引擎 phase 为 thinking）时不广播周期快照：否则快照 applyNow 会
-    // clearCountdown 并把 phase 重置为 playing，覆盖客户端 requestCoordinator 刚设的
-    // discard 相位与倒计时，导致闲家出不了牌、倒计时不显示。
-    if (game.phase.value === 'thinking') return
+    // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播周期快照：
+    // 否则快照 applyNow 会 clearCountdown、清空 actionPrompt 并把 phase 重置为 playing，
+    // 覆盖客户端 requestCoordinator 刚设的 discard/prompt 相位、倒计时与碰杠胡按钮。
+    if (waitingCount > 0 || game.phase.value === 'thinking') return
     for (const [peerId, seat] of seatByPeer) {
       room.send(serializeStateToSnapshot(game, seat, context), peerId)
     }

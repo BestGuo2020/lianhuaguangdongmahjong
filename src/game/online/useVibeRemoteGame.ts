@@ -96,7 +96,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           mode: matchType.value,
           seatByPeer,
           seatNames,
-          createController: (r, peerId) => new LotusRemotePlayerController(r, peerId),
+          createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
           createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: true, instantOpening: true }),
         })
       } else {
@@ -106,7 +106,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           mode: matchType.value,
           seatByPeer,
           seatNames,
-          createController: (r, peerId) => new RemotePlayerController(r, peerId),
+          createController: (r, peerId, onPending) => new RemotePlayerController(r, peerId, onPending),
           createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: true, instantOpening: true }),
         })
       }
