@@ -30,6 +30,8 @@ export interface HostGameRunnerOptions<TController> {
   createGame: (remoteControllers: Array<TController | undefined>) => GamePort & SnapshotSource
   /** seat → 昵称（覆盖默认 PLAYER_SEED；房主 + 远端真人）。 */
   seatNames?: Map<number, string>
+  /** seat → 头像（SDK 用户头像；房主 + 远端真人）。 */
+  seatAvatars?: Map<number, string>
   /** 快照广播间隔（ms）。 */
   broadcastIntervalMs?: number
   /** 房主自视快照（seat 0 脱敏视图）：喂给房主自己的表现层 viewer。 */
@@ -39,7 +41,7 @@ export interface HostGameRunnerOptions<TController> {
 }
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
   let waitingCount = 0
@@ -60,13 +62,20 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   const game = createGame(remoteControllers)
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
-  // 用真实昵称覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
-  // 因此必须在「opening」（重开局）时重新覆盖，否则过庄后昵称回退成默认名。
-  function applySeatNames() {
-    if (!seatNames) return
-    for (const [seat, name] of seatNames) {
-      const player = game.players[seat]
-      if (player) player.name = name
+  // 用真实昵称/头像覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
+  // 因此必须在「opening」（重开局）时重新覆盖，否则过庄后昵称/头像回退成默认。
+  function applySeatProfiles() {
+    if (seatNames) {
+      for (const [seat, name] of seatNames) {
+        const player = game.players[seat]
+        if (player) player.name = name
+      }
+    }
+    if (seatAvatars) {
+      for (const [seat, avatar] of seatAvatars) {
+        const player = game.players[seat]
+        if (player) player.avatar = avatar
+      }
     }
   }
 
@@ -144,7 +153,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   let lastPhase = game.phase.value
   const stopWatch = watch(() => game.phase.value, (phase) => {
     if (phase === 'opening' && lastPhase !== 'opening') {
-      applySeatNames()
+      applySeatProfiles()
       sendRoundStart()
     }
     lastPhase = phase
@@ -161,8 +170,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。
   game.startGame(mode)
-  // 首局覆盖昵称（后续每局由 phase→opening 的 watch 重新覆盖）。
-  applySeatNames()
+  // 首局覆盖昵称/头像（后续每局由 phase→opening 的 watch 重新覆盖）。
+  applySeatProfiles()
 
   // 周期快照广播：对局状态下每帧兜底同步（客户端 reconciler 取最新快照，幂等）。
   const intervalId = window.setInterval(broadcastAll, broadcastIntervalMs)

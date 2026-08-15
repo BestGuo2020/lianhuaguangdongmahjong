@@ -11,12 +11,13 @@ export interface LobbySeat {
   seat: number
   peerId: string
   nickname: string
+  avatar: string
   ready: boolean
 }
 
 // client → host
 export type ClientLobbyMessage =
-  | { type: 'lobby_hello'; nickname: string }
+  | { type: 'lobby_hello'; nickname: string; avatar: string }
   | { type: 'lobby_ready'; ready: boolean }
   | { type: 'lobby_leave' }
 
@@ -44,13 +45,14 @@ export interface HostLobbyOptions {
   room: VibeHubSDK.Room
   capacity: number
   hostNickname: string
+  hostAvatar: string
   /** 每次座位表变化时回调（房主自己的 UI 也用同一份座位表）。 */
   onRoster?: (seats: LobbySeat[]) => void
   /** 全员就绪并请求开局时回调。 */
   onStart: () => void
 }
 
-export function createHostLobby({ room, capacity, hostNickname, onRoster, onStart }: HostLobbyOptions) {
+export function createHostLobby({ room, capacity, hostNickname, hostAvatar, onRoster, onStart }: HostLobbyOptions) {
   // 座位 0 固定给房主；其余座位按 hello 到达顺序分配。
   const peers = new Map<string, LobbySeat>()
   const occupied = new Set<number>([0])
@@ -58,7 +60,7 @@ export function createHostLobby({ room, capacity, hostNickname, onRoster, onStar
 
   function roster(): LobbySeat[] {
     return [
-      { seat: 0, peerId: room.peerId, nickname: hostNickname, ready: hostReady },
+      { seat: 0, peerId: room.peerId, nickname: hostNickname, avatar: hostAvatar, ready: hostReady },
       ...[...peers.values()].sort((a, b) => a.seat - b.seat),
     ]
   }
@@ -96,11 +98,12 @@ export function createHostLobby({ room, capacity, hostNickname, onRoster, onStar
       const existing = peers.get(fromPeerId)
       if (existing) {
         existing.nickname = message.nickname
+        existing.avatar = message.avatar
       } else {
         const seat = nextSeat()
         if (seat >= 0) {
           occupied.add(seat)
-          peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, ready: false })
+          peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, avatar: message.avatar, ready: false })
         }
       }
       broadcast()
@@ -149,12 +152,13 @@ export interface ClientLobbyOptions {
 
 export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientLobbyOptions) {
   let nickname = ''
+  let avatar = ''
 
   // 连接就绪后（重新）发送 hello：join 后立即 send 可能因 DataChannel 尚未建立而丢失，
   // 导致房主收不到 hello、roster 缺该玩家（进而 mySeat 恒为 -1、无准备按钮、无法开局）。
   room.onPeer((event) => {
     if (event.type === 'join' && nickname) {
-      room.send({ type: 'lobby_hello', nickname } satisfies ClientLobbyMessage)
+      room.send({ type: 'lobby_hello', nickname, avatar } satisfies ClientLobbyMessage)
     }
   })
 
@@ -166,9 +170,10 @@ export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientL
   })
 
   return {
-    hello(name: string) {
+    hello(name: string, avatarUrl = '') {
       nickname = name
-      room.send({ type: 'lobby_hello', nickname: name } satisfies ClientLobbyMessage)
+      avatar = avatarUrl
+      room.send({ type: 'lobby_hello', nickname: name, avatar: avatarUrl } satisfies ClientLobbyMessage)
     },
     setReady(ready: boolean) {
       room.send({ type: 'lobby_ready', ready } satisfies ClientLobbyMessage)

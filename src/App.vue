@@ -109,7 +109,7 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
 } = vibeRemoteGame
 
 // SDK 无服务端房间容量元数据，「剩余房间」不再展示。
@@ -149,7 +149,7 @@ const {
   toggleReady,
 } = lobbyController
 
-// 登录后以 VibeHub 账号 id 作为联机 playerId，昵称取公开资料。
+// 登录后以 VibeHub 账号 id 作为联机 playerId，昵称取公开资料，头像取 SDK 用户头像。
 watch(vibeUser, (user) => {
   if (!user) return
   playerId.value = user.id
@@ -157,6 +157,7 @@ watch(vibeUser, (user) => {
     nickname.value = user.name
     nicknameInput.value = user.name
   }
+  if (user.image) avatar.value = user.image
 })
 
 const statsOpen = ref(false)

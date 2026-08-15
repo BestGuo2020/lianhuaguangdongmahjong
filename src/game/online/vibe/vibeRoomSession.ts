@@ -15,6 +15,7 @@ export interface VibeRoomSessionState {
   roomId: Ref<string>
   mySeat: Ref<number>
   nickname: Ref<string>
+  avatar: Ref<string>
   playerId: Ref<string>
   roomSeats: Ref<LobbySeat[]>
   sessionStatus: Ref<string>
@@ -77,11 +78,12 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
       state.mySeat.value = 0
       state.matchType.value = mode
       state.rulesetId.value = rulesetId
-      state.roomSeats.value = [{ seat: 0, peerId: created.peerId, nickname: state.nickname.value, ready: false }]
+      state.roomSeats.value = [{ seat: 0, peerId: created.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false }]
       hostLobby = createHostLobby({
         room: created,
         capacity,
         hostNickname: state.nickname.value,
+        hostAvatar: state.avatar.value,
         onRoster: (seats) => { state.roomSeats.value = seats },
         onStart: () => onStart(created),
       })
@@ -116,7 +118,7 @@ export function createVibeRoomSession({ state, onStart, onClosed }: VibeRoomSess
         onStart: () => onStart(joined),
         onClosed: () => onClosed(),
       })
-      clientLobby.hello(state.nickname.value)
+      clientLobby.hello(state.nickname.value, state.avatar.value)
       state.sessionStatus.value = 'connected'
     } catch (error) {
       state.sessionError.value = readableError(error, '加入房间失败')

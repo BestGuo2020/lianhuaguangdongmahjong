@@ -30,6 +30,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const roomId = ref('')
   const mySeat = ref(-1)
   const nickname = ref('')
+  const avatar = ref('')
   const playerId = ref(options.guestId ?? '')
   const roomTimeLimit = ref<number | null>(null)
   const rulesetId = ref<RuleVariant>('lotus-classic')
@@ -76,7 +77,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const turnCanWindKong = ref(false)
 
   return {
-    sessionStatus, sessionError, roomId, mySeat, nickname, playerId,
+    sessionStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     roomTimeLimit, rulesetId, autoPlay,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,

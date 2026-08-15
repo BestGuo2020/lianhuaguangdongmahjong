@@ -24,8 +24,8 @@ function setup() {
     nickname: ref(''),
     playerId: ref('guest-1'),
     roomSeats: ref<LobbySeat[]>([
-      { seat: 0, peerId: 'host-peer', nickname: 'A', ready: true },
-      { seat: 1, peerId: 'peer1', nickname: 'B', ready: true },
+      { seat: 0, peerId: 'host-peer', nickname: 'A', avatar: '', ready: true },
+      { seat: 1, peerId: 'peer1', nickname: 'B', avatar: '', ready: true },
     ]),
     actions,
     guardEntry: (action) => { pendingEntry = action },

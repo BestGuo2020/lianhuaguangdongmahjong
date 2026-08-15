@@ -79,7 +79,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     guestId: sessionStore.loadGuestId() || '',
   })
   const {
-    sessionStatus, sessionError, roomId, mySeat, nickname, playerId,
+    sessionStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     roomTimeLimit, rulesetId, autoPlay,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
@@ -99,7 +99,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   const roomSession = createVibeRoomSession({
     state: {
-      roomId, mySeat, nickname, playerId,
+      roomId, mySeat, nickname, avatar, playerId,
       roomSeats: lobbySeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
     },
     onStart: (room) => {
@@ -110,8 +110,10 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       }
       const seatByPeer = new Map<string, number>()
       const seatNames = new Map<number, string>()
+      const seatAvatars = new Map<number, string>()
       for (const seat of lobbySeats.value) {
         seatNames.set(seat.seat, seat.nickname)
+        seatAvatars.set(seat.seat, seat.avatar)
         if (seat.seat > 0) seatByPeer.set(seat.peerId, seat.seat)
       }
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
@@ -124,6 +126,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           mode: matchType.value,
           seatByPeer,
           seatNames,
+          seatAvatars,
           createController: (r, peerId, onPending) => new LotusRemotePlayerController(r, peerId, onPending),
           createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
           onLocalSnapshot,
@@ -136,6 +139,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           mode: matchType.value,
           seatByPeer,
           seatNames,
+          seatAvatars,
           createController: (r, peerId, onPending) => new RemotePlayerController(r, peerId, onPending),
           createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
           onLocalSnapshot,
@@ -487,7 +491,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   return defineGamePort({
     // 远程会话
-    sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId,
+    sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,

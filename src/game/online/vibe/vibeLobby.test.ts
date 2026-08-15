@@ -7,14 +7,14 @@ describe('vibeLobby', () => {
     const room = createMockVibeRoom(true)
     const rosters: LobbySeat[][] = []
     createHostLobby({
-      room, capacity: 4, hostNickname: '房主',
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       onRoster: (seats) => rosters.push(seats),
       onStart: () => {},
     })
-    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1' })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(rosters[rosters.length - 1]).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', ready: false },
-      { seat: 1, peerId: 'peer1', nickname: '玩家1', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 1, peerId: 'peer1', nickname: '玩家1', avatar: '', ready: false },
     ])
   })
 
@@ -22,11 +22,11 @@ describe('vibeLobby', () => {
     const room = createMockVibeRoom(true)
     let started = false
     const host = createHostLobby({
-      room, capacity: 4, hostNickname: '房主',
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       onStart: () => { started = true },
     })
     host.setHostReady(true)
-    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1' })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     room.emit('peer1', { type: 'lobby_ready', ready: true })
     expect(host.requestStart()).toBe(true)
     expect(started).toBe(true)
@@ -37,7 +37,7 @@ describe('vibeLobby', () => {
     const room = createMockVibeRoom(true)
     let started = false
     const host = createHostLobby({
-      room, capacity: 4, hostNickname: '房主',
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       onStart: () => { started = true },
     })
     host.setHostReady(true)
@@ -49,15 +49,15 @@ describe('vibeLobby', () => {
     const room = createMockVibeRoom(true)
     const rosters: LobbySeat[][] = []
     createHostLobby({
-      room, capacity: 4, hostNickname: '房主',
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       onRoster: (seats) => rosters.push(seats),
       onStart: () => {},
     })
-    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1' })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(rosters[rosters.length - 1]).toHaveLength(2)
     room.emit('peer1', { type: 'lobby_leave' })
     expect(rosters[rosters.length - 1]).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
     ])
   })
 
@@ -76,7 +76,7 @@ describe('vibeLobby', () => {
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_ready')).toBe(true)
     room.emit('host-peer', {
       type: 'lobby_roster', hostSeat: 0,
-      seats: [{ seat: 0, peerId: 'host-peer', nickname: '房主', ready: false }],
+      seats: [{ seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false }],
     })
     expect(received).toHaveLength(1)
   })
