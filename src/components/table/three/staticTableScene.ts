@@ -72,10 +72,11 @@ function makeTableSurfaceTexture() {
   return texture
 }
 
-// 程序木纹：横向年轮条带（sin 扰动）+ 细木丝，平铺在木框条上模拟木质包边。
+// 程序木纹：全幅单张（repeat 1 覆盖整个木框面），不规则弯曲年轮条带 + 细木丝 + 节疤，
+// 避免平铺重复造成的「一块块复制塑料片」感。方向：条带沿纹理 u（世界 x），v（世界 z）分布。
 function makeWoodTexture() {
   const w = 512
-  const h = 256
+  const h = 512
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
@@ -87,18 +88,46 @@ function makeWoodTexture() {
   base.addColorStop(1, c3)
   ctx.fillStyle = base
   ctx.fillRect(0, 0, w, h)
-  // 年轮条带：水平条 + sin 扰动，深浅交替
-  for (let i = 0; i < 30; i++) {
-    const y = (i / 30) * h + Math.sin(i * 1.7) * 6
-    const dark = (i % 2) === 0
-    ctx.fillStyle = dark ? `rgba(0,0,0,${.05 + Math.random() * .07})` : `rgba(255,230,190,${.03 + Math.random() * .05})`
-    ctx.fillRect(0, y, w, 1.5 + Math.random() * 2.5)
+  // 不规则年轮条带：随机波浪线（每条第带独立波形）、宽度随机、深浅交替，部分分叉
+  for (let i = 0; i < 46; i++) {
+    const y = (i / 46) * h + (Math.random() - .5) * 24
+    const dark = Math.random() > .45
+    ctx.strokeStyle = dark
+      ? `rgba(20,10,5,${.1 + Math.random() * .12})`
+      : `rgba(255,225,185,${.05 + Math.random() * .08})`
+    ctx.lineWidth = 1 + Math.random() * 5
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    const amp = 3 + Math.random() * 12
+    const cycles = 1 + Math.random() * 1.5
+    for (let x = 0; x <= w; x += 16) {
+      const yy = y + Math.sin((x / w) * Math.PI * 2 * cycles) * amp
+      ctx.lineTo(x, yy)
+    }
+    ctx.stroke()
+    // 分叉：约 1/4 条带末端分出短支
+    if (Math.random() < .25) {
+      ctx.beginPath()
+      ctx.moveTo(w * .6, y + Math.sin(.6 * Math.PI * 2 * cycles) * amp)
+      ctx.quadraticCurveTo(w * .72, y + 10, w * .82, y + 6)
+      ctx.stroke()
+    }
+  }
+  // 大块色差斑块：低 alpha 椭圆，模拟天然木色不均
+  for (let i = 0; i < 5; i++) {
+    const x = Math.random() * w
+    const y = Math.random() * h
+    const r = 40 + Math.random() * 90
+    ctx.fillStyle = `rgba(255,235,200,${.03 + Math.random() * .05})`
+    ctx.beginPath()
+    ctx.ellipse(x, y, r, r * .5, Math.random() * Math.PI, 0, Math.PI * 2)
+    ctx.fill()
   }
   // 细木丝：短纵向微弯细线
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < 700; i++) {
     const x = Math.random() * w
     const y0 = Math.random() * h
-    const len = 16 + Math.random() * 56
+    const len = 14 + Math.random() * 48
     ctx.strokeStyle = `rgba(0,0,0,${.015 + Math.random() * .04})`
     ctx.lineWidth = 1
     ctx.beginPath()
@@ -106,11 +135,50 @@ function makeWoodTexture() {
     ctx.quadraticCurveTo(x + 2, y0 + len / 2, x + Math.random() * 2 - 1, y0 + len)
     ctx.stroke()
   }
+  // 节疤：少量、纯随机、可聚簇（打破均匀节奏，避免「每 N 块牌一个」的平铺感）
+  const knotCount = 2 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < knotCount; i++) {
+    const x = Math.random() * w
+    const y = Math.random() * h
+    const r = 3 + Math.random() * 9
+    ctx.strokeStyle = `rgba(25,12,4,${.18 + Math.random() * .12})`
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.ellipse(x, y, r, r * .55, Math.random() * Math.PI, 0, Math.PI * 2)
+    ctx.stroke()
+    if (Math.random() < .5) {
+      // 聚簇：旁再画一个更小的节疤
+      ctx.beginPath()
+      ctx.ellipse(x + r * .8, y + r * .5, r * .45, r * .28, Math.random() * Math.PI, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+  }
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
+  return texture
+}
+
+// 木纹细节纹理：灰度噪点，作 bumpMap（微凹凸）+ roughnessMap（光泽不均），消除塑料均匀感。
+function makeWoodDetailTexture() {
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const imageData = ctx.createImageData(size, size)
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const v = 128 + Math.floor(Math.random() * 100)
+    imageData.data[i] = v
+    imageData.data[i + 1] = v
+    imageData.data[i + 2] = v
+    imageData.data[i + 3] = 255
+  }
+  ctx.putImageData(imageData, 0, 0)
   const texture = own(new THREE.CanvasTexture(canvas))
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(2, 1)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+  texture.repeat.set(12, 12)
   return texture
 }
 
@@ -597,31 +665,46 @@ function addTable() {
   // 台面 21.04 见方（半宽 10.52）、顶面 y≈.07；桌身半宽 10.9；牌河最远约 ±10.2（框内沿不得内缩越过）。
   // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8、高 .16、中心 y=.14（顶 .22）。
   if (theme.woodTrim) {
-    const wood = own(new THREE.MeshPhysicalMaterial({
+    // 顶面：全幅木纹 + 噪点凹凸/光泽不均；立面（内/外/底面）：纯色木料，避免立面 UV 拉伸成塑料感。
+    const woodTop = own(new THREE.MeshPhysicalMaterial({
       map: makeWoodTexture(),
+      bumpMap: makeWoodDetailTexture(),
+      bumpScale: .01,
+      roughnessMap: makeWoodDetailTexture(),
       color: 0xffffff,
       roughness: .45,
       metalness: .05,
       clearcoat: .3,
       clearcoatRoughness: .3,
     }))
-    const outer = 11
-    const inner = 10.2
+    const woodSide = own(new THREE.MeshPhysicalMaterial({
+      color: 0x6b421f,
+      roughness: .5,
+      metalness: .05,
+      clearcoat: .25,
+      clearcoatRoughness: .35,
+    }))
+    const outer = 22
+    const inner = 20.4
+    // ⚠️ shape 必须建在第一象限（0..22）：ExtrudeGeometry 顶面 UV 按 shape 坐标/包围盒生成，
+    // 若中心在原点（-11..11）则 UV 为 -0.5..0.5，ClampToEdge 下纹理只剩 1/4 象限 + 边缘拉伸（伪重复）。
     const shape = new THREE.Shape()
-    shape.moveTo(-outer, -outer)
-    shape.lineTo(outer, -outer)
+    shape.moveTo(0, 0)
+    shape.lineTo(outer, 0)
     shape.lineTo(outer, outer)
-    shape.lineTo(-outer, outer)
+    shape.lineTo(0, outer)
     shape.closePath()
     const hole = new THREE.Path()
-    hole.moveTo(-inner, -inner)
-    hole.lineTo(inner, -inner)
-    hole.lineTo(inner, inner)
-    hole.lineTo(-inner, inner)
+    hole.moveTo(inner, inner)
+    hole.lineTo(inner, outer - inner)
+    hole.lineTo(outer - inner, outer - inner)
+    hole.lineTo(outer - inner, inner)
     hole.closePath()
     shape.holes.push(hole)
     const frameGeometry = own(new THREE.ExtrudeGeometry(shape, { depth: .16, bevelEnabled: false }))
-    const frame = addStaticMesh(frameGeometry, wood, 0, .06, -1.65)
+    // ExtrudeGeometry 材质组顺序：[0]=侧面, [1]=顶面, [2]=底面
+    // 位置补偿：shape 中心 (11,11) → 世界 (0, 桌心 z=-1.65)；深度 .16 旋转后 y 0..0.16 → 中心 .08 → pos.y=.06（顶 .22）
+    const frame = addStaticMesh(frameGeometry, [woodSide, woodTop, woodSide], -11, .06, 9.35)
     frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .06）
   }
 
