@@ -8,6 +8,7 @@ import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS }
 import { createDicePresenter } from './table/three/dicePresenter'
 import { createPerfHud } from './table/three/perfHud'
 import { createStaticTableScene } from './table/three/staticTableScene'
+import { tableThemeByName } from './table/three/tableTheme'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
@@ -58,6 +59,7 @@ const DEFAULT_PIXEL_RATIO_CAP = 3
 let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || DEFAULT_PIXEL_RATIO_CAP
 
 // 抗锯齿开关：默认开；URL 带 ?aa=off 关闭 MSAA（省一大截 fill，但牌边缘会出现锯齿）。
+// 牌桌主题：URL 带 ?theme=<name> 可切换（见 tableTheme.ts TABLE_THEMES），不传用默认墨玉翡翠。
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
@@ -248,6 +250,7 @@ onMounted(async () => {
     scene,
     props,
     playAreaOffsetZ: PLAY_AREA_OFFSET_Z,
+    theme: tableThemeByName(new URLSearchParams(window.location.search).get('theme')),
     own,
     ownDynamic,
     trackTileMaterial,
