@@ -234,8 +234,8 @@ describe('startHostGame 无头权威', () => {
     }
     expect(sawTurnRequest).toBe(true)
 
-    // 客人不响应 → 超过房主 15s 超时 → AI 接管座位。
-    await vi.advanceTimersByTimeAsync(16000)
+    // 客人不响应 → 超过房主 18s 超时 → AI 接管座位。
+    await vi.advanceTimersByTimeAsync(20000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
     // AI 接管后游戏继续推进，不再卡死。
     await vi.advanceTimersByTimeAsync(2000)
@@ -353,7 +353,7 @@ describe('startHostGame 无头权威', () => {
       sawTurnRequest = guestMessagesA.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
-    await vi.advanceTimersByTimeAsync(16000)
+    await vi.advanceTimersByTimeAsync(20000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
     // 刷新：旧窗口关闭；新窗口 peerId 变化（新标签页），昵称与座位表记录不同。
@@ -404,6 +404,36 @@ describe('startHostGame 无头权威', () => {
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     runner.stop()
   }, 20000)
+
+  it('SDK 报 reconnecting（对端掉线，无 leave）→ 立即 AI 接管；新 peerId 昵称兜底恢复（不残留 AI）', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<LotusController>({
+      room,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([['old-peer', 1]]),
+      seatNames: new Map([[1, '玩家1']]),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    // 客户端掉线：真实 SDK 只报 reconnecting（不报 leave）→ 立即 AI 接管（不等 18s 超时）。
+    room.emitPeer({ type: 'reconnecting', id: 'old-peer' })
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    // 新 peerId 重进（昵称匹配）→ 恢复座位。此前昵称兜底只认「已 AI 接管」的座位，
+    // 掉线时间短（<18s）时座位未接管会恢复失败 → 座位残留 AI → continue 屏障把它
+    // 当掉线过滤 → 房主无视等待直接进下一局。
+    room.emit('new-peer', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    expect(runner.getLivePeerSeats().get('new-peer')).toBe(1)
+    // continue 屏障的判定输入：座位已归还真人 → 必须要求该新 peer 确认。
+    expect(runner.getLivePeerSeats().has('old-peer')).toBe(false)
+    // 推进时钟触发开局公告等 fake timer，避免 teardown 时 window 已还原报错。
+    await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
 
   it('enableAIForSeat 可外部强制接管座位（续接安全网），并递增接管版本号', async () => {
     const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
@@ -468,7 +498,7 @@ describe('startHostGame 无头权威', () => {
       sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
-    await vi.advanceTimersByTimeAsync(16000)
+    await vi.advanceTimersByTimeAsync(20000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
     // 接管后 AI 只是兜底：玩家任一条操作消息回来即归还真人决策（onMessage 不依赖

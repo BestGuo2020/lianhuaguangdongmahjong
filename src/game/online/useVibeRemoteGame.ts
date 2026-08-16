@@ -514,13 +514,45 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       console.warn(`[client] 重进后连座位都没收到（数据通道可能未建立），重新加入（第 ${rejoinRetries} 次）`)
       void roomSession.leaveRoom()
       later(() => { void roomSession.resumeSession() }, 1500)
-      later(retry, 8000)
+      // 12s 再查：SDK relay 切换/消息排队时 roster 可能迟到，过短的间隔会自伤——
+      // 每次重进都是新 peerId（旧连接在 SDK 里还要挂 120s 才释放），重进越多连接越乱。
+      later(retry, 12000)
     }
-    later(retry, 8000)
+    later(retry, 12000)
   }
   function resetRejoinRetry() {
     rejoinRetries = 0
   }
+
+  // 「已确认」失联自愈：客户端确认「下一局」后 waitingNextRound=true，若长时间收不到
+  // 推进信号（round_start → handleRoundStart 会把它清回 false），说明与房主的通道断了
+  // （SDK relay 协商失败/消息丢失），round_start 永远到不了 → 客户端永远卡在
+  // 「已确认，等待其他玩家」。超时自动重进：快照会重同步当前局面、waitingNextRound
+  // 随 resetAll 清除，客户端回到新一局而不是干等。
+  let confirmRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  function clearConfirmRecovery() {
+    if (confirmRecoveryTimer != null) {
+      window.clearTimeout(confirmRecoveryTimer)
+      confirmRecoveryTimer = null
+    }
+  }
+  watch(() => state.waitingNextRound.value, (waiting) => {
+    if (!waiting || isHost.value || !roomId.value) {
+      clearConfirmRecovery()
+      return
+    }
+    clearConfirmRecovery()
+    confirmRecoveryTimer = window.setTimeout(() => {
+      confirmRecoveryTimer = null
+      if (!state.waitingNextRound.value || state.matchFinished.value) return
+      if (!roomId.value || isHost.value) return
+      console.warn('[client] 确认后长时间未收到推进信号（通道可能断开），自动重进')
+      rejoinRetries += 1
+      if (rejoinRetries > 2) return
+      void roomSession.leaveRoom()
+      later(() => { void roomSession.resumeSession() }, 1000)
+    }, 20000)
+  })
 
   function clearCountdown() {
     requestCoordinator.clearCountdown()

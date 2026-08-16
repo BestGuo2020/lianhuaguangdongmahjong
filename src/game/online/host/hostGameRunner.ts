@@ -57,8 +57,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 } {
   const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
 
-  // 远端玩家请求超时（客户端 12s 回合倒计时 + 余量）：超时判定掉线 → AI 接管，游戏不卡死。
-  const REMOTE_REQUEST_TIMEOUT_MS = 15000
+  // 远端玩家请求超时（客户端 12s 回合倒计时 + 网络抖动余量）：超时判定掉线 → AI 接管，
+  // 游戏不卡死。放宽到 18s：SDK relay 切换/网络抖动时消息往返可能远超 12s 倒计时，
+  // 过短的超时会把「响应慢」误判成「掉线」，反复触发 AI 代打。
+  const REMOTE_REQUEST_TIMEOUT_MS = 18000
   // 被 AI 接管的座位（seat 1-3），供 UI 标记「AI 代打」。
   const aiControlledSeats = new Set<number>()
   // 接管/归还版本号（ref 才能被 Vue watch 感知；raw Set 的 mutation 无法被响应式跟踪）。
@@ -73,6 +75,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     seat: number
     controller: TController | undefined
     timeout: ReturnType<typeof setTimeout> | null
+    /** 失联标记：SDK 报 reconnecting（对端断开、重连中）置 true；恢复（join/hello）清 false。 */
+    disconnected: boolean
   }> = []
   const asDisconnectable = (controller: TController) => controller as TController & DisconnectableController
   for (const [peerId, seat] of seatByPeer) {
@@ -82,6 +86,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         seat,
         controller: undefined as TController | undefined,
         timeout: null as ReturnType<typeof setTimeout> | null,
+        disconnected: false,
       }
       seatStates.push(seatState)
       // AI 接管/归还状态变化：同步 aiControlledSeats（下一局确认关卡据此跳过掉线座位）
@@ -133,20 +138,23 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   // 掉线接管 / 重连恢复：对局中 peer 离开 → AI 接管；peer 重新加入（刷新页面重进）→
   // 恢复真人决策 + 补发座位身份（rejoin_ok），客户端据此恢复本家座位映射。
   room.onPeer((event) => {
-    if (event.type === 'leave') {
+    if (event.type === 'leave' || event.type === 'reconnecting') {
+      // 真实 SDK 对「对端关闭页面」通常只报 reconnecting（连接中断、等待恢复）而非
+      // leave——两者都视为掉线：立即 AI 接管（不必等 18s 请求超时，游戏不卡），
+      // 并标记失联（重进恢复时昵称兜底据此匹配，即使座位还没被 18s 超时接管）。
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
+      seatState.disconnected = true
       const controller = asDisconnectable(seatState.controller)
       if (!controller.isAIControlled()) controller.enableAI()
       return
     }
-    if (event.type === 'join') {
+    if (event.type === 'join' || event.type === 'connecting') {
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
+      seatState.disconnected = false
       const controller = asDisconnectable(seatState.controller)
       if (controller.isAIControlled()) controller.disableAI()
-      // 同 peerId 刷新重连：旧窗口没收到/未响应的挂起请求要重发（新窗口才刚开始）。
-      controller.resendPending()
       room.send({
         kind: 'rejoin_ok',
         seat: seatState.seat,
@@ -160,6 +168,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       // 立即补发一帧快照：等待中的座位 pending 会挡住周期广播，不主动补发的话
       // 重连客户端只能干等下一次状态变化（甚至永远等不到）才能看到牌桌。
       broadcastAll(true)
+      // 快照之后再重发挂起请求：客户端先有 players/手牌，收到 turn_request 才能
+      // 同步手牌并出牌；若请求先到而手牌为空，客户端无法出牌 → 15s 被 AI 代打，
+      // 只能等下一轮才恢复（「重进后第一次无法出牌」）。
+      controller.resendPending()
     }
   })
 
@@ -184,17 +196,26 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           controller.disableAI()
           controller.retargetPeer(fromPeerId)
           bySeat.peerId = fromPeerId
-          // 挂起请求重发给新 peerId（旧窗口的 turn/claim 请求新窗口收不到）。
-          controller.resendPending()
+          bySeat.disconnected = false
+          // 恢复后清除挂起请求的掉线计时器（见昵称兜底注释：防刚重进就被误接管）。
+          if (bySeat.timeout != null) {
+            window.clearTimeout(bySeat.timeout)
+            bySeat.timeout = null
+          }
         }
       }
     }
     if (!seatState) {
+      // 昵称兜底：刷新后 peerId 变化时按昵称匹配座位。放宽到「失联中或已 AI 接管」
+      // 的座位：客户端掉线重进时，若掉线时间短（<18s 请求超时）座位尚未被 AI 接管，
+      // 只认 isAIControlled 会恢复失败 → 座位保持 AI 状态 → continue 屏障把它当掉线
+      // 过滤 → 房主无视等待直接进下一局（客户端明明重进回来了）。
       const nickname = (message as { nickname?: unknown }).nickname
       const fallback = seatStates.find((state) => {
         if (!state.controller || state.peerId === fromPeerId) return false
+        if (seatName(state.seat) !== nickname) return false
         const controller = asDisconnectable(state.controller)
-        return controller.isAIControlled() && seatName(state.seat) === nickname
+        return state.disconnected || controller.isAIControlled()
       })
       if (fallback) {
         seatState = fallback
@@ -202,7 +223,13 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         controller.disableAI()
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
-        controller.resendPending()
+        fallback.disconnected = false
+        // 恢复后清除挂起请求的掉线计时器：否则刚重进的客户端响应稍慢（relay 切换）
+        // 就会被 18s 超时误接管。
+        if (fallback.timeout != null) {
+          window.clearTimeout(fallback.timeout)
+          fallback.timeout = null
+        }
       }
     }
     if (!seatState) return
@@ -218,6 +245,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     } satisfies ServerMessage, fromPeerId)
     // 同上：补发一帧全量快照，让重连客户端立即看到牌桌（含正在等待中的请求局面）。
     broadcastAll(true)
+    // 快照之后再重发挂起请求（见 onPeer('join') 注释：先给手牌、再收回合请求，
+    // 否则重进后第一次无法出牌）。
+    asDisconnectable(seatState.controller!)?.resendPending()
   })
 
   // 临时诊断：定位「刷新重进后操作回不去」——客户端动作是否到达房主、是否对上座位。

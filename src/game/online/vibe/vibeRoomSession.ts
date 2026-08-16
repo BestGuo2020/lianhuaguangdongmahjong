@@ -107,7 +107,6 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
     try {
       const joined = await joinVibeRoom(code)
       room = joined
-      state.isHost.value = false
       state.roomId.value = joined.roomId
       // 元数据非致命：失败不应让客户端停在「房间已设但无座位」的半状态
       // （对局进行中的重进靠快照提供 mode/rulesetId，元数据只是锦上添花）。
@@ -115,6 +114,43 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
       try { meta = await getRoomMeta(joined.roomId) } catch (error) {
         console.warn('[client] 读房间元数据失败（忽略）:', error)
       }
+      // 对局结束/全员离开后房间没有房主：重新加入时 SDK 判定自己为房主（最早成员）。
+      // 此时必须走 host 初始化（hostLobby/座位 0），否则按客户端逻辑永远收不到
+      // roster → mySeat 恒为 -1 → 连续重试失败（「重进后连座位都没收到」）。
+      if (joined.isHost) {
+        state.isHost.value = true
+        state.mySeat.value = 0
+        const mode = meta?.mode === 'east' || meta?.mode === 'hanchan' ? meta.mode : 'east'
+        const ruleset = meta?.rulesetId === 'lotus-classic' || meta?.rulesetId === 'lotus-legacy'
+          ? meta.rulesetId
+          : 'lotus-classic'
+        state.matchType.value = mode
+        state.rulesetId.value = ruleset
+        const capacity = typeof meta?.max === 'number' ? meta.max : 4
+        state.roomSeats.value = [{
+          seat: 0, peerId: joined.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false,
+        }]
+        hostLobby = createHostLobby({
+          room: joined,
+          capacity,
+          hostNickname: state.nickname.value,
+          hostAvatar: state.avatar.value,
+          onRoster: (seats) => { state.roomSeats.value = seats },
+          onStart: () => onStart(joined),
+          isInMatch: () => state.phase.value !== 'lobby',
+        })
+        // 宣告自己是新房主（携带 mode/ruleset/max），让其他玩家能加入并读对局元数据。
+        void joined.announce({
+          listed: false,
+          open: true,
+          max: capacity,
+          mode,
+          rulesetId: ruleset,
+        })
+        state.sessionStatus.value = 'connected'
+        return
+      }
+      state.isHost.value = false
       if (meta) {
         if (meta.mode === 'east' || meta.mode === 'hanchan') state.matchType.value = meta.mode
         if (meta.rulesetId === 'lotus-classic' || meta.rulesetId === 'lotus-legacy') state.rulesetId.value = meta.rulesetId
