@@ -3,7 +3,7 @@
 
 /** 声明版本号：声明文案有实质修改时 +1，已确认旧版的用户需重新确认。
  *  与后端 app/api/account.py 的 DISCLAIMER_VERSION 保持同步。 */
-export const DISCLAIMER_VERSION = 1
+export const DISCLAIMER_VERSION = 2
 
 export interface DisclaimerSection {
   /** 段落小标题（可选，如「免责提示」） */
@@ -17,6 +17,15 @@ export interface DisclaimerSection {
 export const DISCLAIMER_TITLE = '用户声明'
 
 export const DISCLAIMER_SECTIONS: DisclaimerSection[] = [
+  {
+    title: 'P2P 房主权威对局模式说明',
+    body: '本游戏联机对战采用 P2P（点对点）房主权威（host-authority）模式：创建房间的玩家设备即「房主」，承担对局引擎职责，负责洗牌、发牌、掷骰、碰杠胡判定与计分，并向其他玩家设备广播对局快照；对局数据经玩家设备之间的直连或中继通道传输，不存在中央游戏服务器。',
+    list: [
+      '房主负责房间管理：创建房间、分配座位、全员就绪后开局、关闭/解散房间；',
+      '房主离开或断线时，进行中的对局将终止；对局中其他玩家掉线时，其座位将由 AI 代打，玩家可凭会话重连恢复；',
+      '由于对局判定以房主设备为准，请与信任的玩家组队对局；平台无法对 P2P 对局过程进行实时审核，亦不对玩家之间私下达成的约定或行为负责。',
+    ],
+  },
   {
     body: '本游戏为纯娱乐棋牌游戏，游戏内所有积分、道具仅为本游戏内部虚拟娱乐数值，不具备任何现金价值，不可兑换人民币、实物、有价资产，不支持任何形式回购、变现、折现、线下结算。用户确认知晓：本游戏不提供赌博相关任何功能。',
   },

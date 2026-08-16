@@ -241,4 +241,61 @@ describe('vibeLobby', () => {
     expect(helloSent()).toBe(3)
     expect(received).toHaveLength(1)
   })
+
+  it('客户端：hello 后每 15s 发 lobby_ping 心跳；leave 停止', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(false)
+    const client = createClientLobby({ room, onRoster: () => {}, onStart: () => {}, onClosed: () => {} })
+    client.hello('玩家')
+    const pingCount = () => room.sent.filter((s) => (s.message as { type: string }).type === 'lobby_ping').length
+    vi.advanceTimersByTime(14999)
+    expect(pingCount()).toBe(0)
+    vi.advanceTimersByTime(1)
+    expect(pingCount()).toBe(1)
+    vi.advanceTimersByTime(15000)
+    expect(pingCount()).toBe(2)
+    client.leave()
+    vi.advanceTimersByTime(40000)
+    expect(pingCount()).toBe(2) // 离开后不再发
+  })
+
+  it('房主：心跳超时（客户端关页面，不再发 ping）→ 释放座位，不依赖 SDK 事件', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    const restorePeers = stubOnlinePeers(room, () => ['peer1'])
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    expect(rosters[rosters.length - 1]).toHaveLength(2)
+    // 客户端关页面：SDK peers() 仍报连接正常（120s 内不移除），但心跳停了。
+    // 40s 心跳超时 → 10s 宽限 → 50s 释放。
+    vi.advanceTimersByTime(55000)
+    expect(rosters[rosters.length - 1]).toHaveLength(1)
+    restorePeers()
+  })
+
+  it('房主：心跳未超时（在线且活跃）→ 不释放', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    const restorePeers = stubOnlinePeers(room, () => ['peer1'])
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    // 客户端每 15s 发 ping（模拟 3 次）。
+    vi.advanceTimersByTime(15000)
+    room.emit('peer1', { type: 'lobby_ping' })
+    vi.advanceTimersByTime(15000)
+    room.emit('peer1', { type: 'lobby_ping' })
+    vi.advanceTimersByTime(15000)
+    expect(rosters[rosters.length - 1]).toHaveLength(2) // 一直有心跳 → 座位保留
+    restorePeers()
+  })
 })

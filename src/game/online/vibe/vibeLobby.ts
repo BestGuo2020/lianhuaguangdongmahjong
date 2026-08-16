@@ -20,6 +20,7 @@ export type ClientLobbyMessage =
   | { type: 'lobby_hello'; nickname: string; avatar: string }
   | { type: 'lobby_ready'; ready: boolean }
   | { type: 'lobby_leave' }
+  | { type: 'lobby_ping' }
 
 // host → client
 export type HostLobbyMessage =
@@ -30,7 +31,7 @@ export type HostLobbyMessage =
 export function isClientLobbyMessage(message: unknown): message is ClientLobbyMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
   const type = (message as { type?: unknown }).type
-  return type === 'lobby_hello' || type === 'lobby_ready' || type === 'lobby_leave'
+  return type === 'lobby_hello' || type === 'lobby_ready' || type === 'lobby_leave' || type === 'lobby_ping'
 }
 
 export function isHostLobbyMessage(message: unknown): message is HostLobbyMessage {
@@ -60,25 +61,34 @@ export function createHostLobby({
   room, capacity, hostNickname, hostAvatar, onRoster, onStart,
   staleGraceMs = 10000, isInMatch = () => false,
 }: HostLobbyOptions) {
+  // 应用层心跳超时：客户端每 15s 发 lobby_ping，超过 40s 未收到对端任何消息 → 判定离开。
+  const PING_TIMEOUT_MS = 40000
   // 座位 0 固定给房主；其余座位按 hello 到达顺序分配。
   const peers = new Map<string, LobbySeat>()
   const occupied = new Set<number>([0])
   const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  // 应用层心跳：客户端定期发 lobby_ping（见 createClientLobby），房主记录每个对端
+  // 最后活跃时间；超过 PING_TIMEOUT_MS 无任何消息（关页面不再 ping）→ 判定离开。
+  // 这是不依赖 SDK peers()/事件的主动检测，保证「关闭浏览器 → 房主尽快看到退出」。
+  const lastSeenMap = new Map<string, number>()
   let hostReady = false
 
   // 兜底：SDK 可能对「对端直接关闭页面/标签页」只做底层连接关闭、不立刻发
   // leave/reconnecting 事件（对端要从 peers() 移除要等 P2P 重连超时 ≈120s）——
-  // 定期检查已登记 peer 的连接状态（open/reconnecting/是否仍在列表），发现断开
+  // 定期检查已登记 peer 的连接状态 + 应用层心跳（最后活跃时间），发现断开/失活
   // 即进 10s 宽限（防抖动），宽限内未恢复就释放座位并广播，让房主尽快看到有人退出。
   const presenceTimer = setInterval(() => {
     if (isInMatch()) return // 对局中座位锁定给 AI 代打，不在此释放
     const onlinePeers = room.peers()
+    const now = Date.now()
     for (const [peerId] of peers) {
       const info = onlinePeers.find((p) => p.id === peerId)
-      // 连接正常：不动（宽限的取消只由 join/connecting/hello 等事件负责——
-      // peers() 的连接状态可能与事件不同步，轮询清除会误取消事件触发的宽限）。
-      if (info && info.open && !info.reconnecting) continue
-      // 连接断开/重连中/已从 SDK 列表移除 → 进 10s 宽限（宽限中不重复重置计时）。
+      const lastSeen = lastSeenMap.get(peerId) ?? now
+      const connected = Boolean(info && info.open && !info.reconnecting)
+      const alive = now - lastSeen < PING_TIMEOUT_MS
+      // 连接正常且最近有心跳/消息：不动（宽限的取消只由 join/connecting/hello 等事件负责）。
+      if (connected && alive) continue
+      // 连接断开/重连中/已从列表移除，或超过心跳超时（关页面前不再发 ping）→ 宽限释放。
       if (!staleTimers.has(peerId)) scheduleStaleRelease(peerId)
     }
   }, 5000)
@@ -166,6 +176,8 @@ export function createHostLobby({
 
   room.onMessage((message, fromPeerId) => {
     if (!isClientLobbyMessage(message)) return
+    // 任何客户端消息（含心跳 lobby_ping）都刷新「最后活跃时间」。
+    lastSeenMap.set(fromPeerId, Date.now())
     if (message.type === 'lobby_hello') {
       const existing = peers.get(fromPeerId)
       if (existing) {
@@ -249,6 +261,7 @@ export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientL
   let avatar = ''
   let receivedRoster = false
   let helloRetry: ReturnType<typeof setInterval> | null = null
+  let pingTimer: ReturnType<typeof setInterval> | null = null
 
   function sendHello() {
     room.send({ type: 'lobby_hello', nickname, avatar } satisfies ClientLobbyMessage)
@@ -292,12 +305,23 @@ export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientL
         if (receivedRoster) { stopRetry(); return }
         sendHello()
       }, 2000)
+      // 应用层心跳：每 15s 发 lobby_ping，让房主能检测「关闭页面」的客户端
+      // （关页面后不再发 ping，房主 40s 内判定离开并释放座位），不依赖 SDK 事件。
+      if (pingTimer == null) {
+        pingTimer = setInterval(() => {
+          if (nickname) room.send({ type: 'lobby_ping' } satisfies ClientLobbyMessage)
+        }, 15000)
+      }
     },
     setReady(ready: boolean) {
       room.send({ type: 'lobby_ready', ready } satisfies ClientLobbyMessage)
     },
     leave() {
       stopRetry()
+      if (pingTimer != null) {
+        clearInterval(pingTimer)
+        pingTimer = null
+      }
       room.send({ type: 'lobby_leave' } satisfies ClientLobbyMessage)
     },
   }
