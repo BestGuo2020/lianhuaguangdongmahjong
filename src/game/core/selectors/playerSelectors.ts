@@ -29,12 +29,13 @@ export function createPlayerSelectors(options: PlayerSelectorOptions) {
   const wildcards = () => options.getWildcards?.() ?? []
   return createRulePlayerSelectors({
     ...options,
-    // 经典排除花牌红中；莲花麻将按精牌动态排除。
-    availableWaitTiles: () => TILE_TYPES.filter((tile) => (
+    // 经典排除花牌红中；莲花麻将听口候选 = 全部 34 种（含精面，与 lotusRules.waitingTiles
+    // 候选池一致），听全部时 any=true 显示「听任意」，与广麻提示一致。
+    availableWaitTiles: () => (
       ruleset().id === 'lotus-legacy'
-        ? !jokers().includes(tile)
-        : tile !== 'red'
-    )),
+        ? [...TILE_TYPES]
+        : TILE_TYPES.filter((tile) => tile !== 'red')
+    ),
     isWinningHand: (hand, meldCount) => ruleset().win.isWinningHand(hand, meldCount, { jokers: jokers(), jokerSubstitutes: wildcards() }),
     concealedKongs: (hand) => ruleset().win.concealedKongs(hand, { jokers: jokers() }),
     waitingTiles: (hand, meldCount) => ruleset().win.waitingTiles(hand, meldCount, { jokers: jokers(), jokerSubstitutes: wildcards() }),

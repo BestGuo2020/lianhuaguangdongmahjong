@@ -17,7 +17,9 @@ export function createLotusSelectors(state: LotusGameState, ruleset: RuleSet = L
     isUserTurn: common.isUserTurn,
     userDrewThisTurn: state.userDrewThisTurn,
     selectedIndex: state.selectedIndex,
-    availableWaitTiles: () => TILE_TYPES.filter((tile) => !state.jokerTiles.value.includes(tile)),
+    // 听口候选 = 全部 34 种（含精面：补入精面即增加癞子数，也是听口，与
+    // lotusRules.waitingTiles 的候选池一致）。听全部时 any=true，提示显示「听任意」（与广麻一致）。
+    availableWaitTiles: () => [...TILE_TYPES],
     isWinningHand: (hand, meldCount) => ruleset.win.isWinningHand(hand, meldCount, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
     concealedKongs: (hand) => ruleset.win.concealedKongs(hand, { jokers: state.jokerTiles.value }),
     waitingTiles: (hand, meldCount) => ruleset.win.waitingTiles(hand, meldCount, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
