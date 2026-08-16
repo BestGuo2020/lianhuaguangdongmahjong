@@ -23,6 +23,8 @@ export interface VibeRoomSessionState {
   rulesetId: Ref<RuleVariant>
   matchType: Ref<MatchType>
   isHost: Ref<boolean>
+  /** 对局相位（'lobby' = 大厅；其余 = 对局中），供 hostLobby 判定掉线座位是否可释放。 */
+  phase: Ref<string>
 }
 
 export interface VibeRoomSessionOptions {
@@ -88,6 +90,8 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
         hostAvatar: state.avatar.value,
         onRoster: (seats) => { state.roomSeats.value = seats },
         onStart: () => onStart(created),
+        // 对局中（phase != lobby）掉线座位锁定给 AI 代打，不能释放给新玩家。
+        isInMatch: () => state.phase.value !== 'lobby',
       })
       state.sessionStatus.value = 'connected'
     } catch (error) {

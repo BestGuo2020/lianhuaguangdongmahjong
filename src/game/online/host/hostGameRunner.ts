@@ -9,7 +9,7 @@
 //
 // 诚实说明：本模块是 host-authority 的核心骨架；hand_result / match_finished 等事件消息
 // 与广播时机需在真机联调阶段按实际 phase 转换校准（详见 docs/vibehub-p2p-migration.md）。
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import type { GamePort } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
 import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
@@ -44,13 +44,25 @@ export interface HostGameRunnerOptions<TController> {
   onLocalEvent?: (message: ServerMessage) => void
 }
 
-export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): { game: GamePort & SnapshotSource; stop(): void; aiControlledSeats: Set<number> } {
+export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): {
+  game: GamePort & SnapshotSource
+  stop(): void
+  aiControlledSeats: Set<number>
+  /** 接管/归还版本号（ref）：外部据此 watch 到 AI 接管变化（raw Set 的 mutation 无法响应式跟踪）。 */
+  aiControlledSeatsVersion: { value: number }
+  /** 当前真人座位表（peerId → seat，重连后 peerId 已 retarget）。 */
+  getLivePeerSeats(): Map<string, number>
+  /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
+  enableAIForSeat(seat: number): boolean
+} {
   const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
 
   // 远端玩家请求超时（客户端 12s 回合倒计时 + 余量）：超时判定掉线 → AI 接管，游戏不卡死。
   const REMOTE_REQUEST_TIMEOUT_MS = 15000
   // 被 AI 接管的座位（seat 1-3），供 UI 标记「AI 代打」。
   const aiControlledSeats = new Set<number>()
+  // 接管/归还版本号（ref 才能被 Vue watch 感知；raw Set 的 mutation 无法被响应式跟踪）。
+  const aiControlledSeatsVersion = ref(0)
 
   // 构建远端控制器（seat 1-3 对应远端 peer；未映射座位留 undefined → 引擎回退 AI）
   let waitingCount = 0
@@ -82,6 +94,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           aiControlledSeats.delete(seat)
           sendAnnouncement(`玩家「${seatName(seat)}」已重连`, 'gold')
         }
+        aiControlledSeatsVersion.value += 1
       }
       remoteControllers[seat - 1] = seatState.controller = createController(room, peerId, (pending) => {
         if (pending) {
@@ -362,6 +375,29 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   return {
     game,
     aiControlledSeats,
+    aiControlledSeatsVersion,
+    /**
+     * 当前真人座位表（peerId → seat）：与开局静态 seatByPeer 不同，重连恢复（retarget）
+     * 会更新 seatStates 里的 peerId。续接确认关卡（continue 屏障）必须用它来判定
+     * 「要等谁确认」——若用大厅静态表，重连后的新 peerId 发来 continue 也对不上旧
+     * peerId，全员永远卡在「已确认，等待其他玩家」。
+     */
+    getLivePeerSeats(): Map<string, number> {
+      const live = new Map<string, number>()
+      for (const state of seatStates) {
+        if (state.peerId) live.set(state.peerId, state.seat)
+      }
+      return live
+    },
+    /** 外部（续接安全网）强制 AI 接管某座位：掉线但无挂起请求（局末断线）时，
+     * 座位永远不会被 15s 超时接管，continue 屏障会永久等待——由安全网兜底接管。 */
+    enableAIForSeat(seat: number): boolean {
+      const seatState = seatStates.find((state) => state.seat === seat)
+      const controller = seatState?.controller ? asDisconnectable(seatState.controller) : null
+      if (!seatState || !controller || controller.isAIControlled()) return false
+      controller.enableAI()
+      return true
+    },
     stop() {
       window.clearInterval(intervalId)
       stopWatch()

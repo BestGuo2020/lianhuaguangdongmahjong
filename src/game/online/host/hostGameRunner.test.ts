@@ -27,6 +27,27 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** 驱动房主（seat 0）行动：出牌或对碰/杠/胡/抢杠询问一律「过」。
+ * 莲花引擎的 phase='prompt' 只由房主 humanBridge 设置（远端/ AI 座位的询问
+ * 不进引擎相位），无人应答会永久卡死；是否触发看洗牌运气，必须自动过掉。 */
+function driveHostSeat(runner: {
+  game: {
+    phase: { value: string }
+    currentPlayer: { value: number }
+    players: Array<{ hand: unknown[] }>
+    userPass(): void
+    userDiscard(index: number): void
+  }
+}) {
+  if (runner.game.phase.value === 'prompt') {
+    runner.game.userPass()
+    return
+  }
+  if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
+    runner.game.userDiscard((runner.game.players[0]?.hand.length ?? 1) - 1)
+  }
+}
+
 describe('startHostGame 无头权威', () => {
   it('开局广播 round_start，并把 seat0 快照喂给 onLocalSnapshot', async () => {
     stubWindow()
@@ -132,10 +153,7 @@ describe('startHostGame 无头权威', () => {
     for (let i = 0; i < 300 && !turnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(250)
       // 庄家（房主 seat 0）回合无人操作会卡住；测试代为出牌推进到闲家回合。
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
+      driveHostSeat(runner)
       turnRequest = guestMessages.find((message) => message?.kind === 'turn_request')
     }
     expect(turnRequest).toBeTruthy()
@@ -211,10 +229,7 @@ describe('startHostGame 无头权威', () => {
     let sawTurnRequest = false
     for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
+      driveHostSeat(runner)
       sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
@@ -334,10 +349,7 @@ describe('startHostGame 无头权威', () => {
     let sawTurnRequest = false
     for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
+      driveHostSeat(runner)
       sawTurnRequest = guestMessagesA.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
@@ -367,15 +379,16 @@ describe('startHostGame 无头权威', () => {
     expect(rejoinOk?.seat).toBe(1)
     const snapshot = rejoinMessages.find((message) => message?.kind === 'state_snapshot')
     expect(snapshot).toBeTruthy()
+    // continue 屏障按实时座位表判定：新 peerId 在表中、旧 peerId 消失，否则重连客户端
+    // 发来的 continue 对不上旧 peerId，全员卡在「已确认，等待其他玩家」。
+    expect(runner.getLivePeerSeats().get(guestRoomB.peerId)).toBe(1)
+    expect(runner.getLivePeerSeats().has(guestRoomA.peerId)).toBe(false)
 
     // 新窗口收到回合请求并能正常响应 → 引擎接受弃牌，座位不再被 AI 反复接管。
     let responded = false
     for (let i = 0; i < 400 && !responded; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
+      driveHostSeat(runner)
       if (rejoinMessages.some((message) => message?.kind === 'turn_request')) {
         guestRoomB.send({ type: 'discard', handIndex: 0 })
         responded = true
@@ -391,6 +404,39 @@ describe('startHostGame 无头权威', () => {
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     runner.stop()
   }, 20000)
+
+  it('enableAIForSeat 可外部强制接管座位（续接安全网），并递增接管版本号', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const hostRoom = await hostClient.room.join('SAFETY1')
+    const guestRoom = await guestClient.room.join('SAFETY1')
+    stubWindow()
+    const runner = startHostGame<LotusController>({
+      room: hostRoom,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    // 局末断线场景：座位没有挂起请求（从未触发 15s 超时）→ 不在 AI 名单。
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    const versionBefore = runner.aiControlledSeatsVersion.value
+    expect(runner.enableAIForSeat(1)).toBe(true)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    expect(runner.aiControlledSeatsVersion.value).toBe(versionBefore + 1)
+    // 已接管再调 → 无效（不重复播报/递增）。
+    expect(runner.enableAIForSeat(1)).toBe(false)
+    expect(runner.aiControlledSeatsVersion.value).toBe(versionBefore + 1)
+    // 空座位 / 不存在座位 → 无效。
+    expect(runner.enableAIForSeat(2)).toBe(false)
+    expect(runner.enableAIForSeat(9)).toBe(false)
+    // 推进时钟，让开局公告等 fake timer 全部触发，避免 teardown 时 window 已还原报错。
+    await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
 
   it('AI 接管后玩家恢复响应 → 归还座位（不再永久代打）', async () => {
     const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
@@ -418,32 +464,17 @@ describe('startHostGame 无头权威', () => {
     let sawTurnRequest = false
     for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
+      driveHostSeat(runner)
       sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
     await vi.advanceTimersByTimeAsync(16000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
-    // 接管后 AI 只是兜底，仍持续给玩家发请求；玩家恢复响应 → 归还座位。
-    const beforeCount = guestMessages.filter((message) => message?.kind === 'turn_request').length
-    let reclaimed = false
-    for (let i = 0; i < 400 && !reclaimed; i += 1) {
-      await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value === 0) {
-        const handLength = runner.game.players[0]?.hand.length ?? 1
-        runner.game.userDiscard(handLength - 1)
-      }
-      const count = guestMessages.filter((message) => message?.kind === 'turn_request').length
-      if (count > beforeCount) {
-        guestRoom.send({ type: 'discard', handIndex: 0 })
-        reclaimed = true
-      }
-    }
-    expect(reclaimed).toBe(true)
+    // 接管后 AI 只是兜底：玩家任一条操作消息回来即归还真人决策（onMessage 不依赖
+    // 挂起请求；若恰有挂起则同时采用该操作）。不依赖「下一轮 turn_request」——莲花
+    // 引擎 AI 可能提前胡牌结束对局，等待新请求会超时误报。
+    guestRoom.send({ type: 'discard', handIndex: 0 })
     await vi.advanceTimersByTimeAsync(500)
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     runner.stop()

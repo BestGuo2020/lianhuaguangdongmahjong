@@ -104,12 +104,20 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const lobbySeats = ref<LobbySeat[]>([])
 
   // 房主对局引擎（开局后懒创建）：房主 UI 直接用它；客户端 UI 用快照状态。
-  const hostGame = shallowRef<{ game: GamePort & SnapshotSource; stop(): void; aiControlledSeats: Set<number> } | null>(null)
+  const hostGame = shallowRef<{
+    game: GamePort & SnapshotSource
+    stop(): void
+    aiControlledSeats: Set<number>
+    aiControlledSeatsVersion: { value: number }
+    getLivePeerSeats(): Map<string, number>
+    enableAIForSeat(seat: number): boolean
+  } | null>(null)
 
   const roomSession = createVibeRoomSession({
     state: {
       roomId, mySeat, nickname, avatar, playerId,
       roomSeats: lobbySeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
+      phase,
     },
     loadSavedRoom: () => sessionStore.loadSession(),
     onStart: (room) => {
@@ -207,20 +215,47 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // 座位不再要求确认（否则永远等不到，卡在「已确认，等待其他玩家」）。
       const continueReady = new Set<string>()
       let hostReadyNext = false
+      let continueSafety: ReturnType<typeof setTimeout> | null = null
+      function clearContinueSafety() {
+        if (continueSafety != null) { window.clearTimeout(continueSafety); continueSafety = null }
+      }
       function maybeAdvanceRound() {
         const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
-        // 用实时大厅座位表（重连的客户端 peerId 会变，静态 seatByPeer 是开局快照，
-        // 若按它判定，重连后座位既不在 AI 名单也等不到确认 → 下一局永远卡住）。
-        const currentSeatByPeer = new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat]))
-        const livePeers = liveContinuePeers(currentSeatByPeer, aiSeats)
+        // 用引擎当前的真人座位表（seatStates，重连后 peerId 已 retarget）而非大厅
+        // 静态表：重连客户端发来的 continue 携带新 peerId，若按大厅旧 peerId 判定，
+        // 永远等不到确认 → 全员卡死在「已确认，等待其他玩家」。
+        const liveSeats = hostGame.value?.getLivePeerSeats()
+          ?? new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat]))
+        const livePeers = liveContinuePeers(liveSeats, aiSeats)
+        // 临时诊断：定位「已确认，等待其他玩家」卡死——打印在等谁、谁已确认。
+        console.log('[host] continue: ready=', hostReadyNext, 'live=', livePeers.join(','), 'confirmed=', [...continueReady].join(','), 'ai=', [...aiSeats].join(','))
         if (hostReadyNext && livePeers.every((peerId) => continueReady.has(peerId))) {
           hostReadyNext = false
           continueReady.clear()
+          clearContinueSafety()
           hostGame.value?.game.nextRound()
         }
       }
+      // 等待确认期间有人被 AI 接管（掉线超时）→ 立即重新评估屏障，不能干等。
+      watch(() => hostGame.value?.aiControlledSeatsVersion.value ?? 0, () => maybeAdvanceRound())
       continueAction = () => {
         hostReadyNext = true
+        // 兜底：超过 20s 仍未确认的座位视为掉线（局末断线的玩家此后引擎再无请求，
+        // 15s 挂起超时永远不会触发，座位不会进 AI 名单）→ 强制 AI 接管并重新评估，
+        // 避免全员永久卡在「已确认，等待其他玩家」。
+        clearContinueSafety()
+        continueSafety = window.setTimeout(() => {
+          continueSafety = null
+          if (!hostReadyNext) return
+          const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
+          const liveSeats = hostGame.value?.getLivePeerSeats() ?? new Map<string, number>()
+          for (const [peerId, seat] of liveSeats) {
+            if (!aiSeats.has(seat) && !continueReady.has(peerId)) {
+              hostGame.value?.enableAIForSeat(seat)
+            }
+          }
+          // enableAIForSeat 触发 aiControlledSeatsVersion → watch → maybeAdvanceRound。
+        }, 20000)
         maybeAdvanceRound()
       }
       room.onMessage((message, fromPeerId) => {
