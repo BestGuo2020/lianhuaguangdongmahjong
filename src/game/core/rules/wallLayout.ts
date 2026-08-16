@@ -36,19 +36,32 @@ export interface WallSlot {
 /**
  * 拆墙点（莲花广麻骰子规则，牌单位 0..135）：
  * - 点数和决定拆哪家墙：5/9→庄家，2/6/10→下家，3/7/11→对家，4/8/12→上家；
- *   即 wallPlayer = (sum - 1) % 4。
+ *   相对庄家计数后换算为绝对墙段：wallPlayer = (dealer + sum - 1) % 4。
  * - 较小的点数 n 决定从该墙右起第 n+1 列开始抓（一墩=2 张）。
  * - 各玩家墙段起点对应 3D 环四边：庄=近(0)、下=右(102)、对=远(68)、上=左(34)。
  * 与前端 useGame 及后端 _break_wall_by_dice 保持一致（本地/远程同规则）。
  */
-export function wallBreakIndex(dice: readonly [number, number] | number[], total = WALL_TOTAL): number {
+/**
+ * 按指定庄家计算拆墙点。dealer 是绝对座位：0=本家/近侧、1=右侧、2=对家、3=左侧。
+ * 点数先决定相对庄家的墙段，再换算到固定牌桌物理环。
+ */
+export function wallBreakIndexForDealer(
+  dice: readonly [number, number] | number[],
+  dealer: number,
+  total = WALL_TOTAL,
+): number {
   const d1 = dice[0] ?? 1
   const d2 = dice[1] ?? 1
   const sum = d1 + d2
   const n = Math.min(d1, d2)
-  const wallPlayer = (sum - 1) % 4
+  const wallPlayer = (((dealer % 4) + 4) % 4 + (sum - 1)) % 4
   const segmentStart = [0, 102, 68, 34][wallPlayer]
   return (segmentStart + n * 2) % total
+}
+
+/** 兼容旧调用：默认 0 号座位为庄家。 */
+export function wallBreakIndex(dice: readonly [number, number] | number[], total = WALL_TOTAL): number {
+  return wallBreakIndexForDealer(dice, 0, total)
 }
 
 /** 第 i 张当前牌（wall[i]）在固定环中的墩位与层（0=底牌，1=顶牌）。

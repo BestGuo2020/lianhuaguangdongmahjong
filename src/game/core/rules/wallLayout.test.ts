@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WALL_STACKS, WALL_TOTAL, wallBreakIndex, wallStackSlot, wallTilePlacement } from './wallLayout'
+import { WALL_STACKS, WALL_TOTAL, wallBreakIndex, wallBreakIndexForDealer, wallStackSlot, wallTilePlacement } from './wallLayout'
 
 describe('wall break index', () => {
   it('determines the wall by dice sum: 5/9→庄, 2/6/10→下, 3/7/11→对, 4/8/12→上', () => {
@@ -106,5 +106,34 @@ describe('wall stack ring', () => {
   it('wraps modulo 68', () => {
     expect(wallStackSlot(WALL_STACKS)).toEqual(wallStackSlot(0))
     expect(wallStackSlot(-1)).toEqual(wallStackSlot(WALL_STACKS - 1))
+  })
+})
+
+describe('wallBreakIndexForDealer（按庄家拆墙）', () => {
+  it('dealer=0 时与兼容包装 wallBreakIndex 完全一致', () => {
+    for (const d1 of [1, 2, 3, 4, 5, 6]) {
+      for (const d2 of [1, 2, 3, 4, 5, 6]) {
+        expect(wallBreakIndexForDealer([d1, d2], 0)).toBe(wallBreakIndex([d1, d2]))
+      }
+    }
+  })
+
+  it('按真实庄家换算绝对墙段：点数和决定拆相对庄家的墙', () => {
+    // sum=9 → 拆庄家墙；庄家=座位1（右墙起点 102），n=min(5,4)=4 → 102+8=110
+    expect(wallBreakIndexForDealer([5, 4], 1)).toBe(110)
+    // sum=6 → 拆下家墙（相对=1）；庄家=座位1 → 绝对座位 2（远墙起点 68），n=2 → 68+4=72
+    expect(wallBreakIndexForDealer([2, 4], 1)).toBe(72)
+    // sum=7 → 拆对家墙（相对=2）；庄家=座位2 → 绝对座位 0（近墙起点 0），n=1 → 0+2=2
+    expect(wallBreakIndexForDealer([1, 6], 2)).toBe(2)
+  })
+
+  it('墙段起点数组与座位-方位映射一致（近/右/远/左）', () => {
+    // 座位 s 的墙段起点张位 = [0,102,68,34][s]（近/右/远/左），对应 wallStackSlot 槽位 0/51/34/17
+    const starts = [0, 102, 68, 34]
+    const slots = [0, 51, 34, 17]
+    starts.forEach((start, seat) => {
+      expect(wallStackSlot(start / 2).z).toBe(wallStackSlot(slots[seat]).z)
+      expect(wallStackSlot(start / 2).x).toBe(wallStackSlot(slots[seat]).x)
+    })
   })
 })

@@ -3,6 +3,8 @@ import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '..
 
 export interface TableProps {
   players?: GamePlayer[]
+  /** 当前客户端对应的绝对座位；牌山需要按此座位旋转到本地视角。 */
+  localSeat?: number
   currentPlayer?: number
   lastDiscard?: LastDiscard | null
   wall?: TileType[]

@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
-import { wallBreakIndex, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
+import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
 import type { TileInstanceRenderer } from './tileInstanceRenderer'
@@ -405,7 +405,17 @@ function addMelds(playerIndex) {
 // 牌山断点：莲花麻将由开局翻精计算（翻精墩移出、两次骰子定开门），
 // 现行玩法仍按骰子规则计算。
 function resolveBreakIndex() {
-  return props.wallBreakIndex ?? wallBreakIndex(props.diceValues)
+  // wallBreakIndex 是房主维护的绝对物理牌墙坐标；牌桌上的玩家和牌山
+  // 都要按当前客户端的绝对座位旋转到本地视角。每个座位占 17 墩 / 34 张牌。
+  const base = props.wallBreakIndex ?? wallBreakIndexForDealer(props.diceValues, props.dealerIndex ?? 0)
+  const localSeat = ((props.localSeat ?? 0) % 4 + 4) % 4
+  return (base + localSeat * (WALL_TOTAL / 4)) % WALL_TOTAL
+}
+
+function resolveFlipStack() {
+  if (props.flipStack == null) return null
+  const localSeat = ((props.localSeat ?? 0) % 4 + 4) % 4
+  return (props.flipStack + localSeat * (WALL_TOTAL / 8)) % (WALL_TOTAL / 2)
 }
 
 // 牌山 head 位置 = 下一张要摸的牌所在处：wall[0] 经 wallHeadDrawn 沿环顺时针推进。
@@ -427,7 +437,7 @@ function wallDrawHeadPos() {
  * 使翻精墩在环上留出空位（供指示牌翻出）。
  */
 function wallPhysicalIndex(index: number, head: number): number {
-  const flip = props.flipStack
+  const flip = resolveFlipStack()
   if (flip == null) return (head + index) % WALL_TOTAL
   const skipA = flip * 2
   let physical = head
@@ -443,8 +453,9 @@ function wallPhysicalIndex(index: number, head: number): number {
 /** 精指示牌：翻出牌面朝上，图案面与牌墙顶层表面平齐（不凸起）。
  * 翻精墩底层牌仍保留显示（视觉上牌山完整）；翻精阶段（openingStage==='flip'）指示牌从墙内升起。 */
 function addFlipIndicator() {
-  if (props.flipStack == null) return
-  const slot = wallStackSlot(props.flipStack)
+  const flipStack = resolveFlipStack()
+  if (flipStack == null) return
+  const slot = wallStackSlot(flipStack)
   // 翻精墩底层牌保留在牌山上（背朝上，与周围牌墙一致）
   const baseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
   baseQuat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
