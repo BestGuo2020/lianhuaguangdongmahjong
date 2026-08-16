@@ -27,6 +27,12 @@ export interface TableTheme {
     /** 麻将机底面。 */
     machineBottom: PhysicalParams
   }
+  /** 素面模式：不建鎏金托边/四边金线/四角饰钉（雀魂等素面风格用）。桌身仍为两层（底 + 台面）。 */
+  plainSurface?: boolean
+  /** 桌面呢绒纹理：给台面材质叠加程序化噪点贴图，模拟织物绒感（配合高 roughness）。 */
+  tableFelt?: boolean
+  /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
+  tileBackGradient?: [string, string, string]
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
   tile: {
     /** 牌体白色侧面。 */
@@ -288,10 +294,135 @@ export const rosewoodTheme: TableTheme = {
   },
 }
 
+/** 示例主题「雀魂风」：素面深绿呢绒桌（无金线/饰钉）+ 哑光瓷白牌 + 蓝色牌背。 */
+export const majsoulTheme: TableTheme = {
+  table: {
+    jade: {
+      color: 0x1f4d2e,
+      emissive: 0x08150c,
+      emissiveIntensity: .06,
+      roughness: .85,
+      metalness: 0,
+      clearcoat: .08,
+      clearcoatRoughness: .6,
+      sheen: .35,
+      sheenColor: 0x2e6b45,
+      sheenRoughness: .8,
+    },
+    darkJade: {
+      color: 0x0e2417,
+      emissive: 0x050d08,
+      emissiveIntensity: .05,
+      roughness: .9,
+      metalness: 0,
+      clearcoat: 0,
+    },
+    gold: {
+      color: 0x2a2a28,
+      emissive: 0x0a0a08,
+      emissiveIntensity: .1,
+      roughness: .5,
+      metalness: .4,
+      clearcoat: .1,
+      clearcoatRoughness: .5,
+    },
+    goldHighlight: {
+      color: 0x3a3a36,
+      emissive: 0x0d0d0a,
+      emissiveIntensity: .08,
+      roughness: .55,
+      metalness: .35,
+      clearcoat: .1,
+      clearcoatRoughness: .5,
+    },
+    machine: {
+      color: 0x0a1210,
+      roughness: .5,
+      metalness: .1,
+      clearcoat: .3,
+      clearcoatRoughness: .4,
+    },
+    machineTop: {
+      roughness: .55,
+      metalness: .05,
+      clearcoat: .2,
+      clearcoatRoughness: .5,
+    },
+    machineBottom: {
+      color: 0x040605,
+      roughness: .6,
+      metalness: .1,
+      clearcoat: .1,
+    },
+  },
+  plainSurface: true,
+  tableFelt: true,
+  tileBackGradient: ['#3e7bb8', '#2a5d9e', '#1b4278'],
+  tile: {
+    side: {
+      color: 0xe8e8e4,
+      metalness: 0,
+      roughness: .5,
+      clearcoat: .18,
+      clearcoatRoughness: .4,
+      ior: 1.45,
+      specularIntensity: .15,
+      specularColor: 0xffffff,
+      envMapIntensity: .22,
+    },
+    faceSide: {
+      color: 0x2e6db4,
+      metalness: 0,
+      roughness: .55,
+      clearcoat: .2,
+      clearcoatRoughness: .4,
+      ior: 1.45,
+      specularIntensity: .18,
+      envMapIntensity: .25,
+    },
+    bottom: {
+      color: 0xd8d8d2,
+      metalness: 0,
+      roughness: .5,
+      clearcoat: .2,
+      clearcoatRoughness: .4,
+      ior: 1.45,
+      envMapIntensity: .2,
+    },
+    back: {
+      color: 0xd8d8d2,
+      metalness: 0,
+      roughness: .45,
+      clearcoat: .25,
+      clearcoatRoughness: .35,
+      ior: 1.45,
+      envMapIntensity: .22,
+    },
+    face: {
+      color: 0xf2f1ea,
+      metalness: 0,
+      roughness: .55,
+      clearcoat: .22,
+      clearcoatRoughness: .4,
+      ior: 1.45,
+      specularIntensity: .18,
+      specularColor: 0xffffff,
+      envMapIntensity: .22,
+    },
+  },
+  highlight: {
+    color: 0xe3b948,
+    emissive: 0x7d4d08,
+    emissiveIntensity: .8,
+    roughness: .4,
+  },
+}
+
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
 export const TABLE_THEMES: Record<string, TableTheme> = {
   jade: defaultTableTheme,
   rosewood: rosewoodTheme,
+  majsoul: majsoulTheme,
 }
 
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */

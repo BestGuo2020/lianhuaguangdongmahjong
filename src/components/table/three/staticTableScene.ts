@@ -29,15 +29,38 @@ export function createStaticTableScene(options: TableSceneOptions) {
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
 
-function makeBackTexture() {
-  const surface = document.createElement('canvas')
+// 素面呢绒桌面的程序化纹理：低对比灰度噪点 + 平铺，模拟织物绒感（与高 roughness 配合）。
+function makeFeltTexture() {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const imageData = ctx.createImageData(size, size)
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const v = 205 + Math.floor(Math.random() * 36)
+    imageData.data[i] = v
+    imageData.data[i + 1] = v
+    imageData.data[i + 2] = v
+    imageData.data[i + 3] = 255
+  }
+  ctx.putImageData(imageData, 0, 0)
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(14, 14)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function makeBackTexture() {  const surface = document.createElement('canvas')
   surface.width = 256
   surface.height = 352
   const ctx = surface.getContext('2d')
   const gradient = ctx.createLinearGradient(22, 8, 232, 344)
-  gradient.addColorStop(0, '#3eb34a')
-  gradient.addColorStop(.46, '#26983a')
-  gradient.addColorStop(1, '#176d2b')
+  const [c1, c2, c3] = theme.tileBackGradient ?? ['#3eb34a', '#26983a', '#176d2b']
+  gradient.addColorStop(0, c1)
+  gradient.addColorStop(.46, c2)
+  gradient.addColorStop(1, c3)
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, surface.width, surface.height)
   const highlight = ctx.createRadialGradient(42, 35, 4, 54, 52, 86)
@@ -451,7 +474,10 @@ function addStaticMesh(geometry, material, x, y, z) {
 }
 
 function addTable() {
-  const jade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.jade }))
+  const jade = own(new THREE.MeshPhysicalMaterial({
+    ...theme.table.jade,
+    ...(theme.tableFelt ? { map: makeFeltTexture() } : {}),
+  }))
   const darkJade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.darkJade }))
   const gold = own(new THREE.MeshPhysicalMaterial({ ...theme.table.gold }))
   const goldHighlight = own(new THREE.MeshPhysicalMaterial({ ...theme.table.goldHighlight }))
@@ -481,25 +507,28 @@ function addTable() {
 
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   // 几何正方形：宽 = 深 = 21.8，桌身中心保持在 z=-1.65。
+  // 素面主题（plainSurface）：只建桌身 + 台面两层，跳过鎏金托边/金线/饰钉。
   addStaticMesh(new RoundedBoxGeometry(21.8, .54, 21.8, 3, .18), darkJade, 0, -.37, -1.65)
-  addStaticMesh(new RoundedBoxGeometry(21.46, .22, 21.46, 3, .13), gold, 0, -.14, -1.65)
   addStaticMesh(new RoundedBoxGeometry(21.04, .18, 21.04, 3, .12), jade, 0, -.02, -1.62)
+  if (!theme.plainSurface) {
+    addStaticMesh(new RoundedBoxGeometry(21.46, .22, 21.46, 3, .13), gold, 0, -.14, -1.65)
 
-  const railY = .1
-  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, -11.87)
-  addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, 8.57)
-  addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, -10.22, railY, -1.65)
-  addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, 10.22, railY, -1.65)
-  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, -11.57)
-  addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, 8.27)
-  addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, -9.92, .105, -1.65)
-  addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, 9.92, .105, -1.65)
+    const railY = .1
+    addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, -11.87)
+    addStaticMesh(new THREE.BoxGeometry(20.55, .075, .105), goldHighlight, 0, railY, 8.57)
+    addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, -10.22, railY, -1.65)
+    addStaticMesh(new THREE.BoxGeometry(.105, .075, 20.44), goldHighlight, 10.22, railY, -1.65)
+    addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, -11.57)
+    addStaticMesh(new THREE.BoxGeometry(19.96, .05, .045), gold, 0, .105, 8.27)
+    addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, -9.92, .105, -1.65)
+    addStaticMesh(new THREE.BoxGeometry(.045, .05, 19.84), gold, 9.92, .105, -1.65)
 
-  const cornerGeometry = own(new THREE.CylinderGeometry(.24, .3, .1, 12))
-  ;[[-9.93, -11.59], [9.93, -11.59], [-9.93, 8.29], [9.93, 8.29]].forEach(([x, z]) => {
-    const stud = addStaticMesh(cornerGeometry.clone(), goldHighlight, x, .16, z)
-    stud.rotation.y = Math.PI / 4
-  })
+    const cornerGeometry = own(new THREE.CylinderGeometry(.24, .3, .1, 12))
+    ;[[-9.93, -11.59], [9.93, -11.59], [-9.93, 8.29], [9.93, 8.29]].forEach(([x, z]) => {
+      const stud = addStaticMesh(cornerGeometry.clone(), goldHighlight, x, .16, z)
+      stud.rotation.y = Math.PI / 4
+    })
+  }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
     map: makeMachineTexture(),
