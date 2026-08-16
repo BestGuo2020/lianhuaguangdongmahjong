@@ -357,7 +357,7 @@ export const majsoulTheme: TableTheme = {
   },
   plainSurface: true,
   tableFelt: true,
-  tileBackGradient: ['#f0b26a', '#e69d47', '#c97f2e'],
+  tileBackGradient: ['#e08444', '#d67a38', '#c06c2c'],
   tile: {
     side: {
       color: 0xe8e8e4,
@@ -390,13 +390,15 @@ export const majsoulTheme: TableTheme = {
       envMapIntensity: .2,
     },
     back: {
-      color: 0xd8d8d2,
+      color: 0xffffff,
       metalness: 0,
-      roughness: .45,
-      clearcoat: .25,
-      clearcoatRoughness: .35,
+      roughness: .75,
+      clearcoat: .06,
+      clearcoatRoughness: .5,
       ior: 1.45,
-      envMapIntensity: .22,
+      specularIntensity: .03,
+      specularColor: 0x8a5a20,
+      envMapIntensity: .06,
     },
     face: {
       color: 0xf2f1ea,
