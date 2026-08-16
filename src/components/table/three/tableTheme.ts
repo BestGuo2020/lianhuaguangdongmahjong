@@ -165,3 +165,137 @@ export const defaultTableTheme: TableTheme = {
     roughness: .4,
   },
 }
+
+/** 示例主题「红木金丝」：红木台面 + 亮金丝边 + 暖白牌身，验证换肤链路用。 */
+export const rosewoodTheme: TableTheme = {
+  table: {
+    jade: {
+      color: 0x6e2f1e,
+      emissive: 0x1d0a04,
+      emissiveIntensity: .15,
+      roughness: .38,
+      metalness: .06,
+      clearcoat: .58,
+      clearcoatRoughness: .22,
+      sheen: .28,
+      sheenColor: 0x9c5f42,
+      sheenRoughness: .68,
+    },
+    darkJade: {
+      color: 0x3c160d,
+      emissive: 0x160604,
+      emissiveIntensity: .15,
+      roughness: .5,
+      metalness: .12,
+      clearcoat: .34,
+      clearcoatRoughness: .32,
+    },
+    gold: {
+      color: 0xc4943f,
+      emissive: 0x402706,
+      emissiveIntensity: .35,
+      roughness: .26,
+      metalness: .9,
+      clearcoat: .32,
+      clearcoatRoughness: .2,
+    },
+    goldHighlight: {
+      color: 0xe8c05e,
+      emissive: 0x3f2106,
+      emissiveIntensity: .4,
+      roughness: .2,
+      metalness: .95,
+      clearcoat: .34,
+      clearcoatRoughness: .16,
+    },
+    machine: {
+      color: 0x140f0a,
+      roughness: .32,
+      metalness: .22,
+      clearcoat: .72,
+      clearcoatRoughness: .18,
+    },
+    machineTop: {
+      roughness: .3,
+      metalness: .16,
+      clearcoat: .66,
+      clearcoatRoughness: .18,
+    },
+    machineBottom: {
+      color: 0x050302,
+      roughness: .46,
+      metalness: .3,
+      clearcoat: .24,
+    },
+  },
+  tile: {
+    side: {
+      color: 0xcfc9bd,
+      metalness: 0,
+      roughness: .31,
+      clearcoat: .58,
+      clearcoatRoughness: .23,
+      ior: 1.46,
+      specularIntensity: .34,
+      specularColor: 0xfff7e8,
+      envMapIntensity: .3,
+    },
+    faceSide: {
+      color: 0x32a73a,
+      metalness: 0,
+      roughness: .3,
+      clearcoat: .68,
+      clearcoatRoughness: .18,
+      ior: 1.46,
+      specularIntensity: .62,
+      envMapIntensity: .46,
+    },
+    bottom: {
+      color: 0xc2beb2,
+      metalness: 0,
+      roughness: .42,
+      clearcoat: .38,
+      clearcoatRoughness: .24,
+      ior: 1.45,
+      envMapIntensity: .25,
+    },
+    back: {
+      color: 0xd8d2c4,
+      metalness: 0,
+      roughness: .32,
+      clearcoat: .48,
+      clearcoatRoughness: .26,
+      ior: 1.46,
+      envMapIntensity: .28,
+    },
+    face: {
+      color: 0xe3dfd2,
+      metalness: 0,
+      roughness: .4,
+      clearcoat: .56,
+      clearcoatRoughness: .24,
+      ior: 1.46,
+      specularIntensity: .36,
+      specularColor: 0xfff8ea,
+      envMapIntensity: .3,
+    },
+  },
+  highlight: {
+    color: 0xe3b948,
+    emissive: 0x7d4d08,
+    emissiveIntensity: .8,
+    roughness: .4,
+  },
+}
+
+/** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
+export const TABLE_THEMES: Record<string, TableTheme> = {
+  jade: defaultTableTheme,
+  rosewood: rosewoodTheme,
+}
+
+/** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
+export function tableThemeByName(name: string | null | undefined): TableTheme | undefined {
+  return name ? TABLE_THEMES[name] : undefined
+}
+
