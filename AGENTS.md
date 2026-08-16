@@ -23,6 +23,11 @@
 3. 其余游戏 UI/规则文件（`src/components/table/*`、`src/game/core/*`、`src/game/variants/lotus/*` 等）跟随 master，同步时自动采用 master 版本。
 4. 文件归属完整清单、冲突处理与清单维护方法见 `docs/branch-sync-workflow.md`。
 
+**vibehub 领先（反向移植）**：共享文件的修复应**一律先在 master 做**。若发现 vibehub 上已有共享文件的改动而 master 没有（例如 vibehub 先修了某个 bug），必须移植回 master，否则下次同步可能被 master 版覆盖丢失。流程：
+1. 运行 `powershell -File scripts/check-vibehub-ahead.ps1`（`pnpm sync:vibehub` 也会自动先跑），列出 vibehub 领先的共享文件；
+2. 审查 `git diff vibehub master -- <文件>`，区分「真实修复」（移植）与「联机特定改造」（如引用 `useVibeRemoteGame` 的改动，不移植）；
+3. 移植：`git checkout vibehub -- <文件>` → master 提交 → `pnpm sync:vibehub`（此时两边一致，同步无损）。
+
 ## 后端仓库
 
 `backend/` 是**独立的 git 仓库**（`D:/PycharmProjects/linahua-mahjong-backend` 主仓库的 linked worktree，前端仓库的 .gitignore 忽略了它）。修改后端代码后，需在 `backend/` 目录内单独 `git commit`（后端自己的 main 分支），与前端分支互不影响。

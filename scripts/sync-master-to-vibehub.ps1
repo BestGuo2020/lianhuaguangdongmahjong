@@ -23,6 +23,21 @@ try {
     exit 1
   }
 
+  # Nothing to sync when master has no commits that vibehub lacks.
+  $newCommits = @(git log vibehub..master --oneline)
+  if (-not $newCommits) {
+    Write-Host 'master has no new commits; nothing to sync' -ForegroundColor Green
+    exit 0
+  }
+
+  Write-Host '==> checking vibehub-ahead shared files (port-back candidates)'
+  & (Join-Path $PSScriptRoot 'check-vibehub-ahead.ps1')
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host 'WARNING: vibehub has shared-file changes ahead of master (listed above).' -ForegroundColor Yellow
+    Write-Host 'Review them; port real fixes back to master (git checkout vibehub -- <file>)' -ForegroundColor Yellow
+    Write-Host 'before they are overwritten by this sync. Continuing anyway...' -ForegroundColor Yellow
+  }
+
   Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
   git checkout vibehub
   if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
