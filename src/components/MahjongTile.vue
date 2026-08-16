@@ -28,25 +28,34 @@ const isPrecision = computed(() => (
   && props.tile !== 'white'
   && Boolean(props.jokerTiles?.includes(props.tile))
 ))
-// 替牌 = 莲花麻将中可替代精牌的实体牌（白板出现在 wildcardTiles）；
+// 白板翻精：白板本身是精（jokerTiles 与 wildcardTiles 都含白板，可替代任意牌）→ 标「精」，
+// 优先于替身判定（此前落入 isWildcard，白板翻精被误标为「替」）。
+const isWhiteJoker = computed(() => (
+  props.tile === 'white'
+  && Boolean(props.jokerTiles?.includes(props.tile))
+  && Boolean(props.wildcardTiles?.includes(props.tile))
+))
+// 替牌 = 莲花麻将中可替代精牌的实体牌（白板出现在 wildcardTiles 且非精）；
 // 莲花广麻无 wildcardTiles，白板癞子走 isLaizi，不在此列。
 const isWildcard = computed(() => {
-  if (props.tile === 'back' || isPrecision.value) return false
+  if (props.tile === 'back' || isPrecision.value || isWhiteJoker.value) return false
   return Boolean(props.wildcardTiles?.includes(props.tile))
 })
 const isLaizi = computed(() => (
   !isPrecision.value
+  && !isWhiteJoker.value
   && !isWildcard.value
   && props.tile === 'white'
   && Boolean(props.jokerTiles?.includes(props.tile))
 ))
-const isJoker = computed(() => isPrecision.value || isWildcard.value || isLaizi.value)
-// 标记统一为「精」：真精牌、白板替身（可代本局精牌）、白板癞子/白板翻精都标「精」
-// （此前替身标「替」，白板翻精标「癞」，用户要求统一为「精」）。
-const tileMarker = computed(() => (isPrecision.value || isWildcard.value || isLaizi.value ? '精' : ''))
+const isJoker = computed(() => isPrecision.value || isWhiteJoker.value || isWildcard.value || isLaizi.value)
+// 标记按身份区分：真精牌/白板翻精标「精」，替身（可代本局精牌）标「替」，广麻白板癞子标「癞」。
+const tileMarker = computed(() => (
+  isPrecision.value || isWhiteJoker.value ? '精' : isWildcard.value ? '替' : isLaizi.value ? '癞' : ''
+))
 const tileLabel = computed(() => {
   if (!isJoker.value || shownTile.value === 'back') return meta.value.name
-  const role = isPrecision.value || isLaizi.value ? '精牌' : '万能牌'
+  const role = isPrecision.value || isWhiteJoker.value ? '精牌' : isLaizi.value ? '癞子' : '万能牌'
   return `${meta.value.name}，${role}${isWildcard.value ? '，可代本局精牌' : ''}`
 })
 const tileStyle = computed(() => {
@@ -59,7 +68,7 @@ const tileStyle = computed(() => {
 <template>
   <div
     class="mahjong-tile"
-    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: isPrecision && !hidden, wildcard: isWildcard && !hidden, laizi: isLaizi && !hidden, red: tile === 'red' && !hidden }"
+    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: (isPrecision || isWhiteJoker) && !hidden, wildcard: isWildcard && !hidden, laizi: isLaizi && !hidden, red: tile === 'red' && !hidden }"
     :style="tileStyle"
     role="button"
     :aria-label="tileLabel"
