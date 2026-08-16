@@ -66,6 +66,23 @@ export function createHostLobby({
   const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
   let hostReady = false
 
+  // 兜底：SDK 可能对「对端直接关闭页面/标签页」只做底层连接关闭、不立刻发
+  // leave/reconnecting 事件（对端要从 peers() 移除要等 P2P 重连超时 ≈120s）——
+  // 定期检查已登记 peer 的连接状态（open/reconnecting/是否仍在列表），发现断开
+  // 即进 10s 宽限（防抖动），宽限内未恢复就释放座位并广播，让房主尽快看到有人退出。
+  const presenceTimer = setInterval(() => {
+    if (isInMatch()) return // 对局中座位锁定给 AI 代打，不在此释放
+    const onlinePeers = room.peers()
+    for (const [peerId] of peers) {
+      const info = onlinePeers.find((p) => p.id === peerId)
+      // 连接正常：不动（宽限的取消只由 join/connecting/hello 等事件负责——
+      // peers() 的连接状态可能与事件不同步，轮询清除会误取消事件触发的宽限）。
+      if (info && info.open && !info.reconnecting) continue
+      // 连接断开/重连中/已从 SDK 列表移除 → 进 10s 宽限（宽限中不重复重置计时）。
+      if (!staleTimers.has(peerId)) scheduleStaleRelease(peerId)
+    }
+  }, 5000)
+
   function roster(): LobbySeat[] {
     return [
       { seat: 0, peerId: room.peerId, nickname: hostNickname, avatar: hostAvatar, ready: hostReady },
@@ -210,6 +227,9 @@ export function createHostLobby({
       return true
     },
     close() {
+      clearInterval(presenceTimer)
+      staleTimers.forEach((timer) => clearTimeout(timer))
+      staleTimers.clear()
       room.send({ type: 'lobby_closed' } satisfies HostLobbyMessage)
     },
   }

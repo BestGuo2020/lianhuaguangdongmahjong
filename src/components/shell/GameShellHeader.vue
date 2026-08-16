@@ -41,9 +41,9 @@ const signalText = computed(() => (
         class="signal-icon"
         :src="`${imageBase}signal-${signalQuality}.png`"
         :alt="signalText"
-        :title="signalQuality <= 1 ? `${signalText}，可能被 AI 托管` : signalText"
+        :title="signalQuality <= 0 ? `${signalText}，可能被 AI 托管` : signalText"
       />
-      <span v-if="gameMode === 'remote' && signalQuality <= 1" class="signal-warn">{{ signalText }}</span>
+      <span v-if="gameMode === 'remote' && signalQuality <= 0" class="signal-warn">{{ signalText }}</span>
     </div>
     <nav>
       <button

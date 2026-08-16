@@ -190,6 +190,14 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
   }
 
   async function leaveRoom(): Promise<void> {
+    // 房主离开也广播 lobby_closed：让客户端立即感知「房主已离开/关闭房间」，
+    // 而不是只看到 SDK 层的「网络断开，正在重连」干等超时。客户端主动离开
+    // （isHost=false）不需要广播。
+    if (state.isHost.value) {
+      hostLobby?.close()
+      // 给 lobby_closed 广播留出送达时间：send 后立即 leave 会切断通道，消息可能丢失。
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    }
     clearSession()
   }
 

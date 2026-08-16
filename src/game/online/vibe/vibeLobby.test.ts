@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createClientLobby, createHostLobby, type LobbySeat } from './vibeLobby'
-import { createMockVibeRoom } from '../host/mockVibeRoom'
+import { createMockVibeRoom, type MockVibeRoom } from '../host/mockVibeRoom'
 
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
+
+/** 覆写 mock room 的 peers()：真实 SDK 会返回在线对端，mock 固定返回 []，
+ * 会导致 hostLobby 的对端在场轮询把所有已登记 peer 误判为「已消失」。 */
+function stubOnlinePeers(room: MockVibeRoom, online: () => string[]) {
+  const original = room.peers
+  room.peers = () => online().map((id) => ({
+    id, open: true, latency: 5, jitter: 0, relay: false, realtime: true, reconnecting: false,
+  }))
+  return () => { room.peers = original }
+}
 
 describe('vibeLobby', () => {
   it('房主：peer hello 后分配座位、广播 roster', () => {
@@ -90,6 +100,8 @@ describe('vibeLobby', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(true)
     const rosters: LobbySeat[][] = []
+    const online = ['peer1', 'peer2']
+    const restorePeers = stubOnlinePeers(room, () => online)
     createHostLobby({
       room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       staleGraceMs: 10000,
@@ -110,12 +122,37 @@ describe('vibeLobby', () => {
     room.emit('peer3', { type: 'lobby_hello', nickname: '玩家3', avatar: '' })
     expect(rosters[rosters.length - 1]).toHaveLength(3)
     expect(rosters[rosters.length - 1].map((s) => s.peerId).sort()).toEqual(['host-peer', 'peer2', 'peer3'])
+    restorePeers()
+  })
+
+  it('房主：对端直接从 SDK 列表消失（关页面，无 leave/reconnecting 事件）→ 轮询释放座位', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(true)
+    // 覆写 peers 模拟 SDK 静默移除对端。
+    const online: string[] = ['peer1']
+    const restorePeers = stubOnlinePeers(room, () => online)
+    const rosters: LobbySeat[][] = []
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    expect(rosters[rosters.length - 1]).toHaveLength(2)
+    // 客户端直接关页面：SDK 底层连接关闭（peers() 不再含 peer1，无 leave/reconnecting 事件）。
+    online.splice(0)
+    vi.advanceTimersByTime(5000)
+    expect(rosters[rosters.length - 1]).toHaveLength(2) // 第一轮发现断开 → 进入 10s 宽限
+    vi.advanceTimersByTime(10000)
+    expect(rosters[rosters.length - 1]).toHaveLength(1) // 宽限超时 → 释放座位
+    restorePeers()
   })
 
   it('房主：失联宽限期间 peer 恢复（join）→ 取消释放', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(true)
     const rosters: LobbySeat[][] = []
+    const restorePeers = stubOnlinePeers(room, () => ['peer1'])
     createHostLobby({
       room, capacity: 4, hostNickname: '房主', hostAvatar: '',
       staleGraceMs: 10000,
@@ -129,6 +166,7 @@ describe('vibeLobby', () => {
     vi.advanceTimersByTime(10000)
     // 恢复后不再释放。
     expect(rosters[rosters.length - 1].map((s) => s.peerId)).toEqual(['host-peer', 'peer1'])
+    restorePeers()
   })
 
   it('房主：对局中（isInMatch）失联不释放座位（座位锁定给 AI 代打）', () => {
@@ -158,6 +196,7 @@ describe('vibeLobby', () => {
       onRoster: (seats) => rosters.push(seats),
       onStart: () => {},
     })
+    const restorePeers = stubOnlinePeers(room, () => ['peer-old', 'peer-new'])
     room.emit('peer-old', { type: 'lobby_hello', nickname: '刷新客', avatar: '' })
     expect(rosters[rosters.length - 1]).toHaveLength(2)
     room.emitPeer({ type: 'reconnecting', id: 'peer-old' })
@@ -172,6 +211,7 @@ describe('vibeLobby', () => {
     const final = rosters[rosters.length - 1]
     expect(final).toHaveLength(2)
     expect(final.map((s) => s.peerId)).toEqual(['host-peer', 'peer-new'])
+    restorePeers()
   })
 
   it('客户端：hello 丢失时每 2s 重发，直到收到 roster', () => {

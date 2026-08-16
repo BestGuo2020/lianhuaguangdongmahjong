@@ -83,7 +83,7 @@ describe('remoteMatchLifecycle', () => {
 
     lifecycle.nextRound()
     expect(sendContinue).toHaveBeenCalledOnce()
-    expect(opening.start).toHaveBeenCalledWith(roundStart, { instant: false })
+    expect(opening.start).toHaveBeenCalledWith(roundStart)
     expect(state.waitingNextRound.value).toBe(false)
     expect(requests.flush).toHaveBeenCalled()
   })

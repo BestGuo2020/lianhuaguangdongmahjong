@@ -7,7 +7,7 @@ export interface RemoteMatchLifecycleOptions {
   isShowingRoundResult(): boolean
   clearTimers(): void
   opening: {
-    start(message: RoundStartMessage, options?: { instant?: boolean }): void
+    start(message: RoundStartMessage): void
     cancel(): void
   }
   settlement: { cancel(): void }
@@ -39,25 +39,23 @@ export function createRemoteMatchLifecycle({
   sendContinue,
   refreshRoom,
 }: RemoteMatchLifecycleOptions) {
-  let pendingRoundStart: RoundStartMessage & { _instant?: boolean } | null = null
+  let pendingRoundStart: RoundStartMessage | null = null
 
   function clearRoundBarrier() {
     pendingRoundStart = null
     state.waitingNextRound.value = false
   }
 
-  function handleRoundStart(message: RoundStartMessage, options: { instant?: boolean } = {}) {
+  function handleRoundStart(message: RoundStartMessage) {
     const alreadyConfirmed = state.waitingNextRound.value
     state.waitingNextRound.value = false
     if (isShowingRoundResult() && !alreadyConfirmed) {
       // 结算页等待确认时到达的 round_start 先缓存；用户点「继续」后再放行。
-      // 重进（instant）标记一并缓存，放行时跳过发牌动画（否则动画期间缓存的
-      // turn_request 响应晚于房主掉线超时 → 在线玩家被误判 AI 代打）。
-      pendingRoundStart = { ...message, _instant: options.instant ?? false }
+      pendingRoundStart = message
       return
     }
     pendingRoundStart = null
-    opening.start(message, options)
+    opening.start(message)
   }
 
   function finishMatch(finalScores: Array<{ seat: number; name: string; score: number }>) {
@@ -134,10 +132,10 @@ export function createRemoteMatchLifecycle({
     state.waitingNextRound.value = true
 
     if (pendingRoundStart) {
-      const { _instant, ...rest } = pendingRoundStart
+      const message = pendingRoundStart
       pendingRoundStart = null
       state.waitingNextRound.value = false
-      opening.start(rest, { instant: _instant ?? false })
+      opening.start(message)
     }
 
     const pendingSnapshot = snapshots.takePending()

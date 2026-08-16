@@ -41,10 +41,12 @@ const isLaizi = computed(() => (
   && Boolean(props.jokerTiles?.includes(props.tile))
 ))
 const isJoker = computed(() => isPrecision.value || isWildcard.value || isLaizi.value)
-const tileMarker = computed(() => (isPrecision.value ? '精' : isLaizi.value ? '癞' : '替'))
+// 标记统一为「精」：真精牌、白板替身（可代本局精牌）、白板癞子/白板翻精都标「精」
+// （此前替身标「替」，白板翻精标「癞」，用户要求统一为「精」）。
+const tileMarker = computed(() => (isPrecision.value || isWildcard.value || isLaizi.value ? '精' : ''))
 const tileLabel = computed(() => {
   if (!isJoker.value || shownTile.value === 'back') return meta.value.name
-  const role = isPrecision.value ? '精牌' : isLaizi.value ? '癞子' : '万能牌'
+  const role = isPrecision.value || isLaizi.value ? '精牌' : '万能牌'
   return `${meta.value.name}，${role}${isWildcard.value ? '，可代本局精牌' : ''}`
 })
 const tileStyle = computed(() => {

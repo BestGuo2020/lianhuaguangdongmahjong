@@ -19,10 +19,13 @@ export interface VibeRoomTransportOptions {
   signalIntervalMs?: number
 }
 
-/** 单个对端 → 0-3 信号档：reconnecting=0；relay 或高延迟/抖动降档。 */
+/** 单个对端 → 0-3 信号档：延迟/抖动主导；relay 中继是 SDK 的正常传输模式
+ * （打牌完全正常），不因 relay 本身降档——否则房主对走中继的客户端会长期误显示
+ * 「网络不稳定」。reconnecting（直连 P2P 在重连）给 1 格：relay 通道通常仍可用。
+ * 彻底失联由掉线判定（25s/30s 无消息）负责，不由信号格表达。 */
 function scorePeer(peer: VibeHubSDK.PeerInfo): number {
-  if (peer.reconnecting) return 0
-  let score = peer.relay ? 2 : 3
+  if (peer.reconnecting) return 1
+  let score = 3
   if (peer.latency > 300) score = Math.max(0, score - 1)
   else if (peer.latency > 150) score = Math.max(1, score - 1)
   if (peer.jitter > 100) score = Math.max(0, score - 1)
@@ -34,20 +37,43 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
   const signalQuality = ref(0)
   let boundRoom: VibeHubSDK.Room | null = null
   let signalTimer: ReturnType<typeof setInterval> | null = null
+  // reconnecting 延迟确认：SDK 在直连失败自动切换 relay 时也会报 reconnecting
+  // （连接其实还在，只是换传输路径）——延迟确认，期间恢复（connecting/join/收到消息）
+  // 就不显示「网络断开，正在重连」横幅，避免误报。
+  let reconnectingTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearReconnectingConfirm() {
+    if (reconnectingTimer != null) {
+      clearTimeout(reconnectingTimer)
+      reconnectingTimer = null
+    }
+  }
 
   function bind(room: VibeHubSDK.Room) {
     if (boundRoom === room) return
     boundRoom = room
-    room.onMessage((message, _fromPeerId) => onMessage(message))
+    room.onMessage((message, _fromPeerId) => {
+      // 收到任何业务消息 → 连接可用，取消 reconnecting 确认。
+      clearReconnectingConfirm()
+      onMessage(message)
+    })
     room.onPeer((event) => {
       // 只跟踪房主（hostId）的连接状态：其他玩家的掉线/抖动不应触发「网络断开，
       // 正在重连」横幅。error 事件无 id，直接忽略。
       if (event.type === 'error') return
       if (event.id !== room.hostId && event.id !== room.peerId) return
       if (event.type === 'reconnecting') {
-        status.value = 'reconnecting'
-        signalQuality.value = 0
+        // 延迟 2s 确认：relay 切换/短暂抖动会在 2s 内恢复（connecting/消息），不误报。
+        // 信号格不在此归 0：直连在重连但 relay 可用（对局照常），由轮询 peers() 估算。
+        if (reconnectingTimer == null) {
+          reconnectingTimer = setTimeout(() => {
+            reconnectingTimer = null
+            if (boundRoom == null) return
+            status.value = 'reconnecting'
+          }, 2000)
+        }
       } else if (event.type === 'join' || event.type === 'connecting') {
+        clearReconnectingConfirm()
         status.value = 'connected'
         updateSignalQuality()
       }
@@ -99,6 +125,7 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
       clearInterval(signalTimer)
       signalTimer = null
     }
+    clearReconnectingConfirm()
     boundRoom = null
     status.value = 'idle'
     signalQuality.value = 0

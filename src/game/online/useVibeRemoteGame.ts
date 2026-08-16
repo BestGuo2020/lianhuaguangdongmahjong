@@ -230,7 +230,23 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       })
     },
     onClosed: () => {
-      void leaveRoom()
+      // 房主主动离开/解散房间（lobby_closed）：
+      // - 大厅：提示「房主已关闭房间」并离开（不再干等「网络断开，正在重连」）；
+      // - 对局中：结束对局显示最终排名（房主放弃，对局终止）。
+      clearHostGoneTimer()
+      if (phase.value === 'lobby') {
+        state.sessionError.value = '房主已关闭房间'
+        void leaveRoom()
+      } else {
+        matchLifecycle.finishMatch(players.map((player) => ({
+          seat: player.seat,
+          name: player.name,
+          score: player.score,
+        })))
+        transientEventPresenter.announce('房主已关闭房间，对局结束', 'gold')
+        // 房主确认没了：重置传输状态，结算页/返回大厅后不再残留「网络断开，正在重连」横幅。
+        transport.close()
+      }
     },
   })
 
@@ -417,7 +433,15 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     playSound,
     later,
     actions: {
-      discard: remoteActionController.userDiscard,
+      // 自动出牌（倒计时结束/autoPlay）：绕过本地 isUserTurn——重进后 phase/currentPlayer
+      // 可能被快照覆盖导致 isUserTurn false，本地拒绝发送会让在线玩家永远响应不了，
+      // 被房主 25s 超时误判掉线（「AI 夺舍」）。动作合法性由房主权威引擎校验。
+      discard: (index) => {
+        const me = user.value
+        if (!me || index < 0 || index >= me.hand.length) return
+        clearCountdown()
+        sendAction({ type: 'discard', handIndex: index })
+      },
       pass: remoteActionController.userPass,
       hu: remoteActionController.userHu,
       pickDiscard: remoteActionController.pickDiscard,
@@ -441,6 +465,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   function returnToLobby() {
     if (isHost.value) hostGame.value?.game.returnToLobby()
     lifecycleReturnToLobby()
+    // 重置传输状态：对局结束（正常打完或房主掉线）返回大厅后，SDK 可能仍停留在
+    // reconnecting（房主没了），否则横幅「网络断开，正在重连」会一直残留在大厅。
+    transport.close()
+    // 对局已结束返回大厅：房间使命完成，清除保存的会话——否则刷新/重新进入时会
+    // 自动 resumeSession 加入旧房间号（「房主离开后旧房间号还在」）。
+    clearSavedSession()
   }
 
   function clearPendingRequest() {
@@ -584,6 +614,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     })
   })
 
+  // 对局结束（正常打完/房主掉线）→ 清除保存的会话：即使没点「返回大厅」直接关页面，
+  // 下次刷新/重新进入也是干净大厅，不再自动 resumeSession 加入旧房间号。
+  watch(() => state.matchFinished.value, (finished) => {
+    if (finished) clearSavedSession()
+  })
+
   // 重连/加入后绑定传输层：对局进行中刷新页面重进时没有 lobby_start（onStart 里的
   // transport.open() 不触发），必须在此挂上 room.onMessage 才能收到快照/turn_request。
   // 客户端角色有效；房主保持不绑定（房主自视走 onLocalSnapshot/onLocalEvent）。
@@ -598,24 +634,19 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   })
 
   // ── 消息分发（客户端：无 rejoin 握手，mySeat 由大厅 roster 分配）──
-  // 重进标记：对局中重新加入（收到 rejoin_ok）置 true，下一个 round_start 用
-  // instant（跳过发牌动画）并清除——否则重进玩家照常播 8s 动画，动画期间缓存的
-  // turn_request 响应晚于房主掉线超时 → 在线玩家被误判「掉线 AI 代打」（AI 夺舍）。
-  const rejoinedMidMatch = ref(false)
+  // 注：重进后的发牌动画不再跳过——之前 instant（跳过动画）是为缓解「重进 AI 夺舍」
+  // 而加（动画期间缓存的 turn_request 响应晚于 18s 掉线超时）；现在掉线超时已放宽到
+  // 25s（动画 ≈8s + 客户端 12s 倒计时 ≈20s < 25s），正常播动画也不会误判掉线。
   const serverMessageRouter = createServerMessageRouter({
     rejoin_ok: (msg) => {
       // 刷新页面重进：房主补发的座位身份 → 恢复本家座位映射（对局进行中快照即重同步）。
       state.mySeat.value = msg.seat
       if (msg.roomId) state.roomId.value = msg.roomId
       state.sessionStatus.value = 'connected'
-      rejoinedMidMatch.value = true
     },
     rejoin_err: () => {},
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
-    round_start: (msg) => {
-      matchLifecycle.handleRoundStart(msg, { instant: rejoinedMidMatch.value })
-      rejoinedMidMatch.value = false
-    },
+    round_start: (msg) => matchLifecycle.handleRoundStart(msg),
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
     rob_kong_request: requestCoordinator.apply,
@@ -647,6 +678,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // SDK 的 connecting/join 事件只是自身重连流程，不能当作恢复。
   let hostGoneTimer: ReturnType<typeof setTimeout> | null = null
   let hostGoneBoundRoom: VibeHubSDK.Room | null = null
+  let hostPresenceTimer: ReturnType<typeof setInterval> | null = null
   function clearHostGoneTimer() {
     if (hostGoneTimer != null) {
       window.clearTimeout(hostGoneTimer)
@@ -654,16 +686,50 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     }
   }
 
-  /** 房主失联检测（客户端）：对局中 8s 无消息 → 结束对局；大厅 4s → 离开房间并提示。
+  /** 房主失联检测（客户端）：对局中 30s 无消息 → 结束对局；大厅 8s → 离开房间并提示。
    * 必须随「加入房间」注册（watch(roomId)），不能只在开局（onStart）注册——否则大厅
    * 阶段房主离开没有任何检测，客户端只能干等「网络断开，正在重连」几十秒。 */
   function bindHostGoneDetection(room: VibeHubSDK.Room) {
     if (hostGoneBoundRoom === room) return
     hostGoneBoundRoom = room
+    // 兜底轮询：SDK 可能静默移除对端（不发 leave/reconnecting 事件，只在中继超时后
+    // 「永久丢失」）——定期确认房主仍在 peers() 中，连续两轮（≈10s）不见即按离开处理，
+    // 避免「房主退出了，房间还显示着、人还占着座」。
+    if (hostPresenceTimer != null) {
+      clearInterval(hostPresenceTimer)
+      hostPresenceTimer = null
+    }
+    let missingCount = 0
+    hostPresenceTimer = setInterval(() => {
+      if (!roomId.value || state.matchFinished.value) return
+      const hasHost = room.peers().some((peer) => peer.id === room.hostId)
+      if (hasHost) {
+        missingCount = 0
+        return
+      }
+      missingCount += 1
+      if (missingCount < 2) return
+      missingCount = 0
+      clearHostGoneTimer()
+      if (phase.value === 'lobby') {
+        state.sessionError.value = '房主已关闭房间'
+        void leaveRoom()
+      } else {
+        matchLifecycle.finishMatch(players.map((player) => ({
+          seat: player.seat,
+          name: player.name,
+          score: player.score,
+        })))
+        transientEventPresenter.announce('房主掉线，对局结束', 'gold')
+        transport.close()
+      }
+    }, 5000)
     room.onPeer((event) => {
       if (event.type === 'error' || event.type === 'relay') return
-      const hostSeat = lobbySeats.value.find((seat) => seat.seat === 0)
-      if (!hostSeat || event.id !== hostSeat.peerId) return
+      // 用 SDK 的 room.hostId 判定房主（权威），不用 roster 匹配——roster 可能因
+      // 未同步/被清而缺失 seat 0，导致房主离开事件被跳过（客户端只看到「网络断开，
+      // 正在重连」横幅，房间/房主却还显示着）。
+      if (event.id !== room.hostId) return
       if (state.matchFinished.value) return
       const finishMatch = () => {
         matchLifecycle.finishMatch(players.map((player) => ({
@@ -672,6 +738,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           score: player.score,
         })))
         transientEventPresenter.announce('房主掉线，对局结束', 'gold')
+        // 房主确认没了：重置传输状态，避免返回大厅后残留「网络断开，正在重连」横幅。
+        transport.close()
       }
       const leaveLobby = () => {
         state.sessionError.value = '房主已关闭房间'
@@ -696,7 +764,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             if (state.matchFinished.value) return
             if (phase.value === 'lobby') leaveLobby()
             else finishMatch()
-          }, phase.value === 'lobby' ? 4000 : 30000)
+          }, phase.value === 'lobby' ? 8000 : 30000)
         }
       }
     })
@@ -711,6 +779,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   function closeConnection() {
     transport.close()
     clearTimers()
+    clearHostGoneTimer()
+    if (hostPresenceTimer != null) {
+      clearInterval(hostPresenceTimer)
+      hostPresenceTimer = null
+    }
+    hostGoneBoundRoom = null
   }
 
   function resetAll() {

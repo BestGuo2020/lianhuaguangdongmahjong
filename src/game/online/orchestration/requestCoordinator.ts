@@ -56,7 +56,10 @@ export function createRequestCoordinator({
     countdownHandle = globalThis.setInterval(() => {
       state.turnSeconds.value -= 1
       if (state.turnSeconds.value === 3) playSound('didu.ogg')
-      if (state.turnSeconds.value <= 0) {
+      // 提前 2s 自动出牌（剩 2 秒时）：留给网络往返余量，确保响应早于房主掉线超时
+      // （25s）与 AI 兜底（22s）——否则倒计时归零才发出，relay 延迟下可能被 AI 先
+      // 接管（「AI 夺舍」：在线玩家被短暂代打一手）。
+      if (state.turnSeconds.value <= 2) {
         clearCountdown()
         onExpire()
       }

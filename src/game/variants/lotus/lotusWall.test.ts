@@ -90,10 +90,11 @@ describe('莲花麻将牌墙构造', () => {
     expect(result.openingStack).toBe(34)
   })
 
-  it('指示牌 + 同序下一张 = 癞子', () => {
+  it('指示牌 + 同序下一张 = 癞子（白板翻精时白板也是精）', () => {
     const result = buildLotusWall({ dealer: 0, dice: [1, 1], secondDice: [1, 1], random: () => 0 })
     expect(result.jokers).toEqual(computeJokers(result.flipTile))
-    expect(result.jokers).not.toContain('white')
+    // 白板翻精：精牌 = 白板 + 红中。
+    expect(computeJokers('white')).toEqual(['white', 'red'])
   })
 
   it('翻精墩整体跳过，牌墙 134 张且每种不超过 4 张', () => {

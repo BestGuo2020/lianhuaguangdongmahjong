@@ -41,9 +41,14 @@ describe('癞子计算', () => {
   })
   it('翻精 = 指示牌 + 同序下一张', () => {
     expect(computeJokers('m5')).toEqual(['m5', 'm6'])
-    expect(computeJokers('white')).toEqual(['red'])
+    expect(computeJokers('white')).toEqual(['white', 'red'])
     expect(sortTilesWithJokers(['white', 'm1', 'm5', 'm6'], computeJokers('m5')))
       .toEqual(['m5', 'm6', 'm1', 'white'])
+  })
+  it('白板翻精：精牌 = 白板 + 红中（白板作精，可替代任意牌）', () => {
+    expect(computeJokers('white')).toEqual(['white', 'red'])
+    // 绿发翻精：顺延到白板 → 白板也是精（替代任意牌）。
+    expect(computeJokers('green')).toEqual(['green', 'white'])
   })
 })
 

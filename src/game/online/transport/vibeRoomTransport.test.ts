@@ -14,7 +14,7 @@ afterEach(() => {
 })
 
 describe('vibeRoomTransport 信号检测', () => {
-  it('按最差对端计算 0-3 格信号（直连低延迟=3；relay 高延迟=1；重连中=0）', () => {
+  it('按最差对端计算 0-3 格信号（延迟/抖动主导；relay 不降档）', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
     const mutablePeers: VibeHubSDK.PeerInfo[] = [peer()]
@@ -29,21 +29,22 @@ describe('vibeRoomTransport 信号检测', () => {
     transport.open()
     expect(transport.signalQuality.value).toBe(3)
 
-    // 对端走 relay、延迟 400ms → 1 格。
+    // 对端走 relay、延迟 400ms → 2 格（只降一档；relay 下 SDK 延迟字段常虚高，
+    // 实际打牌不卡，过度降档会误报「网络不稳定」）。
     mutablePeers[0] = peer({ relay: true, latency: 400 })
     vi.advanceTimersByTime(1100)
-    expect(transport.signalQuality.value).toBe(1)
+    expect(transport.signalQuality.value).toBe(2)
 
-    // 对端 reconnecting → 0 格。
+    // 对端 reconnecting（直连在重连，但 relay 通道通常仍可用）→ 1 格，不误报断线。
     mutablePeers[0] = peer({ reconnecting: true })
     vi.advanceTimersByTime(1100)
-    expect(transport.signalQuality.value).toBe(0)
-
-    // 两个对端取最差：一个流畅（3）、一个 relay 抖动（1）→ 整体 1。
-    mutablePeers[0] = peer({ latency: 5 })
-    mutablePeers.push(peer({ id: 'p2', relay: true, latency: 80, jitter: 150 }))
-    vi.advanceTimersByTime(1100)
     expect(transport.signalQuality.value).toBe(1)
+
+    // relay 但低延迟 → 不降档（3）；抖动 >100 才降。两个对端取最差。
+    mutablePeers[0] = peer({ relay: true, latency: 5 })
+    mutablePeers.push(peer({ id: 'p2', latency: 5, jitter: 150 }))
+    vi.advanceTimersByTime(1100)
+    expect(transport.signalQuality.value).toBe(2)
 
     // 无对端（大厅空房）→ 默认良好 3，不误报「网络不稳定」。
     mutablePeers.splice(0)

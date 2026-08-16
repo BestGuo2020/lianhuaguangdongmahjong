@@ -234,9 +234,13 @@ describe('startHostGame 无头权威', () => {
     }
     expect(sawTurnRequest).toBe(true)
 
-    // 客人不响应 → 超过房主 25s 超时 → AI 接管座位。
-    await vi.advanceTimersByTimeAsync(28000)
-    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    // 客人不响应 → 超过房主 25s 超时 → AI 接管座位（轮询等待，见刷新重进测试注释）。
+    let aiTook = false
+    for (let i = 0; i < 600 && !aiTook; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      aiTook = runner.aiControlledSeats.has(1)
+    }
+    expect(aiTook).toBe(true)
     // AI 接管后游戏继续推进，不再卡死。
     await vi.advanceTimersByTimeAsync(2000)
     expect(runner.game.phase.value).not.toBe('lobby')
@@ -345,16 +349,21 @@ describe('startHostGame 无头权威', () => {
       onLocalEvent: () => {},
     })
 
-    // 推进到闲家回合，不响应 → 15s 超时 AI 接管。
+    // 推进到闲家回合，不响应 → 25s 超时 AI 接管（轮询等待：引擎推进节奏受莲花随机
+    // 洗牌影响，固定时长在并行负载下偶发不足）。
     let sawTurnRequest = false
-    for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
+    for (let i = 0; i < 600 && !sawTurnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
       driveHostSeat(runner)
       sawTurnRequest = guestMessagesA.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
-    await vi.advanceTimersByTimeAsync(28000)
-    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    let aiTook = false
+    for (let i = 0; i < 600 && !aiTook; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      aiTook = runner.aiControlledSeats.has(1)
+    }
+    expect(aiTook).toBe(true)
 
     // 刷新：旧窗口关闭；新窗口 peerId 变化（新标签页），昵称与座位表记录不同。
     guestRoomA.leave()
@@ -530,16 +539,20 @@ describe('startHostGame 无头权威', () => {
       onLocalEvent: () => {},
     })
 
-    // 推进到闲家回合，客人不响应 → 15s 超时 AI 接管。
+    // 推进到闲家回合，客人不响应 → 25s 超时 AI 接管（轮询等待，见刷新重进测试注释）。
     let sawTurnRequest = false
-    for (let i = 0; i < 300 && !sawTurnRequest; i += 1) {
+    for (let i = 0; i < 600 && !sawTurnRequest; i += 1) {
       await vi.advanceTimersByTimeAsync(100)
       driveHostSeat(runner)
       sawTurnRequest = guestMessages.some((message) => message?.kind === 'turn_request')
     }
     expect(sawTurnRequest).toBe(true)
-    await vi.advanceTimersByTimeAsync(28000)
-    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    let aiTook = false
+    for (let i = 0; i < 600 && !aiTook; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      aiTook = runner.aiControlledSeats.has(1)
+    }
+    expect(aiTook).toBe(true)
 
     // 接管后 AI 只是兜底：玩家任一条操作消息回来即归还真人决策（onMessage 不依赖
     // 挂起请求；若恰有挂起则同时采用该操作）。不依赖「下一轮 turn_request」——莲花

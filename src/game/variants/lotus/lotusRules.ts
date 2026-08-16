@@ -25,9 +25,11 @@ export function nextInSequence(tile: TileType): TileType {
   return tile
 }
 
-/** 本局癞子 = [指示牌, 同序下一张]（恰 2 张，二者不同）。 */
+/** 本局癞子 = [指示牌, 同序下一张]（恰 2 张，二者不同）。
+ * 白板翻精：指示牌是白板 → 精牌 = [白板, 红中]（箭循环白→中），白板本身作为精
+ * （可替代任意牌）。此前把白板从精牌里过滤掉（只留红中），导致白板翻精时不作精。 */
 export function computeJokers(flipTile: TileType): TileType[] {
-  return [...new Set([flipTile, nextInSequence(flipTile)])].filter((tile) => tile !== 'white')
+  return [...new Set([flipTile, nextInSequence(flipTile)])]
 }
 
 export function isJoker(tile: TileType, jokers: TileType[]): boolean {
