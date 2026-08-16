@@ -515,7 +515,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       rejoinRetries += 1
       if (rejoinRetries > 2) {
         rejoining.value = false
-        sessionStore.clearSession()
+        clearSavedSession()
         state.sessionError.value = '房间已失效或无法连接，请重新创建或加入房间'
         return
       }
@@ -564,7 +564,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       rejoinRetries += 1
       if (rejoinRetries > 2) {
         rejoining.value = false
-        sessionStore.clearSession()
+        clearSavedSession()
         state.sessionError.value = '房间已失效或无法连接，请重新创建或加入房间'
         return
       }
@@ -628,16 +628,24 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   })
 
   // ── 消息分发（客户端：无 rejoin 握手，mySeat 由大厅 roster 分配）──
+  // 重进标记：对局中重新加入（收到 rejoin_ok）置 true，下一个 round_start 用
+  // instant（跳过发牌动画）并清除——否则重进玩家照常播 8s 动画，动画期间缓存的
+  // turn_request 响应晚于房主掉线超时 → 在线玩家被误判「掉线 AI 代打」（AI 夺舍）。
+  const rejoinedMidMatch = ref(false)
   const serverMessageRouter = createServerMessageRouter({
     rejoin_ok: (msg) => {
       // 刷新页面重进：房主补发的座位身份 → 恢复本家座位映射（对局进行中快照即重同步）。
       state.mySeat.value = msg.seat
       if (msg.roomId) state.roomId.value = msg.roomId
       state.sessionStatus.value = 'connected'
+      rejoinedMidMatch.value = true
     },
     rejoin_err: () => {},
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
-    round_start: matchLifecycle.handleRoundStart,
+    round_start: (msg) => {
+      matchLifecycle.handleRoundStart(msg, { instant: rejoinedMidMatch.value })
+      rejoinedMidMatch.value = false
+    },
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
     rob_kong_request: requestCoordinator.apply,
@@ -681,6 +689,40 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     closeConnection()
     resetAll()
     roomSession.leaveRoom()
+    // 主动退出房间 → 清除保存的会话：否则刷新页面、重新登录后 watch(vibeUser)
+    // 会触发 resumeSession 自动加入旧房间（「退出了房间，登录后怎么又进旧房」）。
+    clearSavedSession()
+  }
+
+  /** 房主关闭房间（closeRoom 也走 leaveRoom 的清理路径）。 */
+  async function closeRoom() {
+    await roomSession.closeRoom()
+    await leaveRoom()
+  }
+
+  // 暴露给 lobby 控制器的房间动作：主动退出/关闭房间时清除保存的会话（内部重进路径
+  // 用原始 roomSession，保留会话以便自动重进）。
+  // sessionVersion 让 savedSessionExists 响应式：清会话后 App.vue 的 watch(vibeUser)
+  // 立即读到「已无会话」，不会在退出房间后重新登录时又自动加入旧房间。
+  const sessionVersion = ref(0)
+  const savedSessionExists = computed(() => {
+    void sessionVersion.value
+    return sessionStore.loadSession() != null
+  })
+  function clearSavedSession() {
+    sessionStore.clearSession()
+    sessionVersion.value += 1
+  }
+  const remoteActions = {
+    ...roomSession,
+    async leaveRoom() {
+      await roomSession.leaveRoom()
+      clearSavedSession()
+    },
+    async closeRoom() {
+      await roomSession.closeRoom()
+      clearSavedSession()
+    },
   }
 
   function cleanup() {
@@ -695,13 +737,13 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
-    savedSessionExists: sessionStore.loadSession() != null,
+    savedSessionExists,
     scheduleRejoinRetry,
     resetRejoinRetry,
     rejoining,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
-    remoteActions: roomSession,
+    remoteActions,
     // 游戏状态（useGame 兼容接口）
     phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,
     actionPrompt, announcement, tableActionEvent, scoreFlowEvent, result, winEffect,

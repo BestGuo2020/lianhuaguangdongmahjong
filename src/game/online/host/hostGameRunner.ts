@@ -57,10 +57,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 } {
   const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
 
-  // 远端玩家请求超时（客户端 12s 回合倒计时 + 网络抖动余量）：超时判定掉线 → AI 接管，
-  // 游戏不卡死。放宽到 18s：SDK relay 切换/网络抖动时消息往返可能远超 12s 倒计时，
-  // 过短的超时会把「响应慢」误判成「掉线」，反复触发 AI 代打。
-  const REMOTE_REQUEST_TIMEOUT_MS = 18000
+  // 远端玩家请求超时（客户端 12s 回合倒计时 + 开局动画/网络抖动余量）：超时判定掉线
+  // → AI 接管，游戏不卡死。放宽到 25s：客户端开局动画（发牌/翻精 ≈4s）期间到达的
+  // turn_request 会被 isBlocked 缓存，动画结束才收到请求、倒计时 12s → 响应约 16s；
+  // 过短的超时会把「响应慢」误判成「掉线」，反复触发 AI 代打（重进玩家「AI 夺舍」）。
+  const REMOTE_REQUEST_TIMEOUT_MS = 25000
   // 被 AI 接管的座位（seat 1-3），供 UI 标记「AI 代打」。
   const aiControlledSeats = new Set<number>()
   // 接管/归还版本号（ref 才能被 Vue watch 感知；raw Set 的 mutation 无法被响应式跟踪）。

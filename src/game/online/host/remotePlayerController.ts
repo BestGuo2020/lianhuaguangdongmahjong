@@ -46,8 +46,8 @@ function isActionMessage(message: unknown): message is RemotePlayerActionMessage
 }
 
 /** AI 兜底等待：超过该时长玩家未响应则由 AI 决策本请求（仍持续提示玩家，响应即归还）。
- * 比房主的掉线接管超时（18s）稍短：AI 先兜住本请求，房主侧的 18s 才正式判掉线。 */
-const REMOTE_FALLBACK_MS = 16000
+ * 比房主的掉线接管超时（25s）稍短：AI 先兜住本请求，房主侧的 25s 才正式判掉线。 */
+const REMOTE_FALLBACK_MS = 22000
 
 export class RemotePlayerController implements PlayerController, DisconnectableController {
   private pending: ((action: RemotePlayerActionMessage) => void) | null = null

@@ -185,7 +185,7 @@ export function createOpeningTimeline({
       state.dealAnimation.value = { playerIndex, count: dealCount, serial: serial + 1 }
       serial += 1
       playSound('deal.mp3', 0.72)
-      await wait(count === 4 ? 260 : 150)
+      await wait(count === 4 ? 150 : 90)
       return true
     }
     for (let batch = 0; batch < 3; batch += 1) {
@@ -205,13 +205,13 @@ export function createOpeningTimeline({
     // 骰子动画（dicePresenter 1050ms）+ 渲染余量：3D 场景在首次开局时需完成
     // WebGL 初始化和首帧渲染，等待过短会让骰子看起来"还没播完就进入下一步"。
     // 莲花开局有两次掷骰与翻精，经典只有一次投骰。
-    const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
+    const diceWait = hasSecondDice || hasFlip ? 1000 : 800
     running = true
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
     // 等 game_start 播完再掷骰（与单机 lotusOpening/localOpening 对齐）。
     // playEffectAndWait 自带 4s 兜底超时、静音/异常时立即返回，不会阻塞开局协议。
-    await Promise.all([playSoundAndWait('game_start.mp3').catch(() => {}), wait(1250)])
+    await Promise.all([playSoundAndWait('game_start.mp3').catch(() => {}), wait(800)])
     if (currentSequence !== sequence) return
     state.openingStage.value = 'dice'
     state.diceValues.value = [...firstDice]
@@ -223,7 +223,7 @@ export function createOpeningTimeline({
       state.flipTile.value = flipTileValue
       state.flipStack.value = flipStackValue
       if (flipTileValue) announce(`翻精 ${tileName(flipTileValue)}`)
-      await wait(1200)
+      await wait(700)
       if (currentSequence !== sequence) return
     }
     if (hasSecondDice) {
@@ -236,8 +236,8 @@ export function createOpeningTimeline({
       if (currentSequence !== sequence) return
     }
     if (openingSnapshot && !(await deal(currentSequence))) return
-    // 开牌后留出 650ms 停顿再放行首回合（对齐单机 lotusOpening/localOpening 节奏）。
-    await wait(650)
+    // 开牌后留出 400ms 停顿再放行首回合（对齐单机 lotusOpening/localOpening 节奏）。
+    await wait(400)
     if (currentSequence !== sequence) return
     state.openingStage.value = null
     running = false
@@ -245,7 +245,7 @@ export function createOpeningTimeline({
     onFinished()
   }
 
-  function start(message: RoundStartMessage) {
+  function start(message: RoundStartMessage, options: { instant?: boolean } = {}) {
     cancel()
     state.round.value = message.round
     state.dealer.value = toLocalSeat(message.dealer)
@@ -282,6 +282,17 @@ export function createOpeningTimeline({
     state.revealHands.value = false
     state.winningPlayerIndex.value = -1
     state.phase.value = 'dealing'
+    if (options.instant) {
+      // 重进（对局中再加入）：跳过骰子/翻精/发牌动画，直接放行快照驱动——重进玩家
+      // 手牌由快照提供，不需要发牌动画。若照常播 8s 动画，期间到达的 turn_request
+      // 会被 isBlocked 缓存，客户端响应晚于房主掉线超时 → 在线玩家被误判「掉线
+      // AI 代打」（提示一闪而过，AI 夺舍）。
+      state.openingStage.value = null
+      running = false
+      send({ type: 'opening_done' })
+      onFinished()
+      return
+    }
     const currentSequence = sequence
     void run(currentSequence)
   }
