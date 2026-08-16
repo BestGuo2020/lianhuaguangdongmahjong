@@ -593,7 +593,7 @@ function addTable() {
     })
   }
 
-  // 木质包边（woodTrim）：台面四周一圈宽大木纹框，四长条 + 四短条搭成完整框，明显高出台面。
+  // 木质包边（woodTrim）：台面四周一圈宽大木纹框，回字形挤出几何一体成型（四角零重叠，避免 z-fighting 闪烁）。
   // 台面 21.04 见方（半宽 10.52）、顶面 y≈.07；桌身半宽 10.9；牌河最远约 ±10.2（框内沿不得内缩越过）。
   // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8、高 .16、中心 y=.14（顶 .22）。
   if (theme.woodTrim) {
@@ -605,15 +605,24 @@ function addTable() {
       clearcoat: .3,
       clearcoatRoughness: .3,
     }))
-    const trimY = .14
-    const bar = .8
-    const trimH = .16
-    const t = 10.6
-    const len = 22
-    addStaticMesh(new THREE.BoxGeometry(len, trimH, bar), wood, 0, trimY, t)
-    addStaticMesh(new THREE.BoxGeometry(len, trimH, bar), wood, 0, trimY, -t)
-    addStaticMesh(new THREE.BoxGeometry(bar, trimH, len), wood, t, trimY, 0)
-    addStaticMesh(new THREE.BoxGeometry(bar, trimH, len), wood, -t, trimY, 0)
+    const outer = 11
+    const inner = 10.2
+    const shape = new THREE.Shape()
+    shape.moveTo(-outer, -outer)
+    shape.lineTo(outer, -outer)
+    shape.lineTo(outer, outer)
+    shape.lineTo(-outer, outer)
+    shape.closePath()
+    const hole = new THREE.Path()
+    hole.moveTo(-inner, -inner)
+    hole.lineTo(inner, -inner)
+    hole.lineTo(inner, inner)
+    hole.lineTo(-inner, inner)
+    hole.closePath()
+    shape.holes.push(hole)
+    const frameGeometry = own(new THREE.ExtrudeGeometry(shape, { depth: .16, bevelEnabled: false }))
+    const frame = addStaticMesh(frameGeometry, wood, 0, .06, -1.65)
+    frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .06）
   }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
