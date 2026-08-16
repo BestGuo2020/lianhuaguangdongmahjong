@@ -3,6 +3,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { TILE_TYPES } from '../../../game/core/rules/tiles'
 import { windForSeat } from '../../../game/core/presentation/tableLayout'
 import type { TileType } from '../../../game/core/contracts/types'
+import { defaultTableTheme } from './tableTheme'
+import type { TableTheme } from './tableTheme'
 
 interface TableSceneOptions {
   renderer: THREE.WebGLRenderer
@@ -13,6 +15,8 @@ interface TableSceneOptions {
     dealerIndex: number
   }
   playAreaOffsetZ: number
+  /** 主题配置；不传则用 defaultTableTheme。换肤 = 传另一份 TableTheme。 */
+  theme?: TableTheme
   own<T>(resource: T): T
   ownDynamic<T>(resource: T): T
   trackTileMaterial(material: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial
@@ -21,6 +25,7 @@ interface TableSceneOptions {
 
 export function createStaticTableScene(options: TableSceneOptions) {
   const { renderer, scene, props, own, ownDynamic, trackTileMaterial } = options
+  const theme = options.theme ?? defaultTableTheme
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
 
@@ -104,15 +109,7 @@ function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi'
   const material = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
     envMap: scene.userData.tileEnvironment,
-    color: 0xd8d7ce,
-    roughness: .4,
-    metalness: 0,
-    clearcoat: .56,
-    clearcoatRoughness: .24,
-    ior: 1.46,
-    specularIntensity: .36,
-    specularColor: new THREE.Color(0xfffdf4),
-    envMapIntensity: .3,
+    ...theme.tile.face,
   })))
   if (!options.isGlossy()) {
     material.clearcoat = 0
@@ -294,15 +291,7 @@ function getAtlasMaterial() {
   const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
     envMap: scene.userData.tileEnvironment,
-    color: 0xd8d7ce,
-    roughness: .4,
-    metalness: 0,
-    clearcoat: .56,
-    clearcoatRoughness: .24,
-    ior: 1.46,
-    specularIntensity: .36,
-    specularColor: new THREE.Color(0xfffdf4),
-    envMapIntensity: .3,
+    ...theme.tile.face,
   })))
   // 每实例 UV 偏移：aUvOffset 由 InstancedMesh 逐实例提供，把顶面 UV 折进对应图集格。
   // 只改 vMapUv（r185 里 map 用 vMapUv 采样，且它在 #ifdef USE_MAP 下声明）。
@@ -343,15 +332,14 @@ function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
   const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
     envMap: scene.userData.tileEnvironment,
-    color: 0xd8d7ce,
-    roughness: .4,
-    clearcoat: options.isGlossy() ? .56 : 0,
-    clearcoatRoughness: options.isGlossy() ? .24 : 0,
-    ior: 1.46,
-    specularIntensity: options.isGlossy() ? .36 : 0,
-    specularColor: new THREE.Color(0xfffdf4),
-    envMapIntensity: .3,
+    ...theme.tile.face,
   })))
+  if (!options.isGlossy()) {
+    mat.clearcoat = 0
+    mat.clearcoatRoughness = 0
+    mat.specularIntensity = 0
+    mat.ior = 1.5
+  }
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader
     shader.vertexShader = shader.vertexShader.replace(
@@ -463,97 +451,29 @@ function addStaticMesh(geometry, material, x, y, z) {
 }
 
 function addTable() {
-  const jade = own(new THREE.MeshPhysicalMaterial({
-    color: 0x254223,
-    emissive: 0x101d0f,
-    emissiveIntensity: .12,
-    roughness: .4,
-    metalness: .04,
-    clearcoat: .72,
-    clearcoatRoughness: .2,
-    sheen: .22,
-    sheenColor: new THREE.Color(0x6f8d69),
-    sheenRoughness: .72,
-  }))
-  const darkJade = own(new THREE.MeshPhysicalMaterial({
-    color: 0x08271c,
-    emissive: 0x03140e,
-    emissiveIntensity: .12,
-    roughness: .48,
-    metalness: .16,
-    clearcoat: .36,
-    clearcoatRoughness: .3,
-  }))
-  const gold = own(new THREE.MeshPhysicalMaterial({
-    color: 0xb88a38,
-    emissive: 0x3a2406,
-    emissiveIntensity: .3,
-    roughness: .28,
-    metalness: .88,
-    clearcoat: .3,
-    clearcoatRoughness: .2,
-  }))
-  const goldHighlight = own(new THREE.MeshPhysicalMaterial({
-    color: 0xe1b85d,
-    emissive: 0x392006,
-    emissiveIntensity: .35,
-    roughness: .22,
-    metalness: .94,
-    clearcoat: .38,
-    clearcoatRoughness: .16,
-  }))
-  const machine = own(new THREE.MeshPhysicalMaterial({
-    color: 0x071f17,
-    roughness: .3,
-    metalness: .24,
-    clearcoat: .76,
-    clearcoatRoughness: .16,
-  }))
+  const jade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.jade }))
+  const darkJade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.darkJade }))
+  const gold = own(new THREE.MeshPhysicalMaterial({ ...theme.table.gold }))
+  const goldHighlight = own(new THREE.MeshPhysicalMaterial({ ...theme.table.goldHighlight }))
+  const machine = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machine }))
   scene.userData.tileSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
-    color: 0xc9c9c1,
-    metalness: 0,
-    roughness: .31,
-    clearcoat: .58,
-    clearcoatRoughness: .23,
-    ior: 1.46,
-    specularIntensity: .34,
-    specularColor: new THREE.Color(0xfffdf3),
-    envMapIntensity: .3,
+    ...theme.tile.side,
   })))
   scene.userData.faceSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
-    color: 0x32a73a,
-    metalness: 0,
-    roughness: .3,
-    clearcoat: .68,
-    clearcoatRoughness: .18,
-    ior: 1.46,
-    specularIntensity: .62,
-    envMapIntensity: .46,
+    ...theme.tile.faceSide,
   })))
   scene.userData.tileBottom = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     envMap: scene.userData.tileEnvironment,
-    color: 0xbfc1b9,
-    metalness: 0,
-    roughness: .42,
-    clearcoat: .38,
-    clearcoatRoughness: .24,
-    ior: 1.45,
-    envMapIntensity: .25,
+    ...theme.tile.bottom,
   })))
   scene.userData.backMaterial = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: makeBackTexture(),
     envMap: scene.userData.tileEnvironment,
-    color: 0xd1d2cb,
-    metalness: 0,
-    roughness: .32,
-    clearcoat: .48,
-    clearcoatRoughness: .26,
-    ior: 1.46,
-    envMapIntensity: .28,
+    ...theme.tile.back,
   })))
-  scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ color: 0xe3b948, emissive: 0x7d4d08, emissiveIntensity: .8, roughness: .4 }))
+  scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ ...theme.highlight }))
   // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
   // 绿色牌背层略微内收，白色正面层形成完整外轮廓。
   scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .22, .94, 6, .07))
@@ -583,12 +503,9 @@ function addTable() {
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
     map: makeMachineTexture(),
-    roughness: .3,
-    metalness: .16,
-    clearcoat: .66,
-    clearcoatRoughness: .18,
+    ...theme.table.machineTop,
   }))
-  const machineBottom = own(new THREE.MeshPhysicalMaterial({ color: 0x020906, roughness: .46, metalness: .3, clearcoat: .24 }))
+  const machineBottom = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machineBottom }))
   addStaticMesh(new RoundedBoxGeometry(3.85, .2, 3.85, 3, .22), gold, 0, .14, PLAY_AREA_OFFSET_Z)
   addStaticMesh(new RoundedBoxGeometry(3.58, .16, 3.58, 3, .18), darkJade, 0, .25, PLAY_AREA_OFFSET_Z)
   const machineGeometry = own(new RoundedBoxGeometry(3.35, .28, 3.35, 3, .16))
