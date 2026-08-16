@@ -505,13 +505,22 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // 都没拿到（mySeat < 0，即完全没收到过房主消息）」→ 自动 leave + 重新 join（最多 2 次）。
   // 注意：拿到座位（mySeat >= 0）说明通道可用、已正常进房，绝不能重试（每次重试会换
   // 新 peerId，反而打断昵称兜底恢复）。房主在大厅时客户端本就停在 lobby，也属正常。
+  // 重试耗尽仍失败：房间大概率已失效（对局散场/全员离开，旧房间号在 SDK 侧已不存在）——
+  // 继续重试毫无意义，清除会话并提示，让用户回大厅重新创建/加入。
+  const rejoining = ref(false)
   let rejoinRetries = 0
   function scheduleRejoinRetry() {
     const retry = () => {
-      if (!roomId.value || mySeat.value >= 0 || state.matchFinished.value) return
+      if (!roomId.value || mySeat.value >= 0 || state.matchFinished.value || isHost.value) return
       rejoinRetries += 1
-      if (rejoinRetries > 2) return
-      console.warn(`[client] 重进后连座位都没收到（数据通道可能未建立），重新加入（第 ${rejoinRetries} 次）`)
+      if (rejoinRetries > 2) {
+        rejoining.value = false
+        sessionStore.clearSession()
+        state.sessionError.value = '房间已失效或无法连接，请重新创建或加入房间'
+        return
+      }
+      rejoining.value = true
+      console.warn(`[client] 尝试重新加入房间（第 ${rejoinRetries} 次）——重进后连座位都没收到`)
       void roomSession.leaveRoom()
       later(() => { void roomSession.resumeSession() }, 1500)
       // 12s 再查：SDK relay 切换/消息排队时 roster 可能迟到，过短的间隔会自伤——
@@ -522,7 +531,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   }
   function resetRejoinRetry() {
     rejoinRetries = 0
+    rejoining.value = false
   }
+  // 重进成功（拿到座位或成为房主）→ 关闭「尝试重新加入」提示。
+  watch([mySeat, isHost], () => {
+    if (mySeat.value >= 0 || isHost.value) rejoining.value = false
+  })
 
   // 「已确认」失联自愈：客户端确认「下一局」后 waitingNextRound=true，若长时间收不到
   // 推进信号（round_start → handleRoundStart 会把它清回 false），说明与房主的通道断了
@@ -548,7 +562,13 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       if (!roomId.value || isHost.value) return
       console.warn('[client] 确认后长时间未收到推进信号（通道可能断开），自动重进')
       rejoinRetries += 1
-      if (rejoinRetries > 2) return
+      if (rejoinRetries > 2) {
+        rejoining.value = false
+        sessionStore.clearSession()
+        state.sessionError.value = '房间已失效或无法连接，请重新创建或加入房间'
+        return
+      }
+      rejoining.value = true
       void roomSession.leaveRoom()
       later(() => { void roomSession.resumeSession() }, 1000)
     }, 20000)
@@ -678,6 +698,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     savedSessionExists: sessionStore.loadSession() != null,
     scheduleRejoinRetry,
     resetRejoinRetry,
+    rejoining,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
     remoteActions: roomSession,

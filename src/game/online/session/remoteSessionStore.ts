@@ -8,7 +8,13 @@ export interface StoredSession {
   playerId: string
   mode: MatchType
   rulesetId?: RuleVariant
+  /** 保存时间戳（ms）：超过有效期（对局早已散场、房间大概率不存在）则不再自动重进。 */
+  savedAt?: number
 }
+
+/** 会话有效期：超过该时长（对局结束/全员离开后房间在 SDK 侧基本失效）自动清除，
+ * 避免几小时后回来还自动重进一个早已不存在的旧房间号，反复「重进后连座位都没收到」。 */
+export const SESSION_TTL_MS = 2 * 60 * 60 * 1000
 
 export interface StorageLike {
   getItem(key: string): string | null
@@ -70,7 +76,7 @@ export function createRemoteSessionStore(
     loadGuestId: () => read(REMOTE_STORAGE_KEYS.guestId),
     saveGuestId: (playerId: string) => write(REMOTE_STORAGE_KEYS.guestId, playerId),
     saveNickname: (nickname: string) => write(REMOTE_STORAGE_KEYS.nickname, nickname),
-    loadSession(): StoredSession | null {
+    loadSession(now: () => number = Date.now): StoredSession | null {
       const raw = read(REMOTE_STORAGE_KEYS.session)
       if (!raw) return null
       try {
@@ -80,6 +86,12 @@ export function createRemoteSessionStore(
         if (session.mode !== 'east' && session.mode !== 'hanchan') return null
         const rulesetId = session.rulesetId ?? 'lotus-classic'
         if (rulesetId !== 'lotus-classic' && rulesetId !== 'lotus-legacy') return null
+        // 旧会话失效：保存超过 2 小时（对局早已散场，房间大概率不存在）→ 清除并返回
+        // null，刷新后不再自动重进旧房间号（重试一个不存在的房间毫无意义）。
+        if (typeof session.savedAt === 'number' && now() - session.savedAt > SESSION_TTL_MS) {
+          remove(REMOTE_STORAGE_KEYS.session)
+          return null
+        }
         return {
           roomId: session.roomId,
           rejoinCode: session.rejoinCode,
@@ -87,13 +99,14 @@ export function createRemoteSessionStore(
           playerId: session.playerId ?? '',
           mode: session.mode,
           rulesetId,
+          savedAt: session.savedAt,
         }
       } catch {
         return null
       }
     },
     saveSession(session: StoredSession): void {
-      write(REMOTE_STORAGE_KEYS.session, JSON.stringify(session))
+      write(REMOTE_STORAGE_KEYS.session, JSON.stringify({ ...session, savedAt: Date.now() }))
     },
     clearSession(): void {
       remove(REMOTE_STORAGE_KEYS.session)

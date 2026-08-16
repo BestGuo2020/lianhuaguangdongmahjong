@@ -111,6 +111,7 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+  rejoining,
 } = vibeRemoteGame
 
 // SDK 无服务端房间容量元数据，「剩余房间」不再展示。
@@ -208,6 +209,7 @@ const continueCountdown = useRemoteContinueCountdown({
   <main class="game-app">
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting'" class="remote-banner" role="status">网络断开，正在重连…</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
+    <div v-if="gameMode === 'remote' && rejoining" class="remote-banner" role="status">尝试重新加入房间…</div>
     <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>
     <div class="wood-frame">
       <div class="felt-table" :class="{ 'has-three-scene': players.length }">

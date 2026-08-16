@@ -35,12 +35,38 @@ describe('remoteSessionStore', () => {
     store.saveSession(session)
 
     expect(store.loadGuestId()).toBe('guest-1')
-    expect(store.loadSession()).toEqual(session)
+    const loaded = store.loadSession()
+    expect(loaded).toMatchObject(session)
+    expect(typeof loaded?.savedAt).toBe('number')
     expect(storage.data[REMOTE_STORAGE_KEYS.nickname]).toBe('莲花')
 
     store.clearSession()
     expect(store.loadSession()).toBeNull()
     expect(store.loadGuestId()).toBe('guest-1')
+  })
+
+  it('旧会话超过有效期（对局早已散场）→ 自动清除，不再自动重进不存在的房间', () => {
+    const storage = memoryStorage()
+    const store = createRemoteSessionStore(() => storage)
+    const now = Date.now()
+    storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({
+      roomId: 'OLDROOM',
+      rejoinCode: '',
+      nickname: '莲花',
+      playerId: 'guest-1',
+      mode: 'east',
+      rulesetId: 'lotus-classic',
+      savedAt: now - 3 * 60 * 60 * 1000, // 3 小时前保存（超过 2h TTL）
+    })
+    // 过期 → 返回 null 并清除存储。
+    expect(store.loadSession(() => now)).toBeNull()
+    expect(storage.data[REMOTE_STORAGE_KEYS.session]).toBeUndefined()
+    // 未过期（如 1 小时前）→ 仍可恢复。
+    storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({
+      roomId: 'LIVEROOM', rejoinCode: '', nickname: '莲花', playerId: 'guest-1', mode: 'east',
+      rulesetId: 'lotus-classic', savedAt: now - 60 * 60 * 1000,
+    })
+    expect(store.loadSession(() => now)?.roomId).toBe('LIVEROOM')
   })
 
   it('rejects malformed and unknown-mode sessions；SDK 版允许无 rejoinCode', () => {
@@ -51,7 +77,10 @@ describe('remoteSessionStore', () => {
     expect(store.loadSession()).toBeNull()
     // SDK 版（VibeHub）无 rejoinCode：仅 roomId + 合法 mode 即为有效会话（刷新页面重进）。
     storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ roomId: 'A', mode: 'east' })
-    expect(store.loadSession()).toEqual({ roomId: 'A', rejoinCode: undefined, nickname: '', playerId: '', mode: 'east', rulesetId: 'lotus-classic' })
+    expect(store.loadSession()).toEqual({
+      roomId: 'A', rejoinCode: undefined, nickname: '', playerId: '', mode: 'east',
+      rulesetId: 'lotus-classic', savedAt: undefined,
+    })
     storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ rejoinCode: 'B', mode: 'east' })
     expect(store.loadSession()).toBeNull()
     storage.data[REMOTE_STORAGE_KEYS.session] = JSON.stringify({ roomId: 'A', rejoinCode: 'B', mode: 'unknown' })
