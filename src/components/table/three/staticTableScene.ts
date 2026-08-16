@@ -29,26 +29,46 @@ export function createStaticTableScene(options: TableSceneOptions) {
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
 
-// 素面呢绒桌面的程序化纹理：低对比灰度噪点 + 平铺，模拟织物绒感（与高 roughness 配合）。
-function makeFeltTexture() {
-  const size = 128
+// 台面表面纹理（单张合成，避免 map 通道冲突）：
+// - tableFelt：白底 + 密集细线噪点，模拟绒面颗粒；
+// - tableVignette：径向渐变边缘压暗（中心亮、四周暗）。
+// 无平铺（ClampToEdge），整张覆盖台面 UV。
+function makeTableSurfaceTexture() {
+  const size = 256
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')
-  const imageData = ctx.createImageData(size, size)
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const v = 205 + Math.floor(Math.random() * 36)
-    imageData.data[i] = v
-    imageData.data[i + 1] = v
-    imageData.data[i + 2] = v
-    imageData.data[i + 3] = 255
+  if (theme.tableFelt) {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
+    for (let i = 0; i < 900; i++) {
+      const x = Math.random() * size
+      const y = Math.random() * size
+      const len = 2 + Math.random() * 5
+      ctx.strokeStyle = `rgba(128,128,128,${.08 + Math.random() * .12})`
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + (Math.random() - .5) * 2, y + len)
+      ctx.stroke()
+    }
+  } else {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
   }
-  ctx.putImageData(imageData, 0, 0)
+  if (theme.tableVignette) {
+    const i = theme.tableVignette
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * .18, size / 2, size / 2, size * .62)
+    grad.addColorStop(0, 'rgba(0,0,0,0)')
+    grad.addColorStop(1, `rgba(0,0,0,${i})`)
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+  }
   const texture = own(new THREE.CanvasTexture(canvas))
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(14, 14)
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
   texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
   return texture
 }
 
@@ -519,7 +539,7 @@ function addStaticMesh(geometry, material, x, y, z) {
 function addTable() {
   const jade = own(new THREE.MeshPhysicalMaterial({
     ...theme.table.jade,
-    ...(theme.tableFelt ? { map: makeFeltTexture() } : {}),
+    ...(theme.tableFelt || theme.tableVignette ? { map: makeTableSurfaceTexture() } : {}),
   }))
   const darkJade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.darkJade }))
   const gold = own(new THREE.MeshPhysicalMaterial({ ...theme.table.gold }))

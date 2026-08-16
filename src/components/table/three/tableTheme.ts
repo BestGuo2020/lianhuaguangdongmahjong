@@ -31,6 +31,8 @@ export interface TableTheme {
   plainSurface?: boolean
   /** 桌面呢绒纹理：给台面材质叠加程序化噪点贴图，模拟织物绒感（配合高 roughness）。 */
   tableFelt?: boolean
+  /** 桌面暗角强度 0-1：台面中心亮、向四周渐暗（径向渐变压暗边缘），不传不启用。 */
+  tableVignette?: number
   /** 木质包边：台面四周一圈程序木纹框（雀魂等木框桌用），与 plainSurface 配合。 */
   woodTrim?: boolean
   /** 木纹三段颜色（canvas 程序纹理），不传用默认深棕。 */
@@ -116,6 +118,7 @@ export const defaultTableTheme: TableTheme = {
       clearcoat: .24,
     },
   },
+  tableVignette: .45,
   tile: {
     side: {
       color: 0xc9c9c1,
@@ -238,6 +241,7 @@ export const rosewoodTheme: TableTheme = {
       clearcoat: .24,
     },
   },
+  tableVignette: .45,
   tile: {
     side: {
       color: 0xcfc9bd,
@@ -361,6 +365,7 @@ export const majsoulTheme: TableTheme = {
   },
   plainSurface: true,
   tableFelt: true,
+  tableVignette: .55,
   woodTrim: true,
   woodTrimColors: ['#8a5a30', '#6b421f', '#4e2f14'],
   tileBackGradient: ['#e08444', '#d67a38', '#c06c2c'],
