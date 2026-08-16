@@ -1,0 +1,167 @@
+import type * as THREE from 'three'
+
+// 牌桌主题配置：把原来硬编码在 staticTableScene.ts 里的所有共享材质参数抽成数据。
+// 换肤 = 换一份 TableTheme；贴图类（map/envMap）由创建方注入，不在这里配置。
+
+/** MeshPhysicalMaterial 参数（排除需要创建方注入的贴图字段）。 */
+export type PhysicalParams = Omit<THREE.MeshPhysicalMaterialParameters, 'map' | 'envMap'>
+
+/** MeshStandardMaterial 参数（排除需要创建方注入的贴图字段）。 */
+export type StandardParams = Omit<THREE.MeshStandardMaterialParameters, 'map' | 'envMap'>
+
+export interface TableTheme {
+  /** 牌桌台身、鎏金边、麻将机等静态部件的材质。 */
+  table: {
+    /** 墨玉台面（最上层桌面）。 */
+    jade: PhysicalParams
+    /** 深墨玉（最底层桌身 + 麻将机内圈）。 */
+    darkJade: PhysicalParams
+    /** 鎏金（中层托边、内圈细线）。 */
+    gold: PhysicalParams
+    /** 亮金（四边金线、四角饰钉）。 */
+    goldHighlight: PhysicalParams
+    /** 麻将机机身侧面。 */
+    machine: PhysicalParams
+    /** 麻将机顶面（壁牌数 + 风位贴图）。 */
+    machineTop: PhysicalParams
+    /** 麻将机底面。 */
+    machineBottom: PhysicalParams
+  }
+  /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
+  tile: {
+    /** 牌体白色侧面。 */
+    side: PhysicalParams
+    /** 绿色牌背层（翻面时可见的侧边）。 */
+    faceSide: PhysicalParams
+    /** 牌底。 */
+    bottom: PhysicalParams
+    /** 牌背（带绿色渐变贴图）。 */
+    back: PhysicalParams
+    /** 牌面（makeFaceMaterial / 图集材质共用）。 */
+    face: PhysicalParams
+  }
+  /** 选中/高亮牌的金色材质（MeshStandardMaterial）。 */
+  highlight: StandardParams
+}
+
+/** 默认主题（原 staticTableScene.ts addTable/makeFaceMaterial 的硬编码值，逐一搬入）。 */
+export const defaultTableTheme: TableTheme = {
+  table: {
+    jade: {
+      color: 0x254223,
+      emissive: 0x101d0f,
+      emissiveIntensity: .12,
+      roughness: .4,
+      metalness: .04,
+      clearcoat: .72,
+      clearcoatRoughness: .2,
+      sheen: .22,
+      sheenColor: 0x6f8d69,
+      sheenRoughness: .72,
+    },
+    darkJade: {
+      color: 0x08271c,
+      emissive: 0x03140e,
+      emissiveIntensity: .12,
+      roughness: .48,
+      metalness: .16,
+      clearcoat: .36,
+      clearcoatRoughness: .3,
+    },
+    gold: {
+      color: 0xb88a38,
+      emissive: 0x3a2406,
+      emissiveIntensity: .3,
+      roughness: .28,
+      metalness: .88,
+      clearcoat: .3,
+      clearcoatRoughness: .2,
+    },
+    goldHighlight: {
+      color: 0xe1b85d,
+      emissive: 0x392006,
+      emissiveIntensity: .35,
+      roughness: .22,
+      metalness: .94,
+      clearcoat: .38,
+      clearcoatRoughness: .16,
+    },
+    machine: {
+      color: 0x071f17,
+      roughness: .3,
+      metalness: .24,
+      clearcoat: .76,
+      clearcoatRoughness: .16,
+    },
+    machineTop: {
+      roughness: .3,
+      metalness: .16,
+      clearcoat: .66,
+      clearcoatRoughness: .18,
+    },
+    machineBottom: {
+      color: 0x020906,
+      roughness: .46,
+      metalness: .3,
+      clearcoat: .24,
+    },
+  },
+  tile: {
+    side: {
+      color: 0xc9c9c1,
+      metalness: 0,
+      roughness: .31,
+      clearcoat: .58,
+      clearcoatRoughness: .23,
+      ior: 1.46,
+      specularIntensity: .34,
+      specularColor: 0xfffdf3,
+      envMapIntensity: .3,
+    },
+    faceSide: {
+      color: 0x32a73a,
+      metalness: 0,
+      roughness: .3,
+      clearcoat: .68,
+      clearcoatRoughness: .18,
+      ior: 1.46,
+      specularIntensity: .62,
+      envMapIntensity: .46,
+    },
+    bottom: {
+      color: 0xbfc1b9,
+      metalness: 0,
+      roughness: .42,
+      clearcoat: .38,
+      clearcoatRoughness: .24,
+      ior: 1.45,
+      envMapIntensity: .25,
+    },
+    back: {
+      color: 0xd1d2cb,
+      metalness: 0,
+      roughness: .32,
+      clearcoat: .48,
+      clearcoatRoughness: .26,
+      ior: 1.46,
+      envMapIntensity: .28,
+    },
+    face: {
+      color: 0xd8d7ce,
+      metalness: 0,
+      roughness: .4,
+      clearcoat: .56,
+      clearcoatRoughness: .24,
+      ior: 1.46,
+      specularIntensity: .36,
+      specularColor: 0xfffdf4,
+      envMapIntensity: .3,
+    },
+  },
+  highlight: {
+    color: 0xe3b948,
+    emissive: 0x7d4d08,
+    emissiveIntensity: .8,
+    roughness: .4,
+  },
+}
