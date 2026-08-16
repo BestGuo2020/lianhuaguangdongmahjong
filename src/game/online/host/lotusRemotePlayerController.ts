@@ -87,9 +87,10 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     this.peerId = peerId
   }
 
-  resendPending(): void {
-    if (this.pending === null || this.pendingPayload === null) return
+  resendPending(): boolean {
+    if (this.pending === null || this.pendingPayload === null) return false
     this.room.send(this.pendingPayload, this.peerId)
+    return true
   }
 
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {

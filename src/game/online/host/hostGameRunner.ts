@@ -135,6 +135,19 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     onLocalEvent?.(message)
   }
 
+  // 重连恢复后重设计时：清掉旧 18s 掉线计时器，从「重发请求」这一刻重新给客户端
+  // 完整 18s 响应窗口。否则客户端掉线期间请求已计时，重进后 resendPending 重发但
+  // 计时器仍按旧时刻跑——客户端刚重进、倒计时刚开始（人还在思考）就被旧计时器
+  // 误判掉线 AI 代打。
+  function restartTimeout(seatState: (typeof seatStates)[number]) {
+    if (seatState.timeout != null) window.clearTimeout(seatState.timeout)
+    seatState.timeout = window.setTimeout(() => {
+      seatState.timeout = null
+      const controller = asDisconnectable(seatState.controller!)
+      if (controller && !controller.isAIControlled()) controller.enableAI()
+    }, REMOTE_REQUEST_TIMEOUT_MS)
+  }
+
   // 掉线接管 / 重连恢复：对局中 peer 离开 → AI 接管；peer 重新加入（刷新页面重进）→
   // 恢复真人决策 + 补发座位身份（rejoin_ok），客户端据此恢复本家座位映射。
   room.onPeer((event) => {
@@ -171,7 +184,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       // 快照之后再重发挂起请求：客户端先有 players/手牌，收到 turn_request 才能
       // 同步手牌并出牌；若请求先到而手牌为空，客户端无法出牌 → 15s 被 AI 代打，
       // 只能等下一轮才恢复（「重进后第一次无法出牌」）。
-      controller.resendPending()
+      // 重发成功 → 从这一刻重新计算掉线超时（旧计时器会误判刚重进的在线玩家掉线）。
+      if (controller.resendPending()) restartTimeout(seatState)
     }
   })
 
@@ -197,11 +211,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           controller.retargetPeer(fromPeerId)
           bySeat.peerId = fromPeerId
           bySeat.disconnected = false
-          // 恢复后清除挂起请求的掉线计时器（见昵称兜底注释：防刚重进就被误接管）。
-          if (bySeat.timeout != null) {
-            window.clearTimeout(bySeat.timeout)
-            bySeat.timeout = null
-          }
+          // 恢复后清除挂起请求的掉线计时器并重新计时（见 restartTimeout 注释：
+          // 防刚重进的在线玩家被旧计时器误判掉线）。
+          if (controller.resendPending()) restartTimeout(bySeat)
         }
       }
     }
@@ -224,12 +236,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
         fallback.disconnected = false
-        // 恢复后清除挂起请求的掉线计时器：否则刚重进的客户端响应稍慢（relay 切换）
-        // 就会被 18s 超时误接管。
-        if (fallback.timeout != null) {
-          window.clearTimeout(fallback.timeout)
-          fallback.timeout = null
-        }
+        // 恢复后清除挂起请求的掉线计时器并重新计时（见 restartTimeout 注释：
+        // 防刚重进的在线玩家被旧计时器误判掉线）。
+        if (controller.resendPending()) restartTimeout(fallback)
       }
     }
     if (!seatState) return
@@ -246,8 +255,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     // 同上：补发一帧全量快照，让重连客户端立即看到牌桌（含正在等待中的请求局面）。
     broadcastAll(true)
     // 快照之后再重发挂起请求（见 onPeer('join') 注释：先给手牌、再收回合请求，
-    // 否则重进后第一次无法出牌）。
-    asDisconnectable(seatState.controller!)?.resendPending()
+    // 否则重进后第一次无法出牌）。重发成功 → 从这一刻重新计算掉线超时。
+    const restored = asDisconnectable(seatState.controller!)
+    if (restored.resendPending()) restartTimeout(seatState)
   })
 
   // 临时诊断：定位「刷新重进后操作回不去」——客户端动作是否到达房主、是否对上座位。

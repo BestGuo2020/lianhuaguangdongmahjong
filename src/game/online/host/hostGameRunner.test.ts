@@ -435,6 +435,47 @@ describe('startHostGame 无头权威', () => {
     runner.stop()
   })
 
+  it('重连恢复后掉线超时从重发时刻重新计算：在线思考的玩家不被旧计时器误判掉线', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<LotusController>({
+      room,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([['peer-x', 1]]),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    // 推进到闲家回合：turn_request 发给 peer-x，掉线计时（18s）开始。
+    let turnSent = false
+    for (let i = 0; i < 400 && !turnSent; i += 1) {
+      await vi.advanceTimersByTimeAsync(100)
+      driveHostSeat(runner)
+      turnSent = room.sent.some((s) => (s.message as { kind?: string })?.kind === 'turn_request' && s.to === 'peer-x')
+    }
+    expect(turnSent).toBe(true)
+
+    // 客户端掉线 5s 后重连（SDK 恢复连接事件，同 peerId）：挂起请求还在（未到 18s
+    // 超时、无 leave 事件）→ 恢复后重发请求，掉线计时必须从重发时刻重新计算。
+    await vi.advanceTimersByTimeAsync(5000)
+    const beforeResend = room.sent.filter((s) => (s.message as { kind?: string })?.kind === 'turn_request').length
+    room.emitPeer({ type: 'join', id: 'peer-x' })
+    const afterResend = room.sent.filter((s) => (s.message as { kind?: string })?.kind === 'turn_request').length
+    expect(afterResend).toBeGreaterThan(beforeResend) // resendPending 重发
+
+    // 原计时到期点（掉线后 18s = 重连后 13s）：不得误判在线思考的玩家掉线。
+    await vi.advanceTimersByTimeAsync(13000)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    // 新计时到期点（重连后 18s = 掉线后 23s）：客户端仍不响应 → 才正式 AI 接管。
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    // 推进时钟触发开局公告等 fake timer，避免 teardown 时 window 已还原报错。
+    await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
+
   it('enableAIForSeat 可外部强制接管座位（续接安全网），并递增接管版本号', async () => {
     const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
     const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })

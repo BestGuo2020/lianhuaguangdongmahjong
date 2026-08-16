@@ -34,8 +34,9 @@ export interface DisconnectableController {
   isAIControlled(): boolean
   /** 重连后身份可能变化（刷新页面 peerId 改变）：把消息过滤改绑到新 peerId。 */
   retargetPeer(peerId: string): void
-  /** 重连恢复时重发当前挂起的请求（发给旧 peerId 的 turn/claim 请求新窗口收不到）。 */
-  resendPending(): void
+  /** 重连恢复时重发当前挂起的请求（发给旧 peerId 的 turn/claim 请求新窗口收不到）。
+   * 返回是否确有挂起请求被重发（房主据此从重发时刻重新计算掉线超时）。 */
+  resendPending(): boolean
 }
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
@@ -102,9 +103,10 @@ export class RemotePlayerController implements PlayerController, DisconnectableC
     this.peerId = peerId
   }
 
-  resendPending(): void {
-    if (this.pending === null || this.pendingPayload === null) return
+  resendPending(): boolean {
+    if (this.pending === null || this.pendingPayload === null) return false
     this.room.send(this.pendingPayload, this.peerId)
+    return true
   }
 
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
