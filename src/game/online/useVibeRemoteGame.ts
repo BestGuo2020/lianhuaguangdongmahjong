@@ -622,12 +622,14 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   // 重连/加入后绑定传输层：对局进行中刷新页面重进时没有 lobby_start（onStart 里的
   // transport.open() 不触发），必须在此挂上 room.onMessage 才能收到快照/turn_request。
-  // 客户端角色有效；房主保持不绑定（房主自视走 onLocalSnapshot/onLocalEvent）。
-  // 同时注册房主失联检测：随「加入房间」生效（大厅/对局都覆盖），开局后才注册的话
-  // 大厅阶段房主离开没有检测，客户端只能干等「网络断开，正在重连」。
+  // 客户端：绑定业务消息；房主：也绑定传输层（signalOnly——只收发心跳测 RTT 信号，
+  // 不转发业务消息，否则会收到自己广播的回环重复处理）——否则房主的 signalQuality
+  // 永远是初始 0，左上角恒显示「网络不稳定」。
+  // 同时注册房主失联检测：随「加入房间」生效（大厅/对局都覆盖）。
   watch(roomId, (value) => {
-    if (value && !isHost.value) {
-      transport.open()
+    if (!value) return
+    transport.open({ signalOnly: isHost.value })
+    if (!isHost.value) {
       const room = roomSession.getRoom()
       if (room) bindHostGoneDetection(room)
     }

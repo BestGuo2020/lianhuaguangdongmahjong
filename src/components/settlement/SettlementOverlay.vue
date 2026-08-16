@@ -116,10 +116,6 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
             <div class="final-name">
               <strong>{{ entry.name }}</strong>
               <small v-if="entry.playerIndex === 0">你</small>
-              <button
-                v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
-                class="report-link" @click="$emit('report', entry.name)"
-              >举报</button>
             </div>
             <em>{{ entry.score }}</em>
           </article>

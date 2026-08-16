@@ -4,9 +4,9 @@
 // 与 WebSocket 的关键差异：room.onMessage/onPeer 返回 `this`（Room）而非退订函数，
 // 因此 transport 在 join 完成后绑定一次，之后不复绑；SDK 自行处理断线重连与中继切换。
 //
-// 信号强度：SDK 不提供统一「信号格」概念，这里用 room.peers() 的每对端
-// latency / jitter / relay / reconnecting 估算 0-3 档，取最差对端作为整体信号
-// （对局质量取决于最差的一路连接）。
+// 信号强度：不依赖 SDK 的 latency/jitter 字段（中继 relay 下常虚高，据此降档会把
+// 「打牌完全正常」的对局误报成「网络不稳定」）——传输层自己发 ping、对端回 pong，
+// 用真实消息往返时间（RTT）定 0-3 格；peer 的 reconnecting/open 状态仅作兜底。
 import { ref } from 'vue'
 
 export type RoomSocketStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'
@@ -15,21 +15,30 @@ export interface VibeRoomTransportOptions {
   /** 返回当前已加入的 SDK 房间；未加入时为 null。 */
   getRoom: () => VibeHubSDK.Room | null
   onMessage: (message: unknown) => void
-  /** 信号轮询间隔（ms）。 */
+  /** 信号轮询/心跳间隔（ms）。 */
   signalIntervalMs?: number
 }
 
-/** 单个对端 → 0-3 信号档：延迟/抖动主导；relay 中继是 SDK 的正常传输模式
- * （打牌完全正常），不因 relay 本身降档——否则房主对走中继的客户端会长期误显示
- * 「网络不稳定」。reconnecting（直连 P2P 在重连）给 1 格：relay 通道通常仍可用。
- * 彻底失联由掉线判定（25s/30s 无消息）负责，不由信号格表达。 */
+/** open 选项：signalOnly=true 时只收发传输层心跳（测 RTT 信号），业务消息不转发。
+ * 房主用它绑定传输层测「到各客户端」的信号——房主业务消息走 onLocalSnapshot/
+ * onLocalEvent，不能经 transport 转发（否则会收到自己广播的回环、重复处理）。 */
+export interface VibeRoomOpenOptions {
+  signalOnly?: boolean
+}
+
+/** RTT → 0-3 信号档：真实往返 <150ms 流畅、<300ms 良好、<500ms 波动、以上不稳定。 */
+function scoreFromRtt(rtt: number): number {
+  if (rtt < 150) return 3
+  if (rtt < 300) return 2
+  if (rtt < 500) return 1
+  return 0
+}
+
+/** 单个对端 → 0-3 信号档（兜底）：reconnecting（直连在重连）或连接关闭 → 1 格（波动，
+ * 不报断线）；正常 → 3（具体质量由应用层 RTT 决定）。彻底失联由掉线判定负责。 */
 function scorePeer(peer: VibeHubSDK.PeerInfo): number {
-  if (peer.reconnecting) return 1
-  let score = 3
-  if (peer.latency > 300) score = Math.max(0, score - 1)
-  else if (peer.latency > 150) score = Math.max(1, score - 1)
-  if (peer.jitter > 100) score = Math.max(0, score - 1)
-  return score
+  if (peer.reconnecting || !peer.open) return 1
+  return 3
 }
 
 export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs = 3000 }: VibeRoomTransportOptions) {
@@ -41,6 +50,8 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
   // （连接其实还在，只是换传输路径）——延迟确认，期间恢复（connecting/join/收到消息）
   // 就不显示「网络断开，正在重连」横幅，避免误报。
   let reconnectingTimer: ReturnType<typeof setTimeout> | null = null
+  // 最近一轮 ping 测得的最差 RTT（多人局取最差对端）。
+  let worstRtt: number | null = null
 
   function clearReconnectingConfirm() {
     if (reconnectingTimer != null) {
@@ -49,12 +60,31 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
     }
   }
 
-  function bind(room: VibeHubSDK.Room) {
+  function recordRtt(rtt: number) {
+    worstRtt = worstRtt == null ? rtt : Math.max(worstRtt, rtt)
+  }
+
+  function bind(room: VibeHubSDK.Room, signalOnly: boolean) {
     if (boundRoom === room) return
     boundRoom = room
-    room.onMessage((message, _fromPeerId) => {
-      // 收到任何业务消息 → 连接可用，取消 reconnecting 确认。
+    room.onMessage((message, fromPeerId) => {
+      // 收到任何消息 → 连接可用，取消 reconnecting 确认。
       clearReconnectingConfirm()
+      if (typeof message === 'object' && message !== null) {
+        const m = message as { __transport_ping?: unknown; __transport_pong?: unknown }
+        if (typeof m.__transport_ping === 'number') {
+          // 对端心跳 → 立即原样回 pong（定向，避免广播互相收到）。
+          boundRoom?.send({ __transport_pong: m.__transport_ping }, fromPeerId)
+          return
+        }
+        if (typeof m.__transport_pong === 'number') {
+          // 自己的 ping 回来了 → 真实 RTT → 立即刷新信号。
+          recordRtt(Date.now() - m.__transport_pong)
+          updateSignalQuality()
+          return
+        }
+      }
+      if (signalOnly) return // 房主：不转发业务消息（避免收到自己广播的回环）
       onMessage(message)
     })
     room.onPeer((event) => {
@@ -64,7 +94,6 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
       if (event.id !== room.hostId && event.id !== room.peerId) return
       if (event.type === 'reconnecting') {
         // 延迟 2s 确认：relay 切换/短暂抖动会在 2s 内恢复（connecting/消息），不误报。
-        // 信号格不在此归 0：直连在重连但 relay 可用（对局照常），由轮询 peers() 估算。
         if (reconnectingTimer == null) {
           reconnectingTimer = setTimeout(() => {
             reconnectingTimer = null
@@ -92,18 +121,29 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
       signalQuality.value = 3
       return
     }
-    signalQuality.value = Math.min(...peers.map(scorePeer))
+    // 对端连接状态兜底（reconnecting/关闭 → 至少 1 格）。
+    const peerScore = Math.min(...peers.map(scorePeer))
+    // 应用层 RTT（真实往返）主导；本轮还没收到 pong 时沿用上一轮 RTT。
+    const rttScore = worstRtt == null ? 3 : scoreFromRtt(worstRtt)
+    signalQuality.value = Math.min(peerScore, rttScore)
   }
 
-  function open() {
+  function tick() {
+    worstRtt = null // 重置，用本轮 pong 重新测量
+    const room = boundRoom
+    if (room) room.send({ __transport_ping: Date.now() })
+    updateSignalQuality()
+  }
+
+  function open(options: VibeRoomOpenOptions = {}) {
     const room = getRoom()
     if (!room) return
-    bind(room)
+    bind(room, options.signalOnly ?? false)
     status.value = 'connected'
     updateSignalQuality()
-    // 周期轮询 peers()：SDK 的直连/中继切换、延迟抖动会实时反映到信号格。
+    // 周期发心跳 ping 并刷新信号：基于真实往返 RTT（不依赖 SDK 虚高的 latency/jitter）。
     if (signalTimer == null) {
-      signalTimer = setInterval(updateSignalQuality, signalIntervalMs)
+      signalTimer = setInterval(tick, signalIntervalMs)
     }
   }
 
@@ -129,6 +169,7 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
     boundRoom = null
     status.value = 'idle'
     signalQuality.value = 0
+    worstRtt = null
   }
 
   return { status, signalQuality, open, confirmSession, send, close }

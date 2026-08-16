@@ -13,47 +13,60 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('vibeRoomTransport 信号检测', () => {
-  it('按最差对端计算 0-3 格信号（延迟/抖动主导；relay 不降档）', () => {
+describe('vibeRoomTransport 信号检测（应用层 RTT ping-pong）', () => {
+  it('基于真实往返 RTT 定信号：<150ms=3、300-500ms=1；无 pong 时按对端连接状态兜底', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
     const mutablePeers: VibeHubSDK.PeerInfo[] = [peer()]
     const originalPeers = room.peers
-    // mockVibeRoom.peers 固定返回 []：覆写为可变的对端列表以测信号计算。
+    // mockVibeRoom.peers 固定返回 []：覆写为可变的对端列表。
     room.peers = () => mutablePeers
     const transport = createVibeRoomTransport({
       getRoom: () => room,
       onMessage: () => {},
-      signalIntervalMs: 1000,
+      signalIntervalMs: 3000,
     })
     transport.open()
+    expect(transport.signalQuality.value).toBe(3) // 对端正常且无 RTT 数据 → 流畅
+
+    // 第一个 tick（interval 3s，tick 在 3000ms 触发）发出心跳 ping。
+    vi.advanceTimersByTime(3100)
+    const ping = room.sent.find((s) => (s.message as { __transport_ping?: number })?.__transport_ping != null)
+    expect(ping).toBeTruthy()
+    // 对端几乎立即回 pong → RTT ≈ 100ms → 3 格。
+    room.emit('peer1', { __transport_pong: (ping!.message as { __transport_ping: number }).__transport_ping })
     expect(transport.signalQuality.value).toBe(3)
 
-    // 对端走 relay、延迟 400ms → 2 格（只降一档；relay 下 SDK 延迟字段常虚高，
-    // 实际打牌不卡，过度降档会误报「网络不稳定」）。
-    mutablePeers[0] = peer({ relay: true, latency: 400 })
-    vi.advanceTimersByTime(1100)
-    expect(transport.signalQuality.value).toBe(2)
-
-    // 对端 reconnecting（直连在重连，但 relay 通道通常仍可用）→ 1 格，不误报断线。
-    mutablePeers[0] = peer({ reconnecting: true })
-    vi.advanceTimersByTime(1100)
+    // 第二个 tick（tick 在 6000ms 触发）：对端延迟 400ms 才回 pong → RTT=400 → 1 格（波动）。
+    vi.advanceTimersByTime(3100)
+    const ping2 = room.sent.filter((s) => (s.message as { __transport_ping?: number })?.__transport_ping != null).at(-1)!
+    vi.advanceTimersByTime(200) // 6200 + 200 = 6400 → RTT = 6400 - 6000 = 400
+    room.emit('peer1', { __transport_pong: (ping2.message as { __transport_ping: number }).__transport_ping })
     expect(transport.signalQuality.value).toBe(1)
 
-    // relay 但低延迟 → 不降档（3）；抖动 >100 才降。两个对端取最差。
-    mutablePeers[0] = peer({ relay: true, latency: 5 })
-    mutablePeers.push(peer({ id: 'p2', latency: 5, jitter: 150 }))
-    vi.advanceTimersByTime(1100)
-    expect(transport.signalQuality.value).toBe(2)
+    // 对端 reconnecting（直连在重连）→ 兜底 1 格（即使 RTT 低）。
+    mutablePeers[0] = peer({ reconnecting: true })
+    vi.advanceTimersByTime(3100)
+    expect(transport.signalQuality.value).toBe(1)
 
-    // 无对端（大厅空房）→ 默认良好 3，不误报「网络不稳定」。
+    // 无对端（大厅空房）→ 默认良好 3。
     mutablePeers.splice(0)
-    vi.advanceTimersByTime(1100)
+    vi.advanceTimersByTime(3100)
     expect(transport.signalQuality.value).toBe(3)
 
     transport.close()
     expect(transport.signalQuality.value).toBe(0)
-    // 还原 mock 的 peers（避免影响同文件其他用例）。
     room.peers = originalPeers
+  })
+
+  it('收到对端 ping 立即回 pong（心跳应答）', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(false)
+    const transport = createVibeRoomTransport({ getRoom: () => room, onMessage: () => {} })
+    transport.open()
+    room.sent.splice(0)
+    room.emit('peer1', { __transport_ping: 12345 })
+    expect(room.sent.some((s) => (s.message as { __transport_pong?: number })?.__transport_pong === 12345)).toBe(true)
+    transport.close()
   })
 })
