@@ -7,6 +7,12 @@ describe('3D tile markers', () => {
     expect(tileMarkerFor('white', ['white', 'red'], ['white'])).toBe('joker')
   })
 
+  it('marks white as 精 when the flipped tile is green (jing = [green, white])', () => {
+    // 发财翻精：同序下一张是白板 → 白板也是精（可替代任意牌）
+    expect(tileMarkerFor('white', ['green', 'white'], ['white'])).toBe('joker')
+    expect(tileMarkerFor('green', ['green', 'white'], ['white'])).toBe('joker')
+  })
+
   it('marks white as 替 when listed only as the legacy substitute tile', () => {
     // 翻到非白板（如 3 万）：白板只是替身，只能替代精牌面 → 标替
     expect(tileMarkerFor('white', [], ['white'])).toBe('wildcard')
