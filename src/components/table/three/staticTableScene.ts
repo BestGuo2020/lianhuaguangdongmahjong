@@ -573,8 +573,9 @@ function addTable() {
     })
   }
 
-  // 木质包边（woodTrim）：台面四周一圈木纹框，四长条 + 四短条搭成完整框，微微高出台面。
-  // 台面 21.04 见方、顶面 y≈.07；木框中心 y=.11、高 .1（顶 .16），条宽 .2，外沿比台面多出 .11。
+  // 木质包边（woodTrim）：台面四周一圈宽大木纹框，四长条 + 四短条搭成完整框，明显高出台面。
+  // 台面 21.04 见方（半宽 10.52）、顶面 y≈.07；桌身半宽 10.9；牌河最远约 ±10.2（框内沿不得内缩越过）。
+  // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8、高 .16、中心 y=.14（顶 .22）。
   if (theme.woodTrim) {
     const wood = own(new THREE.MeshPhysicalMaterial({
       map: makeWoodTexture(),
@@ -584,13 +585,15 @@ function addTable() {
       clearcoat: .3,
       clearcoatRoughness: .3,
     }))
-    const trimY = .11
-    const bar = .2
-    const t = 10.63
-    addStaticMesh(new THREE.BoxGeometry(21.3, .1, bar), wood, 0, trimY, t)
-    addStaticMesh(new THREE.BoxGeometry(21.3, .1, bar), wood, 0, trimY, -t)
-    addStaticMesh(new THREE.BoxGeometry(bar, .1, 21.3), wood, t, trimY, 0)
-    addStaticMesh(new THREE.BoxGeometry(bar, .1, 21.3), wood, -t, trimY, 0)
+    const trimY = .14
+    const bar = .8
+    const trimH = .16
+    const t = 10.6
+    const len = 22
+    addStaticMesh(new THREE.BoxGeometry(len, trimH, bar), wood, 0, trimY, t)
+    addStaticMesh(new THREE.BoxGeometry(len, trimH, bar), wood, 0, trimY, -t)
+    addStaticMesh(new THREE.BoxGeometry(bar, trimH, len), wood, t, trimY, 0)
+    addStaticMesh(new THREE.BoxGeometry(bar, trimH, len), wood, -t, trimY, 0)
   }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
