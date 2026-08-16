@@ -1,10 +1,10 @@
-# 同步脚本：master（UI 主分支）→ vibehub（P2P 联机分支）
-# 用途：UI/规则/牌桌改动只需在 master 上做，跑本脚本即可同步到 vibehub。
-# 原理：
-#   1. git merge master --no-commit -X theirs —— 冲突一律采用 master 版（UI 以 master 为准）
-#   2. 对「联机装配文件」checkout --ours —— 恢复 vibehub 自己的版本（P2P 联机逻辑）
-#   3. 删除 master 独有、vibehub 不用的 WS 版联机文件（api/、roomSocket、useRemoteGame 等）
-# 要求：master 工作区必须干净（未提交改动先 commit 或 stash）。
+# Sync script: master (UI main branch) -> vibehub (P2P online branch)
+# UI/rule/table changes are made on master only; run this script to sync them to vibehub.
+# Steps:
+#   1. git merge master --no-commit -X theirs  (conflicts resolve to master's version)
+#   2. checkout --ours on online-assembly files (keep vibehub's own P2P logic)
+#   3. git rm master-only WebSocket files (api/, roomSocket, useRemoteGame, ...)
+# Requires: master working tree must be clean (commit or stash pending changes first).
 param(
   [switch]$Push
 )
@@ -13,29 +13,30 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
-  Write-Host '==> 检查 master 工作区'
+  Write-Host '==> checking master working tree'
   git checkout master
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout master failed' }
   $dirty = git status --porcelain
   if ($dirty) {
-    Write-Host 'master 有未提交改动，请先提交或 stash：' -ForegroundColor Red
+    Write-Host 'master has uncommitted changes; commit or stash them first:' -ForegroundColor Red
     Write-Host $dirty
     exit 1
   }
 
-  Write-Host '==> 切到 vibehub 并合并 master（冲突采用 master 版）'
+  Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
   git checkout vibehub
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
   git merge master --no-commit --no-ff -X theirs
-  if ($LASTEXITCODE -ne 0) { throw 'merge 失败' }
+  if ($LASTEXITCODE -ne 0) { throw 'git merge failed' }
 
   $unresolved = git diff --name-only --diff-filter=U
   if ($unresolved) {
-    Write-Host '存在未解决的冲突，中止（请手工解决后 git merge --continue）：' -ForegroundColor Red
+    Write-Host 'unresolved conflicts remain; aborting (resolve manually, then git merge --continue):' -ForegroundColor Red
     Write-Host $unresolved
     exit 1
   }
 
-  # ── 恢复 vibehub 自己的联机装配文件（ours = vibehub 当前分支版本）──────────
-  # 这些文件两边内容本质不同（P2P vs WS），永远保留 vibehub 版。
+  # Files that must always keep vibehub's own version (P2P vs WS differ by nature).
   $vibehubKeep = @(
     'index.html'
     'vite.config.ts'
@@ -65,12 +66,11 @@ try {
     'src/game/online/state/remoteGameState.ts'
     'src/game/online/state/remoteGameState.test.ts'
   )
-  Write-Host '==> 恢复 vibehub 联机文件'
+  Write-Host '==> restoring vibehub online files'
   git checkout --ours -- $vibehubKeep
-  if ($LASTEXITCODE -ne 0) { throw 'checkout --ours 失败' }
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout --ours failed' }
 
-  # ── 删除 master 独有、vibehub 不用的 WS 版联机文件 ────────────────────────
-  # 这些文件只存在于 master（WebSocket 版），vibehub 不引用，避免死代码。
+  # Master-only WebSocket files that vibehub does not use.
   $masterOnly = @(
     'src/game/online/api'
     'src/game/online/session/remoteRoomLifecycle.ts'
@@ -82,22 +82,23 @@ try {
     'src/game/online/useRemoteGame.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
-  Write-Host '==> 删除 master 独有 WS 联机文件'
+  Write-Host '==> removing master-only WebSocket files'
   git rm --quiet -r -- $masterOnly
-  if ($LASTEXITCODE -ne 0) { throw 'git rm 失败' }
+  if ($LASTEXITCODE -ne 0) { throw 'git rm failed' }
 
-  Write-Host '==> 提交同步'
-  git commit -m 'sync: 从 master 同步 UI 改动（自动生成）'
-  if ($LASTEXITCODE -ne 0) { throw 'commit 失败' }
+  Write-Host '==> committing sync'
+  git commit -m 'sync: sync UI changes from master (auto generated)'
+  if ($LASTEXITCODE -ne 0) { throw 'git commit failed' }
 
   if ($Push) {
-    Write-Host '==> 推送 vibehub'
+    Write-Host '==> pushing vibehub'
     git push origin vibehub
+    if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
   }
 
-  Write-Host '==> 切回 master'
+  Write-Host '==> switching back to master'
   git checkout master
-  Write-Host '同步完成。建议在 vibehub 上跑一遍测试：pnpm test' -ForegroundColor Green
+  Write-Host 'sync done. It is recommended to run tests on vibehub: pnpm test' -ForegroundColor Green
 } finally {
   Pop-Location
 }
