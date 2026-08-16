@@ -68,7 +68,7 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.restore()
   }
   if (marker) {
-    // 癞：莲花广麻的白板万能牌；替：莲花麻将中可替代精牌的实体牌；精：精牌本身。
+    // 按身份区分标记：精=真精牌/白板翻精（白板即精）；替=莲花麻将白板替身（可代本局精牌）；癞=广麻白板癞子。
     const markerLabel = marker === 'wildcard' ? '\u66ff' : marker === 'laizi' ? '\u764d' : '\u7cbe'
     const markerColor = marker === 'wildcard' ? '#b88220' : marker === 'laizi' ? '#c0342e' : '#08a9dc'
     const markerShadow = marker === 'wildcard' ? 'rgba(75,45,0,.85)' : marker === 'laizi' ? 'rgba(90,10,12,.85)' : 'rgba(0,40,70,.85)'

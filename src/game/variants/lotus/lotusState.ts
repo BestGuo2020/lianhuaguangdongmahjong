@@ -23,7 +23,7 @@ export function createLotusGameState() {
     /** 翻出的指示牌（精），桌面亮出 */
     flipTile: ref<TileType | null>(null),
     /** 本局癞子集合（指示牌 + 同序下一张） */
-    /** 实际精牌（翻精牌与顺序下一张）；白板不在此集合内。 */
+    /** 实际精牌（翻精牌与顺序下一张）；白板翻精时白板也在集合内（作精替代任意牌）。 */
     jokerTiles: ref<TileType[]>([]),
     /** 可替代精牌的实体牌；它不是精牌。 */
     wildcardTiles: ref<TileType[]>(['white']),
