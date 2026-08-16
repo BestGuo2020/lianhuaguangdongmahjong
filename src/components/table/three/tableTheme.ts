@@ -31,6 +31,10 @@ export interface TableTheme {
   plainSurface?: boolean
   /** 桌面呢绒纹理：给台面材质叠加程序化噪点贴图，模拟织物绒感（配合高 roughness）。 */
   tableFelt?: boolean
+  /** 木质包边：台面四周一圈程序木纹框（雀魂等木框桌用），与 plainSurface 配合。 */
+  woodTrim?: boolean
+  /** 木纹三段颜色（canvas 程序纹理），不传用默认深棕。 */
+  woodTrimColors?: [string, string, string]
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
@@ -357,6 +361,8 @@ export const majsoulTheme: TableTheme = {
   },
   plainSurface: true,
   tableFelt: true,
+  woodTrim: true,
+  woodTrimColors: ['#8a5a30', '#6b421f', '#4e2f14'],
   tileBackGradient: ['#e08444', '#d67a38', '#c06c2c'],
   tile: {
     side: {

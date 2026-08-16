@@ -52,7 +52,50 @@ function makeFeltTexture() {
   return texture
 }
 
-function makeBackTexture() {  const surface = document.createElement('canvas')
+// 程序木纹：横向年轮条带（sin 扰动）+ 细木丝，平铺在木框条上模拟木质包边。
+function makeWoodTexture() {
+  const w = 512
+  const h = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  const [c1, c2, c3] = theme.woodTrimColors ?? ['#7a4e2a', '#5f3a1e', '#462a14']
+  const base = ctx.createLinearGradient(0, 0, 0, h)
+  base.addColorStop(0, c1)
+  base.addColorStop(.5, c2)
+  base.addColorStop(1, c3)
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, w, h)
+  // 年轮条带：水平条 + sin 扰动，深浅交替
+  for (let i = 0; i < 30; i++) {
+    const y = (i / 30) * h + Math.sin(i * 1.7) * 6
+    const dark = (i % 2) === 0
+    ctx.fillStyle = dark ? `rgba(0,0,0,${.05 + Math.random() * .07})` : `rgba(255,230,190,${.03 + Math.random() * .05})`
+    ctx.fillRect(0, y, w, 1.5 + Math.random() * 2.5)
+  }
+  // 细木丝：短纵向微弯细线
+  for (let i = 0; i < 500; i++) {
+    const x = Math.random() * w
+    const y0 = Math.random() * h
+    const len = 16 + Math.random() * 56
+    ctx.strokeStyle = `rgba(0,0,0,${.015 + Math.random() * .04})`
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x, y0)
+    ctx.quadraticCurveTo(x + 2, y0 + len / 2, x + Math.random() * 2 - 1, y0 + len)
+    ctx.stroke()
+  }
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(2, 1)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+  return texture
+}
+
+function makeBackTexture() {
+  const surface = document.createElement('canvas')
   surface.width = 256
   surface.height = 352
   const ctx = surface.getContext('2d')
@@ -528,6 +571,26 @@ function addTable() {
       const stud = addStaticMesh(cornerGeometry.clone(), goldHighlight, x, .16, z)
       stud.rotation.y = Math.PI / 4
     })
+  }
+
+  // 木质包边（woodTrim）：台面四周一圈木纹框，四长条 + 四短条搭成完整框，微微高出台面。
+  // 台面 21.04 见方、顶面 y≈.07；木框中心 y=.11、高 .1（顶 .16），条宽 .2，外沿比台面多出 .11。
+  if (theme.woodTrim) {
+    const wood = own(new THREE.MeshPhysicalMaterial({
+      map: makeWoodTexture(),
+      color: 0xffffff,
+      roughness: .45,
+      metalness: .05,
+      clearcoat: .3,
+      clearcoatRoughness: .3,
+    }))
+    const trimY = .11
+    const bar = .2
+    const t = 10.63
+    addStaticMesh(new THREE.BoxGeometry(21.3, .1, bar), wood, 0, trimY, t)
+    addStaticMesh(new THREE.BoxGeometry(21.3, .1, bar), wood, 0, trimY, -t)
+    addStaticMesh(new THREE.BoxGeometry(bar, .1, 21.3), wood, t, trimY, 0)
+    addStaticMesh(new THREE.BoxGeometry(bar, .1, 21.3), wood, -t, trimY, 0)
   }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
