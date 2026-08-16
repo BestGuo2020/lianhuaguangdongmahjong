@@ -71,6 +71,9 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'git checkout --ours failed' }
 
   # Master-only WebSocket files that vibehub does not use.
+  # Note: a plain merge keeps vibehub's deletions, so these paths usually do not exist
+  # after merging; they only reappear if master later MODIFIES one of them
+  # (modify/delete conflict resolved by -X theirs). Remove whichever ones exist.
   $masterOnly = @(
     'src/game/online/api'
     'src/game/online/session/remoteRoomLifecycle.ts'
@@ -82,9 +85,14 @@ try {
     'src/game/online/useRemoteGame.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
-  Write-Host '==> removing master-only WebSocket files'
-  git rm --quiet -r -- $masterOnly
-  if ($LASTEXITCODE -ne 0) { throw 'git rm failed' }
+  $existing = $masterOnly | Where-Object { Test-Path $_ }
+  if ($existing) {
+    Write-Host '==> removing master-only WebSocket files'
+    git rm --quiet -r -- $existing
+    if ($LASTEXITCODE -ne 0) { throw 'git rm failed' }
+  } else {
+    Write-Host '==> no master-only files to remove'
+  }
 
   Write-Host '==> committing sync'
   git commit -m 'sync: sync UI changes from master (auto generated)'
