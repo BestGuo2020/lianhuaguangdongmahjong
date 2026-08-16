@@ -195,6 +195,9 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
 
   async function closeRoom(): Promise<void> {
     if (state.isHost.value) hostLobby?.close()
+    // 给 lobby_closed 广播留出送达时间：send 后立即 leave 会切断通道，消息可能丢失，
+    // 客户端收不到「房间已关闭」只能看到「网络断开，正在重连」。
+    await new Promise((resolve) => setTimeout(resolve, 400))
     clearSession()
   }
 

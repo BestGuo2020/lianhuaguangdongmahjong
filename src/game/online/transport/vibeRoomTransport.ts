@@ -23,6 +23,10 @@ export function createVibeRoomTransport({ getRoom, onMessage }: VibeRoomTranspor
     boundRoom = room
     room.onMessage((message, _fromPeerId) => onMessage(message))
     room.onPeer((event) => {
+      // 只跟踪房主（hostId）的连接状态：其他玩家的掉线/抖动不应触发「网络断开，
+      // 正在重连」横幅。error 事件无 id，直接忽略。
+      if (event.type === 'error') return
+      if (event.id !== room.hostId && event.id !== room.peerId) return
       if (event.type === 'reconnecting') {
         status.value = 'reconnecting'
       } else if (event.type === 'join' || event.type === 'connecting') {

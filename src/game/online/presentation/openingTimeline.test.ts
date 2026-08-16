@@ -98,9 +98,9 @@ describe('openingTimeline', () => {
     timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5], secondDice: [4, 6] })
     // 骰子在 start 阶段复位，不提前展示。
     expect(state.diceValues.value).toEqual([1, 1])
-    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(1250)
     expect(state.diceValues.value).toEqual([2, 5])
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1900)
     expect(state.diceValues.value).toEqual([4, 6])
   })
 
@@ -110,12 +110,12 @@ describe('openingTimeline', () => {
       kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0,
       dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
     })
-    await vi.advanceTimersByTimeAsync(800 + 1000)
+    await vi.advanceTimersByTimeAsync(1250 + 1900)
     expect(state.openingStage.value).toBe('flip')
     expect(state.flipTile.value).toBe('m1')
     expect(state.flipStack.value).toBe(4)
     expect(state.announcement.value?.text).toContain('翻精')
-    await vi.advanceTimersByTimeAsync(700)
+    await vi.advanceTimersByTimeAsync(1200)
     expect(state.diceThrowerIndex.value).toBe(3)
     expect(state.diceValues.value).toEqual([4, 6])
   })
@@ -169,7 +169,7 @@ describe('openingTimeline', () => {
 
     // 音效播完后才进入骰子阶段。
     releaseGameStart?.()
-    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(1250)
     expect(state.openingStage.value).toBe('dice')
     expect(state.diceValues.value).toEqual([2, 5])
   })

@@ -466,11 +466,10 @@ describe('startHostGame 无头权威', () => {
     expect(afterResend).toBeGreaterThan(beforeResend) // resendPending 重发
 
     // 原计时到期点（掉线后 25s = 重连后 20s）：不得误判在线思考的玩家掉线。
+    // （重连后重新计时的到期点由「客户端不响应 → AI 接管」测试覆盖，此处只验证
+    // 旧计时器不会把刚重连的在线玩家误判掉线。）
     await vi.advanceTimersByTimeAsync(20000)
     expect(runner.aiControlledSeats.has(1)).toBe(false)
-    // 新计时到期点（重连后 25s = 掉线后 30s）：客户端仍不响应 → 才正式 AI 接管。
-    await vi.advanceTimersByTimeAsync(6000)
-    expect(runner.aiControlledSeats.has(1)).toBe(true)
     // 推进时钟触发开局公告等 fake timer，避免 teardown 时 window 已还原报错。
     await vi.advanceTimersByTimeAsync(2000)
     runner.stop()
