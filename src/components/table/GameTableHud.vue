@@ -7,6 +7,7 @@ import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { tileName } from '../../game/core/rules/tiles'
 import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
+import type { TableThemeName } from './three/tableTheme'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -14,6 +15,7 @@ const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'
 void import('../MahjongTable3D.vue')
 
 interface Props {
+  themeName: TableThemeName
   players: GamePlayer[]
   user: GamePlayer
   phase: GamePhase
@@ -232,6 +234,8 @@ function onAvatarError(entry: GamePlayer) {
 <template>
   <div class="game-table-hud" @pointerdown="clearMobileSelection">
     <MahjongTable3D
+      :key="themeName"
+      :theme-name="themeName"
       :players="players" :local-seat="user.seat" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
       :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"

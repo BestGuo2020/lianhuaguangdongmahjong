@@ -18,7 +18,7 @@ import { useRemoteContinueCountdown } from './game/online/presentation/useRemote
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
-import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
+import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/three/tableTheme'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -27,6 +27,10 @@ const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
 const selectedRule = ref<RuleVariant>(DEFAULT_RULE_VARIANT)
+const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
+const tableThemeName = ref<TableThemeName>(TABLE_THEME_OPTIONS.some((option) => option.value === initialThemeCandidate)
+  ? initialThemeCandidate as TableThemeName
+  : 'jade')
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
@@ -202,6 +206,14 @@ const continueCountdown = useRemoteContinueCountdown({
   continueRound: nextRound,
 })
 
+function changeTableTheme(theme: TableThemeName) {
+  tableThemeName.value = theme
+  const url = new URL(window.location.href)
+  if (theme === 'jade') url.searchParams.delete('theme')
+  else url.searchParams.set('theme', theme)
+  window.history.replaceState(window.history.state, '', url)
+}
+
 </script>
 
 <template>
@@ -223,9 +235,11 @@ const continueCountdown = useRemoteContinueCountdown({
           :room-id="roomId"
           :signal-quality="signalQuality"
           :sound-on="soundOn"
+          :theme-name="tableThemeName"
           @quit="quitMatch"
           @toggle-sound="soundOn = !soundOn"
           @open-rules="rulesOpen = true"
+          @change-theme="changeTableTheme"
         />
         <div class="table-depth" aria-hidden="true">
           <i class="table-edge edge-top"></i>
@@ -276,6 +290,7 @@ const continueCountdown = useRemoteContinueCountdown({
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
           :flip-stack="flipStack"
+          :theme-name="tableThemeName"
           @select-tile="selectTile"
           @clear-selection="clearUserSelection"
           @discard="userDiscard"

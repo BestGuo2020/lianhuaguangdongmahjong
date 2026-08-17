@@ -606,6 +606,15 @@ export const TABLE_THEMES: Record<string, TableTheme> = {
   happyMahjong: happyMahjongTheme,
 }
 
+export const TABLE_THEME_OPTIONS = [
+  { value: 'jade', label: '默认墨玉', description: '深绿玉石与金色桌沿' },
+  { value: 'majsoul', label: '雀魂风', description: '蓝灰台面与木质边框' },
+  { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
+  { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
+] as const
+
+export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']
+
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
 export function tableThemeByName(name: string | null | undefined): TableTheme | undefined {
   return name ? TABLE_THEMES[name] : undefined
