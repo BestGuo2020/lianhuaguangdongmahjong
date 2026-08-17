@@ -344,15 +344,15 @@ onMounted(async () => {
       glossy: glossyMaterials,
     }),
   )
-  render()
 
   // 牌面资源在牌桌首帧之后再加载，避免大厅阶段的 34 张图片与 3D chunk
-  // 竞争网络带宽；首帧先在加载层下启动，图片就绪后重建图集。
+  // 竞争网络带宽；资源就绪前不启动 3D 动画循环。
   await preloadTileImages()
   if (destroyed) return
   // 图集在图片就绪前可能已用空底构建，需失效让下一次重建带上真实牌面。
   tableScene.invalidateTileFaces()
   tableTiles.rebuild()
+  render()
   // ready 必须晚于牌面资源和图集重建，否则父层会在发牌资源未就绪时隐藏加载层。
   emit('ready')
 })
