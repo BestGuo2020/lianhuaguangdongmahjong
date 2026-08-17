@@ -60,7 +60,7 @@ function makeTableSurfaceTexture() {
   }
   if (theme.tableVignette) {
     const i = theme.tableVignette
-    const grad = ctx.createRadialGradient(size / 2, size / 2, size * .18, size / 2, size / 2, size * .62)
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * .16, size / 2, size / 2, size * .68)
     grad.addColorStop(0, 'rgba(0,0,0,0)')
     grad.addColorStop(1, `rgba(0,0,0,${i})`)
     ctx.fillStyle = grad
