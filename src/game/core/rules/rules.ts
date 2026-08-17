@@ -142,14 +142,17 @@ export function meldSourceTileIndex(meld: Meld, playerIndex: number) {
  * 副露的桌面展示顺序。
  * 国标/日麻的吃牌只允许取上家弃牌，因此把吃来的牌横置在该副露左侧，
  * 再把手里的两张牌排在右侧；本项目副露轨道从玩家右手端向手牌方向排布，
- * 所以渲染数组中“左侧”对应最后一项。meld.tiles 仍保留牌面组成顺序，便于规则计算。
+ * 所以渲染数组中“左侧”对应最后一项。由于渲染数组会被从右向左落位，
+ * 两张手牌也必须反向排列，才能在桌面上保持原本的牌面顺序。
+ * meld.tiles 仍保留牌面组成顺序，便于规则计算。
  */
 export function meldDisplayTiles(meld: Meld): TileType[] {
   const tiles = meld.added ? meld.tiles.slice(0, 3) : meld.tiles
   if (meld.type !== 'chi') return tiles
   const sourceIndex = tiles.indexOf(meld.tile)
   if (sourceIndex < 0) return tiles
-  return [...tiles.slice(0, sourceIndex), ...tiles.slice(sourceIndex + 1), meld.tile]
+  const companions = [...tiles.slice(0, sourceIndex), ...tiles.slice(sourceIndex + 1)].reverse()
+  return [...companions, meld.tile]
 }
 
 export function drawHorses(wall: TileType[], amount = 8, seat: HorseSeat = 0) {
