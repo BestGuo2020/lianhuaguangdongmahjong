@@ -30,7 +30,7 @@ export function createStaticTableScene(options: TableSceneOptions) {
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
 
 // 台面表面纹理（单张合成，避免 map 通道冲突）：
-// - tableFelt：白底 + 逐像素暗蓝颗粒（保持桌面蓝色相、仅明暗起伏），模拟绒面颗粒且不显脏；
+// - tableFelt：近白底 + 低对比度蓝灰颗粒（保持材质基础色、只做轻微明暗起伏），模拟绒面颗粒且不显脏；
 // - tableVignette：径向渐变边缘压暗（中心亮、四周暗）。
 // 无平铺（ClampToEdge），整张覆盖台面 UV。
 function makeTableSurfaceTexture() {
@@ -42,13 +42,16 @@ function makeTableSurfaceTexture() {
   if (theme.tableFelt) {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, size, size)
-    // 暗蓝噪点：乘法贴图里灰点会把桌面拉灰（脏感），蓝系点只改变明度、保留色相 → 绒面颗粒。
+    // 纹理会作为材质 map 直接参与基础色计算，不能用低 alpha 的深蓝像素
+    // 假装“叠加”在白底上：putImageData 不会替我们完成透明混色，且材质默认不透明。
+    // 这里使用接近白色的低对比度蓝灰像素，让 map 只改变明暗，不把基础蓝色压成黑蓝。
     const imageData = ctx.createImageData(size, size)
     for (let i = 0; i < imageData.data.length; i += 4) {
-      imageData.data[i] = 20 + Math.floor(Math.random() * 30)
-      imageData.data[i + 1] = 60 + Math.floor(Math.random() * 40)
-      imageData.data[i + 2] = 120 + Math.floor(Math.random() * 60)
-      imageData.data[i + 3] = 30 + Math.floor(Math.random() * 50)
+      const variation = Math.floor(Math.random() * 16)
+      imageData.data[i] = 232 + variation
+      imageData.data[i + 1] = 238 + variation
+      imageData.data[i + 2] = 248 + Math.floor(variation / 2)
+      imageData.data[i + 3] = 255
     }
     ctx.putImageData(imageData, 0, 0)
   } else {
@@ -667,6 +670,7 @@ function addTable() {
   // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8、高 .16、中心 y=.14（顶 .22）。
   if (theme.woodTrim) {
     // 顶面：全幅木纹 + 噪点凹凸/光泽不均；立面（内/外/底面）：纯色木料，避免立面 UV 拉伸成塑料感。
+    const woodFinish = theme.woodTrimMaterial ?? {}
     const woodTop = own(new THREE.MeshPhysicalMaterial({
       map: makeWoodTexture(),
       bumpMap: makeWoodDetailTexture(),
@@ -677,6 +681,7 @@ function addTable() {
       metalness: .05,
       clearcoat: .3,
       clearcoatRoughness: .3,
+      ...woodFinish,
     }))
     const woodSide = own(new THREE.MeshPhysicalMaterial({
       color: 0x6b421f,
@@ -684,6 +689,7 @@ function addTable() {
       metalness: .05,
       clearcoat: .25,
       clearcoatRoughness: .35,
+      ...woodFinish,
     }))
     // 木框相对台面外移 1.5 个麻将（1.5 × 牌长 .94 ≈ 1.4）：内沿 10.2→11.6、外沿 11.0→12.4（条宽 .8 不变）。
     // 台面/桌身已随之外扩（surfaceHalf 11.65 / tableHalf 12.5），框不悬空、绒布无露底。
