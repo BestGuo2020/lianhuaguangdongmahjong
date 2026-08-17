@@ -177,7 +177,7 @@ button { font: inherit; }
 .theme-toggle-mark i:nth-child(4) { background: #d7bd68; }
 .theme-menu { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: 194px; padding: 8px; border: 1px solid rgba(213,171,84,.58); border-radius: 9px; background: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%); box-shadow: 0 18px 42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.05); }
 .theme-menu::before { content: ""; position: absolute; top: -5px; right: 14px; width: 9px; height: 9px; border-top: 1px solid rgba(213,171,84,.58); border-left: 1px solid rgba(213,171,84,.58); background: #123024; transform: rotate(45deg); }
-.theme-menu > p { margin: 2px 7px 7px; color: #c5a659; font-size: 10px; letter-spacing: .2em; }
+.theme-menu > p { margin: 2px 7px 7px; color: #c5a659; font-size: 14px; letter-spacing: .2em; }
 .theme-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: auto; min-height: 45px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; }
 .theme-menu > button:hover, .theme-menu > button.active { border-color: rgba(213,171,84,.35); background: rgba(213,171,84,.1); }
 .theme-menu > button > span { min-width: 0; }
@@ -1147,4 +1147,27 @@ button { font: inherit; }
   .lobby h1 { font-size: 24px; }
   .subtitle { margin: 2px 0 8px; }
   .start-button { min-width: 180px; padding: 6px 20px 6px; }
+}
+
+/* 移动端主题菜单：覆盖顶栏圆形按钮的通用尺寸，避免菜单选项被压成竖排。 */
+@media (max-width: 700px), (max-height: 460px) {
+  .theme-menu {
+    width: min(210px, calc(100vw - 12px));
+    max-height: min(280px, calc(100vh - 14px));
+    overflow-y: auto;
+  }
+  .theme-menu > button {
+    width: 100%;
+    height: auto;
+    min-height: 42px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 13px;
+  }
+  .theme-menu > button > span { min-width: 0; }
+  .theme-menu strong { font-size: 13px; white-space: nowrap; }
+  .theme-menu small { font-size: 9px; }
+  .theme-menu > button > i { width: 10px; height: 10px; }
 }
