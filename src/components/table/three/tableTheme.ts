@@ -125,7 +125,7 @@ export const defaultTableTheme: TableTheme = {
       clearcoat: .24,
     },
   },
-  tableVignette: .45,
+  tableVignette: .35,
   tile: {
     side: {
       color: 0xc9c9c1,
