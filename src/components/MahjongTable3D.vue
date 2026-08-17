@@ -234,10 +234,12 @@ onMounted(async () => {
   keyLight.position.set(-7, 13, 9)
   keyLight.castShadow = true
   keyLight.shadow.mapSize.set(1024, 1024)
-  keyLight.shadow.camera.left = -12
-  keyLight.shadow.camera.right = 12
-  keyLight.shadow.camera.top = 10
-  keyLight.shadow.camera.bottom = -10
+  // 阴影相机必须覆盖木框外沿（半径约 12.4，斜向投影后会超过 ±12）；
+  // 范围过小会在木框上形成一条突兀的阴影裁切线。
+  keyLight.shadow.camera.left = -18
+  keyLight.shadow.camera.right = 18
+  keyLight.shadow.camera.top = 18
+  keyLight.shadow.camera.bottom = -18
   scene.add(keyLight)
   shadowLight = keyLight
   const rimLight = new THREE.DirectionalLight(0x3acb8b, 1.6)
