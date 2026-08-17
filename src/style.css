@@ -832,6 +832,17 @@ button { font: inherit; }
   height: 100%;
   pointer-events: none;
 }
+/* 对局时不使用外层黑色木框，让所有主题的牌桌铺满游戏区域。 */
+.wood-frame:has(.felt-table.has-three-scene) {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.felt-table.has-three-scene {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .felt-table.has-three-scene::before,
 .felt-table.has-three-scene::after { opacity: 0; }
 .felt-table.has-three-scene .table-depth { opacity: 0; }
