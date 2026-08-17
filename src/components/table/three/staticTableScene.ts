@@ -30,7 +30,7 @@ export function createStaticTableScene(options: TableSceneOptions) {
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
 
 // 台面表面纹理（单张合成，避免 map 通道冲突）：
-// - tableFelt：白底 + 密集细线噪点，模拟绒面颗粒；
+// - tableFelt：白底 + 逐像素微噪点（近白亮灰、极低 alpha），只产生细微颗粒明暗，避免可见短线脏点；
 // - tableVignette：径向渐变边缘压暗（中心亮、四周暗）。
 // 无平铺（ClampToEdge），整张覆盖台面 UV。
 function makeTableSurfaceTexture() {
@@ -42,17 +42,15 @@ function makeTableSurfaceTexture() {
   if (theme.tableFelt) {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, size, size)
-    for (let i = 0; i < 900; i++) {
-      const x = Math.random() * size
-      const y = Math.random() * size
-      const len = 2 + Math.random() * 5
-      ctx.strokeStyle = `rgba(128,128,128,${.08 + Math.random() * .12})`
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(x, y)
-      ctx.lineTo(x + (Math.random() - .5) * 2, y + len)
-      ctx.stroke()
+    const imageData = ctx.createImageData(size, size)
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const v = 235 + Math.floor(Math.random() * 20)
+      imageData.data[i] = v
+      imageData.data[i + 1] = v
+      imageData.data[i + 2] = v
+      imageData.data[i + 3] = 14 + Math.floor(Math.random() * 26)
     }
+    ctx.putImageData(imageData, 0, 0)
   } else {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, size, size)
