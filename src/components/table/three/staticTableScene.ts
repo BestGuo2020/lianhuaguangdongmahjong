@@ -667,7 +667,7 @@ function addTable() {
 
   // 木质包边（woodTrim）：台面四周一圈宽大木纹框，回字形挤出几何一体成型（四角零重叠，避免 z-fighting 闪烁）。
   // 台面 21.04 见方（半宽 10.52）、顶面 y≈.07；桌身半宽 10.9；牌河最远约 ±10.2（框内沿不得内缩越过）。
-  // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8、高 .16、中心 y=.14（顶 .22）。
+  // 木框：内沿 10.2（牌河边界）、外沿 11.0，条宽 .8；垂直厚度取半个麻将厚度（.34 × .5 = .17）。
   if (theme.woodTrim) {
     // 顶面：全幅木纹 + 噪点凹凸/光泽不均；立面（内/外/底面）：纯色木料，避免立面 UV 拉伸成塑料感。
     const woodFinish = theme.woodTrimMaterial ?? {}
@@ -710,11 +710,12 @@ function addTable() {
     hole.lineTo(outer - inner, inner)
     hole.closePath()
     shape.holes.push(hole)
-    const frameGeometry = own(new THREE.ExtrudeGeometry(shape, { depth: .16, bevelEnabled: false }))
+    const woodTrimThickness = .34 * .5
+    const frameGeometry = own(new THREE.ExtrudeGeometry(shape, { depth: woodTrimThickness, bevelEnabled: false }))
     // ExtrudeGeometry 材质组顺序：[0]=侧面, [1]=顶面, [2]=底面
     // 位置补偿：shape 中心 (12.4,12.4) → 世界 (0, 桌心 z=-1.65)；深度 .16 旋转后 y 0..0.16 → 中心 .08 → pos.y=.06（顶 .22）
-    const frame = addStaticMesh(frameGeometry, [woodSide, woodTop, woodSide], -12.4, .06, 10.75)
-    frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .06）
+    const frame = addStaticMesh(frameGeometry, [woodSide, woodTop, woodSide], -12.4, .05, 10.75)
+    frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .05）
   }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
