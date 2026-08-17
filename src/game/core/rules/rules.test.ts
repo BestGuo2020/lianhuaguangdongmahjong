@@ -228,9 +228,12 @@ describe('副露来源指向', () => {
   it('吃副露展示时把实际被吃的牌放在玩家视角的左侧', () => {
     expect(meldDisplayTiles({
       type: 'chi', tile: 'm6', from: 3, tiles: ['m4', 'm5', 'm6'],
-    })).toEqual(['m4', 'm5', 'm6'])
+    })).toEqual(['m5', 'm4', 'm6'])
     expect(meldDisplayTiles({
       type: 'chi', tile: 'm4', from: 3, tiles: ['m4', 'm5', 'm6'],
-    })).toEqual(['m5', 'm6', 'm4'])
+    })).toEqual(['m6', 'm5', 'm4'])
+    expect(meldDisplayTiles({
+      type: 'chi', tile: 'm5', from: 3, tiles: ['m4', 'm5', 'm6'],
+    })).toEqual(['m6', 'm4', 'm5'])
   })
 })
