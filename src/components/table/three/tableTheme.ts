@@ -44,6 +44,8 @@ export interface TableTheme {
     clearcoat?: number
     clearcoatRoughness?: number
   }
+  /** 非木质包边材质；仅在未启用 woodTrim 的主题上绘制一圈低矮硬质边框。 */
+  edgeTrim?: PhysicalParams
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
@@ -126,6 +128,13 @@ export const defaultTableTheme: TableTheme = {
     },
   },
   tableVignette: .35,
+  edgeTrim: {
+    color: 0x102c23,
+    roughness: .45,
+    metalness: .1,
+    clearcoat: .28,
+    clearcoatRoughness: .32,
+  },
   tile: {
     side: {
       color: 0xc9c9c1,
@@ -513,6 +522,13 @@ export const happyMahjongTheme: TableTheme = {
   tableVignette: .3,
   woodTrim: false,
   tileBackGradient: ['#2a9361', '#1e754c', '#105238'],
+  edgeTrim: {
+    color: 0x0a3540,
+    roughness: .48,
+    metalness: .1,
+    clearcoat: .28,
+    clearcoatRoughness: .32,
+  },
   tile: {
     ...defaultTableTheme.tile,
     side: {

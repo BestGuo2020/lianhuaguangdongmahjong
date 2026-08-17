@@ -718,6 +718,31 @@ function addTable() {
     frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .05）
   }
 
+  // 非木质主题使用低矮硬质包边：覆盖原本桌身与台面的落差，不增加木纹和厚重外扩。
+  if (!theme.woodTrim && theme.edgeTrim) {
+    const outerHalf = 10.9
+    const trimWidth = .38
+    const outer = outerHalf * 2
+    const inner = trimWidth
+    const trimShape = new THREE.Shape()
+    trimShape.moveTo(0, 0)
+    trimShape.lineTo(outer, 0)
+    trimShape.lineTo(outer, outer)
+    trimShape.lineTo(0, outer)
+    trimShape.closePath()
+    const trimHole = new THREE.Path()
+    trimHole.moveTo(inner, inner)
+    trimHole.lineTo(inner, outer - inner)
+    trimHole.lineTo(outer - inner, outer - inner)
+    trimHole.lineTo(outer - inner, inner)
+    trimHole.closePath()
+    trimShape.holes.push(trimHole)
+    const trimMaterial = own(new THREE.MeshPhysicalMaterial({ ...theme.edgeTrim }))
+    const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .12, bevelEnabled: false }))
+    const trim = addStaticMesh(trimGeometry, trimMaterial, -outerHalf, 0, -1.65 + outerHalf)
+    trim.rotation.x = -Math.PI / 2
+  }
+
   const machineTop = own(new THREE.MeshPhysicalMaterial({
     map: makeMachineTexture(),
     ...theme.table.machineTop,
