@@ -55,6 +55,7 @@ export interface OpeningTimelineOptions {
   playSoundAndWait: (name: string, volume?: number) => Promise<void>
   send: (message: Record<string, unknown>) => void
   onFinished: () => void
+  waitForTableReady?: () => Promise<void>
 }
 
 export function createOpeningTimeline({
@@ -65,6 +66,7 @@ export function createOpeningTimeline({
   playSoundAndWait,
   send,
   onFinished,
+  waitForTableReady,
 }: OpeningTimelineOptions) {
   let sequence = 0
   let running = false
@@ -204,6 +206,10 @@ export function createOpeningTimeline({
     // 莲花开局有两次掷骰与翻精，经典只有一次投骰。
     const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
     running = true
+    if (waitForTableReady) {
+      await waitForTableReady()
+      if (currentSequence !== sequence) return
+    }
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
     // 等 game_start 播完再掷骰（与单机 lotusOpening/localOpening 对齐）。

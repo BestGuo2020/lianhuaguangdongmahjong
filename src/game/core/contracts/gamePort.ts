@@ -174,7 +174,7 @@ export interface GamePort {
   /** 莲花麻将：手牌同时持有东南西北各 1 张可暗杠（乱风杠）。 */
   capabilities: RefLike<GameCapabilities>
 
-  startGame(mode?: MatchType): unknown
+  startGame(mode?: MatchType, options?: GameStartOptions): unknown
   selectTile(index: number): void
   clearUserSelection(): void
   userDiscard(index?: number): void
@@ -188,6 +188,11 @@ export interface GamePort {
   nextRound(): void
   returnToLobby(): void
   tileName(tile: TileType): string
+}
+
+export interface GameStartOptions {
+  /** 牌桌 3D 场景就绪前暂停开局时间线。 */
+  waitForTableReady?: () => Promise<void>
 }
 
 type FunctionKeys<T> = {

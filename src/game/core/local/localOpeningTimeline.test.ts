@@ -3,6 +3,36 @@ import { createLocalGameState } from './localGameState'
 import { createLocalOpeningTimeline } from './localOpeningTimeline'
 
 describe('localOpeningTimeline', () => {
+  it('waits for the 3D table before entering the opening stage', async () => {
+    const state = createLocalGameState()
+    let releaseTableReady!: () => void
+    const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
+    const timeline = createLocalOpeningTimeline({
+      state,
+      clearTimers: () => timeline.cancel(),
+      takeTile: () => null,
+      wait: async () => {},
+      later: vi.fn(() => 1),
+      playSound: vi.fn(),
+      playSoundAndWait: async () => {},
+      announce: vi.fn(),
+      getRoundLabel: () => '东1局',
+      beginTurn: vi.fn(),
+      endGame: vi.fn(),
+    })
+
+    const opening = timeline.start('east', { waitForTableReady: () => tableReady })
+    await Promise.resolve()
+    expect(state.openingStage.value).toBeNull()
+
+    releaseTableReady()
+    await Promise.resolve()
+    expect(state.openingStage.value).toBe('start')
+
+    timeline.cancel()
+    await opening
+  })
+
   it('cancels an in-flight opening before dice and dealing mutate state', async () => {
     const state = createLocalGameState()
     let releaseWait!: () => void

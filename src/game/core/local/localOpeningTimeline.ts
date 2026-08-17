@@ -52,7 +52,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
   }
 
-  async function start(mode?: MatchType) {
+  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void> } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -79,8 +79,13 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     state.lastDiscardSound.value = null
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
-    state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
+
+    if (startOptions.waitForTableReady) {
+      await startOptions.waitForTableReady()
+      if (currentSequence !== sequence) return
+    }
+    state.openingStage.value = 'start'
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return

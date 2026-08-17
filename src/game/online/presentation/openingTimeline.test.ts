@@ -55,6 +55,22 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('openingTimeline', () => {
+  it('waits for the 3D table before entering the opening stage', async () => {
+    let releaseTableReady!: () => void
+    const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
+    const { state, timeline } = harness({ waitForTableReady: () => tableReady })
+
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+    expect(state.openingStage.value).toBeNull()
+    timeline.captureSnapshot(snapshot())
+    expect(state.players).toHaveLength(4)
+
+    releaseTableReady()
+    await Promise.resolve()
+    expect(state.openingStage.value).toBe('start')
+    timeline.cancel()
+  })
+
   it('runs start, dice and authoritative deal animation before opening_done', async () => {
     const { state, sent, finished, timeline } = harness()
     timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })

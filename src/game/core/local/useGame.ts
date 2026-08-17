@@ -1,5 +1,5 @@
 import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
-import { defineGamePort } from '../contracts/gamePort'
+import { defineGamePort, type GameStartOptions } from '../contracts/gamePort'
 import type { EndGameOptions, TileType } from '../contracts/types'
 import { AiController, HumanController, type HumanBridge, type PlayerController } from '../controllers/playerController'
 import type { ActionContext } from '../rules/actions'
@@ -159,9 +159,9 @@ export function useGame({
     endGame,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
-  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {
+  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions) => {
     followDealer.reset()
-    return openingTimeline.start(mode)
+    return openingTimeline.start(mode, options)
   }
 
   const tableContext: ActionContext = {

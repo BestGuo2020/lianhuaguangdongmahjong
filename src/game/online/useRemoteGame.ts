@@ -44,9 +44,10 @@ const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  waitForTableReady?: () => Promise<void>
 }
 
-export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseRemoteGameOptions = {}) {
+export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {}, waitForTableReady }: UseRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
   const state = createRemoteGameState({
     guestId: sessionStore.loadGuestId() || '',
@@ -110,6 +111,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     playSoundAndWait,
     send: roomSocket.send,
     onFinished: applyBufferedAfterOpening,
+    waitForTableReady,
   })
   const snapshotReconciler = createSnapshotReconciler({
     state,
