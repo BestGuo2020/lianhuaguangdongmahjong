@@ -33,7 +33,8 @@ export interface ServerSnapshot {
   openingStack?: number | null
   wallBreakIndex?: number
   wallCount: number
-  wall: TileType[]
+  /** Remote snapshots may omit the remaining wall to prevent future-draw leakage. */
+  wall?: TileType[]
   headDrawn: number
   currentPlayer: number
   players: ServerPlayerDto[]

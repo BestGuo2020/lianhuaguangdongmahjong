@@ -28,6 +28,7 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
     { noContinue = false }: { noContinue?: boolean } = {},
   ) {
     const player = state.players[playerIndex]
+    if (!player || player.hand.filter((item) => item === tile).length < 4) return
     player.hand = removeMatches(player.hand, tile, 4)
     if (options.sortHand) player.hand = options.sortHand(player.hand)
     player.drawnTileIndex = -1
@@ -39,6 +40,8 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
   }
   function declareAddedKong(playerIndex: number, meldIndex: number, tile: TileType) {
     const player = state.players[playerIndex]
+    const meld = player?.melds[meldIndex]
+    if (!player || !meld || meld.type !== 'peng' || meld.tile !== tile || !player.hand.includes(tile)) return
     player.hand = removeMatches(player.hand, tile, 1)
     if (options.sortHand) player.hand = options.sortHand(player.hand)
     player.drawnTileIndex = -1

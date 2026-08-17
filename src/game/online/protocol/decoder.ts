@@ -139,7 +139,7 @@ function isSnapshot(message: JsonObject): boolean {
     && isNullable(message.flipStack, isNumber)
     && isNullable(message.openingStack, isNumber)
     && isOptional(message.wallBreakIndex, isNumber)
-    && isNumber(message.wallCount) && isArrayOf(message.wall, isTile)
+     && isNumber(message.wallCount) && isOptional(message.wall, (value): value is TileType[] => isArrayOf(value, isTile))
     && isNumber(message.headDrawn) && isNumber(message.currentPlayer)
     && isArrayOf(message.players, isPlayer) && isNumber(message.seat)
     && isNullable(message.result, isRoundResult)
