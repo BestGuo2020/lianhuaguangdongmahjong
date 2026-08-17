@@ -302,24 +302,24 @@ export const rosewoodTheme: TableTheme = {
   },
 }
 
-/** 示例主题「雀魂风」：素面青绿呢绒桌（无金线/饰钉）+ 哑光瓷白牌 + 橙色牌背（#E69D47 系）。 */
+/** 示例主题「雀魂风」：素面深钴蓝呢绒桌（参考 #2A3C6D）+ 哑光瓷白牌 + 橙色牌背（#E69D47 系）。 */
 export const majsoulTheme: TableTheme = {
   table: {
     jade: {
-      color: 0x2f6b66,
-      emissive: 0x071a17,
+      color: 0x2a3c6d,
+      emissive: 0x0b1530,
       emissiveIntensity: .08,
       roughness: .85,
       metalness: 0,
       clearcoat: .08,
       clearcoatRoughness: .6,
       sheen: .35,
-      sheenColor: 0x3f8a7a,
+      sheenColor: 0x4a5f9e,
       sheenRoughness: .8,
     },
     darkJade: {
-      color: 0x0c1f1d,
-      emissive: 0x040d0c,
+      color: 0x101c30,
+      emissive: 0x060a14,
       emissiveIntensity: .05,
       roughness: .9,
       metalness: 0,
@@ -367,7 +367,7 @@ export const majsoulTheme: TableTheme = {
   tableFelt: true,
   tableVignette: .55,
   woodTrim: true,
-  woodTrimColors: ['#8a5a30', '#6b421f', '#4e2f14'],
+  woodTrimColors: ['#6b4526', '#5a3a22', '#422a17'],
   tileBackGradient: ['#e08444', '#d67a38', '#c06c2c'],
   tile: {
     side: {
