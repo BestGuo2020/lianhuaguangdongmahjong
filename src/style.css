@@ -175,10 +175,10 @@ button { font: inherit; }
 .theme-toggle-mark i:nth-child(2) { background: #b87343; }
 .theme-toggle-mark i:nth-child(3) { background: #2e9a62; }
 .theme-toggle-mark i:nth-child(4) { background: #d7bd68; }
-.theme-menu { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: 194px; padding: 8px; border: 1px solid rgba(213,171,84,.58); border-radius: 9px; background: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%); box-shadow: 0 18px 42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.05); }
+.theme-menu { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: min(194px, calc(100vw - 12px)); max-width: calc(100vw - 12px); max-height: min(320px, calc(100dvh - 14px)); overflow-y: auto; padding: 8px; border: 1px solid rgba(213,171,84,.58); border-radius: 9px; background: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%); box-shadow: 0 18px 42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.05); }
 .theme-menu::before { content: ""; position: absolute; top: -5px; right: 14px; width: 9px; height: 9px; border-top: 1px solid rgba(213,171,84,.58); border-left: 1px solid rgba(213,171,84,.58); background: #123024; transform: rotate(45deg); }
-.theme-menu > p { margin: 2px 7px 7px; color: #c5a659; font-size: 14px; letter-spacing: .2em; }
-.theme-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: auto; min-height: 45px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; }
+.theme-menu > p { margin: 2px 7px 7px; color: #c5a659; font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
+.top-bar .theme-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: auto; min-height: 45px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; }
 .theme-menu > button:hover, .theme-menu > button.active { border-color: rgba(213,171,84,.35); background: rgba(213,171,84,.1); }
 .theme-menu > button > span { min-width: 0; }
 .theme-menu strong, .theme-menu small { display: block; }
@@ -1019,7 +1019,7 @@ button { font: inherit; }
   .final-board { width: min(620px, 92%); padding: 15px 24px 18px; }.final-board > h2 { margin: 2px 0 9px; font-size: 30px; }.final-rankings { gap: 5px; }.final-rankings article { min-width: 0; min-height: 51px; grid-template-columns: 46px 42px minmax(0,1fr) 82px; gap: 8px; padding-right: 10px; }.final-rankings img { width: 40px; height: 40px; }.final-rank b { font-size: 29px; }.final-rankings em { min-width: 0; overflow: hidden; font-size: 21px; text-overflow: ellipsis; }.final-board > button { margin-top: 10px; padding: 8px 20px; }
 }
 
-@media (max-width: 700px), (max-height: 460px) {
+@media (max-width: 700px), (max-height: 480px) {
   .settlement-card { width: 96%; padding-right: 16px; padding-left: 16px; }
   .round-rankings { gap: 5px; }
   .round-rankings article { grid-template-columns: 31px 30px minmax(0,1fr) 45px 55px; gap: 4px; padding-right: 5px; padding-left: 5px; }
@@ -1185,7 +1185,7 @@ button { font: inherit; }
 }
 
 /* 移动端主题菜单：覆盖顶栏圆形按钮的通用尺寸，避免菜单选项被压成竖排。 */
-@media (max-width: 700px), (max-height: 460px) {
+@media (max-width: 700px), (max-height: 480px) {
   .theme-menu {
     width: min(210px, calc(100vw - 12px));
     max-height: min(280px, calc(100vh - 14px));
