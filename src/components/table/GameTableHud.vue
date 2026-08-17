@@ -79,9 +79,14 @@ const emit = defineEmits<{
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const waitsOpen = ref(false)
+const tableReady = ref(false)
 const hoveredDiscard = ref<TileType | null>(null)
 const kongPickerOpen = ref(false)
 const chiPickerOpen = ref(false)
+
+watch(() => props.themeName, () => {
+  tableReady.value = false
+})
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
 // 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
@@ -246,7 +251,16 @@ function onAvatarError(entry: GamePlayer) {
       :wall-break-index="wallBreakIndex"
       :flip-tile="flipTile"
       :flip-stack="flipStack"
+      @ready="tableReady = true"
     />
+    <Transition name="table-loading">
+      <div v-if="!tableReady" class="table-loading" role="status" aria-live="polite">
+        <div class="table-loading-card">
+          <span class="table-loading-spinner" aria-hidden="true"></span>
+          <span>牌桌加载中…</span>
+        </div>
+      </div>
+    </Transition>
     <Transition name="flip-cue">
       <div
         v-if="flipTile" key="flip" class="flip-indicator" :class="{ 'flip-open': flipOpen }"

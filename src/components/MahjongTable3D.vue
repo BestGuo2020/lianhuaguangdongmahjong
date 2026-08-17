@@ -24,6 +24,9 @@ const props = withDefaults(defineProps<TableProps>(), {
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0, diceThrowerIndex: 0,
   tableActionEvent: null,
 })
+const emit = defineEmits<{
+  ready: []
+}>()
 
 const canvas = ref(null)
 let renderer
@@ -190,7 +193,7 @@ function render(time = 0) {
   let cameraShakeZ = 0
   let exposure = BASE_EXPOSURE
   dicePresenter?.animate(time)
-  tableTiles.animate(time, scratchVector)
+  tableTiles?.animate(time, scratchVector)
   const winFrame = winEffectPresenter?.animate(time)
   if (winFrame) {
     exposure = winFrame.exposure
@@ -206,6 +209,11 @@ function render(time = 0) {
 }
 
 onMounted(async () => {
+  // 先让牌桌加载提示完成一次浏览器绘制，再进行 WebGL/几何体初始化。
+  // 否则异步组件虽然已经挂载，下面的大段同步工作仍会把画面卡在黑屏。
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  if (destroyed) return
+
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: aaEnabled, alpha: true, powerPreference: 'high-performance' })
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -337,8 +345,10 @@ onMounted(async () => {
     }),
   )
   render()
+  emit('ready')
 
-  // 等启动预加载完成（已完成则立即返回），确保图集带上全部真实牌面。
+  // 牌面资源在牌桌首帧之后再加载，避免大厅阶段的 34 张图片与 3D chunk
+  // 竞争网络带宽；首帧先用牌背/底色，图片就绪后再失效重建图集。
   await preloadTileImages()
   if (destroyed) return
   // 图集在图片就绪前可能已用空底构建，需失效让下一次重建带上真实牌面。
