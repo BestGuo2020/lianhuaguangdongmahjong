@@ -252,7 +252,7 @@ onMounted(async () => {
     scene,
     props,
     playAreaOffsetZ: PLAY_AREA_OFFSET_Z,
-    theme: tableThemeByName(new URLSearchParams(window.location.search).get('theme')),
+    theme: tableThemeByName(props.themeName ?? new URLSearchParams(window.location.search).get('theme')),
     own,
     ownDynamic,
     trackTileMaterial,

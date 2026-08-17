@@ -1,7 +1,10 @@
 import type { DealAnimation, LastDiscard, OpeningStage, WinEffect } from '../../../game/core/contracts/gamePort'
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../../../game/core/contracts/types'
+import type { TableThemeName } from './tableTheme'
 
 export interface TableProps {
+  /** 当前牌桌主题；切换时只重建 3D 牌桌，不刷新页面。 */
+  themeName?: TableThemeName
   players?: GamePlayer[]
   /** 当前客户端对应的绝对座位；牌山需要按此座位旋转到本地视角。 */
   localSeat?: number
