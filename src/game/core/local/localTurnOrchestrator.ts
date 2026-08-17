@@ -110,6 +110,8 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       case 'pass':
         return offerNextClaim(remainingClaims, tile, from)
       case 'gang':
+        // 控制器（尤其是远端客户端）返回的动作仍需由房主按当前状态复核。
+        if (!claimant.canGang) return offerNextClaim(remainingClaims, tile, from)
         interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(
@@ -118,6 +120,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
         )
         return
       case 'peng':
+        if (!claimant.canPeng) return offerNextClaim(remainingClaims, tile, from)
         interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         if (action.discardIndex !== undefined) {
@@ -208,24 +211,42 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       ruleset,
     } satisfies TurnContext),
     requestTurn: (controller, context) => controller.requestTurn(context as TurnContext),
-    handleAction: async (action, playerIndex, player, _turnOptions, api) => {
-      switch (action.kind) {
-        case 'win':
-          interruptFollow()
-          return options.endGame(playerIndex, { kongBloom: api.isKongDraw(playerIndex) })
-        case 'added-kong': {
-          interruptFollow()
-          return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
-        }
-        case 'concealed-kong': {
-          interruptFollow()
+      handleAction: async (action, playerIndex, player, _turnOptions, api) => {
+        switch (action.kind) {
+          case 'win':
+            if (!ruleset.win.isWinningHand(player.hand, options.structuralMeldCount(playerIndex))) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
+            return options.endGame(playerIndex, { kongBloom: api.isKongDraw(playerIndex) })
+          case 'added-kong': {
+            const meld = player.melds[action.meldIndex]
+            if (!Number.isInteger(action.meldIndex)
+              || !meld
+              || meld.type !== 'peng'
+              || !player.hand.includes(meld.tile)) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
+            return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
+          }
+          case 'concealed-kong': {
+            if (!ruleset.win.concealedKongs(player.hand).includes(action.tile)) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
           await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })
         }
-        case 'discard': {
-          return options.discardTile(playerIndex, action.handIndex)
-        }
+          case 'discard': {
+            const handIndex = Number.isInteger(action.handIndex)
+              && action.handIndex >= 0
+              && action.handIndex < player.hand.length
+              ? action.handIndex
+              : player.hand.length - 1
+            return options.discardTile(playerIndex, handIndex)
+          }
       }
     },
   })

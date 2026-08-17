@@ -5,7 +5,7 @@ import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
-import { canChi, matchingCount, type ChiMeld, LOTUS_RULESET } from './lotusRules'
+import { canChi, matchingCount, type ChiMeld, LOTUS_RULESET, windKong } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
@@ -202,19 +202,19 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     const player = state.players[claimant.playerIndex]
     const decided = decisions.get(claimant.playerIndex)
     if (decided) {
-      if (decided.kind === 'gang') {
+      if (decided.kind === 'gang' && claimant.canGang) {
         interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(() => { void beginTurn(claimant.playerIndex, { fromTail: true }) }, PACE_MS.afterClaimGang)
         return
       }
-      if (decided.kind === 'peng') {
+      if (decided.kind === 'peng' && claimant.canPeng) {
         interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.skipDrawPengDelay)
         return
       }
-      if (decided.kind === 'chi') {
+      if (decided.kind === 'chi' && claimant.chiOptions.some((option) => option.tiles.join(',') === decided.meld.tiles.join(','))) {
         performChi(claimant.playerIndex, decided.meld, tile, from)
         options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
         return
@@ -243,6 +243,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       case 'pass':
         return offerNextClaim(remainingClaims, tile, from, decisions)
       case 'gang':
+        if (!claimant.canGang) return offerNextClaim(remainingClaims, tile, from, decisions)
         interruptFollow()
         performDiscardGang(options.tableContext, claimant.playerIndex, tile, from)
         options.later(
@@ -251,6 +252,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         )
         return
       case 'peng':
+        if (!claimant.canPeng) return offerNextClaim(remainingClaims, tile, from, decisions)
         interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
         if (action.discardIndex !== undefined) {
@@ -266,6 +268,9 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         }
         return
       case 'chi':
+        if (!claimant.chiOptions.some((option) => option.tiles.join(',') === action.meld.tiles.join(','))) {
+          return offerNextClaim(remainingClaims, tile, from, decisions)
+        }
         performChi(claimant.playerIndex, action.meld, tile, from)
         options.later(
           () => { void beginTurn(claimant.playerIndex, { skipDraw: true }) },
@@ -282,7 +287,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     const chiOptions = canChi(player.hand, tile, state.jokerTiles.value)
     const decided = decisions.get(nextPlayer)
     if (decided) {
-      if (decided.kind === 'chi') {
+      if (decided.kind === 'chi' && chiOptions.some((option) => option.tiles.join(',') === decided.meld.tiles.join(','))) {
         performChi(nextPlayer, decided.meld, tile, from)
         options.later(() => { void beginTurn(nextPlayer, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
         return
@@ -309,6 +314,10 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     })
     if (hasSettled()) return
     if (action.kind === 'pass') {
+      options.later(() => { void beginTurn(playerIndex) }, PACE_MS.afterDiscardToNextTurn)
+      return
+    }
+    if (!chiOptions.some((option) => option.tiles.join(',') === action.meld.tiles.join(','))) {
       options.later(() => { void beginTurn(playerIndex) }, PACE_MS.afterDiscardToNextTurn)
       return
     }
@@ -432,29 +441,54 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     }),
     requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),
     handleAction: async (action, playerIndex, player, _turnOptions, api) => {
-      switch (action.kind) {
-        case 'win':
-          interruptFollow()
+        switch (action.kind) {
+          case 'win':
+            if (!ruleset.win.isWinningHand(player.hand, options.structuralMeldCount(playerIndex), {
+              jokers: state.jokerTiles.value,
+              jokerSubstitutes: state.wildcardTiles.value,
+            })) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
           return options.endGame(playerIndex, {
             selfDraw: true,
             kongBloom: api.isKongDraw(playerIndex),
             winHand: [...player.hand],
           })
-        case 'added-kong':
-          interruptFollow()
+          case 'added-kong':
+            if (!Number.isInteger(action.meldIndex)
+              || !player.melds[action.meldIndex]
+              || player.melds[action.meldIndex].type !== 'peng'
+              || !player.hand.includes(player.melds[action.meldIndex].tile)) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
           return requestAddedKong(playerIndex, action.meldIndex, player.melds[action.meldIndex].tile)
-        case 'concealed-kong':
-          interruptFollow()
+          case 'concealed-kong':
+            if (!ruleset.win.concealedKongs(player.hand, { jokers: state.jokerTiles.value }).includes(action.tile)) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
           await options.performConcealedKong(playerIndex, action.tile, { noContinue: true })
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })
-        case 'wind-kong':
-          interruptFollow()
+          case 'wind-kong':
+            if (!windKong(player.hand, state.jokerTiles.value)) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
           await options.performWindKong(playerIndex)
           if (api.hasSettled()) return
           return beginTurn(playerIndex, { fromTail: true })
-        case 'discard':
-          return options.discardTile(playerIndex, action.handIndex)
+          case 'discard':
+            return options.discardTile(
+              playerIndex,
+              Number.isInteger(action.handIndex)
+                && action.handIndex >= 0
+                && action.handIndex < player.hand.length
+                ? action.handIndex
+                : player.hand.length - 1,
+            )
       }
     },
   })

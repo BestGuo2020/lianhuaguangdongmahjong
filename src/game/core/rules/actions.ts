@@ -2,7 +2,7 @@
 // 消掉弃牌、结算分数、播报动画/音效），避免两处并行实现逐渐漂移。
 // 决策（做什么）在 ai.ts，回合编排（谁继续、何时继续）留在 useGame，
 // 这里只负责「把某个动作在牌桌上执行掉」。
-import { applyKongScore } from './rules'
+import { applyKongScore, matchingCount } from './rules'
 import type { GamePlayer, ScoreDelta, TableActionType, TileType } from '../contracts/types'
 
 export function removeMatches(hand: TileType[], tile: TileType, amount: number): TileType[] {
@@ -36,6 +36,8 @@ export interface ActionContext {
  */
 export function performPeng(ctx: ActionContext, playerIndex: number, tile: TileType, from: number): void {
   const player = ctx.players[playerIndex]
+  const source = ctx.players[from]
+  if (!player || !source || matchingCount(player.hand, tile) < 2 || source.discards.at(-1) !== tile) return
   player.drawnTileIndex = -1
   removeLastDiscard(ctx.players[from].discards, tile)
   player.hand = removeMatches(player.hand, tile, 2)
@@ -52,6 +54,8 @@ export function performPeng(ctx: ActionContext, playerIndex: number, tile: TileT
  */
 export function performDiscardGang(ctx: ActionContext, playerIndex: number, tile: TileType, from: number): void {
   const player = ctx.players[playerIndex]
+  const source = ctx.players[from]
+  if (!player || !source || matchingCount(player.hand, tile) < 3 || source.discards.at(-1) !== tile) return
   player.drawnTileIndex = -1
   removeLastDiscard(ctx.players[from].discards, tile)
   player.hand = removeMatches(player.hand, tile, 3)
