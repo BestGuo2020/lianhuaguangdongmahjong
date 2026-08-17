@@ -44,7 +44,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     resetLocalPlayers(state, 2000)
   }
 
-  async function start(mode?: MatchType) {
+  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void>; waitForOpeningReady?: () => Promise<void> } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -73,7 +73,6 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.lastDiscardSound.value = null
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
-    state.openingStage.value = 'start'
     // 第一次掷骰由庄家投掷；第二次会在翻精后切换为翻精目标方。
     state.diceThrowerIndex.value = state.dealer.value
     state.flipTile.value = null
@@ -85,6 +84,12 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.secondDice.value = null
     state.wallBreakIndex.value = 0
     state.roundFirstDiscard.value = true
+
+    if (startOptions.waitForTableReady) {
+      await startOptions.waitForTableReady()
+      if (currentSequence !== sequence) return
+    }
+    state.openingStage.value = 'start'
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
@@ -156,6 +161,10 @@ export function createLotusOpening(options: LotusOpeningOptions) {
         winHand: [...dealer.hand],
         winTile: dealer.hand[dealer.drawnTileIndex] ?? dealer.hand[dealer.hand.length - 1],
       })
+    }
+    if (startOptions.waitForOpeningReady) {
+      await startOptions.waitForOpeningReady()
+      if (currentSequence !== sequence) return
     }
     options.later(() => options.beginTurn(dealerIndex, { skipDraw: true, preDrawn: true }), 650)
   }

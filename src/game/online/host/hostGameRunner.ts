@@ -17,6 +17,7 @@ import type { RoundStartMessage, ServerMessage } from '../protocol/messages'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { DisconnectableController } from './remotePlayerController'
+import { createHostOpeningBarrier } from './openingBarrier'
 
 export interface HostGameRunnerOptions<TController> {
   room: VibeHubSDK.Room
@@ -29,7 +30,10 @@ export interface HostGameRunnerOptions<TController> {
    * onAIControlledChange 在「AI 接管/归还」变化时回调（true=接管，false=归还）。 */
   createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void, onAIControlledChange: (ai: boolean) => void) => TController
   /** 本地引擎工厂：传入非本家座位控制器，返回 GamePort（同时作为快照源）。 */
-  createGame: (remoteControllers: Array<TController | undefined>) => GamePort & SnapshotSource
+  createGame: (
+    remoteControllers: Array<TController | undefined>,
+    waitForOpeningReady?: () => Promise<void>,
+  ) => GamePort & SnapshotSource
   /** seat → 昵称（覆盖默认 PLAYER_SEED；房主 + 远端真人）。 */
   seatNames?: Map<number, string>
   /** seat → 头像（SDK 用户头像；房主 + 远端真人）。 */
@@ -42,6 +46,8 @@ export interface HostGameRunnerOptions<TController> {
   onLocalSnapshot?: (snapshot: ServerSnapshot) => void
   /** 房主自视事件（round_start/table_action/score_flow）：喂给房主自己的表现层 viewer。 */
   onLocalEvent?: (message: ServerMessage) => void
+  /** 生产 vibehub 房主启用 opening_done 屏障；单元测试/旧调用可保持即时引擎。 */
+  openingBarrier?: boolean
 }
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): {
@@ -52,10 +58,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   aiControlledSeatsVersion: { value: number }
   /** 当前真人座位表（peerId → seat，重连后 peerId 已 retarget）。 */
   getLivePeerSeats(): Map<string, number>
+  /** 房主 viewer 的开局动画结束后，确认当前 round。 */
+  markLocalOpeningReady(round: number): void
   /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
   enableAIForSeat(seat: number): boolean
 } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent, openingBarrier: openingBarrierEnabled = false } = options
 
   // 远端玩家请求超时（客户端 12s 回合倒计时 + 开局动画/网络抖动余量）：超时判定掉线
   // → AI 接管，游戏不卡死。放宽到 25s：客户端开局动画（发牌/翻精 ≈4s）期间到达的
@@ -80,6 +88,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     disconnected: boolean
   }> = []
   const asDisconnectable = (controller: TController) => controller as TController & DisconnectableController
+  const openingBarrier = createHostOpeningBarrier(
+    () => seatStates
+      .filter((state) => !state.disconnected && !asDisconnectable(state.controller!).isAIControlled())
+      .map((state) => state.peerId),
+  )
   for (const [peerId, seat] of seatByPeer) {
     if (seat >= 1 && seat <= 3) {
       const seatState = {
@@ -100,6 +113,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           aiControlledSeats.delete(seat)
           sendAnnouncement(`玩家「${seatName(seat)}」已重连`, 'gold')
         }
+        if (ai) openingBarrier.removePeer(peerId)
         aiControlledSeatsVersion.value += 1
       }
       remoteControllers[seat - 1] = seatState.controller = createController(room, peerId, (pending) => {
@@ -123,7 +137,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     }
   }
 
-  game = createGame(remoteControllers)
+  game = createGame(
+    remoteControllers,
+    openingBarrierEnabled ? () => openingBarrier.wait(game.round.value) : undefined,
+  )
   const context: SnapshotContext = { roomId: room.roomId, rulesetId }
 
   function seatName(seat: number): string {
@@ -135,6 +152,15 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     room.send(message)
     onLocalEvent?.(message)
   }
+
+  // P2P 没有后端替房主收集 opening_done，房主直接接收远端确认。
+  room.onMessage((message, fromPeerId) => {
+    if (!openingBarrierEnabled) return
+    if (typeof message !== 'object' || message === null) return
+    const value = message as { type?: unknown; round?: unknown }
+    if (value.type !== 'opening_done' || typeof value.round !== 'number') return
+    openingBarrier.markPeerReady(fromPeerId, value.round)
+  })
 
   // 重连恢复后重设计时：清掉旧 18s 掉线计时器，从「重发请求」这一刻重新给客户端
   // 完整 18s 响应窗口。否则客户端掉线期间请求已计时，重进后 resendPending 重发但
@@ -405,8 +431,19 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     ),
   ]
 
-  // 启动本地引擎：instantOpening 下开局瞬间完成（发牌无动画），随后广播全量手牌快照。
-  game.startGame(mode)
+  // 启动本地引擎：先完成逻辑发牌并广播全量快照，再等待房主 viewer 与所有
+  // 在线 peer 的 opening_done，最后才进入庄家首回合。
+  if (openingBarrierEnabled) {
+    const startGameWithBarrier = game.startGame as unknown as (
+      mode?: MatchType,
+      options?: { waitForOpeningReady?: () => Promise<void> },
+    ) => unknown
+    startGameWithBarrier(mode, {
+      waitForOpeningReady: () => openingBarrier.wait(game.round.value),
+    })
+  } else {
+    game.startGame(mode)
+  }
   // 首局覆盖昵称/头像（后续每局由 phase→opening 的 watch 重新覆盖）。
   applySeatProfiles()
 
@@ -430,6 +467,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       }
       return live
     },
+    markLocalOpeningReady(round: number) {
+      if (openingBarrierEnabled) openingBarrier.markLocalReady(round)
+    },
     /** 外部（续接安全网）强制 AI 接管某座位：掉线但无挂起请求（局末断线）时，
      * 座位永远不会被 15s 超时接管，continue 屏障会永久等待——由安全网兜底接管。 */
     enableAIForSeat(seat: number): boolean {
@@ -441,6 +481,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     },
     stop() {
       window.clearInterval(intervalId)
+      openingBarrier.cancel()
       stopWatch()
       stopEventWatchers.forEach((stop) => stop())
       stopImmediateWatchers.forEach((stop) => stop())

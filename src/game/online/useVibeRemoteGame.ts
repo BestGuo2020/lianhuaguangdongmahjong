@@ -80,9 +80,10 @@ export function liveContinuePeers(seatByPeer: Map<string, number>, aiControlledS
 interface UseVibeRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  waitForTableReady?: () => Promise<void>
 }
 
-export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {} }: UseVibeRemoteGameOptions = {}) {
+export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {}, waitForTableReady }: UseVibeRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
   const state = createRemoteGameState({
     guestId: sessionStore.loadGuestId() || '',
@@ -110,6 +111,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     aiControlledSeats: Set<number>
     aiControlledSeatsVersion: { value: number }
     getLivePeerSeats(): Map<string, number>
+    markLocalOpeningReady(round: number): void
     enableAIForSeat(seat: number): boolean
   } | null>(null)
 
@@ -148,10 +150,16 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatNames,
           seatAvatars,
           createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
-          createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+          createGame: (controllers, waitForOpeningReady) => useLotusGame({
+            remoteControllers: controllers,
+            countdownEnabled: false,
+            headless: true,
+            waitForOpeningReady,
+          }),
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
+          openingBarrier: true,
         })
       } else {
         hostGame.value = startHostGame({
@@ -162,10 +170,16 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           seatNames,
           seatAvatars,
           createController: (r, peerId, onPending, onAI) => new RemotePlayerController(r, peerId, onPending, undefined, onAI),
-          createGame: (controllers) => useGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+          createGame: (controllers, waitForOpeningReady) => useGame({
+            remoteControllers: controllers,
+            countdownEnabled: false,
+            headless: true,
+            waitForOpeningReady,
+          }),
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
+          openingBarrier: true,
         })
       }
       // 临时诊断：定位「闲家方位是房主方位」的座位映射问题。
@@ -332,6 +346,11 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     playSoundAndWait,
     send: transport.send,
     onFinished: applyBufferedAfterOpening,
+    onOpeningDone: (round) => {
+      if (isHost.value) hostGame.value?.markLocalOpeningReady(round)
+    },
+    waitForTableReady,
+    waitForOpeningSnapshot: Boolean(waitForTableReady),
   })
   const snapshotReconciler = createSnapshotReconciler({
     state,

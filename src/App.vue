@@ -16,6 +16,7 @@ import { createRemoteLobbyController } from './game/online/orchestration/remoteL
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
+import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/three/tableTheme'
@@ -27,6 +28,31 @@ const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
 const selectedRule = ref<RuleVariant>(DEFAULT_RULE_VARIANT)
+const gameTableReady = ref(false)
+let tableReadyPromise: Promise<void> | null = null
+let tableReadyResolve: (() => void) | null = null
+
+function waitForTableReady() {
+  if (gameTableReady.value) return Promise.resolve()
+  if (!tableReadyPromise) {
+    tableReadyPromise = new Promise<void>((resolve) => { tableReadyResolve = resolve })
+  }
+  return tableReadyPromise
+}
+
+function handleTableReady() {
+  gameTableReady.value = true
+  tableReadyResolve?.()
+  tableReadyResolve = null
+  tableReadyPromise = null
+}
+
+function resetTableReady() {
+  gameTableReady.value = false
+  tableReadyResolve?.()
+  tableReadyResolve = null
+  tableReadyPromise = null
+}
 const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
 const tableThemeName = ref<TableThemeName>(TABLE_THEME_OPTIONS.some((option) => option.value === initialThemeCandidate)
   ? initialThemeCandidate as TableThemeName
@@ -50,7 +76,7 @@ const lotusGame = useLotusGame({
   playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
 })
-const vibeRemoteGame = useVibeRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait })
+const vibeRemoteGame = useVibeRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait, waitForTableReady })
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
@@ -124,9 +150,10 @@ const roomMeta = ref(null)
 const disclaimerGate = useDisclaimerGate(playerId)
 
 function startGameWithAudio() {
+  resetTableReady()
   startBgm()
   // 音效在后台缓存，不能阻塞玩家创建和 3D 牌桌首次渲染。
-  startGame(selectedMatch.value)
+  startGame(selectedMatch.value, { waitForTableReady })
 }
 
 const lobbyController = createRemoteLobbyController({
@@ -185,6 +212,9 @@ const showLobby = computed(() => (
   phase.value === 'lobby'
   || (gameMode.value === 'remote' && Boolean(roomId.value) && players.value.length === 0)
 ))
+watch(showLobby, (value) => {
+  if (value) resetTableReady()
+}, { immediate: true })
 // 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
 // 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
 const humanSeats = computed(() => (
@@ -301,6 +331,7 @@ function changeTableTheme(theme: TableThemeName) {
           @gang="userGang"
           @hu="userHu"
           @wind-kong="userWindKong"
+          @ready="handleTableReady"
         />
 
         <LobbyView

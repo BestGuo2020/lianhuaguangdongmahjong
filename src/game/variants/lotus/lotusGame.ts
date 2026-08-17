@@ -2,7 +2,7 @@
 // 结构仿 core/local/useGame.ts，但整体独立于「莲花广麻」，复用共享的计时/瞬态事件/音效模块。
 import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import type { TileType } from '../../core/contracts/types'
-import { defineGamePort } from '../../core/contracts/gamePort'
+import { defineGamePort, type GameStartOptions } from '../../core/contracts/gamePort'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
 import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
 import { createMatchLifecycle } from '../../shared/runtime/matchLifecycle'
@@ -35,6 +35,8 @@ interface UseLotusGameOptions {
   instantOpening?: boolean
   /** 无头权威引擎：即时节奏（PACE_MS/结算动画归零）+ 即时开局，逻辑即时推进、表现层交给 viewer。 */
   headless?: boolean
+  /** 房主权威联机：每一局进入首回合前等待所有在线客户端完成开局表现。 */
+  waitForOpeningReady?: () => Promise<void>
   ruleset?: RuleSet
 }
 
@@ -46,6 +48,7 @@ export function useLotusGame({
   countdownEnabled = true,
   instantOpening = false,
   headless = false,
+  waitForOpeningReady,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
   const sound = headless ? () => {} : playSound
@@ -187,9 +190,12 @@ export function useLotusGame({
     endGame,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
-  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {
+  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions & { waitForOpeningReady?: () => Promise<void> }) => {
     followDealer.reset()
-    return openingTimeline.start(mode)
+    return openingTimeline.start(mode, {
+      ...options,
+      waitForOpeningReady: options?.waitForOpeningReady ?? waitForOpeningReady,
+    })
   }
 
   const tableContext = {

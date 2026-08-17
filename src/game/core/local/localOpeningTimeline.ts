@@ -52,7 +52,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
   }
 
-  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void> } = {}) {
+  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void>; waitForOpeningReady?: () => Promise<void> } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -127,6 +127,10 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     const fourRedWinner = state.players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return options.endGame(fourRedWinner, { fourRed: true })
     options.announce(`${options.getRoundLabel()} · 开牌`)
+    if (startOptions.waitForOpeningReady) {
+      await startOptions.waitForOpeningReady()
+      if (currentSequence !== sequence) return
+    }
     options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true, preDrawn: true }), 650)
   }
 

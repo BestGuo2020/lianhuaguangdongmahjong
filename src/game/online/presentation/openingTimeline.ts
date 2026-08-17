@@ -14,6 +14,7 @@ import { WALL_TOTAL } from '../../core/rules/wallLayout'
 import { tileName } from '../../core/rules/tiles'
 import type { ServerPlayerDto, ServerSnapshot } from '../protocol/dto'
 import type { RoundStartMessage } from '../protocol/messages'
+import { createOpeningSnapshotGate } from './openingGate'
 
 export interface OpeningTimelineState {
   phase: RefLike<GamePhase>
@@ -55,6 +56,10 @@ export interface OpeningTimelineOptions {
   playSoundAndWait: (name: string, volume?: number) => Promise<void>
   send: (message: Record<string, unknown>) => void
   onFinished: () => void
+  onOpeningDone?: (round: number) => void
+  waitForTableReady?: () => Promise<void>
+  waitForOpeningSnapshot?: boolean
+  openingSnapshotTimeoutMs?: number
 }
 
 export function createOpeningTimeline({
@@ -65,6 +70,10 @@ export function createOpeningTimeline({
   playSoundAndWait,
   send,
   onFinished,
+  onOpeningDone,
+  waitForTableReady,
+  waitForOpeningSnapshot = false,
+  openingSnapshotTimeoutMs = 15000,
 }: OpeningTimelineOptions) {
   let sequence = 0
   let running = false
@@ -77,6 +86,7 @@ export function createOpeningTimeline({
   let flipTileValue: TileType | null = null
   let flipStackValue: number | null = null
   const timers = new Set<number>()
+  const openingSnapshotGate = createOpeningSnapshotGate(openingSnapshotTimeoutMs)
 
   function wait(delay: number): Promise<void> {
     return new Promise((resolve) => {
@@ -117,6 +127,7 @@ export function createOpeningTimeline({
     firstDice = []
     flipTileValue = null
     flipStackValue = null
+    openingSnapshotGate.cancel()
     state.openingStage.value = null
   }
 
@@ -129,6 +140,7 @@ export function createOpeningTimeline({
     // 发牌动画开始后，普通回合快照可能已经到达；它们应留在 reconciler
     // 的 pendingSnapshot 中，不能重建正在播放的手牌/牌墙，否则动画会回到首批牌。
     if (dealStarted) return
+    if (waitForOpeningSnapshot && !openingSnapshotGate.capture(snapshot)) return
     // 只保留「开局后第一份」快照（opening 全量手牌）；无头房主推进极快，
     // 等待发牌动画期间会陆续到达 drawing/checking 等快照，若继续覆盖会把发牌手牌冲掉。
     if (openingSnapshot) return
@@ -207,6 +219,22 @@ export function createOpeningTimeline({
     // 莲花开局有两次掷骰与翻精，经典只有一次投骰。
     const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
     running = true
+    if (waitForOpeningSnapshot) {
+      const tableReady = waitForTableReady ? waitForTableReady() : Promise.resolve()
+      const [, capturedSnapshot] = await Promise.all([tableReady, openingSnapshotGate.wait()])
+      if (capturedSnapshot && !openingSnapshot) openingSnapshot = capturedSnapshot
+      if (!openingSnapshot) {
+        if (currentSequence !== sequence) return
+        state.openingStage.value = null
+        running = false
+        sendOpeningDone()
+        onFinished()
+        return
+      }
+    } else if (waitForTableReady) {
+      await waitForTableReady()
+    }
+    if (currentSequence !== sequence) return
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
     // 等 game_start 播完再掷骰（与单机 lotusOpening/localOpening 对齐）。
@@ -241,12 +269,20 @@ export function createOpeningTimeline({
     if (currentSequence !== sequence) return
     state.openingStage.value = null
     running = false
-    send({ type: 'opening_done' })
+    sendOpeningDone()
     onFinished()
+  }
+
+  function sendOpeningDone() {
+    onOpeningDone?.(state.round.value)
+    send(waitForOpeningSnapshot
+      ? { type: 'opening_done', round: state.round.value }
+      : { type: 'opening_done' })
   }
 
   function start(message: RoundStartMessage, options: { instant?: boolean } = {}) {
     cancel()
+    if (waitForOpeningSnapshot && !options.instant) openingSnapshotGate.begin(message.round)
     state.round.value = message.round
     state.dealer.value = toLocalSeat(message.dealer)
     state.honba.value = message.honba
@@ -289,7 +325,7 @@ export function createOpeningTimeline({
       // AI 代打」（提示一闪而过，AI 夺舍）。
       state.openingStage.value = null
       running = false
-      send({ type: 'opening_done' })
+      sendOpeningDone()
       onFinished()
       return
     }
