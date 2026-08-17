@@ -444,11 +444,126 @@ export const majsoulTheme: TableTheme = {
   },
 }
 
+/** 欢乐麻将风：青绿色绒面台 + 翡翠色牌背 + 暖白牌体 + 深青外沿金线。 */
+export const happyMahjongTheme: TableTheme = {
+  ...defaultTableTheme,
+  table: {
+    ...defaultTableTheme.table,
+    jade: {
+      ...defaultTableTheme.table.jade,
+      color: 0x2a7287,
+      emissive: 0x08242e,
+      emissiveIntensity: .1,
+      roughness: .5,
+      metalness: .02,
+      clearcoat: .34,
+      clearcoatRoughness: .3,
+      sheen: .28,
+      sheenColor: 0x4b8298,
+      sheenRoughness: .76,
+    },
+    darkJade: {
+      ...defaultTableTheme.table.darkJade,
+      color: 0x082b38,
+      emissive: 0x04171f,
+      emissiveIntensity: .1,
+      roughness: .6,
+      metalness: .08,
+      clearcoat: .22,
+      clearcoatRoughness: .34,
+    },
+    gold: {
+      ...defaultTableTheme.table.gold,
+      color: 0xb39a42,
+      emissive: 0x302808,
+      emissiveIntensity: .24,
+      roughness: .38,
+      metalness: .72,
+      clearcoat: .18,
+      clearcoatRoughness: .3,
+    },
+    goldHighlight: {
+      ...defaultTableTheme.table.goldHighlight,
+      color: 0xd2bf62,
+      emissive: 0x392f0b,
+      emissiveIntensity: .28,
+      roughness: .32,
+      metalness: .78,
+      clearcoat: .2,
+      clearcoatRoughness: .26,
+    },
+    machine: {
+      ...defaultTableTheme.table.machine,
+      color: 0x092d32,
+      roughness: .42,
+      metalness: .14,
+      clearcoat: .36,
+      clearcoatRoughness: .3,
+    },
+    machineBottom: {
+      ...defaultTableTheme.table.machineBottom,
+      color: 0x020d10,
+      roughness: .52,
+      metalness: .18,
+      clearcoat: .18,
+    },
+  },
+  plainSurface: false,
+  tableFelt: true,
+  tableVignette: .3,
+  woodTrim: false,
+  tileBackGradient: ['#2a9361', '#1e754c', '#105238'],
+  tile: {
+    ...defaultTableTheme.tile,
+    side: {
+      ...defaultTableTheme.tile.side,
+      color: 0xe5e9df,
+      roughness: .42,
+      clearcoat: .38,
+      clearcoatRoughness: .28,
+      specularIntensity: .24,
+    },
+    faceSide: {
+      ...defaultTableTheme.tile.faceSide,
+      color: 0x237e56,
+      roughness: .38,
+      clearcoat: .5,
+      clearcoatRoughness: .24,
+      specularIntensity: .42,
+      envMapIntensity: .3,
+    },
+    bottom: {
+      ...defaultTableTheme.tile.bottom,
+      color: 0xd9ded5,
+      roughness: .48,
+      clearcoat: .28,
+      clearcoatRoughness: .28,
+    },
+    back: {
+      ...defaultTableTheme.tile.back,
+      color: 0xe4e8df,
+      roughness: .45,
+      clearcoat: .25,
+      clearcoatRoughness: .35,
+      envMapIntensity: .18,
+    },
+    face: {
+      ...defaultTableTheme.tile.face,
+      color: 0xf0efe5,
+      roughness: .45,
+      clearcoat: .35,
+      clearcoatRoughness: .28,
+      specularIntensity: .28,
+    },
+  },
+}
+
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
 export const TABLE_THEMES: Record<string, TableTheme> = {
   jade: defaultTableTheme,
   rosewood: rosewoodTheme,
   majsoul: majsoulTheme,
+  happyMahjong: happyMahjongTheme,
 }
 
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
