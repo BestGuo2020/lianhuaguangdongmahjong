@@ -2,6 +2,8 @@
 // 拦截「自相矛盾 / 不可能」的快照（如墙数不符、座位越界、暗牌半透明等）。
 // 诚实说明：这只防「草率伪造」，防不了「自洽但不公平」的精心作弊。
 import type { ServerSnapshot } from '../protocol/dto'
+import { WALL_TOTAL } from '../../core/rules/wallLayout'
+import { WALL_TOTAL_WITHOUT_FLIP } from '../../variants/lotus/lotusWall'
 
 export interface SnapshotViolation {
   code: string
@@ -11,6 +13,10 @@ export interface SnapshotViolation {
 const SEAT_MIN = 0
 const SEAT_MAX = 3
 const PLAYER_COUNT = 4
+
+function initialWallCount(snapshot: ServerSnapshot) {
+  return snapshot.rulesetId === 'lotus-legacy' ? WALL_TOTAL_WITHOUT_FLIP : WALL_TOTAL
+}
 
 export function verifySnapshot(snapshot: ServerSnapshot): SnapshotViolation[] {
   const violations: SnapshotViolation[] = []
@@ -31,7 +37,19 @@ export function verifySnapshot(snapshot: ServerSnapshot): SnapshotViolation[] {
   if (snapshot.wall && snapshot.wallCount !== snapshot.wall.length) {
     violations.push({ code: 'WALL_COUNT', message: `wallCount=${snapshot.wallCount} 与 wall.length=${snapshot.wall.length} 不符` })
   }
-  range('牌头已摸', 'HEAD_DRAWN', snapshot.headDrawn, 0, snapshot.wall?.length ?? snapshot.wallCount)
+  // wallCount 表示「当前剩余牌数」，headDrawn 表示「从牌头累计摸过的牌数」；
+  // 两者不是同一个坐标系，不能用 headDrawn <= wallCount 判断。摸到牌墙过半后，
+  // 合法快照必然会出现 headDrawn > wallCount。这里按本规则的初始牌墙校验累计进度，
+  // 同时允许杠后从牌尾补摸导致 headDrawn + wallCount 小于初始牌数。
+  const initialCount = initialWallCount(snapshot)
+  range('剩余牌数', 'WALL_COUNT_RANGE', snapshot.wallCount, 0, initialCount)
+  range('牌头已摸', 'HEAD_DRAWN', snapshot.headDrawn, 0, initialCount)
+  if (snapshot.headDrawn + snapshot.wallCount > initialCount) {
+    violations.push({
+      code: 'WALL_PROGRESS',
+      message: `牌墙进度不可能：headDrawn=${snapshot.headDrawn} + wallCount=${snapshot.wallCount} > ${initialCount}`,
+    })
+  }
 
   // 玩家数量与座位唯一性
   if (snapshot.players.length !== PLAYER_COUNT) {

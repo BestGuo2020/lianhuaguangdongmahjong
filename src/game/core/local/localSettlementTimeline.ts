@@ -118,5 +118,24 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     },
   })
 
-  return timeline
+  function isLegalWin(winnerIndex: number, endOptions: EndGameOptions) {
+    const winner = state.players[winnerIndex]
+    if (!winner) return false
+    // 四红是开局特殊结束条件，不要求普通 14 张胡牌结构，但红中数量仍由房主状态确认。
+    if (endOptions.fourRed) return winner.redCount >= 4
+
+    const winningHand = endOptions.robbedKong || Number.isInteger(endOptions.sourceFrom)
+      ? (endOptions.winTile ? [...winner.hand, endOptions.winTile] : null)
+      : winner.hand
+    return winningHand !== null
+      && ruleset.win.isWinningHand(winningHand, options.structuralMeldCount(winnerIndex))
+  }
+
+  return {
+    ...timeline,
+    endGame(winnerIndex: number, endOptions: EndGameOptions = {}) {
+      if (!isLegalWin(winnerIndex, endOptions)) return
+      return timeline.endGame(winnerIndex, endOptions)
+    },
+  }
 }

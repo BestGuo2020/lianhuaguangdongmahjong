@@ -56,6 +56,31 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     return (to - from + state.players.length) % state.players.length
   }
 
+  function canWinDiscard(playerIndex: number, tile: TileType) {
+    const player = state.players[playerIndex]
+    if (!player) return false
+    return ruleset.win.isWinningHand(
+      [...player.hand, tile],
+      options.structuralMeldCount(playerIndex),
+      {
+        jokers: state.jokerTiles.value,
+        ordinaryJokers: (state.jokerTiles.value.includes(tile) || state.wildcardTiles.value.includes(tile)) ? [tile] : [],
+        jokerSubstitutes: state.wildcardTiles.value,
+      },
+    )
+  }
+
+  function canRobKong(playerIndex: number, tile: TileType) {
+    const player = state.players[playerIndex]
+    if (!player) return false
+    return ruleset.win.canRobKong(
+      player.hand,
+      tile,
+      options.structuralMeldCount(playerIndex),
+      { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value },
+    )
+  }
+
   function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
     return runner.beginTurn(playerIndex, turnOptions)
   }
@@ -67,11 +92,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       .map((player, playerIndex) => ({
         playerIndex,
         distance: seatDistance(from, playerIndex),
-        canHu: playerIndex !== from && ruleset.win.isWinningHand(
-          [...player.hand, tile],
-          options.structuralMeldCount(playerIndex),
-          { jokers: state.jokerTiles.value, ordinaryJokers: (state.jokerTiles.value.includes(tile) || state.wildcardTiles.value.includes(tile)) ? [tile] : [], jokerSubstitutes: state.wildcardTiles.value },
-        ),
+        canHu: playerIndex !== from && canWinDiscard(playerIndex, tile),
       }))
       .filter(({ canHu }) => canHu)
       .sort((a, b) => a.distance - b.distance)
@@ -121,8 +142,9 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     }
     const action = await options.controllers[playerIndex].requestDiscardHu(ctx)
     if (hasSettled()) return
-    if (action.kind !== 'win') {
+    if (action.kind !== 'win' || !canWinDiscard(playerIndex, tile)) {
       decisions.set(playerIndex, action)
+      if (action.kind === 'win') decisions.set(playerIndex, { kind: 'pass' })
       void offerHu(remaining, from, tile, isFirstDiscard, decisions)
       return
     }
@@ -352,8 +374,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       .map((player, playerIndex) => ({
         playerIndex,
         distance: seatDistance(kongPlayerIndex, playerIndex),
-        canRob: playerIndex !== kongPlayerIndex
-          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex), { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value }),
+        canRob: playerIndex !== kongPlayerIndex && canRobKong(playerIndex, tile),
       }))
       .filter(({ canRob }) => canRob)
       .sort((a, b) => a.distance - b.distance)
@@ -383,7 +404,8 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       jokers: state.jokerTiles.value,
     })
     if (hasSettled() || state.pendingKong.value !== kong) return
-    if (action === 'pass') {
+    // 抢杠响应来自远端客户端，必须在收到 hu 后再次用房主状态验牌。
+    if (action === 'pass' || !canRobKong(robberIndex, kong.tile)) {
       const [nextRobber, ...remaining] = kong.remainingRobbers
       if (nextRobber === undefined) return options.settleAddedKong(kong.playerIndex)
       state.pendingKong.value = { ...kong, remainingRobbers: remaining }

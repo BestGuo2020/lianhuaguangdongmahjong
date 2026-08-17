@@ -37,10 +37,12 @@ describe('verifySnapshot', () => {
     expect(verifySnapshot(snapshot())).toEqual([])
   })
 
-  it('客户端收到脱敏快照时允许缺少牌墙内容，但仍校验 wallCount/headDrawn', () => {
+  it('客户端收到脱敏快照时允许缺少牌墙内容，并按累计进度校验牌墙', () => {
     expect(verifySnapshot(snapshot({ wall: undefined }))).toEqual([])
-    expect(verifySnapshot(snapshot({ wall: undefined, headDrawn: 4 }))).toEqual([
-      { code: 'HEAD_DRAWN', message: '牌头已摸 越界：4' },
+    // headDrawn 是累计值，合法地可以大于当前剩余牌数。
+    expect(verifySnapshot(snapshot({ wall: undefined, wallCount: 60, headDrawn: 76 }))).toEqual([])
+    expect(verifySnapshot(snapshot({ wall: undefined, wallCount: 60, headDrawn: 77 }))).toEqual([
+      { code: 'WALL_PROGRESS', message: '牌墙进度不可能：headDrawn=77 + wallCount=60 > 136' },
     ])
   })
 

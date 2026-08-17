@@ -13,6 +13,26 @@ function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
 }
 
 describe('localSettlementTimeline', () => {
+  it('rejects a non-winning settlement request even when a caller bypasses the turn orchestrator', () => {
+    const state = createLocalGameState()
+    state.phase.value = 'thinking'
+    state.players.push(player(0, ['m1']), player(1), player(2), player(3))
+    const timeline = createLocalSettlementTimeline({
+      state,
+      clearTimers: vi.fn(),
+      later: vi.fn(),
+      playSound: vi.fn(),
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '��һ��',
+    })
+
+    timeline.endGame(0)
+
+    expect(state.phase.value).toBe('thinking')
+    expect(state.result.value).toBeNull()
+  })
+
   it('keeps win effect, reveal, and final scoring as ordered phases', () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
@@ -49,7 +69,7 @@ describe('localSettlementTimeline', () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
-      player(0, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east']),
+      player(0, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 'east', 'east', 'm7', 'm8']),
       { ...player(1), discards: ['m9'] }, player(2), player(3),
     )
     state.lastDiscard.value = { tile: 'm9', from: 1, id: 7 }
