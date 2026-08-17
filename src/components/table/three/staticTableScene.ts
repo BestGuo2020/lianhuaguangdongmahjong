@@ -719,10 +719,10 @@ function addTable() {
     frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .05）
   }
 
-  // 非木质主题使用与雀魂木框同宽的硬质包边：保留厚度存在感，但不使用木纹。
+  // 非木质主题使用中等宽度的硬质包边：保留边缘层次，但不压过桌面主体。
   if (!theme.woodTrim && theme.edgeTrim) {
     const outerHalf = 12.4
-    const innerHalf = 10.8
+    const innerHalf = outerHalf - (theme.edgeTrimWidth ?? .65)
     const outer = outerHalf * 2
     const inner = outerHalf - innerHalf
     const trimShape = new THREE.Shape()
@@ -742,6 +742,33 @@ function addTable() {
     const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .17, bevelEnabled: false }))
     const trim = addStaticMesh(trimGeometry, trimMaterial, -outerHalf, .05, -1.65 + outerHalf)
     trim.rotation.x = -Math.PI / 2
+
+    if (theme.edgeAccent) {
+      const accentMaterial = own(new THREE.MeshPhysicalMaterial({
+        ...theme.table.goldHighlight,
+        color: 0xe2c15f,
+        emissive: 0x4b350a,
+        emissiveIntensity: .32,
+        roughness: .3,
+        metalness: .82,
+        clearcoat: .26,
+        clearcoatRoughness: .24,
+      }))
+      const accentOffset = 11.98
+      const accentLength = 23.1
+      const accentY = .25
+      addStaticMesh(new THREE.BoxGeometry(accentLength, .045, .055), accentMaterial, 0, accentY, -1.65 - accentOffset)
+      addStaticMesh(new THREE.BoxGeometry(accentLength, .045, .055), accentMaterial, 0, accentY, -1.65 + accentOffset)
+      addStaticMesh(new THREE.BoxGeometry(.055, .045, accentLength), accentMaterial, -accentOffset, accentY, -1.65)
+      addStaticMesh(new THREE.BoxGeometry(.055, .045, accentLength), accentMaterial, accentOffset, accentY, -1.65)
+
+      const ornamentGeometry = new THREE.TorusGeometry(.16, .026, 8, 18, Math.PI * 1.6)
+      ;[[-accentOffset, -1.65, Math.PI / 2], [accentOffset, -1.65, -Math.PI / 2], [0, -1.65 - accentOffset, 0], [0, -1.65 + accentOffset, Math.PI]].forEach(([x, z, rotation]) => {
+        const ornament = addStaticMesh(ornamentGeometry.clone(), accentMaterial, x, accentY + .025, z)
+        ornament.rotation.x = Math.PI / 2
+        ornament.rotation.z = rotation
+      })
+    }
   }
 
   const machineTop = own(new THREE.MeshPhysicalMaterial({
