@@ -850,6 +850,41 @@ button { font: inherit; }
   height: 100%;
   pointer-events: none;
 }
+.table-loading {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, rgba(18, 61, 39, .78), rgba(4, 12, 8, .94) 72%);
+}
+.table-loading-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid rgba(225, 189, 85, .55);
+  border-radius: 24px;
+  background: rgba(7, 24, 17, .88);
+  color: #f2d888;
+  font-size: 14px;
+  letter-spacing: .08em;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .45);
+}
+.table-loading-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(242, 216, 136, .3);
+  border-top-color: #f2d888;
+  border-radius: 50%;
+  animation: table-loading-spin .8s linear infinite;
+}
+@keyframes table-loading-spin { to { transform: rotate(360deg); } }
+.table-loading-enter-active,
+.table-loading-leave-active { transition: opacity .2s ease; }
+.table-loading-enter-from,
+.table-loading-leave-to { opacity: 0; }
 /* 对局时不使用外层黑色木框，让所有主题的牌桌铺满游戏区域。 */
 .wood-frame:has(.felt-table.has-three-scene) {
   padding: 0;
