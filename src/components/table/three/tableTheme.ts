@@ -550,6 +550,10 @@ export const happyMahjongTheme: TableTheme = {
   tableFelt: true,
   tableVignette: .3,
   woodTrim: false,
+  rimLight: {
+    color: 0x477a73,
+    intensity: .95,
+  },
   tileBackGradient: ['#2a9361', '#1e754c', '#105238'],
   edgeTrim: {
     color: 0x15545e,
