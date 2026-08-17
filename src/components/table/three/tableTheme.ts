@@ -372,7 +372,7 @@ export const majsoulTheme: TableTheme = {
   },
   plainSurface: true,
   tableFelt: true,
-  tableVignette: .30,
+  tableVignette: .32,
   woodTrim: true,
   woodTrimColors: ['#78502b', '#62401f', '#452b17'],
   woodTrimMaterial: {
