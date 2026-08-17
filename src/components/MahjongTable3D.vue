@@ -211,7 +211,8 @@ onMounted(async () => {
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = BASE_EXPOSURE
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
+  // 牌墙投影到木框/台面时，硬 PCF 会把斜边采样成明显的“楼梯”；软 PCF 保留阴影层次但抹平锯齿。
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
@@ -234,6 +235,8 @@ onMounted(async () => {
   keyLight.position.set(-7, 13, 9)
   keyLight.castShadow = true
   keyLight.shadow.mapSize.set(1024, 1024)
+  keyLight.shadow.bias = -0.0004
+  keyLight.shadow.normalBias = .02
   // 阴影相机必须覆盖木框外沿（半径约 12.4，斜向投影后会超过 ±12）；
   // 范围过小会在木框上形成一条突兀的阴影裁切线。
   keyLight.shadow.camera.left = -18
