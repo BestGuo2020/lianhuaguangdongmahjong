@@ -14,7 +14,7 @@ export type RoomSocketStatus = 'idle' | 'connecting' | 'connected' | 'reconnecti
 export interface VibeRoomTransportOptions {
   /** 返回当前已加入的 SDK 房间；未加入时为 null。 */
   getRoom: () => VibeHubSDK.Room | null
-  onMessage: (message: unknown) => void
+  onMessage: (message: unknown, fromPeerId?: string) => void
   /** 信号轮询/心跳间隔（ms）。 */
   signalIntervalMs?: number
 }
@@ -85,7 +85,7 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
         }
       }
       if (signalOnly) return // 房主：不转发业务消息（避免收到自己广播的回环）
-      onMessage(message)
+      onMessage(message, fromPeerId)
     })
     room.onPeer((event) => {
       // 只跟踪房主（hostId）的连接状态：其他玩家的掉线/抖动不应触发「网络断开，

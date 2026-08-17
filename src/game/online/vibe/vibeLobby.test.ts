@@ -197,12 +197,12 @@ describe('vibeLobby', () => {
       onStart: () => {},
     })
     const restorePeers = stubOnlinePeers(room, () => ['peer-old', 'peer-new'])
-    room.emit('peer-old', { type: 'lobby_hello', nickname: '刷新客', avatar: '' })
+    room.emit('peer-old', { type: 'lobby_hello', nickname: '刷新客', avatar: '', playerId: 'user-refresh' })
     expect(rosters[rosters.length - 1]).toHaveLength(2)
     room.emitPeer({ type: 'reconnecting', id: 'peer-old' })
-    // 刷新后新 peerId 加入，昵称相同（同一账号）→ 旧身份仍在宽限中，立即顶替其座位，
+    // 刷新后新 peerId 加入，稳定 playerId 相同（昵称只是展示字段）→ 旧身份仍在宽限中，立即顶替其座位，
     // 不会出现「旧身份占一个座位 + 新身份再占一个」的重复占座。
-    room.emit('peer-new', { type: 'lobby_hello', nickname: '刷新客', avatar: '' })
+    room.emit('peer-new', { type: 'lobby_hello', nickname: '刷新客', avatar: '', playerId: 'user-refresh' })
     const after = rosters[rosters.length - 1]
     expect(after).toHaveLength(2)
     expect(after.map((s) => s.peerId)).toEqual(['host-peer', 'peer-new'])

@@ -52,7 +52,12 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
   }
 
-  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void>; waitForOpeningReady?: () => Promise<void> } = {}) {
+  async function start(mode?: MatchType, startOptions: {
+    waitForTableReady?: () => Promise<void>
+    waitForOpeningReady?: () => Promise<void>
+    initialWall?: TileType[]
+    openingDice?: [number, number]
+  } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -64,7 +69,9 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
     const currentSequence = sequence
     resetPlayers()
-    state.wall.value = shuffle(createWall())
+    state.wall.value = startOptions.initialWall
+      ? [...startOptions.initialWall]
+      : shuffle(createWall())
     state.wallHeadDrawn.value = 0
     state.result.value = null
     state.winEffect.value = null
@@ -90,10 +97,12 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
-    state.diceValues.value = [
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-    ]
+    state.diceValues.value = startOptions.openingDice
+      ? [...startOptions.openingDice]
+      : [
+          Math.floor(Math.random() * 6) + 1,
+          Math.floor(Math.random() * 6) + 1,
+        ]
     state.openingStage.value = 'dice'
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1150)])
     if (currentSequence !== sequence) return

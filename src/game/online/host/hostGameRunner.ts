@@ -48,6 +48,14 @@ export interface HostGameRunnerOptions<TController> {
   onLocalEvent?: (message: ServerMessage) => void
   /** 生产 vibehub 房主启用 opening_done 屏障；单元测试/旧调用可保持即时引擎。 */
   openingBarrier?: boolean
+  /** SDK 承诺洗牌完成后注入的确定性开局数据。 */
+  opening?: HostOpeningData | PromiseLike<HostOpeningData>
+}
+
+export interface HostOpeningData {
+    initialWall: import('../../core/contracts/types').TileType[]
+    openingDice: [number, number]
+    openingSecondDice?: [number, number]
 }
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): {
@@ -244,11 +252,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         }
       }
     }
-    if (!seatState) {
-      // 昵称兜底：刷新后 peerId 变化时按昵称匹配座位。放宽到「失联中或已 AI 接管」
-      // 的座位：客户端掉线重进时，若掉线时间短（<18s 请求超时）座位尚未被 AI 接管，
-      // 只认 isAIControlled 会恢复失败 → 座位保持 AI 状态 → continue 屏障把它当掉线
-      // 过滤 → 房主无视等待直接进下一局（客户端明明重进回来了）。
+    // 仅保留无大厅座位表的旧单测/离线调用兼容路径；生产 SDK 流程总是提供
+    // getSeatByPeer，身份恢复必须由 vibeLobby 的 playerId 匹配完成，不能按昵称接管座位。
+    if (!seatState && !options.getSeatByPeer) {
       const nickname = (message as { nickname?: unknown }).nickname
       const fallback = seatStates.find((state) => {
         if (!state.controller || state.peerId === fromPeerId) return false
@@ -263,8 +269,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
         fallback.disconnected = false
-        // 恢复后清除挂起请求的掉线计时器并重新计时（见 restartTimeout 注释：
-        // 防刚重进的在线玩家被旧计时器误判掉线）。
         if (controller.resendPending()) restartTimeout(fallback)
       }
     }
@@ -350,10 +354,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     for (const state of seatStates) {
       if (state.peerId && !sent.has(state.seat)) {
         sent.add(state.seat)
-        room.send(serializeStateToSnapshot(game, state.seat, context), state.peerId)
+        room.send(serializeStateToSnapshot(game, state.seat, { ...context, includeWall: false }), state.peerId)
       }
     }
-    onLocalSnapshot?.(serializeStateToSnapshot(game, 0, context))
+    onLocalSnapshot?.(serializeStateToSnapshot(game, 0, { ...context, includeWall: true }))
   }
 
   // ── 瞬时事件广播：碰/杠/吃 音效与动画（胡牌走 settled 快照 → settlement 时间线）──
@@ -431,21 +435,37 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     ),
   ]
 
-  // 启动本地引擎：先完成逻辑发牌并广播全量快照，再等待房主 viewer 与所有
-  // 在线 peer 的 opening_done，最后才进入庄家首回合。
-  if (openingBarrierEnabled) {
-    const startGameWithBarrier = game.startGame as unknown as (
-      mode?: MatchType,
-      options?: { waitForOpeningReady?: () => Promise<void> },
-    ) => unknown
-    startGameWithBarrier(mode, {
-      waitForOpeningReady: () => openingBarrier.wait(game.round.value),
+  function startOpening(opening?: HostOpeningData) {
+    // 启动本地引擎：先完成逻辑发牌并广播全量快照，再等待房主 viewer 与所有
+    // 在线 peer 的 opening_done，最后才进入庄家首回合。
+    if (openingBarrierEnabled) {
+      const startGameWithBarrier = game.startGame as unknown as (
+        mode?: MatchType,
+        options?: {
+          waitForOpeningReady?: () => Promise<void>
+          initialWall?: import('../../core/contracts/types').TileType[]
+          openingDice?: [number, number]
+          openingSecondDice?: [number, number]
+        },
+      ) => unknown
+      startGameWithBarrier(mode, {
+        ...opening,
+        waitForOpeningReady: () => openingBarrier.wait(game.round.value),
+      })
+    } else {
+      game.startGame(mode, opening)
+    }
+    // 首局覆盖昵称/头像（后续每局由 phase→opening 的 watch 重新覆盖）。
+    applySeatProfiles()
+  }
+
+  if (options.opening && typeof (options.opening as PromiseLike<HostOpeningData>).then === 'function') {
+    void Promise.resolve(options.opening).then(startOpening).catch((error) => {
+      console.error('[host] 承诺洗牌失败，取消开局:', error)
     })
   } else {
-    game.startGame(mode)
+    startOpening(options.opening as HostOpeningData | undefined)
   }
-  // 首局覆盖昵称/头像（后续每局由 phase→opening 的 watch 重新覆盖）。
-  applySeatProfiles()
 
   // 周期快照广播：对局状态下每帧兜底同步（客户端 reconciler 取最新快照，幂等）。
   const intervalId = window.setInterval(broadcastAll, broadcastIntervalMs)

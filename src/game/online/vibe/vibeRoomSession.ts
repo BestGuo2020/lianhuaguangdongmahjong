@@ -30,7 +30,7 @@ export interface VibeRoomSessionState {
 export interface VibeRoomSessionOptions {
   state: VibeRoomSessionState
   /** 全员就绪并开局后的回调（房主/客户端都会收到 lobby_start）。 */
-  onStart: (room: VibeHubSDK.Room) => void
+  onStart: (room: VibeHubSDK.Room, details: { shuffleId: string; seatCount: number }) => void
   /** 房主关闭房间时的回调（客户端收到 lobby_closed）。 */
   onClosed: () => void
   /** 上次的会话（刷新页面重进用）；返回 null 表示无会话。 */
@@ -89,7 +89,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
         hostNickname: state.nickname.value,
         hostAvatar: state.avatar.value,
         onRoster: (seats) => { state.roomSeats.value = seats },
-        onStart: () => onStart(created),
+        onStart: (details) => onStart(created, details),
         // 对局中（phase != lobby）掉线座位锁定给 AI 代打，不能释放给新玩家。
         isInMatch: () => state.phase.value !== 'lobby',
       })
@@ -136,7 +136,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
           hostNickname: state.nickname.value,
           hostAvatar: state.avatar.value,
           onRoster: (seats) => { state.roomSeats.value = seats },
-          onStart: () => onStart(joined),
+          onStart: (details) => onStart(joined, details),
           isInMatch: () => state.phase.value !== 'lobby',
         })
         // 宣告自己是新房主（携带 mode/ruleset/max），让其他玩家能加入并读对局元数据。
@@ -164,10 +164,10 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
           // 临时诊断：定位「闲家方位是房主方位」的座位分配问题。
           console.log('[client] mySeat:', state.mySeat.value, 'joined.peerId:', joined.peerId, 'seats:', seats.map((s) => `${s.seat}:${s.peerId}`).join(' | '))
         },
-        onStart: () => onStart(joined),
+        onStart: (details) => onStart(joined, details),
         onClosed: () => onClosed(),
       })
-      clientLobby.hello(state.nickname.value, state.avatar.value)
+      clientLobby.hello(state.nickname.value, state.avatar.value, state.playerId.value)
       state.sessionStatus.value = 'connected'
     } catch (error) {
       state.sessionError.value = readableError(error, '加入房间失败')

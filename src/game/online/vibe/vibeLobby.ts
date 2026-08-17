@@ -15,9 +15,14 @@ export interface LobbySeat {
   ready: boolean
 }
 
+interface HostedSeat extends LobbySeat {
+  /** Stable application identity; never included in the public roster. */
+  playerId: string
+}
+
 // client → host
 export type ClientLobbyMessage =
-  | { type: 'lobby_hello'; nickname: string; avatar: string }
+  | { type: 'lobby_hello'; nickname: string; avatar: string; playerId?: string }
   | { type: 'lobby_ready'; ready: boolean }
   | { type: 'lobby_leave' }
   | { type: 'lobby_ping' }
@@ -25,7 +30,7 @@ export type ClientLobbyMessage =
 // host → client
 export type HostLobbyMessage =
   | { type: 'lobby_roster'; hostSeat: number; seats: LobbySeat[] }
-  | { type: 'lobby_start' }
+  | { type: 'lobby_start'; shuffleId: string; seatCount: number }
   | { type: 'lobby_closed' }
 
 export function isClientLobbyMessage(message: unknown): message is ClientLobbyMessage {
@@ -50,7 +55,7 @@ export interface HostLobbyOptions {
   /** 每次座位表变化时回调（房主自己的 UI 也用同一份座位表）。 */
   onRoster?: (seats: LobbySeat[]) => void
   /** 全员就绪并请求开局时回调。 */
-  onStart: () => void
+  onStart: (details: { shuffleId: string; seatCount: number }) => void
   /** 掉线宽限（ms）：peer 失联（SDK 只报 reconnecting、不报 leave）超过该时长仍不恢复 → 释放座位。默认 10s。 */
   staleGraceMs?: number
   /** 对局中回调：为 true 时掉线座位不释放（座位已锁定给对局、AI 代打，不能分给新玩家）。 */
@@ -64,7 +69,7 @@ export function createHostLobby({
   // 应用层心跳超时：客户端每 15s 发 lobby_ping，超过 40s 未收到对端任何消息 → 判定离开。
   const PING_TIMEOUT_MS = 40000
   // 座位 0 固定给房主；其余座位按 hello 到达顺序分配。
-  const peers = new Map<string, LobbySeat>()
+  const peers = new Map<string, HostedSeat>()
   const occupied = new Set<number>([0])
   const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
   // 应用层心跳：客户端定期发 lobby_ping（见 createClientLobby），房主记录每个对端
@@ -94,9 +99,10 @@ export function createHostLobby({
   }, 5000)
 
   function roster(): LobbySeat[] {
+    const publicPeers = [...peers.values()].map(({ playerId: _playerId, ...seat }) => seat)
     return [
       { seat: 0, peerId: room.peerId, nickname: hostNickname, avatar: hostAvatar, ready: hostReady },
-      ...[...peers.values()].sort((a, b) => a.seat - b.seat),
+      ...publicPeers.sort((a, b) => a.seat - b.seat),
     ]
   }
 
@@ -142,7 +148,7 @@ export function createHostLobby({
       staleTimers.delete(peerId)
       const seat = peers.get(peerId)
       if (!seat) return
-      const replacement = [...peers.entries()].find(([id, s]) => id !== peerId && s.nickname === seat.nickname)
+      const replacement = [...peers.entries()].find(([id, s]) => id !== peerId && s.playerId === seat.playerId)
       if (replacement) {
         peers.delete(peerId)
         peers.set(replacement[0], { ...replacement[1], seat: seat.seat })
@@ -179,33 +185,36 @@ export function createHostLobby({
     // 任何客户端消息（含心跳 lobby_ping）都刷新「最后活跃时间」。
     lastSeenMap.set(fromPeerId, Date.now())
     if (message.type === 'lobby_hello') {
+      // peerId 每次刷新都会变化，playerId 才是可用于续接座位的稳定身份。
+      // 缺失时退回当前 peerId，但绝不再按昵称继承座位，避免同名玩家抢座。
+      const playerId = message.playerId?.trim() || fromPeerId
       const existing = peers.get(fromPeerId)
       if (existing) {
         existing.nickname = message.nickname
         existing.avatar = message.avatar
+        existing.playerId = playerId
       } else {
-        // 刷新重进（peerId 变化）：优先把座位继承给同名的新身份。对局中旧身份的座位
-        // 仍占着（isInMatch 不释放），若不顶替，新 peerId 会被 nextSeat 分到别的座位，
-        // 导致 hostGameRunner 按大厅座位表恢复时对错座位（抢真人座位 / 操作对不上 /
-        // continue 屏障等错人 → 结算后卡在「已确认，等待其他玩家」）。
-        const sameName = [...peers.entries()].find(
-          ([id, s]) => id !== fromPeerId && s.nickname === message.nickname && (isInMatch() || staleTimers.has(id)),
+        // 刷新重进（peerId 变化）：只按稳定 playerId 继承旧座位；昵称是可伪造的展示字段，
+        // 不能再作为身份凭据。对局中旧身份的座位仍占着，继承后新 peerId 才能恢复原座位。
+        const sameIdentity = [...peers.entries()].find(
+          ([id, s]) => id !== fromPeerId && s.playerId === playerId && (isInMatch() || staleTimers.has(id)),
         )
-        if (sameName) {
-          clearStaleTimer(sameName[0])
-          peers.delete(sameName[0])
+        if (sameIdentity) {
+          clearStaleTimer(sameIdentity[0])
+          peers.delete(sameIdentity[0])
           peers.set(fromPeerId, {
-            seat: sameName[1].seat,
+            seat: sameIdentity[1].seat,
             peerId: fromPeerId,
             nickname: message.nickname,
             avatar: message.avatar,
             ready: false,
+            playerId,
           })
         } else {
           const seat = nextSeat()
           if (seat >= 0) {
             occupied.add(seat)
-            peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, avatar: message.avatar, ready: false })
+            peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, avatar: message.avatar, ready: false, playerId })
           }
         }
       }
@@ -232,10 +241,12 @@ export function createHostLobby({
       hostReady = ready
       broadcast()
     },
-    requestStart(): boolean {
+  requestStart(): boolean {
       if (!allReady()) return false
-      room.send({ type: 'lobby_start' } satisfies HostLobbyMessage)
-      onStart()
+      const shuffleId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      const seatCount = peers.size + 1
+      room.send({ type: 'lobby_start', shuffleId, seatCount } satisfies HostLobbyMessage)
+      onStart({ shuffleId, seatCount })
       return true
     },
     close() {
@@ -252,19 +263,20 @@ export function createHostLobby({
 export interface ClientLobbyOptions {
   room: VibeHubSDK.Room
   onRoster: (hostSeat: number, seats: LobbySeat[]) => void
-  onStart: () => void
+  onStart: (details: { shuffleId: string; seatCount: number }) => void
   onClosed: () => void
 }
 
 export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientLobbyOptions) {
   let nickname = ''
   let avatar = ''
+  let playerId = ''
   let receivedRoster = false
   let helloRetry: ReturnType<typeof setInterval> | null = null
   let pingTimer: ReturnType<typeof setInterval> | null = null
 
   function sendHello() {
-    room.send({ type: 'lobby_hello', nickname, avatar } satisfies ClientLobbyMessage)
+    room.send({ type: 'lobby_hello', nickname, avatar, playerId } satisfies ClientLobbyMessage)
   }
 
   function stopRetry() {
@@ -288,14 +300,15 @@ export function createClientLobby({ room, onRoster, onStart, onClosed }: ClientL
       receivedRoster = true
       stopRetry()
       onRoster(message.hostSeat, message.seats)
-    } else if (message.type === 'lobby_start') onStart()
+    } else if (message.type === 'lobby_start') onStart(message)
     else if (message.type === 'lobby_closed') onClosed()
   })
 
   return {
-    hello(name: string, avatarUrl = '') {
+    hello(name: string, avatarUrl = '', stablePlayerId = '') {
       nickname = name
       avatar = avatarUrl
+      playerId = stablePlayerId
       receivedRoster = false
       stopRetry()
       sendHello()

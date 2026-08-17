@@ -28,10 +28,10 @@ export function verifySnapshot(snapshot: ServerSnapshot): SnapshotViolation[] {
   range('赢家', 'BAD_WINNER', snapshot.winningPlayerIndex, -1, SEAT_MAX)
 
   // 墙一致性
-  if (snapshot.wallCount !== snapshot.wall.length) {
+  if (snapshot.wall && snapshot.wallCount !== snapshot.wall.length) {
     violations.push({ code: 'WALL_COUNT', message: `wallCount=${snapshot.wallCount} 与 wall.length=${snapshot.wall.length} 不符` })
   }
-  range('牌头已摸', 'HEAD_DRAWN', snapshot.headDrawn, 0, snapshot.wall.length)
+  range('牌头已摸', 'HEAD_DRAWN', snapshot.headDrawn, 0, snapshot.wall?.length ?? snapshot.wallCount)
 
   // 玩家数量与座位唯一性
   if (snapshot.players.length !== PLAYER_COUNT) {

@@ -44,7 +44,13 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     resetLocalPlayers(state, 2000)
   }
 
-  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void>; waitForOpeningReady?: () => Promise<void> } = {}) {
+  async function start(mode?: MatchType, startOptions: {
+    waitForTableReady?: () => Promise<void>
+    waitForOpeningReady?: () => Promise<void>
+    initialWall?: TileType[]
+    openingDice?: [number, number]
+    openingSecondDice?: [number, number]
+  } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -57,7 +63,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     const currentSequence = sequence
     resetPlayers()
     // 先立起牌山（环序 136 张），掷骰前即可看到
-    const ring = buildRingWall()
+    const ring = startOptions.initialWall
+      ? [...startOptions.initialWall]
+      : buildRingWall()
     state.wall.value = [...ring]
     state.wallHeadDrawn.value = 0
     state.result.value = null
@@ -96,7 +104,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
 
     // 第一次掷骰：定翻精方位与墩位。diceValues 会在第二次掷骰时被覆盖，
     // 必须把第一次点数单独保留，供联机 round_start 的一骰使用（对齐单人模式）。
-    const firstDice: [number, number] = [roll(), roll()]
+    const firstDice: [number, number] = startOptions.openingDice
+      ? [...startOptions.openingDice] as [number, number]
+      : [roll(), roll()]
     state.diceValues.value = firstDice
     state.firstDice.value = firstDice
     state.openingStage.value = 'dice'
@@ -119,7 +129,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 再写入第二次骰子值，确保骰子动画从一开始就显示正确的玩家。
     state.diceThrowerIndex.value = flipSeat
     // 第二次掷骰：两个骰子的点数和作为开牌依据。
-    const secondDice: [number, number] = [roll(), roll()]
+    const secondDice: [number, number] = startOptions.openingSecondDice
+      ? [...startOptions.openingSecondDice] as [number, number]
+      : [roll(), roll()]
     state.diceValues.value = secondDice
     state.secondDice.value = secondDice
     state.openingStage.value = 'dice'

@@ -307,7 +307,7 @@ describe('startHostGame 无头权威', () => {
     await vi.advanceTimersByTimeAsync(200)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
-    // 重连：peerId 变了（新标签页无 sessionStorage），但昵称相同 → 房主按昵称兜底恢复座位。
+    // 旧调用未提供大厅座位表，保留昵称兜底以兼容历史单测。
     const guestB = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000, peerId: 'guest-y' })
     const guestBJoin = guestB.room.join('FALLBACK1')
     await vi.advanceTimersByTimeAsync(200)
@@ -431,7 +431,7 @@ describe('startHostGame 无头权威', () => {
     // 客户端掉线：真实 SDK 只报 reconnecting（不报 leave）→ 立即 AI 接管（不等 18s 超时）。
     room.emitPeer({ type: 'reconnecting', id: 'old-peer' })
     expect(runner.aiControlledSeats.has(1)).toBe(true)
-    // 新 peerId 重进（昵称匹配）→ 恢复座位。此前昵称兜底只认「已 AI 接管」的座位，
+    // 新 peerId 重进（昵称匹配）→ 恢复座位。此测试不提供大厅座位表，走兼容兜底；
     // 掉线时间短（<18s）时座位未接管会恢复失败 → 座位残留 AI → continue 屏障把它
     // 当掉线过滤 → 房主无视等待直接进下一局。
     room.emit('new-peer', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })

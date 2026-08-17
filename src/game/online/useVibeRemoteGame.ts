@@ -12,10 +12,12 @@ import { defineGamePort, type GamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
 import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
+import { createWall } from '../core/rules/tiles'
 import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
 import { createPlayerSelectors } from '../core/selectors/playerSelectors'
 import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
 import type { ServerMessage } from './protocol/messages'
+import { decodeServerMessage } from './protocol/decoder'
 import { createRemoteSessionStore } from './session/remoteSessionStore'
 import { createVibeRoomSession } from './vibe/vibeRoomSession'
 import { createVibeRoomTransport } from './transport/vibeRoomTransport'
@@ -31,9 +33,11 @@ import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle
 import type { LobbySeat } from './vibe/vibeLobby'
 import { useGame } from '../core/local/useGame'
 import { useLotusGame } from '../variants/lotus/lotusGame'
-import { startHostGame } from './host/hostGameRunner'
+import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
 import { RemotePlayerController } from './host/remotePlayerController'
 import { LotusRemotePlayerController } from './host/lotusRemotePlayerController'
+import { verifySnapshot } from './antiCheat/publicStateVerifier'
+import { runCommittedShuffle } from './antiCheat/committedShuffle'
 import type { SnapshotSource } from './host/localStateToSnapshot'
 import {
   mapPlayersToLocal,
@@ -122,15 +126,32 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       phase,
     },
     loadSavedRoom: () => sessionStore.loadSession(),
-    onStart: (room) => {
+    onStart: (room, shuffleDetails) => {
+      const seatByPeer = new Map<string, number>()
+      for (const seat of lobbySeats.value) seatByPeer.set(seat.peerId, seat.seat)
+      // roster 到达与 lobby_start 的消息顺序在 SDK 层不作强保证；至少保证本端
+      // 身份在承诺协议中有明确映射，未知 peer 不得伪造其他座位。
+      if (!seatByPeer.has(room.peerId)) seatByPeer.set(room.peerId, mySeat.value)
+      const openingPromise = new Promise<HostOpeningData>((resolve, reject) => {
+        runCommittedShuffle({
+          room,
+          roundId: shuffleDetails.shuffleId,
+          seatCount: shuffleDetails.seatCount,
+          mySeat: mySeat.value,
+          seatByPeer,
+          tiles: createWall(),
+          onComplete: (initialWall, openingDice, openingSecondDice) => resolve({ initialWall, openingDice, openingSecondDice }),
+          onError: reject,
+        })
+      })
       if (!isHost.value) {
         // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
         // （房主失联检测在 watch(roomId) 加入房间时已注册——开局时才注册的话，
         // 大厅阶段房主离开没有任何检测，客户端只能干等「网络断开，正在重连」。）
         transport.open()
+        void openingPromise.catch((error) => console.warn('[client] 承诺洗牌未完成:', error))
         return
       }
-      const seatByPeer = new Map<string, number>()
       const seatNames = new Map<number, string>()
       const seatAvatars = new Map<number, string>()
       for (const seat of lobbySeats.value) {
@@ -156,6 +177,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             headless: true,
             waitForOpeningReady,
           }),
+          opening: openingPromise,
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
@@ -176,6 +198,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             headless: true,
             waitForOpeningReady,
           }),
+          opening: openingPromise,
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
           onLocalSnapshot,
           onLocalEvent,
@@ -791,8 +814,23 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     })
   }
 
-  function handleMessage(raw: unknown) {
-    // 收到房主的业务消息（快照/请求/announcement/roster）→ 房主在线，取消掉线判定。
+  function handleMessage(raw: unknown, fromPeerId?: string) {
+    const room = roomSession.getRoom()
+    // SDK Room 的消息可以来自任意 peer；客户端只信任当前房主的游戏消息。
+    // 房主自视事件通过本地调用进入，此时没有 fromPeerId。
+    if (!isHost.value && room && fromPeerId !== room.hostId) {
+      console.warn('[client] 丢弃非房主游戏消息', fromPeerId)
+      return
+    }
+    const decoded = decodeServerMessage(raw)
+    if (decoded?.kind === 'state_snapshot') {
+      const violations = verifySnapshot(decoded)
+      if (violations.length) {
+        console.warn('[client] 丢弃非法状态快照', violations)
+        return
+      }
+    }
+    // 收到可信房主的业务消息（快照/请求/announcement/roster）→ 房主在线，取消掉线判定。
     clearHostGoneTimer()
     serverMessageRouter(raw)
   }

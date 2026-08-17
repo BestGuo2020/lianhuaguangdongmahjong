@@ -37,6 +37,13 @@ describe('verifySnapshot', () => {
     expect(verifySnapshot(snapshot())).toEqual([])
   })
 
+  it('客户端收到脱敏快照时允许缺少牌墙内容，但仍校验 wallCount/headDrawn', () => {
+    expect(verifySnapshot(snapshot({ wall: undefined }))).toEqual([])
+    expect(verifySnapshot(snapshot({ wall: undefined, headDrawn: 4 }))).toEqual([
+      { code: 'HEAD_DRAWN', message: '牌头已摸 越界：4' },
+    ])
+  })
+
   it('wallCount 与 wall 长度不符 → 违规', () => {
     const violations = verifySnapshot(snapshot({ wallCount: 5 }))
     expect(violations.some((v) => v.code === 'WALL_COUNT')).toBe(true)

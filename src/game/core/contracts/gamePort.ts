@@ -193,6 +193,12 @@ export interface GamePort {
 export interface GameStartOptions {
   /** 牌桌 3D 场景就绪前暂停开局时间线。 */
   waitForTableReady?: () => Promise<void>
+  /** 联机承诺洗牌产出的牌墙；莲花麻将这里表示尚未翻精前的环序牌墙。 */
+  initialWall?: TileType[]
+  /** 广麻的一骰；莲花麻将的第一次骰点。 */
+  openingDice?: [number, number]
+  /** 莲花麻将的第二次骰点。 */
+  openingSecondDice?: [number, number]
 }
 
 type FunctionKeys<T> = {

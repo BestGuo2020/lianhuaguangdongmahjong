@@ -46,6 +46,8 @@ export interface SnapshotSource {
 export interface SnapshotContext {
   roomId: string
   rulesetId: RuleVariant
+  /** Only the local authority viewer needs the exact remaining wall order. */
+  includeWall?: boolean
 }
 
 function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
@@ -92,7 +94,7 @@ export function serializeStateToSnapshot(
     openingStack: null,
     wallBreakIndex: source.wallBreakIndex?.value ?? 0,
     wallCount: source.wall.value.length,
-    wall: [...source.wall.value],
+    ...(context.includeWall === false ? {} : { wall: [...source.wall.value] }),
     headDrawn: source.wallHeadDrawn.value,
     currentPlayer: source.currentPlayer.value,
     players: source.players.map((player, seat) => toServerPlayer(player, seat === targetSeat || reveal)),
