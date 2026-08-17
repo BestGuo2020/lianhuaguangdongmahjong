@@ -37,6 +37,13 @@ export interface TableTheme {
   woodTrim?: boolean
   /** 木纹三段颜色（canvas 程序纹理），不传用默认深棕。 */
   woodTrimColors?: [string, string, string]
+  /** 木框表面光泽参数；不传使用默认木框质感。 */
+  woodTrimMaterial?: {
+    roughness?: number
+    metalness?: number
+    clearcoat?: number
+    clearcoatRoughness?: number
+  }
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
@@ -365,10 +372,16 @@ export const majsoulTheme: TableTheme = {
   },
   plainSurface: true,
   tableFelt: true,
-  tableVignette: .5,
+  tableVignette: .25,
   woodTrim: true,
-  woodTrimColors: ['#6b4526', '#5a3a22', '#422a17'],
-  tileBackGradient: ['#e08444', '#d67a38', '#c06c2c'],
+  woodTrimColors: ['#78502b', '#62401f', '#452b17'],
+  woodTrimMaterial: {
+    roughness: .62,
+    metalness: .04,
+    clearcoat: .1,
+    clearcoatRoughness: .4,
+  },
+  tileBackGradient: ['#e5a04a', '#d58b35', '#b97127'],
   tile: {
     side: {
       color: 0xe8e8e4,
