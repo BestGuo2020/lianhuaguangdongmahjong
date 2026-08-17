@@ -640,9 +640,10 @@ function addTable() {
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   // 几何正方形：宽 = 深 = 21.8，桌身中心保持在 z=-1.65。
   // 素面主题（plainSurface）：只建桌身 + 台面两层，跳过鎏金托边/金线/饰钉。
-  // woodTrim 主题：桌身/台面随木框外扩（木框外移 1.5 个麻将 ≈ 1.4 单位，避免悬空/露底）。
-  const tableHalf = theme.woodTrim ? 12.5 : 10.9
-  const surfaceHalf = theme.woodTrim ? 11.65 : 10.52
+  // 带包边的主题：桌身/台面随边框外扩（外移约 1.5 个麻将，避免边框悬空/露底）。
+  const hasWideTrim = Boolean(theme.woodTrim || theme.edgeTrim)
+  const tableHalf = hasWideTrim ? 12.5 : 10.9
+  const surfaceHalf = hasWideTrim ? 11.65 : 10.52
   addStaticMesh(new RoundedBoxGeometry(tableHalf * 2, .54, tableHalf * 2, 3, .18), darkJade, 0, -.37, -1.65)
   addStaticMesh(new RoundedBoxGeometry(surfaceHalf * 2, .18, surfaceHalf * 2, 3, .12), jade, 0, -.02, -1.62)
   if (!theme.plainSurface) {
@@ -718,12 +719,12 @@ function addTable() {
     frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .05）
   }
 
-  // 非木质主题使用低矮硬质包边：覆盖原本桌身与台面的落差，不增加木纹和厚重外扩。
+  // 非木质主题使用与雀魂木框同宽的硬质包边：保留厚度存在感，但不使用木纹。
   if (!theme.woodTrim && theme.edgeTrim) {
-    const outerHalf = 10.9
-    const trimWidth = .38
+    const outerHalf = 12.4
+    const innerHalf = 10.8
     const outer = outerHalf * 2
-    const inner = trimWidth
+    const inner = outerHalf - innerHalf
     const trimShape = new THREE.Shape()
     trimShape.moveTo(0, 0)
     trimShape.lineTo(outer, 0)
@@ -738,8 +739,8 @@ function addTable() {
     trimHole.closePath()
     trimShape.holes.push(trimHole)
     const trimMaterial = own(new THREE.MeshPhysicalMaterial({ ...theme.edgeTrim }))
-    const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .12, bevelEnabled: false }))
-    const trim = addStaticMesh(trimGeometry, trimMaterial, -outerHalf, 0, -1.65 + outerHalf)
+    const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .17, bevelEnabled: false }))
+    const trim = addStaticMesh(trimGeometry, trimMaterial, -outerHalf, .05, -1.65 + outerHalf)
     trim.rotation.x = -Math.PI / 2
   }
 
