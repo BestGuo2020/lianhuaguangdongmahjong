@@ -64,6 +64,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
+  ready: []
   selectTile: [index: number]
   clearSelection: []
   discard: [index: number]
@@ -75,6 +76,11 @@ const emit = defineEmits<{
   hu: []
   windKong: []
 }>()
+
+function handleTableReady() {
+  tableReady.value = true
+  emit('ready')
+}
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
@@ -251,7 +257,7 @@ function onAvatarError(entry: GamePlayer) {
       :wall-break-index="wallBreakIndex"
       :flip-tile="flipTile"
       :flip-stack="flipStack"
-      @ready="tableReady = true"
+      @ready="handleTableReady"
     />
     <Transition name="table-loading">
       <div v-if="!tableReady" class="table-loading" role="status" aria-live="polite">
