@@ -50,6 +50,11 @@ export interface TableTheme {
   edgeTrimWidth?: number
   /** 非木质包边上的细金线与装饰纹样。 */
   edgeAccent?: boolean
+  /** 牌桌侧向补光；不同主题可换成相配的色温。 */
+  rimLight?: {
+    color: number
+    intensity: number
+  }
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
@@ -267,6 +272,10 @@ export const rosewoodTheme: TableTheme = {
   },
   tableVignette: .45,
   plainSurface: true,
+  rimLight: {
+    color: 0xb45b3f,
+    intensity: 1.05,
+  },
   edgeTrim: {
     color: 0x3f1d13,
     emissive: 0x140703,
@@ -541,6 +550,10 @@ export const happyMahjongTheme: TableTheme = {
   tableFelt: true,
   tableVignette: .3,
   woodTrim: false,
+  rimLight: {
+    color: 0x477a73,
+    intensity: .95,
+  },
   tileBackGradient: ['#2a9361', '#1e754c', '#105238'],
   edgeTrim: {
     color: 0x15545e,

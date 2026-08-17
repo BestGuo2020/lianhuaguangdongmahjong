@@ -242,7 +242,8 @@ onMounted(async () => {
   keyLight.shadow.camera.bottom = -18
   scene.add(keyLight)
   shadowLight = keyLight
-  const rimLight = new THREE.DirectionalLight(0x3acb8b, 1.6)
+  const activeTheme = tableThemeByName(props.themeName ?? new URLSearchParams(window.location.search).get('theme'))
+  const rimLight = new THREE.DirectionalLight(activeTheme?.rimLight?.color ?? 0x3acb8b, activeTheme?.rimLight?.intensity ?? 1.6)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
   // 移除了 goldFill（点光源，每片元开销最大）与 tileHighlight（与 keyLight 同向的微弱重复）。
