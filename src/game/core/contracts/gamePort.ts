@@ -185,7 +185,7 @@ export interface GamePort {
   userHu(): void
   /** 莲花麻将：从吃候选中选择第 chiIndex 组吃面子（现行玩法为 no-op）。 */
   /** 莲花麻将：暗杠（乱风杠）东南西北各 1 张（现行玩法为 no-op）。 */
-  nextRound(): void
+  nextRound(options?: GameStartOptions): void
   returnToLobby(): void
   tileName(tile: TileType): string
 }

@@ -10,6 +10,14 @@ import type { TileType } from '../../core/contracts/types'
 
 export interface ShuffleCommitMessage { type: 'shuffle_commit'; roundId: string; seat: number; commitment: string }
 export interface ShuffleRevealMessage { type: 'shuffle_reveal'; roundId: string; seat: number; seed: string }
+export interface ShuffleStartMessage {
+  type: 'round_shuffle_start'
+  round: number
+  roundId: string
+  /** 本轮实际参与承诺的座位；掉线并已由 AI 接管的座位不在其中。 */
+  seats: number[]
+  seatCount: number
+}
 
 function isCommit(message: unknown): message is ShuffleCommitMessage {
   return typeof message === 'object' && message !== null
@@ -127,6 +135,7 @@ export function runCommittedShuffle(options: CommittedShuffleOptions): void {
   let finished = false
 
   const expectedSeats = new Set([...seatByPeer.values()])
+  const participantCount = expectedSeats.size
 
   function validSeat(seat: number): boolean {
     return Number.isInteger(seat) && seat >= 0 && seat < seatCount && expectedSeats.has(seat)
@@ -140,14 +149,14 @@ export function runCommittedShuffle(options: CommittedShuffleOptions): void {
   }
 
   function checkCommitPhase() {
-    if (commitments.size < seatCount || revealed || finished) return
+    if (commitments.size < participantCount || revealed || finished) return
     revealed = true
     room.send({ type: 'shuffle_reveal', roundId, seat: mySeat, seed: seeds.get(mySeat) ?? '' } satisfies ShuffleRevealMessage)
     checkRevealPhase()
   }
 
   async function checkRevealPhase() {
-    if (seeds.size < seatCount || finished) return
+    if (seeds.size < participantCount || finished) return
     // 校验所有承诺
     const entries = [...commitments.entries()].sort((a, b) => a[0] - b[0])
     for (const [seat, commitment] of entries) {

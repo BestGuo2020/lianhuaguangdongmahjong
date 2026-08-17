@@ -13,6 +13,7 @@ import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
 import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
 import { createWall } from '../core/rules/tiles'
+import { advanceMatchState } from '../core/local/matchProgress'
 import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
 import { createPlayerSelectors } from '../core/selectors/playerSelectors'
 import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
@@ -37,7 +38,7 @@ import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
 import { RemotePlayerController } from './host/remotePlayerController'
 import { LotusRemotePlayerController } from './host/lotusRemotePlayerController'
 import { verifySnapshot } from './antiCheat/publicStateVerifier'
-import { runCommittedShuffle } from './antiCheat/committedShuffle'
+import { runCommittedShuffle, type ShuffleStartMessage } from './antiCheat/committedShuffle'
 import type { SnapshotSource } from './host/localStateToSnapshot'
 import {
   mapPlayersToLocal,
@@ -70,6 +71,16 @@ function sendToEngine(game: GamePort, message: RemotePlayerActionMessage) {
       game.userHu()
       return
   }
+}
+
+function isShuffleStartMessage(message: unknown): message is ShuffleStartMessage {
+  return typeof message === 'object' && message !== null
+    && (message as { type?: unknown }).type === 'round_shuffle_start'
+    && Number.isInteger((message as { round?: unknown }).round)
+    && typeof (message as { roundId?: unknown }).roundId === 'string'
+    && Array.isArray((message as { seats?: unknown }).seats)
+    && (message as { seats: unknown[] }).seats.every((seat) => Number.isInteger(seat))
+    && Number.isInteger((message as { seatCount?: unknown }).seatCount)
 }
 
 /** 仍需等待「下一局确认」的远端 peer：排除已被 AI 接管（掉线）的座位——
@@ -118,6 +129,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     markLocalOpeningReady(round: number): void
     enableAIForSeat(seat: number): boolean
   } | null>(null)
+  let handleRoundShuffleStart: (room: VibeHubSDK.Room, message: ShuffleStartMessage, fromPeerId: string) => void = () => {}
 
   const roomSession = createVibeRoomSession({
     state: {
@@ -132,18 +144,40 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // roster 到达与 lobby_start 的消息顺序在 SDK 层不作强保证；至少保证本端
       // 身份在承诺协议中有明确映射，未知 peer 不得伪造其他座位。
       if (!seatByPeer.has(room.peerId)) seatByPeer.set(room.peerId, mySeat.value)
-      const openingPromise = new Promise<HostOpeningData>((resolve, reject) => {
-        runCommittedShuffle({
-          room,
-          roundId: shuffleDetails.shuffleId,
-          seatCount: shuffleDetails.seatCount,
-          mySeat: mySeat.value,
-          seatByPeer,
-          tiles: createWall(),
-          onComplete: (initialWall, openingDice, openingSecondDice) => resolve({ initialWall, openingDice, openingSecondDice }),
-          onError: reject,
+      function createShufflePromise(currentRoom: VibeHubSDK.Room, roundId: string, participants: Map<string, number>, seatCount: number) {
+        return new Promise<HostOpeningData>((resolve, reject) => {
+          runCommittedShuffle({
+            room: currentRoom,
+            roundId,
+            seatCount,
+            mySeat: mySeat.value,
+            seatByPeer: participants,
+            tiles: createWall(),
+            onComplete: (initialWall, openingDice, openingSecondDice) => resolve({ initialWall, openingDice, openingSecondDice }),
+            onError: reject,
+          })
         })
-      })
+      }
+      const openingPromise = createShufflePromise(room, shuffleDetails.shuffleId, seatByPeer, shuffleDetails.seatCount)
+      const consumedRoundShuffleIds = new Set<string>()
+      // 后续局由房主先广播参与座位和令牌；客户端只接受真正来自 SDK hostId 的
+      // 消息，并参与承诺/揭晓，不在本地创建权威引擎。
+      handleRoundShuffleStart = (currentRoom, message, fromPeerId) => {
+        if (isHost.value || fromPeerId !== currentRoom.hostId) return
+        if (message.round <= round.value || message.seatCount < 1 || message.seats.length < 1) return
+        if (consumedRoundShuffleIds.has(message.roundId)) return
+        if (!message.seats.includes(mySeat.value)) return
+        consumedRoundShuffleIds.add(message.roundId)
+        const expectedSeats = new Set(message.seats)
+        const participants = new Map(
+          lobbySeats.value
+            .filter((seat) => expectedSeats.has(seat.seat))
+            .map((seat) => [seat.peerId, seat.seat] as [string, number]),
+        )
+        if (!participants.has(currentRoom.peerId)) participants.set(currentRoom.peerId, mySeat.value)
+        void createShufflePromise(currentRoom, message.roundId, participants, message.seatCount)
+          .catch((error) => console.warn('[client] 后续局承诺洗牌未完成:', error))
+      }
       if (!isHost.value) {
         // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
         // （房主失联检测在 watch(roomId) 加入房间时已注册——开局时才注册的话，
@@ -216,6 +250,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // 座位不再要求确认（否则永远等不到，卡在「已确认，等待其他玩家」）。
       const continueReady = new Set<string>()
       let hostReadyNext = false
+      let advancingRound = false
       let continueSafety: ReturnType<typeof setTimeout> | null = null
       function clearContinueSafety() {
         if (continueSafety != null) { window.clearTimeout(continueSafety); continueSafety = null }
@@ -230,11 +265,53 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         const livePeers = liveContinuePeers(liveSeats, aiSeats)
         // 临时诊断：定位「已确认，等待其他玩家」卡死——打印在等谁、谁已确认。
         console.log('[host] continue: ready=', hostReadyNext, 'live=', livePeers.join(','), 'confirmed=', [...continueReady].join(','), 'ai=', [...aiSeats].join(','))
-        if (hostReadyNext && livePeers.every((peerId) => continueReady.has(peerId))) {
+        if (hostReadyNext && !advancingRound && livePeers.every((peerId) => continueReady.has(peerId))) {
           hostReadyNext = false
           continueReady.clear()
           clearContinueSafety()
-          hostGame.value?.game.nextRound()
+          const currentGame = hostGame.value?.game
+          const result = currentGame?.result.value
+          if (!currentGame || !result || currentGame.matchFinished.value) return
+          const next = advanceMatchState({
+            round: currentGame.round.value,
+            dealer: currentGame.dealer.value,
+            honba: currentGame.honba.value,
+            matchType: currentGame.matchType.value,
+            result,
+            playerCount: currentGame.players.length,
+          })
+          // 最后一局无需再洗牌，沿用原有结算推进逻辑直接进入 finished。
+          if (next.finished) {
+            currentGame.nextRound()
+            return
+          }
+          const liveParticipants = new Map<string, number>([[room.peerId, 0]])
+          for (const [peerId, seat] of (hostGame.value?.getLivePeerSeats() ?? new Map())) {
+            if (!hostGame.value?.aiControlledSeats.has(seat)) liveParticipants.set(peerId, seat)
+          }
+          const participantSeats = [...liveParticipants.values()].sort((a, b) => a - b)
+          if (!participantSeats.includes(0)) participantSeats.unshift(0)
+          const roundId = `${room.roomId}:round:${next.round}:${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+          const shuffleStart: ShuffleStartMessage = {
+            type: 'round_shuffle_start',
+            round: next.round,
+            roundId,
+            seats: participantSeats,
+            seatCount: 4,
+          }
+          advancingRound = true
+          room.send(shuffleStart)
+          void createShufflePromise(room, roundId, liveParticipants, shuffleStart.seatCount)
+            .then((opening) => {
+              if (hostGame.value?.game !== currentGame) return
+              advancingRound = false
+              currentGame.nextRound(opening)
+            })
+            .catch((error) => {
+              advancingRound = false
+              console.error('[host] 后续局承诺洗牌失败，暂停推进:', error)
+              transientEventPresenter.announce('本局洗牌校验失败，暂不进入下一局', 'red')
+            })
         }
       }
       // 等待确认期间有人被 AI 接管（掉线超时）→ 立即重新评估屏障，不能干等。
@@ -816,6 +893,10 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   function handleMessage(raw: unknown, fromPeerId?: string) {
     const room = roomSession.getRoom()
+    if (isShuffleStartMessage(raw)) {
+      if (room && fromPeerId) handleRoundShuffleStart(room, raw, fromPeerId)
+      return
+    }
     // SDK Room 的消息可以来自任意 peer；客户端只信任当前房主的游戏消息。
     // 房主自视事件通过本地调用进入，此时没有 fromPeerId。
     if (!isHost.value && room && fromPeerId !== room.hostId) {

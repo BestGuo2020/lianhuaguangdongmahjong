@@ -1,4 +1,4 @@
-import type { GamePhase, RefLike, RoundResult, WinEffect } from '../../core/contracts/gamePort'
+import type { GamePhase, GameStartOptions, RefLike, RoundResult, WinEffect } from '../../core/contracts/gamePort'
 import type { GamePlayer, MatchType, WinPresentation } from '../../core/contracts/types'
 import { advanceMatchState } from '../../core/local/matchProgress'
 
@@ -20,13 +20,13 @@ interface MatchLifecycleState {
 interface MatchLifecycleOptions {
   state: MatchLifecycleState
   clearTimers(): void
-  startGame(mode?: MatchType): unknown
+  startGame(mode?: MatchType, options?: GameStartOptions): unknown
 }
 
 export function createMatchLifecycle(options: MatchLifecycleOptions) {
   const { state } = options
 
-  function nextRound() {
+  function nextRound(startOptions?: GameStartOptions) {
     if (!state.result.value || state.matchFinished.value) return
     const next = advanceMatchState({
       round: state.round.value,
@@ -44,7 +44,7 @@ export function createMatchLifecycle(options: MatchLifecycleOptions) {
       state.phase.value = 'finished'
       return
     }
-    options.startGame()
+    options.startGame(undefined, startOptions)
   }
 
   function returnToLobby() {
