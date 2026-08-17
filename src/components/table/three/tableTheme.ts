@@ -132,6 +132,7 @@ export const defaultTableTheme: TableTheme = {
     },
   },
   tableVignette: .35,
+  plainSurface: true,
   edgeTrim: {
     color: 0x163a2c,
     emissive: 0x071a13,
@@ -141,6 +142,7 @@ export const defaultTableTheme: TableTheme = {
     clearcoat: .2,
     clearcoatRoughness: .36,
   },
+  edgeAccent: true,
   tile: {
     side: {
       color: 0xc9c9c1,
@@ -264,6 +266,18 @@ export const rosewoodTheme: TableTheme = {
     },
   },
   tableVignette: .45,
+  plainSurface: true,
+  edgeTrim: {
+    color: 0x3f1d13,
+    emissive: 0x140703,
+    emissiveIntensity: .08,
+    roughness: .52,
+    metalness: .06,
+    clearcoat: .2,
+    clearcoatRoughness: .36,
+  },
+  edgeTrimWidth: .65,
+  edgeAccent: true,
   tile: {
     side: {
       color: 0xcfc9bd,
