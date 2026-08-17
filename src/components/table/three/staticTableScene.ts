@@ -639,8 +639,11 @@ function addTable() {
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   // 几何正方形：宽 = 深 = 21.8，桌身中心保持在 z=-1.65。
   // 素面主题（plainSurface）：只建桌身 + 台面两层，跳过鎏金托边/金线/饰钉。
-  addStaticMesh(new RoundedBoxGeometry(21.8, .54, 21.8, 3, .18), darkJade, 0, -.37, -1.65)
-  addStaticMesh(new RoundedBoxGeometry(21.04, .18, 21.04, 3, .12), jade, 0, -.02, -1.62)
+  // woodTrim 主题：桌身/台面随木框外扩（木框外移 1.5 个麻将 ≈ 1.4 单位，避免悬空/露底）。
+  const tableHalf = theme.woodTrim ? 12.5 : 10.9
+  const surfaceHalf = theme.woodTrim ? 11.65 : 10.52
+  addStaticMesh(new RoundedBoxGeometry(tableHalf * 2, .54, tableHalf * 2, 3, .18), darkJade, 0, -.37, -1.65)
+  addStaticMesh(new RoundedBoxGeometry(surfaceHalf * 2, .18, surfaceHalf * 2, 3, .12), jade, 0, -.02, -1.62)
   if (!theme.plainSurface) {
     addStaticMesh(new RoundedBoxGeometry(21.46, .22, 21.46, 3, .13), gold, 0, -.14, -1.65)
 
@@ -684,10 +687,12 @@ function addTable() {
       clearcoat: .25,
       clearcoatRoughness: .35,
     }))
-    const outer = 22
-    const inner = 20.4
-    // ⚠️ shape 必须建在第一象限（0..22）：ExtrudeGeometry 顶面 UV 按 shape 坐标/包围盒生成，
-    // 若中心在原点（-11..11）则 UV 为 -0.5..0.5，ClampToEdge 下纹理只剩 1/4 象限 + 边缘拉伸（伪重复）。
+    // 木框相对台面外移 1.5 个麻将（1.5 × 牌长 .94 ≈ 1.4）：内沿 10.2→11.6、外沿 11.0→12.4（条宽 .8 不变）。
+    // 台面/桌身已随之外扩（surfaceHalf 11.65 / tableHalf 12.5），框不悬空、绒布无露底。
+    const outer = 24.8
+    const inner = 23.2
+    // ⚠️ shape 必须建在第一象限（0..24.8）：ExtrudeGeometry 顶面 UV 按 shape 坐标/包围盒生成，
+    // 若中心在原点则 UV 为 -0.5..0.5，ClampToEdge 下纹理只剩 1/4 象限 + 边缘拉伸（伪重复）。
     const shape = new THREE.Shape()
     shape.moveTo(0, 0)
     shape.lineTo(outer, 0)
@@ -703,8 +708,8 @@ function addTable() {
     shape.holes.push(hole)
     const frameGeometry = own(new THREE.ExtrudeGeometry(shape, { depth: .16, bevelEnabled: false }))
     // ExtrudeGeometry 材质组顺序：[0]=侧面, [1]=顶面, [2]=底面
-    // 位置补偿：shape 中心 (11,11) → 世界 (0, 桌心 z=-1.65)；深度 .16 旋转后 y 0..0.16 → 中心 .08 → pos.y=.06（顶 .22）
-    const frame = addStaticMesh(frameGeometry, [woodSide, woodTop, woodSide], -11, .06, 9.35)
+    // 位置补偿：shape 中心 (12.4,12.4) → 世界 (0, 桌心 z=-1.65)；深度 .16 旋转后 y 0..0.16 → 中心 .08 → pos.y=.06（顶 .22）
+    const frame = addStaticMesh(frameGeometry, [woodSide, woodTop, woodSide], -12.4, .06, 10.75)
     frame.rotation.x = -Math.PI / 2 // XY 平面挤出 → 水平放置，挤出方向朝上（顶 .22、底 .06）
   }
 
