@@ -112,6 +112,9 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     send: roomSocket.send,
     onFinished: applyBufferedAfterOpening,
     waitForTableReady,
+    // 生产 UI 同时提供牌桌 ready 握手时，才启用快照门闸；保留无 UI 测试/工具调用
+    // 的旧表现，避免没有牌桌生命周期时开局时间线无人释放。
+    waitForOpeningSnapshot: Boolean(waitForTableReady),
   })
   const snapshotReconciler = createSnapshotReconciler({
     state,
