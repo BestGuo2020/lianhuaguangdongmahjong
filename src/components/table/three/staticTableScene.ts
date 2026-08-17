@@ -692,7 +692,7 @@ function addTable() {
       clearcoatRoughness: .35,
       ...woodFinish,
     }))
-    // 木框相对台面外移 1.5 个麻将（1.5 × 牌长 .94 ≈ 1.4）：内沿 10.2→11.6、外沿 11.0→12.4（条宽 .8 不变）。
+    // 木框保持原有宽度，避免影响雀魂主题的牌墙空间。
     // 台面/桌身已随之外扩（surfaceHalf 11.65 / tableHalf 12.5），框不悬空、绒布无露底。
     const outer = 24.8
     const inner = 23.2
@@ -757,12 +757,12 @@ function addTable() {
       const accentOffset = 11.98
       const accentLength = 23.1
       const accentY = .25
-      addStaticMesh(new THREE.BoxGeometry(accentLength, .045, .055), accentMaterial, 0, accentY, -1.65 - accentOffset)
-      addStaticMesh(new THREE.BoxGeometry(accentLength, .045, .055), accentMaterial, 0, accentY, -1.65 + accentOffset)
-      addStaticMesh(new THREE.BoxGeometry(.055, .045, accentLength), accentMaterial, -accentOffset, accentY, -1.65)
-      addStaticMesh(new THREE.BoxGeometry(.055, .045, accentLength), accentMaterial, accentOffset, accentY, -1.65)
+      addStaticMesh(new THREE.BoxGeometry(accentLength, .06, .09), accentMaterial, 0, accentY, -1.65 - accentOffset)
+      addStaticMesh(new THREE.BoxGeometry(accentLength, .06, .09), accentMaterial, 0, accentY, -1.65 + accentOffset)
+      addStaticMesh(new THREE.BoxGeometry(.09, .06, accentLength), accentMaterial, -accentOffset, accentY, -1.65)
+      addStaticMesh(new THREE.BoxGeometry(.09, .06, accentLength), accentMaterial, accentOffset, accentY, -1.65)
 
-      const ornamentGeometry = new THREE.TorusGeometry(.16, .026, 8, 18, Math.PI * 1.6)
+      const ornamentGeometry = new THREE.TorusGeometry(.18, .035, 8, 18, Math.PI * 1.6)
       ;[[-accentOffset, -1.65, Math.PI / 2], [accentOffset, -1.65, -Math.PI / 2], [0, -1.65 - accentOffset, 0], [0, -1.65 + accentOffset, Math.PI]].forEach(([x, z, rotation]) => {
         const ornament = addStaticMesh(ornamentGeometry.clone(), accentMaterial, x, accentY + .025, z)
         ornament.rotation.x = Math.PI / 2
