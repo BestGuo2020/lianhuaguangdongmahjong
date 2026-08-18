@@ -25,9 +25,11 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
 function setup() {
   const state = createRemoteGameState({ autoPlay: false })
   let opening = false
+  let waitingForOpeningSnapshot = false
   let showingResult = false
   const captureSnapshot = vi.fn()
   const settlement = { start: vi.fn(), cancel: vi.fn() }
+  const openingCancel = vi.fn()
   const playSound = vi.fn()
   const onFinishedSnapshot = vi.fn()
   const scheduled: Array<() => void> = []
@@ -35,7 +37,12 @@ function setup() {
     state,
     getLocalSeat: () => 2,
     isShowingRoundResult: () => showingResult,
-    opening: { isRunning: () => opening, captureSnapshot },
+    opening: {
+      isRunning: () => opening,
+      isWaitingForSnapshot: () => waitingForOpeningSnapshot,
+      captureSnapshot,
+      cancel: openingCancel,
+    },
     settlement,
     clearCountdown: vi.fn(),
     onFinishedSnapshot,
@@ -43,8 +50,9 @@ function setup() {
     later: (callback) => { scheduled.push(callback) },
   })
   return {
-    state, reconciler, captureSnapshot, settlement, playSound, onFinishedSnapshot,
+    state, reconciler, captureSnapshot, openingCancel, settlement, playSound, onFinishedSnapshot,
     setOpening: (value: boolean) => { opening = value },
+    setWaitingForOpeningSnapshot: (value: boolean) => { waitingForOpeningSnapshot = value },
     setShowingResult: (value: boolean) => { showingResult = value },
   }
 }
@@ -82,6 +90,17 @@ describe('snapshotReconciler', () => {
 
     reconciler.applyNow(incoming)
     expect(playSound.mock.calls.filter(([name]) => name === 'dapai.mp3')).toHaveLength(1)
+  })
+
+  it('远端快照省略 wall 时按 wallCount 保留牌山占位，重连后牌山不消失', () => {
+    const { state, reconciler } = setup()
+
+    reconciler.applyNow(snapshot({ wall: undefined, wallCount: 81, headDrawn: 53 }))
+
+    expect(state.wall.value).toHaveLength(81)
+    expect(state.wall.value.every((tile) => tile === 'm1')).toBe(true)
+    expect(state.wallCount.value).toBe(81)
+    expect(state.wallHeadDrawn.value).toBe(53)
   })
 
   it('结算展示期间只保留最新快照', () => {
@@ -161,5 +180,163 @@ describe('snapshotReconciler', () => {
     expect(state.players).toHaveLength(1)
     expect(state.matchFinished.value).toBe(true)
     expect(state.phase.value).toBe('finished')
+  })
+
+  it('当前房间的完整非终局快照可清理旧连接残留的最终结算状态', () => {
+    const { state, reconciler } = setup()
+    state.matchFinished.value = true
+    state.phase.value = 'finished'
+    state.revealHands.value = true
+
+    reconciler.applyNow(snapshot({ phase: 'drawing', round: 2, matchFinished: false }))
+
+    expect(state.matchFinished.value).toBe(false)
+    expect(state.phase.value).toBe('playing')
+    expect(state.revealHands.value).toBe(false)
+    expect(state.round.value).toBe(2)
+  })
+
+  it('房主代次变化时重置事件去重游标，允许新生命周期的首个弃牌提示', () => {
+    const { state, reconciler, playSound } = setup()
+    const first = snapshot({
+      authorityEpoch: 'old', sequence: 1,
+      lastDiscard: { tile: 'm5', from: 0, id: 1 },
+    })
+    reconciler.applyNow(first)
+    playSound.mockClear()
+
+    reconciler.setAuthorityEpoch('new')
+    const next = snapshot({
+      authorityEpoch: 'new', sequence: 1,
+      lastDiscard: { tile: 'm5', from: 0, id: 1 },
+    })
+    reconciler.applyNow(next)
+
+    expect(state.lastDiscard.value?.id).toBe(1)
+    expect(playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
+  })
+
+  it('新的非结算房主快照会取消上一局的结算动画，旧定时器不能复活结算页', () => {
+    const { reconciler, settlement } = setup()
+    const settled = snapshot({
+      phase: 'settled',
+      result: {
+        winnerIndex: 2, winner: 'P2', roundLabel: '东1局', honba: 0,
+        horses: [], hits: 0, multiplier: 1, totalMultiplier: 1,
+        points: 100, totalWon: 300, details: [], scoreChanges: [],
+      },
+    })
+    reconciler.applyNow(settled)
+    settlement.cancel.mockClear()
+
+    reconciler.applyNow(snapshot({ phase: 'drawing', round: 2 }))
+
+    expect(settlement.cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('开局动画未完成但房主已进入更后轮次时，最新快照取消旧动画并直接收敛', () => {
+    const { state, reconciler, openingCancel, setOpening } = setup()
+    setOpening(true)
+    expect(reconciler.apply(snapshot({ round: 2, phase: 'drawing' }))).toBe(true)
+
+    expect(openingCancel).toHaveBeenCalledOnce()
+    expect(state.round.value).toBe(2)
+  })
+
+  it('round_start 先到时，先用同轮权威快照配对，不能把它误判成未来轮次', () => {
+    const { state, reconciler, captureSnapshot, openingCancel, setOpening, setWaitingForOpeningSnapshot } = setup()
+    setOpening(true)
+    setWaitingForOpeningSnapshot(true)
+
+    const incoming = snapshot({ round: 2, phase: 'opening', sequence: 2, authorityEpoch: 'epoch-1' })
+    expect(reconciler.apply(incoming)).toBe(false)
+    expect(captureSnapshot).toHaveBeenCalledWith(incoming)
+    expect(openingCancel).not.toHaveBeenCalled()
+    expect(state.round.value).toBe(1)
+  })
+
+  it('开局快照先到时先暂存，不能跳过随后到达的客户端开局动画', () => {
+    const { state, reconciler, setOpening } = setup()
+    const openingSnapshot = snapshot({
+      phase: 'opening', round: 2, sequence: 2, authorityEpoch: 'epoch-1',
+    })
+
+    expect(reconciler.apply(openingSnapshot)).toBe(false)
+    expect(state.round.value).toBe(2)
+    expect(state.phase.value).toBe('dealing')
+    expect(state.players).toHaveLength(4)
+
+    // 模拟 round_start 已启动动画；动画完成后的 flush 才允许快照落地。
+    setOpening(true)
+    expect(reconciler.flush()).toEqual(openingSnapshot)
+    expect(state.round.value).toBe(2)
+    expect(state.phase.value).toBe('playing')
+    expect(state.players).toHaveLength(4)
+  })
+
+  it('dealing 快照在开局前到达时只缓存不落地（避免跳过开局动画）', () => {
+    // 房主引擎 headless 开局时，摸牌进度 watcher 会在 round_start 之前广播
+    // 带完整手牌的 dealing 快照；若立即落地，handleRoundStart 会误判「本局已
+    // 渲染」并跳过 start/dice/deal 动画（四端都看不到开局提示层）。
+    const { state, reconciler, setOpening } = setup()
+    const dealingSnapshot = snapshot({
+      phase: 'dealing', round: 1, sequence: 1, authorityEpoch: 'epoch-1',
+    })
+
+    // 开局时间线未运行：dealing 快照只缓存，不预渲染完整手牌/回合状态。
+    expect(reconciler.apply(dealingSnapshot)).toBe(false)
+    expect(state.players).toHaveLength(0)
+    expect(state.phase.value).toBe('lobby')
+
+    // 开局动画结束后 flush 才落地缓存的最新快照。
+    setOpening(true)
+    expect(reconciler.flush()).toEqual(dealingSnapshot)
+    expect(state.players).toHaveLength(4)
+    expect(state.phase.value).toBe('playing')
+  })
+
+  it('同一房主代次拒绝倒序快照，旧终局不能覆盖当前状态', () => {
+    const { state, reconciler } = setup()
+    const finished = snapshot({ authorityEpoch: 'epoch-1', sequence: 20, phase: 'finished', matchFinished: true })
+    const stalePlaying = snapshot({ authorityEpoch: 'epoch-1', sequence: 19, phase: 'drawing', matchFinished: false })
+
+    expect(reconciler.applyNow(finished)).toBe(true)
+    expect(reconciler.applyNow(stalePlaying)).toBe(false)
+    expect(state.matchFinished.value).toBe(true)
+    expect(state.phase.value).toBe('finished')
+  })
+
+  it('拒绝零序号快照，生产房主序列从 1 开始', () => {
+    const { state, reconciler } = setup()
+    expect(reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 0 }))).toBe(false)
+    expect(state.players).toHaveLength(0)
+  })
+
+  it('不完整的终局标志不会切入最终排名页', () => {
+    const { state, reconciler, onFinishedSnapshot } = setup()
+
+    expect(reconciler.applyNow(snapshot({ phase: 'finished', matchFinished: false }))).toBe(true)
+    expect(state.matchFinished.value).toBe(false)
+    expect(state.phase.value).toBe('playing')
+    expect(onFinishedSnapshot).not.toHaveBeenCalled()
+
+    expect(reconciler.applyNow(snapshot({ phase: 'drawing', matchFinished: true }))).toBe(true)
+    expect(state.matchFinished.value).toBe(false)
+    expect(state.phase.value).toBe('playing')
+    expect(onFinishedSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('结算期间缓存快照也按序号单调收敛，迟到旧包不能覆盖较新的下一局', () => {
+    const { state, reconciler, setShowingResult } = setup()
+    setShowingResult(true)
+
+    expect(reconciler.apply(snapshot({ authorityEpoch: 'epoch-1', sequence: 20, round: 2 }))).toBe(false)
+    expect(reconciler.apply(snapshot({ authorityEpoch: 'epoch-1', sequence: 22, round: 3 }))).toBe(false)
+    expect(reconciler.apply(snapshot({ authorityEpoch: 'epoch-1', sequence: 21, round: 2, phase: 'finished', matchFinished: true }))).toBe(false)
+
+    setShowingResult(false)
+    expect(reconciler.flush()).toMatchObject({ sequence: 22, round: 3 })
+    expect(state.round.value).toBe(3)
+    expect(state.matchFinished.value).toBe(false)
   })
 })

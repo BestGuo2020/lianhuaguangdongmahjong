@@ -82,4 +82,19 @@ describe('vibeRoomSession', () => {
     await session.joinRoom('HOSTED1')
     expect(state.isHost.value).toBe(false)
   })
+
+  it('旧会话重进时若 SDK 把客户端提升为 host，则安全拒绝无状态接管', async () => {
+    const state = makeState()
+    const session = createVibeRoomSession({
+      state,
+      onStart: () => {},
+      onClosed: () => {},
+      loadSavedRoom: () => ({ roomId: 'STALE_HOST1', nickname: '测试玩家' }),
+    })
+
+    await expect(session.joinRoom('STALE_HOST1')).rejects.toThrow('未创建新的房主状态')
+    expect(state.isHost.value).toBe(false)
+    expect(state.mySeat.value).toBe(-1)
+    expect(state.roomId.value).toBe('')
+  })
 })

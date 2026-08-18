@@ -6,6 +6,8 @@ export interface StoredSession {
   rejoinCode: string
   nickname: string
   playerId: string
+  /** 房主签发的座位续接凭据；不广播到公开 roster。 */
+  seatToken?: string
   mode: MatchType
   rulesetId?: RuleVariant
   /** 保存时间戳（ms）：超过有效期（对局早已散场、房间大概率不存在）则不再自动重进。 */
@@ -20,6 +22,11 @@ export interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
+}
+
+export interface RemoteSessionStoreOptions {
+  /** 开发环境多标签 Mock 测试用的键前缀；生产环境不传。 */
+  namespace?: string
 }
 
 export const REMOTE_STORAGE_KEYS = {
@@ -47,10 +54,13 @@ export function generateGuestId(
 
 export function createRemoteSessionStore(
   getStorage: () => StorageLike | null = browserStorage,
+  options: RemoteSessionStoreOptions = {},
 ) {
+  const storageKey = (key: string) => options.namespace ? `${options.namespace}:${key}` : key
+
   function read(key: string): string | null {
     try {
-      return getStorage()?.getItem(key) ?? null
+      return getStorage()?.getItem(storageKey(key)) ?? null
     } catch {
       return null
     }
@@ -58,7 +68,7 @@ export function createRemoteSessionStore(
 
   function write(key: string, value: string): void {
     try {
-      getStorage()?.setItem(key, value)
+      getStorage()?.setItem(storageKey(key), value)
     } catch {
       // 隐私模式或存储配额异常时降级为当前页面会话。
     }
@@ -66,7 +76,7 @@ export function createRemoteSessionStore(
 
   function remove(key: string): void {
     try {
-      getStorage()?.removeItem(key)
+      getStorage()?.removeItem(storageKey(key))
     } catch {
       // 无法访问存储不应阻断退出房间。
     }
@@ -97,6 +107,7 @@ export function createRemoteSessionStore(
           rejoinCode: session.rejoinCode,
           nickname: session.nickname ?? '',
           playerId: session.playerId ?? '',
+          ...(typeof session.seatToken === 'string' ? { seatToken: session.seatToken } : {}),
           mode: session.mode,
           rulesetId,
           savedAt: session.savedAt,
@@ -106,7 +117,34 @@ export function createRemoteSessionStore(
       }
     },
     saveSession(session: StoredSession): void {
-      write(REMOTE_STORAGE_KEYS.session, JSON.stringify({ ...session, savedAt: Date.now() }))
+      // 房主 token 可能在 roster 之后异步到达；后续 room/mode watcher 写会话时
+      // 必须保留已有 token，否则刷新重进会退化成“只靠 playerId 抢座”。
+      let existingToken: string | undefined
+      try {
+        const existing = JSON.parse(read(REMOTE_STORAGE_KEYS.session) ?? 'null') as {
+          roomId?: unknown
+          playerId?: unknown
+          seatToken?: unknown
+        } | null
+        if (
+          existing?.roomId === session.roomId
+          && existing?.playerId === session.playerId
+          && typeof existing.seatToken === 'string'
+        ) existingToken = existing.seatToken
+      } catch {
+        // Ignore malformed previous session; the new session replaces it.
+      }
+      write(REMOTE_STORAGE_KEYS.session, JSON.stringify({
+        ...session,
+        ...(session.seatToken || !existingToken ? {} : { seatToken: existingToken }),
+        savedAt: Date.now(),
+      }))
+    },
+    saveSeatToken(seatToken: string): void {
+      if (!seatToken) return
+      const session = this.loadSession()
+      if (!session) return
+      this.saveSession({ ...session, seatToken })
     },
     clearSession(): void {
       remove(REMOTE_STORAGE_KEYS.session)

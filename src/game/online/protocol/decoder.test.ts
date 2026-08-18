@@ -3,7 +3,7 @@ import { decodeServerMessage } from './decoder'
 
 describe('decodeServerMessage', () => {
   it('accepts a structurally valid protocol message', () => {
-    const message = { kind: 'announcement', text: '杠', tone: 'gold', id: 7 }
+    const message = { kind: 'announcement', authorityEpoch: 'epoch-1', round: 1, text: '杠', tone: 'gold', id: 7 }
     expect(decodeServerMessage(message)).toBe(message)
   })
 
@@ -13,15 +13,35 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ kind: 'hand_result', result: { winTile: 'm10' } })).toBeNull()
   })
 
+  it('拒绝缺少房主代次/序号的可改变牌局语义的消息', () => {
+    const roundStart = {
+      kind: 'round_start', matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5],
+    }
+    const announcement = { kind: 'announcement', text: '碰', tone: 'gold', id: 1 }
+    const snapshot = {
+      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'playing',
+      round: 1, dealer: 0, honba: 0, wallCount: 0, wall: [], headDrawn: 0,
+      currentPlayer: -1, players: [], seat: 0, result: null, announcement: null,
+      matchFinished: false, lastDiscard: null, winPresentation: null, winningPlayerIndex: -1,
+    }
+    expect(decodeServerMessage(roundStart)).toBeNull()
+    expect(decodeServerMessage(announcement)).toBeNull()
+    expect(decodeServerMessage(snapshot)).toBeNull()
+  })
+
   it('accepts an optional second dice pair on round_start', () => {
-    const message = { kind: 'round_start', matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5], secondDice: [4, 6] }
+    const message = {
+      kind: 'round_start', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5], secondDice: [4, 6],
+    }
     expect(decodeServerMessage(message)).toBe(message)
     expect(decodeServerMessage({ ...message, secondDice: [4] })).toBeNull()
   })
 
   it('accepts optional authoritative lotus flip metadata', () => {
     const message = {
-      kind: 'round_start', matchStarted: true, round: 1, dealer: 0, honba: 0,
+      kind: 'round_start', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: true, round: 1, dealer: 0, honba: 0,
       dice: [2, 5], secondDice: [4, 6], flipTile: 'm1', flipStack: 4, flipSeat: 1,
     }
     expect(decodeServerMessage(message)).toBe(message)
@@ -33,9 +53,48 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage('{"kind":"pong"}')).toBeNull()
   })
 
+  it('rejects zero or fractional authority counters', () => {
+    const request = {
+      kind: 'turn_request', authorityEpoch: 'epoch-1', round: 1,
+      requestId: 'epoch-1:1', requestSeq: 1, targetSeat: 1,
+      ctx: {
+        hand: ['m1'], melds: [], exposedMelds: 0,
+        kongBloom: false, skipDraw: false, afterKong: false,
+      },
+    }
+    expect(decodeServerMessage({ ...request, requestSeq: 0 })).toBeNull()
+    expect(decodeServerMessage({ ...request, round: 0 })).toBeNull()
+    expect(decodeServerMessage({ ...request, targetSeat: 1.5 })).toBeNull()
+    expect(decodeServerMessage({ ...request, targetSeat: 4 })).toBeNull()
+  })
+
+  it('rejects impossible authoritative coordinates and dice values', () => {
+    const roundStart = {
+      kind: 'round_start', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5],
+    }
+    expect(decodeServerMessage({ ...roundStart, dealer: 4 })).toBeNull()
+    expect(decodeServerMessage({ ...roundStart, dice: [0, 7] })).toBeNull()
+
+    const request = {
+      kind: 'claim_request', authorityEpoch: 'epoch-1', round: 1,
+      requestId: 'epoch-1:1', requestSeq: 1, targetSeat: 1,
+      ctx: { hand: ['m1'], canGang: false, tile: 'm2', from: 2 },
+    }
+    expect(decodeServerMessage({ ...request, ctx: { ...request.ctx, from: 4 } })).toBeNull()
+
+    const tableAction = {
+      kind: 'table_action', authorityEpoch: 'epoch-1', round: 1,
+      event: { id: 1, type: 'peng', actorIndex: 1, sourceIndex: 2, tile: 'm1', meldIndex: 0 },
+    }
+    expect(decodeServerMessage({ ...tableAction, event: { ...tableAction.event, actorIndex: 1.5 } })).toBeNull()
+    expect(decodeServerMessage({ ...tableAction, event: { ...tableAction.event, meldIndex: 4 } })).toBeNull()
+  })
+
   it('accepts nullable optional meld fields emitted by the backend snapshot serializer', () => {
     const message = {
-      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'thinking',
+      kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      requestId: null, requestSeq: null, mode: 'east', phase: 'thinking',
       round: 1, dealer: 0, honba: 0, dice: [2, 5], wallCount: 80,
       wall: ['m1'], headDrawn: 52, currentPlayer: 0, seat: 0,
       // lotus-classic 无翻精时后端发送 null 而非省略；decoder 用 isNullable 校验。
@@ -54,7 +113,8 @@ describe('decodeServerMessage', () => {
 
   it('validates optional opening metadata on snapshots', () => {
     const message = {
-      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'dealing',
+      kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      requestId: null, requestSeq: null, mode: 'east', phase: 'dealing',
       round: 1, dealer: 0, honba: 0, dice: [2, 5], secondDice: [4, 6],
       flipTile: 'm1', jokerTiles: ['m1', 'm2'], wildcardTiles: ['white'],
       flipStack: 4, openingStack: 18, wallBreakIndex: 36, wallCount: 134,
@@ -67,12 +127,25 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, jokerTiles: ['m10'] })).toBeNull()
   })
 
+  it('rejects a snapshot with only one terminal flag', () => {
+    const message = {
+      kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      requestId: null, requestSeq: null, mode: 'east', phase: 'finished',
+      round: 4, dealer: 0, honba: 0, dice: [2, 5], wallCount: 0,
+      wall: [], headDrawn: 136, currentPlayer: -1, seat: 0,
+      players: [], result: null, announcement: null, matchFinished: false,
+      lastDiscard: null, winPresentation: null, winningPlayerIndex: -1,
+    }
+    expect(decodeServerMessage(message)).toBeNull()
+  })
+
   it('accepts null flip metadata on lotus-classic snapshots (no joker flip)', () => {
     // 莲花广麻（lotus-classic，默认规则）无翻精：后端快照中 flipTile / flipStack /
     // openingStack 发送 null 而非省略。此前用 isOptional（仅接受 undefined）校验，
     // null 会使整条 state_snapshot 解码失败 → 前端停留在房间面板，无法进入对局界面。
     const message = {
-      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', rulesetId: 'lotus-classic',
+      kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 1,
+      requestId: null, requestSeq: null, mode: 'east', rulesetId: 'lotus-classic',
       phase: 'opening', round: 1, dealer: 0, honba: 0, dice: [3, 6],
       secondDice: [1, 1], flipTile: null, jokerTiles: [], wildcardTiles: [],
       flipStack: null, openingStack: null, wallBreakIndex: 6, wallCount: 80,

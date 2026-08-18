@@ -15,6 +15,16 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 720 },
+    // 多 context 场景下，后台标签页的计时器/rAF 会被 Chromium 节流甚至冻结，
+    // 导致重进页面的开局动画（setTimeout 驱动）停滞。显式禁用后台节流。
+    launchOptions: {
+      args: [
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=IntensiveWakeUpThrottling',
+      ],
+    },
   },
   projects: [
     {

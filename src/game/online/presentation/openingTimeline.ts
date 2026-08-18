@@ -52,6 +52,8 @@ export interface OpeningTimelineOptions {
   state: OpeningTimelineState
   toLocalSeat: (seat: number) => number
   mapPlayers: (players: ServerPlayerDto[]) => GamePlayer[]
+  /** 生产联机开局确认必须绑定当前房主生命周期；单测/本地表现层可省略。 */
+  getAuthorityEpoch?: () => string | undefined
   playSound: (name: string, volume?: number) => unknown
   playSoundAndWait: (name: string, volume?: number) => Promise<void>
   send: (message: Record<string, unknown>) => void
@@ -66,18 +68,20 @@ export function createOpeningTimeline({
   state,
   toLocalSeat,
   mapPlayers,
+  getAuthorityEpoch,
   playSound,
   playSoundAndWait,
   send,
   onFinished,
   onOpeningDone,
-  waitForTableReady,
   waitForOpeningSnapshot = false,
   openingSnapshotTimeoutMs = 15000,
 }: OpeningTimelineOptions) {
   let sequence = 0
   let running = false
+  let startMessage: RoundStartMessage | null = null
   let openingSnapshot: ServerSnapshot | null = null
+  let primedSnapshot: ServerSnapshot | null = null
   let hasSecondDice = false
   let hasFlip = false
   let flipSeat = -1
@@ -119,7 +123,9 @@ export function createOpeningTimeline({
     timers.forEach((timer) => globalThis.clearTimeout(timer))
     timers.clear()
     running = false
+    startMessage = null
     openingSnapshot = null
+    primedSnapshot = null
     hasSecondDice = false
     hasFlip = false
     flipSeat = -1
@@ -133,6 +139,28 @@ export function createOpeningTimeline({
 
   function isRunning() {
     return running
+  }
+
+  function isWaitingForSnapshot() {
+    return running && waitForOpeningSnapshot && openingSnapshot == null
+  }
+
+  function hasSnapshotForRound(round: number) {
+    return openingSnapshot?.round === round || primedSnapshot?.round === round
+  }
+
+  /**
+   * state_snapshot 可能先于 round_start 抵达。先把同轮 opening 快照暂存，
+   * 等 round_start 到达后仍播放客户端动画；动画结束时再由 reconciler 用这份
+   * 已验收的房主快照落地，避免为了顺序而牺牲客户端表现层。
+   */
+  function primeSnapshot(snapshot: ServerSnapshot) {
+    if (snapshot.phase !== 'opening') return
+    if (running) {
+      captureSnapshot(snapshot)
+      return
+    }
+    if (snapshot.round >= state.round.value) primedSnapshot = snapshot
   }
 
   function captureSnapshot(snapshot: ServerSnapshot) {
@@ -219,22 +247,54 @@ export function createOpeningTimeline({
     // 莲花开局有两次掷骰与翻精，经典只有一次投骰。
     const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
     running = true
-    if (waitForOpeningSnapshot) {
-      const tableReady = waitForTableReady ? waitForTableReady() : Promise.resolve()
-      const [, capturedSnapshot] = await Promise.all([tableReady, openingSnapshotGate.wait()])
+    if (waitForOpeningSnapshot && !openingSnapshot) {
+      // 牌桌 3D 资源是表现层依赖，不能成为开局协议的门槛。房主的 opening
+      // 快照已经在 reconciler 中先挂好了四家座位骨架；这里必须先按权威开局
+      // 时间线进入 start/dice/deal。若等待 WebGL/牌面资源，客户端会在慢网下
+      // 一直停在 loading，随后被 playing 快照覆盖，最终只有房主看得到动画。
+      const capturedSnapshot = await openingSnapshotGate.wait()
       if (capturedSnapshot && !openingSnapshot) openingSnapshot = capturedSnapshot
       if (!openingSnapshot) {
         if (currentSequence !== sequence) return
         state.openingStage.value = null
         running = false
-        sendOpeningDone()
         onFinished()
         return
       }
-    } else if (waitForTableReady) {
-      await waitForTableReady()
     }
     if (currentSequence !== sequence) return
+    // round_start 只描述房主要求播放哪一轮动画；真正的轮次、庄家和局面
+    // 要等同轮 state_snapshot 到达后才写入本地状态。否则旧 Room 的 round_start
+    // 先到时，客户端会先把 state.round 改成未来轮次，随后把当前房主快照当成旧包丢弃。
+    if (startMessage) {
+      state.round.value = startMessage.round
+      state.dealer.value = toLocalSeat(startMessage.dealer)
+      state.honba.value = startMessage.honba
+      state.secondDice.value = startMessage.secondDice ?? [1, 1]
+      state.diceValues.value = [1, 1]
+      state.flipTile.value = null
+      state.jokerTiles.value = []
+      state.wildcardTiles.value = []
+      state.flipStack.value = startMessage.flipStack ?? null
+      state.openingStack.value = null
+      state.wallBreakIndex.value = 0
+      state.players.forEach((player) => {
+        player.hand.splice(0)
+        player.discards.splice(0)
+        player.melds.splice(0)
+        player.drawnTileIndex = -1
+      })
+      state.currentPlayer.value = -1
+      state.selectedIndex.value = -1
+      state.actionPrompt.value = null
+      state.lastDiscard.value = null
+      state.result.value = null
+      state.winEffect.value = null
+      state.winPresentation.value = null
+      state.revealHands.value = false
+      state.winningPlayerIndex.value = -1
+      state.phase.value = 'dealing'
+    }
     state.openingStage.value = 'start'
     state.diceThrowerIndex.value = state.dealer.value
     // 等 game_start 播完再掷骰（与单机 lotusOpening/localOpening 对齐）。
@@ -273,52 +333,44 @@ export function createOpeningTimeline({
     onFinished()
   }
 
-  function sendOpeningDone() {
-    onOpeningDone?.(state.round.value)
+  function sendOpeningDone(round = startMessage?.round ?? state.round.value) {
+    onOpeningDone?.(round)
+    const authorityEpoch = getAuthorityEpoch?.()
     send(waitForOpeningSnapshot
-      ? { type: 'opening_done', round: state.round.value }
-      : { type: 'opening_done' })
+      ? { type: 'opening_done', round, ...(authorityEpoch ? { authorityEpoch } : {}) }
+      : { type: 'opening_done', ...(authorityEpoch ? { authorityEpoch } : {}) })
+  }
+
+  /**
+   * state_snapshot 先于 round_start 到达时，表现层已经不需要再重播开局动画，
+   * 但房主的 opening barrier 仍然必须收到当前连接的完成确认。这个确认只发送
+   * 协议 ack，不修改任何本地牌局状态；牌局状态仍以刚刚验收的房主快照为准。
+   */
+  function confirm(message: RoundStartMessage) {
+    sendOpeningDone(message.round)
   }
 
   function start(message: RoundStartMessage, options: { instant?: boolean } = {}) {
+    const preparedSnapshot = primedSnapshot?.round === message.round ? primedSnapshot : null
     cancel()
-    if (waitForOpeningSnapshot && !options.instant) openingSnapshotGate.begin(message.round)
-    state.round.value = message.round
-    state.dealer.value = toLocalSeat(message.dealer)
-    state.honba.value = message.honba
+    startMessage = message
+    if (preparedSnapshot) openingSnapshot = preparedSnapshot
+    if (waitForOpeningSnapshot && !options.instant && !preparedSnapshot) openingSnapshotGate.begin(message.round)
     firstDice = [...message.dice]
     flipTileValue = message.flipTile ?? null
     flipStackValue = message.flipStack ?? null
     hasSecondDice = message.secondDice != null
     hasFlip = message.flipTile != null && message.flipStack != null
     flipSeat = message.flipSeat ?? -1
-    state.secondDice.value = message.secondDice ?? [1, 1]
-    // 骰子值 / 指示牌在对应阶段才展示；翻精墩（flipStack）从开局就保留（补足 136 张牌山），
-    // 指示牌仅在翻精阶段翻出（面朝上），故此处只复位 diceValues 与 flipTile。
-    state.diceValues.value = [1, 1]
-    state.flipTile.value = null
-    state.jokerTiles.value = []
-    state.wildcardTiles.value = []
-    state.flipStack.value = flipStackValue
-    state.openingStack.value = null
-    state.wallBreakIndex.value = 0
-    state.players.forEach((player) => {
-      player.hand.splice(0)
-      player.discards.splice(0)
-      player.melds.splice(0)
-      player.drawnTileIndex = -1
-    })
-    state.currentPlayer.value = -1
-    state.selectedIndex.value = -1
-    state.actionPrompt.value = null
-    state.lastDiscard.value = null
-    state.result.value = null
-    state.winEffect.value = null
-    state.winPresentation.value = null
-    state.revealHands.value = false
-    state.winningPlayerIndex.value = -1
-    state.phase.value = 'dealing'
     if (options.instant) {
+      // 重进快照会在同一轮的 state_snapshot 中落地；instant 路径不播放动画，
+      // 但仍立即应用 round_start 的表现参数以保持旧兼容行为。
+      state.round.value = message.round
+      state.dealer.value = toLocalSeat(message.dealer)
+      state.honba.value = message.honba
+      state.secondDice.value = message.secondDice ?? [1, 1]
+      state.flipStack.value = flipStackValue
+      state.phase.value = 'dealing'
       // 重进（对局中再加入）：跳过骰子/翻精/发牌动画，直接放行快照驱动——重进玩家
       // 手牌由快照提供，不需要发牌动画。若照常播 8s 动画，期间到达的 turn_request
       // 会被 isBlocked 缓存，客户端响应晚于房主掉线超时 → 在线玩家被误判「掉线
@@ -333,5 +385,14 @@ export function createOpeningTimeline({
     void run(currentSequence)
   }
 
-  return { start, cancel, isRunning, captureSnapshot }
+  return {
+    start,
+    cancel,
+    isRunning,
+    isWaitingForSnapshot,
+    hasSnapshotForRound,
+    primeSnapshot,
+    captureSnapshot,
+    confirm,
+  }
 }

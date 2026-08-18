@@ -10,7 +10,7 @@ import type {
 } from '../../core/contracts/types'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 
-export type RemoteSessionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing'
+export type RemoteSessionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing' | 'reconnecting'
 export type RemoteClientPhase = GamePhase
 
 export interface RemoteGameStateOptions {

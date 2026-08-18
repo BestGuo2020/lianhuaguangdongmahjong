@@ -95,6 +95,31 @@ describe('requestCoordinator', () => {
     expect(first.actions.discard).toHaveBeenCalledWith(2)
   })
 
+  it('清理当前倒计时后，旧 autoPlay 延迟任务不能再发动作', async () => {
+    const { actions, coordinator } = setup({ autoPlay: true })
+    coordinator.apply(TURN_REQUEST)
+    coordinator.clearCountdown()
+
+    await vi.advanceTimersByTimeAsync(600)
+
+    expect(actions.hu).not.toHaveBeenCalled()
+    expect(actions.discard).not.toHaveBeenCalled()
+  })
+
+  it('当前房主快照撤销旧请求时，同时清掉旧倒计时，不能在剩 3 秒自动出牌', async () => {
+    const { state, actions, coordinator } = setup({ autoPlay: false })
+    coordinator.apply(TURN_REQUEST)
+    coordinator.syncSnapshot({ round: 1, requestId: null, requestSeq: null })
+
+    await vi.advanceTimersByTimeAsync(15000)
+
+    expect(actions.discard).not.toHaveBeenCalled()
+    expect(actions.pass).not.toHaveBeenCalled()
+    expect(state.turnSeconds.value).toBe(0)
+    expect(state.userDrewThisTurn.value).toBe(false)
+    expect(state.turnCanHu.value).toBe(false)
+  })
+
   it('映射声明与抢杠请求，并在受阻期间只保留最新请求', async () => {
     const { state, actions, announce, coordinator, setBlocked } = setup({ autoPlay: true, blocked: true })
     coordinator.apply(TURN_REQUEST)

@@ -6,11 +6,13 @@ import type { ServerMessage } from '../protocol/messages'
 import { startHostGame } from './hostGameRunner'
 import { createMockVibeRoom } from './mockVibeRoom'
 import { createMockVibeClient } from '../vibe/mockVibeHub'
+import { RemotePlayerController } from './remotePlayerController'
 import { useLotusGame } from '../../variants/lotus/lotusGame'
 import { LotusRemotePlayerController } from './lotusRemotePlayerController'
 import { windKong } from '../../variants/lotus/lotusRules'
 import type { LotusController } from '../../variants/lotus/lotusControllers'
 import type { TileType } from '../../core/contracts/types'
+import { createWall } from '../../core/rules/tiles'
 
 function stubWindow() {
   vi.useFakeTimers()
@@ -49,6 +51,49 @@ function driveHostSeat(runner: {
 }
 
 describe('startHostGame 无头权威', () => {
+  it('SDK 洗牌承诺未完成时不广播空玩家快照', async () => {
+    const hostClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const guestClient = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, leaveTimeoutMs: 100000 })
+    const hostRoom = await hostClient.room.join('OPENING_PENDING1')
+    const guestRoom = await guestClient.room.join('OPENING_PENDING1')
+    stubWindow()
+
+    let resolveOpening!: (opening: { initialWall: TileType[]; openingDice: [number, number] }) => void
+    const opening = new Promise<{ initialWall: TileType[]; openingDice: [number, number] }>((resolve) => {
+      resolveOpening = resolve
+    })
+    const messages: Array<{ kind?: string; players?: unknown[] }> = []
+    guestRoom.onMessage((message) => messages.push(message as never))
+
+    const runner = startHostGame<PlayerController>({
+      room: hostRoom,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([[guestRoom.peerId, 1]]),
+      createController: (r, peerId, onPending, onAI) => new RemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      opening,
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    // opening 仍 pending 时，重连/hello 的补发路径也不能泄露 players=[] 快照。
+    guestRoom.send({ type: 'lobby_hello', nickname: '客人', avatar: '' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(messages.filter((message) => message.kind === 'state_snapshot')).toHaveLength(0)
+
+    resolveOpening({ initialWall: createWall(), openingDice: [1, 1] })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(messages.some((message) => message.kind === 'state_snapshot' && message.players?.length === 4)).toBe(true)
+    runner.stop()
+  })
+
   it('开局广播 round_start，并把 seat0 快照喂给 onLocalSnapshot', async () => {
     stubWindow()
     const room = createMockVibeRoom(true)
@@ -263,9 +308,11 @@ describe('startHostGame 无头权威', () => {
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
     })
-    // 掉线：直接关闭标签页（leave）→ 房主 AI 接管座位。
+    // 掉线：直接关闭标签页（leave）→ 先进入恢复宽限，避免刷新时误报 AI。
     guestRoomA.leave()
     await vi.advanceTimersByTimeAsync(200)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    await vi.advanceTimersByTimeAsync(12000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
     // 重连：同一 peerId 的新窗口重新加入 → 房主恢复真人并补发座位身份。
@@ -305,6 +352,8 @@ describe('startHostGame 无头权威', () => {
     })
     guestRoomA.leave()
     await vi.advanceTimersByTimeAsync(200)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    await vi.advanceTimersByTimeAsync(12000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
 
     // 旧调用未提供大厅座位表，保留昵称兜底以兼容历史单测。
@@ -414,7 +463,7 @@ describe('startHostGame 无头权威', () => {
     runner.stop()
   }, 20000)
 
-  it('SDK 报 reconnecting（对端掉线，无 leave）→ 立即 AI 接管；新 peerId 昵称兜底恢复（不残留 AI）', async () => {
+  it('SDK 报 reconnecting 后等待恢复窗口；超时才 AI 接管，新 peerId 可恢复', async () => {
     stubWindow()
     const room = createMockVibeRoom(true)
     const runner = startHostGame<LotusController>({
@@ -428,12 +477,19 @@ describe('startHostGame 无头权威', () => {
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
     })
-    // 客户端掉线：真实 SDK 只报 reconnecting（不报 leave）→ 立即 AI 接管（不等 18s 超时）。
+    // reconnecting 可能只是 P2P → Relay 切换，恢复窗口内不应立即 AI 接管。
     room.emitPeer({ type: 'reconnecting', id: 'old-peer' })
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    // 恢复窗口内不切 AI，但续局屏障暂不等待不可用的旧连接。
+    expect(runner.getLivePeerSeats().has('old-peer')).toBe(false)
+    // 洗牌重试仍须保留恢复中的控制器映射；旧的超时结果不能在宽限期内夺取座位。
+    expect(runner.getPeerSeats().get('old-peer')).toBe(1)
+    expect(runner.enableAIForSeat(1, { requireRecoveryExpired: true })).toBe(false)
+    expect(runner.getDisconnectedSeats()).toEqual(new Set([1]))
+    await vi.advanceTimersByTimeAsync(12000)
     expect(runner.aiControlledSeats.has(1)).toBe(true)
-    // 新 peerId 重进（昵称匹配）→ 恢复座位。此测试不提供大厅座位表，走兼容兜底；
-    // 掉线时间短（<18s）时座位未接管会恢复失败 → 座位残留 AI → continue 屏障把它
-    // 当掉线过滤 → 房主无视等待直接进下一局。
+    expect(runner.getPeerSeats().has('old-peer')).toBe(false)
+    // 新 peerId 重进（昵称匹配）→ 恢复座位。此测试不提供大厅座位表，走兼容兜底。
     room.emit('new-peer', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     expect(runner.getLivePeerSeats().get('new-peer')).toBe(1)
@@ -441,6 +497,29 @@ describe('startHostGame 无头权威', () => {
     expect(runner.getLivePeerSeats().has('old-peer')).toBe(false)
     // 推进时钟触发开局公告等 fake timer，避免 teardown 时 window 已还原报错。
     await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
+
+  it('SDK reconnecting 后切换 relay → 不接管 AI', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<LotusController>({
+      room,
+      rulesetId: 'lotus-legacy',
+      mode: 'east',
+      seatByPeer: new Map([['peer-relay', 1]]),
+      seatNames: new Map([[1, '中继玩家']]),
+      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+
+    room.emitPeer({ type: 'reconnecting', id: 'peer-relay' })
+    await vi.advanceTimersByTimeAsync(5000)
+    room.emitPeer({ type: 'relay', id: 'peer-relay', active: true })
+    await vi.advanceTimersByTimeAsync(12000)
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
     runner.stop()
   })
 
@@ -523,7 +602,7 @@ describe('startHostGame 无头权威', () => {
     const hostRoom = await hostClient.room.join('RECLAIM1')
     const guestRoom = await guestClient.room.join('RECLAIM1')
     stubWindow()
-    const guestMessages: Array<{ kind?: string }> = []
+    const guestMessages: Array<{ kind?: string; requestId?: string }> = []
     guestRoom.onMessage((message) => guestMessages.push(message as never))
     guestRoom.onMessage((message) => {
       if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
@@ -533,7 +612,7 @@ describe('startHostGame 无头权威', () => {
       rulesetId: 'lotus-legacy',
       mode: 'east',
       seatByPeer: new Map([[guestRoom.peerId, 1]]),
-      createController: (r, peerId, onPending, onAI) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI),
+      createController: (r, peerId, onPending, onAI, requestContext) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI, requestContext),
       createGame: (controllers) => useLotusGame({ remoteControllers: controllers, countdownEnabled: false, headless: true }),
       onLocalSnapshot: () => {},
       onLocalEvent: () => {},
@@ -554,11 +633,14 @@ describe('startHostGame 无头权威', () => {
     }
     expect(aiTook).toBe(true)
 
-    // 接管后 AI 只是兜底：玩家任一条操作消息回来即归还真人决策（onMessage 不依赖
-    // 挂起请求；若恰有挂起则同时采用该操作）。不依赖「下一轮 turn_request」——莲花
-    // 引擎 AI 可能提前胡牌结束对局，等待新请求会超时误报。
-    guestRoom.send({ type: 'discard', handIndex: 0 })
+    // AI 兜底请求的旧动作不能改变房主已经确认的 AI 状态；必须先有当前连接
+    // 的恢复事件，再归还真人控制权。
+    const staleRequest = guestMessages.find((message) => message.kind === 'turn_request')
+    guestRoom.send({ type: 'discard', handIndex: 0, requestId: staleRequest?.requestId })
     await vi.advanceTimersByTimeAsync(500)
+    expect(runner.aiControlledSeats.has(1)).toBe(true)
+    guestRoom.send({ type: 'lobby_hello', nickname: runner.game.players[1].name, avatar: '' })
+    await vi.advanceTimersByTimeAsync(100)
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     runner.stop()
   }, 20000)

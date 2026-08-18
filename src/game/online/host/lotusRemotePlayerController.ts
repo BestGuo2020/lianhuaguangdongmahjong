@@ -22,12 +22,32 @@ import type { RemotePlayerActionMessage } from '../orchestration/remoteActionCon
 import type { ServerRequest } from '../protocol/messages'
 import { windKong } from '../../variants/lotus/lotusRules'
 import { LotusAiController } from '../../variants/lotus/lotusControllers'
-import type { DisconnectableController } from './remotePlayerController'
+import type { DisconnectableController, RemoteRequestContext } from './remotePlayerController'
 
 function isActionMessage(message: unknown): message is RemotePlayerActionMessage {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
-  const type = (message as { type?: unknown }).type
-  return type === 'discard' || type === 'pass' || type === 'claim' || type === 'gang' || type === 'hu'
+  const value = message as {
+    type?: unknown
+    handIndex?: unknown
+    action?: unknown
+    optionIndex?: unknown
+    kind?: unknown
+    tile?: unknown
+  }
+  if (value.type === 'pass' || value.type === 'hu') return true
+  if (value.type === 'discard') return Number.isSafeInteger(value.handIndex) && (value.handIndex as number) >= 0
+  if (value.type === 'claim') {
+    return (value.action === 'peng' || value.action === 'gang' || value.action === 'chi')
+      && (value.action !== 'chi'
+        ? (value.optionIndex === undefined || (Number.isSafeInteger(value.optionIndex) && (value.optionIndex as number) >= 0))
+        : (Number.isSafeInteger(value.optionIndex) && (value.optionIndex as number) >= 0))
+  }
+  if (value.type === 'gang') {
+    if (value.kind === 'wind') return value.tile === undefined
+    return (value.kind === 'added' || value.kind === 'concealed')
+      && typeof value.tile === 'string' && value.tile.length > 0
+  }
+  return false
 }
 
 /** AI 兜底等待：超过该时长玩家未响应则由 AI 决策本请求（仍持续提示玩家，响应即归还）。
@@ -40,6 +60,8 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
   private aiMode = false
   private peerId: string
   private readonly ai: LotusAiController
+  private requestSequence = 0
+  private readonly requestContext?: RemoteRequestContext
 
   constructor(
     private readonly room: VibeHubSDK.Room,
@@ -47,17 +69,23 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     private readonly onPending?: (pending: boolean) => void,
     ai: LotusAiController = new LotusAiController(),
     private readonly onAIControlledChange?: (ai: boolean) => void,
+    requestContext?: RemoteRequestContext,
   ) {
     this.ai = ai
+    this.requestContext = requestContext
     this.peerId = peerId
     room.onMessage((message, fromPeerId) => {
       if (fromPeerId !== this.peerId || !isActionMessage(message)) return
-      // 玩家消息回来了 → 立即归还真人决策（AI 只是兜底，不是永久接管）。
+      if (this.pending === null) {
+        // AI 兜底后的迟到动作不是连接恢复凭据，不能撤销房主的 AI 接管状态。
+        // 真人恢复必须经过当前连接的 join/hello 续接路径。
+        return
+      }
+      if (this.requestContext && message.requestId !== this.pendingPayload?.requestId) return
       if (this.aiMode) {
         this.aiMode = false
         this.onAIControlledChange?.(false)
       }
-      if (this.pending === null) return
       const resolve = this.pending
       this.pending = null
       this.pendingPayload = null
@@ -93,12 +121,28 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     return true
   }
 
+  getPendingRequestMeta(): { requestId: string; requestSeq: number; round: number } | null {
+    const payload = this.pendingPayload
+    if (!payload?.requestId || payload.requestSeq == null || payload.round == null) return null
+    return { requestId: payload.requestId, requestSeq: payload.requestSeq, round: payload.round }
+  }
+
   private request(payload: ServerRequest): Promise<RemotePlayerActionMessage> {
+    const enriched = this.requestContext
+      ? {
+          ...payload,
+          authorityEpoch: this.requestContext.authorityEpoch,
+          round: this.requestContext.getRound(),
+          ...(this.requestContext.seat != null ? { targetSeat: this.requestContext.seat } : {}),
+          requestSeq: ++this.requestSequence,
+          requestId: `${this.requestContext.authorityEpoch}:${this.requestSequence}`,
+        }
+      : payload
     return new Promise((resolve) => {
       this.pending = resolve
-      this.pendingPayload = payload
+      this.pendingPayload = enriched
       this.onPending?.(true)
-      this.room.send(payload, this.peerId)
+      this.room.send(enriched, this.peerId)
     })
   }
 
@@ -116,21 +160,27 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     mapWire: (response: RemotePlayerActionMessage) => T,
   ): Promise<T> {
     const wire = this.request(payload)
+    const requestId = this.pendingPayload?.requestId
+    let fallbackTriggered = false
     const fallback = this.wait(REMOTE_FALLBACK_MS).then(() => {
-      // 解除挂起（防止迟到响应重复生效），并由 AI 决策本请求。
+      if (!requestId || !this.pendingPayload || this.pendingPayload.requestId !== requestId) {
+        return new Promise<T>(() => {})
+      }
+      // 解除挂起（防止迟到响应重复生效），但不能解析 wire：wire 一旦解析，
+      // 它的 then 会和 fallback 竞争并把本次请求错误地当成真人 pass。AI 的决定
+      // 必须是当前请求唯一的引擎输入。
+      fallbackTriggered = true
       if (this.pending) {
-        const resolve = this.pending
         this.pending = null
         this.pendingPayload = null
         this.onPending?.(false)
-        resolve({ type: 'pass' })
       }
       this.enableAI()
       return ai()
     })
     return Promise.race([
       wire.then((response) => {
-        this.disableAI()
+        if (!fallbackTriggered) this.disableAI()
         return mapWire(response)
       }),
       fallback,
@@ -155,18 +205,25 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     const mapWire = (response: RemotePlayerActionMessage): LotusTurnAction => {
       switch (response.type) {
         case 'discard':
-          return { kind: 'discard', handIndex: response.handIndex }
+          if (response.handIndex >= 0 && response.handIndex < ctx.hand.length) {
+            return { kind: 'discard', handIndex: response.handIndex }
+          }
+          break
         case 'hu':
           return { kind: 'win' }
         case 'gang':
-          if (response.kind === 'concealed' && response.tile) {
+          if (response.kind === 'concealed' && response.tile
+            && ctx.hand.filter((tile) => tile === response.tile).length >= 4) {
             return { kind: 'concealed-kong', tile: response.tile }
           }
           if (response.kind === 'added' && response.tile) {
             const meldIndex = ctx.melds.findIndex((meld) => meld.type === 'peng' && meld.tile === response.tile)
-            return { kind: 'added-kong', meldIndex: Math.max(0, meldIndex) }
+            if (meldIndex >= 0 && ctx.hand.includes(response.tile)) {
+              return { kind: 'added-kong', meldIndex }
+            }
+            break
           }
-          if (response.kind === 'wind') {
+          if (response.kind === 'wind' && windKong(ctx.hand, ctx.jokers)) {
             return { kind: 'wind-kong' }
           }
           break
@@ -191,7 +248,7 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
       },
     }
     const mapWire = (response: RemotePlayerActionMessage): LotusHuAction => (
-      this.mapCombinedClaim(response, ctx.chiOptions)
+      this.mapCombinedClaim(response, ctx.chiOptions, ctx.canPeng, ctx.canGang)
     )
     if (this.aiMode) return this.requestWithAIFallback(payload, () => this.ai.requestDiscardHu(ctx), mapWire)
     return mapWire(await this.request(payload))
@@ -213,10 +270,10 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     }
     const mapWire = (response: RemotePlayerActionMessage): LotusClaimAction => {
       if (response.type === 'claim') {
-        if (response.action === 'peng') return { kind: 'peng' }
-        if (response.action === 'gang') return { kind: 'gang' }
+        if (response.action === 'peng' && ctx.canPeng) return { kind: 'peng' }
+        if (response.action === 'gang' && ctx.canGang) return { kind: 'gang' }
         if (response.action === 'chi') {
-          const meld = ctx.chiOptions[response.optionIndex ?? 0]
+          const meld = response.optionIndex != null ? ctx.chiOptions[response.optionIndex] : undefined
           if (meld) return { kind: 'chi', meld }
         }
       }
@@ -239,7 +296,7 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
     }
     const mapWire = (response: RemotePlayerActionMessage): LotusChiAction => {
       if (response.type === 'claim' && response.action === 'chi') {
-        const meld = ctx.chiOptions[response.optionIndex ?? 0]
+        const meld = response.optionIndex != null ? ctx.chiOptions[response.optionIndex] : undefined
         if (meld) return { kind: 'chi', meld }
       }
       return { kind: 'pass' }
@@ -263,13 +320,15 @@ export class LotusRemotePlayerController implements LotusController, Disconnecta
   private mapCombinedClaim(
     response: RemotePlayerActionMessage,
     chiOptions: LotusHuContext['chiOptions'],
+    canPeng: boolean,
+    canGang: boolean,
   ): LotusHuAction {
     if (response.type === 'hu') return { kind: 'win' }
     if (response.type === 'claim') {
-      if (response.action === 'peng') return { kind: 'peng' }
-      if (response.action === 'gang') return { kind: 'gang' }
+      if (response.action === 'peng' && canPeng) return { kind: 'peng' }
+      if (response.action === 'gang' && canGang) return { kind: 'gang' }
       if (response.action === 'chi') {
-        const meld = chiOptions[response.optionIndex ?? 0]
+        const meld = response.optionIndex != null ? chiOptions[response.optionIndex] : undefined
         if (meld) return { kind: 'chi', meld }
       }
     }

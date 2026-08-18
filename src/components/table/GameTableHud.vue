@@ -260,7 +260,7 @@ function onAvatarError(entry: GamePlayer) {
       @ready="handleTableReady"
     />
     <Transition name="table-loading">
-      <div v-if="!tableReady" class="table-loading" role="status" aria-live="polite">
+      <div v-if="!tableReady" class="table-loading" :class="{ 'table-loading-in-game': phase !== 'lobby' }" role="status" aria-live="polite">
         <div class="table-loading-card">
           <span class="table-loading-spinner" aria-hidden="true"></span>
           <span>牌桌加载中…</span>

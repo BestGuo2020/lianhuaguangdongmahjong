@@ -17,5 +17,10 @@ export default defineConfig({
     // 本地联调 WebRTC：通过 hosts 把 127.0.0.1 伪装成 *.lumigrav.space 域名
     // （VibeHub SDK 只给该域提供服务），因此放开 Vite 的 Host 头校验。
     allowedHosts: true,
+    watch: {
+      // 编辑器「另存为重命名」会在源码目录留下 `.xxx.ts.<pid>.tmpdir` 临时目录；
+      // watcher 监听它们会在 Windows 上报 EBUSY 直接崩溃 dev server。忽略这类路径。
+      ignored: ['**/.selfHostConfig.ts.*.tmpdir/**', '**/*.tmp', '**/*.tmpdir/**'],
+    },
   },
 })

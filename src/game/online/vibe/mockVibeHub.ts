@@ -21,8 +21,29 @@ type Wire =
 const CHANNEL_NAME = 'lianhua-vibe-mock'
 const META_WAIT_MS = 600
 
+function queryNumber(name: string): number | undefined {
+  try {
+    const raw = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(name) : null
+    if (raw == null || raw === '') return undefined
+    const value = Number(raw)
+    return Number.isFinite(value) && value >= 0 ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function hasQueryParam(name: string): boolean {
+  try {
+    return typeof window !== 'undefined'
+      && typeof window.location?.search === 'string'
+      && new URLSearchParams(window.location.search).has(name)
+  } catch {
+    return false
+  }
+}
+
 /** 每个窗口一个稳定 peerId（sessionStorage 按标签页隔离，两个标签页各不同）。 */
-function getPeerId(): string {
+export function getMockPeerId(): string {
   const fallback = () => {
     const hasUuid = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     return hasUuid
@@ -152,17 +173,25 @@ export interface MockVibeOptions {
   leaveTimeoutMs?: number
   /** 注入固定 peerId（模拟刷新页面重进的同一身份）；缺省按 sessionStorage/随机生成。 */
   peerId?: string
+  /** 在本地注入一次 P2P → Relay 切换；不传则可用 URL ?mockRelay=1 开启。 */
+  relayAfterMs?: number
+  /** Relay 持续时间；0 表示保持 Relay。可用 URL ?mockRelayDuration=5000 设置。 */
+  relayDurationMs?: number
 }
 
 export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.Client {
   const settleMs = options.settleMs ?? 250
   const pingIntervalMs = options.pingIntervalMs ?? 1000
   const leaveTimeoutMs = options.leaveTimeoutMs ?? 4000
+  const relayAfterMs = options.relayAfterMs
+    ?? queryNumber('mockRelayAfter')
+    ?? (hasQueryParam('mockRelay') ? 1000 : undefined)
+  const relayDurationMs = options.relayDurationMs ?? queryNumber('mockRelayDuration') ?? 0
   const channel = new BroadcastChannel(CHANNEL_NAME)
   const rooms = new Map<string, MockRoom>()
   const metaCache = new Map<string, VibeHubSDK.RoomMetadata>()
   const authHandlers = new Set<(user: VibeHubSDK.User | null) => void>()
-  const peerId = options.peerId ?? getPeerId()
+  const peerId = options.peerId ?? getMockPeerId()
   // 真实 SDK 走网络（JSON 序列化），应用层消息按设计是 JSON 安全的；这里同样先
   // JSON 序列化再投递，避免 Vue reactive Proxy 等对象无法被 structured clone 克隆
   // （DataCloneError）——与真实数据通道的行为一致。
@@ -174,7 +203,11 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     const wire = event.data as Wire | undefined
     if (!wire || wire.__mock !== true) return
     if (wire.kind === 'meta') {
-      if (wire.meta) metaCache.set(wire.roomId, wire.meta)
+      if (wire.meta) {
+        metaCache.set(wire.roomId, wire.meta)
+        const room = rooms.get(wire.roomId)
+        if (typeof wire.meta.hostPeerId === 'string') room?.adoptHost(wire.meta.hostPeerId)
+      }
       return
     }
     rooms.get(wire.roomId)?.handleWire(wire)
@@ -209,6 +242,9 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     private meta: VibeHubSDK.RoomMetadata | null = null
     private readonly messageHandlers: Array<(message: unknown, fromPeerId: string) => void> = []
     private readonly peerHandlers: Array<(event: VibeHubSDK.PeerEvent) => void> = []
+    private readonly relayPeers = new Set<string>()
+    private relayTimer: ReturnType<typeof setTimeout> | null = null
+    private relayEndTimer: ReturnType<typeof setTimeout> | null = null
     private left = false
 
     constructor(roomId: string) {
@@ -254,14 +290,14 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
           open: true,
           latency: 5,
           jitter: 0,
-          relay: false,
+          relay: this.relayPeers.has(id),
           realtime: true,
           reconnecting: false,
         }))
     }
 
     networkStats(): VibeHubSDK.NetworkStats {
-      return { state: 'direct' } as VibeHubSDK.NetworkStats
+      return { state: this.relayPeers.size > 0 ? 'relay' : 'direct' } as VibeHubSDK.NetworkStats
     }
 
     async diagnostics(): Promise<VibeHubSDK.RoomDiagnostics> {
@@ -290,14 +326,52 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     leave(): void {
       if (this.left) return
       this.left = true
+      if (this.relayTimer != null) clearTimeout(this.relayTimer)
+      if (this.relayEndTimer != null) clearTimeout(this.relayEndTimer)
       post({ __mock: true, kind: 'leave', roomId: this.roomId, peerId: this.peerId })
       this.messageHandlers.splice(0)
       this.peerHandlers.splice(0)
     }
 
+    /** 测试专用：模拟 SDK 先报 reconnecting，再切到 Relay；业务消息仍正常收发。 */
+    simulateRelaySwitch(afterMs: number, durationMs = 0): void {
+      if (this.relayTimer != null) clearTimeout(this.relayTimer)
+      if (this.relayEndTimer != null) clearTimeout(this.relayEndTimer)
+      this.relayTimer = setTimeout(() => {
+        this.relayTimer = null
+        if (this.left) return
+        const peerIds = [...this.members.keys()].filter((id) => id !== this.peerId)
+        peerIds.forEach((id) => this.peerHandlers.forEach((cb) => cb({ type: 'reconnecting', id })))
+        // 给应用一个真实的切路事件顺序：reconnecting → relay(active)。
+        this.relayPeers.clear()
+        peerIds.forEach((id) => this.relayPeers.add(id))
+        peerIds.forEach((id) => this.peerHandlers.forEach((cb) => cb({ type: 'relay', id, active: true })))
+        if (durationMs > 0) {
+          this.relayEndTimer = setTimeout(() => {
+            this.relayEndTimer = null
+            if (this.left) return
+            peerIds.forEach((id) => this.relayPeers.delete(id))
+            peerIds.forEach((id) => this.peerHandlers.forEach((cb) => cb({ type: 'relay', id, active: false })))
+            peerIds.forEach((id) => this.peerHandlers.forEach((cb) => cb({ type: 'connecting', id })))
+          }, durationMs)
+        }
+      }, Math.max(0, afterMs))
+    }
+
     /** 该房间是否已被本窗口离开（离开后忽略一切 wire 消息）。 */
     isLeft(): boolean {
       return this.left
+    }
+
+    /** Mock 专用：使用房间元数据锁定房主，不允许窗口按本地 members 自行改选。 */
+    adoptHost(hostPeerId: string): void {
+      if (this.left || !hostPeerId) return
+      // 房主身份在本地会话内只允许首次可信发现；SDK/元数据中的后续换主
+      // 不能覆盖已经锁定的引擎权威，否则客户端会把无状态的新 peer 当成房主。
+      if (this.hostId && this.hostId !== hostPeerId) return
+      this.hostId = hostPeerId
+      this.isHost = hostPeerId === this.peerId
+      if (!this.members.has(hostPeerId)) this.members.set(hostPeerId, 0)
     }
 
     /** 本窗口是不是当前已知成员里最早加入的（用于即时判定房主）。 */
@@ -325,25 +399,35 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
         this.members.set(wire.peerId, wire.ts)
         this.lastSeen.set(wire.peerId, wire.ts)
         this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.peerId }))
-        // 本窗口是房主（最早加入者）：欢迎新人（携带房主身份，供对方完成选举）。
-        if (this.isEarliestMember()) {
+        // 已知房主时由任意已连接窗口帮助新人完成房主发现；只有尚未收到
+        // welcome 的最早成员才临时宣布自己。不能让每个窗口按自己的局部成员表
+        // 各自重新选主，否则第 4 个窗口在消息乱序时会形成假脑裂。
+        const announcedHostId = this.hostId && this.members.has(this.hostId)
+          ? this.hostId
+          : (this.isEarliestMember() ? this.peerId : null)
+        if (announcedHostId) {
           post({
             __mock: true,
             kind: 'welcome',
             roomId: this.roomId,
             from: this.peerId,
-            hostId: this.peerId,
-            hostTs: this.members.get(this.peerId) ?? 0,
+            hostId: announcedHostId,
+            hostTs: this.members.get(announcedHostId) ?? 0,
           })
         }
       } else if (wire.kind === 'welcome') {
         if (wire.hostId === this.peerId) return
-        if (this.members.has(wire.hostId)) return
-        this.members.set(wire.hostId, wire.hostTs)
-        this.lastSeen.set(wire.hostId, wire.hostTs)
-        this.hostId = wire.hostId
-        this.isHost = false
-        this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.hostId }))
+        if (!this.members.has(wire.hostId)) {
+          this.members.set(wire.hostId, wire.hostTs)
+          this.lastSeen.set(wire.hostId, wire.hostTs)
+          this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.hostId }))
+        }
+        // 首个已知房主一旦落地就锁定；迟到或脑裂窗口发来的另一个 welcome
+        // 不能覆盖当前会话的权威身份。
+        if (this.hostId == null || !this.members.has(this.hostId)) {
+          this.hostId = wire.hostId
+          this.isHost = false
+        }
       } else if (wire.kind === 'leave') {
         if (wire.peerId === this.peerId) return
         if (!this.members.delete(wire.peerId)) return
@@ -381,6 +465,11 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
 
     /** 加入收尾：按最早加入者（ts 最小、同 ts 取 peerId 字典序）确定房主。 */
     finalizeHost(): void {
+      // welcome/metadata 已经锁定房主时，不能用本窗口尚未收齐的成员表覆盖它。
+      if (this.hostId && this.members.has(this.hostId)) {
+        this.isHost = this.hostId === this.peerId
+        return
+      }
       const earliestId = this.earliestMemberId()
       this.hostId = earliestId
       this.isHost = earliestId === this.peerId
@@ -399,13 +488,21 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
       },
       async get(roomId: string): Promise<VibeHubSDK.RoomMetadata | null> {
         const id = roomId.toUpperCase()
-        if (metaCache.has(id)) return metaCache.get(id) ?? null
+        if (metaCache.has(id)) {
+          const cached = metaCache.get(id) ?? null
+          if (cached?.hostPeerId && rooms.get(id)) rooms.get(id)!.adoptHost(cached.hostPeerId)
+          return cached
+        }
         // 向房主补发元数据请求（跨窗口无中心存储，只能靠房主响应）。
         post({ __mock: true, kind: 'meta_req', roomId: id, from: peerId })
         const deadline = Date.now() + META_WAIT_MS
         while (Date.now() < deadline) {
           await delay(25)
-          if (metaCache.has(id)) return metaCache.get(id) ?? null
+          if (metaCache.has(id)) {
+            const received = metaCache.get(id) ?? null
+            if (received?.hostPeerId && rooms.get(id)) rooms.get(id)!.adoptHost(received.hostPeerId)
+            return received
+          }
         }
         return null
       },
@@ -424,6 +521,7 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
         // 等一个窗口让其它对端互相发现（房主/成员选举、welcome 互认）。
         await delay(settleMs)
         room.finalizeHost()
+        if (relayAfterMs != null) room.simulateRelaySwitch(relayAfterMs, relayDurationMs)
         return room
       },
     },

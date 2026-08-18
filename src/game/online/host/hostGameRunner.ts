@@ -16,8 +16,9 @@ import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } f
 import type { RoundStartMessage, ServerMessage } from '../protocol/messages'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
-import type { DisconnectableController } from './remotePlayerController'
+import type { DisconnectableController, RemoteRequestContext } from './remotePlayerController'
 import { createHostOpeningBarrier } from './openingBarrier'
+import { verifySnapshot } from '../antiCheat/publicStateVerifier'
 
 export interface HostGameRunnerOptions<TController> {
   room: VibeHubSDK.Room
@@ -28,7 +29,7 @@ export interface HostGameRunnerOptions<TController> {
   seatByPeer: Map<string, number>
   /** 远端控制器工厂：广麻用 RemotePlayerController，莲花用 LotusRemotePlayerController。
    * onAIControlledChange 在「AI 接管/归还」变化时回调（true=接管，false=归还）。 */
-  createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void, onAIControlledChange: (ai: boolean) => void) => TController
+  createController: (room: VibeHubSDK.Room, peerId: string, onPending: (pending: boolean) => void, onAIControlledChange: (ai: boolean) => void, requestContext: RemoteRequestContext) => TController
   /** 本地引擎工厂：传入非本家座位控制器，返回 GamePort（同时作为快照源）。 */
   createGame: (
     remoteControllers: Array<TController | undefined>,
@@ -46,6 +47,8 @@ export interface HostGameRunnerOptions<TController> {
   onLocalSnapshot?: (snapshot: ServerSnapshot) => void
   /** 房主自视事件（round_start/table_action/score_flow）：喂给房主自己的表现层 viewer。 */
   onLocalEvent?: (message: ServerMessage) => void
+  /** 对局中的 peer 恢复/重进后，重放仍在进行的瞬时协议（如 round_shuffle_start）。 */
+  onPeerRecovered?: (peerId: string) => void
   /** 生产 vibehub 房主启用 opening_done 屏障；单元测试/旧调用可保持即时引擎。 */
   openingBarrier?: boolean
   /** SDK 承诺洗牌完成后注入的确定性开局数据。 */
@@ -60,24 +63,39 @@ export interface HostOpeningData {
 
 export function startHostGame<TController>(options: HostGameRunnerOptions<TController>): {
   game: GamePort & SnapshotSource
+  authorityEpoch: string
   stop(): void
   aiControlledSeats: Set<number>
   /** 接管/归还版本号（ref）：外部据此 watch 到 AI 接管变化（raw Set 的 mutation 无法响应式跟踪）。 */
   aiControlledSeatsVersion: { value: number }
-  /** 当前真人座位表（peerId → seat，重连后 peerId 已 retarget）。 */
+  /** 当前可用且非 AI 真人座位表（peerId → seat，reconnecting 暂不参与续局屏障）。 */
   getLivePeerSeats(): Map<string, number>
+  /** 当前已绑定控制器且尚未被 AI 接管的座位表（包含恢复宽限中的 peer）。 */
+  getPeerSeats(): Map<string, number>
+  /** 当前仍在 reconnecting 的座位；恢复窗口结束后才会切 AI。 */
+  getDisconnectedSeats(): Set<number>
   /** 房主 viewer 的开局动画结束后，确认当前 round。 */
   markLocalOpeningReady(round: number): void
   /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
-  enableAIForSeat(seat: number): boolean
+  enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
 } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent, openingBarrier: openingBarrierEnabled = false } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent, onPeerRecovered, openingBarrier: openingBarrierEnabled = false } = options
+  let active = true
+
+  // 这是一次房主引擎生命周期的唯一代次。刷新/重新创建房主后即使 roomId
+  // 恰好相同，旧请求和旧终局也不能再被当前客户端接受。
+  const authorityEpoch = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
   // 远端玩家请求超时（客户端 12s 回合倒计时 + 开局动画/网络抖动余量）：超时判定掉线
   // → AI 接管，游戏不卡死。放宽到 25s：客户端开局动画（发牌/翻精 ≈4s）期间到达的
   // turn_request 会被 isBlocked 缓存，动画结束才收到请求、倒计时 12s → 响应约 16s；
   // 过短的超时会把「响应慢」误判成「掉线」，反复触发 AI 代打（重进玩家「AI 夺舍」）。
   const REMOTE_REQUEST_TIMEOUT_MS = 25000
+  // SDK 的 reconnecting 可能只是 P2P → Relay 切路。先留出恢复窗口，Relay 也不可用
+  // 时才 AI 接管；有挂起请求时仍由上面的响应超时负责兜底。
+  const CONNECTION_RECOVERY_GRACE_MS = 12000
   // 被 AI 接管的座位（seat 1-3），供 UI 标记「AI 代打」。
   const aiControlledSeats = new Set<number>()
   // 接管/归还版本号（ref 才能被 Vue watch 感知；raw Set 的 mutation 无法被响应式跟踪）。
@@ -95,9 +113,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     /** 失联标记：SDK 报 reconnecting（对端断开、重连中）置 true；恢复（join/hello）清 false。 */
     disconnected: boolean
   }> = []
+  const recoveryTimers = new Map<number, ReturnType<typeof setTimeout>>()
   const asDisconnectable = (controller: TController) => controller as TController & DisconnectableController
   const openingBarrier = createHostOpeningBarrier(
     () => seatStates
+      // reconnecting 是软掉线：恢复窗口内不立即切 AI，但当前开局也不能等待
+      // 一个不可用的 DataChannel。恢复后 recoverPeer 会重新补发快照/请求。
       .filter((state) => !state.disconnected && !asDisconnectable(state.controller!).isAIControlled())
       .map((state) => state.peerId),
   )
@@ -121,7 +142,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           aiControlledSeats.delete(seat)
           sendAnnouncement(`玩家「${seatName(seat)}」已重连`, 'gold')
         }
-        if (ai) openingBarrier.removePeer(peerId)
+        if (ai) openingBarrier.removePeer(seatState.peerId)
         aiControlledSeatsVersion.value += 1
       }
       remoteControllers[seat - 1] = seatState.controller = createController(room, peerId, (pending) => {
@@ -141,7 +162,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           seatState.timeout = null
         }
         waitingCount += pending ? 1 : -1
-      }, onAIControlledChange)
+      }, onAIControlledChange, {
+        authorityEpoch,
+        seat,
+        getRound: () => game.round.value,
+      })
     }
   }
 
@@ -149,24 +174,36 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     remoteControllers,
     openingBarrierEnabled ? () => openingBarrier.wait(game.round.value) : undefined,
   )
-  const context: SnapshotContext = { roomId: room.roomId, rulesetId }
+  let snapshotSequence = 0
+  const context: SnapshotContext = { roomId: room.roomId, rulesetId, authorityEpoch }
 
   function seatName(seat: number): string {
     return game.players[seat]?.name ?? `座位${seat}`
   }
 
   function sendAnnouncement(text: string, tone: string) {
-    const message: ServerMessage = { kind: 'announcement', text, tone, id: Date.now() }
+    if (!active) return
+    const message: ServerMessage = { kind: 'announcement', text, tone, id: Date.now(), authorityEpoch, round: game.round.value }
     room.send(message)
     onLocalEvent?.(message)
   }
 
   // P2P 没有后端替房主收集 opening_done，房主直接接收远端确认。
   room.onMessage((message, fromPeerId) => {
+    if (!active) return
     if (!openingBarrierEnabled) return
     if (typeof message !== 'object' || message === null) return
-    const value = message as { type?: unknown; round?: unknown }
-    if (value.type !== 'opening_done' || typeof value.round !== 'number') return
+    const value = message as { type?: unknown; round?: unknown; authorityEpoch?: unknown }
+    // opening_done 只是客户端表现层完成的确认，不是客户端可以推进引擎的命令。
+    // 必须同时绑定当前房主代次和当前引擎轮次；旧 Room 的迟到确认、NaN/小数轮次
+    // 以及下一局的提前确认都不能满足当前开局屏障。
+    if (
+      value.type !== 'opening_done'
+      || typeof value.round !== 'number'
+      || !Number.isInteger(value.round)
+      || value.round !== game.round.value
+      || value.authorityEpoch !== authorityEpoch
+    ) return
     openingBarrier.markPeerReady(fromPeerId, value.round)
   })
 
@@ -183,23 +220,84 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     }, REMOTE_REQUEST_TIMEOUT_MS)
   }
 
+  function clearRecoveryTimer(seatState: (typeof seatStates)[number]) {
+    const timer = recoveryTimers.get(seatState.seat)
+    if (timer != null) {
+      window.clearTimeout(timer)
+      recoveryTimers.delete(seatState.seat)
+    }
+  }
+
+  function scheduleConnectionRecovery(seatState: (typeof seatStates)[number]) {
+    clearRecoveryTimer(seatState)
+    const peerIdAtDisconnect = seatState.peerId
+    recoveryTimers.set(seatState.seat, window.setTimeout(() => {
+      recoveryTimers.delete(seatState.seat)
+      // Relay/connecting/hello 期间已恢复，或 peer 已被大厅重定向，不得误接管新连接。
+      if (!seatState.disconnected || seatState.peerId !== peerIdAtDisconnect) return
+      const controller = asDisconnectable(seatState.controller!)
+      if (!controller.isAIControlled()) controller.enableAI()
+    }, CONNECTION_RECOVERY_GRACE_MS))
+  }
+
+  function recoverPeer(seatState: (typeof seatStates)[number], peerId: string, forceSync = false) {
+    if (!active) return
+    const controller = asDisconnectable(seatState.controller!)
+    const wasDisconnected = seatState.disconnected
+    const wasAI = controller.isAIControlled()
+    clearRecoveryTimer(seatState)
+    seatState.disconnected = false
+    if (wasAI) controller.disableAI()
+    if (!forceSync && !wasDisconnected && !wasAI) return
+    room.send({
+      kind: 'rejoin_ok',
+      seat: seatState.seat,
+      rejoin: true,
+      roomId: room.roomId,
+      mode,
+      rulesetId,
+      nickname: seatName(seatState.seat),
+      rejoinCode: '',
+      authorityEpoch,
+    } satisfies ServerMessage, peerId)
+    // Relay 切换期间可能丢掉最后一帧，恢复后主动补发当前局面。
+    broadcastAll(true)
+    if (controller.resendPending()) restartTimeout(seatState)
+    onPeerRecovered?.(peerId)
+  }
+
   // 掉线接管 / 重连恢复：对局中 peer 离开 → AI 接管；peer 重新加入（刷新页面重进）→
   // 恢复真人决策 + 补发座位身份（rejoin_ok），客户端据此恢复本家座位映射。
   room.onPeer((event) => {
-    if (event.type === 'leave' || event.type === 'reconnecting') {
-      // 真实 SDK 对「对端关闭页面」通常只报 reconnecting（连接中断、等待恢复）而非
-      // leave——两者都视为掉线：立即 AI 接管（不必等 18s 请求超时，游戏不卡），
-      // 并标记失联（重进恢复时昵称兜底据此匹配，即使座位还没被 18s 超时接管）。
+    if (!active) return
+    if (event.type === 'leave') {
+      // SDK 的 leave 也可能只是旧 RTCPeerConnection 被刷新流程关闭；不要立即
+      // AI 接管，否则正常刷新/Relay 切换会在下一局结算边界误报掉线。统一走恢复
+      // 宽限，真正长期失联后再由计时器接管；有挂起请求时仍由请求超时兜底。
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
       seatState.disconnected = true
-      const controller = asDisconnectable(seatState.controller)
-      if (!controller.isAIControlled()) controller.enableAI()
+      scheduleConnectionRecovery(seatState)
+      return
+    }
+    if (event.type === 'reconnecting') {
+      const seatState = seatStates.find((state) => state.peerId === event.id)
+      if (!seatState?.controller) return
+      // reconnecting 可能只是 P2P → Relay 切路，先留出恢复窗口，不立即 AI 接管。
+      seatState.disconnected = true
+      scheduleConnectionRecovery(seatState)
+      return
+    }
+    if (event.type === 'relay' && event.active) {
+      const seatState = seatStates.find((state) => state.peerId === event.id)
+      if (!seatState?.controller) return
+      recoverPeer(seatState, event.id)
       return
     }
     if (event.type === 'join' || event.type === 'connecting') {
       const seatState = seatStates.find((state) => state.peerId === event.id)
       if (!seatState?.controller) return
+      clearRecoveryTimer(seatState)
       seatState.disconnected = false
       const controller = asDisconnectable(seatState.controller)
       if (controller.isAIControlled()) controller.disableAI()
@@ -212,6 +310,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         rulesetId,
         nickname: seatName(seatState.seat),
         rejoinCode: '',
+        authorityEpoch,
       } satisfies ServerMessage, event.id)
       // 立即补发一帧快照：等待中的座位 pending 会挡住周期广播，不主动补发的话
       // 重连客户端只能干等下一次状态变化（甚至永远等不到）才能看到牌桌。
@@ -221,6 +320,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       // 只能等下一轮才恢复（「重进后第一次无法出牌」）。
       // 重发成功 → 从这一刻重新计算掉线超时（旧计时器会误判刚重进的在线玩家掉线）。
       if (controller.resendPending()) restartTimeout(seatState)
+      onPeerRecovered?.(event.id)
     }
   })
 
@@ -229,6 +329,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   // 直发的 rejoin_ok 被漏掉（刷新页面重进的客户端会因漏收而丢失本家座位）。
   // 同时做 peerId 兜底：刷新后 peerId 可能变化（新标签页），优先按大厅座位表恢复
   room.onMessage((message, fromPeerId) => {
+    if (!active) return
     if (typeof message !== 'object' || message === null) return
     if ((message as { type?: unknown }).type !== 'lobby_hello') return
     let seatState = seatStates.find((state) => state.peerId === fromPeerId)
@@ -241,10 +342,17 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         const bySeat = seatStates.find((state) => state.seat === assignedSeat)
         const controller = bySeat?.controller ? asDisconnectable(bySeat.controller) : null
         if (bySeat && controller) {
+          const previousPeerId = bySeat.peerId
           seatState = bySeat
+          clearRecoveryTimer(bySeat)
           controller.disableAI()
           controller.retargetPeer(fromPeerId)
           bySeat.peerId = fromPeerId
+          // 承诺洗牌协调器持有的 seatByPeer 是同一个 Map。刷新发生在首局
+          // 承诺/揭晓期间时，必须原子替换旧 peer，否则新连接的承诺永远被
+          // 当成未知来源，房主会错误地把开局判为超时。
+          if (seatByPeer.get(previousPeerId) === assignedSeat) seatByPeer.delete(previousPeerId)
+          seatByPeer.set(fromPeerId, assignedSeat)
           bySeat.disconnected = false
           // 恢复后清除挂起请求的掉线计时器并重新计时（见 restartTimeout 注释：
           // 防刚重进的在线玩家被旧计时器误判掉线）。
@@ -263,16 +371,25 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         return state.disconnected || controller.isAIControlled()
       })
       if (fallback) {
+        const previousPeerId = fallback.peerId
         seatState = fallback
         const controller = asDisconnectable(fallback.controller!)
         controller.disableAI()
         controller.retargetPeer(fromPeerId)
         fallback.peerId = fromPeerId
+        if (seatByPeer.get(previousPeerId) === fallback.seat) seatByPeer.delete(previousPeerId)
+        seatByPeer.set(fromPeerId, fallback.seat)
         fallback.disconnected = false
         if (controller.resendPending()) restartTimeout(fallback)
       }
     }
     if (!seatState) return
+    const restoredController = seatState.controller ? asDisconnectable(seatState.controller) : null
+    const wasDisconnected = seatState.disconnected
+    const wasAI = Boolean(restoredController?.isAIControlled())
+    clearRecoveryTimer(seatState)
+    seatState.disconnected = false
+    if (wasAI) restoredController?.disableAI()
     room.send({
       kind: 'rejoin_ok',
       seat: seatState.seat,
@@ -282,6 +399,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       rulesetId,
       nickname: seatName(seatState.seat),
       rejoinCode: '',
+      authorityEpoch,
     } satisfies ServerMessage, fromPeerId)
     // 同上：补发一帧全量快照，让重连客户端立即看到牌桌（含正在等待中的请求局面）。
     broadcastAll(true)
@@ -289,10 +407,13 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     // 否则重进后第一次无法出牌）。重发成功 → 从这一刻重新计算掉线超时。
     const restored = asDisconnectable(seatState.controller!)
     if (restored.resendPending()) restartTimeout(seatState)
+    if (wasDisconnected || wasAI) broadcastAll(true)
+    onPeerRecovered?.(fromPeerId)
   })
 
   // 临时诊断：定位「刷新重进后操作回不去」——客户端动作是否到达房主、是否对上座位。
   room.onMessage((message, fromPeerId) => {
+    if (!active) return
     if (typeof message !== 'object' || message === null) return
     const type = (message as { type?: unknown }).type
     if (type !== 'discard' && type !== 'pass' && type !== 'claim' && type !== 'gang' && type !== 'hu') return
@@ -328,6 +449,13 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   // 会反复发送幂等快照，客户端 3D 牌桌每次 rebuild 都会清掉进行中的出牌飞行动画（360ms）。
   let lastBroadcastKey = ''
   function broadcastAll(force = false) {
+    if (!active) return
+    // opening 数据可能来自 SDK 的承诺洗牌，在它 resolve 之前引擎仍处于
+    // 初始 lobby，players 为空。重连/hello 事件可能先到，此时不能把空玩家表
+    // 序列化成 state_snapshot：客户端会把它正确地当成非法快照丢弃，随后开局
+    // 看起来就像“房主没有同步”。等 startGame 的 resetPlayers 完成后，首个
+    // dealing/opening 快照会正常广播。
+    if (game.players.length !== 4) return
     // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播周期快照：
     // 否则快照 applyNow 会 clearCountdown、清空 actionPrompt 并把 phase 重置为 playing，
     // 覆盖客户端 requestCoordinator 刚设的 discard/prompt 相位、倒计时与碰杠胡按钮。
@@ -335,6 +463,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     if (!force && (waitingCount > 0 || game.phase.value === 'thinking')) return
     const key = [
       game.phase.value,
+      game.round.value,
+      game.dealer.value,
+      game.honba.value,
       game.currentPlayer.value,
       game.lastDiscard.value?.id ?? 0,
       game.wallHeadDrawn.value,
@@ -343,9 +474,29 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       game.result.value?.winnerIndex ?? -1,
       game.winPresentation.value?.winnerIndex ?? -1,
       game.revealHands.value ? 1 : 0,
+      game.matchFinished.value ? 1 : 0,
       game.players.map((p) => `${p.hand.join('')}|${p.discards.join('')}|${p.melds.map((m) => m.type + m.tiles.join('')).join('')}|${p.score}|${p.redCount}`).join('~'),
     ].join('#')
     if (!force && key === lastBroadcastKey) return
+    snapshotSequence += 1
+    const localSnapshot = serializeStateToSnapshot(game, 0, {
+      ...context,
+      sequence: snapshotSequence,
+      requestId: null,
+      requestSeq: null,
+      includeWall: true,
+    })
+    const violations = verifySnapshot(localSnapshot)
+    if (violations.length) {
+      console.warn('[host] 跳过非法权威快照', {
+        codes: violations.map((violation) => violation.code),
+        messages: violations.map((violation) => violation.message),
+        phase: localSnapshot.phase,
+        round: localSnapshot.round,
+        players: localSnapshot.players.length,
+      })
+      return
+    }
     lastBroadcastKey = key
     // 用 seatStates 而非开局静态 seatByPeer：刷新重连的客户端 peerId 会变化，
     // seatState.peerId 在恢复时被 retarget 更新。若按旧 map 发送，重连后的新 peerId
@@ -354,40 +505,95 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     for (const state of seatStates) {
       if (state.peerId && !sent.has(state.seat)) {
         sent.add(state.seat)
-        room.send(serializeStateToSnapshot(game, state.seat, { ...context, includeWall: false }), state.peerId)
+        const pending = typeof (asDisconnectable(state.controller!).getPendingRequestMeta) === 'function'
+          ? asDisconnectable(state.controller!).getPendingRequestMeta()
+          : null
+        const seatSnapshot = serializeStateToSnapshot(game, state.seat, {
+          ...context,
+          sequence: snapshotSequence,
+          requestId: pending?.requestId ?? null,
+          requestSeq: pending?.requestSeq ?? null,
+          includeWall: false,
+        })
+        const seatViolations = verifySnapshot(seatSnapshot)
+        if (seatViolations.length) {
+          // 每个座位的暗牌脱敏视图也属于房主权威输出。单个座位序列化异常时
+          // 宁可让该座位继续等待当前快照，也不能发送可能泄露牌墙/他人手牌的包。
+          console.warn('[host] 跳过非法座位快照', {
+            seat: state.seat,
+            peerId: state.peerId,
+            codes: seatViolations.map((violation) => violation.code),
+            messages: seatViolations.map((violation) => violation.message),
+          })
+          continue
+        }
+        room.send(seatSnapshot, state.peerId)
       }
     }
-    onLocalSnapshot?.(serializeStateToSnapshot(game, 0, { ...context, includeWall: true }))
+    onLocalSnapshot?.(localSnapshot)
   }
 
   // ── 瞬时事件广播：碰/杠/吃 音效与动画（胡牌走 settled 快照 → settlement 时间线）──
   let lastTableActionId = -1
   let lastScoreFlowId = -1
+  let roundStartSequence = 0
+  let roundStartMessage: RoundStartMessage | null = null
+  let roundStartResendTimer: ReturnType<typeof setInterval> | null = null
+
+  function stopRoundStartResend() {
+    if (roundStartResendTimer != null) {
+      window.clearInterval(roundStartResendTimer)
+      roundStartResendTimer = null
+    }
+  }
+
+  function resendRoundStart() {
+    if (!active || game.phase.value !== 'opening' || !roundStartMessage) {
+      stopRoundStartResend()
+      return
+    }
+    // 同一轮固定 authorityEpoch/sequence 的重复消息由客户端幂等去重；重发的
+    // 目的只是覆盖 round_start 恰好落在 P2P→Relay/旧连接关闭窗口的情况，不能
+    // 让客户端重新计算任何牌局状态。
+    room.send(roundStartMessage)
+  }
+
+  function startRoundStartResend() {
+    stopRoundStartResend()
+    roundStartResendTimer = window.setInterval(resendRoundStart, 500)
+  }
+
   const stopEventWatchers = [
     watch(() => game.tableActionEvent.value, (event) => {
+      if (!active) return
       if (!event || event.id === lastTableActionId) return
       lastTableActionId = event.id
-      const message: ServerMessage = { kind: 'table_action', event }
+      const message: ServerMessage = { kind: 'table_action', event, authorityEpoch, round: game.round.value }
       room.send(message)
       onLocalEvent?.(message)
       broadcastAll()
     }),
     watch(() => game.scoreFlowEvent.value, (event) => {
+      if (!active) return
       if (!event || event.id === lastScoreFlowId) return
       lastScoreFlowId = event.id
-      const message: ServerMessage = { kind: 'score_flow', deltas: event.deltas }
+      const message: ServerMessage = { kind: 'score_flow', deltas: event.deltas, authorityEpoch, round: game.round.value }
       room.send(message)
       onLocalEvent?.(message)
     }),
   ]
 
   function sendRoundStart() {
+    if (!active) return
     // 莲花麻将 diceValues 在第二次掷骰时被覆盖，一骰须取 firstDice（对齐单人模式）；
     // 广麻无 firstDice，回退 diceValues（单骰）。flipSeat 让客户端二骰由翻精目标方
     // 投出（对齐单人模式），否则两骰都显示庄家投。
     const dice = game.firstDice?.value ?? game.diceValues.value
     const message: RoundStartMessage = {
       kind: 'round_start',
+      roomId: room.roomId,
+      authorityEpoch,
+      sequence: ++roundStartSequence,
       matchStarted: game.round.value === 1,
       round: game.round.value,
       dealer: game.dealer.value,
@@ -398,9 +604,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       flipStack: game.flipStack?.value ?? undefined,
       flipSeat: game.flipSeat?.value ?? undefined,
     }
+    roundStartMessage = message
     room.send(message)
     onLocalEvent?.(message)
     broadcastAll()
+    startRoundStartResend()
   }
 
   // round_start：发牌完成后（phase 进入 opening，此时手牌已齐）广播，触发客户端发牌/骰点动画。
@@ -408,6 +616,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   // （instantOpening 下阶段瞬变，watch 会错过中间态）。
   let lastPhase = game.phase.value
   const stopWatch = watch(() => game.phase.value, (phase) => {
+    if (!active) return
+    if (phase !== 'opening') stopRoundStartResend()
     if (phase === 'opening' && lastPhase !== 'opening') {
       applySeatProfiles()
       sendRoundStart()
@@ -419,9 +629,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   // 关键状态变化立即广播快照，降低 200ms 兜底轮询带来的「两边不同步」延迟。
   const stopImmediateWatchers = [
-    watch(() => game.lastDiscard.value, () => broadcastAll()),
-    watch(() => game.currentPlayer.value, () => broadcastAll()),
-    watch(() => game.wallHeadDrawn.value, () => broadcastAll()),
+    watch(() => game.lastDiscard.value, () => { if (active) broadcastAll() }),
+    watch(() => game.currentPlayer.value, () => { if (active) broadcastAll() }),
+    watch(() => game.wallHeadDrawn.value, () => { if (active) broadcastAll() }),
     // 摸牌瞬间广播：drawFor 在 phase='drawing' 阶段就把摸到的牌推入本家手牌并设置
     // drawnTileIndex，该 Vue flush 先于 beginTurn 把 phase 切成 'thinking'，因此这里
     // 的广播能通过 thinking 守卫。否则各端永远只看到出牌后的 13 张（及碰/杠后的
@@ -430,12 +640,13 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     watch(
       () => game.players.map((player) => player.drawnTileIndex).join(','),
       (value) => {
-        if (value !== '-1,-1,-1,-1') broadcastAll()
+        if (active && value !== '-1,-1,-1,-1') broadcastAll()
       },
     ),
   ]
 
   function startOpening(opening?: HostOpeningData) {
+    if (!active) return
     // 启动本地引擎：先完成逻辑发牌并广播全量快照，再等待房主 viewer 与所有
     // 在线 peer 的 opening_done，最后才进入庄家首回合。
     if (openingBarrierEnabled) {
@@ -461,6 +672,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   if (options.opening && typeof (options.opening as PromiseLike<HostOpeningData>).then === 'function') {
     void Promise.resolve(options.opening).then(startOpening).catch((error) => {
+      if (!active) return
       console.error('[host] 承诺洗牌失败，取消开局:', error)
     })
   } else {
@@ -472,35 +684,60 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   return {
     game,
+    authorityEpoch,
     aiControlledSeats,
     aiControlledSeatsVersion,
     /**
-     * 当前真人座位表（peerId → seat）：与开局静态 seatByPeer 不同，重连恢复（retarget）
-     * 会更新 seatStates 里的 peerId。续接确认关卡（continue 屏障）必须用它来判定
-     * 「要等谁确认」——若用大厅静态表，重连后的新 peerId 发来 continue 也对不上旧
-     * peerId，全员永远卡在「已确认，等待其他玩家」。
+     * 当前可用且非 AI 真人座位表（peerId → seat）：与开局静态 seatByPeer 不同，
+     * 重连恢复（retarget）会更新 seatStates 里的 peerId。reconnecting 在恢复窗口内
+     * 不触发 AI，但暂不参与续局屏障，避免正常玩家已确认却被旧连接拖住。
      */
     getLivePeerSeats(): Map<string, number> {
       const live = new Map<string, number>()
       for (const state of seatStates) {
-        if (state.peerId) live.set(state.peerId, state.seat)
+        if (state.peerId && !state.disconnected && !asDisconnectable(state.controller!).isAIControlled()) live.set(state.peerId, state.seat)
       }
       return live
+    },
+    getPeerSeats(): Map<string, number> {
+      const peers = new Map<string, number>()
+      for (const state of seatStates) {
+        if (state.peerId && !asDisconnectable(state.controller!).isAIControlled()) peers.set(state.peerId, state.seat)
+      }
+      return peers
+    },
+    getDisconnectedSeats(): Set<number> {
+      return new Set(seatStates.filter((state) => state.disconnected).map((state) => state.seat))
     },
     markLocalOpeningReady(round: number) {
       if (openingBarrierEnabled) openingBarrier.markLocalReady(round)
     },
     /** 外部（续接安全网）强制 AI 接管某座位：掉线但无挂起请求（局末断线）时，
      * 座位永远不会被 15s 超时接管，continue 屏障会永久等待——由安全网兜底接管。 */
-    enableAIForSeat(seat: number): boolean {
+    enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean {
+      if (!active) return false
       const seatState = seatStates.find((state) => state.seat === seat)
       const controller = seatState?.controller ? asDisconnectable(seatState.controller) : null
       if (!seatState || !controller || controller.isAIControlled()) return false
+      // 承诺洗牌的超时回调可能晚于一次旧连接事件到达。只有 SDK 已明确把座位标记为
+      // disconnected 且恢复宽限计时器已经结束，才允许这条旧回调接管 AI；否则保留
+      // 真人控制器，下一次重试使用当前 peerId，避免 P2P → Relay/刷新竞态造成夺舍。
+      if (options?.requireRecoveryExpired && (!seatState.disconnected || recoveryTimers.has(seat))) return false
       controller.enableAI()
       return true
     },
     stop() {
+      if (!active) return
+      active = false
       window.clearInterval(intervalId)
+      recoveryTimers.forEach((timer) => window.clearTimeout(timer))
+      recoveryTimers.clear()
+      for (const state of seatStates) {
+      if (state.timeout != null) window.clearTimeout(state.timeout)
+        asDisconnectable(state.controller!).reset?.()
+      }
+      stopRoundStartResend()
+      roundStartMessage = null
       openingBarrier.cancel()
       stopWatch()
       stopEventWatchers.forEach((stop) => stop())

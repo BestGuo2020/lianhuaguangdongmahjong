@@ -94,12 +94,30 @@ pnpm test                                             # 前端测试（含 selfH
 | `?turn=turn:user:pass@host:port` / `VITE_TURN_SERVER` | TURN 中继（可选，跨设备打洞失败时兜底） |
 | `?stun=stun:host:port` / `VITE_STUN_SERVER` | 自定义 STUN（不传用公共 STUN） |
 | `?selfHostPeer=p-xxx` | 固定 peerId（重连测试用，默认每次连接随机） |
+| `?forceRelay=1` / `VITE_FORCE_RELAY` | 强制只走 TURN relay（`iceTransportPolicy:'relay'`，真实中继路径测试） |
+| `?selfHostRelay=1` | 加入后约 1s 自动模拟一次 P2P→Relay 切换（保持 Relay） |
+| `?selfHostRelayAfter=ms` / `?selfHostRelayDuration=ms` | 模拟切换的延迟与持续时长（`Duration=0` 保持 Relay） |
 
 优先级：URL 查询参数 > 环境变量。
 
 ---
 
-## 四、与内置 mock 的区别
+## 四、P2P → Relay 切换
+
+传输层会轮询 `getStats()` 读「选中候选对」的本地候选类型，把真实路径写回
+`peers()[].relay` 与 `networkStats().state`（`direct` / `relay` / `recovering`），并在
+切换时发 `relay` / `reconnecting` / `connecting` 对端事件，应用层现有的信号格与房主
+失联判定会真实响应。
+
+**三种测法：**
+
+1. **确定性模拟（无需 coturn）**：加 `?selfHostRelay=1`，加入后自动注入
+   `reconnecting → relay(active) → …` 事件序列；或代码里直接调
+   `room.simulateRelaySwitch(afterMs, durationMs)`。
+2. **真实中继**：起 coturn 后加 `?forceRelay=1`（只走 TURN），或 `?turn=` 打洞失败时自动回落。
+3. **观察**：`chrome://webrtc-internals` 看选中候选是 `host/srflx`（直连）还是 `relay`（中继）。
+
+## 五、与内置 mock 的区别
 
 | | mock（BroadcastChannel） | 自托管传输层 |
 |---|---|---|
@@ -109,13 +127,14 @@ pnpm test                                             # 前端测试（含 selfH
 | 跨设备 | 不支持 | 支持 |
 | 建连前首条消息丢失 / 延迟 / 打洞失败 | 无 | 真实发生 |
 
-**当前限制（v1）**：不实现 SDK 的自动 relay 切换与断线重连（连接断开会直接按 `leave` 处理，
-应用层已有房主失联/AI 接管兜底）；无主机迁移（房主刷新即结束，与生产一致）；无登录
-（`login()` 返回本机身份，DEV/自托管本不强制登录）。
+**当前限制（v1）**：能探测/上报 relay、可强制 relay、可模拟切换，但**不实现 SDK 的自动
+relay 路径管理与断线自动重连**（ICE 断开直接按 `leave` 处理，应用层已有房主失联/AI 接管
+兜底）；无主机迁移（房主刷新即结束，与生产一致）；无登录（`login()` 返回本机身份，
+DEV/自托管本不强制登录）。
 
 ---
 
-## 五、常见问题
+## 六、常见问题
 
 - **`?selfHost` 没生效 / 又走了 mock**：信令地址必须以 `ws://`/`wss://` 开头，否则被忽略。
 - **本机没问题、真机连不上**：多半是没走 HTTPS（非 localhost 的 http 不是安全上下文，
@@ -128,7 +147,7 @@ pnpm test                                             # 前端测试（含 selfH
 
 ---
 
-## 六、回退方式
+## 七、回退方式
 
 删掉 URL 里的 `?selfHost=`（并清掉 `VITE_SELF_HOST_SIGNALING`）即恢复原有行为：
 DEV 用 mock，生产构建走真实 VibeHub SDK。自托管传输层是纯增量，不影响 `sync:vibehub`。

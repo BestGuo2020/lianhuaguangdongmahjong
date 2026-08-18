@@ -93,7 +93,8 @@ describe('remoteActionController', () => {
     state.actionPrompt.value = { type: 'rob', tile: 's9' as TileType, from: 1 }
     controller.userHu()
     expect(send).toHaveBeenCalledWith({ type: 'hu' })
-    expect(state.actionPrompt.value).toBeNull()
+    // actionPrompt 是房主事实，客户端动作只能发送意图；待房主快照确认后再清除。
+    expect(state.actionPrompt.value).not.toBeNull()
   })
 
   it('切换自动操作，并始终返回有效的自动弃牌索引', () => {

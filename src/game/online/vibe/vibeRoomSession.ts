@@ -9,7 +9,7 @@ import type { Ref } from 'vue'
 import type { MatchType } from '../../core/contracts/types'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import { createRoom as createVibeRoom, getRoomMeta, joinRoom as joinVibeRoom } from './vibeRoom'
-import { createClientLobby, createHostLobby, type LobbySeat } from './vibeLobby'
+import { createClientLobby, createHostLobby, type LobbyParticipant, type LobbySeat } from './vibeLobby'
 
 export interface VibeRoomSessionState {
   roomId: Ref<string>
@@ -30,11 +30,13 @@ export interface VibeRoomSessionState {
 export interface VibeRoomSessionOptions {
   state: VibeRoomSessionState
   /** 全员就绪并开局后的回调（房主/客户端都会收到 lobby_start）。 */
-  onStart: (room: VibeHubSDK.Room, details: { shuffleId: string; seatCount: number }) => void
+  onStart: (room: VibeHubSDK.Room, details: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] }) => void
   /** 房主关闭房间时的回调（客户端收到 lobby_closed）。 */
   onClosed: () => void
+  /** 客户端收到房主定向签发的座位续接凭据。 */
+  onSeatToken?: (token: string) => void
   /** 上次的会话（刷新页面重进用）；返回 null 表示无会话。 */
-  loadSavedRoom?: () => { roomId: string; nickname?: string } | null
+  loadSavedRoom?: () => { roomId: string; nickname?: string; seatToken?: string } | null
 }
 
 const ERROR_TEXT: Record<string, string> = {
@@ -47,7 +49,7 @@ function readableError(error: unknown, fallback: string): string {
   return ERROR_TEXT[error.message] ?? error.message
 }
 
-export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom }: VibeRoomSessionOptions) {
+export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, loadSavedRoom }: VibeRoomSessionOptions) {
   let room: VibeHubSDK.Room | null = null
   let hostLobby: ReturnType<typeof createHostLobby> | null = null
   let clientLobby: ReturnType<typeof createClientLobby> | null = null
@@ -58,10 +60,13 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
   }
 
   function clearSession() {
+    const oldRoom = room
+    // 先切断当前引用，再让 SDK 收尾。旧 Room 的异步 roster/signal 可能在 leave()
+    // 之后晚到，不能再污染随后重新加入的新会话状态。
+    room = null
     // 客户端主动离开时先通知房主释放座位（比依赖 SDK 断连检测更可靠、更即时）。
     if (!state.isHost.value) clientLobby?.leave()
-    room?.leave()
-    room = null
+    oldRoom?.leave()
     hostLobby = null
     clientLobby = null
     state.roomId.value = ''
@@ -88,8 +93,8 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
         capacity,
         hostNickname: state.nickname.value,
         hostAvatar: state.avatar.value,
-        onRoster: (seats) => { state.roomSeats.value = seats },
-        onStart: (details) => onStart(created, details),
+        onRoster: (seats) => { if (room === created) state.roomSeats.value = seats },
+        onStart: (details) => { if (room === created) onStart(created, details) },
         // 对局中（phase != lobby）掉线座位锁定给 AI 代打，不能释放给新玩家。
         isInMatch: () => state.phase.value !== 'lobby',
       })
@@ -105,6 +110,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
     state.sessionError.value = ''
     state.sessionStatus.value = 'joining'
     try {
+      const saved = loadSavedRoom?.()
       const joined = await joinVibeRoom(code)
       room = joined
       state.roomId.value = joined.roomId
@@ -118,6 +124,17 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
       // 此时必须走 host 初始化（hostLobby/座位 0），否则按客户端逻辑永远收不到
       // roster → mySeat 恒为 -1 → 连续重试失败（「重进后连座位都没收到」）。
       if (joined.isHost) {
+        // P2P 房主掉线后 SDK 可能把某个客户端提升为 host，但该客户端没有房主
+        // 引擎的完整隐藏牌墙/请求状态，继续初始化 hostLobby 会制造第二个“权威”
+        // 并让房间脑裂。只有明确的空房间、且没有正在恢复的旧会话，才允许新建
+        // 大厅；其余情况宁可报告无法安全恢复，也不伪造一局新的权威牌局。
+        if (saved?.roomId === joined.roomId || joined.peers().length > 0) {
+          joined.leave()
+          state.roomId.value = ''
+          state.mySeat.value = -1
+          state.sessionStatus.value = 'idle'
+          throw new Error('原房主已离线，牌局无法安全恢复；未创建新的房主状态')
+        }
         state.isHost.value = true
         state.mySeat.value = 0
         const mode = meta?.mode === 'east' || meta?.mode === 'hanchan' ? meta.mode : 'east'
@@ -135,8 +152,8 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
           capacity,
           hostNickname: state.nickname.value,
           hostAvatar: state.avatar.value,
-          onRoster: (seats) => { state.roomSeats.value = seats },
-          onStart: (details) => onStart(joined, details),
+          onRoster: (seats) => { if (room === joined) state.roomSeats.value = seats },
+          onStart: (details) => { if (room === joined) onStart(joined, details) },
           isInMatch: () => state.phase.value !== 'lobby',
         })
         // 宣告自己是新房主（携带 mode/ruleset/max），让其他玩家能加入并读对局元数据。
@@ -158,16 +175,24 @@ export function createVibeRoomSession({ state, onStart, onClosed, loadSavedRoom 
       clientLobby = createClientLobby({
         room: joined,
         onRoster: (_hostSeat, seats) => {
+          if (room !== joined) return
           state.roomSeats.value = seats
           const own = seats.find((seat) => seat.peerId === joined.peerId)
           if (own) state.mySeat.value = own.seat
           // 临时诊断：定位「闲家方位是房主方位」的座位分配问题。
           console.log('[client] mySeat:', state.mySeat.value, 'joined.peerId:', joined.peerId, 'seats:', seats.map((s) => `${s.seat}:${s.peerId}`).join(' | '))
         },
-        onStart: (details) => onStart(joined, details),
-        onClosed: () => onClosed(),
+        // token 也必须绑定当前 Room。SDK 在 leave() 后仍可能投递旧房间的
+        // 定向消息；若旧 token 趁新会话建立前写回 localStorage，下一次重进会
+        // 携带错误凭据，表现为“第一次失败、第二次才进房”或座位恢复异常。
+        onSeatToken: (token) => {
+          if (room === joined) onSeatToken?.(token)
+        },
+        onStart: (details) => { if (room === joined) onStart(joined, details) },
+        onClosed: () => { if (room === joined) onClosed() },
       })
-      clientLobby.hello(state.nickname.value, state.avatar.value, state.playerId.value)
+      const savedToken = saved?.roomId === joined.roomId ? saved.seatToken : undefined
+      clientLobby.hello(state.nickname.value, state.avatar.value, state.playerId.value, savedToken)
       state.sessionStatus.value = 'connected'
     } catch (error) {
       state.sessionError.value = readableError(error, '加入房间失败')

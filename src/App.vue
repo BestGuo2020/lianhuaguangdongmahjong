@@ -174,7 +174,7 @@ const lobbyController = createRemoteLobbyController({
 // 生产环境需先登录（SDK token 不落盘），未登录就 join 会失败或留下半状态（只响声音
 // 进不去游戏）；本地（mock 匿名）无需登录，立即重进。登录后的重进由 vibeUser watch 触发。
 onMounted(() => {
-  if (vibeRemoteGame.savedSessionExists && !loginRequired.value) lobbyController.resumeSession()
+  if (vibeRemoteGame.savedSessionExists.value && !loginRequired.value) lobbyController.resumeSession()
 })
 const {
   nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,
@@ -201,7 +201,7 @@ watch(vibeUser, (user) => {
   // 刷新页面后 SDK 需重新授权（token 仅驻内存）；登录完成后若存在保存的房间会话
   // 且尚未在房间中 → 自动重进（对局进行中则快照重同步 + 座位恢复）。
   // 重进后若数据通道建不起来（SDK 残留旧 RTCPeerConnection）→ 自动重试加入。
-  if (vibeRemoteGame.savedSessionExists && !roomId.value) {
+  if (vibeRemoteGame.savedSessionExists.value && !roomId.value) {
     lobbyController.resumeSession()
     vibeRemoteGame.scheduleRejoinRetry()
   }

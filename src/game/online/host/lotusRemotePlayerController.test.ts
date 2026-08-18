@@ -5,7 +5,7 @@ import type { LotusHuContext, LotusTurnContext } from '../../variants/lotus/lotu
 
 function turnContext(): LotusTurnContext {
   return {
-    hand: ['m1', 'm2', 'm3', 'm4'],
+    hand: ['m1', 'm2', 'm3', 'm4', 'east', 'south', 'west', 'north'],
     melds: [],
     exposedMelds: 0,
     kongBloom: false,

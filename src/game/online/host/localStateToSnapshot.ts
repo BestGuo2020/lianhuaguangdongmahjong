@@ -46,6 +46,11 @@ export interface SnapshotSource {
 export interface SnapshotContext {
   roomId: string
   rulesetId: RuleVariant
+  /** 生产快照必须绑定当前房主引擎生命周期；缺失时序列化直接失败。 */
+  authorityEpoch: string
+  sequence?: number
+  requestId?: string | null
+  requestSeq?: number | null
   /** Only the local authority viewer needs the exact remaining wall order. */
   includeWall?: boolean
 }
@@ -70,6 +75,11 @@ export function serializeStateToSnapshot(
   targetSeat: number,
   context: SnapshotContext,
 ): ServerSnapshot {
+  if (!context.authorityEpoch.trim()
+    || !Number.isSafeInteger(context.sequence)
+    || (context.sequence as number) < 1) {
+    throw new Error('无法序列化无房主代次或序号的权威快照')
+  }
   const dice = source.diceValues.value
   // 莲花麻将 diceValues 在第二次掷骰时被覆盖；一骰必须取 firstDice，否则客户端
   // 一骰阶段会显示成二骰（与单人模式不一致）。
@@ -78,6 +88,10 @@ export function serializeStateToSnapshot(
   return {
     kind: 'state_snapshot',
     roomId: context.roomId,
+    authorityEpoch: context.authorityEpoch,
+    sequence: context.sequence,
+    requestId: context.requestId ?? null,
+    requestSeq: context.requestSeq ?? null,
     mode: source.matchType.value,
     rulesetId: context.rulesetId,
     phase: source.phase.value,

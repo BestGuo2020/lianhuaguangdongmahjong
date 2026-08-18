@@ -27,6 +27,23 @@ describe('mockVibeHub 本地假 SDK', () => {
     expect(meta).not.toBeNull()
     expect(meta?.mode).toBe('east')
     expect(meta?.rulesetId).toBe('lotus-classic')
+    const guestRoom = await guest.room.join('XYZ789')
+    expect(guestRoom.isHost).toBe(false)
+    expect(guestRoom.hostId).toBe(hostRoom.peerId)
+  })
+
+  it('四个客户端并发加入时所有窗口锁定同一个房主', async () => {
+    const clients = ['p0', 'p1', 'p2', 'p3'].map((peerId) => createMockVibeClient({
+      peerId,
+      settleMs: 40,
+      pingIntervalMs: 0,
+    }))
+    const rooms = await Promise.all(clients.map((client) => client.room.join('FOURWAY1')))
+    await settle()
+
+    expect(new Set(rooms.map((room) => room.hostId))).toEqual(new Set(['p0']))
+    expect(rooms.filter((room) => room.isHost).map((room) => room.peerId)).toEqual(['p0'])
+    rooms.forEach((room) => room.leave())
   })
 
   it('广播消息带 fromPeerId；定向消息只发给目标窗口', async () => {
@@ -108,5 +125,40 @@ describe('mockVibeHub 本地假 SDK', () => {
     await settle()
     expect(received).toHaveLength(1)
     expect((received[0] as { kind: string }).kind).toBe('state_snapshot')
+  })
+
+  it('可注入 P2P → Relay 切换事件，且切换期间消息仍可用', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0, relayAfterMs: 100 })
+      const guest = createMockVibeClient({ settleMs: 10, pingIntervalMs: 0 })
+      const hostJoin = host.room.join('RELAY1')
+      await vi.advanceTimersByTimeAsync(20)
+      const hostRoom = await hostJoin
+      const guestJoin = guest.room.join('RELAY1')
+      await vi.advanceTimersByTimeAsync(20)
+      const guestRoom = await guestJoin
+      const events: string[] = []
+      hostRoom.onPeer((event) => {
+        if (event.type === 'reconnecting') events.push(`reconnecting:${event.id}`)
+        if (event.type === 'relay') events.push(`relay:${event.id}:${event.active}`)
+      })
+      const received: unknown[] = []
+      guestRoom.onMessage((message) => received.push(message))
+
+      await vi.advanceTimersByTimeAsync(120)
+      expect(hostRoom.peers()[0]?.relay).toBe(true)
+      expect(hostRoom.networkStats().state).toBe('relay')
+      expect(events.some((event) => event.startsWith('reconnecting:'))).toBe(true)
+      expect(events.some((event) => event.endsWith(':true'))).toBe(true)
+
+      hostRoom.send({ kind: 'relay-safe' })
+      await vi.advanceTimersByTimeAsync(20)
+      expect(received).toEqual([{ kind: 'relay-safe' }])
+      hostRoom.leave()
+      guestRoom.leave()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

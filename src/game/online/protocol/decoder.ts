@@ -16,6 +16,8 @@ const TABLE_ACTION_TYPES = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
   'wind-kong', 'self-draw', 'discard-win', 'robbed-kong-win',
 ])
+const SEAT_MIN = 0
+const SEAT_MAX = 3
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -29,6 +31,26 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= 1
+}
+
+function isIntegerAtLeast(value: unknown, min: number): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= min
+}
+
+function isIntegerBetween(value: unknown, min: number, max: number): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= min && value <= max
+}
+
+function isSeat(value: unknown): value is number {
+  return isIntegerBetween(value, SEAT_MIN, SEAT_MAX)
+}
+
+function isMaybeSeat(value: unknown): value is number | null {
+  return value === null || isSeat(value)
+}
+
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
@@ -39,6 +61,21 @@ function isNullable<T>(value: unknown, guard: (candidate: unknown) => candidate 
 
 function isOptional<T>(value: unknown, guard: (candidate: unknown) => candidate is T): boolean {
   return value === undefined || guard(value)
+}
+
+function isSnapshotAuthorityMeta(message: JsonObject): boolean {
+  return isString(message.authorityEpoch)
+    && isPositiveInteger(message.sequence)
+    && (message.requestId === null) === (message.requestSeq === null)
+    && (message.requestId === null || (isString(message.requestId) && isPositiveInteger(message.requestSeq)))
+}
+
+function isRequestAuthorityMeta(message: JsonObject): boolean {
+  return isString(message.authorityEpoch)
+    && isPositiveInteger(message.round)
+    && isString(message.requestId)
+    && isPositiveInteger(message.requestSeq)
+    && isSeat(message.targetSeat)
 }
 
 function isArrayOf<T>(value: unknown, guard: (candidate: unknown) => candidate is T): value is T[] {
@@ -55,7 +92,7 @@ function isMeld(value: unknown): value is ServerMeldDto {
   return isString(value.type) && MELD_TYPES.has(value.type)
     && isTile(value.tile)
     && isArrayOf(value.tiles, isTile)
-    && isOptional(value.from, (candidate): candidate is number | null => isNullable(candidate, isNumber))
+    && isOptional(value.from, isMaybeSeat)
     && isOptional(value.added, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
     && isOptional(value.pending, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
     && isOptional(value.windKong, (candidate): candidate is boolean | null => isNullable(candidate, isBoolean))
@@ -64,21 +101,21 @@ function isMeld(value: unknown): value is ServerMeldDto {
 function isPlayer(value: unknown): value is ServerPlayerDto {
   if (!isObject(value)) return false
   return isString(value.name) && isString(value.avatar)
-    && isNumber(value.score) && isNumber(value.seat)
+    && isNumber(value.score) && isSeat(value.seat)
     // 服务端会用 null 遮蔽其他玩家的暗牌；mapper 在进入核心状态时继续按牌背处理。
     && Array.isArray(value.hand) && value.hand.every((tile) => tile === null || isTile(tile))
     && isArrayOf(value.discards, isTile)
     && isArrayOf(value.melds, isMeld)
-    && isNumber(value.redCount) && isNumber(value.drawnTileIndex)
+    && isIntegerAtLeast(value.redCount, 0) && isIntegerAtLeast(value.drawnTileIndex, -1)
 }
 
 function isRoundResult(value: unknown): value is RoundResult {
   if (!isObject(value)) return false
   return isOptional(value.draw, isBoolean)
-    && isOptional(value.winnerIndex, isNumber)
+    && isOptional(value.winnerIndex, (candidate) => isSeat(candidate))
     && isOptional(value.winner, isString)
     && isOptional(value.roundLabel, isString)
-    && isOptional(value.honba, isNumber)
+    && isOptional(value.honba, (candidate) => isIntegerAtLeast(candidate, 0))
     && isOptional(value.horses, (item): item is TileType[] => isArrayOf(item, isTile))
     && isOptional(value.hits, isNumber)
     && isOptional(value.multiplier, isNumber)
@@ -86,49 +123,50 @@ function isRoundResult(value: unknown): value is RoundResult {
     && isOptional(value.horsePoints, isNumber)
     && isOptional(value.points, isNumber)
     && isOptional(value.totalWon, isNumber)
-    && isOptional(value.tenpai, (item): item is number[] => isArrayOf(item, isNumber))
+    && isOptional(value.tenpai, (item): item is number[] => isArrayOf(item, isSeat))
     && isOptional(value.dealerTenpai, isBoolean)
     && isOptional(value.fourRed, isBoolean)
     && isOptional(value.kongBloom, isBoolean)
     && isOptional(value.robbedKong, isBoolean)
-    && isOptional(value.robbedKongPlayerIndex, isNumber)
+    && isOptional(value.robbedKongPlayerIndex, (candidate) => isIntegerBetween(candidate, -1, SEAT_MAX))
     && isOptional(value.winTile, isTile)
     && isOptional(value.details, (items): items is JsonObject[] => isArrayOf(items, (item): item is JsonObject => (
       isObject(item) && isString(item.label)
       && isOptional(item.multiplier, isNumber) && isOptional(item.points, isNumber)
     )))
     && isOptional(value.scoreChanges, (items): items is JsonObject[] => isArrayOf(items, (item): item is JsonObject => (
-      isObject(item) && isNumber(item.playerIndex) && isString(item.name)
+      isObject(item) && isSeat(item.playerIndex) && isString(item.name)
       && isString(item.avatar) && isNumber(item.score) && isNumber(item.delta)
-      && isOptional(item.rank, isNumber) && isOptional(item.fallbackAvatar, isString)
+      && isOptional(item.rank, (candidate) => isIntegerAtLeast(candidate, 1)) && isOptional(item.fallbackAvatar, isString)
     )))
 }
 
 function isAnnouncement(value: unknown): value is JsonObject {
-  return isObject(value) && isString(value.text) && isString(value.tone) && isNumber(value.id)
+  return isObject(value) && isString(value.text) && isString(value.tone) && isPositiveInteger(value.id)
 }
 
 function isLastDiscard(value: unknown): value is JsonObject {
-  return isObject(value) && isTile(value.tile) && isNumber(value.from) && isNumber(value.id)
+  return isObject(value) && isTile(value.tile) && isSeat(value.from) && isPositiveInteger(value.id)
 }
 
 function isWinPresentation(value: unknown): value is WinPresentation {
   return isObject(value)
-    && isNumber(value.winnerIndex) && isTile(value.tile) && isNumber(value.sourceIndex)
-    && isBoolean(value.robbedKong) && isNumber(value.robbedKongPlayerIndex)
-    && isNumber(value.robbedKongMeldIndex)
+    && isSeat(value.winnerIndex) && isTile(value.tile) && isIntegerBetween(value.sourceIndex, -1, SEAT_MAX)
+    && isBoolean(value.robbedKong) && isIntegerBetween(value.robbedKongPlayerIndex, -1, SEAT_MAX)
+    && isIntegerAtLeast(value.robbedKongMeldIndex, -1)
 }
 
 function isDice(value: unknown): value is [number, number] {
-  return Array.isArray(value) && value.length === 2 && value.every(isNumber)
+  return Array.isArray(value) && value.length === 2 && value.every((item) => isIntegerBetween(item, 1, 6))
 }
 
 function isSnapshot(message: JsonObject): boolean {
   return isString(message.roomId)
+    && isSnapshotAuthorityMeta(message)
     && isString(message.mode) && MATCH_TYPES.has(message.mode)
     && isOptional(message.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
     && isString(message.phase) && GAME_PHASES.has(message.phase as GamePhase)
-    && isNumber(message.round) && isNumber(message.dealer) && isNumber(message.honba)
+    && isPositiveInteger(message.round) && isSeat(message.dealer) && isIntegerAtLeast(message.honba, 0)
     && isOptional(message.dice, isDice)
     && isOptional(message.secondDice, isDice)
     // lotus-classic（莲花广麻，默认规则）无翻精：后端这三个字段发送 null 而非省略，
@@ -136,18 +174,19 @@ function isSnapshot(message: JsonObject): boolean {
     && isNullable(message.flipTile, isTile)
     && isOptional(message.jokerTiles, (value): value is TileType[] => isArrayOf(value, isTile))
     && isOptional(message.wildcardTiles, (value): value is TileType[] => isArrayOf(value, isTile))
-    && isNullable(message.flipStack, isNumber)
-    && isNullable(message.openingStack, isNumber)
-    && isOptional(message.wallBreakIndex, isNumber)
-     && isNumber(message.wallCount) && isOptional(message.wall, (value): value is TileType[] => isArrayOf(value, isTile))
-    && isNumber(message.headDrawn) && isNumber(message.currentPlayer)
-    && isArrayOf(message.players, isPlayer) && isNumber(message.seat)
+    && isNullable(message.flipStack, (value) => isIntegerAtLeast(value, 0))
+    && isNullable(message.openingStack, (value) => isIntegerAtLeast(value, 0))
+    && isOptional(message.wallBreakIndex, (value) => isIntegerAtLeast(value, 0))
+     && isIntegerAtLeast(message.wallCount, 0) && isOptional(message.wall, (value): value is TileType[] => isArrayOf(value, isTile))
+    && isIntegerAtLeast(message.headDrawn, 0) && isIntegerBetween(message.currentPlayer, -1, SEAT_MAX)
+    && isArrayOf(message.players, isPlayer) && isSeat(message.seat)
     && isNullable(message.result, isRoundResult)
     && isNullable(message.announcement, isAnnouncement)
     && isBoolean(message.matchFinished)
+    && ((message.phase === 'finished') === message.matchFinished)
     && isNullable(message.lastDiscard, isLastDiscard)
     && isNullable(message.winPresentation, isWinPresentation)
-    && isNumber(message.winningPlayerIndex)
+    && isIntegerBetween(message.winningPlayerIndex, -1, SEAT_MAX)
 }
 
 export function decodeServerMessage(raw: unknown): ServerMessage | null {
@@ -156,56 +195,71 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
     switch (raw.kind) {
       case 'state_snapshot': return isSnapshot(raw)
       case 'round_start':
-        return isBoolean(raw.matchStarted) && isNumber(raw.round) && isNumber(raw.dealer)
-          && isNumber(raw.honba) && isDice(raw.dice)
+        return isString(raw.roomId)
+          && isString(raw.authorityEpoch)
+          && isPositiveInteger(raw.sequence)
+          && isBoolean(raw.matchStarted) && isPositiveInteger(raw.round) && isSeat(raw.dealer)
+          && isIntegerAtLeast(raw.honba, 0) && isDice(raw.dice)
           && isOptional(raw.secondDice, isDice)
           && isOptional(raw.flipTile, isTile)
-          && isOptional(raw.flipStack, isNumber)
-          && isOptional(raw.flipSeat, isNumber)
+          && isOptional(raw.flipStack, (value) => isIntegerAtLeast(value, 0))
+          && isOptional(raw.flipSeat, isSeat)
       case 'rejoin_ok':
-        return isNumber(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)
+        return isSeat(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
           && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
           && isString(raw.nickname) && isString(raw.rejoinCode)
+          && isString(raw.authorityEpoch)
       case 'rejoin_err':
       case 'error': return isString(raw.code)
       case 'turn_request':
-        return isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
-          && isArrayOf(raw.ctx.melds, isMeld) && isNumber(raw.ctx.exposedMelds)
+        return isRequestAuthorityMeta(raw)
+          && isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
+          && isArrayOf(raw.ctx.melds, isMeld) && isIntegerAtLeast(raw.ctx.exposedMelds, 0)
           && isBoolean(raw.ctx.kongBloom) && isBoolean(raw.ctx.skipDraw)
           && isBoolean(raw.ctx.afterKong)
           && isOptional(raw.ctx.jokers, (item): item is TileType[] => isArrayOf(item, isTile))
           && isOptional(raw.ctx.canHu, isBoolean)
           && isOptional(raw.ctx.canWindKong, isBoolean)
       case 'claim_request':
-        return isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
+        return isRequestAuthorityMeta(raw)
+          && isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
           && isOptional(raw.ctx.canPeng, isBoolean)
           && isOptional(raw.ctx.canHu, isBoolean)
-          && isBoolean(raw.ctx.canGang) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)
+          && isBoolean(raw.ctx.canGang) && isTile(raw.ctx.tile) && isSeat(raw.ctx.from)
           && isOptional(raw.ctx.chiOptions, (items): items is JsonObject[] => isArrayOf(items, (item): item is JsonObject => (
             isObject(item) && isArrayOf(item.tiles, isTile)
             && isString(item.kind) && ['sequence', 'wind', 'dragon'].includes(item.kind)
           )))
       case 'rob_kong_request':
-        return isObject(raw.ctx) && isTile(raw.ctx.tile) && isNumber(raw.ctx.from)
-          && isArrayOf(raw.ctx.hand, isTile) && isNumber(raw.ctx.exposedMelds)
+        return isRequestAuthorityMeta(raw)
+          && isObject(raw.ctx) && isTile(raw.ctx.tile) && isSeat(raw.ctx.from)
+          && isArrayOf(raw.ctx.hand, isTile) && isIntegerAtLeast(raw.ctx.exposedMelds, 0)
       case 'table_action':
-        return isObject(raw.event) && isNumber(raw.event.id)
+        return isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
+          && isObject(raw.event) && isPositiveInteger(raw.event.id)
           && isString(raw.event.type) && TABLE_ACTION_TYPES.has(raw.event.type)
-          && isNumber(raw.event.actorIndex) && isNullable(raw.event.sourceIndex, isNumber)
-          && isTile(raw.event.tile) && isNumber(raw.event.meldIndex)
+          && isSeat(raw.event.actorIndex) && isNullable(raw.event.sourceIndex, isSeat)
+          && isTile(raw.event.tile) && isIntegerBetween(raw.event.meldIndex, -1, 3)
       case 'score_flow':
-        return isArrayOf(raw.deltas, (item): item is JsonObject => (
-          isObject(item) && isNumber(item.playerIndex) && isNumber(item.amount)
+        return isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
+          && isArrayOf(raw.deltas, (item): item is JsonObject => (
+          isObject(item) && isSeat(item.playerIndex) && isNumber(item.amount)
         ))
       case 'announcement':
-        return isString(raw.text) && isString(raw.tone) && isOptional(raw.id, isNumber)
-      case 'hand_result': return isRoundResult(raw.result)
-      case 'continue_prompt': return isNumber(raw.total)
+        return isString(raw.text) && isString(raw.tone) && isOptional(raw.id, isPositiveInteger)
+          && isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
+      case 'hand_result':
+        return isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
+          && isRoundResult(raw.result)
+      case 'continue_prompt': return isIntegerAtLeast(raw.total, 0)
       case 'match_finished':
         return isString(raw.roomId) && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
+          && isString(raw.authorityEpoch)
+          && isPositiveInteger(raw.sequence)
+          && isPositiveInteger(raw.round)
           && isArrayOf(raw.finalScores, (item): item is JsonObject => (
-            isObject(item) && isNumber(item.seat) && isString(item.name) && isNumber(item.score)
+            isObject(item) && isSeat(item.seat) && isString(item.name) && isNumber(item.score)
           ))
       case 'room_closed':
       case 'pong': return true

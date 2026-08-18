@@ -69,4 +69,43 @@ describe('vibeRoomTransport 信号检测（应用层 RTT ping-pong）', () => {
     expect(room.sent.some((s) => (s.message as { __transport_pong?: number })?.__transport_pong === 12345)).toBe(true)
     transport.close()
   })
+
+  it('P2P 切换 relay 后恢复为 connected，不显示断线', () => {
+    vi.useFakeTimers()
+    const room = createMockVibeRoom(false)
+    room.peers = () => [peer({ reconnecting: true, relay: true, open: true })]
+    const transport = createVibeRoomTransport({ getRoom: () => room, onMessage: () => {} })
+    transport.open()
+
+    room.emitPeer({ type: 'reconnecting', id: 'host-peer' })
+    vi.advanceTimersByTime(2100)
+    expect(transport.status.value).toBe('reconnecting')
+
+    room.emitPeer({ type: 'relay', id: 'host-peer', active: true })
+    expect(transport.status.value).toBe('connected')
+    transport.close()
+  })
+
+  it('刷新重进后忽略旧 Room 迟到的消息和 peer 事件', () => {
+    const oldRoom = createMockVibeRoom(false)
+    const newRoom = createMockVibeRoom(false)
+    let currentRoom: VibeHubSDK.Room = oldRoom
+    const received: unknown[] = []
+    const transport = createVibeRoomTransport({
+      getRoom: () => currentRoom,
+      onMessage: (message) => received.push(message),
+    })
+    transport.open()
+    transport.close()
+    currentRoom = newRoom
+    transport.open()
+
+    oldRoom.emit('host-peer', { kind: 'stale_old_room' })
+    oldRoom.emitPeer({ type: 'reconnecting', id: 'host-peer' })
+    expect(received).toEqual([])
+
+    newRoom.emit('host-peer', { kind: 'current_room' })
+    expect(received).toEqual([{ kind: 'current_room' }])
+    transport.close()
+  })
 })

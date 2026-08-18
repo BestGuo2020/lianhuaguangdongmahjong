@@ -39,9 +39,12 @@ export function createTransientEventPresenter({
   later,
 }: TransientEventPresenterOptions) {
   function announce(text: string, tone = 'gold') {
-    state.announcement.value = { text, tone, id: Date.now() }
+    const current = { text, tone, id: Date.now() }
+    state.announcement.value = current
     later(() => {
-      if (state.announcement.value?.text === text) state.announcement.value = null
+      if (state.announcement.value?.id === current.id && state.announcement.value.text === current.text) {
+        state.announcement.value = null
+      }
     }, 1500)
   }
 

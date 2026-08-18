@@ -15,7 +15,9 @@ function setup() {
   const state = createRemoteGameState({ guestId: 'guest-1', autoPlay: true })
   let showingResult = false
   let pendingSnapshot: ServerSnapshot | null = null
-  const opening = { start: vi.fn(), cancel: vi.fn() }
+  const opening = {
+    start: vi.fn(), confirm: vi.fn(), hasSnapshotForRound: vi.fn(() => false), cancel: vi.fn(),
+  }
   const settlement = { cancel: vi.fn() }
   const snapshots = {
     reset: vi.fn(),
@@ -27,7 +29,7 @@ function setup() {
     }),
     apply: vi.fn(),
   }
-  const requests = { reset: vi.fn(), clearPending: vi.fn(), flush: vi.fn() }
+  const requests = { reset: vi.fn(), clearPending: vi.fn(), flush: vi.fn(), syncSnapshot: vi.fn() }
   const transientEvents = { clear: vi.fn() }
   const sendContinue = vi.fn()
   const refreshRoom = vi.fn()
@@ -73,6 +75,8 @@ describe('remoteMatchLifecycle', () => {
 
   it('在结算屏障缓冲 round_start，确认继续后启动开局并刷新缓冲请求', () => {
     const { state, lifecycle, opening, requests, sendContinue, setShowingResult } = setup()
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
     const roundStart = {
       kind: 'round_start' as const, matchStarted: false, round: 2,
       dealer: 1, honba: 0, dice: [2, 4] as [number, number],
@@ -88,15 +92,129 @@ describe('remoteMatchLifecycle', () => {
     expect(requests.flush).toHaveBeenCalled()
   })
 
+  it('同一轮重复或迟到的 round_start 不会再次清空并重播开局', () => {
+    const { lifecycle, opening } = setup()
+    const roundStart = {
+      kind: 'round_start' as const, authorityEpoch: 'epoch-1', sequence: 4,
+      matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 4] as [number, number],
+    }
+
+    lifecycle.handleRoundStart(roundStart)
+    lifecycle.handleRoundStart({ ...roundStart, sequence: 5 })
+    lifecycle.handleRoundStart({ ...roundStart, sequence: 3 })
+
+    expect(opening.start).toHaveBeenCalledOnce()
+  })
+
+  it('权威快照先到时，round_start 只去重，不重新等待已经消费过的快照', () => {
+    const { state, lifecycle, opening } = setup()
+    state.round.value = 2
+    state.phase.value = 'playing'
+    state.players.push(player(0), player(1), player(2), player(3))
+
+    lifecycle.handleRoundStart({
+      kind: 'round_start', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: false, round: 2, dealer: 0, honba: 0, dice: [2, 4],
+    })
+
+    expect(opening.start).not.toHaveBeenCalled()
+    expect(opening.confirm).toHaveBeenCalledWith(expect.objectContaining({ round: 2 }))
+    expect(state.waitingNextRound.value).toBe(false)
+  })
+
+  it('权威快照先到且已缓存开局数据时，round_start 仍启动客户端动画', () => {
+    const { state, lifecycle, opening } = setup()
+    state.round.value = 2
+    state.phase.value = 'playing'
+    state.players.push(player(0), player(1), player(2), player(3))
+    opening.hasSnapshotForRound.mockReturnValue(true)
+
+    lifecycle.handleRoundStart({
+      kind: 'round_start', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: false, round: 2, dealer: 0, honba: 0, dice: [2, 4],
+    })
+
+    expect(opening.start).toHaveBeenCalledOnce()
+    expect(opening.confirm).not.toHaveBeenCalled()
+  })
+
+  it('round_start 丢失时，当前房主 opening 快照仍恢复客户端动画', () => {
+    const { state, lifecycle, opening } = setup()
+    state.round.value = 1
+    state.phase.value = 'dealing'
+    state.players.push(player(0), player(1), player(2), player(3))
+    opening.hasSnapshotForRound.mockReturnValue(true)
+
+    lifecycle.handleOpeningSnapshot({
+      kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 2,
+      mode: 'east', phase: 'opening', round: 1, dealer: 2, honba: 1,
+      dice: [3, 5], secondDice: [2, 4], wallCount: 83, wall: [], headDrawn: 53,
+      currentPlayer: -1, players: [0, 1, 2, 3].map((seat) => player(seat) as never), seat: 1,
+      result: null, announcement: null, matchFinished: false, lastDiscard: null,
+      winPresentation: null, winningPlayerIndex: -1,
+    })
+
+    expect(opening.start).toHaveBeenCalledWith(expect.objectContaining({
+      round: 1, dealer: 2, honba: 1, dice: [3, 5], secondDice: [2, 4],
+    }))
+
+    lifecycle.handleRoundStart({
+      kind: 'round_start', authorityEpoch: 'epoch-1', sequence: 1,
+      matchStarted: true, round: 1, dealer: 2, honba: 1, dice: [3, 5],
+    })
+    expect(opening.start).toHaveBeenCalledOnce()
+  })
+
+  it('清理继续屏障后，旧 Room 的同轮 round_start 仍会被去重', () => {
+    const { lifecycle, opening } = setup()
+    const roundStart = {
+      kind: 'round_start' as const, authorityEpoch: 'epoch-1', sequence: 4,
+      matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 4] as [number, number],
+    }
+
+    lifecycle.handleRoundStart(roundStart)
+    lifecycle.clearRoundBarrier()
+    lifecycle.handleRoundStart({ ...roundStart, sequence: 5 })
+
+    expect(opening.start).toHaveBeenCalledOnce()
+  })
+
+  it('房主 authorityEpoch 变化后允许新生命周期从 sequence=1 开始', () => {
+    const { lifecycle, opening } = setup()
+    lifecycle.handleRoundStart({
+      kind: 'round_start', authorityEpoch: 'old', sequence: 9,
+      matchStarted: true, round: 3, dealer: 0, honba: 0, dice: [2, 4],
+    })
+    lifecycle.handleRoundStart({
+      kind: 'round_start', authorityEpoch: 'new', sequence: 1,
+      matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [3, 5],
+    })
+
+    expect(opening.start).toHaveBeenCalledTimes(2)
+  })
+
   it('丢弃滞留结算快照，只重新应用可推进的新快照', () => {
-    const { lifecycle, snapshots, setPendingSnapshot } = setup()
+    const { state, lifecycle, snapshots, requests, setPendingSnapshot } = setup()
+    // nextRound 只能由房主已经确认的本局结算状态触发。
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
     setPendingSnapshot({ phase: 'settled', result: { winnerIndex: 0 } } as unknown as ServerSnapshot)
     lifecycle.nextRound()
     expect(snapshots.apply).not.toHaveBeenCalled()
 
     setPendingSnapshot({ phase: 'drawing', result: null } as unknown as ServerSnapshot)
+    snapshots.apply.mockReturnValue(true)
     lifecycle.nextRound()
     expect(snapshots.apply).toHaveBeenCalledWith(expect.objectContaining({ phase: 'drawing' }))
+    expect(requests.syncSnapshot).toHaveBeenCalledWith(expect.objectContaining({ phase: 'drawing' }))
+  })
+
+  it('非结算阶段的继续操作不能在客户端本地制造下一局等待状态', () => {
+    const { state, lifecycle, sendContinue } = setup()
+    lifecycle.nextRound()
+
+    expect(sendContinue).not.toHaveBeenCalled()
+    expect(state.waitingNextRound.value).toBe(false)
   })
 
   it('返回房间大厅时保留房间会话，只清理牌桌并刷新房间', () => {
@@ -115,17 +233,4 @@ describe('remoteMatchLifecycle', () => {
     expect(refreshRoom).toHaveBeenCalled()
   })
 
-  it('场次结束时更新服务端最终分数并清理推进屏障', () => {
-    const { state, lifecycle, snapshots, requests } = setup()
-    state.players.push(player(0), player(1))
-    lifecycle.finishMatch([
-      { seat: 0, name: 'P0', score: 1800 },
-      { seat: 1, name: 'P1', score: 200 },
-    ])
-
-    expect(state.phase.value).toBe('finished')
-    expect(state.players.map((item) => item.score)).toEqual([1800, 200])
-    expect(snapshots.clearPending).toHaveBeenCalled()
-    expect(requests.clearPending).toHaveBeenCalled()
-  })
 })

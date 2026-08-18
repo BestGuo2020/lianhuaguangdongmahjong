@@ -52,6 +52,8 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
   let reconnectingTimer: ReturnType<typeof setTimeout> | null = null
   // 最近一轮 ping 测得的最差 RTT（多人局取最差对端）。
   let worstRtt: number | null = null
+  // SDK relay 事件可能先于 peers() 状态更新；单独记录，避免切路瞬间被判成断线。
+  const relayPeers = new Set<string>()
 
   function clearReconnectingConfirm() {
     if (reconnectingTimer != null) {
@@ -68,6 +70,9 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
     if (boundRoom === room) return
     boundRoom = room
     room.onMessage((message, fromPeerId) => {
+      // room.leave() 后 SDK 仍可能把旧轮询队列里的 signal/message 投递出来；
+      // 只允许当前绑定的 Room 进入业务层，避免刷新重进时旧房间的快照/请求污染新会话。
+      if (boundRoom !== room) return
       // 收到任何消息 → 连接可用，取消 reconnecting 确认。
       clearReconnectingConfirm()
       if (typeof message === 'object' && message !== null) {
@@ -88,11 +93,13 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
       onMessage(message, fromPeerId)
     })
     room.onPeer((event) => {
+      if (boundRoom !== room) return
       // 只跟踪房主（hostId）的连接状态：其他玩家的掉线/抖动不应触发「网络断开，
       // 正在重连」横幅。error 事件无 id，直接忽略。
       if (event.type === 'error') return
       if (event.id !== room.hostId && event.id !== room.peerId) return
       if (event.type === 'reconnecting') {
+        relayPeers.delete(event.id)
         // 延迟 2s 确认：relay 切换/短暂抖动会在 2s 内恢复（connecting/消息），不误报。
         if (reconnectingTimer == null) {
           reconnectingTimer = setTimeout(() => {
@@ -101,8 +108,20 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
             status.value = 'reconnecting'
           }, 2000)
         }
+      } else if (event.type === 'relay') {
+        if (event.active) {
+          // relay 是 SDK 的可用保底路径，不是掉线。直连切换 relay 期间可能没有
+          // join/connecting 事件，因此这里也必须取消「正在重连」状态。
+          clearReconnectingConfirm()
+          relayPeers.add(event.id)
+          status.value = 'connected'
+          updateSignalQuality()
+        } else {
+          relayPeers.delete(event.id)
+        }
       } else if (event.type === 'join' || event.type === 'connecting') {
         clearReconnectingConfirm()
+        relayPeers.delete(event.id)
         status.value = 'connected'
         updateSignalQuality()
       }
@@ -122,7 +141,9 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
       return
     }
     // 对端连接状态兜底（reconnecting/关闭 → 至少 1 格）。
-    const peerScore = Math.min(...peers.map(scorePeer))
+    const peerScore = Math.min(...peers.map((peer) => (
+      relayPeers.has(peer.id) && peer.open ? 3 : scorePeer(peer)
+    )))
     // 应用层 RTT（真实往返）主导；本轮还没收到 pong 时沿用上一轮 RTT。
     const rttScore = worstRtt == null ? 3 : scoreFromRtt(worstRtt)
     signalQuality.value = Math.min(peerScore, rttScore)
@@ -167,6 +188,7 @@ export function createVibeRoomTransport({ getRoom, onMessage, signalIntervalMs =
     }
     clearReconnectingConfirm()
     boundRoom = null
+    relayPeers.clear()
     status.value = 'idle'
     signalQuality.value = 0
     worstRtt = null

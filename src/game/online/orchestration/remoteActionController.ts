@@ -6,11 +6,11 @@ import type { RemoteGameState } from '../state/remoteGameState'
 type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles'>
 
 export type RemotePlayerActionMessage =
-  | { type: 'discard'; handIndex: number }
-  | { type: 'pass' }
-  | { type: 'claim'; action: 'peng' | 'gang' | 'chi'; optionIndex?: number }
-  | { type: 'gang'; kind: 'added' | 'concealed' | 'wind'; tile?: TileType }
-  | { type: 'hu' }
+  | { type: 'discard'; handIndex: number; requestId?: string }
+  | { type: 'pass'; requestId?: string }
+  | { type: 'claim'; action: 'peng' | 'gang' | 'chi'; optionIndex?: number; requestId?: string }
+  | { type: 'gang'; kind: 'added' | 'concealed' | 'wind'; tile?: TileType; requestId?: string }
+  | { type: 'hu'; requestId?: string }
 
 export interface RemoteActionControllerOptions {
   state: ActionState
@@ -97,7 +97,6 @@ export function createRemoteActionController({
   function userPass() {
     const prompt = state.actionPrompt.value
     clearCountdown()
-    state.actionPrompt.value = null
     if (!prompt) return
     playSound('click.mp3', 0.65)
     send({ type: 'pass' })
@@ -106,7 +105,6 @@ export function createRemoteActionController({
   function userPeng() {
     if (!isClaimPrompt(state.actionPrompt.value)) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'peng' })
   }
@@ -114,7 +112,6 @@ export function createRemoteActionController({
   function userChi(optionIndex = 0) {
     if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'chi', optionIndex })
   }
@@ -122,7 +119,6 @@ export function createRemoteActionController({
   function userGangFromDiscard() {
     if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.canGang) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'gang' })
   }
@@ -145,14 +141,12 @@ export function createRemoteActionController({
   function userHu() {
     if (isClaimPrompt(state.actionPrompt.value) && state.actionPrompt.value.canHu) {
       clearCountdown()
-      state.actionPrompt.value = null
       playSound('click.mp3', 0.65)
       send({ type: 'hu' })
       return
     }
     if (state.actionPrompt.value?.type === 'rob') {
       clearCountdown()
-      state.actionPrompt.value = null
       playSound('click.mp3', 0.65)
       send({ type: 'hu' })
       return

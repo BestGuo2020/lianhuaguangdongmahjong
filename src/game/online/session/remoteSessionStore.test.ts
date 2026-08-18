@@ -26,6 +26,7 @@ describe('remoteSessionStore', () => {
       rejoinCode: 'AAAA-BBBB',
       nickname: '莲花',
       playerId: 'guest-1',
+      seatToken: 'seat-secret',
       mode: 'hanchan',
       rulesetId: 'lotus-classic',
     }
@@ -39,6 +40,9 @@ describe('remoteSessionStore', () => {
     expect(loaded).toMatchObject(session)
     expect(typeof loaded?.savedAt).toBe('number')
     expect(storage.data[REMOTE_STORAGE_KEYS.nickname]).toBe('莲花')
+
+    store.saveSeatToken('seat-secret-2')
+    expect(store.loadSession()?.seatToken).toBe('seat-secret-2')
 
     store.clearSession()
     expect(store.loadSession()).toBeNull()
@@ -100,5 +104,25 @@ describe('remoteSessionStore', () => {
     const id = generateGuestId(() => 0.5, () => 123456789)
 
     expect(id).toBe('gii3v9')
+  })
+
+  it('隔离开发 Mock peer 的会话，避免共享 localStorage 互相恢复', () => {
+    const storage = memoryStorage()
+    const peerA = createRemoteSessionStore(() => storage, { namespace: 'mock:peer-a' })
+    const peerB = createRemoteSessionStore(() => storage, { namespace: 'mock:peer-b' })
+
+    peerA.saveGuestId('guest-a')
+    peerA.saveNickname('甲')
+    peerA.saveSession({ roomId: 'ROOM-A', rejoinCode: '', nickname: '甲', playerId: 'guest-a', mode: 'east' })
+    peerB.saveGuestId('guest-b')
+    peerB.saveNickname('乙')
+    peerB.saveSession({ roomId: 'ROOM-B', rejoinCode: '', nickname: '乙', playerId: 'guest-b', mode: 'east' })
+
+    expect(peerA.loadGuestId()).toBe('guest-a')
+    expect(peerA.loadSession()?.roomId).toBe('ROOM-A')
+    expect(peerB.loadGuestId()).toBe('guest-b')
+    expect(peerB.loadSession()?.roomId).toBe('ROOM-B')
+    expect(storage.data[`mock:peer-a:${REMOTE_STORAGE_KEYS.session}`]).toBeTruthy()
+    expect(storage.data[`mock:peer-b:${REMOTE_STORAGE_KEYS.session}`]).toBeTruthy()
   })
 })
