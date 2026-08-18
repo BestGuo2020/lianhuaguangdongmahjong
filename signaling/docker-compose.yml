@@ -1,0 +1,29 @@
+# 云服务器一键起：信令服务器 + coturn（TURN/STUN）
+#
+#   cd signaling
+#   # 1) 先改 coturn/turnserver.conf 里的 realm / user 密码 / external-ip
+#   # 2) docker compose up -d --build
+#
+# 云服务器安全组需放行：
+#   8787/tcp                信令（若走 wss 由反代转发，可只对内网开放）
+#   3478/udp + 3478/tcp     STUN/TURN
+#   5349/udp + 5349/tcp     TURN over TLS（可选）
+#   49152-65535/udp         TURN 中继端口范围
+
+services:
+  signaling:
+    build: .
+    container_name: lianhua-signaling
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: lianhua-coturn
+    # TURN 需要开放大量 UDP 端口，host 网络最省事（无需逐端口映射）。
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]

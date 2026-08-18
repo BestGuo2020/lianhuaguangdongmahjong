@@ -155,4 +155,8 @@ vite.config.ts.timestamp-*
 .claude
 .mcp.json
 
+# Python（signaling/ 自托管信令服务器）
+__pycache__/
+*.py[cod]
+
 /backend/
