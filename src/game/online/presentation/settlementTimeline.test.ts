@@ -25,6 +25,7 @@ function harness() {
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
   }
   const sounds: string[] = []
+  const onResultMissingAfterReveal = vi.fn()
   const timeline = createSettlementTimeline({
     state,
     mapResult: (value) => value ? { ...value, winnerIndex: 0 } : null,
@@ -32,8 +33,9 @@ function harness() {
     toLocalSeat: (seat) => (seat - 2 + 4) % 4,
     playSound: (name) => sounds.push(name),
     reducedMotion: () => true,
+    onResultMissingAfterReveal,
   })
-  return { state, sounds, timeline }
+  return { state, sounds, timeline, onResultMissingAfterReveal }
 }
 
 beforeEach(() => vi.useFakeTimers())
@@ -65,6 +67,49 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('settled')
     expect(state.revealHands.value).toBe(true)
     expect(state.result.value?.draw).toBe(true)
+  })
+
+  it('公共胡牌事件先播放，结算随后只补结果且不重播特效', async () => {
+    const { state, sounds, timeline } = harness()
+    const winning = snapshot()
+
+    timeline.startEffect(winning)
+    timeline.startEffect(winning)
+    expect(state.phase.value).toBe('win-effect')
+    expect(sounds).toEqual(['zimo.mp3'])
+
+    timeline.start(winning)
+    expect(state.phase.value).toBe('win-effect')
+    expect(state.result.value).toBeNull()
+    expect(sounds).toEqual(['zimo.mp3'])
+
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.winnerIndex).toBe(0)
+    expect(sounds).toEqual(['zimo.mp3'])
+  })
+
+  it('胡牌表现先播完时停在亮牌阶段，收到结算后立即弹出结果', async () => {
+    const { state, timeline, onResultMissingAfterReveal } = harness()
+    const winning = snapshot()
+
+    timeline.startEffect(winning)
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
+    expect(onResultMissingAfterReveal).toHaveBeenCalledWith(1, 0)
+
+    timeline.start(winning)
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.winnerIndex).toBe(0)
+  })
+
+  it('结算事实及时到达时不触发缺失恢复事件', async () => {
+    const { timeline, onResultMissingAfterReveal } = harness()
+    timeline.start(snapshot())
+
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(onResultMissingAfterReveal).not.toHaveBeenCalled()
   })
 
   it('cancels pending settlement transitions', async () => {

@@ -3,6 +3,8 @@ import type { TileType } from '../../core/contracts/types'
 import type { Announcement } from '../../core/contracts/gamePort'
 import type { RemoteGameState } from '../state/remoteGameState'
 import type { ServerSnapshot } from '../protocol/dto'
+import type { RoundSettledMessage } from '../protocol/messages'
+import type { SettlementPresentationPayload } from '../presentation/settlementTimeline'
 import {
   mapLastDiscardToLocal,
   mapPlayersToLocal,
@@ -31,7 +33,7 @@ export interface SnapshotReconcilerOptions {
     cancel(): void
   }
   settlement: {
-    start(snapshot: ServerSnapshot): void
+    start(snapshot: SettlementPresentationPayload): void
     cancel(): void
   }
   clearCountdown(): void
@@ -65,7 +67,7 @@ export function createSnapshotReconciler({
   // 「先收到新快照、后收到旧快照」时旧包覆盖 pendingSnapshot。
   let pendingSequence = -1
   // 牌山单调性诊断游标：wall 张数回跳或 headDrawn 回退 = 牌山重建/瞬移信号（§6.2）。
-  let lastDiagRound = -1
+  let lastDiagHand = ''
   let diagWallLen = -1
   let diagHeadDrawn = -1
 
@@ -120,9 +122,13 @@ export function createSnapshotReconciler({
 
   function applySharedSnapshot(snapshot: ServerSnapshot) {
     // 牌山单调性诊断：wall 张数回跳（超过 2 张）或 headDrawn 回退 = 牌山瞬移证据。
-    // 开局/换庄边界（round 变化）重置游标；正常对局中 wall 只减、headDrawn 只增。
-    if (lastDiagRound !== snapshot.round) {
-      lastDiagRound = snapshot.round
+    // 开局边界按 (round, honba) 重置。round 已先推进但新牌墙尚未装载的过渡
+    // 快照也可能存在，所以 opening/dealing 必须再次建立新基线；正常 playing
+    // 阶段 wall 只减、headDrawn 只增。
+    const diagHand = `${snapshot.round}:${snapshot.honba}`
+    const openingBoundary = snapshot.phase === 'opening' || snapshot.phase === 'dealing'
+    if (lastDiagHand !== diagHand || openingBoundary) {
+      lastDiagHand = diagHand
       diagWallLen = -1
       diagHeadDrawn = -1
     }
@@ -133,7 +139,7 @@ export function createSnapshotReconciler({
     ) {
       console.warn('[wall-regress] 牌山回跳/重建', JSON.stringify({
         wallLen: diagWallLen, newWallLen, headDrawn: diagHeadDrawn, newHeadDrawn: snapshot.headDrawn,
-        round: snapshot.round, phase: snapshot.phase, seq: snapshot.sequence,
+        round: snapshot.round, honba: snapshot.honba, phase: snapshot.phase, seq: snapshot.sequence,
       }))
     }
     if (newWallLen >= 0) diagWallLen = newWallLen
@@ -165,7 +171,7 @@ export function createSnapshotReconciler({
     state.wallBreakIndex.value = snapshot.wallBreakIndex ?? 0
   }
 
-  function acceptMetadata(snapshot: ServerSnapshot): boolean {
+  function acceptMetadata(snapshot: Pick<ServerSnapshot, 'authorityEpoch' | 'sequence'>): boolean {
     // 快照是客户端唯一可落地的牌局来源。房主刷新/换代后 epoch 必须变化；
     // 同一 epoch 只接受单调递增序列，旧 Room 的迟到终局不能覆盖当前对局。
     if (snapshot.authorityEpoch) {
@@ -180,15 +186,19 @@ export function createSnapshotReconciler({
     return true
   }
 
-  function applyNow(snapshot: ServerSnapshot, metadataAccepted = false): boolean {
-    if (!metadataAccepted && !acceptMetadata(snapshot)) return false
-    if (snapshot.sequence != null) {
-      lastSequence = snapshot.sequence
+  function commitAcceptedMetadata(message: Pick<ServerSnapshot, 'sequence'>) {
+    if (message.sequence != null) {
+      lastSequence = message.sequence
       pendingSequence = -1
     }
-    // 直接落地的新快照已经比任何暂存快照更新，旧 pending 不能在之后复活。
+    // 当前权威消息已经不旧于任何暂存快照；旧 pending 不能在表现结束后复活。
     pendingSnapshot = null
     pendingSequence = -1
+  }
+
+  function applyNow(snapshot: ServerSnapshot, metadataAccepted = false): boolean {
+    if (!metadataAccepted && !acceptMetadata(snapshot)) return false
+    commitAcceptedMetadata(snapshot)
     // 房主「返回大厅」会广播 lobby 快照（空玩家）；客户端若正在展示最终排名页
     // （matchFinished 为 true），保持现状不落地——否则最终对局排行会被房主的
     // 返回动作冲掉（players 清空 → standings 消失）。客户端自己点「返回大厅」时
@@ -340,6 +350,9 @@ export function createSnapshotReconciler({
       return applyNow(snapshot, true)
     }
     if (isShowingRoundResult()) {
+      // win_effect 公共事件会先把客户端置为表现阶段；随后到达的定向 settled
+      // 快照必须立即为同一条时间线补上最终结果，不能像普通下一局快照一样缓存。
+      if (snapshot.phase === 'settled' && snapshot.result) return applyNow(snapshot, true)
       pendingSnapshot = snapshot
       pendingSequence = snapshot.sequence ?? pendingSequence
       return false
@@ -351,6 +364,44 @@ export function createSnapshotReconciler({
       return false
     }
     return applyNow(snapshot, true)
+  }
+
+  /**
+   * 应用不含暗牌/牌墙的房间级结算事实。完整定向快照和公共兜底共用同一 sequence，
+   * 谁先到就由谁启动结算；后到的同序消息会被 authority 门禁幂等拒绝。
+   */
+  function applySettlementNotice(message: RoundSettledMessage): boolean {
+    if (message.round < state.round.value) return false
+    if (!acceptMetadata(message)) return false
+    commitAcceptedMetadata(message)
+    if (state.matchFinished.value) return false
+
+    for (const entry of message.scores) {
+      const player = state.players[toLocal(entry.seat)]
+      if (!player) continue
+      player.name = entry.name
+      player.score = entry.score
+    }
+    state.matchType.value = message.mode
+    state.rulesetId.value = message.rulesetId ?? state.rulesetId.value
+    state.round.value = message.round
+    state.honba.value = message.honba
+    state.dealer.value = toLocal(message.dealer)
+
+    // 已完整进入结算页时，每秒重发只刷新序号/分数；若当前仍是 win-effect /
+    // revealing 且 result 尚未到达，则必须把最终结果交给同一条时间线补齐。
+    if (isShowingRoundResult() && state.result.value != null) return true
+
+    opening.cancel()
+    clearCountdown()
+    onFinishedSnapshot()
+    state.selectedIndex.value = -1
+    state.currentPlayer.value = -1
+    state.actionPrompt.value = null
+    state.waitingNextRound.value = false
+    state.matchFinished.value = false
+    settlement.start(message)
+    return true
   }
 
   function takePending(): ServerSnapshot | null {
@@ -382,6 +433,9 @@ export function createSnapshotReconciler({
     authorityEpoch = null
     lastSequence = -1
     pendingSequence = -1
+    lastDiagHand = ''
+    diagWallLen = -1
+    diagHeadDrawn = -1
   }
 
   function setAuthorityEpoch(epoch?: string) {
@@ -390,6 +444,9 @@ export function createSnapshotReconciler({
     lastSequence = -1
     pendingSequence = -1
     pendingSnapshot = null
+    lastDiagHand = ''
+    diagWallLen = -1
+    diagHeadDrawn = -1
     // 事件 id 通常由引擎在新生命周期重新从 0/1 开始；旧生命周期的去重游标
     // 不能阻止新房主的第一张弃牌/公告在重开一局时展示。
     lastAnnouncementId = -1
@@ -399,6 +456,7 @@ export function createSnapshotReconciler({
   return {
     apply,
     applyNow,
+    applySettlementNotice,
     flush,
     takePending,
     clearPending,

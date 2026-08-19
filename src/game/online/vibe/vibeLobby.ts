@@ -32,7 +32,6 @@ export type ClientLobbyMessage =
   | { type: 'lobby_hello'; nickname: string; avatar: string; playerId?: string; seatToken?: string }
   | { type: 'lobby_ready'; ready: boolean }
   | { type: 'lobby_leave' }
-  | { type: 'lobby_ping' }
 
 // host → client
 export type HostLobbyMessage =
@@ -68,7 +67,7 @@ export function isClientLobbyMessage(message: unknown): message is ClientLobbyMe
       && (value.seatToken === undefined || typeof value.seatToken === 'string')
   }
   if (value.type === 'lobby_ready') return typeof value.ready === 'boolean'
-  return value.type === 'lobby_leave' || value.type === 'lobby_ping'
+  return value.type === 'lobby_leave'
 }
 
 export function isHostLobbyMessage(message: unknown): message is HostLobbyMessage {
@@ -134,39 +133,13 @@ export function createHostLobby({
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
   },
 }: HostLobbyOptions) {
-  // 应用层心跳超时：客户端每 15s 发 lobby_ping，超过 40s 未收到对端任何消息 → 判定离开。
-  const PING_TIMEOUT_MS = 40000
   // 座位 0 固定给房主；其余座位按 hello 到达顺序分配。
   const peers = new Map<string, HostedSeat>()
   const occupied = new Set<number>([0])
   const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const relayPeers = new Set<string>()
-  // 应用层心跳：客户端定期发 lobby_ping（见 createClientLobby），房主记录每个对端
-  // 最后活跃时间；超过 PING_TIMEOUT_MS 无任何消息（关页面不再 ping）→ 判定离开。
-  // 这是不依赖 SDK peers()/事件的主动检测，保证「关闭浏览器 → 房主尽快看到退出」。
-  const lastSeenMap = new Map<string, number>()
   let hostReady = false
   let rosterRevision = 0
-
-  // 兜底：SDK 可能对「对端直接关闭页面/标签页」只做底层连接关闭、不立刻发
-  // leave/reconnecting 事件（对端要从 peers() 移除要等 P2P 重连超时 ≈120s）——
-  // 定期检查已登记 peer 的连接状态 + 应用层心跳（最后活跃时间），发现断开/失活
-  // 即进 10s 宽限（防抖动），宽限内未恢复就释放座位并广播，让房主尽快看到有人退出。
-  const presenceTimer = setInterval(() => {
-    if (isInMatch()) return // 对局中座位锁定给 AI 代打，不在此释放
-    const onlinePeers = room.peers()
-    const now = Date.now()
-    for (const [peerId] of peers) {
-      const info = onlinePeers.find((p) => p.id === peerId)
-      const lastSeen = lastSeenMap.get(peerId) ?? now
-      const connected = relayPeers.has(peerId) || Boolean(info && info.open && !info.reconnecting)
-      const alive = now - lastSeen < PING_TIMEOUT_MS
-      // 连接正常且最近有心跳/消息：不动（宽限的取消只由 join/connecting/hello 等事件负责）。
-      if (connected && alive) continue
-      // 连接断开/重连中/已从列表移除，或超过心跳超时（关页面前不再发 ping）→ 宽限释放。
-      if (!staleTimers.has(peerId)) scheduleStaleRelease(peerId)
-    }
-  }, 5000)
 
   function roster(): LobbySeat[] {
     const publicPeers = [...peers.values()].map(({ playerId: _playerId, seatToken: _seatToken, ...seat }) => seat)
@@ -275,8 +248,6 @@ export function createHostLobby({
 
   room.onMessage((message, fromPeerId) => {
     if (!isClientLobbyMessage(message)) return
-    // 任何客户端消息（含心跳 lobby_ping）都刷新「最后活跃时间」。
-    lastSeenMap.set(fromPeerId, Date.now())
     if (message.type === 'lobby_hello') {
       // peerId 每次刷新都会变化，playerId 才是可用于续接座位的稳定身份。
       // 缺失时退回当前 peerId，但绝不再按昵称继承座位，避免同名玩家抢座。
@@ -368,7 +339,6 @@ export function createHostLobby({
       return true
     },
     close() {
-      clearInterval(presenceTimer)
       staleTimers.forEach((timer) => clearTimeout(timer))
       staleTimers.clear()
       room.send({ type: 'lobby_closed' } satisfies HostLobbyMessage)
@@ -397,8 +367,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
   let lastRosterRevision = 0
   let pendingStart: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] } | null = null
   let startedShuffleId: string | null = null
-  let helloRetry: ReturnType<typeof setInterval> | null = null
-  let pingTimer: ReturnType<typeof setInterval> | null = null
+  let helloRetry: ReturnType<typeof setTimeout> | null = null
 
   function sendHello() {
     room.send({ type: 'lobby_hello', nickname, avatar, playerId, ...(seatToken ? { seatToken } : {}) } satisfies ClientLobbyMessage)
@@ -406,7 +375,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
 
   function stopRetry() {
     if (helloRetry != null) {
-      clearInterval(helloRetry)
+      clearTimeout(helloRetry)
       helloRetry = null
     }
   }
@@ -494,29 +463,18 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       startedShuffleId = null
       stopRetry()
       sendHello()
-      // 兜底：首次 hello 因通道未就绪丢失（SDK join 事件可能不会对新人自身触发，
-      // onPeer 重发兜不住）→ 每 2s 重发，直到收到 roster（mySeat 落地）。
-      helloRetry = setInterval(() => {
-        if (receivedRoster) { stopRetry(); return }
-        sendHello()
+      // 首次 hello 可能早于 DataChannel ready；除 SDK join 事件重发外，只做一次
+      // 有界握手重试，不建立持续轮询。
+      helloRetry = setTimeout(() => {
+        helloRetry = null
+        if (!receivedRoster) sendHello()
       }, 2000)
-      // 应用层心跳：每 15s 发 lobby_ping，让房主能检测「关闭页面」的客户端
-      // （关页面后不再发 ping，房主 40s 内判定离开并释放座位），不依赖 SDK 事件。
-      if (pingTimer == null) {
-        pingTimer = setInterval(() => {
-          if (nickname) room.send({ type: 'lobby_ping' } satisfies ClientLobbyMessage)
-        }, 15000)
-      }
     },
     setReady(ready: boolean) {
       room.send({ type: 'lobby_ready', ready } satisfies ClientLobbyMessage)
     },
     leave() {
       stopRetry()
-      if (pingTimer != null) {
-        clearInterval(pingTimer)
-        pingTimer = null
-      }
       room.send({ type: 'lobby_leave' } satisfies ClientLobbyMessage)
     },
   }

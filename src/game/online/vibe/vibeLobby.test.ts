@@ -363,7 +363,7 @@ describe('vibeLobby', () => {
     restorePeers()
   })
 
-  it('房主：对端直接从 SDK 列表消失（关页面，无 leave/reconnecting 事件）→ 轮询释放座位', () => {
+  it('房主：不轮询 SDK 列表；只响应 onPeer 连接事件释放座位', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(true)
     // 覆写 peers 模拟 SDK 静默移除对端。
@@ -377,12 +377,13 @@ describe('vibeLobby', () => {
     })
     room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(rosters[rosters.length - 1]).toHaveLength(2)
-    // 客户端直接关页面：SDK 底层连接关闭（peers() 不再含 peer1，无 leave/reconnecting 事件）。
+    // 仅修改 peers() 且不发 SDK 事件，不应触发任何应用层轮询。
     online.splice(0)
-    vi.advanceTimersByTime(5000)
-    expect(rosters[rosters.length - 1]).toHaveLength(2) // 第一轮发现断开 → 进入 10s 宽限
+    vi.advanceTimersByTime(60000)
+    expect(rosters[rosters.length - 1]).toHaveLength(2)
+    room.emitPeer({ type: 'reconnecting', id: 'peer1' })
     vi.advanceTimersByTime(10000)
-    expect(rosters[rosters.length - 1]).toHaveLength(1) // 宽限超时 → 释放座位
+    expect(rosters[rosters.length - 1]).toHaveLength(1)
     restorePeers()
   })
 
@@ -517,7 +518,7 @@ describe('vibeLobby', () => {
     ])
   })
 
-  it('客户端：hello 丢失时每 2s 重发，直到收到 roster', () => {
+  it('客户端：hello 丢失时只做一次有界重试，不持续轮询', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
     const received: LobbySeat[][] = []
@@ -533,8 +534,8 @@ describe('vibeLobby', () => {
     // 首次 hello 丢失（房主没回 roster）→ 2s 后重发。
     vi.advanceTimersByTime(2000)
     expect(helloSent()).toBe(2)
-    vi.advanceTimersByTime(2000)
-    expect(helloSent()).toBe(3)
+    vi.advanceTimersByTime(20000)
+    expect(helloSent()).toBe(2)
     // 收到 roster → 停止重发。
     room.emit('host-peer', {
       type: 'lobby_roster', hostSeat: 0, revision: 1,
@@ -544,28 +545,23 @@ describe('vibeLobby', () => {
       ],
     })
     vi.advanceTimersByTime(10000)
-    expect(helloSent()).toBe(3)
+    expect(helloSent()).toBe(2)
     expect(received).toHaveLength(1)
   })
 
-  it('客户端：hello 后每 15s 发 lobby_ping 心跳；leave 停止', () => {
+  it('客户端：hello 后不建立 lobby_ping 周期心跳', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
     const client = createClientLobby({ room, onRoster: () => {}, onStart: () => {}, onClosed: () => {} })
     client.hello('玩家')
     const pingCount = () => room.sent.filter((s) => (s.message as { type: string }).type === 'lobby_ping').length
-    vi.advanceTimersByTime(14999)
+    vi.advanceTimersByTime(60000)
     expect(pingCount()).toBe(0)
-    vi.advanceTimersByTime(1)
-    expect(pingCount()).toBe(1)
-    vi.advanceTimersByTime(15000)
-    expect(pingCount()).toBe(2)
     client.leave()
-    vi.advanceTimersByTime(40000)
-    expect(pingCount()).toBe(2) // 离开后不再发
+    expect(pingCount()).toBe(0)
   })
 
-  it('房主：心跳超时（客户端关页面，不再发 ping）→ 释放座位，不依赖 SDK 事件', () => {
+  it('房主：没有 SDK 连接事件时不按心跳超时释放座位', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(true)
     const rosters: LobbySeat[][] = []
@@ -577,10 +573,9 @@ describe('vibeLobby', () => {
     })
     room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(rosters[rosters.length - 1]).toHaveLength(2)
-    // 客户端关页面：SDK peers() 仍报连接正常（120s 内不移除），但心跳停了。
-    // 40s 心跳超时 → 10s 宽限 → 50s 释放。
+    // 不再维护应用层心跳；时间推进本身不能改变座位。
     vi.advanceTimersByTime(55000)
-    expect(rosters[rosters.length - 1]).toHaveLength(1)
+    expect(rosters[rosters.length - 1]).toHaveLength(2)
     restorePeers()
   })
 

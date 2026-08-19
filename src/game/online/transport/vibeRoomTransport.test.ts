@@ -13,60 +13,64 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('vibeRoomTransport 信号检测（应用层 RTT ping-pong）', () => {
-  it('基于真实往返 RTT 定信号：<150ms=3、300-500ms=1；无 pong 时按对端连接状态兜底', () => {
-    vi.useFakeTimers()
+describe('vibeRoomTransport（SDK 事件驱动）', () => {
+  it('读取 SDK 网络质量，不发送应用层心跳', () => {
     const room = createMockVibeRoom(false)
     const mutablePeers: VibeHubSDK.PeerInfo[] = [peer()]
     const originalPeers = room.peers
-    // mockVibeRoom.peers 固定返回 []：覆写为可变的对端列表。
     room.peers = () => mutablePeers
+    room.networkStats = () => ({ quality: { rttP95Ms: 400 } } as VibeHubSDK.NetworkStats)
     const transport = createVibeRoomTransport({
       getRoom: () => room,
       onMessage: () => {},
-      signalIntervalMs: 3000,
     })
     transport.open()
-    expect(transport.signalQuality.value).toBe(3) // 对端正常且无 RTT 数据 → 流畅
-
-    // 第一个 tick（interval 3s，tick 在 3000ms 触发）发出心跳 ping。
-    vi.advanceTimersByTime(3100)
-    const ping = room.sent.find((s) => (s.message as { __transport_ping?: number })?.__transport_ping != null)
-    expect(ping).toBeTruthy()
-    // 对端几乎立即回 pong → RTT ≈ 100ms → 3 格。
-    room.emit('peer1', { __transport_pong: (ping!.message as { __transport_ping: number }).__transport_ping })
-    expect(transport.signalQuality.value).toBe(3)
-
-    // 第二个 tick（tick 在 6000ms 触发）：对端延迟 400ms 才回 pong → RTT=400 → 1 格（波动）。
-    vi.advanceTimersByTime(3100)
-    const ping2 = room.sent.filter((s) => (s.message as { __transport_ping?: number })?.__transport_ping != null).at(-1)!
-    vi.advanceTimersByTime(200) // 6200 + 200 = 6400 → RTT = 6400 - 6000 = 400
-    room.emit('peer1', { __transport_pong: (ping2.message as { __transport_ping: number }).__transport_ping })
     expect(transport.signalQuality.value).toBe(1)
-
-    // 对端 reconnecting（直连在重连）→ 兜底 1 格（即使 RTT 低）。
-    mutablePeers[0] = peer({ reconnecting: true })
-    vi.advanceTimersByTime(3100)
-    expect(transport.signalQuality.value).toBe(1)
-
-    // 无对端（大厅空房）→ 默认良好 3。
-    mutablePeers.splice(0)
-    vi.advanceTimersByTime(3100)
-    expect(transport.signalQuality.value).toBe(3)
+    expect(room.sent).toEqual([])
 
     transport.close()
     expect(transport.signalQuality.value).toBe(0)
     room.peers = originalPeers
   })
 
-  it('收到对端 ping 立即回 pong（心跳应答）', () => {
+  it('SDK reconnecting 事件超时后升级完整重进，收到房主消息则取消', () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
-    const transport = createVibeRoomTransport({ getRoom: () => room, onMessage: () => {} })
+    const onHostConnectionLost = vi.fn()
+    const transport = createVibeRoomTransport({
+      getRoom: () => room,
+      onMessage: () => {},
+      onHostConnectionLost,
+    })
     transport.open()
-    room.sent.splice(0)
-    room.emit('peer1', { __transport_ping: 12345 })
-    expect(room.sent.some((s) => (s.message as { __transport_pong?: number })?.__transport_pong === 12345)).toBe(true)
+
+    room.emitPeer({ type: 'reconnecting', id: 'host-peer' })
+    vi.advanceTimersByTime(7000)
+    expect(onHostConnectionLost).not.toHaveBeenCalled()
+    room.emit('host-peer', { kind: 'state_snapshot' })
+    expect(transport.status.value).toBe('connected')
+    vi.advanceTimersByTime(2000)
+    expect(onHostConnectionLost).not.toHaveBeenCalled()
+
+    room.emitPeer({ type: 'reconnecting', id: 'host-peer' })
+    vi.advanceTimersByTime(8000)
+    expect(onHostConnectionLost).toHaveBeenCalledOnce()
+    transport.close()
+  })
+
+  it('可靠业务发送遇到 closed-PC 异常立即升级完整房间重进', () => {
+    const room = createMockVibeRoom(false)
+    room.send = () => { throw new Error('RTCPeerConnection is closed') }
+    const onHostConnectionLost = vi.fn()
+    const transport = createVibeRoomTransport({
+      getRoom: () => room,
+      onMessage: () => {},
+      onHostConnectionLost,
+    })
+    transport.open()
+
+    expect(transport.send({ type: 'continue' })).toBe(false)
+    expect(onHostConnectionLost).toHaveBeenCalledOnce()
     transport.close()
   })
 
@@ -106,6 +110,22 @@ describe('vibeRoomTransport 信号检测（应用层 RTT ping-pong）', () => {
 
     newRoom.emit('host-peer', { kind: 'current_room' })
     expect(received).toEqual([{ kind: 'current_room' }])
+    transport.close()
+  })
+
+  it('close 后 reopen 同一个 Room 不会激活旧监听器导致第二场重复处理', () => {
+    const room = createMockVibeRoom(false)
+    const received: unknown[] = []
+    const transport = createVibeRoomTransport({
+      getRoom: () => room,
+      onMessage: (message) => received.push(message),
+    })
+    transport.open()
+    transport.close()
+    transport.open()
+
+    room.emit('host-peer', { kind: 'second_match' })
+    expect(received).toEqual([{ kind: 'second_match' }])
     transport.close()
   })
 })

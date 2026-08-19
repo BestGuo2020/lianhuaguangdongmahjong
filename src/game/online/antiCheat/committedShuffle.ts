@@ -19,6 +19,8 @@ export interface ShuffleStartMessage {
   type: 'round_shuffle_start'
   roomId: string
   round: number
+  /** 连庄时 round 不变，必须用 honba 区分合法新手与旧洗牌消息。 */
+  honba: number
   roundId: string
   /** 本轮实际参与承诺的座位；掉线并已由 AI 接管的座位不在其中。 */
   seats: number[]

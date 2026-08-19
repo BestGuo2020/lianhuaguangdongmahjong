@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GamePlayer } from '../../core/contracts/types'
 import type { ServerSnapshot } from '../protocol/dto'
+import type { RoundSettledMessage } from '../protocol/messages'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createSnapshotReconciler } from './snapshotReconciler'
 
@@ -18,6 +19,17 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
     currentPlayer: 2, players: [0, 1, 2, 3].map(player), seat: 2,
     result: null, announcement: null, matchFinished: false, lastDiscard: null,
     winPresentation: null, winningPlayerIndex: -1,
+    ...overrides,
+  }
+}
+
+function settledNotice(overrides: Partial<RoundSettledMessage> = {}): RoundSettledMessage {
+  return {
+    kind: 'round_settled', roomId: 'ABC123', authorityEpoch: 'epoch-1', sequence: 11,
+    mode: 'east', rulesetId: 'lotus-legacy', round: 2, honba: 1, dealer: 1,
+    result: { winnerIndex: 3, winner: 'P3', roundLabel: '东2局', honba: 1 },
+    winPresentation: null, winningPlayerIndex: 3,
+    scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 1000 + seat * 100 })),
     ...overrides,
   }
 }
@@ -103,6 +115,22 @@ describe('snapshotReconciler', () => {
     expect(state.wallHeadDrawn.value).toBe(53)
   })
 
+  it('新手 opening 重建牌墙不误报回跳，但同手 playing 回跳仍告警', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { reconciler } = setup()
+
+    // round 已推进、牌墙还未重置的过渡快照，随后才到真正的 opening 基线。
+    reconciler.applyNow(snapshot({ round: 3, honba: 0, phase: 'drawing', wallCount: 56, headDrawn: 77 }))
+    reconciler.applyNow(snapshot({ round: 3, honba: 0, phase: 'opening', wallCount: 81, headDrawn: 53 }))
+    expect(warn.mock.calls.filter(([message]) => message === '[wall-regress] 牌山回跳/重建')).toHaveLength(0)
+
+    // 同一手进入 playing 后，牌墙增长/head 回退才是真正的异常。
+    reconciler.applyNow(snapshot({ round: 3, honba: 0, phase: 'drawing', wallCount: 50, headDrawn: 84 }))
+    reconciler.applyNow(snapshot({ round: 3, honba: 0, phase: 'drawing', wallCount: 70, headDrawn: 60 }))
+    expect(warn.mock.calls.filter(([message]) => message === '[wall-regress] 牌山回跳/重建')).toHaveLength(1)
+    warn.mockRestore()
+  })
+
   it('结算展示期间只保留最新快照', () => {
     const { state, reconciler, setShowingResult } = setup()
     setShowingResult(true)
@@ -133,6 +161,81 @@ describe('snapshotReconciler', () => {
     expect(onFinishedSnapshot).toHaveBeenCalled()
     expect(state.phase.value).toBe('finished')
     expect(state.revealHands.value).toBe(true)
+  })
+
+  it('定向 settled 快照缺失时用公共结算事实进入结算，并幂等忽略每秒重发', () => {
+    const {
+      state, reconciler, settlement, openingCancel, onFinishedSnapshot, setShowingResult,
+    } = setup()
+    reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 10 }))
+
+    const first = settledNotice()
+    expect(reconciler.applySettlementNotice(first)).toBe(true)
+    expect(openingCancel).toHaveBeenCalled()
+    expect(onFinishedSnapshot).toHaveBeenCalled()
+    expect(settlement.start).toHaveBeenCalledTimes(1)
+    expect(settlement.start).toHaveBeenCalledWith(first)
+    expect(state.round.value).toBe(2)
+    expect(state.honba.value).toBe(1)
+    expect(state.dealer.value).toBe(3)
+    expect(state.players.map((item) => item.score)).toEqual([1200, 1300, 1000, 1100])
+
+    setShowingResult(true)
+    state.phase.value = 'settled'
+    state.result.value = first.result
+    expect(reconciler.applySettlementNotice(settledNotice({
+      sequence: 12,
+      scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 2000 + seat * 100 })),
+    }))).toBe(true)
+    expect(settlement.start).toHaveBeenCalledTimes(1)
+    expect(state.players.map((item) => item.score)).toEqual([2200, 2300, 2000, 2100])
+    expect(reconciler.applySettlementNotice(settledNotice({ sequence: 11 }))).toBe(false)
+  })
+
+  it('同序结算事实被门禁拒绝时不会伪造已结算状态', () => {
+    const { state, reconciler, settlement } = setup()
+    reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 11, phase: 'playing' }))
+
+    expect(reconciler.applySettlementNotice(settledNotice({ sequence: 11 }))).toBe(false)
+    expect(settlement.start).not.toHaveBeenCalled()
+    expect(state.phase.value).toBe('playing')
+    expect(state.result.value).toBeNull()
+  })
+
+  it('公共胡牌特效播放中仍把随后结算事实交给同一时间线补齐结果', () => {
+    const { state, reconciler, settlement, setShowingResult } = setup()
+    reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 10 }))
+    setShowingResult(true)
+    state.phase.value = 'win-effect'
+    state.result.value = null
+
+    const notice = settledNotice()
+    expect(reconciler.applySettlementNotice(notice)).toBe(true)
+    expect(settlement.start).toHaveBeenCalledWith(notice)
+  })
+
+  it('公共胡牌特效播放中收到定向 settled 快照时立即补结果而不缓存', () => {
+    const { state, reconciler, settlement, setShowingResult } = setup()
+    reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 10 }))
+    setShowingResult(true)
+    state.phase.value = 'win-effect'
+
+    const settled = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 11, phase: 'settled',
+      result: {
+        winnerIndex: 2, winner: 'P2', roundLabel: '东1局', honba: 0,
+        horses: [], hits: 0, multiplier: 1, totalMultiplier: 1,
+        points: 100, totalWon: 300, details: [], scoreChanges: [],
+      },
+      winningPlayerIndex: 2,
+      winPresentation: {
+        winnerIndex: 2, tile: 'm1', sourceIndex: -1, robbedKong: false,
+        robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+      },
+    })
+    expect(reconciler.apply(settled)).toBe(true)
+    expect(settlement.start).toHaveBeenCalledWith(settled)
+    expect(reconciler.takePending()).toBeNull()
   })
 
   it('匹配结束（快照路径）清除「已确认，等待其他玩家」标记', () => {

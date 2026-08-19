@@ -14,6 +14,8 @@ import type { LotusController } from '../../variants/lotus/lotusControllers'
 import type { TileType } from '../../core/contracts/types'
 import { createWall } from '../../core/rules/tiles'
 
+const realSetTimeout = globalThis.setTimeout
+
 function stubWindow() {
   vi.useFakeTimers()
   vi.stubGlobal('window', {
@@ -22,6 +24,16 @@ function stubWindow() {
     setInterval: globalThis.setInterval,
     clearInterval: globalThis.clearInterval,
   })
+}
+
+async function waitForMockMessage(
+  messages: Array<{ kind?: string }>,
+  kind: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 20 && !messages.some((message) => message.kind === kind); attempt += 1) {
+    await vi.advanceTimersByTimeAsync(50)
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 0))
+  }
 }
 
 afterEach(() => {
@@ -326,7 +338,7 @@ describe('startHostGame 无头权威', () => {
     // 客户端 join 完成、处理链挂好后发 hello，房主据此补发 rejoin_ok（避免 join
     // settle 期间直发的 rejoin_ok 因处理器未挂载被漏掉）。
     guestRoomB.send({ type: 'lobby_hello', nickname: '重连客', avatar: '' })
-    await vi.advanceTimersByTimeAsync(300)
+    await waitForMockMessage(rejoinMessages, 'rejoin_ok')
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     const rejoinOk = rejoinMessages.find((message) => message?.kind === 'rejoin_ok')
     expect(rejoinOk?.seat).toBe(1)
@@ -364,7 +376,7 @@ describe('startHostGame 无头权威', () => {
     const rejoinMessages: Array<{ kind?: string; seat?: number }> = []
     guestRoomB.onMessage((message) => rejoinMessages.push(message as never))
     guestRoomB.send({ type: 'lobby_hello', nickname: '重连客A', avatar: '' })
-    await vi.advanceTimersByTimeAsync(300)
+    await waitForMockMessage(rejoinMessages, 'rejoin_ok')
     expect(runner.aiControlledSeats.has(1)).toBe(false)
     const rejoinOk = rejoinMessages.find((message) => message?.kind === 'rejoin_ok')
     expect(rejoinOk?.seat).toBe(1)
@@ -429,7 +441,7 @@ describe('startHostGame 无头权威', () => {
       if ((message as { kind?: string })?.kind === 'claim_request') guestRoomB.send({ type: 'pass' })
     })
     guestRoomB.send({ type: 'lobby_hello', nickname: '全新昵称', avatar: '' })
-    await vi.advanceTimersByTimeAsync(300)
+    await waitForMockMessage(rejoinMessages, 'rejoin_ok')
 
     // 座位恢复 + rejoin_ok + 对局快照（此前按静态 seatByPeer 广播，新 peerId 永远收不到）。
     expect(runner.aiControlledSeats.has(1)).toBe(false)
@@ -497,6 +509,192 @@ describe('startHostGame 无头权威', () => {
     expect(runner.getLivePeerSeats().has('old-peer')).toBe(false)
     // 推进时钟触发开局公告等 fake timer，避免 teardown 时 window 已还原报错。
     await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
+
+  it('终局状态变化只即时广播一次，不按时间周期重发', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const snapshots: ServerSnapshot[] = []
+    const runner = startHostGame<PlayerController>({
+      room,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map(),
+      createController: () => ({}) as PlayerController,
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: (snapshot) => snapshots.push(snapshot),
+      onLocalEvent: () => {},
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    snapshots.splice(0)
+
+    runner.game.matchFinished.value = true
+    runner.game.phase.value = 'finished'
+    await vi.advanceTimersByTimeAsync(2500)
+
+    const finished = snapshots.filter((snapshot) => snapshot.matchFinished && snapshot.phase === 'finished')
+    expect(finished).toHaveLength(1)
+    runner.stop()
+  })
+
+  it('单局结算变化即时广播一次公共事实，不按时间周期重发', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const snapshots: ServerSnapshot[] = []
+    let setPending!: (pending: boolean) => void
+    const runner = startHostGame<PlayerController>({
+      room,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([['peer-1', 1]]),
+      createController: (_room, _peerId, onPending) => {
+        setPending = onPending
+        return new AiController()
+      },
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: (snapshot) => snapshots.push(snapshot),
+      onLocalEvent: () => {},
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    snapshots.splice(0)
+
+    // 点炮/抢杠等竞争裁决中，胜者已经确定时其他 claim promise 可能仍在收尾。
+    // 旧守卫会因为这个 pending 永久压住 settled 快照。
+    setPending(true)
+    runner.game.result.value = {
+      winnerIndex: 0,
+      winner: runner.game.players[0]?.name ?? 'P0',
+      roundLabel: '东1局',
+      honba: 0,
+      horses: [],
+      hits: 0,
+      multiplier: 1,
+      totalMultiplier: 1,
+      points: 100,
+      totalWon: 300,
+      details: [],
+      scoreChanges: [],
+    }
+    runner.game.phase.value = 'settled'
+    await vi.advanceTimersByTimeAsync(2500)
+
+    const settled = snapshots.filter((snapshot) => snapshot.phase === 'settled' && snapshot.result)
+    expect(settled).toHaveLength(1)
+    const publicSettled = room.sent.filter(({ message, to }) => (
+      to == null && (message as { kind?: string }).kind === 'round_settled'
+    ))
+    expect(publicSettled).toHaveLength(1)
+    for (const { message } of publicSettled) {
+      expect(message).not.toHaveProperty('players')
+      expect(message).not.toHaveProperty('wall')
+      expect(message).toMatchObject({ roomId: 'ROOM', round: 1, honba: 0 })
+    }
+    runner.stop()
+  })
+
+  it('客户端亮牌后可按当前代次和局次单次请求补发结算事实', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<PlayerController>({
+      room,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([['peer-1', 1]]),
+      createController: () => new AiController(),
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    runner.game.result.value = { winnerIndex: 0 }
+    runner.game.phase.value = 'settled'
+    await vi.advanceTimersByTimeAsync(50)
+    room.sent.splice(0)
+
+    room.emit('peer-1', {
+      type: 'settlement_sync_request', authorityEpoch: runner.authorityEpoch,
+      round: runner.game.round.value, honba: runner.game.honba.value,
+    })
+    const publicNotice = room.sent.find(({ message, to }) => (
+      to == null && (message as { kind?: string }).kind === 'round_settled'
+    ))
+    const directedSnapshot = room.sent.find(({ message, to }) => (
+      to === 'peer-1' && (message as { kind?: string }).kind === 'state_snapshot'
+    ))
+    expect(publicNotice).toBeTruthy()
+    expect(directedSnapshot).toBeTruthy()
+
+    room.sent.splice(0)
+    room.emit('peer-1', {
+      type: 'settlement_sync_request', authorityEpoch: 'old-epoch',
+      round: runner.game.round.value, honba: runner.game.honba.value,
+    })
+    room.emit('peer-1', {
+      type: 'settlement_sync_request', authorityEpoch: runner.authorityEpoch,
+      round: runner.game.round.value + 1, honba: runner.game.honba.value,
+    })
+    expect(room.sent).toEqual([])
+    runner.stop()
+  })
+
+  it('胡牌开始时只按状态变化广播一次特效，不按时间重发且不泄露暗牌', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<PlayerController>({
+      room,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([['peer-1', 1]]),
+      createController: () => new AiController(),
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    room.sent.splice(0)
+
+    runner.game.winningPlayerIndex.value = 0
+    runner.game.winPresentation.value = {
+      winnerIndex: 0, tile: 'm1', sourceIndex: -1, robbedKong: false,
+      robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+    }
+    await vi.advanceTimersByTimeAsync(900)
+
+    const events = room.sent.filter(({ message, to }) => (
+      to == null && (message as { kind?: string }).kind === 'win_effect'
+    ))
+    expect(events).toHaveLength(1)
+    for (const { message } of events) {
+      expect(message).not.toHaveProperty('players')
+      expect(message).not.toHaveProperty('wall')
+      expect(message).not.toHaveProperty('result')
+      expect(message).toMatchObject({ roomId: 'ROOM', round: 1, honba: 0, winningPlayerIndex: 0 })
+    }
     runner.stop()
   })
 
@@ -603,9 +801,10 @@ describe('startHostGame 无头权威', () => {
     const guestRoom = await guestClient.room.join('RECLAIM1')
     stubWindow()
     const guestMessages: Array<{ kind?: string; requestId?: string }> = []
+    let autoPassClaims = true
     guestRoom.onMessage((message) => guestMessages.push(message as never))
     guestRoom.onMessage((message) => {
-      if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
+      if (autoPassClaims && (message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
     })
     const runner = startHostGame<LotusController>({
       room: hostRoom,
@@ -632,6 +831,9 @@ describe('startHostGame 无头权威', () => {
       aiTook = runner.aiControlledSeats.has(1)
     }
     expect(aiTook).toBe(true)
+    // AI 接管后的后台牌局仍可能产生新 claim_request；若测试助手继续自动 pass，
+    // 那会是一条当前连接的合法响应并正确触发归还，掩盖下面“旧 discard 不归还”的断言。
+    autoPassClaims = false
 
     // AI 兜底请求的旧动作不能改变房主已经确认的 AI 状态；必须先有当前连接
     // 的恢复事件，再归还真人控制权。

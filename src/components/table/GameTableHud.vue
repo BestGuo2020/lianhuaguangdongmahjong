@@ -243,7 +243,22 @@ function onAvatarError(entry: GamePlayer) {
 </script>
 
 <template>
-  <div class="game-table-hud" @pointerdown="clearMobileSelection">
+  <div
+    class="game-table-hud"
+    :data-opening-stage="openingStage ?? ''"
+    :data-dice-values="diceValues.join(',')"
+    :data-dice-thrower-index="diceThrowerIndex"
+    :data-wall-break-index="wallBreakIndex ?? -1"
+    :data-flip-stack="flipStack ?? -1"
+    :data-wall-count="wallCount"
+    :data-wall-head-drawn="wallHeadDrawn"
+    :data-deal-serial="dealAnimation.serial"
+    :data-deal-count="dealAnimation.count"
+    :data-win-effect-id="winEffect?.id ?? -1"
+    :data-win-effect-winner="winEffect?.winnerIndex ?? -1"
+    :data-win-effect-tile="winEffect?.tile ?? ''"
+    @pointerdown="clearMobileSelection"
+  >
     <MahjongTable3D
       :key="themeName"
       :theme-name="themeName"

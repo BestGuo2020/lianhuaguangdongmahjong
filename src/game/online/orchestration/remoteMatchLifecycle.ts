@@ -9,7 +9,7 @@ export interface RemoteMatchLifecycleOptions {
   opening: {
     start(message: RoundStartMessage): void
     confirm(message: RoundStartMessage): void
-    hasSnapshotForRound?(round: number): boolean
+    hasSnapshotForHand?(round: number, honba: number): boolean
     cancel(): void
   }
   settlement: { cancel(): void }
@@ -43,9 +43,15 @@ export function createRemoteMatchLifecycle({
   refreshRoom,
 }: RemoteMatchLifecycleOptions) {
   let pendingRoundStart: RoundStartMessage | null = null
-  let startedRound = -1
+  let startedHand = ''
   let lastRoundStartSequence = -1
   let authorityEpoch: string | null = null
+
+  const handKey = (value: Pick<RoundStartMessage, 'round' | 'honba'>) => `${value.round}:${value.honba}`
+  const snapshotPrecedesState = (value: Pick<ServerSnapshot, 'round' | 'honba'>) => (
+    value.round < state.round.value
+    || (value.round === state.round.value && value.honba < state.honba.value)
+  )
 
   function clearRoundBarrier() {
     // 这里只清理“等待玩家确认”的表现层屏障；不能清掉 round_start 的去重游标。
@@ -64,10 +70,11 @@ export function createRemoteMatchLifecycle({
     if (message.authorityEpoch && authorityEpoch !== message.authorityEpoch) {
       authorityEpoch = message.authorityEpoch
       pendingRoundStart = null
-      startedRound = -1
+      startedHand = ''
       lastRoundStartSequence = -1
     }
-    if (message.round < state.round.value || startedRound === message.round) return
+    const currentHand = handKey(message)
+    if (snapshotPrecedesState(message) || startedHand === currentHand) return
     if (message.sequence != null) {
       if (message.sequence <= lastRoundStartSequence) return
       lastRoundStartSequence = message.sequence
@@ -84,14 +91,14 @@ export function createRemoteMatchLifecycle({
       && state.phase.value !== 'lobby'
       && state.phase.value !== 'finished'
     ) {
-      startedRound = message.round
+      startedHand = currentHand
       pendingRoundStart = null
       state.waitingNextRound.value = false
-      if (opening.hasSnapshotForRound?.(message.round)) opening.start(message)
+      if (opening.hasSnapshotForHand?.(message.round, message.honba)) opening.start(message)
       else opening.confirm(message)
       return
     }
-    startedRound = message.round
+    startedHand = currentHand
     const alreadyConfirmed = state.waitingNextRound.value
     state.waitingNextRound.value = false
     if (isShowingRoundResult() && !alreadyConfirmed) {
@@ -110,15 +117,16 @@ export function createRemoteMatchLifecycle({
    */
   function handleOpeningSnapshot(snapshot: ServerSnapshot) {
     if (snapshot.phase !== 'opening' || state.matchFinished.value || isShowingRoundResult()) return
-    if (snapshot.round < state.round.value || startedRound === snapshot.round) return
-    if (!opening.hasSnapshotForRound?.(snapshot.round)) return
+    const currentHand = handKey(snapshot)
+    if (snapshotPrecedesState(snapshot) || startedHand === currentHand) return
+    if (!opening.hasSnapshotForHand?.(snapshot.round, snapshot.honba)) return
     if (snapshot.authorityEpoch && authorityEpoch !== snapshot.authorityEpoch) {
       authorityEpoch = snapshot.authorityEpoch
       pendingRoundStart = null
-      startedRound = -1
+      startedHand = ''
       lastRoundStartSequence = -1
     }
-    startedRound = snapshot.round
+    startedHand = currentHand
     pendingRoundStart = null
     state.waitingNextRound.value = false
     opening.start({
@@ -143,7 +151,7 @@ export function createRemoteMatchLifecycle({
     requests.reset()
     clearRoundBarrier()
     authorityEpoch = null
-    startedRound = -1
+    startedHand = ''
     lastRoundStartSequence = -1
     opening.cancel()
     state.openingStage.value = null

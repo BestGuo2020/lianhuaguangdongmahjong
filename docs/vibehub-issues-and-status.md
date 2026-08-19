@@ -77,8 +77,10 @@
 - `roundId`、参与者座位、房主代次和牌墙流程绑定。
 - AI 座位不应阻塞真人承诺；真人重进后必须重新绑定新 peer。
 - 后续局继续按钮不是客户端推进命令，真正推进仍由房主引擎和 opening barrier 决定。
+- 后续局洗牌消息使用完整手牌键 `(round, honba)`；连庄时 round 不变、honba 增加，
+  不能再被 `message.round <= currentRound` 误判成旧消息。
 
-状态：**已处理主要流程，异常掉线/重进期间仍需真实回归**。
+状态：**已处理主要流程，2 真人 + 2 AI 公网连续两场已验证（2026-08-19）**；异常掉线/重进期间仍需真实回归。
 
 ## 3. 快照与状态同步问题
 
@@ -117,8 +119,64 @@ mySeat: 2 ... seats: 0:... | 1:... | 2:...
 - 结算时间线在收到当前房主的非结算快照时取消。
 - 旧 `Room`、旧结算回调和旧 pending snapshot 不得覆盖新局。
 - 终局必须同时满足权威 `matchFinished` 和 `phase='finished'`。
+- 单局 `settled` 快照与终局快照一样每秒用新 sequence 重发；胡牌裁决已经进入
+  `win-effect/revealing/settled` 后，不再被仍在收尾的旧 claim `waitingCount` 阻塞。
+- `finished` 定向快照每秒用新 sequence 重发；同时房间级广播不含暗牌/牌墙的
+  `match_finished` 最终分数，避免真人座位临时被 AI 接管后因无可达 peerId 而漏掉最终排名。
+- 针对真实线上复现的“定向 peer 半开、Room 广播仍可用”，新增房间级 `round_settled`：
+  与定向快照共用 authority epoch/sequence，只广播局号、本场、胡牌表现、结算结果和四席分数，
+  不含暗牌或牌墙。客户端谁先收到就启动结算，后续每秒重发只刷新分数/序号，不重启胡牌特效。
+- 胡牌表现不再等房主播完后才随 `settled` 到达：房主在 `winPresentation` 出现时立即公共广播
+  `win_effect`，并以同一事件序号在 300/800ms 短时重发。客户端幂等播放一次；稍后的定向
+  `settled` 快照或公共 `round_settled` 只为同一时间线补齐最终结果，因此房主端和客户端能在
+  同一阶段看到胡牌特效，也不会因结果包晚到而重复播放或永久停在亮牌阶段。
 
-状态：**部分处理，真实掉线重进链路仍未完全验证**。这是本次历史问题中最需要继续做四端回归的部分。
+状态：**selfHost 公网主要正常流程已处理；真实 VibeHub 线上仍失败**。2026-08-19 使用两个真实账号、
+2 真人 + 2 AI、莲花麻将东风场复验时，第一场东2在 147 秒完成自摸结算，但只有房主进入结算弹窗；
+客户端仍停在结算前牌桌和旧分数，页面显示“网络不稳定”，5 秒内没有收到/应用任何 `settled` 快照。
+房主已确认后持续等待客户端，无法进入东3。房主侧虽每秒生成新 sequence 并重发定向快照，
+`vibeRoomTransport` 对已绑定 `Room` 的低信号状态只更新 RTT/图标，不会请求快照、重绑 Room 或主动重进；
+SDK 仍把 peer 视为 open 时，`bindHostGoneDetection` 的 peer 缺失/`reconnecting` 兜底也不会触发。
+因此“半开但业务消息不达”的定向通道仍可永久卡住单局结算。公共 `win_effect` / `round_settled`
+修复已完成并部署；下面的线上复验用于确认它对不同失联层级的实际覆盖范围。
+
+部署后复验（2026-08-19）进一步确认：公共结算事实能修复单帧/定向漏包，但不能穿透
+“整个房主 DataChannel 半开”的时间窗。第一场东1用时 298 秒、东2用时 277 秒，东2双端结算并在
+双确认后 4226ms 进入东3；东3用时 132 秒，但只记录到房主确认，约 66 秒后才进入东4。
+这说明 SDK 仍报告 peer `open` 时，定向快照、Room 公共广播和 transport ping 可能一起不达；
+旧信号代码每轮 tick 先清空 RTT、无 pong 又回退为“peer open = 良好”，不会主动调用 SDK reconnect。
+
+第一版主动心跳已部署并确认线上静态资源包含构建标记，但真实账号复验仍失败：一轮中东1用时
+152 秒，双端结算、双确认后 2347ms 进入东2；东2用时 189 秒，只有房主进入结算并确认，客户端
+保持旧分数/旧牌桌且显示“网络不稳定”。另一轮东1用时 208 秒后再次出现同样分叉，10 秒内客户端
+仍未进入结算。这证明“每 3 秒 ping、2 秒无匹配 pong 后调用一次 `room.reconnect(hostId)`”能够发现
+半开连接，却不能保证 SDK 真正替换仍被标记为 open 的旧 DataChannel；同时
+`hostReconnectRequested` 会一直保持 true，原实现不会再升级恢复动作。
+
+第二版线上复验仍发现问题：页面确实加载了第二版标记，但首次漏 pong 就调用 SDK
+`room.reconnect(hostId)`，触发 `setRemoteDescription` 在 closed `RTCPeerConnection` 上的竞态；
+房主随后把真人座位转 AI，客户端没有结算确认就被推进到下一局。因此单次 SDK reconnect 不能作为
+可靠恢复动作。
+
+第三版部署后的真实账号复验（2026-08-19）仍复现一次结算分叉：第 1 场东1用时 22 秒，双端胡牌
+特效/结算/确认正常，536ms 进入东2；东2用时 227 秒，双端正常，4003ms 进入东3；东3用时
+131 秒且双端都播放胡牌特效，但只有房主出现结算并确认，客户端 20 秒内始终没有结算弹窗。
+客户端同时记录 SDK `relay answer InvalidStateError: setRemoteDescription ... signalingState is closed`。
+
+第四版心跳方案已撤销：项目约束禁止用周期轮询同步游戏实时状态。进一步审计发现生产路径原本还存在
+200ms `broadcastAll()` 快照扫描、500ms `round_start` 重发、3s transport ping、5s 房主/座位 presence
+检查和 15s 大厅 ping；这些周期网络机制已全部移除，不能通过改成递归 `setTimeout` 规避约束。
+
+当前改为纯事件驱动：引擎状态 watcher 在事实变化时通过 VibeHub `room.send` 发送一次；SDK
+`onPeer(reconnecting/relay/join/connecting/leave)` 驱动连接状态和恢复，恢复事件到达时定向补发当前
+`round_start`、快照和挂起请求；可靠业务 `room.send` 同步失败时立即完整重进。另有两种不发送网络包的
+一次性看门狗：收到 `win_effect` 后 8 秒仍没有结算事实则完整重进；牌局进行中收到可信房主消息后重置
+30 秒静默计时，超时完整重进。大厅首次 `hello` 只保留一次 2 秒有界重试，不再持续心跳。
+
+生产 SDK 初始化入口也已移除 selfHost/WebSocket 测试传输；生产 bundle 审计确认不含 `selfHost`、
+`WebSocket`、`__transport_ping`、`lobby_ping` 和旧心跳标记。全量前端测试 65 文件 / 530 项、类型检查、
+生产构建、`git diff --check` 均通过。**待用户部署事件驱动版本后，使用真实 VibeHub 两账号从新房间
+完成两个东风场。**
 
 ### 3.3 “确认后一直等待”，三家确认也不能立即下一局
 
@@ -137,14 +195,24 @@ mySeat: 2 ... seats: 0:... | 1:... | 2:...
 
 原因：开局屏障、洗牌承诺、实时连接状态和 AI 接管集合曾经使用不同的 peer/seat 视图。某个玩家已重进，但承诺协调器仍持有旧 peer，导致真人永远被认为未完成。
 
+2026-08-19 的 2 真人 + 2 AI 公网复验又确认了两个更具体的竞态：
+
+1. `round_shuffle_start` 只带 round，客户端用 `message.round <= currentRound` 拒绝旧消息；
+   连庄同 round、只增加 honba，合法洗牌因此被永久拒绝。
+2. 客户端确认后的 20 秒看门狗只认 `round_start`，不认已经收到的承诺洗牌/重试也是推进，
+   会在房主正常进行 15 秒承诺重试时主动断开旧连接，反过来放大故障。
+
 处理：
 
 - 重进时原子替换 `seatByPeer` 中的旧 peer。
 - 承诺流程绑定当前 `roundId`、authority epoch 和当前参与者。
 - 自动重进不再把客户端本地点击当作推进命令。
 - 对真实在线真人和 AI 座位分别计算 barrier 参与者。
+- `round_shuffle_start` 新增 honba 并按 `(round,honba)` 门禁；收到可信洗牌开始后，
+  客户端将看门狗延长到可覆盖最多四轮 15 秒重试的 90 秒窗口，每个新 roundId 重置窗口。
 
-状态：**部分处理**。当网络仍处于 P2P 重连、Relay 切换和旧连接未释放时，仍需观察线上 SDK 是否会造成承诺重复、超时或漏发。
+状态：**selfHost 公网两场曾通过，真实 VibeHub 线上未通过**。本次真实账号复验已确认
+“网络不稳定/疑似半开连接叠加结算”会让客户端缺失结算弹窗，房主等待确认，属于会直接拖慢或阻断牌局的现存问题。
 
 ## 4. 掉线、重进与 AI 接管问题
 
@@ -233,7 +301,14 @@ mySeat: 2 ... seats: 0:... | 1:... | 2:...
 - 新局非终局快照会取消旧 settlement timeline 并清理终局残留。
 - 旧 `hand_result`/`match_finished` 不再单独把客户端写成最终排名。
 
-状态：**部分处理/未完全验证**。这是目前最重要的真实四端回归项，尤其要覆盖“结算页掉线 → 第一次自动重进失败 → 第二次成功 → 房主继续下一局”。
+2026-08-19 公网复验又发现：稳定 `settled` 快照原先只发送一次；此外点炮/抢杠竞争响应
+可能在结算阶段仍留下短暂的 `waitingCount > 0`，旧广播守卫会把结算快照全部压住。
+现已让单局结算每秒可靠重发，并允许表现/结算/终局阶段绕过旧 pending 守卫。
+
+状态：**主要应用路径已完成真实浏览器验证**。`tests/e2e/selfhost-settlement-rejoin.spec.ts`
+使用公网 2 真人 + 2 AI，在东1结算层刷新客端，确认恢复同一结算、不误入最终排名，
+双方确认后进入下一手（房间 `PF8627`，1 passed / 3.3m）。第一次自动重进被人为阻断、
+第二次再成功的 SDK 极端竞态仍属于专项网络故障注入范围。
 
 ## 5. P2P、Relay 和 SDK 层错误
 
@@ -345,7 +420,7 @@ THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated.
 
 状态：**已处理，浏览器四端验证通过（2026-08-18）**。
 
-### 6.3 新发现：dealing 快照提前落地导致四端都跳过开局动画（已修复）
+### 6.2 新发现：dealing 快照提前落地导致四端都跳过开局动画（已修复）
 
 **现象（本次浏览器回归新发现，四端一致复现）**：四端都没有 `.opening-overlay`，牌桌直接出现完整手牌。
 
@@ -364,7 +439,48 @@ THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated.
 `playwright.config.ts` 已加 `--disable-background-timer-throttling` 等启动参数；
 即便如此四端并发动画在软件 WebGL 下仍可能变慢，e2e 轮询窗口需给足余量。
 
-### 6.2 慢 3G 下牌山未加载，解除限速后牌山消失
+### 6.3 已复验：骰子、翻精、牌山断点与发牌动画（用户报告"牌山瞬移"）
+
+**现象（用户实玩报告）**：莲花麻将开局打第一骰时，看到的骰子数字是 5 点，自己（庄家）面前
+明明有牌山，但翻精指示牌（或视觉上的"牌山"）出现在下家（右墙段）。
+
+**代码与真实浏览器复验结论（2026-08-19）**：
+
+1. **规则层面无 bug**：莲花麻将一骰 = **两枚骰子求和** `S = d1 + d2`
+   （`lotusOpening.ts` 第一骰 `[roll(), roll()]`，与 `docs/lianhua-mahjonggame-legacy-rules.md`
+   第 30-37 行、南昌麻将传统规则一致：5/9→自身、2/6/10→下家、3/7/11→对家、4/8/12→上家）。
+   翻精方位 = `(dealer + S − 1) % 4`。用户看到的"5 点"极可能是**单颗骰子面值**，
+   另一颗为 1（S=6→下家）或 5（S=10→下家）——总和才是方位依据。
+   纯函数枚举验证（`src/game/variants/lotus/lotusWall.verify.test.ts`）：
+   `[5,1]→下家(墩56)`、`[5,5]→下家(墩60)`、`[5,4]→庄家(墩8)`、`[2,3]/[1,4]→庄家(墩4)`。
+
+2. **规则坐标换算正确，但远端动画时间线存在一个已修复的断点应用 bug**：按牌（tile 内容）逐一对比"立牌山(136)→翻精后(134)→开门后(134)"
+   三阶段在 4 个 localSeat 视角下的物理张位，随机 200 组骰子全部一致
+   （`lotusWall.verify.test.ts`「按牌对比，各视角」）；`wallPhysicalIndex` 跳过翻精墩、
+   `wallBreakIndexForOpeningStack`、`resolveFlipStack` 旋转均已验证等价。但远端
+   `openingTimeline` 曾在收到权威断点后又被 `round_start` 重置为 0，直到发牌完成后
+   flush 快照才纠正，肉眼表现就是发牌结束时牌山突然跳位；翻精前 LCD 也提前显示 134。
+   现已改为：start/一骰保持 136 和断点 0 → flip 显示 134 → 二骰结束进入 deal 时
+   应用权威断点并按发牌批次递减（实测示例：断点 0→100，牌数 136→134→130…）。
+
+3. **视觉上"指示牌出现在下家墙段"本身是规则正确行为**：翻精墩就在目标方位玩家的
+   墙段里（`flipStack = seatSegmentStart(flipSeat) + (S−1)`），指示牌从该墙段翻出，
+   墙本身不动。
+
+**仍需用户口径确认的点**：
+
+- 用户当时两颗骰子的**实际面值**（是否 5+1 或 5+5）。
+- 用户看到的"牌山在下家"具体指：翻精指示牌位置 / 二骰投掷者（翻精方位玩家）动画 /
+  发牌起点（开门墩）位置——三者都是规则正确的"在目标方位"，但若用户预期
+  "5 点=自己面前"，则属于规则认知差异而非 bug。
+- 若后续复现仍存疑，可用 `scripts/verify-wall-live.mjs`（读取 Vue 实例
+  diceValues/flipStack/wallBreakIndex 时间线 + 翻精截图）实机取证。
+
+状态：**动画 bug 已修复并完成双端 WebM/逐帧验证**。`tests/e2e/selfhost-opening-visual.spec.ts`
+确认双方完整经历 `start → 一骰 → flip → 二骰 → deal`，一骰/二骰投掷方、翻精牌、
+牌山断点和发牌批次一致；“单颗 5 点是否应指向本家”仍属于规则口径确认。
+
+### 6.4 慢 3G 下牌山未加载，解除限速后牌山消失
 
 现象：慢 3G 下牌桌/牌山加载不完整；恢复网络后客户端牌山消失。
 
@@ -376,7 +492,10 @@ THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated.
 - opening 骨架先挂载，发牌动画从权威 opening 快照重新播放。
 - 3D 资源加载不应改变逻辑牌墙状态。
 
-状态：**部分处理/未完成慢 3G 实测**（代码防护见 snapshotReconciler 的 wall 占位逻辑；慢 3G 实测仍缺失）。
+状态：**应用层慢网恢复已浏览器验证（2026-08-19）**。公网
+`selfhost-slow-network-three-humans-one-ai.spec.ts` 在 3 真人 + 1 AI 开局时把一个客端限制为
+400ms 延迟、约 64 KiB/s，8 秒后解除限速；三端均完成发牌，慢速端 loading 消失，
+逻辑牌山与传给 3D 的牌墙持续非空（房间 `2CEZSW`，15 秒观察 `wall 110→84`，无回跳/消失）。
 
 ## 7. 典型复现矩阵
 
@@ -385,27 +504,45 @@ THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated.
 | 场景 | 期望结果 | 当前状态 |
 | --- | --- | --- |
 | 4 真人，正常开局 | 四端都有 start/dice/deal，随后同一轮 playing | **浏览器已验证**（selfhost-opening-overlay） |
-| 3 真人 + 1 AI | 引擎仍有 4 个玩家，AI 不阻塞真人开局 | 代码已处理，需实测 |
-| 2 真人 + 2 AI | 仅真人参与确认，AI 由房主托管 | 部分处理，需实测 |
+| 3 真人 + 1 AI | 引擎仍有 4 个玩家，AI 不阻塞真人开局 | **公网慢网恢复场景已验证（2026-08-19）** |
+| 2 真人 + 2 AI | 仅真人参与确认，AI 由房主托管 | **公网连续两个东风场已验证（2026-08-19）** |
 | P2P 切 Relay | hostId、座位、round、epoch 不变 | **浏览器已验证**（模拟切换 + 真 TURN forceRelay，selfhost-relay-switch） |
 | 对局中刷新一个客户端 | 恢复原座位，不出现旧 AI 夺舍 | **浏览器已验证**（selfhost-rejoin） |
-| 结算页刷新一个客户端 | 不影响其他客户端，不误进最终排名 | 代码已处理，结算页重进未单独复验 |
+| 结算页刷新一个客户端 | 不影响其他客户端，不误进最终排名 | **公网 2 真人 + 2 AI 已验证（selfhost-settlement-rejoin）** |
 | 第一次自动重进失败，第二次成功 | 第二次仍恢复同一座位和当前阶段 | 部分处理，需真实网络复验 |
 | 重进后倒计时 | 不执行旧请求的自动出牌 | 代码已处理，需实测 |
 | 三家确认下一局 | 不因旧 peer/旧承诺卡住 | **浏览器已验证**（完整东风场 4 局连打，selfhost-full-match） |
 | 非房主伪造快照/胡牌/终局 | 客户端丢弃，房主状态不变 | 主要入口已处理（单测覆盖） |
-| 慢 3G / 资源延迟 | 逻辑牌墙不消失，动画不被 loading 遮住 | 部分处理，慢 3G 未实测 |
+| 慢 3G / 资源延迟 | 逻辑牌墙不消失，动画不被 loading 遮住 | **公网限速→恢复已验证（3 真人 + 1 AI）** |
 
 ## 8. 当前验证结果
 
-最近一次代码验证（2026-08-18 复验）：
+最近一次代码验证（2026-08-19 复验）：
 
-- Vitest：64 个测试文件、**513 个测试通过**（新增 selfHostRoom 自动重连/relay 路径测试）。
+- Vitest：65 个测试文件、**530 个测试通过**。
 - `pnpm typecheck`：通过。
 - `pnpm build`：通过。
 - 后端 smoke：`signaling/smoke.py` 通过（信令 join/welcome/offer/answer/meta 中转正常）。
 
 浏览器验证（本轮完成，selfHost + 真实 WebRTC）：
+
+- **2 真人 + 2 AI 连续两个东风场（2026-08-19 最终复验）**：
+  `tests/e2e/selfhost-two-humans-two-ai-two-matches.spec.ts` 使用公网信令
+  `wss://www.bestguo.top:58787` 和指定 TURN，玩法为莲花麻将，两个真实浏览器 context + 两个 AI；
+  两个独立房间 `KHFHMQ → J2CC2P` 均从东1走到东4并让双方进入最终排名，测试 **1 passed (57.5m)**。
+  第一场各可见手耗时：193s、142s、315s、159s、217s、245s；第二场主要手耗时：
+  125s、219s、213s、78s、244s、104s、253s、76s、105s（另有起手即时结算）。
+  全部 `(round,honba)` 均不超过 360s；第二场明确覆盖 **东2局→东2局·1本场**，并多次覆盖
+  东3/东4连庄。全程无自动重进、非法快照、wall-regress 或未捕获异常，双方最终排名同步。
+- **开局动画双端录屏（2026-08-19）**：`tests/e2e/selfhost-opening-visual.spec.ts` 通过（1.8m），
+  页面内 20ms 阶段历史和 WebM 证明双方均看到 start、一骰、翻精、二骰、发牌；逐帧核对
+  牌数 136→134、翻精指示牌位置、二骰换投掷方和发牌断点一致。
+- **结算页刷新重进（2026-08-19）**：公网 2 真人 + 2 AI 房间 `PF8627`，双端进入东1结算后
+  刷新客端，恢复的局号/结算一致且双方均未误进最终排名；确认后进入下一手，**1 passed (3.3m)**。
+- **3 真人 + 1 AI 慢网恢复（2026-08-19）**：公网房间 `2CEZSW`，一个客端在牌桌加载窗口
+  以 400ms/64 KiB/s 运行 8 秒后恢复；三端发牌完成，慢速端牌山持续存在，**1 passed (1.6m)**。
+- **应用层边界复验（2026-08-19）**：四真人开局、四端 opening、对局中刷新重进、
+  模拟 P2P→Relay、Relay→P2P 往返和强制 UDP TURN 共 **6 passed (8.9m)**。
 
 - 本地信令四端回归（`http://127.0.0.1:5173/?selfHost=ws://127.0.0.1:8787`）：
   - `selfhost-four-players.spec.ts` / `selfhost-opening-overlay.spec.ts` / `selfhost-rejoin.spec.ts` 全部通过。
@@ -453,9 +590,11 @@ WSL2/Hyper-V/Windows Sandbox/VMware 全部不可用；Docker 未安装。
 ## 9. 后续优先级
 
 1. ~~恢复浏览器四端控制~~（已完成：Playwright 四端回归，见 §8）。
-2. ~~重点回归“结算页掉线 + 第一次重进失败 + 第二次重进成功 + 房主继续下一局”~~
-   （已完成：selfhost-rejoin + selfhost-full-match 覆盖对局中刷新与完整 4 局）。
+2. ~~重点回归结算页掉线重进后恢复当前结算、且房主继续下一局~~
+   （已完成：`selfhost-settlement-rejoin` 公网 2 真人 + 2 AI 专项；人为阻断第一次重进的
+   SDK 故障注入仍单列在 §4.1/矩阵，不再用“对局中刷新”代替“结算页刷新”证据）。
 3. 跨 NAT 实测（§5.5 两条路线任选）：验证「打洞成功 → P2P 直连」与「打洞失败 → TURN 兜底」。
-4. 慢 3G、旧连接未释放条件下检查 `hostId/seat/authorityEpoch/round/sequence` 是否始终一致。
+4. ~~慢 3G 恢复后牌山/牌桌保持~~（已完成：`selfhost-slow-network-three-humans-one-ai`）；
+   旧连接未释放与人为阻断首次重进时，仍需继续检查 `hostId/seat/authorityEpoch/round/sequence`。
 5. 记录每个客户端的 `phase`、`openingStage`、快照序号、当前请求号和 AI 座位集合，避免只靠最终页面推断中间状态。
 6. 若要求真正 99.999% 的防作弊，最终仍应把麻将引擎和随机性裁判迁移到可信服务端；P2P 房主权威只能做到协议层约束和普通客户端防伪造。

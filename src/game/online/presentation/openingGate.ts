@@ -8,7 +8,7 @@ import type { ServerSnapshot } from '../protocol/dto'
  * 永久挂起。
  */
 export interface OpeningSnapshotGate {
-  begin(round: number): void
+  begin(round: number, honba: number): void
   capture(snapshot: ServerSnapshot): boolean
   wait(): Promise<ServerSnapshot | null>
   cancel(): void
@@ -16,6 +16,7 @@ export interface OpeningSnapshotGate {
 
 export function createOpeningSnapshotGate(timeoutMs = 15000): OpeningSnapshotGate {
   let activeRound = -1
+  let activeHonba = -1
   let snapshot: ServerSnapshot | null = null
   let resolveWait: ((value: ServerSnapshot | null) => void) | null = null
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -33,16 +34,23 @@ export function createOpeningSnapshotGate(timeoutMs = 15000): OpeningSnapshotGat
     clearWait()
     resolve?.(null)
     activeRound = -1
+    activeHonba = -1
     snapshot = null
   }
 
-  function begin(round: number) {
+  function begin(round: number, honba: number) {
     cancel()
     activeRound = round
+    activeHonba = honba
   }
 
   function capture(value: ServerSnapshot) {
-    if (value.round !== activeRound || value.phase !== 'opening' || snapshot) return false
+    if (
+      value.round !== activeRound
+      || value.honba !== activeHonba
+      || value.phase !== 'opening'
+      || snapshot
+    ) return false
     snapshot = value
     const resolve = resolveWait
     clearWait()

@@ -78,7 +78,7 @@ describe('openingTimeline', () => {
       matchStarted: false, round: 2, dealer: 2, honba: 1, dice: [2, 5],
     })
 
-    expect(sent).toEqual([{ type: 'opening_done', round: 2, authorityEpoch: 'epoch-1' }])
+    expect(sent).toEqual([{ type: 'opening_done', round: 2, honba: 1, authorityEpoch: 'epoch-1' }])
     expect(state.round.value).toBe(1)
     expect(state.phase.value).toBe('lobby')
   })
@@ -95,7 +95,7 @@ describe('openingTimeline', () => {
     await vi.advanceTimersByTimeAsync(10000)
 
     expect(state.round.value).toBe(2)
-    expect(sent).toContainEqual({ type: 'opening_done', round: 2 })
+    expect(sent).toContainEqual({ type: 'opening_done', round: 2, honba: 0 })
   })
 
   it('不应因 3D 牌桌尚未 ready 而跳过客户端开局阶段', () => {
@@ -194,15 +194,25 @@ describe('openingTimeline', () => {
       openingStack: 18, wallBreakIndex: 36,
     })
 
-    expect(state.wallCount.value).toBe(134)
+    // 翻精前仍显示完整 136 张牌山（3D 用 flipStack 补回占位墩）。
+    expect(state.wallCount.value).toBe(136)
     expect(state.wall.value).toHaveLength(134)
     expect(state.jokerTiles.value).toEqual(['p2', 'p3'])
     expect(state.wildcardTiles.value).toEqual(['white'])
     expect(state.flipStack.value).toBe(7)
-    expect(state.openingStack.value).toBe(18)
-    expect(state.wallBreakIndex.value).toBe(36)
+    expect(state.openingStack.value).toBeNull()
+    // 二骰结束前不能提前把牌山移动到开门断点。
+    expect(state.wallBreakIndex.value).toBe(0)
     // 指示牌（flipTile）由 round_start 消息在翻精阶段才翻出；翻精墩（flipStack）开局即保留。
     expect(state.flipTile.value).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(1250 + 1900)
+    expect(state.openingStage.value).toBe('flip')
+    expect(state.wallCount.value).toBe(134)
+    await vi.advanceTimersByTimeAsync(1200 + 1900)
+    expect(state.openingStage.value).toBe('deal')
+    expect(state.openingStack.value).toBe(18)
+    expect(state.wallBreakIndex.value).toBe(36)
   })
 
   it('cancels pending animation without sending readiness', async () => {

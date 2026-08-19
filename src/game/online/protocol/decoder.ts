@@ -160,6 +160,12 @@ function isDice(value: unknown): value is [number, number] {
   return Array.isArray(value) && value.length === 2 && value.every((item) => isIntegerBetween(item, 1, 6))
 }
 
+function isSettlementScores(value: unknown): value is Array<{ seat: number; name: string; score: number }> {
+  return Array.isArray(value) && value.length === 4
+    && value.every((item) => isObject(item) && isSeat(item.seat) && isString(item.name) && isNumber(item.score))
+    && new Set(value.map((item) => (item as JsonObject).seat)).size === 4
+}
+
 function isSnapshot(message: JsonObject): boolean {
   return isString(message.roomId)
     && isSnapshotAuthorityMeta(message)
@@ -204,6 +210,24 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isOptional(raw.flipTile, isTile)
           && isOptional(raw.flipStack, (value) => isIntegerAtLeast(value, 0))
           && isOptional(raw.flipSeat, isSeat)
+      case 'win_effect':
+        return isString(raw.roomId)
+          && isString(raw.authorityEpoch)
+          && isPositiveInteger(raw.sequence)
+          && isPositiveInteger(raw.round) && isIntegerAtLeast(raw.honba, 0)
+          && isWinPresentation(raw.winPresentation)
+          && isSeat(raw.winningPlayerIndex)
+      case 'round_settled':
+        return isString(raw.roomId)
+          && isString(raw.authorityEpoch)
+          && isPositiveInteger(raw.sequence)
+          && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
+          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
+          && isPositiveInteger(raw.round) && isIntegerAtLeast(raw.honba, 0) && isSeat(raw.dealer)
+          && isRoundResult(raw.result)
+          && isNullable(raw.winPresentation, isWinPresentation)
+          && isIntegerBetween(raw.winningPlayerIndex, -1, SEAT_MAX)
+          && isSettlementScores(raw.scores)
       case 'rejoin_ok':
         return isSeat(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)

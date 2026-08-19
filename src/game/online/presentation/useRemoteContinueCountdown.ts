@@ -12,7 +12,11 @@ interface ContinueCountdownSources {
 }
 
 export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
-  const countdown = ref(10)
+  // 浏览器回归/人工取证可关闭 10 秒自动确认，稳定停留在结算页验证刷新重进。
+  // 默认线上行为不变；参数只影响显式带 manualContinue=1 的当前页面。
+  const manualContinue = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('manualContinue') === '1'
+  const countdown = ref(manualContinue ? 0 : 10)
   let timer: number | null = null
 
   function stop() {
@@ -20,7 +24,7 @@ export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
       window.clearInterval(timer)
       timer = null
     }
-    countdown.value = 10
+    countdown.value = manualContinue ? 0 : 10
   }
 
   function start() {
@@ -42,7 +46,7 @@ export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
         && Boolean(sources.result.value)
         && !sources.waitingNextRound.value
         && !sources.matchFinished.value
-      if (active) start()
+      if (active && !manualContinue) start()
       else stop()
     },
   )

@@ -48,6 +48,36 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, flipTile: 'm10' })).toBeNull()
   })
 
+  it('只接受带完整权威边界和四席分数的公共结算事实', () => {
+    const message = {
+      kind: 'round_settled', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 7,
+      mode: 'east', rulesetId: 'lotus-legacy', round: 2, honba: 0, dealer: 1,
+      result: { winnerIndex: 3, winTile: 'm9' },
+      winPresentation: null, winningPlayerIndex: 3,
+      scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 2000 })),
+    }
+    expect(decodeServerMessage(message)).toBe(message)
+    expect(decodeServerMessage({ ...message, sequence: 0 })).toBeNull()
+    expect(decodeServerMessage({ ...message, scores: message.scores.slice(0, 3) })).toBeNull()
+    expect(decodeServerMessage({ ...message, scores: message.scores.map((entry) => ({ ...entry, seat: 0 })) })).toBeNull()
+  })
+
+  it('只接受带完整权威边界的公共胡牌特效事件', () => {
+    const message = {
+      kind: 'win_effect', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 3,
+      round: 2, honba: 0, winningPlayerIndex: 3,
+      winPresentation: {
+        winnerIndex: 3, tile: 'm9', sourceIndex: -1, robbedKong: false,
+        robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+      },
+    }
+    expect(decodeServerMessage(message)).toBe(message)
+    expect(decodeServerMessage({ ...message, sequence: 0 })).toBeNull()
+    expect(decodeServerMessage({ ...message, roomId: 123 })).toBeNull()
+    expect(decodeServerMessage({ ...message, winningPlayerIndex: 4 })).toBeNull()
+    expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, tile: 'm10' } })).toBeNull()
+  })
+
   it('rejects unknown kinds and non-object input', () => {
     expect(decodeServerMessage({ kind: 'future_message' })).toBeNull()
     expect(decodeServerMessage('{"kind":"pong"}')).toBeNull()

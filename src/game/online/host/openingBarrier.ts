@@ -5,9 +5,9 @@
  * 因此由房主按当前在线 peer 集合判断是否可以进入首回合。
  */
 export interface HostOpeningBarrier {
-  wait(round: number): Promise<void>
-  markLocalReady(round: number): void
-  markPeerReady(peerId: string, round: number): void
+  wait(round: number, honba: number): Promise<void>
+  markLocalReady(round: number, honba: number): void
+  markPeerReady(peerId: string, round: number, honba: number): void
   removePeer(peerId: string): void
   cancel(): void
 }
@@ -17,6 +17,7 @@ export function createHostOpeningBarrier(
   timeoutMs = 60000,
 ): HostOpeningBarrier {
   let activeRound = -1
+  let activeHonba = -1
   let localReady = false
   let peerReady = new Set<string>()
   let resolveWait: (() => void) | null = null
@@ -42,9 +43,10 @@ export function createHostOpeningBarrier(
     if (livePeers.every((peerId) => peerReady.has(peerId))) finish()
   }
 
-  function wait(round: number) {
+  function wait(round: number, honba: number) {
     cancel()
     activeRound = round
+    activeHonba = honba
     return new Promise<void>((resolve) => {
       resolveWait = resolve
       timeout = setTimeout(finish, timeoutMs)
@@ -52,14 +54,14 @@ export function createHostOpeningBarrier(
     })
   }
 
-  function markLocalReady(round: number) {
-    if (round !== activeRound) return
+  function markLocalReady(round: number, honba: number) {
+    if (round !== activeRound || honba !== activeHonba) return
     localReady = true
     maybeFinish()
   }
 
-  function markPeerReady(peerId: string, round: number) {
-    if (round !== activeRound || !getLivePeerIds().includes(peerId)) return
+  function markPeerReady(peerId: string, round: number, honba: number) {
+    if (round !== activeRound || honba !== activeHonba || !getLivePeerIds().includes(peerId)) return
     peerReady.add(peerId)
     maybeFinish()
   }
@@ -74,6 +76,7 @@ export function createHostOpeningBarrier(
     clearWait()
     resolve?.()
     activeRound = -1
+    activeHonba = -1
     localReady = false
     peerReady = new Set<string>()
   }

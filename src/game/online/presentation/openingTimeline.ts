@@ -58,7 +58,7 @@ export interface OpeningTimelineOptions {
   playSoundAndWait: (name: string, volume?: number) => Promise<void>
   send: (message: Record<string, unknown>) => void
   onFinished: () => void
-  onOpeningDone?: (round: number) => void
+  onOpeningDone?: (round: number, honba: number) => void
   waitForTableReady?: () => Promise<void>
   waitForOpeningSnapshot?: boolean
   openingSnapshotTimeoutMs?: number
@@ -145,8 +145,9 @@ export function createOpeningTimeline({
     return running && waitForOpeningSnapshot && openingSnapshot == null
   }
 
-  function hasSnapshotForRound(round: number) {
-    return openingSnapshot?.round === round || primedSnapshot?.round === round
+  function hasSnapshotForHand(round: number, honba: number) {
+    return (openingSnapshot?.round === round && openingSnapshot.honba === honba)
+      || (primedSnapshot?.round === round && primedSnapshot.honba === honba)
   }
 
   /**
@@ -176,17 +177,28 @@ export function createOpeningTimeline({
     // 立即填充座位骨架（players 非空 → GameTableHud/3D 场景挂载），
     // 让骰子 presenter 在开局动画开始前就绪；手牌留空由发牌动画填充。
     const wallTotal = snapshot.rulesetId === 'lotus-legacy' ? WALL_TOTAL - 2 : WALL_TOTAL
-    state.wallCount.value = wallTotal
+    // 开局最初是完整立墙：莲花麻将可摸牌数组虽已排除翻精墩，但 3D 会用
+    // flipStack 补回该墩的上下两张占位牌。LCD 也应先显示 136，等 flip 阶段
+    // 真正翻出指示牌时才变为 134，不能一进牌桌就提前少两张。
+    state.wallCount.value = WALL_TOTAL
     const snapshotWall = snapshot.wall ?? []
     const placeholders = Math.max(0, wallTotal - snapshotWall.length)
     state.wall.value = [...Array<TileType>(placeholders).fill('m1'), ...snapshotWall]
     state.wallHeadDrawn.value = 0
     state.secondDice.value = snapshot.secondDice ?? snapshot.dice ?? [1, 1]
+    if (!hasSecondDice && snapshot.secondDice) hasSecondDice = true
+    if (!hasFlip && snapshot.flipTile != null && snapshot.flipStack != null) {
+      hasFlip = true
+      flipTileValue = snapshot.flipTile
+      flipStackValue = snapshot.flipStack
+    }
     state.jokerTiles.value = snapshot.jokerTiles ?? []
     state.wildcardTiles.value = snapshot.wildcardTiles ?? []
     state.flipStack.value = snapshot.flipStack ?? null
-    state.openingStack.value = snapshot.openingStack ?? null
-    state.wallBreakIndex.value = snapshot.wallBreakIndex ?? 0
+    // 开门断点必须等二骰结束、进入 deal 时才应用；提前写入会让完整牌山
+    // 在一骰/翻精过程中就瞬移到未来的摸牌起点。
+    state.openingStack.value = null
+    state.wallBreakIndex.value = 0
     const skeleton = mapPlayers(snapshot.players)
     state.players.splice(0, state.players.length, ...skeleton.map((player) => ({
       ...player, hand: [], concealedTileCount: 0, discards: [], melds: [], drawnTileIndex: -1,
@@ -197,6 +209,9 @@ export function createOpeningTimeline({
     const snapshot = openingSnapshot
     if (!snapshot) return true
     dealStarted = true
+    // 与单机莲花时间线一致：二骰决定开门位置，发牌从该断点开始。
+    state.openingStack.value = snapshot.openingStack ?? null
+    state.wallBreakIndex.value = snapshot.wallBreakIndex ?? 0
     state.openingStage.value = 'deal'
     state.phase.value = 'dealing'
     const source = mapPlayers(snapshot.players)
@@ -310,6 +325,9 @@ export function createOpeningTimeline({
       state.openingStage.value = 'flip'
       state.flipTile.value = flipTileValue
       state.flipStack.value = flipStackValue
+      state.wallCount.value = openingSnapshot?.rulesetId === 'lotus-legacy'
+        ? WALL_TOTAL - 2
+        : WALL_TOTAL
       if (flipTileValue) announce(`翻精 ${tileName(flipTileValue)}`)
       await wait(1200)
       if (currentSequence !== sequence) return
@@ -333,11 +351,14 @@ export function createOpeningTimeline({
     onFinished()
   }
 
-  function sendOpeningDone(round = startMessage?.round ?? state.round.value) {
-    onOpeningDone?.(round)
+  function sendOpeningDone(
+    round = startMessage?.round ?? state.round.value,
+    honba = startMessage?.honba ?? state.honba.value,
+  ) {
+    onOpeningDone?.(round, honba)
     const authorityEpoch = getAuthorityEpoch?.()
     send(waitForOpeningSnapshot
-      ? { type: 'opening_done', round, ...(authorityEpoch ? { authorityEpoch } : {}) }
+      ? { type: 'opening_done', round, honba, ...(authorityEpoch ? { authorityEpoch } : {}) }
       : { type: 'opening_done', ...(authorityEpoch ? { authorityEpoch } : {}) })
   }
 
@@ -347,15 +368,20 @@ export function createOpeningTimeline({
    * 协议 ack，不修改任何本地牌局状态；牌局状态仍以刚刚验收的房主快照为准。
    */
   function confirm(message: RoundStartMessage) {
-    sendOpeningDone(message.round)
+    sendOpeningDone(message.round, message.honba)
   }
 
   function start(message: RoundStartMessage, options: { instant?: boolean } = {}) {
-    const preparedSnapshot = primedSnapshot?.round === message.round ? primedSnapshot : null
+    const preparedSnapshot = primedSnapshot?.round === message.round
+      && primedSnapshot.honba === message.honba
+      ? primedSnapshot
+      : null
     cancel()
     startMessage = message
     if (preparedSnapshot) openingSnapshot = preparedSnapshot
-    if (waitForOpeningSnapshot && !options.instant && !preparedSnapshot) openingSnapshotGate.begin(message.round)
+    if (waitForOpeningSnapshot && !options.instant && !preparedSnapshot) {
+      openingSnapshotGate.begin(message.round, message.honba)
+    }
     firstDice = [...message.dice]
     flipTileValue = message.flipTile ?? null
     flipStackValue = message.flipStack ?? null
@@ -390,7 +416,7 @@ export function createOpeningTimeline({
     cancel,
     isRunning,
     isWaitingForSnapshot,
-    hasSnapshotForRound,
+    hasSnapshotForHand,
     primeSnapshot,
     captureSnapshot,
     confirm,

@@ -4,6 +4,7 @@ import type {
   ScoreDelta,
   TableActionEvent,
   TileType,
+  WinPresentation,
 } from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
 import type { ServerMeldDto } from './dto'
@@ -28,6 +29,48 @@ export interface RoundStartMessage {
   flipSeat?: number
 }
 
+/**
+ * 不含暗牌/牌墙的房间级单局结算事实。
+ *
+ * 完整 state_snapshot 仍按座位定向发送；这条公共消息只用于定向 peer 通道半开时
+ * 让仍在当前 Room 的客户端进入同一份胡牌表现和结算，避免房主永久等待确认。
+ */
+export interface RoundSettledMessage {
+  kind: 'round_settled'
+  roomId: string
+  authorityEpoch: string
+  sequence: number
+  mode: MatchType
+  rulesetId?: RuleVariant
+  round: number
+  honba: number
+  dealer: number
+  result: RoundResult
+  winPresentation: WinPresentation | null
+  winningPlayerIndex: number
+  scores: Array<{ seat: number; name: string; score: number }>
+}
+
+/** 房主胡牌表现开始时的小型公共事件；settled 快照/事实随后补齐最终分数。 */
+export interface WinEffectMessage {
+  kind: 'win_effect'
+  roomId: string
+  authorityEpoch: string
+  sequence: number
+  round: number
+  honba: number
+  winPresentation: WinPresentation
+  winningPlayerIndex: number
+}
+
+/** 客户端在胡牌表现完成但结算事实缺失时发出的单次 P2P 补偿请求。 */
+export interface SettlementSyncRequest {
+  type: 'settlement_sync_request'
+  authorityEpoch: string
+  round: number
+  honba: number
+}
+
 export type ServerRequest =
   | { kind: 'turn_request'; authorityEpoch?: string; round?: number; requestId?: string; requestSeq?: number; targetSeat?: number; ctx: { hand: TileType[]; melds: ServerMeldDto[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean; jokers?: TileType[]; canHu?: boolean; canWindKong?: boolean } }
   | { kind: 'claim_request'; authorityEpoch?: string; round?: number; requestId?: string; requestSeq?: number; targetSeat?: number; ctx: { hand: TileType[]; canPeng?: boolean; canHu?: boolean; canGang: boolean; chiOptions?: Array<{ tiles: TileType[]; kind: 'sequence' | 'wind' | 'dragon' }>; tile: TileType; from: number } }
@@ -37,6 +80,8 @@ export type ServerMessage =
   | ServerSnapshot
   | ServerRequest
   | RoundStartMessage
+  | WinEffectMessage
+  | RoundSettledMessage
   | { kind: 'rejoin_ok'; seat: number; rejoin: boolean; roomId: string; mode: MatchType; rulesetId?: RuleVariant; nickname: string; rejoinCode: string; authorityEpoch?: string }
   | { kind: 'rejoin_err'; code: string }
   | { kind: 'table_action'; event: TableActionEvent; authorityEpoch?: string; round?: number }

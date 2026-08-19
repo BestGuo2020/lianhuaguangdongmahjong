@@ -1,7 +1,4 @@
 import { computed, ref } from 'vue'
-import { createMockVibeClient } from './mockVibeHub'
-import { getSelfHostConfig } from '../transport/selfHost/selfHostConfig'
-import { createSelfHostClient } from '../transport/selfHost/selfHostClient'
 
 export interface VibeUser {
   id: string
@@ -59,21 +56,11 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
     return Promise.resolve(null)
   }
   initPromise = (async () => {
-    // 自托管 staging：?selfHost=ws://… 或 VITE_SELF_HOST_SIGNALING 时，用自建
-    // 信令 + 真实 WebRTC DataChannel 联调（测真 NAT/TURN/relay/跨设备），无需上线。
-    // 仅在未配置时回退到本地 mock / 真实 SDK。
-    const selfHostConfig = getSelfHostConfig()
-    if (selfHostConfig) {
-      const selfHost = createSelfHostClient(selfHostConfig)
-      client = selfHost
-      vibeUser.value = null
-      vibeStatus.value = 'ready'
-      return selfHost
-    }
     // 本地开发：真实 VibeHub 云端对本地来源有 CORS + 来源校验（浏览器无法绕过），
     // 直接使用本地 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可
     // 联调全部联机逻辑，无需发布。生产构建不受影响（DEV=false 走真实 SDK）。
     if (import.meta.env.DEV) {
+      const { createMockVibeClient } = await import('./mockVibeHub')
       const mock = createMockVibeClient()
       client = mock
       vibeUser.value = null

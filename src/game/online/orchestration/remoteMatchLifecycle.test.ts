@@ -16,7 +16,7 @@ function setup() {
   let showingResult = false
   let pendingSnapshot: ServerSnapshot | null = null
   const opening = {
-    start: vi.fn(), confirm: vi.fn(), hasSnapshotForRound: vi.fn(() => false), cancel: vi.fn(),
+    start: vi.fn(), confirm: vi.fn(), hasSnapshotForHand: vi.fn(() => false), cancel: vi.fn(),
   }
   const settlement = { cancel: vi.fn() }
   const snapshots = {
@@ -106,6 +106,21 @@ describe('remoteMatchLifecycle', () => {
     expect(opening.start).toHaveBeenCalledOnce()
   })
 
+  it('连庄时同一 round 的新 honba 必须作为新手牌启动开局并解除 opening barrier', () => {
+    const { lifecycle, opening } = setup()
+    const roundStart = {
+      kind: 'round_start' as const, authorityEpoch: 'epoch-1', sequence: 4,
+      matchStarted: false, round: 2, dealer: 1, honba: 0, dice: [2, 4] as [number, number],
+    }
+
+    lifecycle.handleRoundStart(roundStart)
+    lifecycle.handleRoundStart({ ...roundStart, sequence: 5, honba: 1, dice: [3, 5] })
+    lifecycle.handleRoundStart({ ...roundStart, sequence: 6, honba: 1, dice: [3, 5] })
+
+    expect(opening.start).toHaveBeenCalledTimes(2)
+    expect(opening.start).toHaveBeenLastCalledWith(expect.objectContaining({ round: 2, honba: 1 }))
+  })
+
   it('权威快照先到时，round_start 只去重，不重新等待已经消费过的快照', () => {
     const { state, lifecycle, opening } = setup()
     state.round.value = 2
@@ -127,7 +142,7 @@ describe('remoteMatchLifecycle', () => {
     state.round.value = 2
     state.phase.value = 'playing'
     state.players.push(player(0), player(1), player(2), player(3))
-    opening.hasSnapshotForRound.mockReturnValue(true)
+    opening.hasSnapshotForHand.mockReturnValue(true)
 
     lifecycle.handleRoundStart({
       kind: 'round_start', authorityEpoch: 'epoch-1', sequence: 1,
@@ -143,7 +158,7 @@ describe('remoteMatchLifecycle', () => {
     state.round.value = 1
     state.phase.value = 'dealing'
     state.players.push(player(0), player(1), player(2), player(3))
-    opening.hasSnapshotForRound.mockReturnValue(true)
+    opening.hasSnapshotForHand.mockReturnValue(true)
 
     lifecycle.handleOpeningSnapshot({
       kind: 'state_snapshot', roomId: 'ROOM01', authorityEpoch: 'epoch-1', sequence: 2,

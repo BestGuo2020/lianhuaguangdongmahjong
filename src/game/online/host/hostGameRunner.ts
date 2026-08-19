@@ -1,4 +1,4 @@
-// 房主权威对局编排（Phase 3）：开局后房主跑本地引擎 + 周期广播快照 + 桥接远端玩家输入。
+// 房主权威对局编排（Phase 3）：开局后房主跑本地引擎 + 事件驱动快照 + 桥接远端玩家输入。
 //
 // - 用 createGame 工厂创建本地引擎（useGame/useLotusGame），传入 remoteControllers（seat 1-3）
 //   给远端真人座位；其余空席由引擎回退 AI。
@@ -13,7 +13,7 @@ import { ref, watch } from 'vue'
 import type { GamePort } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
 import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
-import type { RoundStartMessage, ServerMessage } from '../protocol/messages'
+import type { RoundStartMessage, ServerMessage, SettlementSyncRequest, WinEffectMessage } from '../protocol/messages'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { DisconnectableController, RemoteRequestContext } from './remotePlayerController'
@@ -41,8 +41,6 @@ export interface HostGameRunnerOptions<TController> {
   seatAvatars?: Map<number, string>
   /** 当前大厅座位表（peerId → seat）：重连恢复时优先按大厅分配恢复（比昵称可靠）。 */
   getSeatByPeer?: () => Map<string, number>
-  /** 快照广播间隔（ms）。 */
-  broadcastIntervalMs?: number
   /** 房主自视快照（seat 0 脱敏视图）：喂给房主自己的表现层 viewer。 */
   onLocalSnapshot?: (snapshot: ServerSnapshot) => void
   /** 房主自视事件（round_start/table_action/score_flow）：喂给房主自己的表现层 viewer。 */
@@ -75,11 +73,11 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   /** 当前仍在 reconnecting 的座位；恢复窗口结束后才会切 AI。 */
   getDisconnectedSeats(): Set<number>
   /** 房主 viewer 的开局动画结束后，确认当前 round。 */
-  markLocalOpeningReady(round: number): void
+  markLocalOpeningReady(round: number, honba: number): void
   /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
   enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
 } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, broadcastIntervalMs = 200, onLocalSnapshot, onLocalEvent, onPeerRecovered, openingBarrier: openingBarrierEnabled = false } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, onLocalSnapshot, onLocalEvent, onPeerRecovered, openingBarrier: openingBarrierEnabled = false } = options
   let active = true
 
   // 这是一次房主引擎生命周期的唯一代次。刷新/重新创建房主后即使 roomId
@@ -172,10 +170,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
 
   game = createGame(
     remoteControllers,
-    openingBarrierEnabled ? () => openingBarrier.wait(game.round.value) : undefined,
+    openingBarrierEnabled ? () => openingBarrier.wait(game.round.value, game.honba.value) : undefined,
   )
   let snapshotSequence = 0
   const context: SnapshotContext = { roomId: room.roomId, rulesetId, authorityEpoch }
+  let roundStartSequence = 0
+  let roundStartMessage: RoundStartMessage | null = null
 
   function seatName(seat: number): string {
     return game.players[seat]?.name ?? `座位${seat}`
@@ -193,7 +193,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     if (!active) return
     if (!openingBarrierEnabled) return
     if (typeof message !== 'object' || message === null) return
-    const value = message as { type?: unknown; round?: unknown; authorityEpoch?: unknown }
+    const value = message as { type?: unknown; round?: unknown; honba?: unknown; authorityEpoch?: unknown }
     // opening_done 只是客户端表现层完成的确认，不是客户端可以推进引擎的命令。
     // 必须同时绑定当前房主代次和当前引擎轮次；旧 Room 的迟到确认、NaN/小数轮次
     // 以及下一局的提前确认都不能满足当前开局屏障。
@@ -202,9 +202,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       || typeof value.round !== 'number'
       || !Number.isInteger(value.round)
       || value.round !== game.round.value
+      || typeof value.honba !== 'number'
+      || !Number.isInteger(value.honba)
+      || value.honba !== game.honba.value
       || value.authorityEpoch !== authorityEpoch
     ) return
-    openingBarrier.markPeerReady(fromPeerId, value.round)
+    openingBarrier.markPeerReady(fromPeerId, value.round, value.honba)
   })
 
   // 重连恢复后重设计时：清掉旧 18s 掉线计时器，从「重发请求」这一刻重新给客户端
@@ -260,7 +263,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       rejoinCode: '',
       authorityEpoch,
     } satisfies ServerMessage, peerId)
-    // Relay 切换期间可能丢掉最后一帧，恢复后主动补发当前局面。
+    // SDK 恢复事件到达后，按事件定向补齐持久事实；不周期重发。
+    if (game.phase.value === 'opening' && roundStartMessage) room.send(roundStartMessage, peerId)
     broadcastAll(true)
     if (controller.resendPending()) restartTimeout(seatState)
     onPeerRecovered?.(peerId)
@@ -312,8 +316,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         rejoinCode: '',
         authorityEpoch,
       } satisfies ServerMessage, event.id)
-      // 立即补发一帧快照：等待中的座位 pending 会挡住周期广播，不主动补发的话
-      // 重连客户端只能干等下一次状态变化（甚至永远等不到）才能看到牌桌。
+      if (game.phase.value === 'opening' && roundStartMessage) room.send(roundStartMessage, event.id)
+      // 立即补发一帧快照：重连客户端不应等待下一次引擎状态变化才能看到牌桌。
       broadcastAll(true)
       // 快照之后再重发挂起请求：客户端先有 players/手牌，收到 turn_request 才能
       // 同步手牌并出牌；若请求先到而手牌为空，客户端无法出牌 → 15s 被 AI 代打，
@@ -401,6 +405,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       rejoinCode: '',
       authorityEpoch,
     } satisfies ServerMessage, fromPeerId)
+    if (game.phase.value === 'opening' && roundStartMessage) room.send(roundStartMessage, fromPeerId)
     // 同上：补发一帧全量快照，让重连客户端立即看到牌桌（含正在等待中的请求局面）。
     broadcastAll(true)
     // 快照之后再重发挂起请求（见 onPeer('join') 注释：先给手牌、再收回合请求，
@@ -425,6 +430,22 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     }
   })
 
+  // 客户端已收到胡牌特效但缺失最终结算时，按业务事件请求一次权威事实补发。
+  // 只接受当前真人座位、当前引擎代次和当前手牌标识；不建立周期同步。
+  room.onMessage((message, fromPeerId) => {
+    if (!active || typeof message !== 'object' || message === null) return
+    const request = message as Partial<SettlementSyncRequest>
+    if (request.type !== 'settlement_sync_request') return
+    const seatState = seatStates.find((state) => state.peerId === fromPeerId)
+    if (!seatState || request.authorityEpoch !== authorityEpoch) return
+    if (request.round !== game.round.value || request.honba !== game.honba.value) return
+    if (game.phase.value !== 'settled' || game.result.value == null) return
+    console.warn('[host] 收到结算事实单次补发请求', {
+      seat: seatState.seat, round: request.round, honba: request.honba,
+    })
+    broadcastAll(true)
+  })
+
   // 用真实昵称/头像覆盖默认 PLAYER_SEED。每局开局 resetPlayers 会用 PLAYER_SEED 重建玩家，
   // 因此必须在「opening」（重开局）时重新覆盖，否则过庄后昵称/头像回退成默认。
   function applySeatProfiles() {
@@ -445,8 +466,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   }
 
 
-  // 状态签名去重：同一帧状态不重复广播。否则 200ms 兜底轮询 + 多个状态 watch
-  // 会反复发送幂等快照，客户端 3D 牌桌每次 rebuild 都会清掉进行中的出牌飞行动画（360ms）。
+  // 状态签名去重：引擎 watcher 可能在一次动作里连续触发，避免重复发送同一快照。
   let lastBroadcastKey = ''
   function broadcastAll(force = false) {
     if (!active) return
@@ -456,11 +476,15 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     // 看起来就像“房主没有同步”。等 startGame 的 resetPlayers 完成后，首个
     // dealing/opening 快照会正常广播。
     if (game.players.length !== 4) return
-    // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播周期快照：
+    // 等待远端玩家响应（出牌/碰杠胡）或本地引擎 thinking 时不广播普通快照：
     // 否则快照 applyNow 会 clearCountdown、清空 actionPrompt 并把 phase 重置为 playing，
     // 覆盖客户端 requestCoordinator 刚设的 discard/prompt 相位、倒计时与碰杠胡按钮。
     // force（重连补发）除外：新 peerId 必须立刻拿到当前局面，否则永远看不到牌桌。
-    if (!force && (waitingCount > 0 || game.phase.value === 'thinking')) return
+    const presentationPhase = ['win-effect', 'revealing', 'settled', 'finished'].includes(game.phase.value)
+    // 胡牌裁决可能在其他座位的 claim promise 尚未全部执行 finally/onPending(false)
+    // 时先进入表现/结算阶段。此时 waitingCount 只是旧请求尾声，不能阻止权威结果
+    // 快照；否则点炮等竞争响应会出现“房主结算、客端永远停在旧牌桌”。
+    if (!force && !presentationPhase && (waitingCount > 0 || game.phase.value === 'thinking')) return
     const key = [
       game.phase.value,
       game.round.value,
@@ -498,6 +522,49 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       return
     }
     lastBroadcastKey = key
+    const settledResult = game.phase.value === 'settled' ? game.result.value : null
+    if (settledResult) {
+      // 完整快照含本家暗牌，必须按座位定向发送；但公网 SDK 的定向 peer 通道可能
+      // 在 peers() 仍显示 open 时半开。同步广播一条不含暗牌/牌墙的公共结算事实，
+      // 让当前 Room 内客户端仍能进入胡牌表现和结算，不再永久阻塞真人确认。
+      room.send({
+        kind: 'round_settled',
+        roomId: room.roomId,
+        authorityEpoch,
+        sequence: snapshotSequence,
+        mode,
+        rulesetId,
+        round: game.round.value,
+        honba: game.honba.value,
+        dealer: game.dealer.value,
+        result: settledResult,
+        winPresentation: game.winPresentation.value,
+        winningPlayerIndex: game.winningPlayerIndex.value,
+        scores: game.players.map((player) => ({
+          seat: player.seat,
+          name: player.name,
+          score: player.score,
+        })),
+      } satisfies ServerMessage)
+    }
+    if (game.matchFinished.value) {
+      // 终局公共广播不含手牌/牌墙，不能依赖 seatStates 中可能已被 AI 接管、
+      // peerId 暂时不可用的定向通道。仍在 Room 中的客户端可凭它可靠进入最终排名。
+      room.send({
+        kind: 'match_finished',
+        roomId: room.roomId,
+        mode,
+        rulesetId,
+        finalScores: game.players.map((player, seat) => ({
+          seat,
+          name: player.name,
+          score: player.score,
+        })),
+        authorityEpoch,
+        sequence: snapshotSequence,
+        round: game.round.value,
+      } satisfies ServerMessage)
+    }
     // 用 seatStates 而非开局静态 seatByPeer：刷新重连的客户端 peerId 会变化，
     // seatState.peerId 在恢复时被 retarget 更新。若按旧 map 发送，重连后的新 peerId
     // 永远收不到快照（客户端 players 为空 → 无法响应 turn_request → 14s 被 AI 接管）。
@@ -533,34 +600,28 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     onLocalSnapshot?.(localSnapshot)
   }
 
-  // ── 瞬时事件广播：碰/杠/吃 音效与动画（胡牌走 settled 快照 → settlement 时间线）──
+  // ── 瞬时事件广播：碰/杠/吃和胡牌表现；settled 快照随后补齐最终结果。──
   let lastTableActionId = -1
   let lastScoreFlowId = -1
-  let roundStartSequence = 0
-  let roundStartMessage: RoundStartMessage | null = null
-  let roundStartResendTimer: ReturnType<typeof setInterval> | null = null
+  let winEffectSequence = 0
 
-  function stopRoundStartResend() {
-    if (roundStartResendTimer != null) {
-      window.clearInterval(roundStartResendTimer)
-      roundStartResendTimer = null
-    }
+  function broadcastWinEffect(message: WinEffectMessage) {
+    if (!active) return
+    room.send(message)
   }
 
-  function resendRoundStart() {
-    if (!active || game.phase.value !== 'opening' || !roundStartMessage) {
-      stopRoundStartResend()
-      return
+  function sendWinEffect(presentation: NonNullable<typeof game.winPresentation.value>) {
+    const message: WinEffectMessage = {
+      kind: 'win_effect',
+      roomId: room.roomId,
+      authorityEpoch,
+      sequence: ++winEffectSequence,
+      round: game.round.value,
+      honba: game.honba.value,
+      winPresentation: presentation,
+      winningPlayerIndex: game.winningPlayerIndex.value,
     }
-    // 同一轮固定 authorityEpoch/sequence 的重复消息由客户端幂等去重；重发的
-    // 目的只是覆盖 round_start 恰好落在 P2P→Relay/旧连接关闭窗口的情况，不能
-    // 让客户端重新计算任何牌局状态。
-    room.send(roundStartMessage)
-  }
-
-  function startRoundStartResend() {
-    stopRoundStartResend()
-    roundStartResendTimer = window.setInterval(resendRoundStart, 500)
+    broadcastWinEffect(message)
   }
 
   const stopEventWatchers = [
@@ -580,6 +641,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       const message: ServerMessage = { kind: 'score_flow', deltas: event.deltas, authorityEpoch, round: game.round.value }
       room.send(message)
       onLocalEvent?.(message)
+    }),
+    watch(() => game.winPresentation.value, (presentation, previous) => {
+      if (!active || !presentation || presentation === previous) return
+      sendWinEffect(presentation)
     }),
   ]
 
@@ -608,7 +673,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     room.send(message)
     onLocalEvent?.(message)
     broadcastAll()
-    startRoundStartResend()
   }
 
   // round_start：发牌完成后（phase 进入 opening，此时手牌已齐）广播，触发客户端发牌/骰点动画。
@@ -617,7 +681,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   let lastPhase = game.phase.value
   const stopWatch = watch(() => game.phase.value, (phase) => {
     if (!active) return
-    if (phase !== 'opening') stopRoundStartResend()
     if (phase === 'opening' && lastPhase !== 'opening') {
       applySeatProfiles()
       sendRoundStart()
@@ -627,7 +690,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     broadcastAll()
   })
 
-  // 关键状态变化立即广播快照，降低 200ms 兜底轮询带来的「两边不同步」延迟。
+  // 关键状态变化即时广播快照；不使用周期轮询同步牌局。
   const stopImmediateWatchers = [
     watch(() => game.lastDiscard.value, () => { if (active) broadcastAll() }),
     watch(() => game.currentPlayer.value, () => { if (active) broadcastAll() }),
@@ -661,7 +724,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       ) => unknown
       startGameWithBarrier(mode, {
         ...opening,
-        waitForOpeningReady: () => openingBarrier.wait(game.round.value),
+        waitForOpeningReady: () => openingBarrier.wait(game.round.value, game.honba.value),
       })
     } else {
       game.startGame(mode, opening)
@@ -678,9 +741,6 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   } else {
     startOpening(options.opening as HostOpeningData | undefined)
   }
-
-  // 周期快照广播：对局状态下每帧兜底同步（客户端 reconciler 取最新快照，幂等）。
-  const intervalId = window.setInterval(broadcastAll, broadcastIntervalMs)
 
   return {
     game,
@@ -709,8 +769,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     getDisconnectedSeats(): Set<number> {
       return new Set(seatStates.filter((state) => state.disconnected).map((state) => state.seat))
     },
-    markLocalOpeningReady(round: number) {
-      if (openingBarrierEnabled) openingBarrier.markLocalReady(round)
+    markLocalOpeningReady(round: number, honba: number) {
+      if (openingBarrierEnabled) openingBarrier.markLocalReady(round, honba)
     },
     /** 外部（续接安全网）强制 AI 接管某座位：掉线但无挂起请求（局末断线）时，
      * 座位永远不会被 15s 超时接管，continue 屏障会永久等待——由安全网兜底接管。 */
@@ -729,14 +789,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     stop() {
       if (!active) return
       active = false
-      window.clearInterval(intervalId)
       recoveryTimers.forEach((timer) => window.clearTimeout(timer))
       recoveryTimers.clear()
       for (const state of seatStates) {
       if (state.timeout != null) window.clearTimeout(state.timeout)
         asDisconnectable(state.controller!).reset?.()
       }
-      stopRoundStartResend()
       roundStartMessage = null
       openingBarrier.cancel()
       stopWatch()

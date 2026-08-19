@@ -8,7 +8,7 @@ import type { ServerMessage } from '../protocol/messages'
 
 const MESSAGE_KINDS: ServerMessageKind[] = [
   'state_snapshot', 'turn_request', 'claim_request', 'rob_kong_request',
-  'round_start', 'rejoin_ok', 'rejoin_err', 'table_action', 'score_flow',
+  'round_start', 'win_effect', 'round_settled', 'rejoin_ok', 'rejoin_err', 'table_action', 'score_flow',
   'announcement', 'hand_result', 'continue_prompt', 'match_finished',
   'room_closed', 'pong', 'error',
 ]
@@ -33,6 +33,20 @@ const VALID_MESSAGES: ServerMessage[] = [
   { kind: 'claim_request', authorityEpoch: 'epoch-1', round: 1, requestId: 'epoch-1:2', requestSeq: 2, targetSeat: 1, ctx: { hand: ['m1'], canGang: false, tile: 'm2', from: 1 } },
   { kind: 'rob_kong_request', authorityEpoch: 'epoch-1', round: 1, requestId: 'epoch-1:3', requestSeq: 3, targetSeat: 1, ctx: { tile: 'm2', from: 1, hand: ['m1'], exposedMelds: 0 } },
   { kind: 'round_start', roomId: 'ROOM', authorityEpoch: 'epoch-1', sequence: 1, matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5] },
+  {
+    kind: 'win_effect', roomId: 'ROOM', authorityEpoch: 'epoch-1', sequence: 1,
+    round: 1, honba: 0, winningPlayerIndex: 0,
+    winPresentation: {
+      winnerIndex: 0, tile: 'm1', sourceIndex: -1, robbedKong: false,
+      robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+    },
+  },
+  {
+    kind: 'round_settled', roomId: 'ROOM', authorityEpoch: 'epoch-1', sequence: 2,
+    mode: 'east', round: 1, honba: 0, dealer: 0, result: { winnerIndex: 0 },
+    winPresentation: null, winningPlayerIndex: 0,
+    scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 1000 })),
+  },
   { kind: 'rejoin_ok', authorityEpoch: 'epoch-1', seat: 0, rejoin: false, roomId: 'ROOM', mode: 'east', nickname: 'A', rejoinCode: 'CODE' },
   { kind: 'rejoin_err', code: 'NOT_FOUND' },
   { kind: 'table_action', authorityEpoch: 'epoch-1', round: 1, event: { id: 1, type: 'peng', actorIndex: 0, sourceIndex: 1, tile: 'm1', meldIndex: 0 } },
