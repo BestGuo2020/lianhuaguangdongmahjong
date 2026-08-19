@@ -510,6 +510,87 @@ describe('startHostGame 无头权威', () => {
     runner.stop()
   })
 
+  it('大厅先验证新 peerId 时无需第二条 hello 也能恢复座位和结算快照', async () => {
+    stubWindow()
+    const hostRoom = createMockVibeRoom(true)
+    const runner = startHostGame<PlayerController>({
+      room: hostRoom,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([['old-peer', 1]]),
+      createController: (room, peerId, onPending, onAI, requestContext) => new RemotePlayerController(
+        room, peerId, onPending, undefined, onAI, requestContext,
+      ),
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    hostRoom.emitPeer({ type: 'reconnecting', id: 'old-peer' })
+    runner.syncVerifiedPeerSeats(new Map([['new-peer', 1]]))
+
+    expect(runner.getPeerSeats().get('new-peer')).toBe(1)
+    expect(runner.getPeerSeats().has('old-peer')).toBe(false)
+    expect(hostRoom.sent.some(({ message, to }) => (
+      to === 'new-peer' && (message as { kind?: string; seat?: number }).kind === 'rejoin_ok'
+        && (message as { seat?: number }).seat === 1
+    ))).toBe(true)
+    expect(hostRoom.sent.some(({ message, to }) => (
+      to === 'new-peer' && (message as { kind?: string }).kind === 'state_snapshot'
+    ))).toBe(true)
+    await vi.advanceTimersByTimeAsync(2000)
+    runner.stop()
+  })
+
+  it('胡牌结算阶段断线不能转 AI 跳过真人确认屏障', async () => {
+    stubWindow()
+    const room = createMockVibeRoom(true)
+    const runner = startHostGame<PlayerController>({
+      room,
+      rulesetId: 'lotus-classic',
+      mode: 'east',
+      seatByPeer: new Map([['peer-1', 1]]),
+      createController: (r, peerId, onPending, onAI, requestContext) => new RemotePlayerController(
+        r, peerId, onPending, undefined, onAI, requestContext,
+      ),
+      createGame: (controllers) => useGame({
+        remoteControllers: controllers,
+        playSound: () => {},
+        playSoundAndWait: async () => {},
+        countdownEnabled: false,
+        headless: true,
+      }),
+      onLocalSnapshot: () => {},
+      onLocalEvent: () => {},
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    runner.game.phase.value = 'settled'
+    room.emitPeer({ type: 'reconnecting', id: 'peer-1' })
+    const beforeHello = room.sent.filter(({ message }) => (
+      (message as { kind?: string }).kind === 'rejoin_ok'
+    )).length
+    room.emit('peer-1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    await vi.advanceTimersByTimeAsync(499)
+    expect(room.sent.filter(({ message }) => (
+      (message as { kind?: string }).kind === 'rejoin_ok'
+    ))).toHaveLength(beforeHello + 1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(room.sent.filter(({ message }) => (
+      (message as { kind?: string }).kind === 'rejoin_ok'
+    ))).toHaveLength(beforeHello + 2)
+    await vi.advanceTimersByTimeAsync(12000)
+
+    expect(runner.aiControlledSeats.has(1)).toBe(false)
+    expect(runner.getPeerSeats().get('peer-1')).toBe(1)
+    expect(runner.enableAIForSeat(1)).toBe(false)
+    runner.stop()
+  })
+
   it('终局状态变化只即时广播一次，不按时间周期重发', async () => {
     stubWindow()
     const room = createMockVibeRoom(true)

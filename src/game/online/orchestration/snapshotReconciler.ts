@@ -28,6 +28,8 @@ export interface SnapshotReconcilerOptions {
     isRunning(): boolean
     /** round_start 已到，但尚未收到同轮的第一份权威开局快照。 */
     isWaitingForSnapshot?(): boolean
+    /** 当前开局动画的目标手（round_start 轮次）；未启动时返回 null。 */
+    getTargetHand?(): { round: number; honba: number } | null
     primeSnapshot?(snapshot: ServerSnapshot): void
     captureSnapshot(snapshot: ServerSnapshot): void
     cancel(): void
@@ -66,6 +68,10 @@ export function createSnapshotReconciler({
   // 结算/发牌动画期间的快照会暂存。单独记录暂存快照的序号，避免
   // 「先收到新快照、后收到旧快照」时旧包覆盖 pendingSnapshot。
   let pendingSequence = -1
+  // 客户端已确认本局结算（nextRound）：后续到达的下一局 opening/dealing 快照
+  // 必须放行落地，不能再被 isShowingRoundResult 结算屏障缓存。否则自动确认
+  // 路径（双方同时确认、round_start 未到）下新局快照永远无法落地、开局动画缺失。
+  let nextHandAllowed = false
   // 牌山单调性诊断游标：wall 张数回跳或 headDrawn 回退 = 牌山重建/瞬移信号（§6.2）。
   let lastDiagHand = ''
   let diagWallLen = -1
@@ -335,29 +341,93 @@ export function createSnapshotReconciler({
     }
     // 如果开局瞬时消息丢失，但当前房主快照已经明确进入更后轮次，
     // 不能继续播放旧轮次动画并等待它结束；最新权威快照优先，直接取消旧开局表现层。
-    if (opening.isRunning() && snapshot.round > state.round.value) {
-      // round_start 与 state_snapshot 通过 SDK 分开传输，不能假设先后顺序。
-      // 若开局动画还在等待同轮快照，先交给 opening gate 配对；不能直接把
-      // round_start 当成已提交的 round，或把当前快照误判成“未来轮次”并丢掉。
-      if (opening.isWaitingForSnapshot?.()) {
-        opening.captureSnapshot(snapshot)
-        pendingSnapshot = snapshot
-        pendingSequence = snapshot.sequence ?? pendingSequence
-        return false
+    if (opening.isRunning()) {
+      // 「未来轮次」必须与开局动画的目标手比较，而不是与滞后的 state.round 比较：
+      // 动画 gate 等待期间 state.round 仍是上一手，同手 opening 快照会被误判成
+      // 未来轮 → 取消刚启动的开局动画并 applyNow 直接落地（自动确认路径的东2局无动画）。
+      const targetHand = opening.getTargetHand?.()
+      const isFutureHand = targetHand
+        ? snapshot.round > targetHand.round
+          || (snapshot.round === targetHand.round && snapshot.honba > targetHand.honba)
+        : snapshot.round > state.round.value
+      if (isFutureHand) {
+        // round_start 与 state_snapshot 通过 SDK 分开传输，不能假设先后顺序。
+        // 若开局动画还在等待同轮快照，先交给 opening gate 配对；不能直接把
+        // round_start 当成已提交的 round，或把当前快照误判成“未来轮次”并丢掉。
+        if (opening.isWaitingForSnapshot?.()) {
+          opening.captureSnapshot(snapshot)
+          pendingSnapshot = snapshot
+          pendingSequence = snapshot.sequence ?? pendingSequence
+          return false
+        }
+        console.log(`[client] reconciler 未来轮快照取消旧开局动画: round=${snapshot.round} honba=${snapshot.honba} phase=${snapshot.phase} target=${targetHand ? `${targetHand.round}:${targetHand.honba}` : `${state.round.value}:${state.honba.value}`} waiting=${Boolean(opening.isWaitingForSnapshot?.())}`)
+        opening.cancel()
+        settlement.cancel()
+        return applyNow(snapshot, true)
       }
-      opening.cancel()
-      settlement.cancel()
-      return applyNow(snapshot, true)
     }
     if (isShowingRoundResult()) {
       // win_effect 公共事件会先把客户端置为表现阶段；随后到达的定向 settled
       // 快照必须立即为同一条时间线补上最终结果，不能像普通下一局快照一样缓存。
       if (snapshot.phase === 'settled' && snapshot.result) return applyNow(snapshot, true)
+      // round_start 已启动开局动画（gate 正在等快照）时，即使仍处于结算表现层
+      // （动画 run() 尚未把 phase 切到 dealing），同局 opening 快照也必须喂给
+      // 动画 gate——否则 round_start 先到、快照后到时，动画 gate 永远等不到
+      // 快照，15 秒超时后静默跳过整个开局动画（自动确认路径的东2局无动画）。
+      if ((opening.isRunning() || opening.isWaitingForSnapshot?.()) && snapshot.phase === 'opening') {
+        opening.captureSnapshot(snapshot)
+        pendingSnapshot = snapshot
+        pendingSequence = snapshot.sequence ?? pendingSequence
+        return false
+      }
+      // 客户端已确认本局结算后，下一局 opening 快照必须放行到开局时间线：
+      // 不能继续缓存（round_start 动画 gate 等不到快照 → 自动确认路径进入新一局
+      // 无开局动画），也不能 applyNow 直接落地（round_start 到达时会因
+      // hasSnapshotForHand=false 走 confirm 只 ack，start/dice/flip 动画仍缺失）。
+      // prime 保留动画数据，round_start 到达后 opening.start 用 primed 快照
+      // 播放完整 136/断点0 → 一骰 → 翻精134 → 二骰 → 断点 → 分批发牌 时序。
+      const isNextHand = snapshot.round > state.round.value
+        || (snapshot.round === state.round.value && snapshot.honba > state.honba.value)
+      if (nextHandAllowed && isNextHand) {
+        // opening 快照 prime 到开局时间线（running 时即 captureSnapshot 喂给
+        // 动画 gate）；dealing 快照（可能先到）只缓存等待 opening。放行标志
+        // 保持到新一局动画真正启动（opening.start 时由 lifecycle 复位），
+        // 不能在这里提前复位——否则后续 opening 快照会被普通缓存挡住，
+        // round_start 的动画 gate 等不到快照 → 开局动画缺失。
+        if (snapshot.phase === 'opening') opening.primeSnapshot?.(snapshot)
+        pendingSnapshot = snapshot
+        pendingSequence = snapshot.sequence ?? pendingSequence
+        return false
+      }
       pendingSnapshot = snapshot
       pendingSequence = snapshot.sequence ?? pendingSequence
       return false
     }
     if (opening.isRunning()) {
+      // 天胡/地胡/起手即胡：开局动画还在播放时，胡牌表现与结算快照已经到达。
+      // 不能继续缓冲等动画播完（高负载下可能超过 20 秒），必须像公共
+      // round_settled 路径一样取消开局动画、立即进入胡牌表现与结算时间线，
+      // 否则房主端永远不出现结算弹窗、真人无法确认下一局。
+      if (snapshot.phase === 'win-effect' || snapshot.phase === 'revealing'
+        || snapshot.phase === 'settled' || snapshot.winPresentation) {
+        opening.cancel()
+        clearCountdown()
+        onFinishedSnapshot()
+        state.selectedIndex.value = -1
+        state.currentPlayer.value = -1
+        state.actionPrompt.value = null
+        state.waitingNextRound.value = false
+        state.matchFinished.value = false
+        applySharedSnapshot(snapshot)
+        state.wallCount.value = snapshot.wallCount
+        state.honba.value = snapshot.honba
+        state.round.value = snapshot.round
+        state.dealer.value = toLocal(snapshot.dealer)
+        // settlement.start 会按 key 幂等：win-effect 快照先启动特效，
+        // 随后同 round/honba 的 settled 快照只补最终 result，不重播动画。
+        settlement.start(snapshot)
+        return true
+      }
       opening.captureSnapshot(snapshot)
       pendingSnapshot = snapshot
       pendingSequence = snapshot.sequence ?? pendingSequence
@@ -422,6 +492,22 @@ export function createSnapshotReconciler({
     pendingSequence = -1
   }
 
+  /** 客户端确认本局结算后调用：放行下一局 opening 快照 prime 到开局时间线。 */
+  function allowNextHand() {
+    nextHandAllowed = true
+  }
+
+  /** 新一局开局动画已启动后调用：停止放行，恢复常规结算屏障。 */
+  function clearNextHand() {
+    nextHandAllowed = false
+  }
+
+  /** nextRound 发现取出的快照已 prime 给开局动画时，放回 pending 等待动画后 flush 落地。 */
+  function restorePending(snapshot: ServerSnapshot) {
+    pendingSnapshot = snapshot
+    pendingSequence = snapshot.sequence ?? pendingSequence
+  }
+
   function resetDiscardDedup() {
     lastDiscardIdApplied = -1
   }
@@ -436,6 +522,7 @@ export function createSnapshotReconciler({
     lastDiagHand = ''
     diagWallLen = -1
     diagHeadDrawn = -1
+    nextHandAllowed = false
   }
 
   function setAuthorityEpoch(epoch?: string) {
@@ -451,6 +538,7 @@ export function createSnapshotReconciler({
     // 不能阻止新房主的第一张弃牌/公告在重开一局时展示。
     lastAnnouncementId = -1
     lastDiscardIdApplied = -1
+    nextHandAllowed = false
   }
 
   return {
@@ -460,6 +548,9 @@ export function createSnapshotReconciler({
     flush,
     takePending,
     clearPending,
+    allowNextHand,
+    clearNextHand,
+    restorePending,
     showAnnouncement,
     resetDiscardDedup,
     setAuthorityEpoch,

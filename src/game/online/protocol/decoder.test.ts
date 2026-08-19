@@ -76,6 +76,13 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, roomId: 123 })).toBeNull()
     expect(decodeServerMessage({ ...message, winningPlayerIndex: 4 })).toBeNull()
     expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, tile: 'm10' } })).toBeNull()
+    // sourceIndex 是赢家手牌内索引（自摸 drawnTileIndex / 点炮 lastIndexOf(winTile)），
+    // 合法范围可到 13+，不是座位。曾误限制在 [-1,3]，胡牌在手牌位置 >=4 时整条
+    // win_effect/round_settled/快照解码失败，客户端永远进不了结算。
+    expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, sourceIndex: 4 } })).not.toBeNull()
+    expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, sourceIndex: 13 } })).not.toBeNull()
+    expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, sourceIndex: 21 } })).toBeNull()
+    expect(decodeServerMessage({ ...message, winPresentation: { ...message.winPresentation, sourceIndex: 1.5 } })).toBeNull()
   })
 
   it('rejects unknown kinds and non-object input', () => {

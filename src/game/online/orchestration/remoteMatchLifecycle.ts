@@ -18,6 +18,9 @@ export interface RemoteMatchLifecycleOptions {
     clearPending(): void
     takePending(): ServerSnapshot | null
     apply(snapshot: ServerSnapshot): boolean
+    allowNextHand(): void
+    clearNextHand(): void
+    restorePending(snapshot: ServerSnapshot): void
   }
   requests: {
     reset(): void
@@ -74,7 +77,10 @@ export function createRemoteMatchLifecycle({
       lastRoundStartSequence = -1
     }
     const currentHand = handKey(message)
-    if (snapshotPrecedesState(message) || startedHand === currentHand) return
+    if (snapshotPrecedesState(message) || startedHand === currentHand) {
+      console.log(`[client] round_start 丢弃/去重: round=${message.round} honba=${message.honba} startedHand=${startedHand || '(空)'} currentHand=${currentHand}`)
+      return
+    }
     if (message.sequence != null) {
       if (message.sequence <= lastRoundStartSequence) return
       lastRoundStartSequence = message.sequence
@@ -94,8 +100,14 @@ export function createRemoteMatchLifecycle({
       startedHand = currentHand
       pendingRoundStart = null
       state.waitingNextRound.value = false
-      if (opening.hasSnapshotForHand?.(message.round, message.honba)) opening.start(message)
-      else opening.confirm(message)
+      if (opening.hasSnapshotForHand?.(message.round, message.honba)) {
+        console.log(`[client] round_start 快照已配对，播放开局动画: round=${message.round} honba=${message.honba}`)
+        snapshots.clearNextHand()
+        opening.start(message)
+      } else {
+        console.log(`[client] round_start 快照已落地但无动画数据，confirm 只 ack: round=${message.round} honba=${message.honba}`)
+        opening.confirm(message)
+      }
       return
     }
     startedHand = currentHand
@@ -103,10 +115,14 @@ export function createRemoteMatchLifecycle({
     state.waitingNextRound.value = false
     if (isShowingRoundResult() && !alreadyConfirmed) {
       // 结算页等待确认时到达的 round_start 先缓存；用户点「继续」后再放行。
+      console.log(`[client] round_start 结算页缓存待确认后放行: round=${message.round} honba=${message.honba}`)
       pendingRoundStart = message
       return
     }
     pendingRoundStart = null
+    // 开局动画正式启动：同局后续快照不再需要放行，恢复常规结算屏障。
+    snapshots.clearNextHand()
+    console.log(`[client] round_start 直接启动开局动画: round=${message.round} honba=${message.honba} alreadyConfirmed=${alreadyConfirmed}`)
     opening.start(message)
   }
 
@@ -202,6 +218,12 @@ export function createRemoteMatchLifecycle({
     // 旧页面/重进残留提前进入 waitingNextRound 并制造假屏障。
     if (state.matchFinished.value || state.phase.value !== 'settled' || state.result.value == null) return
     settlement.cancel()
+    // 已确认本局结算：后续到达的新一局快照（opening/dealing）不能再被
+    // isShowingRoundResult 结算屏障缓存——否则自动确认路径（双方同时确认、
+    // round_start 未到）下 takePending 的新局快照永远无法落地，开局动画缺失。
+    // 这里只放行 reconciler 的新局快照，不改 phase/result 语义（房主自视与
+    // 客户端 continue 协议都依赖结算状态）。
+    snapshots.allowNextHand()
     sendContinue()
     state.waitingNextRound.value = true
 
@@ -209,12 +231,20 @@ export function createRemoteMatchLifecycle({
       const message = pendingRoundStart
       pendingRoundStart = null
       state.waitingNextRound.value = false
+      snapshots.clearNextHand()
       opening.start(message)
     }
 
     const pendingSnapshot = snapshots.takePending()
     if (pendingSnapshot && !(pendingSnapshot.phase === 'settled' && pendingSnapshot.result)) {
-      if (snapshots.apply(pendingSnapshot)) requests.syncSnapshot(pendingSnapshot)
+      // 新一局 opening 快照已 prime 到开局时间线：动画由 round_start 启动，
+      // 快照必须放回 pending，动画结束后 flush 落地（否则开局动画结束时
+      // flush 取不到快照，新一局牌桌永不落地）。
+      if (pendingSnapshot.phase === 'opening' && opening.hasSnapshotForHand?.(pendingSnapshot.round, pendingSnapshot.honba)) {
+        snapshots.restorePending(pendingSnapshot)
+      } else if (snapshots.apply(pendingSnapshot)) {
+        requests.syncSnapshot(pendingSnapshot)
+      }
     }
     requests.flush()
   }
@@ -223,8 +253,30 @@ export function createRemoteMatchLifecycle({
     if (!state.matchFinished.value) return
     settlement.cancel()
     requests.reset()
-    // 返回大厅后可能在同一房间再次开局。必须清掉旧房主 epoch/sequence，
-    // 否则新引擎的第一帧会被当成旧生命周期消息拒绝。
+    // 新一场的轮次/本场/庄家边界：上一场结束时 state.round/honba 仍是末局值
+    // （如东4局·2本场）。不重置的话，同一房间再次开局时新一局的 round=1 消息
+    // 会被「旧轮次」门禁全部丢弃（round_shuffle_start / round_start /
+    // state_snapshot），客户端永远停在大厅而房主已进入新对局（第二场开局失败）。
+    // 新房主引擎的 authorityEpoch 变化会在首个 round_start 处重置 startedHand/
+    // lastRoundStartSequence，这里只负责把轮次边界归零。
+    state.round.value = 1
+    state.dealer.value = 0
+    state.honba.value = 0
+    state.diceValues.value = [1, 1]
+    state.secondDice.value = [1, 1]
+    state.flipTile.value = null
+    state.jokerTiles.value = []
+    state.wildcardTiles.value = []
+    state.flipStack.value = null
+    state.openingStack.value = null
+    state.wallBreakIndex.value = 0
+    state.openingStage.value = null
+    state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
+    state.diceThrowerIndex.value = 0
+    state.turnSeconds.value = 12
+    state.turnCanHu.value = false
+    state.turnCanWindKong.value = false
+    state.userDrewThisTurn.value = false
     snapshots.reset()
     clearRoundBarrier()
     state.matchFinished.value = false

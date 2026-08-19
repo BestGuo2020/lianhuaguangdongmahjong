@@ -28,6 +28,9 @@ function setup() {
       return snapshot
     }),
     apply: vi.fn(),
+    allowNextHand: vi.fn(),
+    clearNextHand: vi.fn(),
+    restorePending: vi.fn((snapshot: ServerSnapshot) => { pendingSnapshot = snapshot }),
   }
   const requests = { reset: vi.fn(), clearPending: vi.fn(), flush: vi.fn(), syncSnapshot: vi.fn() }
   const transientEvents = { clear: vi.fn() }
@@ -217,11 +220,33 @@ describe('remoteMatchLifecycle', () => {
     lifecycle.nextRound()
     expect(snapshots.apply).not.toHaveBeenCalled()
 
+    // 房主推进后客户端收到新的结算页（phase/result 重新就绪）才能再次确认；
+    // 这次 pending 是可推进的新一局 drawing 快照，应被 nextRound 应用。
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 1 }
     setPendingSnapshot({ phase: 'drawing', result: null } as unknown as ServerSnapshot)
     snapshots.apply.mockReturnValue(true)
     lifecycle.nextRound()
     expect(snapshots.apply).toHaveBeenCalledWith(expect.objectContaining({ phase: 'drawing' }))
     expect(requests.syncSnapshot).toHaveBeenCalledWith(expect.objectContaining({ phase: 'drawing' }))
+  })
+
+  it('确认继续后放行下一局快照，不再被结算屏障缓存（自动确认动画修复）', () => {
+    const { state, lifecycle, snapshots, opening, setPendingSnapshot } = setup()
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
+    const openingSnapshot = { phase: 'opening', round: 2, honba: 0, result: null } as unknown as ServerSnapshot
+    setPendingSnapshot(openingSnapshot)
+    // opening 快照已 prime 到开局时间线（hasSnapshotForHand=true）。
+    opening.hasSnapshotForHand.mockReturnValue(true)
+    lifecycle.nextRound()
+    // 修复：自动确认路径（双方同时确认、round_start 未到）下，nextRound 必须
+    // 放行下一局 opening 快照（prime 到开局时间线），否则 reconciler 的结算屏障
+    // 分支会再次缓存，round_start 动画 gate 等不到快照 → 进入新一局无开局动画。
+    expect(snapshots.allowNextHand).toHaveBeenCalledOnce()
+    // opening 快照已 prime：不 apply（等待动画结束 flush 落地），放回 pending。
+    expect(snapshots.restorePending).toHaveBeenCalledWith(openingSnapshot)
+    expect(snapshots.apply).not.toHaveBeenCalled()
   })
 
   it('非结算阶段的继续操作不能在客户端本地制造下一局等待状态', () => {
@@ -246,6 +271,36 @@ describe('remoteMatchLifecycle', () => {
     expect(state.roomId.value).toBe('ABC123')
     expect(state.mySeat.value).toBe(2)
     expect(refreshRoom).toHaveBeenCalled()
+  })
+
+  it('返回大厅把轮次边界归零，同一房间第二场开局不再被旧轮次门禁丢弃（回归）', () => {
+    // 回归：上一场打到东4局·2本场后返回大厅，state.round/honba 仍是末局值；
+    // 同一房间再次开局时，新房主引擎的 round=1 消息（round_shuffle_start /
+    // round_start / state_snapshot）会被「旧轮次」门禁全部丢弃，客户端永远停在
+    // 大厅而房主已进入新对局。returnToLobby 必须把 round/honba/dealer 与开局
+    // 表现状态归零。
+    const { state, lifecycle } = setup()
+    state.roomId.value = 'ABC123'
+    state.mySeat.value = 2
+    state.matchFinished.value = true
+    state.phase.value = 'finished'
+    state.round.value = 4
+    state.honba.value = 2
+    state.dealer.value = 3
+    state.secondDice.value = [5, 5]
+    state.flipTile.value = 'm1'
+    state.openingStage.value = 'deal'
+    lifecycle.returnToLobby()
+
+    expect(state.round.value).toBe(1)
+    expect(state.honba.value).toBe(0)
+    expect(state.dealer.value).toBe(0)
+    expect(state.openingStage.value).toBeNull()
+    expect(state.secondDice.value).toEqual([1, 1])
+    expect(state.flipTile.value).toBeNull()
+    expect(state.matchFinished.value).toBe(false)
+    expect(state.roomId.value).toBe('ABC123')
+    expect(state.mySeat.value).toBe(2)
   })
 
 })

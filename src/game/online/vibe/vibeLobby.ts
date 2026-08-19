@@ -368,6 +368,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
   let pendingStart: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] } | null = null
   let startedShuffleId: string | null = null
   let helloRetry: ReturnType<typeof setTimeout> | null = null
+  let rosterReadyHelloSent = false
 
   function sendHello() {
     room.send({ type: 'lobby_hello', nickname, avatar, playerId, ...(seatToken ? { seatToken } : {}) } satisfies ClientLobbyMessage)
@@ -432,6 +433,18 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       stopRetry()
       assignedSeat = message.seats.find((seat) => seat.peerId === room.peerId)?.seat ?? null
       onRoster(message.hostSeat, message.seats)
+      if (!rosterReadyHelloSent) {
+        rosterReadyHelloSent = true
+        // 首条 hello 的 roster/rejoin_ok/state_snapshot 可能由房主在同一消息栈连续
+        // 发送；新 DataChannel 偶发只交付 roster。下一微任务单次确认业务监听已就绪，
+        // 房主据此重放持久事实。它是事件握手，不是心跳或周期轮询。
+        queueMicrotask(() => {
+          if (receivedRoster) {
+            console.log('[client] roster 已确认本端座位，单次确认业务监听已就绪')
+            sendHello()
+          }
+        })
+      }
       startIfReady()
     } else if (message.type === 'lobby_seat_token') {
       // 令牌是恢复原座位的能力凭据，不允许在收到 roster 前先落地：
@@ -461,6 +474,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       lastRosterRevision = 0
       pendingStart = null
       startedShuffleId = null
+      rosterReadyHelloSent = false
       stopRetry()
       sendHello()
       // 首次 hello 可能早于 DataChannel ready；除 SDK join 事件重发外，只做一次

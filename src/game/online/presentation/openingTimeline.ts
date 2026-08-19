@@ -79,6 +79,7 @@ export function createOpeningTimeline({
 }: OpeningTimelineOptions) {
   let sequence = 0
   let running = false
+  let gateActive = false
   let startMessage: RoundStartMessage | null = null
   let openingSnapshot: ServerSnapshot | null = null
   let primedSnapshot: ServerSnapshot | null = null
@@ -119,10 +120,14 @@ export function createOpeningTimeline({
   }
 
   function cancel() {
+    if (running || gateActive || openingSnapshot || primedSnapshot) {
+      console.log(`[client] opening cancel: running=${running} gateActive=${gateActive} snapshot=${openingSnapshot ? `${openingSnapshot.round}:${openingSnapshot.honba}` : '(空)'} primed=${primedSnapshot ? `${primedSnapshot.round}:${primedSnapshot.honba}` : '(空)'}`)
+    }
     sequence += 1
     timers.forEach((timer) => globalThis.clearTimeout(timer))
     timers.clear()
     running = false
+    gateActive = false
     startMessage = null
     openingSnapshot = null
     primedSnapshot = null
@@ -141,8 +146,22 @@ export function createOpeningTimeline({
     return running
   }
 
+  /**
+   * 当前开局动画的目标手（round_start 的轮次）。reconciler 判断「未来轮次
+   * 快照」时必须与动画目标手比较，而不是与滞后的 state.round 比较——动画
+   * gate 等待期间 state.round 仍是上一手，同手 opening 快照会被误判成未来轮
+   * 并取消刚启动的开局动画（自动确认路径东2局无动画）。
+   */
+  function getTargetHand(): { round: number; honba: number } | null {
+    return startMessage ? { round: startMessage.round, honba: startMessage.honba } : null
+  }
+
   function isWaitingForSnapshot() {
-    return running && waitForOpeningSnapshot && openingSnapshot == null
+    // gate 已 begin（round_start 已到、正在等 opening 快照）即视为等待中：
+    // run() 是异步启动，running 标志可能尚未置位，但 gate 已 active——
+    // 此时到达的同局 opening 快照必须能 capture 喂给 gate，否则 15 秒
+    // 超时后静默跳过整个开局动画。
+    return (running || gateActive) && waitForOpeningSnapshot && openingSnapshot == null
   }
 
   function hasSnapshotForHand(round: number, honba: number) {
@@ -157,23 +176,32 @@ export function createOpeningTimeline({
    */
   function primeSnapshot(snapshot: ServerSnapshot) {
     if (snapshot.phase !== 'opening') return
-    if (running) {
-      captureSnapshot(snapshot)
-      return
-    }
+    // 动画已运行时不再提前 capture：reconciler 的 capture 分支（未来轮/结算屏障/
+    // 动画运行中）会在同一次 apply 里把快照喂给 gate。若在这里先 capture，
+    // openingSnapshot 被提前置位 → isWaitingForSnapshot() 变为 false →
+    // reconciler 的「未来轮快照」分支会误判成「动画未在等快照」而取消动画并
+    // applyNow 直接落地（自动确认路径的东2局无开局动画）。只在动画未启动时
+    // 暂存，等 round_start 到达后由 opening.start 使用。
     if (snapshot.round >= state.round.value) primedSnapshot = snapshot
   }
 
   function captureSnapshot(snapshot: ServerSnapshot) {
-    if (!running) return
+    // run() 是异步启动，快照可能在 running 置位前到达；gate 已 active 时
+    // 仍必须接受同局 opening 快照，否则 15 秒超时静默跳过整个开局动画。
+    if (!running && !gateActive) return
     // 发牌动画开始后，普通回合快照可能已经到达；它们应留在 reconciler
     // 的 pendingSnapshot 中，不能重建正在播放的手牌/牌墙，否则动画会回到首批牌。
     if (dealStarted) return
-    if (waitForOpeningSnapshot && !openingSnapshotGate.capture(snapshot)) return
+    if (waitForOpeningSnapshot && !openingSnapshotGate.capture(snapshot)) {
+      console.log(`[client] opening gate 拒绝快照: round=${snapshot.round} honba=${snapshot.honba} phase=${snapshot.phase}`)
+      return
+    }
+    gateActive = false
     // 只保留「开局后第一份」快照（opening 全量手牌）；无头房主推进极快，
     // 等待发牌动画期间会陆续到达 drawing/checking 等快照，若继续覆盖会把发牌手牌冲掉。
     if (openingSnapshot) return
     openingSnapshot = snapshot
+    console.log(`[client] opening capture 成功: round=${snapshot.round} honba=${snapshot.honba} phase=${snapshot.phase} running=${running} gateActive=${gateActive}`)
     // 立即填充座位骨架（players 非空 → GameTableHud/3D 场景挂载），
     // 让骰子 presenter 在开局动画开始前就绪；手牌留空由发牌动画填充。
     const wallTotal = snapshot.rulesetId === 'lotus-legacy' ? WALL_TOTAL - 2 : WALL_TOTAL
@@ -269,6 +297,7 @@ export function createOpeningTimeline({
       // 一直停在 loading，随后被 playing 快照覆盖，最终只有房主看得到动画。
       const capturedSnapshot = await openingSnapshotGate.wait()
       if (capturedSnapshot && !openingSnapshot) openingSnapshot = capturedSnapshot
+      console.log(`[client] opening gate wait 结束: snapshot=${openingSnapshot ? `${openingSnapshot.round}:${openingSnapshot.honba}` : '(超时)'} seq=${currentSequence} vs ${sequence}`)
       if (!openingSnapshot) {
         if (currentSequence !== sequence) return
         state.openingStage.value = null
@@ -376,11 +405,13 @@ export function createOpeningTimeline({
       && primedSnapshot.honba === message.honba
       ? primedSnapshot
       : null
+    console.log(`[client] opening.start round=${message.round} honba=${message.honba} prepared=${Boolean(preparedSnapshot)} primed=${primedSnapshot ? `${primedSnapshot.round}:${primedSnapshot.honba}` : '(空)'} instant=${Boolean(options.instant)} waitForSnapshot=${waitForOpeningSnapshot}`)
     cancel()
     startMessage = message
     if (preparedSnapshot) openingSnapshot = preparedSnapshot
     if (waitForOpeningSnapshot && !options.instant && !preparedSnapshot) {
       openingSnapshotGate.begin(message.round, message.honba)
+      gateActive = true
     }
     firstDice = [...message.dice]
     flipTileValue = message.flipTile ?? null
@@ -416,6 +447,7 @@ export function createOpeningTimeline({
     cancel,
     isRunning,
     isWaitingForSnapshot,
+    getTargetHand,
     hasSnapshotForHand,
     primeSnapshot,
     captureSnapshot,

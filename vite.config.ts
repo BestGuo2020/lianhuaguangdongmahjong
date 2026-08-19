@@ -18,9 +18,10 @@ export default defineConfig({
     // （VibeHub SDK 只给该域提供服务），因此放开 Vite 的 Host 头校验。
     allowedHosts: true,
     watch: {
-      // 编辑器「另存为重命名」会在源码目录留下 `.xxx.ts.<pid>.tmpdir` 临时目录；
-      // watcher 监听它们会在 Windows 上报 EBUSY 直接崩溃 dev server。忽略这类路径。
-      ignored: ['**/.selfHostConfig.ts.*.tmpdir/**', '**/*.tmp', '**/*.tmpdir/**'],
+      // 编辑器「另存为重命名」会在源码目录留下 `.xxx.ts.<pid>.tmpdir` 临时目录，
+      // 且编辑器/其他进程持有 tmp 目录下文件锁时 watcher 在 Windows 上报 EBUSY
+      // 直接崩溃 dev server。忽略这类路径与整个 tmp 目录。
+      ignored: ['**/.selfHostConfig.ts.*.tmpdir/**', '**/*.tmp', '**/*.tmpdir/**', 'tmp/**'],
     },
   },
 })

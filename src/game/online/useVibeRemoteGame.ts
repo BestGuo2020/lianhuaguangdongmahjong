@@ -151,6 +151,19 @@ export function shouldRecoverDowngradedSettlement(
     && !isSettlementPresentationReady(phase, result)
 }
 
+export function settlementRecoveryDecision(
+  expectedHand: { round: number; honba: number } | null,
+  currentHand: { round: number; honba: number },
+  timerActive: boolean,
+  presentationReady: boolean,
+): 'start' | 'keep' | 'retry' | 'idle' {
+  if (expectedHand == null
+    || expectedHand.round !== currentHand.round
+    || expectedHand.honba !== currentHand.honba) return 'start'
+  if (timerActive) return 'keep'
+  return presentationReady ? 'idle' : 'retry'
+}
+
 /** 仍需等待「下一局确认」的远端 peer：排除已被 AI 接管（掉线）的座位——
  * 否则掉线玩家永远不会发 continue，全员卡死在「已确认，等待其他玩家」。 */
 export function liveContinuePeers(seatByPeer: Map<string, number>, aiControlledSeats: Set<number>): string[] {
@@ -214,6 +227,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     getLivePeerSeats(): Map<string, number>
     getDisconnectedSeats(): Set<number>
     resendCurrentState(): void
+    syncVerifiedPeerSeats(seats: Map<string, number>): void
     markLocalOpeningReady(round: number, honba: number): void
     getPeerSeats(): Map<string, number>
     enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
@@ -223,6 +237,13 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // 让已经进入对局的新 Room 也能接收房主重放的 round_shuffle_start。
   let resumedShuffleRoom: VibeHubSDK.Room | null = null
   const resumedShuffleIds = new Set<string>()
+
+  watch(lobbySeats, (seats) => {
+    if (!isHost.value || !hostGame.value) return
+    hostGame.value.syncVerifiedPeerSeats(new Map(
+      seats.filter((seat) => seat.seat > 0).map((seat) => [seat.peerId, seat.seat]),
+    ))
+  })
 
   const roomSession = createVibeRoomSession({
     state: {
@@ -701,7 +722,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             type: 'settlement_sync_request', authorityEpoch, round, honba: currentHonba,
           } satisfies SettlementSyncRequest)
         }
-        armSettlementRecovery(round, currentHonba, 2000, false)
+        // 返回方向的数据通道半开时，send 可能成功但房主事实永远收不到。只等待
+        // 一次 1s 响应窗口即完整重进，给 SDK leave/join 和双端结算 20s 门限留出余量。
+        armSettlementRecovery(round, currentHonba, 1000, false)
         return
       }
       if (isSettlementPresentationReady(state.phase.value, state.result.value)) return
@@ -710,12 +733,28 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   }
   function noteSettlementRecovery(round: number, currentHonba: number) {
     if (hostGame.value != null || state.matchFinished.value) return
-    if (settlementRecoveryHand?.round !== round || settlementRecoveryHand.honba !== currentHonba) {
+    const hand = { round, honba: currentHonba }
+    const decision = settlementRecoveryDecision(
+      settlementRecoveryHand,
+      hand,
+      settlementRecoveryTimer != null,
+      isSettlementPresentationReady(state.phase.value, state.result.value),
+    )
+    if (decision === 'start') {
       settlementPresentationWasReady = false
+      settlementRecoveryHand = hand
+      armSettlementRecovery(round, currentHonba)
+      return
     }
-    settlementRecoveryHand = { round, honba: currentHonba }
-    armSettlementRecovery(round, currentHonba)
+    // 同一局的公共事实、定向快照和胡牌事件可能先后到达。它们只能确认同一个
+    // 看门狗，不能反复把 5 秒截止时间向后推迟；否则终局密集状态变化会让恢复饥饿。
+    if (decision === 'retry') armSettlementRecovery(round, currentHonba, 0, true)
   }
+  watch(() => state.winPresentation.value, (presentation) => {
+    if (!presentation || hostGame.value != null || state.matchFinished.value) return
+    console.log('[client] 胡牌表现状态已出现，确保同局结算恢复截止时间不可延期')
+    noteSettlementRecovery(state.round.value, state.honba.value)
+  })
   watch(
     () => [state.phase.value, state.result.value, state.round.value, state.honba.value, state.matchFinished.value] as const,
     ([currentPhase, currentResult, currentRound, currentHonba, matchFinished]) => {
@@ -1198,12 +1237,16 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // 同时注册房主失联检测：随「加入房间」生效（大厅/对局都覆盖）。
   watch(roomId, (value) => {
     if (!value) {
+      // 内部完整重进直接调用 roomSession.leaveRoom，不经过外层 closeConnection。
+      // roomId 清空时立即封存旧 Room 的监听代次，避免旧 SDK 队列污染新会话。
+      transport.close()
       hostGoneBoundRoom = null
       pinnedHostPeerId = null
       hostRecovering = false
       clearHostGoneTimer()
       return
     }
+    console.log('[client] 新 Room 状态写入时同步绑定业务监听，再发送大厅恢复握手')
     transport.open({ signalOnly: isHost.value })
     if (!isHost.value) {
       const room = roomSession.getRoom()
@@ -1212,7 +1255,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         bindHostGoneDetection(room)
       }
     }
-  })
+  }, { flush: 'sync' })
 
   // ── 消息分发（客户端：无 rejoin 握手，mySeat 由大厅 roster 分配）──
   // 注：重进后的发牌动画不再跳过——之前 instant（跳过动画）是为缓解「重进 AI 夺舍」
@@ -1397,8 +1440,28 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     authoritySilenceTimer = window.setTimeout(() => {
       authoritySilenceTimer = null
       if (isHost.value || state.matchFinished.value || phase.value === 'lobby' || phase.value === 'settled') return
-      requestAuthorityRecovery('对局中长时间未收到房主消息')
-    }, 30000)
+      // 不是应用层心跳：只在连续静默达到一次性截止时间后，针对当前手牌请求一次
+      // 权威事实。正常真人 12s 回合倒计时会先产生动作/快照并重置本计时器；若通道
+      // 半开，send 看似成功但 1s 内仍无任何房主消息，再完整 leave + resume。
+      const authorityEpoch = requestCoordinator.getAuthorityEpoch()
+      if (!authorityEpoch) {
+        requestAuthorityRecovery('对局权威静默且缺少房主代次')
+        return
+      }
+      console.warn('[client] 对局权威连续静默，单次请求当前手牌事实')
+      const sent = transport.send({
+        type: 'settlement_sync_request',
+        authorityEpoch,
+        round: state.round.value,
+        honba: state.honba.value,
+      } satisfies SettlementSyncRequest)
+      if (!sent) return
+      authoritySilenceTimer = window.setTimeout(() => {
+        authoritySilenceTimer = null
+        if (isHost.value || state.matchFinished.value || phase.value === 'settled') return
+        requestAuthorityRecovery('当前手牌事实单次请求仍无响应')
+      }, 1000)
+    }, 12000)
   }
 
   function requestAuthorityRecovery(reason: string) {
@@ -1483,7 +1546,21 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     const decoded = decodeServerMessage(raw)
     // 大厅 hello/ready/ping、continue 等消息也会经过同一个 Room handler，但它们
     // 不是游戏消息，不应被误报成「非房主游戏消息」。先解码筛出游戏协议，再做房主校验。
-    if (!decoded) return
+    if (!decoded) {
+      if (!isHost.value && typeof raw === 'object' && raw != null && (raw as { kind?: unknown }).kind !== 'round_shuffle_start') {
+        // 诊断：只打印消息类型与字段形状（key:类型），不打印任何牌面/分数/凭据值。
+        // sourceIndex/winningPlayerIndex 等索引数字除外（它们本身不是牌面内容）。
+        const record = raw as Record<string, unknown>
+        const shape = Object.entries(record).map(([key, value]) => (
+          `${key}:${value === null ? 'null' : Array.isArray(value) ? `array[${(value as unknown[]).length}]` : typeof value}`
+        )).join(',')
+        const presentation = record.winPresentation as Record<string, unknown> | null | undefined
+        const wp = presentation ? ` wp=${['winnerIndex', 'sourceIndex', 'robbedKongPlayerIndex', 'robbedKongMeldIndex', 'robbedKong']
+          .map((key) => `${key}=${JSON.stringify(presentation[key])}`).join(',')}` : ''
+        console.log(`[diag] client-msg 解码失败 kind=${(raw as { kind?: unknown }).kind ?? 'unknown'} shape=${shape}${wp}`)
+      }
+      return
+    }
     // SDK Room 的消息可以来自任意 peer；客户端只信任当前会话绑定的房主。
     // 房主自视事件通过本地调用进入，此时没有 fromPeerId。
     // ServerMessage 的所有类型都由当前房主发出：包括 room_closed/error 这类没有
@@ -1567,9 +1644,22 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       })
       return
     }
+    // 同一房间第二场：返回大厅后房主再次开局会创建全新引擎（新 authorityEpoch）。
+    // 新一局的首个 round_start（round=1、客户端尚在大厅）就是新生命周期的边界，
+    // 必须允许代次切换；否则新引擎的所有消息（round_start/快照/请求）都会被
+    // 「旧房主代次」门禁丢弃，客户端永远停在大厅而房主已进入新对局（线上双场
+    // 第二场开局失败，4 连复现）。round=1 + lobby 相位双重限定：旧引擎已停止，
+    // 其迟到消息不可能再以 round=1 + lobby 相位出现，杜绝代次回退。
+    const newMatchBoundary = decoded.kind === 'round_start'
+      && decoded.round === 1
+      && state.phase.value === 'lobby'
+      && authorityEpoch != null
     if (decoded.kind === 'rejoin_ok' && authorityEpoch) {
       // rejoin_ok 是当前 SDK 房主对新引擎生命周期的握手，允许它切换到新的
       // epoch；其它消息不能自行切换代次。
+      requestCoordinator.setAuthorityEpoch(authorityEpoch)
+      snapshotReconciler.setAuthorityEpoch(authorityEpoch)
+    } else if (newMatchBoundary) {
       requestCoordinator.setAuthorityEpoch(authorityEpoch)
       snapshotReconciler.setAuthorityEpoch(authorityEpoch)
     } else if (authorityEpoch && !requestCoordinator.acceptAuthorityEpoch(authorityEpoch)) {

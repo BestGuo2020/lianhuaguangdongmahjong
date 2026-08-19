@@ -62,9 +62,9 @@ export function mapWinPresentationToLocal(
   return {
     ...presentation,
     winnerIndex: toLocalSeat(presentation.winnerIndex, localServerSeat),
-    sourceIndex: presentation.sourceIndex >= 0
-      ? toLocalSeat(presentation.sourceIndex, localServerSeat)
-      : -1,
+    // sourceIndex 是赢家手牌内的索引（getSourceIndex 返回 drawnTileIndex /
+    // hand.lastIndexOf(winTile)），与座位旋转无关，必须原样保留。
+    sourceIndex: presentation.sourceIndex,
     robbedKongPlayerIndex: presentation.robbedKongPlayerIndex >= 0
       ? toLocalSeat(presentation.robbedKongPlayerIndex, localServerSeat)
       : -1,

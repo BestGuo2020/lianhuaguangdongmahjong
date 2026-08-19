@@ -94,6 +94,16 @@ export function createVibeRoomTransport({
       markHostInbound(room, fromPeerId)
       // 收到房主消息即可证明当前可靠通道可用。
       clearReconnectingConfirm()
+      // 诊断：只记录消息类型与来源方向，不记录牌面/内容/凭据。用于判定
+      // 「房主已发出、客户端 SDK 未投递」与「客户端收到但被业务门禁丢弃」。
+      if (!signalOnly) {
+        const candidate = message as { kind?: unknown; type?: unknown }
+        const kind = typeof candidate.kind === 'string' ? candidate.kind
+          : typeof candidate.type === 'string' ? candidate.type
+            : `raw:${typeof message}`
+        const from = fromPeerId == null ? 'local' : fromPeerId === room.hostId ? 'host' : 'other'
+        console.log(`[diag] transport-rx kind=${kind} from=${from} room=${room.roomId}`)
+      }
       if (signalOnly) return // 房主：不转发业务消息（避免收到自己广播的回环）
       onMessage(message, fromPeerId)
     })

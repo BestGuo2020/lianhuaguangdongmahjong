@@ -3,6 +3,7 @@ import {
   allLiveSeatsConfirmed,
   isFutureShuffleHand,
   isSettlementPresentationReady,
+  settlementRecoveryDecision,
   shouldRecoverDowngradedSettlement,
   isShuffleStartMessage,
   liveContinuePeers,
@@ -119,5 +120,14 @@ describe('胡牌后结算表现恢复判定', () => {
     expect(shouldRecoverDowngradedSettlement(
       expected, expected, 'settled', { winnerIndex: 0 }, true,
     )).toBe(false)
+  })
+
+  it('同一局重复结算事实不能延期已启动的恢复截止时间', () => {
+    const hand = { round: 4, honba: 0 }
+    expect(settlementRecoveryDecision(null, hand, false, false)).toBe('start')
+    expect(settlementRecoveryDecision(hand, hand, true, false)).toBe('keep')
+    expect(settlementRecoveryDecision(hand, hand, false, false)).toBe('retry')
+    expect(settlementRecoveryDecision(hand, hand, false, true)).toBe('idle')
+    expect(settlementRecoveryDecision(hand, { round: 4, honba: 1 }, true, false)).toBe('start')
   })
 })

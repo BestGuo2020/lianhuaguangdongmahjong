@@ -39,9 +39,11 @@ function setup() {
   let opening = false
   let waitingForOpeningSnapshot = false
   let showingResult = false
+  let targetHand: { round: number; honba: number } | null = null
   const captureSnapshot = vi.fn()
   const settlement = { start: vi.fn(), cancel: vi.fn() }
   const openingCancel = vi.fn()
+  const openingPrime = vi.fn()
   const playSound = vi.fn()
   const onFinishedSnapshot = vi.fn()
   const scheduled: Array<() => void> = []
@@ -52,8 +54,10 @@ function setup() {
     opening: {
       isRunning: () => opening,
       isWaitingForSnapshot: () => waitingForOpeningSnapshot,
+      getTargetHand: () => targetHand,
       captureSnapshot,
       cancel: openingCancel,
+      primeSnapshot: openingPrime,
     },
     settlement,
     clearCountdown: vi.fn(),
@@ -62,10 +66,11 @@ function setup() {
     later: (callback) => { scheduled.push(callback) },
   })
   return {
-    state, reconciler, captureSnapshot, openingCancel, settlement, playSound, onFinishedSnapshot,
+    state, reconciler, captureSnapshot, openingCancel, openingPrime, settlement, playSound, onFinishedSnapshot,
     setOpening: (value: boolean) => { opening = value },
     setWaitingForOpeningSnapshot: (value: boolean) => { waitingForOpeningSnapshot = value },
     setShowingResult: (value: boolean) => { showingResult = value },
+    setTargetHand: (value: { round: number; honba: number } | null) => { targetHand = value },
   }
 }
 
@@ -238,6 +243,126 @@ describe('snapshotReconciler', () => {
     expect(reconciler.takePending()).toBeNull()
   })
 
+  it('确认继续后放行下一局 opening 快照，不再被结算屏障缓存（自动确认动画修复）', () => {
+    // 回归：自动确认路径（双方同时确认、round_start 未到）下，客户端 nextRound
+    // 后新一局 opening 快照到达；若 reconciler 的 isShowingRoundResult 分支仍把它
+    // 缓存且不 prime，round_start 动画 gate 等不到快照 → 进入新一局无开局动画。
+    const { state, reconciler, openingPrime, setShowingResult } = setup()
+    setShowingResult(true)
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
+    state.round.value = 1
+    state.honba.value = 0
+
+    const nextOpening = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 11, phase: 'opening', round: 2, honba: 0,
+    })
+
+    // 未确认时：结算屏障仍缓存下一局快照（保持旧行为）。
+    expect(reconciler.apply(nextOpening)).toBe(false)
+    expect(reconciler.takePending()).toBe(nextOpening)
+
+    // 确认继续后：下一局 opening 快照 prime 保留动画数据并留在 pending（等
+    // round_start 驱动动画、动画结束后 flush 落地）——不 applyNow 直接落地，
+    // 否则 round_start 到达时 hasSnapshotForHand=false 走 confirm 只 ack，
+    // start/dice/flip 动画缺失。放行标志保持到动画启动（clearNextHand 才复位）。
+    reconciler.allowNextHand()
+    expect(reconciler.apply(nextOpening)).toBe(false)
+    expect(openingPrime).toHaveBeenCalledWith(nextOpening)
+    expect(state.round.value).toBe(1)
+    expect(reconciler.takePending()).toBe(nextOpening)
+
+    // 动画启动后 clearNextHand：后续同局快照恢复普通缓存（不再 prime）。
+    reconciler.clearNextHand()
+    openingPrime.mockClear()
+    const secondSnapshot = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 12, phase: 'dealing', round: 2, honba: 0,
+    })
+    expect(reconciler.apply(secondSnapshot)).toBe(false)
+    expect(openingPrime).not.toHaveBeenCalled()
+  })
+
+  it('round_start 先到（动画 gate 等待中）时，同局 opening 快照必须喂给动画 gate', () => {
+    // 回归：自动确认路径 round_start 先到 → opening.start 启动 gate 等快照；
+    // 快照后到时若被结算屏障普通缓存（不 capture），gate 15 秒超时静默跳过
+    // 整个开局动画（东2局无动画）。即使 clearNextHand 已复位，动画等待中的
+    // opening 快照也必须进入 captureSnapshot 喂给 gate。
+    const { state, reconciler, captureSnapshot, setShowingResult, setWaitingForOpeningSnapshot } = setup()
+    setShowingResult(true)
+    setWaitingForOpeningSnapshot(true)
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
+    state.round.value = 1
+    state.honba.value = 0
+
+    const nextOpening = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 11, phase: 'opening', round: 2, honba: 0,
+    })
+    expect(reconciler.apply(nextOpening)).toBe(false)
+    expect(captureSnapshot).toHaveBeenCalledWith(nextOpening)
+    expect(state.round.value).toBe(1)
+    expect(reconciler.takePending()).toBe(nextOpening)
+  })
+
+  it('动画已运行且同局 opening 快照已喂给 gate 时，不得取消开局动画直接落地（自动确认东2局动画回归）', () => {
+    // 回归：自动确认路径下 round_start 先到 → opening.start 启动 gate；随后同局
+    // opening 快照经 primeSnapshot 先 capture（running=true），isWaitingForSnapshot
+    // 因此变为 false。若「未来轮次」按滞后的 state.round（仍为上一手）比较，
+    // 2 > 1 成立 → 走 opening.cancel + applyNow 直接落地 → 开局动画被取消、
+    // 东2局整副牌直接出现。必须按动画目标手（round_start 的轮次）比较：同手
+    // 快照只进 capture/pending，不能取消动画。
+    const { state, reconciler, captureSnapshot, openingCancel, settlement, setOpening, setShowingResult, setTargetHand } = setup()
+    setOpening(true)
+    // 快照已被 prime 提前 capture：gate 已配对，isWaitingForSnapshot 为 false。
+    setShowingResult(true)
+    setTargetHand({ round: 2, honba: 0 })
+    state.phase.value = 'settled'
+    state.result.value = { winnerIndex: 0 }
+    state.round.value = 1
+    state.honba.value = 0
+
+    const nextOpening = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 11, phase: 'opening', round: 2, honba: 0,
+    })
+    expect(reconciler.apply(nextOpening)).toBe(false)
+    expect(openingCancel).not.toHaveBeenCalled()
+    expect(settlement.cancel).not.toHaveBeenCalled()
+    expect(captureSnapshot).toHaveBeenCalledWith(nextOpening)
+    expect(state.round.value).toBe(1)
+    expect(reconciler.takePending()).toBe(nextOpening)
+  })
+
+  it('动画运行中收到真正的未来轮快照（晚于动画目标手）时取消旧动画并立即落地', () => {
+    const { state, reconciler, openingCancel, settlement, setOpening, setTargetHand } = setup()
+    setOpening(true)
+    setTargetHand({ round: 2, honba: 0 })
+    state.round.value = 2
+    state.honba.value = 0
+
+    const future = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 12, phase: 'drawing', round: 3, honba: 0,
+    })
+    expect(reconciler.apply(future)).toBe(true)
+    expect(openingCancel).toHaveBeenCalled()
+    expect(settlement.cancel).toHaveBeenCalled()
+    expect(state.round.value).toBe(3)
+  })
+
+  it('动画运行中且无目标手信息时，按 state.round 判断未来轮（兼容回退）', () => {
+    const { state, reconciler, openingCancel, settlement, setOpening } = setup()
+    setOpening(true)
+    state.round.value = 2
+    state.honba.value = 0
+
+    const future = snapshot({
+      authorityEpoch: 'epoch-1', sequence: 12, phase: 'drawing', round: 3, honba: 0,
+    })
+    expect(reconciler.apply(future)).toBe(true)
+    expect(openingCancel).toHaveBeenCalled()
+    expect(settlement.cancel).toHaveBeenCalled()
+    expect(state.round.value).toBe(3)
+  })
+
   it('匹配结束（快照路径）清除「已确认，等待其他玩家」标记', () => {
     // 回归：房主只广播快照、不发 match_finished 消息；东四局/南四局打完若不清
     // waitingNextRound，所有端都会永远显示「等待其他玩家确认」。
@@ -344,6 +469,42 @@ describe('snapshotReconciler', () => {
 
     expect(openingCancel).toHaveBeenCalledOnce()
     expect(state.round.value).toBe(2)
+  })
+
+  it('天胡/地胡：开局动画播放中收到 win-effect 快照时取消动画并立即启动结算时间线', () => {
+    // 回归：地胡 40s 极速结算时，房主端开局动画（opening.isRunning=true）还没播完，
+    // 胡牌表现快照已到达。此前该快照被缓冲等动画播完（高负载下 >20s），房主端
+    // 结算弹窗迟迟不出现、真人无法确认；必须像公共 round_settled 一样立即结算。
+    const { state, reconciler, openingCancel, settlement, setOpening } = setup()
+    // 地胡：round_start 已把当前局推进到东4局·1本场，开局动画仍在播放。
+    state.round.value = 4
+    state.honba.value = 1
+    setOpening(true)
+
+    const winEffectSnapshot = snapshot({
+      round: 4, honba: 1, phase: 'win-effect', sequence: 2, authorityEpoch: 'epoch-1',
+      winPresentation: {
+        winnerIndex: 1, tile: 'm9', sourceIndex: 4, robbedKong: false,
+        robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+      },
+      winningPlayerIndex: 1,
+    })
+    expect(reconciler.apply(winEffectSnapshot)).toBe(true)
+    expect(openingCancel).toHaveBeenCalledOnce()
+    expect(settlement.start).toHaveBeenCalledWith(winEffectSnapshot)
+
+    // 随后同局 settled 快照到达：同一 key 只补最终 result，不重播动画。
+    const settledSnapshot = snapshot({
+      round: 4, honba: 1, phase: 'settled', sequence: 3, authorityEpoch: 'epoch-1',
+      result: { winnerIndex: 1, winner: 'P1', multiplier: 8, totalMultiplier: 8, points: 6400, details: [], totalWon: 6400 },
+      winPresentation: {
+        winnerIndex: 1, tile: 'm9', sourceIndex: 4, robbedKong: false,
+        robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+      },
+      winningPlayerIndex: 1,
+    })
+    expect(reconciler.apply(settledSnapshot)).toBe(true)
+    expect(settlement.start).toHaveBeenCalledWith(settledSnapshot)
   })
 
   it('round_start 先到时，先用同轮权威快照配对，不能把它误判成未来轮次', () => {

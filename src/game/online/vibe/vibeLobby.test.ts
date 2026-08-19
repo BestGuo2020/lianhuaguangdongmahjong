@@ -518,7 +518,7 @@ describe('vibeLobby', () => {
     ])
   })
 
-  it('客户端：hello 丢失时只做一次有界重试，不持续轮询', () => {
+  it('客户端：hello 丢失时有界重试，roster 就绪后单次确认业务监听且不持续轮询', async () => {
     vi.useFakeTimers()
     const room = createMockVibeRoom(false)
     const received: LobbySeat[][] = []
@@ -544,8 +544,10 @@ describe('vibeLobby', () => {
         { seat: 1, peerId: room.peerId, nickname: '玩家', avatar: '', ready: false },
       ],
     })
+    await Promise.resolve()
+    expect(helloSent()).toBe(3)
     vi.advanceTimersByTime(10000)
-    expect(helloSent()).toBe(2)
+    expect(helloSent()).toBe(3)
     expect(received).toHaveLength(1)
   })
 
