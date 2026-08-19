@@ -3,6 +3,7 @@ import {
   allLiveSeatsConfirmed,
   isFutureShuffleHand,
   isSettlementPresentationReady,
+  shouldRecoverDowngradedSettlement,
   isShuffleStartMessage,
   liveContinuePeers,
 } from './useVibeRemoteGame'
@@ -27,6 +28,13 @@ describe('liveContinuePeers（下一局确认关卡）', () => {
     expect(allLiveSeatsConfirmed(liveSeats, new Set(), new Set([1, 2]))).toBe(true)
     expect(allLiveSeatsConfirmed(liveSeats, new Set(), new Set([2]))).toBe(false)
     expect(allLiveSeatsConfirmed(liveSeats, new Set([1]), new Set([2]))).toBe(true)
+  })
+
+  it('恢复宽限中的真人仍参与确认，只有已经 AI 接管的座位可跳过', () => {
+    const boundPeers = new Map([['reconnecting-peer', 1]])
+    expect(allLiveSeatsConfirmed(boundPeers, new Set(), new Set())).toBe(false)
+    expect(allLiveSeatsConfirmed(boundPeers, new Set([1]), new Set())).toBe(true)
+    expect(allLiveSeatsConfirmed(boundPeers, new Set(), new Set([1]))).toBe(true)
   })
 })
 
@@ -95,5 +103,21 @@ describe('胡牌后结算表现恢复判定', () => {
     expect(isSettlementPresentationReady('settled', null)).toBe(false)
     expect(isSettlementPresentationReady('revealing', result)).toBe(false)
     expect(isSettlementPresentationReady('win-effect', result)).toBe(false)
+  })
+
+  it('同一局结算曾就绪后被重进握手清空时必须恢复', () => {
+    const expected = { round: 2, honba: 1 }
+    expect(shouldRecoverDowngradedSettlement(
+      expected, expected, 'lobby', null, true,
+    )).toBe(true)
+    expect(shouldRecoverDowngradedSettlement(
+      expected, expected, 'revealing', null, false,
+    )).toBe(false)
+    expect(shouldRecoverDowngradedSettlement(
+      expected, { round: 3, honba: 0 }, 'lobby', null, true,
+    )).toBe(false)
+    expect(shouldRecoverDowngradedSettlement(
+      expected, expected, 'settled', { winnerIndex: 0 }, true,
+    )).toBe(false)
   })
 })

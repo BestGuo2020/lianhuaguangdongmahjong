@@ -72,6 +72,8 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   getPeerSeats(): Map<string, number>
   /** 当前仍在 reconnecting 的座位；恢复窗口结束后才会切 AI。 */
   getDisconnectedSeats(): Set<number>
+  /** 业务事件触发的单次权威事实补发。 */
+  resendCurrentState(): void
   /** 房主 viewer 的开局动画结束后，确认当前 round。 */
   markLocalOpeningReady(round: number, honba: number): void
   /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
@@ -768,6 +770,10 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     },
     getDisconnectedSeats(): Set<number> {
       return new Set(seatStates.filter((state) => state.disconnected).map((state) => state.seat))
+    },
+    /** 业务事件触发的单次权威事实补发；不建立定时广播。 */
+    resendCurrentState() {
+      broadcastAll(true)
     },
     markLocalOpeningReady(round: number, honba: number) {
       if (openingBarrierEnabled) openingBarrier.markLocalReady(round, honba)

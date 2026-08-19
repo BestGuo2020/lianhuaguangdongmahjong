@@ -137,6 +137,20 @@ export function isSettlementPresentationReady(
   return phase === 'settled' && result != null
 }
 
+export function shouldRecoverDowngradedSettlement(
+  expectedHand: { round: number; honba: number } | null,
+  currentHand: { round: number; honba: number },
+  phase: GamePhase,
+  result: RoundResult | null,
+  wasReady: boolean,
+): boolean {
+  return expectedHand != null
+    && expectedHand.round === currentHand.round
+    && expectedHand.honba === currentHand.honba
+    && wasReady
+    && !isSettlementPresentationReady(phase, result)
+}
+
 /** 仍需等待「下一局确认」的远端 peer：排除已被 AI 接管（掉线）的座位——
  * 否则掉线玩家永远不会发 continue，全员卡死在「已确认，等待其他玩家」。 */
 export function liveContinuePeers(seatByPeer: Map<string, number>, aiControlledSeats: Set<number>): string[] {
@@ -199,6 +213,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     aiControlledSeatsVersion: { value: number }
     getLivePeerSeats(): Map<string, number>
     getDisconnectedSeats(): Set<number>
+    resendCurrentState(): void
     markLocalOpeningReady(round: number, honba: number): void
     getPeerSeats(): Map<string, number>
     enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
@@ -390,20 +405,15 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       const continueReadySeats = new Set<number>()
       let hostReadyNext = false
       let advancingRound = false
-      let continueSafety: ReturnType<typeof setTimeout> | null = null
-      function clearContinueSafety() {
-        if (continueSafety != null) { window.clearTimeout(continueSafety); continueSafety = null }
-      }
       function maybeAdvanceRound() {
         const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
-        // reconnecting/leave 处于 hostGameRunner 的恢复宽限内，不立即 enableAIForSeat；
-        // 当前不可用的连接暂不参与屏障，避免 P2P → Relay 切换让已确认的 3 个真人
-        // 也被卡住。宽限真正耗尽后 hostGameRunner 会进入 AI；承诺超时也会用新
-        // roundId 重试并只排除确实未提交的座位。
+        // reconnecting/leave 处于 hostGameRunner 的恢复宽限内时，该座位仍是真人，
+        // 必须保留在确认屏障。只有宽限真正耗尽并切为 AI 后才允许排除；否则一次
+        // SDK 短暂 reconnecting 就能绕过真人确认，客户端会从东2直接跳到东3。
         // 用引擎当前的真人座位表（seatStates，重连后 peerId 已 retarget）而非大厅
         // 静态表：重连客户端发来的 continue 携带新 peerId，若按大厅旧 peerId 判定，
         // 永远等不到确认 → 全员卡死在「已确认，等待其他玩家」。
-        const liveSeats = hostGame.value?.getLivePeerSeats()
+        const liveSeats = hostGame.value?.getPeerSeats()
           ?? new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat]))
         const livePeers = liveContinuePeers(liveSeats, aiSeats)
         // 临时诊断：定位「已确认，等待其他玩家」卡死——打印在等谁、谁已确认。
@@ -411,7 +421,6 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         if (hostReadyNext && !advancingRound && allLiveSeatsConfirmed(liveSeats, aiSeats, continueReadySeats)) {
           hostReadyNext = false
           continueReadySeats.clear()
-          clearContinueSafety()
           const currentGame = hostGame.value?.game
           const result = currentGame?.result.value
           if (!currentGame || !result || currentGame.matchFinished.value) return
@@ -526,23 +535,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // 等待确认期间有人被 AI 接管（掉线超时）→ 立即重新评估屏障，不能干等。
       watch(() => hostGame.value?.aiControlledSeatsVersion.value ?? 0, () => maybeAdvanceRound())
       continueAction = () => {
+        // 房主明确确认当前结算时，再事件驱动补发一次权威结算事实。客户端必须
+        // 先真正收到结算并发送 continue；不能因“20 秒未确认”就把在线真人转 AI
+        // 并越过其确认，造成客户端从东2直接跳到东3。
+        console.log('[host] 房主确认结算，单次补发当前权威事实；在线及恢复宽限中的真人必须明确确认')
+        hostGame.value?.resendCurrentState()
         hostReadyNext = true
-        // 兜底：超过 20s 仍未确认的座位视为掉线（局末断线的玩家此后引擎再无请求，
-        // 15s 挂起超时永远不会触发，座位不会进 AI 名单）→ 强制 AI 接管并重新评估，
-        // 避免全员永久卡在「已确认，等待其他玩家」。
-        clearContinueSafety()
-        continueSafety = window.setTimeout(() => {
-          continueSafety = null
-          if (!hostReadyNext) return
-          const aiSeats = hostGame.value?.aiControlledSeats ?? new Set<number>()
-          const liveSeats = hostGame.value?.getLivePeerSeats() ?? new Map<string, number>()
-          for (const [peerId, seat] of liveSeats) {
-            if (!aiSeats.has(seat) && !continueReadySeats.has(seat)) {
-              hostGame.value?.enableAIForSeat(seat)
-            }
-          }
-          // enableAIForSeat 触发 aiControlledSeatsVersion → watch → maybeAdvanceRound。
-        }, 20000)
         maybeAdvanceRound()
       }
       room.onMessage((message, fromPeerId) => {
@@ -558,9 +556,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
             || !Number.isInteger(value.round)
             || currentGame?.phase.value !== 'settled'
             || currentGame.result.value == null
-            || !hostGame.value?.getLivePeerSeats().has(fromPeerId)
+            || !hostGame.value?.getPeerSeats().has(fromPeerId)
           ) return
-          const liveSeat = hostGame.value?.getLivePeerSeats().get(fromPeerId)
+          const liveSeat = hostGame.value?.getPeerSeats().get(fromPeerId)
           if (liveSeat == null) return
           continueReadySeats.add(liveSeat)
           maybeAdvanceRound()
@@ -673,11 +671,18 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // win_effect 使用独立于快照的事件序号；新房主生命周期/新场次会显式归零。
   let lastWinEffectSequence = 0
   let settlementRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  let settlementRecoveryHand: { round: number; honba: number } | null = null
+  let settlementPresentationWasReady = false
   function clearSettlementRecovery() {
     if (settlementRecoveryTimer != null) {
       window.clearTimeout(settlementRecoveryTimer)
       settlementRecoveryTimer = null
     }
+  }
+  function clearSettlementRecoveryHand() {
+    clearSettlementRecovery()
+    settlementRecoveryHand = null
+    settlementPresentationWasReady = false
   }
   function armSettlementRecovery(round: number, currentHonba: number, delay = 5000, syncFirst = true) {
     clearSettlementRecovery()
@@ -703,6 +708,40 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       restartRoomSession('胡牌特效后未收到结算事实：结算弹窗未完整就绪（settled/result）')
     }, delay)
   }
+  function noteSettlementRecovery(round: number, currentHonba: number) {
+    if (hostGame.value != null || state.matchFinished.value) return
+    if (settlementRecoveryHand?.round !== round || settlementRecoveryHand.honba !== currentHonba) {
+      settlementPresentationWasReady = false
+    }
+    settlementRecoveryHand = { round, honba: currentHonba }
+    armSettlementRecovery(round, currentHonba)
+  }
+  watch(
+    () => [state.phase.value, state.result.value, state.round.value, state.honba.value, state.matchFinished.value] as const,
+    ([currentPhase, currentResult, currentRound, currentHonba, matchFinished]) => {
+      const expectedHand = settlementRecoveryHand
+      if (!expectedHand) return
+      if (matchFinished || currentRound !== expectedHand.round || currentHonba !== expectedHand.honba) {
+        clearSettlementRecoveryHand()
+        return
+      }
+      const ready = isSettlementPresentationReady(currentPhase, currentResult)
+      if (ready) {
+        settlementPresentationWasReady = true
+        return
+      }
+      if (shouldRecoverDowngradedSettlement(
+        expectedHand,
+        { round: currentRound, honba: currentHonba },
+        currentPhase,
+        currentResult,
+        settlementPresentationWasReady,
+      ) && settlementRecoveryTimer == null && !rejoinInFlight) {
+        console.warn('[client] 结算事实已就绪后又被重进握手降级，立即恢复同局结算')
+        armSettlementRecovery(currentRound, currentHonba, 0, true)
+      }
+    },
+  )
   const resetWinEffectDedup = () => { lastWinEffectSequence = 0 }
   // openingTimeline 在 requestCoordinator 之前创建；用可后绑定的 getter，确保
   // 开局确认发送时已经拿到当前房主 epoch，而不是捕获旧/空代次。
@@ -1221,6 +1260,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // waitingNextRound 也不会清掉，随后就会错误触发“确认后长时间未收到推进信号”。
       const previousRound = state.round.value
       const accepted = snapshotReconciler.apply(msg)
+      if (accepted && msg.phase === 'settled' && msg.result != null) {
+        noteSettlementRecovery(msg.round, msg.honba)
+      }
       // round_start 是瞬时消息；若它在 P2P/Relay 切换窗口丢失，当前房主的
       // opening 快照仍可恢复同一套表现参数，不能直接跳过客户端开局动画。
       matchLifecycle.handleOpeningSnapshot(msg)
@@ -1243,13 +1285,15 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       if (msg.sequence <= lastWinEffectSequence) return
       lastWinEffectSequence = msg.sequence
       settlementTimeline.startEffect(msg)
-      armSettlementRecovery(msg.round, msg.honba)
+      noteSettlementRecovery(msg.round, msg.honba)
     },
     round_settled: (msg) => {
       // 不要仅凭收到结算包就撤销恢复计时。公共 round_settled 与定向快照可能
       // 共用 sequence，前者会被幂等门禁拒绝；即使事实被接受，表现时间线也仍
       // 可能没有把 result 落到 UI。8 秒回调会以实际 settled/result 状态判定。
-      snapshotReconciler.applySettlementNotice(msg)
+      if (snapshotReconciler.applySettlementNotice(msg)) {
+        noteSettlementRecovery(msg.round, msg.honba)
+      }
     },
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
@@ -1573,7 +1617,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     transport.close()
     clearTimers()
     clearHostGoneTimer()
-    clearSettlementRecovery()
+    clearSettlementRecoveryHand()
     clearAuthoritySilenceTimer()
     hostGoneBoundRoom = null
     pinnedHostPeerId = null

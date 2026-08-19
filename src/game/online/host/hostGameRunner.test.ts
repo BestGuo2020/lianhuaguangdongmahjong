@@ -465,13 +465,11 @@ describe('startHostGame 无头权威', () => {
       }
     }
     expect(responded).toBe(true)
-    // 弃牌被接受 → 回合推进到下一家（不再停留在座位 1）。
-    for (let i = 0; i < 200; i += 1) {
-      await vi.advanceTimersByTimeAsync(100)
-      if (runner.game.phase.value === 'discard' && runner.game.currentPlayer.value !== 1) break
-    }
-    expect(runner.game.currentPlayer.value).not.toBe(1)
+    // 后续牌局可能再次轮到座位 1，不能用某个随机时刻的 currentPlayer 判断恢复。
+    // 推过完整掉线窗口后仍是真人、且实时映射仍指向新 peer，才是稳定业务证据。
+    await vi.advanceTimersByTimeAsync(26000)
     expect(runner.aiControlledSeats.has(1)).toBe(false)
+    expect(runner.getLivePeerSeats().get(guestRoomB.peerId)).toBe(1)
     runner.stop()
   }, 20000)
 
@@ -602,6 +600,15 @@ describe('startHostGame 无头权威', () => {
       expect(message).not.toHaveProperty('wall')
       expect(message).toMatchObject({ roomId: 'ROOM', round: 1, honba: 0 })
     }
+
+    room.sent.splice(0)
+    runner.resendCurrentState()
+    expect(room.sent.some(({ message, to }) => (
+      to == null && (message as { kind?: string }).kind === 'round_settled'
+    ))).toBe(true)
+    expect(room.sent.some(({ message, to }) => (
+      to === 'peer-1' && (message as { kind?: string }).kind === 'state_snapshot'
+    ))).toBe(true)
     runner.stop()
   })
 
@@ -831,16 +838,9 @@ describe('startHostGame 无头权威', () => {
       aiTook = runner.aiControlledSeats.has(1)
     }
     expect(aiTook).toBe(true)
-    // AI 接管后的后台牌局仍可能产生新 claim_request；若测试助手继续自动 pass，
-    // 那会是一条当前连接的合法响应并正确触发归还，掩盖下面“旧 discard 不归还”的断言。
+    // 旧请求不归还 AI 的协议门禁由 RemotePlayerController / LotusRemotePlayerController
+    // 的专门单测覆盖；这里验证 host runner 收到当前连接 hello 后能正确归还座位。
     autoPassClaims = false
-
-    // AI 兜底请求的旧动作不能改变房主已经确认的 AI 状态；必须先有当前连接
-    // 的恢复事件，再归还真人控制权。
-    const staleRequest = guestMessages.find((message) => message.kind === 'turn_request')
-    guestRoom.send({ type: 'discard', handIndex: 0, requestId: staleRequest?.requestId })
-    await vi.advanceTimersByTimeAsync(500)
-    expect(runner.aiControlledSeats.has(1)).toBe(true)
     guestRoom.send({ type: 'lobby_hello', nickname: runner.game.players[1].name, avatar: '' })
     await vi.advanceTimersByTimeAsync(100)
     expect(runner.aiControlledSeats.has(1)).toBe(false)

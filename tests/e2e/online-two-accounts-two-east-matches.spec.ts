@@ -71,6 +71,8 @@ async function readRecoveryBuildMarkers(page: Page) {
         || /===\s*["'`]settled["'`]\s*&&\s*[^=]+!=\s*null/.test(readinessBody),
       revealCompletionRecovery: scripts.some((script) => script.includes('亮牌动画结束仍缺少结算结果')),
       settlementSyncRequest: scripts.some((script) => script.includes('settlement_sync_request')),
+      strictContinueBarrier: scripts.some((script) => script.includes('在线及恢复宽限中的真人必须明确确认')),
+      settlementDegradeRecovery: scripts.some((script) => script.includes('结算事实已就绪后又被重进握手降级')),
     }
   })
 }
@@ -88,6 +90,8 @@ test('线上部署包含事件驱动恢复且不含应用层心跳', async ({ pa
     settlementReadinessGate: true,
     revealCompletionRecovery: true,
     settlementSyncRequest: true,
+    strictContinueBarrier: true,
+    settlementDegradeRecovery: true,
   })
 })
 
@@ -836,6 +840,8 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       settlementReadinessGate: true,
       revealCompletionRecovery: true,
       settlementSyncRequest: true,
+      strictContinueBarrier: true,
+      settlementDegradeRecovery: true,
     }
     expect(recoveryMarkers, '线上页面未加载事件驱动恢复构建').toEqual([
       expectedMarkers,
