@@ -1202,21 +1202,35 @@ function assertTransitionHistory(
       && !sample.matchFinished
   ))
   const auditedRevealSamples = revealSamples.filter((sample) => {
-    // 只有此前已经看到四家完整亮牌，随后四手与牌山一起归零，才属于底桌切走。
-    // 流局的完整亮牌帧牌山本来就是 0，不能要求 earlier.wallCount>0；截图中没有
-    // 四家完整亮牌，因此不会被排除。
+    // 实际原子历史显示切局提交会先渲染一帧“新牌山 136/head0 + 四手0”，随后
+    // 5-26ms 内才提交新局 dealing/start。只有此前已有完整亮牌且 500ms 内紧接
+    // 新局权威边界时才排除；截图中的旧牌山为 70，绝不会命中。
     const completeReveal = revealSamples.find((earlier) => (
       earlier.at < sample.at
         && earlier.revealedFaceCounts.length === 4
         && earlier.revealedFaceCounts.every((count) => count > 0)
         && earlier.revealedFaceCounts.every((count, index) => count === earlier.concealedCounts[index])
     ))
+    const nextBoundary = history.find((candidate) => (
+      candidate.at > sample.at
+        && (
+          candidate.phase === 'opening'
+          || candidate.phase === 'dealing'
+          || candidate.openingStage === 'start'
+          || Boolean(candidate.hand && candidate.hand !== hand)
+          || candidate.finalVisible
+          || candidate.matchFinished
+        )
+    ))
     const transitionCleanup = completeReveal != null
-      && sample.wallCount === 0
+      && sample.wallCount === 136
+      && sample.wallHeadDrawn === 0
       && sample.concealedCounts.length === 4
       && sample.concealedCounts.every((count) => count === 0)
       && sample.revealedFaceCounts.length === 4
       && sample.revealedFaceCounts.every((count) => count === 0)
+      && nextBoundary != null
+      && nextBoundary.at - sample.at <= 500
     return !transitionCleanup
   })
   expect(auditedRevealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少非终局的四家亮牌阶段`)
