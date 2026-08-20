@@ -109,6 +109,19 @@ interface CanvasHealth {
   tileResources: number
 }
 
+interface FinalStanding {
+  rank: number
+  name: string
+  score: number
+}
+
+interface PageErrorRecord {
+  at: number
+  name: string
+  message: string
+  stack: string
+}
+
 function readOnlineConfig(): OnlineConfig {
   const raw = readFileSync('tmp/online_test', 'utf8')
   const url = raw.match(/测试 url：([^\r\n]+)/)?.[1]?.trim()
@@ -1049,6 +1062,19 @@ async function readNormalizedTableState(page: Page): Promise<NormalizedTableStat
       })).sort((a, b) => a.seat - b.seat),
     }
   })
+}
+
+async function readFinalStandings(page: Page): Promise<FinalStanding[]> {
+  return page.locator('.final-rankings article').evaluateAll((articles) => articles.map((article) => ({
+    rank: Number(article.querySelector('.final-rank b')?.textContent?.trim() ?? Number.NaN),
+    name: article.querySelector('.final-name strong')?.textContent?.trim() ?? '',
+    score: Number(article.querySelector('em')?.textContent?.trim() ?? Number.NaN),
+  })))
+}
+
+function isExternalVibeSdkFetchFailure(error: PageErrorRecord): boolean {
+  return error.message === 'Failed to fetch'
+    && /https:\/\/vibe\.lumigrav\.space\/sdk\/v3\/vibehub\.js(?:[:?]|$)/.test(error.stack)
 }
 
 async function readVisibleTableState(page: Page): Promise<VisibleTableState> {
@@ -2145,6 +2171,22 @@ async function runEastMatch(options: {
     await expect(page.locator('.final-backdrop')).toBeVisible({ timeout: 120_000 })
     await expect(page.getByText('最终排名')).toBeVisible()
   }
+  const finalStandings = await Promise.all(pages.map(readFinalStandings))
+  for (let index = 0; index < finalStandings.length; index += 1) {
+    expect(finalStandings[index], `第 ${matchIndex} 场页面 ${index} 最终排名必须显示四家姓名、名次和分数`)
+      .toHaveLength(4)
+    for (const entry of finalStandings[index]) {
+      expect(entry.name, `第 ${matchIndex} 场页面 ${index} 最终排名存在空姓名`).not.toBe('')
+      expect(Number.isInteger(entry.rank) && entry.rank >= 1 && entry.rank <= 4,
+        `第 ${matchIndex} 场页面 ${index} 最终名次非法`).toBe(true)
+      expect(Number.isFinite(entry.score), `第 ${matchIndex} 场页面 ${index} 最终分数不可读`).toBe(true)
+    }
+  }
+  expect(finalStandings[1], `第 ${matchIndex} 场双端最终排名与分数不一致`)
+    .toEqual(finalStandings[0])
+  console.log(`[ONLINE] 第 ${matchIndex} 场最终分数：${finalStandings[0]
+    .map((entry) => `${entry.rank}位 ${entry.name} ${entry.score}`)
+    .join('；')}`)
   const finalOpeningHistories = await Promise.all(pages.map((page) => openingHistory(page, true)))
   const openingCycles = finalOpeningHistories.map((history, index) => (
     validateOpeningCycles(history, index === 0 ? '房主' : '客户端', matchIndex)
@@ -2187,6 +2229,7 @@ async function runEastMatch(options: {
       tableTransitions,
       transitionIntegrity,
       boundaryStaleSnapshots: boundaryStaleSnapshots.map((lines) => lines.length),
+      finalStandings,
       recoveryEvents: consoleLogs.map((logs) => logs.filter((line) => (
         /单次请求当前手牌事实|先释放旧连接再重进|rejoin_ok|恢复牌局/i.test(line)
       ))),
@@ -2195,7 +2238,7 @@ async function runEastMatch(options: {
     contentType: 'application/json',
   })
   console.log(`[ONLINE] 第 ${matchIndex} 个东风场通过，房间 ${roomCode}`)
-  return { roomCode, timings }
+  return { roomCode, timings, finalStandings: finalStandings[0] }
 }
 
 test('两个线上账号完成两个莲花麻将东风场，每手不超过6分钟', async ({}, testInfo) => {
@@ -2203,6 +2246,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
   const { contexts } = accountPair
   let activePages: [Page, Page] | null = null
   let capturedLogs: string[][] = [[], []]
+  let capturedPageErrors: PageErrorRecord[][] = [[], []]
   try {
     await Promise.all(contexts.map(installAudioProbe))
     // 游戏授权令牌位于当前标签页的 sessionStorage；必须复用授权返回的两个页面，
@@ -2241,9 +2285,16 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     ])
     const logs = pages.map(() => [] as string[])
     capturedLogs = logs
-    const errors = pages.map(() => [] as string[])
+    const errors = pages.map(() => [] as PageErrorRecord[])
+    capturedPageErrors = errors
+    const checkedErrorCounts = pages.map(() => 0)
     pages.forEach((page, index) => {
-      page.on('pageerror', (error) => errors[index].push(error.message))
+      page.on('pageerror', (error) => errors[index].push({
+        at: Date.now(),
+        name: error.name,
+        message: error.message,
+        stack: error.stack ?? '',
+      }))
       page.on('console', (message) => {
         const line = message.text()
         if (/\[host\]|\[client\]|\[diag\]|\[transport\]|心跳|主动重建|error|warn|丢弃|重进|洗牌|快照|continue|shuffle|AI 代打|wall-regress/i.test(line)) {
@@ -2254,14 +2305,31 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
         }
       })
     })
-    const results: Array<{ roomCode: string; timings: Array<{ hand: string; seconds: number }> }> = []
+    const results: Array<{
+      roomCode: string
+      timings: Array<{ hand: string; seconds: number }>
+      finalStandings: FinalStanding[]
+    }> = []
     for (let matchIndex = 1; matchIndex <= 2; matchIndex += 1) {
       results.push(await runEastMatch({
         host: pages[0], client: pages[1], matchIndex, consoleLogs: logs, testInfo,
         reuseRoom: matchIndex > 1,
       }))
-      expect(errors[0], `线上第 ${matchIndex} 场房主出现未捕获异常`).toEqual([])
-      expect(errors[1], `线上第 ${matchIndex} 场客人出现未捕获异常`).toEqual([])
+      for (let index = 0; index < errors.length; index += 1) {
+        const matchErrors = errors[index].slice(checkedErrorCounts[index])
+        checkedErrorCounts[index] = errors[index].length
+        const externalSdkFailures = matchErrors.filter(isExternalVibeSdkFetchFailure)
+        const applicationErrors = matchErrors.filter((error) => !isExternalVibeSdkFetchFailure(error))
+        if (externalSdkFailures.length) {
+          console.log(`[ONLINE] 第 ${matchIndex} 场${index === 0 ? '房主' : '客户端'}记录到 ${externalSdkFailures.length} 次 VibeHub SDK 外部网络拒绝；牌局完整性仍需继续通过`)
+        }
+        await testInfo.attach(`online-match-${matchIndex}-page-errors-${index}`, {
+          body: JSON.stringify({ externalSdkFailures, applicationErrors }, null, 2),
+          contentType: 'application/json',
+        })
+        expect(applicationErrors, `线上第 ${matchIndex} 场${index === 0 ? '房主' : '客人'}出现未捕获应用异常`)
+          .toEqual([])
+      }
       if (matchIndex < 2) {
         for (const page of pages) {
           await page.getByRole('button', { name: '返回大厅', exact: true }).click()
@@ -2280,6 +2348,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
         body: JSON.stringify({
           error: String(error),
           logs: capturedLogs,
+          pageErrors: capturedPageErrors,
           pages: await Promise.all(activePages.map(async (page) => ({
             round: await readRoundLabel(page),
             canvas: await readCanvasHealth(page),
