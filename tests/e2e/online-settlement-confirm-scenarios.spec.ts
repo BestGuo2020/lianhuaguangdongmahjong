@@ -602,27 +602,8 @@ async function installWinPhaseSampler(page: Page) {
         .filter((entry) => entry !== '')
         .map(Number)
         .filter(Number.isFinite)
-      type PlayerProbe = { seat?: unknown; hand?: unknown }
-      type VueInstance = { props?: Record<string, unknown>; parent?: VueInstance | null }
-      let revealedFaceCounts: number[] = []
-      let revealHands = false
-      let instance = (hud as (HTMLElement & { __vueParentComponent?: VueInstance }) | null)
-        ?.__vueParentComponent
-      while (instance) {
-        const players = instance.props?.players
-        if (Array.isArray(players) && 'revealHands' in (instance.props ?? {})) {
-          revealedFaceCounts = (players as PlayerProbe[])
-            .map((player, index) => ({
-              seat: typeof player.seat === 'number' ? player.seat : index,
-              count: Array.isArray(player.hand) ? player.hand.length : 0,
-            }))
-            .sort((left, right) => left.seat - right.seat)
-            .map((entry) => entry.count)
-          revealHands = Boolean(instance.props?.revealHands)
-          break
-        }
-        instance = instance.parent ?? undefined
-      }
+      const revealedFaceCounts = csvNumbers(hud?.dataset.revealedFaceCounts)
+      const revealHands = hud?.dataset.revealHands === '1'
       const current: WinPhaseSample = {
         at: Date.now(),
         hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',

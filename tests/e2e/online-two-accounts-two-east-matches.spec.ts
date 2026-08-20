@@ -812,26 +812,7 @@ async function installOpeningSampler(page: Page) {
       const concealedCounts = csvNumbers(hud?.dataset.concealedCounts)
       const discardCounts = csvNumbers(hud?.dataset.discardCounts)
       const meldTileCounts = csvNumbers(hud?.dataset.meldTileCounts)
-      type PlayerProbe = { seat?: unknown; hand?: unknown }
-      let presentationProps: Record<string, unknown> = props
-      let tableInstance = (hud as (HTMLElement & { __vueParentComponent?: VueInstance }) | null)
-        ?.__vueParentComponent
-      while (tableInstance) {
-        if (Array.isArray(tableInstance.props?.players) && 'revealHands' in (tableInstance.props ?? {})) {
-          presentationProps = tableInstance.props ?? props
-          break
-        }
-        tableInstance = tableInstance.parent ?? undefined
-      }
-      const revealedFaceCounts = Array.isArray(presentationProps.players)
-        ? (presentationProps.players as PlayerProbe[])
-            .map((player, index) => ({
-              seat: typeof player.seat === 'number' ? player.seat : index,
-              count: Array.isArray(player.hand) ? player.hand.length : 0,
-            }))
-            .sort((left, right) => left.seat - right.seat)
-            .map((entry) => entry.count)
-        : []
+      const revealedFaceCounts = csvNumbers(hud?.dataset.revealedFaceCounts)
       const completeSeatCounts = seats.length === 4
         && concealedCounts.length === 4
         && discardCounts.length === 4
@@ -849,7 +830,7 @@ async function installOpeningSampler(page: Page) {
         seats,
         concealedCounts,
         revealedFaceCounts,
-        revealHands: Boolean(presentationProps.revealHands),
+        revealHands: hud?.dataset.revealHands === '1',
         discardCounts,
         meldTileCounts,
         winEffectVisible: effectVisible,
