@@ -1200,10 +1200,9 @@ function assertTransitionHistory(
       && !sample.matchFinished
   ))
   const auditedRevealSamples = revealSamples.filter((sample) => {
-    // 与确认专项 winningWindow 使用同一权威边界：新一手/终局重置牌墙代次时
-    // wallHeadDrawn 会从本手结算值回退到 0。只有此前已有完整四家亮牌、随后
-    // 墙与四手全零且摸牌进度明确回退，才属于切局清理；截图中的牌墙仍为 70、
-    // head 未回退，因此仍会进入严格断言。
+    // 切局的权威事实是旧牌墙代次被清空：只有此前已经看到四家完整亮牌且牌山
+    // 仍大于 0，随后牌山与四手一起归零，才属于底桌切走。截图中的牌山仍为 70，
+    // 没有完整亮牌就直接归零的情况也不会被排除。
     const completeReveal = revealSamples.find((earlier) => (
       earlier.at < sample.at
         && earlier.revealedFaceCounts.length === 4
@@ -1211,7 +1210,7 @@ function assertTransitionHistory(
         && earlier.revealedFaceCounts.every((count, index) => count === earlier.concealedCounts[index])
     ))
     const transitionCleanup = completeReveal != null
-      && sample.wallHeadDrawn < completeReveal.wallHeadDrawn
+      && completeReveal.wallCount > 0
       && sample.wallCount === 0
       && sample.concealedCounts.length === 4
       && sample.concealedCounts.every((count) => count === 0)
