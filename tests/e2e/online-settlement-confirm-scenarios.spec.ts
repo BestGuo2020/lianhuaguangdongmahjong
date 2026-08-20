@@ -418,15 +418,6 @@ function attachConsoleCapture(page: Page, logs: string[]) {
  */
 async function installWinPhaseSampler(page: Page) {
   await page.evaluate(() => {
-    type Meld = { tiles?: unknown[] }
-    type Player = {
-      seat?: unknown
-      hand?: unknown[]
-      concealedTileCount?: unknown
-      discards?: unknown[]
-      melds?: Meld[]
-    }
-    type VueInstance = { props?: Record<string, unknown>; parent?: VueInstance | null }
     const target = window as unknown as {
       __onlineWinPhaseSamples?: WinPhaseSample[]
       __onlineWinPhaseSampler?: number
@@ -442,45 +433,25 @@ async function installWinPhaseSampler(page: Page) {
       && getComputedStyle(element).visibility !== 'hidden'
       && getComputedStyle(element).display !== 'none'
       && Number(getComputedStyle(element).opacity) > 0)
-    const readProps = () => {
-      for (const element of document.querySelectorAll('.game-table-hud, .mahjong-scene')) {
-        let instance = (element as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent
-        while (instance) {
-          if (instance.props && 'players' in instance.props && 'wallCount' in instance.props) {
-            return instance.props
-          }
-          instance = instance.parent ?? undefined
-        }
-      }
-      return undefined
-    }
     const sample = () => {
-      const props = readProps()
       const hud = document.querySelector<HTMLElement>('.game-table-hud')
       const canvas = document.querySelector<HTMLCanvasElement>('.mahjong-scene')
       const settlement = document.querySelector<HTMLElement>('.round-settlement')
-      const players = (Array.isArray(props?.players) ? props?.players : []) as Player[]
-      const entries = players.map((player, index) => ({
-        seat: typeof player.seat === 'number' ? player.seat : index,
-        concealed: typeof player.concealedTileCount === 'number'
-          ? player.concealedTileCount
-          : (player.hand?.length ?? 0),
-        discards: player.discards?.length ?? 0,
-        meldTiles: (player.melds ?? []).reduce((sum, meld) => sum + (meld.tiles?.length ?? 0), 0),
-      })).sort((a, b) => a.seat - b.seat)
-      const numberValue = (value: unknown, fallback = -1) => (
-        typeof value === 'number' && Number.isFinite(value) ? value : fallback
-      )
+      const csvNumbers = (value: string | undefined) => (value ?? '')
+        .split(',')
+        .filter((entry) => entry !== '')
+        .map(Number)
+        .filter(Number.isFinite)
       const current: WinPhaseSample = {
         at: Date.now(),
         hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
-        phase: typeof props?.phase === 'string' ? props.phase : '',
-        wallCount: numberValue(props?.wallCount, Number(hud?.dataset.wallCount ?? -1)),
-        wallHeadDrawn: numberValue(props?.wallHeadDrawn, Number(hud?.dataset.wallHeadDrawn ?? -1)),
-        seats: entries.map((entry) => entry.seat),
-        concealedCounts: entries.map((entry) => entry.concealed),
-        discardCounts: entries.map((entry) => entry.discards),
-        meldTileCounts: entries.map((entry) => entry.meldTiles),
+        phase: hud?.dataset.phase ?? '',
+        wallCount: Number(hud?.dataset.wallCount ?? -1),
+        wallHeadDrawn: Number(hud?.dataset.wallHeadDrawn ?? -1),
+        seats: csvNumbers(hud?.dataset.tableSeats),
+        concealedCounts: csvNumbers(hud?.dataset.concealedCounts),
+        discardCounts: csvNumbers(hud?.dataset.discardCounts),
+        meldTileCounts: csvNumbers(hud?.dataset.meldTileCounts),
         winEffectVisible: Number(hud?.dataset.winEffectId ?? -1) >= 0,
         settlementVisible: visible(settlement),
         confirmed: visible(document.querySelector<HTMLElement>('.remote-banner'))

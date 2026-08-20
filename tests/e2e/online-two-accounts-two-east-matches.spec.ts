@@ -84,6 +84,10 @@ interface TableTransitionSample {
   concealedCount: number
   discardCount: number
   meldTileCount: number
+  seats: number[]
+  concealedCounts: number[]
+  discardCounts: number[]
+  meldTileCounts: number[]
   winEffectVisible: boolean
 }
 interface CanvasHealth {
@@ -619,44 +623,35 @@ async function installOpeningSampler(page: Page) {
         previous = '__unset__'
         previousStage = null
       }
-      let tableProps: Record<string, unknown> = {}
-      for (const tableRoot of document.querySelectorAll('.game-table-hud, .mahjong-scene')) {
-        let tableInstance = (tableRoot as HTMLElement & { __vueParentComponent?: VueInstance })
-          .__vueParentComponent
-        while (tableInstance) {
-          if (tableInstance.props && 'players' in tableInstance.props && 'wallCount' in tableInstance.props) {
-            tableProps = tableInstance.props
-            break
-          }
-          tableInstance = tableInstance.parent ?? undefined
-        }
-        if ('players' in tableProps) break
-      }
-      const tablePlayers = (Array.isArray(tableProps.players) ? tableProps.players : []) as Array<{
-        hand?: unknown[]; concealedTileCount?: number; discards?: unknown[]
-        melds?: Array<{ tiles?: unknown[] }>
-      }>
+      // 完整性判定必须来自 HUD 同一次 Vue 渲染提交。不能把 HUD 的最新
+      // stage/wall 与 Vue 内部 props 的另一时点混读，否则会拼出不存在的状态。
+      const csvNumbers = (value: string | undefined) => (value ?? '')
+        .split(',')
+        .filter((entry) => entry !== '')
+        .map(Number)
+        .filter(Number.isFinite)
+      const seats = csvNumbers(hud?.dataset.tableSeats)
+      const concealedCounts = csvNumbers(hud?.dataset.concealedCounts)
+      const discardCounts = csvNumbers(hud?.dataset.discardCounts)
+      const meldTileCounts = csvNumbers(hud?.dataset.meldTileCounts)
+      const completeSeatCounts = seats.length === 4
+        && concealedCounts.length === 4
+        && discardCounts.length === 4
+        && meldTileCounts.length === 4
       const tableSample = {
         at: Date.now(),
         hand: handLabel,
-        phase: typeof tableProps.phase === 'string' ? tableProps.phase : '',
+        phase: hud?.dataset.phase ?? '',
         openingStage: stage ?? '',
         wallCount: typeof props.wallCount === 'number' ? props.wallCount : -1,
         wallHeadDrawn: typeof props.wallHeadDrawn === 'number' ? props.wallHeadDrawn : -1,
-        concealedCount: tablePlayers.length > 0
-          ? tablePlayers.reduce((sum, player) => sum + (
-            typeof player.concealedTileCount === 'number' ? player.concealedTileCount : (player.hand?.length ?? 0)
-          ), 0)
-          : document.querySelectorAll('.hand-rack .hand-tile-slot').length,
-        // -1 表示生产 Vue 内部对象不可读；不能把“不可读”伪装成牌河/副露为 0。
-        discardCount: tablePlayers.length > 0
-          ? tablePlayers.reduce((sum, player) => sum + (player.discards?.length ?? 0), 0)
-          : -1,
-        meldTileCount: tablePlayers.length > 0
-          ? tablePlayers.reduce((sum, player) => sum + (
-            player.melds?.reduce((meldSum, meld) => meldSum + (meld.tiles?.length ?? 0), 0) ?? 0
-          ), 0)
-          : -1,
+        concealedCount: completeSeatCounts ? concealedCounts.reduce((sum, count) => sum + count, 0) : -1,
+        discardCount: completeSeatCounts ? discardCounts.reduce((sum, count) => sum + count, 0) : -1,
+        meldTileCount: completeSeatCounts ? meldTileCounts.reduce((sum, count) => sum + count, 0) : -1,
+        seats,
+        concealedCounts,
+        discardCounts,
+        meldTileCounts,
         winEffectVisible: effectVisible,
       }
       const tableSignature = JSON.stringify({ ...tableSample, at: 0 })
@@ -954,8 +949,13 @@ function assertTransitionHistory(
     `第 ${matchIndex} 场${side}${hand}开局期间翻精阶段消失`).toBe(true)
   expect(opening.some((sample) => sample.openingStage === 'deal'),
     `第 ${matchIndex} 场${side}${hand}开局期间发牌阶段消失`).toBe(true)
+  let previousDealSample: TableTransitionSample | null = null
   for (const sample of opening) {
     expect(sample.wallCount, `第 ${matchIndex} 场${side}${hand}开局期间牌山凭空消失`).toBeGreaterThan(0)
+    expect(sample.seats, `第 ${matchIndex} 场${side}${hand}开局期间四家座位计数不可读`).toHaveLength(4)
+    expect(sample.concealedCounts, `第 ${matchIndex} 场${side}${hand}开局期间四家暗手计数不可读`).toHaveLength(4)
+    expect(sample.discardCounts, `第 ${matchIndex} 场${side}${hand}开局期间四家牌河计数不可读`).toHaveLength(4)
+    expect(sample.meldTileCounts, `第 ${matchIndex} 场${side}${hand}开局期间四家副露计数不可读`).toHaveLength(4)
     if (sample.discardCount >= 0) {
       expect(sample.discardCount, `第 ${matchIndex} 场${side}${hand}开局期间牌河未正确清场`).toBe(0)
     }
@@ -965,7 +965,20 @@ function assertTransitionHistory(
     expect(sample.winEffectVisible, `第 ${matchIndex} 场${side}${hand}开局期间胡牌特效残留`).toBe(false)
     if (sample.openingStage === 'deal' && sample.wallHeadDrawn > 0) {
       expect(sample.concealedCount,
-        `第 ${matchIndex} 场${side}${hand}发牌已开始但暗手凭空消失`).toBeGreaterThan(0)
+        `第 ${matchIndex} 场${side}${hand}发牌已开始但四家暗手整体消失`).toBeGreaterThan(0)
+    }
+    if (sample.openingStage === 'deal') {
+      if (previousDealSample) {
+        expect(sample.wallHeadDrawn,
+          `第 ${matchIndex} 场${side}${hand}发牌期间牌山进度回退`)
+          .toBeGreaterThanOrEqual(previousDealSample.wallHeadDrawn)
+        for (let seatIndex = 0; seatIndex < 4; seatIndex += 1) {
+          expect(sample.concealedCounts[seatIndex],
+            `第 ${matchIndex} 场${side}${hand}发牌期间座位 ${sample.seats[seatIndex]} 暗手回退或消失`)
+            .toBeGreaterThanOrEqual(previousDealSample.concealedCounts[seatIndex] ?? 0)
+        }
+      }
+      previousDealSample = sample
     }
   }
 }
@@ -1805,6 +1818,10 @@ async function runEastMatch(options: {
     console.log(`[ONLINE] 第 ${matchIndex} 场开局动画采样：房主 ${openingCycles[0].length} 次、客户端 ${openingCycles[1].length} 次（采样差异）`)
   }
   const tableTransitions = await Promise.all(pages.map(tableTransitionHistory))
+  await testInfo.attach(`online-match-${matchIndex}-table-transitions`, {
+    body: JSON.stringify({ host: tableTransitions[0], client: tableTransitions[1] }, null, 2),
+    contentType: 'application/json',
+  })
   const hands = [...new Set(timings.map((item) => item.hand))]
   for (let index = 0; index < 2; index += 1) {
     for (const hand of hands) {
