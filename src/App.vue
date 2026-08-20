@@ -267,6 +267,7 @@ function changeTableTheme(theme: TableThemeName) {
           :win-effect="winEffect"
           :win-presentation="winPresentation"
           :reveal-hands="revealHands"
+          :match-finished="matchFinished"
           :winning-player-index="winningPlayerIndex"
           :dealer="dealer"
           :is-user-turn="isUserTurn"
