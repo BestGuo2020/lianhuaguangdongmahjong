@@ -1592,6 +1592,7 @@ async function runEastMatch(options: {
     resultSignatures: [string, string]
   }>()
   const verifiedHands = new Set<string>()
+  const revealVerifiedHands = new Set<string>()
   const settledTableStates = new Map<string, [NormalizedTableState | null, NormalizedTableState | null]>()
   const transitionIntegrity: Array<{
     fromHand: string
@@ -2033,8 +2034,31 @@ async function runEastMatch(options: {
       console.log(`[ONLINE][第${matchIndex}场] ${activeHand} 捕获双端胡牌特效画面`)
       await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-${activeHand}-win-effect`)
     }
+    const activeToken = handToken(activeHand)
+    if (activeToken && popupSeenAt.every(Boolean) && !revealVerifiedHands.has(activeToken)) {
+      const revealReady = (await Promise.all(pages.map(tableTransitionHistory))).map((history) => (
+        history.some((sample) => (
+          sample.hand === activeHand
+            && sample.revealHands
+            && !sample.finalVisible
+            && !sample.matchFinished
+            && (sample.phase === 'revealing' || sample.phase === 'settled')
+            && sample.wallCount > 0
+            && sample.revealedFaceCounts.length === 4
+            && sample.revealedFaceCounts.every((count) => count > 0)
+            && sample.revealedFaceCounts.every((count, index) => count === sample.concealedCounts[index])
+        ))
+      ))
+      if (revealReady.every(Boolean)) {
+        revealVerifiedHands.add(activeToken)
+        console.log(`[ONLINE][第${matchIndex}场] ${activeHand} 双端四家真实亮牌已确认`)
+      }
+    }
+    // 先证明双端都真正显示四家最终牌面，再允许测试点击确认。若协议只保留张数
+    // 或出现空手，保持结算页并让 6 分钟/同步门槛给出业务失败，不能快速切局掩盖。
+    const mayConfirm = Boolean(activeToken && revealVerifiedHands.has(activeToken))
     const clicked = await Promise.all(pages.map((page, index) => (
-      settlementMatchesActive[index] ? clickContinueIfAvailable(page) : Promise.resolve(false)
+      settlementMatchesActive[index] && mayConfirm ? clickContinueIfAvailable(page) : Promise.resolve(false)
     )))
     for (let index = 0; index < clicked.length; index += 1) {
       if (clicked[index] && !confirmedAt[index]) {
