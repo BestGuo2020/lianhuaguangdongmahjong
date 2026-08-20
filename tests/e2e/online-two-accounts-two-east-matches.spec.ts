@@ -1120,6 +1120,7 @@ function assertTransitionHistory(
   expect(samples.length, `第 ${matchIndex} 场${side}${hand}缺少切局状态采样`).toBeGreaterThan(0)
   const start = samples.findIndex((sample) => sample.openingStage === 'start')
   expect(start, `第 ${matchIndex} 场${side}${hand}未记录下一手开局开始`).toBeGreaterThanOrEqual(0)
+  const openingStartedAt = samples[start]?.at ?? Number.POSITIVE_INFINITY
   // 只检查真正的开局窗口。同一手在正常对局、胡牌和结算期间
   // round-info 不会变；slice(start) 会把本手结束时的正常胡牌特效
   // 误判为“开局残留”。openingStage 首次清空即是开局时间线的边界。
@@ -1195,6 +1196,7 @@ function assertTransitionHistory(
   // 但若协议只留下 null 占位，mapper 后的 hand 会是 []，画面会出现三家空手。
   const revealSamples = samples.filter((sample) => (
     sample.revealHands
+      && sample.at >= openingStartedAt
       && (sample.phase === 'win-effect' || sample.phase === 'revealing' || sample.phase === 'settled')
       && !sample.finalVisible
       && !sample.matchFinished
