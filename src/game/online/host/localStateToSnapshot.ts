@@ -70,6 +70,11 @@ function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
   }
 }
 
+/** 结算公共事实专用：牌局已经结束，四家最终手牌全部公开且不含 null 占位。 */
+export function serializeRevealedPlayers(players: GamePlayer[]): ServerPlayerDto[] {
+  return players.map((player) => toServerPlayer(player, true))
+}
+
 export function serializeStateToSnapshot(
   source: SnapshotSource,
   targetSeat: number,

@@ -54,12 +54,21 @@ describe('decodeServerMessage', () => {
       mode: 'east', rulesetId: 'lotus-legacy', round: 2, honba: 0, dealer: 1,
       result: { winnerIndex: 3, winTile: 'm9' },
       winPresentation: null, winningPlayerIndex: 3,
+      players: [0, 1, 2, 3].map((seat) => ({
+        name: `P${seat}`, avatar: '', score: 2000, seat, hand: ['m1'],
+        discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+      })),
       scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 2000 })),
     }
     expect(decodeServerMessage(message)).toBe(message)
     expect(decodeServerMessage({ ...message, sequence: 0 })).toBeNull()
     expect(decodeServerMessage({ ...message, scores: message.scores.slice(0, 3) })).toBeNull()
     expect(decodeServerMessage({ ...message, scores: message.scores.map((entry) => ({ ...entry, seat: 0 })) })).toBeNull()
+    expect(decodeServerMessage({ ...message, players: message.players.slice(0, 3) })).toBeNull()
+    expect(decodeServerMessage({
+      ...message,
+      players: message.players.map((entry, index) => index === 1 ? { ...entry, hand: [null] } : entry),
+    })).toBeNull()
   })
 
   it('只接受带完整权威边界的公共胡牌特效事件', () => {

@@ -667,6 +667,7 @@ describe('startHostGame 无头权威', () => {
       details: [],
       scoreChanges: [],
     }
+    runner.game.revealHands.value = true
     runner.game.phase.value = 'settled'
     await vi.advanceTimersByTimeAsync(2500)
 
@@ -677,10 +678,26 @@ describe('startHostGame 无头权威', () => {
     ))
     expect(publicSettled).toHaveLength(1)
     for (const { message } of publicSettled) {
-      expect(message).not.toHaveProperty('players')
       expect(message).not.toHaveProperty('wall')
       expect(message).toMatchObject({ roomId: 'ROOM', round: 1, honba: 0 })
+      const revealedPlayers = (message as { players: ServerSnapshot['players'] }).players
+      expect(revealedPlayers).toHaveLength(4)
+      expect(revealedPlayers.every((player) => (
+        player.hand.length > 0 && player.hand.every((tile) => tile !== null)
+      ))).toBe(true)
     }
+    const directedSettled = room.sent.find(({ message, to }) => (
+      to === 'peer-1'
+      && (message as { kind?: string }).kind === 'state_snapshot'
+      && (message as ServerSnapshot).phase === 'settled'
+    ))?.message as ServerSnapshot | undefined
+    expect(directedSettled).toBeTruthy()
+    expect((publicSettled[0].message as { sequence: number }).sequence)
+      .toBeLessThan(directedSettled!.sequence!)
+    expect(directedSettled!.players).toHaveLength(4)
+    expect(directedSettled!.players.every((player) => (
+      player.hand.length > 0 && player.hand.every((tile) => tile !== null)
+    ))).toBe(true)
 
     room.sent.splice(0)
     runner.resendCurrentState()

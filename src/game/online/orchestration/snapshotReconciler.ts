@@ -437,8 +437,9 @@ export function createSnapshotReconciler({
   }
 
   /**
-   * 应用不含暗牌/牌墙的房间级结算事实。完整定向快照和公共兜底共用同一 sequence，
-   * 谁先到就由谁启动结算；后到的同序消息会被 authority 门禁幂等拒绝。
+   * 应用不含暗牌/牌墙的房间级结算事实。房主给公共兜底分配较小 sequence，
+   * 完整定向快照使用紧随其后的较大 sequence：公共事实可先启动结算，但不能
+   * 挡住随后包含四家真实牌面的亮牌快照。
    */
   function applySettlementNotice(message: RoundSettledMessage): boolean {
     if (message.round < state.round.value) return false
@@ -446,6 +447,13 @@ export function createSnapshotReconciler({
     commitAcceptedMetadata(message)
     if (state.matchFinished.value) return false
 
+    // 公共结算事实本身携带四家已公开牌面，不能继续沿用上一帧定向快照里的
+    // null 暗牌占位；否则 revealHands 开启时另外三家会从牌桌上消失。
+    state.players.splice(
+      0,
+      state.players.length,
+      ...mapPlayersToLocal(message.players, getLocalSeat()),
+    )
     for (const entry of message.scores) {
       const player = state.players[toLocal(entry.seat)]
       if (!player) continue

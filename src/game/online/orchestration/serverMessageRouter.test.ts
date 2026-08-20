@@ -45,6 +45,9 @@ const VALID_MESSAGES: ServerMessage[] = [
     kind: 'round_settled', roomId: 'ROOM', authorityEpoch: 'epoch-1', sequence: 2,
     mode: 'east', round: 1, honba: 0, dealer: 0, result: { winnerIndex: 0 },
     winPresentation: null, winningPlayerIndex: 0,
+    players: [0, 1, 2, 3].map((seat) => ({
+      ...player, name: `P${seat}`, seat, hand: [...player.hand], discards: [], melds: [],
+    })),
     scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 1000 })),
   },
   { kind: 'rejoin_ok', authorityEpoch: 'epoch-1', seat: 0, rejoin: false, roomId: 'ROOM', mode: 'east', nickname: 'A', rejoinCode: 'CODE' },

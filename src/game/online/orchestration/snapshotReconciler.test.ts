@@ -29,6 +29,7 @@ function settledNotice(overrides: Partial<RoundSettledMessage> = {}): RoundSettl
     mode: 'east', rulesetId: 'lotus-legacy', round: 2, honba: 1, dealer: 1,
     result: { winnerIndex: 3, winner: 'P3', roundLabel: '东2局', honba: 1 },
     winPresentation: null, winningPlayerIndex: 3,
+    players: [0, 1, 2, 3].map((seat) => ({ ...player(seat), hand: ['m1'] })),
     scores: [0, 1, 2, 3].map((seat) => ({ seat, name: `P${seat}`, score: 1000 + seat * 100 })),
     ...overrides,
   }
@@ -195,6 +196,29 @@ describe('snapshotReconciler', () => {
     expect(settlement.start).toHaveBeenCalledTimes(1)
     expect(state.players.map((item) => item.score)).toEqual([2200, 2300, 2000, 2100])
     expect(reconciler.applySettlementNotice(settledNotice({ sequence: 11 }))).toBe(false)
+  })
+
+  it('公共结算先到后仍接受更高序号的完整亮牌快照', () => {
+    const { state, reconciler } = setup()
+    reconciler.applyNow(snapshot({ authorityEpoch: 'epoch-1', sequence: 10 }))
+    const notice = settledNotice({ sequence: 11 })
+
+    expect(reconciler.applySettlementNotice(notice)).toBe(true)
+    expect(reconciler.applyNow(snapshot({
+      authorityEpoch: 'epoch-1',
+      sequence: 12,
+      phase: 'settled',
+      round: notice.round,
+      honba: notice.honba,
+      dealer: notice.dealer,
+      result: notice.result,
+      players: [0, 1, 2, 3].map((seat) => ({
+        ...player(seat),
+        hand: ['m1', 'm2'],
+      })),
+    }))).toBe(true)
+    expect(state.players).toHaveLength(4)
+    expect(state.players.every((entry) => entry.hand.length === 2)).toBe(true)
   })
 
   it('同序结算事实被门禁拒绝时不会伪造已结算状态', () => {

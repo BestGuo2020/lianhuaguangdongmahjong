@@ -12,7 +12,7 @@
 import { ref, watch } from 'vue'
 import type { GamePort } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
-import { serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
+import { serializeRevealedPlayers, serializeStateToSnapshot, type SnapshotContext, type SnapshotSource } from './localStateToSnapshot'
 import type { RoundStartMessage, ServerMessage, SettlementSyncRequest, WinEffectMessage } from '../protocol/messages'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
@@ -582,10 +582,20 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       game.players.map((p) => `${p.hand.join('')}|${p.discards.join('')}|${p.melds.map((m) => m.type + m.tiles.join('')).join('')}|${p.score}|${p.redCount}`).join('~'),
     ].join('#')
     if (!force && key === lastBroadcastKey) return
+    // 公共结算/终局事实不含手牌，定向快照才含完整亮牌。两类消息不能共用
+    // sequence：若公共事实先到，客户端会把随后同序的定向快照当重复包丢弃，
+    // revealHands 开启后就只剩本家手牌、另外三家看起来凭空消失。
+    // 公共事实使用较小序号，完整快照紧随其后使用更大序号；无论 SDK 以何种
+    // 顺序投递，完整快照都能作为更完整的新事实落地。
     snapshotSequence += 1
+    const publicFactSequence = snapshotSequence
+    const settledResult = game.phase.value === 'settled' ? game.result.value : null
+    const hasPublicFallback = Boolean(settledResult || game.matchFinished.value)
+    if (hasPublicFallback) snapshotSequence += 1
+    const detailedSnapshotSequence = snapshotSequence
     const localSnapshot = serializeStateToSnapshot(game, 0, {
       ...context,
-      sequence: snapshotSequence,
+      sequence: detailedSnapshotSequence,
       requestId: null,
       requestSeq: null,
       includeWall: true,
@@ -602,17 +612,16 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       return
     }
     lastBroadcastKey = key
-    const settledResult = game.phase.value === 'settled' ? game.result.value : null
     if (settledResult) {
-      // 完整快照含本家暗牌，必须按座位定向发送；但公网 SDK 的定向 peer 通道可能
-      // 在 peers() 仍显示 open 时半开。同步广播一条不含暗牌/牌墙的公共结算事实，
-      // 让当前 Room 内客户端仍能进入胡牌表现和结算，不再永久阻塞真人确认。
-      diagTx(`round_settled seq=${snapshotSequence}`)
+      // 完整快照必须按座位定向发送；但公网 SDK 的定向 peer 通道可能在 peers()
+      // 仍显示 open 时半开。同步广播一条不含牌墙、但包含结算公开手牌的公共事实，
+      // 让当前 Room 内客户端仍能进入胡牌表现、亮明四家手牌和结算。
+      diagTx(`round_settled seq=${publicFactSequence}`)
       room.send({
         kind: 'round_settled',
         roomId: room.roomId,
         authorityEpoch,
-        sequence: snapshotSequence,
+        sequence: publicFactSequence,
         mode,
         rulesetId,
         round: game.round.value,
@@ -621,6 +630,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
         result: settledResult,
         winPresentation: game.winPresentation.value,
         winningPlayerIndex: game.winningPlayerIndex.value,
+        players: serializeRevealedPlayers(game.players),
         scores: game.players.map((player) => ({
           seat: player.seat,
           name: player.name,
@@ -631,7 +641,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     if (game.matchFinished.value) {
       // 终局公共广播不含手牌/牌墙，不能依赖 seatStates 中可能已被 AI 接管、
       // peerId 暂时不可用的定向通道。仍在 Room 中的客户端可凭它可靠进入最终排名。
-      diagTx(`match_finished seq=${snapshotSequence}`)
+      diagTx(`match_finished seq=${publicFactSequence}`)
       room.send({
         kind: 'match_finished',
         roomId: room.roomId,
@@ -643,7 +653,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           score: player.score,
         })),
         authorityEpoch,
-        sequence: snapshotSequence,
+        sequence: publicFactSequence,
         round: game.round.value,
       } satisfies ServerMessage)
     }
@@ -659,7 +669,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           : null
         const seatSnapshot = serializeStateToSnapshot(game, state.seat, {
           ...context,
-          sequence: snapshotSequence,
+          sequence: detailedSnapshotSequence,
           requestId: pending?.requestId ?? null,
           requestSeq: pending?.requestSeq ?? null,
           includeWall: false,
@@ -677,7 +687,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
           continue
         }
         room.send(seatSnapshot, state.peerId)
-        diagTx(`snapshot seat=${state.seat} seq=${snapshotSequence}`, state.peerId)
+        diagTx(`snapshot seat=${state.seat} seq=${detailedSnapshotSequence}`, state.peerId)
       }
     }
     onLocalSnapshot?.(localSnapshot)

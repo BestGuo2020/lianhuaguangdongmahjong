@@ -171,6 +171,12 @@ function isSettlementScores(value: unknown): value is Array<{ seat: number; name
     && new Set(value.map((item) => (item as JsonObject).seat)).size === 4
 }
 
+function isRevealedPlayers(value: unknown): value is ServerPlayerDto[] {
+  if (!Array.isArray(value) || value.length !== 4 || !value.every(isPlayer)) return false
+  if (new Set(value.map((player) => player.seat)).size !== 4) return false
+  return value.every((player) => player.hand.every((tile) => tile !== null))
+}
+
 function isSnapshot(message: JsonObject): boolean {
   return isString(message.roomId)
     && isSnapshotAuthorityMeta(message)
@@ -232,6 +238,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isRoundResult(raw.result)
           && isNullable(raw.winPresentation, isWinPresentation)
           && isIntegerBetween(raw.winningPlayerIndex, -1, SEAT_MAX)
+          && isRevealedPlayers(raw.players)
           && isSettlementScores(raw.scores)
       case 'rejoin_ok':
         return isSeat(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)

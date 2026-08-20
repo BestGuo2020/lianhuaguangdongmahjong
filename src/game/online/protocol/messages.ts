@@ -7,7 +7,7 @@ import type {
   WinPresentation,
 } from '../../core/contracts/types'
 import type { ServerSnapshot } from './dto'
-import type { ServerMeldDto } from './dto'
+import type { ServerMeldDto, ServerPlayerDto } from './dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 
 export interface RoundStartMessage {
@@ -30,10 +30,10 @@ export interface RoundStartMessage {
 }
 
 /**
- * 不含暗牌/牌墙的房间级单局结算事实。
+ * 不含牌墙、但包含结算后四家公开手牌的房间级单局结算事实。
  *
- * 完整 state_snapshot 仍按座位定向发送；这条公共消息只用于定向 peer 通道半开时
- * 让仍在当前 Room 的客户端进入同一份胡牌表现和结算，避免房主永久等待确认。
+ * 完整 state_snapshot 仍按座位定向发送；这条公共消息用于定向 peer 通道半开时
+ * 让仍在当前 Room 的客户端进入同一份胡牌表现、亮牌和结算，避免房主永久等待确认。
  */
 export interface RoundSettledMessage {
   kind: 'round_settled'
@@ -48,6 +48,8 @@ export interface RoundSettledMessage {
   result: RoundResult
   winPresentation: WinPresentation | null
   winningPlayerIndex: number
+  /** 结算阶段已公开的四家最终手牌；不得包含 null 暗牌占位。 */
+  players: ServerPlayerDto[]
   scores: Array<{ seat: number; name: string; score: number }>
 }
 
