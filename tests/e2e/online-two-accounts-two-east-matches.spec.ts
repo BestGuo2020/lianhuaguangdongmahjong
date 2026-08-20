@@ -1200,9 +1200,9 @@ function assertTransitionHistory(
       && !sample.matchFinished
   ))
   const auditedRevealSamples = revealSamples.filter((sample) => {
-    // 切局的权威事实是旧牌墙代次被清空：只有此前已经看到四家完整亮牌且牌山
-    // 仍大于 0，随后牌山与四手一起归零，才属于底桌切走。截图中的牌山仍为 70，
-    // 没有完整亮牌就直接归零的情况也不会被排除。
+    // 只有此前已经看到四家完整亮牌，随后四手与牌山一起归零，才属于底桌切走。
+    // 流局的完整亮牌帧牌山本来就是 0，不能要求 earlier.wallCount>0；截图中没有
+    // 四家完整亮牌，因此不会被排除。
     const completeReveal = revealSamples.find((earlier) => (
       earlier.at < sample.at
         && earlier.revealedFaceCounts.length === 4
@@ -1210,7 +1210,6 @@ function assertTransitionHistory(
         && earlier.revealedFaceCounts.every((count, index) => count === earlier.concealedCounts[index])
     ))
     const transitionCleanup = completeReveal != null
-      && completeReveal.wallCount > 0
       && sample.wallCount === 0
       && sample.concealedCounts.length === 4
       && sample.concealedCounts.every((count) => count === 0)
@@ -2043,7 +2042,6 @@ async function runEastMatch(options: {
             && !sample.finalVisible
             && !sample.matchFinished
             && (sample.phase === 'revealing' || sample.phase === 'settled')
-            && sample.wallCount > 0
             && sample.revealedFaceCounts.length === 4
             && sample.revealedFaceCounts.every((count) => count > 0)
             && sample.revealedFaceCounts.every((count, index) => count === sample.concealedCounts[index])
