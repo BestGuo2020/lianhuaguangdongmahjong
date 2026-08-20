@@ -132,6 +132,18 @@ const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
   return splitWinningTile(props.user.hand, props.winPresentation).hand
 })
+const tableSeatCounts = computed(() => [...props.players]
+  .sort((left, right) => left.seat - right.seat)
+  .map((player) => ({
+    seat: player.seat,
+    concealed: player.concealedTileCount ?? player.hand.length,
+    discards: player.discards.length,
+    meldTiles: player.melds.reduce((sum, meld) => sum + meld.tiles.length, 0),
+  })))
+const tableSeatsData = computed(() => tableSeatCounts.value.map((entry) => entry.seat).join(','))
+const tableConcealedData = computed(() => tableSeatCounts.value.map((entry) => entry.concealed).join(','))
+const tableDiscardsData = computed(() => tableSeatCounts.value.map((entry) => entry.discards).join(','))
+const tableMeldTilesData = computed(() => tableSeatCounts.value.map((entry) => entry.meldTiles).join(','))
 const jokerGuide = computed(() => {
   if (!props.flipTile || !props.jokerTiles?.length) return null
   const precisionNames = props.jokerTiles.map(tileName).join('、')
@@ -258,7 +270,27 @@ function onAvatarError(entry: GamePlayer) {
 </script>
 
 <template>
-  <div class="game-table-hud" @pointerdown="clearMobileSelection">
+  <div
+    class="game-table-hud"
+    :data-phase="phase"
+    :data-opening-stage="openingStage ?? ''"
+    :data-dice-values="diceValues.join(',')"
+    :data-dice-thrower-index="diceThrowerIndex"
+    :data-wall-break-index="wallBreakIndex ?? -1"
+    :data-flip-stack="flipStack ?? -1"
+    :data-wall-count="wallCount"
+    :data-wall-head-drawn="wallHeadDrawn"
+    :data-deal-serial="dealAnimation.serial"
+    :data-deal-count="dealAnimation.count"
+    :data-win-effect-id="winEffect?.id ?? -1"
+    :data-win-effect-winner="winEffect?.winnerIndex ?? -1"
+    :data-win-effect-tile="winEffect?.tile ?? ''"
+    :data-table-seats="tableSeatsData"
+    :data-concealed-counts="tableConcealedData"
+    :data-discard-counts="tableDiscardsData"
+    :data-meld-tile-counts="tableMeldTilesData"
+    @pointerdown="clearMobileSelection"
+  >
     <MahjongTable3D
       :key="`${themeName}:${tableLoadAttempt}`"
       :theme-name="themeName"
