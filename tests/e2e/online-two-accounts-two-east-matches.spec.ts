@@ -93,6 +93,7 @@ interface TableTransitionSample {
   meldTileCounts: number[]
   winEffectVisible: boolean
   finalVisible: boolean
+  matchFinished: boolean
 }
 interface CanvasHealth {
   present: boolean
@@ -836,6 +837,7 @@ async function installOpeningSampler(page: Page) {
         meldTileCounts,
         winEffectVisible: effectVisible,
         finalVisible: Boolean(document.querySelector('.final-backdrop')),
+        matchFinished: hud?.dataset.matchFinished === '1',
       }
       const tableSignature = JSON.stringify({ ...tableSample, at: 0 })
       if (tableSignature !== previousTableSignature) {
@@ -1195,6 +1197,7 @@ function assertTransitionHistory(
     sample.revealHands
       && (sample.phase === 'win-effect' || sample.phase === 'revealing' || sample.phase === 'settled')
       && !sample.finalVisible
+      && !sample.matchFinished
   ))
   expect(revealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少亮明四家最终手牌阶段`)
     .toBeGreaterThan(0)
