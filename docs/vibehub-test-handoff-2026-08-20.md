@@ -393,3 +393,74 @@ sha256=31b7e6b40c6adbd3a85aca424d455200b6cf648305ca29bd9edf7feadbc17cbd
 3. 核心命令通过后运行三种结算确认专项，分别覆盖双端自动确认、仅房主确认和仅客户端确认，
    继续严格核验牌山、四家暗手、牌河和副露不突然消失。
 4. 任一线上业务错误立即停止并保留双端截图、原子采样历史、结算历史和控制台日志。
+
+### 11.3 胡牌后三家手牌真实消失、协议修复与最新门禁
+
+用户在房间 `XFKZ4B` 的场景 A 东2局结算画面提供了直接截图证据：本家最终手牌仍可见，
+上、左、右三家的暗手区完全为空，也没有替换成亮明牌；牌山、牌河和副露仍在。这不是原子计数
+误报。旧验收只检查 `concealedTileCount`，而远端脱敏快照会保留该张数、把真实牌面映射成空数组，
+因此会出现“计数仍为 13、画面却没有牌”的漏检。
+
+根因是结算协议同时发送公共 `round_settled` 和定向完整 `state_snapshot`，两者原先共用同一个
+`sequence`。公共事实先到时，客户端会把随后包含真实牌面的同序快照当作重复包拒绝；公共事实本身
+又不携带四家最终手牌，`revealHands` 开启后只有本家旧手牌可见，另外三家变为空手。
+
+生产修复：
+
+- 公共结算事实新增四家已经公开的最终手牌，严格禁止 `null` 暗牌占位；不包含剩余牌墙顺序。
+- 公共结算事实使用较小序号，定向完整快照使用紧随其后的较大序号；无论 SDK 投递顺序如何，
+  完整快照都能作为更新事实落地。
+- 客户端收到公共结算时立即用四家公开手牌替换上一帧的脱敏玩家状态，再进入胡牌/结算时间线。
+- 协议 decoder 要求公共结算包含四个唯一座位且所有手牌均为真实牌面，缺席、重复座位或 `null`
+  牌面一律拒绝。
+- 两份线上验收新增逐座位断言：亮牌阶段 `revealedFaceCounts` 必须有四项、逐项等于
+  `concealedCounts`，且每家真实牌面张数均大于 0；不记录或保存任何具体牌值。
+
+对应提交：
+
+```text
+e6aa4f8 fix: reveal all hands in online settlements
+5dd7ff0 test: verify real hand faces after online wins
+d0221c3 test: expose atomic revealed hand counts          (master)
+d7cf984 sync: sync UI changes from master (auto generated)
+9018c47 test: read revealed counts from atomic HUD
+```
+
+本地权威结果：
+
+```text
+vibehub: 68 test files / 561 tests passed
+master: 246 test files / 1928 tests passed
+pnpm typecheck passed
+pnpm build passed
+git diff --check passed
+```
+
+代理门槛验证：Playwright 的两个真实账号浏览器可分别通过
+`http://127.0.0.1:58309` 和 `socks5://127.0.0.1:58310` 打开直达页；两个账号 OAuth 均可首个
+会话成功。`https://127.0.0.1:58309` 不是该端口的正确代理协议，会返回
+`ERR_PROXY_CONNECTION_FAILED`。代理仅通过运行时 `ONLINE_PROXY_SERVERS` 注入，没有写入默认配置。
+
+第一次加入“真实牌面张数”断言后的线上核心长跑完成第一场 10 手，所有手均低于 6 分钟：
+
+```text
+东1 164s；东2 187s；东3 60s；东3·1本场 65s；东3·2本场 177s；
+东3·3本场 125s；东4 265s；东4·1本场 261s；东4·2本场 114s；东4·3本场 66s。
+```
+
+该次测试在第一场末尾因“未读到 revealHands=true”停止。后续确认这是测试探针读取 Vue 生产私有字段
+失败，不是上述 10 手再次出现空牌；为避免弱化验收，已在共享 `GameTableHud` 同一渲染提交中公开
+`data-reveal-hands` 和 `data-revealed-face-counts` 两组只含数量的原子信号，并让两份测试只读该信号。
+
+最新构建已用官方 CLI 更新现有 `B5AJupT1`，没有创建新项目、开启共创或自动部署。R2 首次上传
+失败后按 CLI 幂等规则重试成功；无缓存回读线上 HTML 已确认引用最新资源：
+
+```text
+assets/index-BYBJY0Vu.js
+assets/index-DoK0osF4.css
+```
+
+但发布后的直达页浏览器门槛连续两次在 120 秒内未能返回可见大厅，浏览器控制会话超时重置。
+按用户明确要求“打不开不要继续”，没有启动新的双东风场或三确认专项。最终验收仍未完成；下一步
+必须先让浏览器插件在 `https://vibeapps.lumigrav.space/B5AJupT1/` 看到大厅且错误日志为空，再从头
+执行两场核心长跑和三种确认方式，不能复用这次只完成一场的结果。
