@@ -1904,9 +1904,12 @@ async function runEastMatch(options: {
       waitingForPreviousSettlementToClear = false
       activeHandStartedAt = activeHandObservedAt
     }
-    const settlementMatchesActive = settlementTexts.map((text, index) => (
+    const settlementBelongsToActive = settlementTexts.map((text, index) => (
       settlementVisible[index]
       && roundToken(text) === roundToken(activeHand)
+    ))
+    const settlementMatchesActive = settlementTexts.map((text, index) => (
+      settlementBelongsToActive[index]
       && (settlementSignature(text) !== lastSettlementSignatures[index])
     ))
     if (activeHand && activeHandStartedAt > 0 && !waitingForPreviousSettlementToClear
@@ -2072,7 +2075,7 @@ async function runEastMatch(options: {
     // 或出现空手，保持结算页并让 6 分钟/同步门槛给出业务失败，不能快速切局掩盖。
     const mayConfirm = Boolean(activeToken && revealVerifiedHands.has(activeToken))
     const clicked = await Promise.all(pages.map((page, index) => (
-      settlementMatchesActive[index] && mayConfirm ? clickContinueIfAvailable(page) : Promise.resolve(false)
+      settlementBelongsToActive[index] && mayConfirm ? clickContinueIfAvailable(page) : Promise.resolve(false)
     )))
     for (let index = 0; index < clicked.length; index += 1) {
       if (clicked[index] && !confirmedAt[index]) {
