@@ -456,21 +456,19 @@ async function waitForWinningSettlement(
 /** 等待下一手（handKey 变化）出现：用于自动确认/补点确认后的推进判定。 */
 async function waitForNextHand(host: Page, client: Page, currentKey: string, timeoutMs: number) {
   const pages: [Page, Page] = [host, client]
-  try {
-    const handles = await Promise.all(pages.map((page) => page.waitForFunction((oldKey) => {
-      const label = document.querySelector('.round-info')?.textContent?.trim() ?? ''
-      const round = label.match(/东[1-4]局/)?.[0] ?? ''
-      const honba = label.match(/(\d+)本场/)?.[1] ?? '0'
-      const key = round ? `${round}:${honba}` : ''
-      return Boolean(key && key !== oldKey)
-    }, currentKey, { timeout: timeoutMs, polling: 100 })))
-    await Promise.all(handles.map((handle) => handle.dispose()))
-  } catch {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
     const labels = await Promise.all(pages.map(readRoundLabel))
-    throw new Error(`等待离开 ${currentKey} 超时（host=${labels[0] || '(空)'} client=${labels[1] || '(空)'}）`)
+    const keys = labels.map(handKey)
+    // 切局渲染会先短暂清空 round-info；只有两端都出现同一个非空新键
+    // 才算推进完成，避免把空字符串当成“下一手”并把开局审计指向空目标。
+    if (keys[0] && keys[1] && keys[0] === keys[1] && keys[0] !== currentKey) {
+      return { hostLabel: labels[0], clientLabel: labels[1] }
+    }
+    await host.waitForTimeout(500)
   }
   const [hostLabel, clientLabel] = await Promise.all(pages.map(readRoundLabel))
-  return { hostLabel, clientLabel }
+  throw new Error(`等待离开 ${currentKey} 超时（host=${hostLabel || '(空)'} client=${clientLabel || '(空)'}）`)
 }
 
 /** 正常路径必须一次加入即同步双端 UI roster；禁止离开重入掩盖。 */
