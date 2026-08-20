@@ -112,6 +112,43 @@ describe('settlementTimeline', () => {
     expect(onResultMissingAfterReveal).not.toHaveBeenCalled()
   })
 
+  it('确认继续取消时间线后，同手迟到的 settled 快照不得重播胡牌表现', async () => {
+    const { state, sounds, timeline } = harness()
+    const winning = snapshot()
+
+    timeline.start(winning)
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(state.phase.value).toBe('settled')
+    expect(state.winEffect.value).toBeNull()
+    expect(sounds).toEqual(['zimo.mp3'])
+
+    // 模拟 nextRound()：先停止本手表现计时器，随后房主本地视图收到同手
+    // 最后一份权威 settled 快照。它只能补事实，不能产生新的特效或声音。
+    timeline.cancel()
+    timeline.start(winning)
+
+    expect(sounds).toEqual(['zimo.mp3'])
+    expect(state.winEffect.value).toBeNull()
+    expect(state.phase.value).toBe('settled')
+  })
+
+  it('完整重置后，新一场相同东1仍可播放胡牌表现', () => {
+    const { state, sounds, timeline } = harness()
+    const winning = snapshot()
+
+    timeline.start(winning)
+    expect(sounds).toEqual(['zimo.mp3'])
+
+    timeline.reset()
+    state.phase.value = 'playing'
+    state.winEffect.value = null
+    timeline.start(winning)
+
+    expect(state.phase.value).toBe('win-effect')
+    expect(state.winEffect.value).not.toBeNull()
+    expect(sounds).toEqual(['zimo.mp3', 'zimo.mp3'])
+  })
+
   it('cancels pending settlement transitions', async () => {
     const { state, timeline } = harness()
     timeline.start(snapshot())

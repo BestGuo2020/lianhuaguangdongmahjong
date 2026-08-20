@@ -98,7 +98,7 @@ describe('openingTimeline', () => {
     expect(sent).toContainEqual({ type: 'opening_done', round: 2, honba: 0 })
   })
 
-  it('不应因 3D 牌桌尚未 ready 而跳过客户端开局阶段', () => {
+  it('等待 3D 资源和合成首帧后才进入客户端开局阶段', async () => {
     let releaseTableReady!: () => void
     const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
     const { state, timeline } = harness({
@@ -109,11 +109,36 @@ describe('openingTimeline', () => {
     timeline.primeSnapshot(snapshot())
     timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
 
-    // 慢网/慢 WebGL 时 ready 可能还没回调，但表现层必须已经进入开局提示。
+    expect(state.openingStage.value).toBeNull()
+    expect(state.phase.value).toBe('lobby')
+
+    releaseTableReady()
+    await Promise.resolve()
+    await Promise.resolve()
+
     expect(state.openingStage.value).toBe('start')
 
     timeline.cancel()
+  })
+
+  it('牌桌等待期间取消后不会进入开局或发送 opening_done', async () => {
+    let releaseTableReady!: () => void
+    const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
+    const { state, sent, timeline } = harness({
+      waitForTableReady: () => tableReady,
+      waitForOpeningSnapshot: true,
+    })
+
+    timeline.primeSnapshot(snapshot())
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+
+    timeline.cancel()
     releaseTableReady()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(10000)
+
+    expect(state.openingStage.value).toBeNull()
+    expect(sent).toEqual([])
   })
 
   it('keeps the first captured snapshot and ignores later fast-host snapshots', async () => {

@@ -12,7 +12,10 @@ export interface RemoteMatchLifecycleOptions {
     hasSnapshotForHand?(round: number, honba: number): boolean
     cancel(): void
   }
-  settlement: { cancel(): void }
+  settlement: {
+    cancel(): void
+    reset(): void
+  }
   snapshots: {
     reset(): void
     clearPending(): void
@@ -163,6 +166,7 @@ export function createRemoteMatchLifecycle({
 
   function resetAll() {
     clearTimers()
+    settlement.reset()
     snapshots.reset()
     requests.reset()
     clearRoundBarrier()
@@ -251,7 +255,7 @@ export function createRemoteMatchLifecycle({
 
   function returnToLobby() {
     if (!state.matchFinished.value) return
-    settlement.cancel()
+    settlement.reset()
     requests.reset()
     // 新一场的轮次/本场/庄家边界：上一场结束时 state.round/honba 仍是末局值
     // （如东4局·2本场）。不重置的话，同一房间再次开局时新一局的 round=1 消息

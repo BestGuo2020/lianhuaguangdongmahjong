@@ -18,7 +18,7 @@ function setup() {
   const opening = {
     start: vi.fn(), confirm: vi.fn(), hasSnapshotForHand: vi.fn(() => false), cancel: vi.fn(),
   }
-  const settlement = { cancel: vi.fn() }
+  const settlement = { cancel: vi.fn(), reset: vi.fn() }
   const snapshots = {
     reset: vi.fn(),
     clearPending: vi.fn(() => { pendingSnapshot = null }),
@@ -58,7 +58,7 @@ function setup() {
 
 describe('remoteMatchLifecycle', () => {
   it('完整重置对局和房间状态，但保留匿名身份与自动操作偏好', () => {
-    const { state, lifecycle, snapshots, requests, transientEvents } = setup()
+    const { state, lifecycle, settlement, snapshots, requests, transientEvents } = setup()
     state.roomId.value = 'ABC123'
     state.players.push(player(0))
     state.phase.value = 'playing'
@@ -71,13 +71,15 @@ describe('remoteMatchLifecycle', () => {
     expect(state.userDrewThisTurn.value).toBe(false)
     expect(state.playerId.value).toBe('guest-1')
     expect(state.autoPlay.value).toBe(true)
+    expect(settlement.reset).toHaveBeenCalledOnce()
+    expect(settlement.cancel).not.toHaveBeenCalled()
     expect(snapshots.reset).toHaveBeenCalled()
     expect(requests.reset).toHaveBeenCalled()
     expect(transientEvents.clear).toHaveBeenCalled()
   })
 
   it('在结算屏障缓冲 round_start，确认继续后启动开局并刷新缓冲请求', () => {
-    const { state, lifecycle, opening, requests, sendContinue, setShowingResult } = setup()
+    const { state, lifecycle, opening, settlement, requests, sendContinue, setShowingResult } = setup()
     state.phase.value = 'settled'
     state.result.value = { winnerIndex: 0 }
     const roundStart = {
@@ -89,6 +91,8 @@ describe('remoteMatchLifecycle', () => {
     expect(opening.start).not.toHaveBeenCalled()
 
     lifecycle.nextRound()
+    expect(settlement.cancel).toHaveBeenCalledOnce()
+    expect(settlement.reset).not.toHaveBeenCalled()
     expect(sendContinue).toHaveBeenCalledOnce()
     expect(opening.start).toHaveBeenCalledWith(roundStart)
     expect(state.waitingNextRound.value).toBe(false)
@@ -258,7 +262,7 @@ describe('remoteMatchLifecycle', () => {
   })
 
   it('返回房间大厅时保留房间会话，只清理牌桌并刷新房间', () => {
-    const { state, lifecycle, refreshRoom } = setup()
+    const { state, lifecycle, settlement, refreshRoom } = setup()
     state.roomId.value = 'ABC123'
     state.mySeat.value = 2
     state.matchFinished.value = true
@@ -270,6 +274,8 @@ describe('remoteMatchLifecycle', () => {
     expect(state.players).toHaveLength(0)
     expect(state.roomId.value).toBe('ABC123')
     expect(state.mySeat.value).toBe(2)
+    expect(settlement.reset).toHaveBeenCalledOnce()
+    expect(settlement.cancel).not.toHaveBeenCalled()
     expect(refreshRoom).toHaveBeenCalled()
   })
 

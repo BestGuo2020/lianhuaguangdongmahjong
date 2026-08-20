@@ -29,6 +29,75 @@ interface WinEffectSample {
   id: number
   winnerIndex: number
   tile: string
+  visible: boolean
+}
+interface AudioPlaybackSample {
+  at: number
+  hand: string
+  name: string
+}
+interface SettlementSample {
+  at: number
+  token: string
+  confirmed: boolean
+  appearance: boolean
+  draw: boolean
+  resultSignature: string
+  labelMismatch: boolean
+}
+interface NormalizedPlayerState {
+  seat: number
+  score: number
+  concealedCount: number
+  discards: string[]
+  melds: Array<{ type: string; tiles: string[]; fromSeat: number | null }>
+}
+interface NormalizedTableState {
+  hand: string
+  phase: string
+  openingStage: string
+  wallCount: number
+  wallHeadDrawn: number
+  winEffect: string
+  players: NormalizedPlayerState[]
+}
+interface VisibleTableState {
+  hand: string
+  openingStage: string
+  wallCount: number
+  wallHeadDrawn: number
+  winEffectVisible: boolean
+  localHandCount: number
+  canvasPresent: boolean
+  canvasWidth: number
+  canvasHeight: number
+  contextLost: boolean | null
+  loadingVisible: boolean
+}
+interface TableTransitionSample {
+  at: number
+  hand: string
+  phase: string
+  openingStage: string
+  wallCount: number
+  wallHeadDrawn: number
+  concealedCount: number
+  discardCount: number
+  meldTileCount: number
+  winEffectVisible: boolean
+}
+interface CanvasHealth {
+  present: boolean
+  width: number
+  height: number
+  cssWidth: number
+  cssHeight: number
+  nonBlackRatio: number
+  averageLuminance: number
+  contextLost: boolean | null
+  loadingVisible: boolean
+  loadingTextVisible: boolean
+  tileResources: number
 }
 
 function readOnlineConfig(): OnlineConfig {
@@ -43,6 +112,145 @@ function readOnlineConfig(): OnlineConfig {
 const ONLINE = readOnlineConfig()
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(9_000_000)
+
+const roundToken = (value: string) => value.match(/东[1-4]局/)?.[0] ?? ''
+const handToken = (value: string) => {
+  const round = value.match(/东[1-4]局/)?.[0] ?? ''
+  const honba = value.match(/(\d+)本场/)?.[1] ?? '0'
+  return round ? `${round}:${honba}` : ''
+}
+const settlementSignature = (text: string) => text
+  .split('\n')
+  .filter((line) => !/查看牌桌|继续(?:\s*\(\d+\))?|等待其他玩家|已确认/.test(line))
+  .join('\n')
+
+async function installAudioProbe(context: BrowserContext) {
+  await context.addInitScript(() => {
+    const target = window as unknown as {
+      __onlineAudioEvents?: AudioPlaybackSample[]
+      __onlineAudioProbeInstalled?: boolean
+    }
+    if (target.__onlineAudioProbeInstalled) return
+    target.__onlineAudioProbeInstalled = true
+    target.__onlineAudioEvents = []
+    const objectUrlSources = new Map<string, string>()
+    const originalBlob = Response.prototype.blob
+    Response.prototype.blob = async function () {
+      const blob = await originalBlob.call(this)
+      Object.defineProperty(blob, '__onlineSourceUrl', { value: this.url, configurable: true })
+      return blob
+    }
+    const originalCreateObjectUrl = URL.createObjectURL.bind(URL)
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      const url = originalCreateObjectUrl(object)
+      const source = (object as Blob & { __onlineSourceUrl?: string }).__onlineSourceUrl
+      if (source) objectUrlSources.set(url, source)
+      return url
+    }
+    const originalPlay = HTMLMediaElement.prototype.play
+    HTMLMediaElement.prototype.play = function (...args) {
+      const raw = this.currentSrc || this.src
+      const source = objectUrlSources.get(raw) ?? raw
+      const name = source.match(/([^/?#]+\.(?:mp3|ogg))(?:[?#]|$)/i)?.[1] ?? ''
+      if (/^(?:hu|zimo|hu_effect_sound)\.mp3$/i.test(name)) {
+        target.__onlineAudioEvents?.push({
+          at: Date.now(),
+          hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+          name,
+        })
+      }
+      return originalPlay.call(this)
+    }
+  })
+}
+
+async function audioHistory(page: Page): Promise<AudioPlaybackSample[]> {
+  return page.evaluate(() => (
+    (window as unknown as { __onlineAudioEvents?: AudioPlaybackSample[] }).__onlineAudioEvents ?? []
+  ))
+}
+
+async function readCanvasHealth(page: Page): Promise<CanvasHealth> {
+  const health = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('.mahjong-scene')
+    const loading = document.querySelector<HTMLElement>('.table-loading')
+    const loadingText = document.querySelector<HTMLElement>('.table-loading-card')
+    const visible = (element: HTMLElement | null) => Boolean(element
+      && element.getClientRects().length
+      && getComputedStyle(element).visibility !== 'hidden'
+      && getComputedStyle(element).display !== 'none'
+      && Number(getComputedStyle(element).opacity) > 0)
+    if (!canvas) {
+      return {
+        present: false, width: 0, height: 0, cssWidth: 0, cssHeight: 0,
+        nonBlackRatio: 0, averageLuminance: 0, contextLost: null,
+        loadingVisible: visible(loading), loadingTextVisible: visible(loadingText),
+        tileResources: performance.getEntriesByType('resource').filter((entry) => /\/tiles\/.*\.png(?:\?|$)/.test(entry.name)).length,
+      }
+    }
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    return {
+      present: true,
+      width: canvas.width,
+      height: canvas.height,
+      cssWidth: Math.round(canvas.getBoundingClientRect().width),
+      cssHeight: Math.round(canvas.getBoundingClientRect().height),
+      // WebGL 后缓冲默认不保证可读；像素值由下方浏览器合成截图覆盖。
+      nonBlackRatio: 0,
+      averageLuminance: 0,
+      contextLost: gl ? gl.isContextLost() : null,
+      loadingVisible: visible(loading),
+      loadingTextVisible: visible(loadingText),
+      tileResources: performance.getEntriesByType('resource').filter((entry) => /\/tiles\/.*\.png(?:\?|$)/.test(entry.name)).length,
+    }
+  })
+  if (!health.present) return health
+  try {
+    const canvasBox = await page.locator('.mahjong-scene').boundingBox()
+    const viewport = page.viewportSize()
+    if (!canvasBox || !viewport) return health
+    // 页面截图来自浏览器最终合成结果，能可靠包含 WebGL；元素截图或直接
+    // 读取 WebGL Canvas 后缓冲都可能返回空像素，从而制造黑屏误报。
+    const screenshot = await page.screenshot({ timeout: 8000 })
+    const rendered = await page.evaluate(async ({ base64, box, viewportSize }) => {
+      const image = new Image()
+      const loaded = new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve()
+        image.onerror = () => reject(new Error('canvas screenshot decode failed'))
+      })
+      image.src = `data:image/png;base64,${base64}`
+      await loaded
+      const probe = document.createElement('canvas')
+      probe.width = 64
+      probe.height = 64
+      const context = probe.getContext('2d', { willReadFrequently: true })
+      const scaleX = image.naturalWidth / viewportSize.width
+      const scaleY = image.naturalHeight / viewportSize.height
+      context?.drawImage(
+        image,
+        Math.max(0, box.x * scaleX), Math.max(0, box.y * scaleY),
+        Math.max(1, box.width * scaleX), Math.max(1, box.height * scaleY),
+        0, 0, probe.width, probe.height,
+      )
+      const pixels = context?.getImageData(0, 0, probe.width, probe.height).data ?? new Uint8ClampedArray()
+      let nonBlack = 0
+      let luminance = 0
+      for (let index = 0; index < pixels.length; index += 4) {
+        const value = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2]
+        luminance += value
+        if (pixels[index + 3] > 0 && value > 4) nonBlack += 1
+      }
+      const pixelCount = pixels.length / 4
+      return {
+        nonBlackRatio: pixelCount ? nonBlack / pixelCount : 0,
+        averageLuminance: pixelCount ? luminance / pixelCount : 0,
+      }
+    }, { base64: screenshot.toString('base64'), box: canvasBox, viewportSize: viewport })
+    return { ...health, ...rendered }
+  } catch {
+    return health
+  }
+}
 
 async function readRecoveryBuildMarkers(page: Page) {
   return page.evaluate(async () => {
@@ -140,9 +348,18 @@ async function authenticate(context: BrowserContext, account: Account, auto = fa
   let attempts = 0
   let lastAuthProgressAt = Date.now()
   let loadingReloads = 0
+  let authErrorRetries = 0
   let authorized = false
   const deadline = Date.now() + 120_000
   while (Date.now() < deadline && !authorized) {
+    // OAuth 回调页偶发显示“认证页面暂时无法加载”，但授权
+    // 消息可能已经成功回传游戏页。以游戏页的真实登录态为最终事实，
+    // 避免已授权却被滞留弹窗误判为超时。
+    if (await page.getByRole('button', { name: '创建房间', exact: true }).isVisible().catch(() => false)) {
+      authorized = true
+      await popup.close().catch(() => {})
+      break
+    }
     const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
     if (await authorize.isVisible().catch(() => false)) {
       await authorize.click()
@@ -168,8 +385,13 @@ async function authenticate(context: BrowserContext, account: Account, auto = fa
         attempts += 1
       }
     } else {
+      const retryAuth = popup.getByRole('button', { name: '重试', exact: true })
       const goLogin = popup.getByRole('button', { name: '去登录', exact: true })
-      if (await goLogin.isVisible().catch(() => false)) {
+      if (authErrorRetries < 3 && await retryAuth.isVisible().catch(() => false)) {
+        await retryAuth.click()
+        authErrorRetries += 1
+        lastAuthProgressAt = Date.now()
+      } else if (await goLogin.isVisible().catch(() => false)) {
         await goLogin.click()
         lastAuthProgressAt = Date.now()
       } else if (Date.now() - lastAuthProgressAt > 20_000 && loadingReloads < 3) {
@@ -207,15 +429,9 @@ async function acceptDisclaimerIfShown(page: Page) {
   }
 }
 
-/**
- * 房间搭建韧性：等待双端出现「准备」按钮且各自座位列表 ≥2。
- * VibeHub 大厅 roster 同步偶发失败（客户端已入房但座位列表未更新）。
- * 座位 30 秒无进展时客户端「离开房间」后按原房间码重新加入（不刷新页面，
- * 刷新会丢失 VibeHub 登录态）；总预算 240 秒。
- */
-async function waitForRoomReady(host: Page, client: Page, roomCode: string, nickname: string) {
-  const deadline = Date.now() + 240_000
-  let lastRejoinAt = 0
+/** 正常路径必须一次加入即同步双端 roster；不允许用离开/重入掩盖恢复异常。 */
+async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
+  const deadline = Date.now() + 30_000
   let hostReady = false
   let clientReady = false
   let hostSeats = 0
@@ -226,32 +442,9 @@ async function waitForRoomReady(host: Page, client: Page, roomCode: string, nick
     hostSeats = await host.locator('.room-seat').count().catch(() => 0)
     clientSeats = await client.locator('.room-seat').count().catch(() => 0)
     if (hostReady && clientReady && hostSeats >= 2 && clientSeats >= 2) return
-    if (Date.now() > deadline) break
-    // 客户端已入房但座位 30 秒未同步：离开房间后重新加入同一房间。
-    if (clientSeats < 2 && Date.now() - lastRejoinAt > 30_000) {
-      lastRejoinAt = Date.now()
-      console.log(`[线上双场] 客户端座位未同步（seats=${clientSeats} host=${hostSeats}），离开后重新加入 ${roomCode}`)
-      const leave = client.getByRole('button', { name: '离开房间', exact: true })
-      if (await leave.isVisible().catch(() => false)) {
-        await leave.click().catch(() => {})
-        await client.waitForTimeout(4_000)
-      }
-      try {
-        await enterOnlineLobby(client, nickname, 'client')
-        const join = client.getByRole('button', { name: '加入房间', exact: true })
-        if (await join.isVisible().catch(() => false)) {
-          await join.click()
-          await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
-          await client.getByRole('button', { name: '确认加入' }).click()
-          await acceptDisclaimerIfShown(client)
-        }
-      } catch {
-        // 重新加入流程异常（页面仍在加载/登录墙）时继续轮询，下一轮再评估。
-      }
-    }
     await host.waitForTimeout(2_000)
   }
-  throw new Error(`等待房间就绪超时（room=${roomCode} hostReady=${hostReady} clientReady=${clientReady} hostSeats=${hostSeats} clientSeats=${clientSeats}）`)
+  throw new Error(`正常加入后 30 秒 roster 仍未同步（room=${roomCode} hostReady=${hostReady} clientReady=${clientReady} hostSeats=${hostSeats} clientSeats=${clientSeats}）；本轮禁止离开重入兜底`)
 }
 
 async function installHostAutoPlayer(page: Page) {
@@ -333,14 +526,22 @@ async function installOpeningSampler(page: Page) {
     const target = window as unknown as {
       __onlineOpeningStages?: OpeningSample[]
       __onlineWinEffects?: WinEffectSample[]
+      __onlineTableTransitions?: TableTransitionSample[]
+      __onlineAudioEvents?: AudioPlaybackSample[]
       __onlineOpeningSampler?: number
       __onlineOpeningObserver?: MutationObserver
     }
+    if (target.__onlineOpeningSampler) window.clearInterval(target.__onlineOpeningSampler)
+    target.__onlineOpeningObserver?.disconnect()
     target.__onlineOpeningStages = []
     target.__onlineWinEffects = []
+    target.__onlineTableTransitions = []
+    target.__onlineAudioEvents = []
     let previous = '__unset__'
     let previousStage: string | null = null
+    let previousWinEffectVisible = false
     let previousWinEffectId: number | null = null
+    let previousTableSignature = ''
     let previousHandLabel = ''
     let cycle = 0
     const sample = () => {
@@ -389,22 +590,24 @@ async function installOpeningSampler(page: Page) {
         id?: unknown; winnerIndex?: unknown; tile?: unknown
       } | null | undefined
       const effectId = typeof effect?.id === 'number' ? effect.id : null
-      if (effectId != null && effectId !== previousWinEffectId) {
+      const effectVisible = effectId != null
+      if (effectVisible !== previousWinEffectVisible
+        || (effectVisible && effectId !== previousWinEffectId)) {
+        previousWinEffectVisible = effectVisible
         previousWinEffectId = effectId
         target.__onlineWinEffects?.push({
           at: performance.now(),
           hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
-          id: effectId,
+          id: effectId ?? -1,
           winnerIndex: typeof effect?.winnerIndex === 'number' ? effect.winnerIndex : -1,
           tile: typeof effect?.tile === 'string' ? effect.tile : '',
+          visible: effectVisible,
         })
       }
       // 生产构建不会暴露 Vue 内部 props，回退到用户实际可见的 DOM 阶段。
       if (stage == null) {
         if (document.querySelector('.opening-overlay.start-cue')) stage = 'start'
         else if (document.querySelector('.hand-rack.dealing')) stage = 'deal'
-        else if (document.querySelector('.second-dice-note')) stage = 'second-dice-visible'
-        else if (document.querySelector('.flip-indicator')) stage = 'flip-visible'
       }
       // cycle 按 round-info 局号（含本场）变化推进，不依赖 start 阶段：
       // WebGL 高负载下 observer/定时器可能漏掉短暂的 start 采样，而 round-info
@@ -415,6 +618,51 @@ async function installOpeningSampler(page: Page) {
         cycle += 1
         previous = '__unset__'
         previousStage = null
+      }
+      let tableProps: Record<string, unknown> = {}
+      for (const tableRoot of document.querySelectorAll('.game-table-hud, .mahjong-scene')) {
+        let tableInstance = (tableRoot as HTMLElement & { __vueParentComponent?: VueInstance })
+          .__vueParentComponent
+        while (tableInstance) {
+          if (tableInstance.props && 'players' in tableInstance.props && 'wallCount' in tableInstance.props) {
+            tableProps = tableInstance.props
+            break
+          }
+          tableInstance = tableInstance.parent ?? undefined
+        }
+        if ('players' in tableProps) break
+      }
+      const tablePlayers = (Array.isArray(tableProps.players) ? tableProps.players : []) as Array<{
+        hand?: unknown[]; concealedTileCount?: number; discards?: unknown[]
+        melds?: Array<{ tiles?: unknown[] }>
+      }>
+      const tableSample = {
+        at: Date.now(),
+        hand: handLabel,
+        phase: typeof tableProps.phase === 'string' ? tableProps.phase : '',
+        openingStage: stage ?? '',
+        wallCount: typeof props.wallCount === 'number' ? props.wallCount : -1,
+        wallHeadDrawn: typeof props.wallHeadDrawn === 'number' ? props.wallHeadDrawn : -1,
+        concealedCount: tablePlayers.length > 0
+          ? tablePlayers.reduce((sum, player) => sum + (
+            typeof player.concealedTileCount === 'number' ? player.concealedTileCount : (player.hand?.length ?? 0)
+          ), 0)
+          : document.querySelectorAll('.hand-rack .hand-tile-slot').length,
+        // -1 表示生产 Vue 内部对象不可读；不能把“不可读”伪装成牌河/副露为 0。
+        discardCount: tablePlayers.length > 0
+          ? tablePlayers.reduce((sum, player) => sum + (player.discards?.length ?? 0), 0)
+          : -1,
+        meldTileCount: tablePlayers.length > 0
+          ? tablePlayers.reduce((sum, player) => sum + (
+            player.melds?.reduce((meldSum, meld) => meldSum + (meld.tiles?.length ?? 0), 0) ?? 0
+          ), 0)
+          : -1,
+        winEffectVisible: effectVisible,
+      }
+      const tableSignature = JSON.stringify({ ...tableSample, at: 0 })
+      if (tableSignature !== previousTableSignature) {
+        previousTableSignature = tableSignature
+        target.__onlineTableTransitions?.push(tableSample)
       }
       previousStage = stage
       if (stage == null || stage.endsWith('-visible')) return
@@ -459,9 +707,12 @@ async function installOpeningSampler(page: Page) {
 async function installSettlementSampler(page: Page) {
   await page.evaluate(() => {
     const target = window as unknown as {
-      __onlineSettlementEvents?: Array<{ at: number; token: string; confirmed: boolean }>
+      __onlineSettlementEvents?: SettlementSample[]
       __onlineSettlementSampler?: number
+      __onlineSettlementObserver?: MutationObserver
     }
+    if (target.__onlineSettlementSampler) window.clearInterval(target.__onlineSettlementSampler)
+    target.__onlineSettlementObserver?.disconnect()
     target.__onlineSettlementEvents = []
     const roundOnly = (value: string) => value.match(/东[1-4]局/)?.[0] ?? ''
     const roundToken = (value: string) => {
@@ -469,37 +720,67 @@ async function installSettlementSampler(page: Page) {
       const honba = value.match(/(\d+)本场/)?.[1] ?? '0'
       return round ? `${round}:${honba}` : ''
     }
-    let last = ''
+    const resultSignature = (text: string) => text
+      .split('\n')
+      .filter((line) => !/查看牌桌|继续(?:\s*\(\d+\))?|等待其他玩家|已确认/.test(line))
+      .join('\n')
+    let previousVisible = false
+    let previousConfirmed = false
+    let previousToken = ''
+    let previousOverlay: HTMLElement | null = null
     const sample = () => {
       const overlay = document.querySelector<HTMLElement>('.round-settlement')
-      if (!overlay) return
+      const visible = Boolean(overlay && overlay.getClientRects().length > 0)
+      if (!visible) {
+        previousVisible = false
+        previousConfirmed = false
+        previousToken = ''
+        previousOverlay = null
+        return
+      }
       const text = overlay.innerText ?? ''
       const handLabel = document.querySelector('.round-info')?.textContent?.trim() ?? ''
       // 结算弹窗文本不含本场；从 round-info 标签取完整手牌键（含本场），
       // 与测试主循环的 handToken(activeHand) 保持一致。但旧结算层残留时
       // （上一局弹窗还没退场、round-info 已切到新局），局号不一致必须跳过，
       // 否则会把上一局的「已确认」事件污染到新局的 evidence，误判双确认不同步。
-      if (roundOnly(text) && roundOnly(text) !== roundOnly(handLabel)) return
       const token = roundToken(handLabel)
       if (!token) return
+      const labelMismatch = Boolean(roundOnly(text) && roundOnly(text) !== roundOnly(handLabel))
+      if (labelMismatch) {
+        previousVisible = true
+        previousOverlay = overlay
+        return
+      }
       const confirmed = /已确认|等待其他玩家确定/.test(text)
-      const signature = `${token}|${confirmed}|${text}`
-      if (signature === last) return
-      last = signature
-      target.__onlineSettlementEvents?.push({ at: Date.now(), token, confirmed })
+      const appearance = !previousVisible || previousOverlay !== overlay
+      const confirmationEdge = confirmed && !previousConfirmed
+      if (appearance || confirmationEdge) {
+        target.__onlineSettlementEvents?.push({
+          at: Date.now(),
+          token,
+          confirmed,
+          appearance,
+          draw: /流局/.test(text),
+          resultSignature: resultSignature(text),
+          labelMismatch,
+        })
+      }
+      previousVisible = true
+      previousConfirmed = confirmed
+      previousToken = token
+      previousOverlay = overlay
     }
     target.__onlineSettlementSampler = window.setInterval(sample, 20)
     const observer = new MutationObserver(sample)
     observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
-    ;(target as { __onlineSettlementObserver?: MutationObserver }).__onlineSettlementObserver = observer
+    target.__onlineSettlementObserver = observer
   })
 }
 
 async function settlementHistory(page: Page) {
   return page.evaluate(() => {
-    const target = window as unknown as {
-      __onlineSettlementEvents?: Array<{ at: number; token: string; confirmed: boolean }>
-    }
+    const target = window as unknown as { __onlineSettlementEvents?: SettlementSample[] }
     return target.__onlineSettlementEvents ?? []
   })
 }
@@ -524,15 +805,233 @@ async function winEffectHistory(page: Page): Promise<WinEffectSample[]> {
   })
 }
 
+async function tableTransitionHistory(page: Page): Promise<TableTransitionSample[]> {
+  return page.evaluate(() => (
+    (window as unknown as { __onlineTableTransitions?: TableTransitionSample[] })
+      .__onlineTableTransitions ?? []
+  ))
+}
+
+async function readNormalizedTableState(page: Page): Promise<NormalizedTableState | null> {
+  return page.evaluate(() => {
+    type Meld = { type?: unknown; tiles?: unknown; from?: unknown }
+    type Player = {
+      seat?: unknown
+      score?: unknown
+      hand?: unknown[]
+      concealedTileCount?: unknown
+      discards?: unknown[]
+      melds?: Meld[]
+    }
+    type VueInstance = { props?: Record<string, unknown>; parent?: VueInstance | null }
+    let props: Record<string, unknown> | undefined
+    for (const element of document.querySelectorAll('.game-table-hud, .mahjong-scene')) {
+      let instance = (element as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent
+      while (instance) {
+        if (instance.props && 'players' in instance.props && 'wallCount' in instance.props) {
+          props = instance.props
+          break
+        }
+        instance = instance.parent ?? undefined
+      }
+      if (props) break
+    }
+    if (!props) return null
+    const players = (Array.isArray(props.players) ? props.players : []) as Player[]
+    const toAbsoluteSeat = (localIndex: number) => {
+      const seat = players[localIndex]?.seat
+      return typeof seat === 'number' ? seat : localIndex
+    }
+    const winEffect = props.winEffect as { winnerIndex?: unknown; tile?: unknown } | null | undefined
+    return {
+      hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+      phase: typeof props.phase === 'string' ? props.phase : '',
+      openingStage: typeof props.openingStage === 'string' ? props.openingStage : '',
+      wallCount: typeof props.wallCount === 'number' ? props.wallCount : -1,
+      wallHeadDrawn: typeof props.wallHeadDrawn === 'number' ? props.wallHeadDrawn : -1,
+      winEffect: winEffect && typeof winEffect.winnerIndex === 'number'
+        ? `${toAbsoluteSeat(winEffect.winnerIndex)}:${typeof winEffect.tile === 'string' ? winEffect.tile : ''}`
+        : '',
+      players: players.map((player, localIndex) => ({
+        seat: typeof player.seat === 'number' ? player.seat : localIndex,
+        score: typeof player.score === 'number' ? player.score : 0,
+        concealedCount: typeof player.concealedTileCount === 'number'
+          ? player.concealedTileCount
+          : (player.hand?.length ?? 0),
+        discards: (player.discards ?? []).filter((tile): tile is string => typeof tile === 'string'),
+        melds: (player.melds ?? []).map((meld) => ({
+          type: typeof meld.type === 'string' ? meld.type : '',
+          tiles: Array.isArray(meld.tiles)
+            ? meld.tiles.filter((tile): tile is string => typeof tile === 'string')
+            : [],
+          fromSeat: typeof meld.from === 'number' ? toAbsoluteSeat(meld.from) : null,
+        })),
+      })).sort((a, b) => a.seat - b.seat),
+    }
+  })
+}
+
+async function readVisibleTableState(page: Page): Promise<VisibleTableState> {
+  return page.evaluate(() => {
+    const hud = document.querySelector<HTMLElement>('.game-table-hud')
+    const canvas = document.querySelector<HTMLCanvasElement>('.mahjong-scene')
+    const loading = document.querySelector<HTMLElement>('.table-loading')
+    const numberValue = (value: string | undefined, fallback = -1) => {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : fallback
+    }
+    const visible = (element: HTMLElement | null) => Boolean(element
+      && element.getClientRects().length
+      && getComputedStyle(element).visibility !== 'hidden'
+      && getComputedStyle(element).display !== 'none'
+      && Number(getComputedStyle(element).opacity) > 0)
+    const gl = canvas ? (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) : null
+    return {
+      hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+      openingStage: hud?.dataset.openingStage ?? '',
+      wallCount: numberValue(hud?.dataset.wallCount),
+      wallHeadDrawn: numberValue(hud?.dataset.wallHeadDrawn),
+      winEffectVisible: numberValue(hud?.dataset.winEffectId) >= 0,
+      localHandCount: document.querySelectorAll('.hand-rack .hand-tile-slot').length,
+      canvasPresent: Boolean(canvas),
+      canvasWidth: canvas?.width ?? 0,
+      canvasHeight: canvas?.height ?? 0,
+      contextLost: gl ? gl.isContextLost() : null,
+      loadingVisible: visible(loading),
+    }
+  })
+}
+
+function publicTableState(state: NormalizedTableState | null) {
+  return state && {
+    hand: state.hand,
+    phase: state.phase,
+    openingStage: state.openingStage,
+    wallCount: state.wallCount,
+    wallHeadDrawn: state.wallHeadDrawn,
+    winEffect: state.winEffect,
+    players: state.players.map((player) => ({
+      seat: player.seat,
+      score: player.score,
+      concealedCount: player.concealedCount,
+      discards: player.discards,
+      melds: player.melds,
+    })),
+  }
+}
+
+function assertTableStatesEqual(
+  states: [NormalizedTableState | null, NormalizedTableState | null],
+  label: string,
+) {
+  expect(states[0], `${label}房主牌桌状态不可读`).not.toBeNull()
+  expect(states[1], `${label}客户端牌桌状态不可读`).not.toBeNull()
+  expect(publicTableState(states[1]), `${label}双端牌山/牌河/暗手/副露/特效不一致`)
+    .toEqual(publicTableState(states[0]))
+}
+
+function assertTransitionHistory(
+  history: TableTransitionSample[],
+  hand: string,
+  side: string,
+  matchIndex: number,
+) {
+  const samples = history.filter((sample) => sample.hand === hand)
+  expect(samples.length, `第 ${matchIndex} 场${side}${hand}缺少切局状态采样`).toBeGreaterThan(0)
+  const start = samples.findIndex((sample) => sample.openingStage === 'start')
+  expect(start, `第 ${matchIndex} 场${side}${hand}未记录下一手开局开始`).toBeGreaterThanOrEqual(0)
+  // 只检查真正的开局窗口。同一手在正常对局、胡牌和结算期间
+  // round-info 不会变；slice(start) 会把本手结束时的正常胡牌特效
+  // 误判为“开局残留”。openingStage 首次清空即是开局时间线的边界。
+  const openingEnd = samples.findIndex((sample, index) => (
+    index > start && sample.openingStage === ''
+  ))
+  expect(openingEnd, `第 ${matchIndex} 场${side}${hand}开局阶段未正常结束`).toBeGreaterThan(start)
+  const opening = samples.slice(start, openingEnd)
+  expect(opening.some((sample) => sample.openingStage === 'dice'),
+    `第 ${matchIndex} 场${side}${hand}开局期间牌桌提前消失`).toBe(true)
+  expect(opening.some((sample) => sample.openingStage === 'flip'),
+    `第 ${matchIndex} 场${side}${hand}开局期间翻精阶段消失`).toBe(true)
+  expect(opening.some((sample) => sample.openingStage === 'deal'),
+    `第 ${matchIndex} 场${side}${hand}开局期间发牌阶段消失`).toBe(true)
+  for (const sample of opening) {
+    expect(sample.wallCount, `第 ${matchIndex} 场${side}${hand}开局期间牌山凭空消失`).toBeGreaterThan(0)
+    if (sample.discardCount >= 0) {
+      expect(sample.discardCount, `第 ${matchIndex} 场${side}${hand}开局期间牌河未正确清场`).toBe(0)
+    }
+    if (sample.meldTileCount >= 0) {
+      expect(sample.meldTileCount, `第 ${matchIndex} 场${side}${hand}开局期间副露未正确清场`).toBe(0)
+    }
+    expect(sample.winEffectVisible, `第 ${matchIndex} 场${side}${hand}开局期间胡牌特效残留`).toBe(false)
+    if (sample.openingStage === 'deal' && sample.wallHeadDrawn > 0) {
+      expect(sample.concealedCount,
+        `第 ${matchIndex} 场${side}${hand}发牌已开始但暗手凭空消失`).toBeGreaterThan(0)
+    }
+  }
+}
+
+async function waitForSynchronizedTableStates(
+  pages: [Page, Page],
+  hand: string,
+  timeoutMs = 20_000,
+): Promise<[NormalizedTableState | null, NormalizedTableState | null]> {
+  const deadline = Date.now() + timeoutMs
+  let states: [NormalizedTableState | null, NormalizedTableState | null] = [null, null]
+  while (Date.now() < deadline) {
+    states = await Promise.all(pages.map(readNormalizedTableState)) as [
+      NormalizedTableState | null, NormalizedTableState | null,
+    ]
+    // Vue 生产构建不保证暴露 __vueParentComponent。双端都不可读时立即回退到
+    // 公开 DOM 探针，不能每手无意义等待 20 秒，更不能把 null 当成牌山为 0。
+    if (states.every((state) => state == null)) return states
+    const synchronized = states.every((state) => state?.hand === hand)
+      && states[0]?.openingStage === states[1]?.openingStage
+      && states[0]?.wallCount === states[1]?.wallCount
+      && states[0]?.wallHeadDrawn === states[1]?.wallHeadDrawn
+    if (synchronized) return states
+    await pages[0].waitForTimeout(100)
+  }
+  return states
+}
+
+async function waitForVisibleNextHandStates(
+  pages: [Page, Page],
+  hand: string,
+  timeoutMs = 90_000,
+): Promise<[VisibleTableState, VisibleTableState]> {
+  const deadline = Date.now() + timeoutMs
+  let states = await Promise.all(pages.map(readVisibleTableState)) as [VisibleTableState, VisibleTableState]
+  while (Date.now() < deadline) {
+    const ready = states.every((state) => (
+      state.hand === hand
+      && state.wallCount > 0
+      && state.wallHeadDrawn > 0
+      && state.localHandCount > 0
+      && state.canvasPresent
+      && state.canvasWidth > 0
+      && state.canvasHeight > 0
+      && state.contextLost === false
+      && !state.winEffectVisible
+    )) && states[0].wallCount === states[1].wallCount
+      && states[0].wallHeadDrawn === states[1].wallHeadDrawn
+    if (ready) return states
+    await pages[0].waitForTimeout(100)
+    states = await Promise.all(pages.map(readVisibleTableState)) as [VisibleTableState, VisibleTableState]
+  }
+  return states
+}
+
 async function attachDualScreenshots(pages: [Page, Page], testInfo: TestInfo, name: string) {
   // WebGL 全页截图在长跑页面上可能卡住 GPU 进程（历史多次复现）。截图只是取证，
   // 不能让无超时的截图阻塞主循环的局号/结算判定；超时或失败时跳过本张取证。
   try {
-    const shots = await Promise.all(pages.map((page) => page.screenshot({ timeout: 8000 })))
-    await Promise.all(shots.map((body, index) => testInfo.attach(
-      `${name}-${index === 0 ? 'host' : 'client'}`,
-      { body, contentType: 'image/png' },
-    )))
+    for (let index = 0; index < pages.length; index += 1) {
+      const body = await pages[index].screenshot({ timeout: 8000 })
+      await testInfo.attach(`${name}-${index === 0 ? 'host' : 'client'}`, {
+        body, contentType: 'image/png',
+      })
+      await pages[index].waitForTimeout(100)
+    }
   } catch (error) {
     console.log(`[spec] 截图 ${name} 超时/失败，跳过取证（不影响业务判定）: ${String(error).slice(0, 160)}`)
   }
@@ -602,8 +1101,40 @@ async function diagnostics(host: Page, client: Page, logs: string[][], message: 
     settlement: await page.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
     final: await page.locator('.final-backdrop').isVisible().catch(() => false),
     banners: await page.locator('.remote-banner').allInnerTexts().catch(() => [] as string[]),
+    canvas: await readCanvasHealth(page),
+    table: await readNormalizedTableState(page),
+    winEffects: await winEffectHistory(page),
+    audio: await audioHistory(page),
+    settlements: await settlementHistory(page),
+    tableTransitions: await tableTransitionHistory(page),
   })))
   return new Error(`${message}\nstates=${JSON.stringify(states)}\nlogs=${JSON.stringify(logs.map((x) => x.slice(-30)))}`)
+}
+
+async function failWithEvidence(
+  pages: [Page, Page],
+  testInfo: TestInfo,
+  consoleLogs: string[][],
+  name: string,
+  message: string,
+): Promise<never> {
+  const [host, client] = pages
+  await attachDualScreenshots(pages, testInfo, name)
+  const evidence = await Promise.all(pages.map(async (page) => ({
+    round: await readRoundLabel(page),
+    canvas: await readCanvasHealth(page),
+    table: await readNormalizedTableState(page),
+    settlement: await page.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+    winEffects: await winEffectHistory(page),
+    audio: await audioHistory(page),
+    settlements: await settlementHistory(page),
+    tableTransitions: await tableTransitionHistory(page),
+  })))
+  await testInfo.attach(`${name}-state`, {
+    body: JSON.stringify({ message, evidence, consoleLogs }, null, 2),
+    contentType: 'application/json',
+  })
+  throw await diagnostics(host, client, consoleLogs, message)
 }
 
 async function runEastMatch(options: {
@@ -636,7 +1167,14 @@ async function runEastMatch(options: {
   await host.locator('.room-code strong').waitFor({ timeout: 40_000 })
   const roomCode = (await host.locator('.room-code strong').innerText()).trim()
   expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
-  await waitForRoomReady(host, client, roomCode, `线上客人-${suffix}`)
+  try {
+    await waitForRoomReady(host, client, roomCode)
+  } catch (error) {
+    await failWithEvidence([host, client], testInfo, consoleLogs,
+      `online-match-${matchIndex}-roster-sync-failure`, String(error))
+  }
+  const occupiedSeats = await Promise.all([host, client].map((page) => page.locator('.room-seat.occupied').count()))
+  expect(occupiedSeats, `线上第 ${matchIndex} 场必须只有 2 个真人，空余 2 席由 AI 补齐`).toEqual([2, 2])
   await Promise.all([host, client].map(installOpeningSampler))
   await Promise.all([host, client].map(installSettlementSampler))
   const start = host.getByRole('button', { name: /开始对局/ })
@@ -682,20 +1220,41 @@ async function runEastMatch(options: {
     throw error
   }
   const pages: [Page, Page] = [host, client]
-  await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-opening-start`)
-  // 生产构建不暴露 Vue 内部 props；按与 openingTimeline 一致的可见时间轴
-  // 在双端取证。截图会在报告中人工复核骰子/翻精牌/牌山开口和发牌位置。
+  // 开局动画结束后立即可能产生真人回合；自动操作器必须早于
+  // Canvas 资源验证安装，不能让取证耗时占用玩家的 12s 决策窗口。
+  await Promise.all(pages.map(installHostAutoPlayer))
+  // 正常路径只依赖 20ms 状态采样与 Canvas 像素验证。全页 WebGL 截图在双
+  // context 下会阻塞 GPU/主线程数秒，可能反过来触发权威静默恢复；截图仅在失败时取证。
   await host.waitForTimeout(1350)
-  await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-opening-first-dice`)
   await host.waitForTimeout(1950)
-  await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-opening-flip`)
   await host.waitForTimeout(1250)
-  await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-opening-second-dice`)
   await host.waitForTimeout(1950)
-  await attachDualScreenshots(pages, testInfo, `online-match-${matchIndex}-opening-deal`)
   for (const page of [host, client]) {
     await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 150_000 }).toBeGreaterThanOrEqual(4)
     await expect(page.locator('.player-seat')).toHaveCount(3)
+  }
+  const initialCanvasDeadline = Date.now() + 90_000
+  let initialCanvasHealth = await Promise.all(pages.map(readCanvasHealth)) as [CanvasHealth, CanvasHealth]
+  while (Date.now() < initialCanvasDeadline && initialCanvasHealth.some((health) => (
+    !health.present || health.width <= 0 || health.height <= 0
+      || health.contextLost !== false || health.loadingVisible || health.tileResources < 34
+      || health.nonBlackRatio < 0.05
+  ))) {
+    await host.waitForTimeout(500)
+    initialCanvasHealth = await Promise.all(pages.map(readCanvasHealth)) as [CanvasHealth, CanvasHealth]
+  }
+  await testInfo.attach(`online-match-${matchIndex}-initial-canvas-health`, {
+    body: JSON.stringify(initialCanvasHealth, null, 2), contentType: 'application/json',
+  })
+  for (let index = 0; index < initialCanvasHealth.length; index += 1) {
+    const health = initialCanvasHealth[index]
+    if (!health.present || health.width <= 0 || health.height <= 0
+      || health.contextLost !== false || health.loadingVisible || health.tileResources < 34
+      || health.nonBlackRatio < 0.05) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-initial-canvas-black`,
+        `线上第 ${matchIndex} 场东1开局后${index === 0 ? '房主' : '客户端'}3D牌桌未正常渲染：${JSON.stringify(health)}`)
+    }
   }
   const initialHistories = await Promise.all([host, client].map((page) => openingHistory(page)))
   for (const [index, history] of initialHistories.entries()) {
@@ -708,10 +1267,6 @@ async function runEastMatch(options: {
   await testInfo.attach(`online-match-${matchIndex}-opening-history`, {
     body: JSON.stringify(initialHistories), contentType: 'application/json',
   })
-  // 两个真实账号都通过页面可见控件操作；客端不使用会干扰 OAuth 回跳的
-  // ?auto=1，而是在收到真实回合/响应 UI 后点击胡、过或首张可打牌。
-  await Promise.all([host, client].map(installHostAutoPlayer))
-
   const markers = ['东1局', '东2局', '东3局', '东4局']
   const observed = [[], []] as [string[], string[]]
   const timings: Array<{ hand: string; seconds: number }> = []
@@ -739,9 +1294,100 @@ async function runEastMatch(options: {
   const settlementEvidence = new Map<string, {
     popup: [number, number]
     confirmed: [number, number]
+    appearances: [number, number]
+    draw: [boolean, boolean]
+    resultSignatures: [string, string]
   }>()
+  const verifiedHands = new Set<string>()
+  const settledTableStates = new Map<string, [NormalizedTableState | null, NormalizedTableState | null]>()
+  const transitionIntegrity: Array<{
+    fromHand: string
+    toHand: string
+    settled: [NormalizedTableState | null, NormalizedTableState | null]
+    next: [NormalizedTableState | null, NormalizedTableState | null]
+  }> = []
+  const fatalOnlineSignal = /先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|恢复牌局|已验证重进握手|大厅验证的新 peer 已恢复原座位|丢弃.*(?:旧|权威|代次)|旧权威|AI 代打|AI 接管|非法状态快照|\[wall-regress\]/i
+
+  const verifySettledHand = async (hand: string, finalize = false) => {
+    const token = handToken(hand)
+    if (!token || (finalize && verifiedHands.has(token))) return
+    const evidence = settlementEvidence.get(token)
+    if (!evidence || !evidence.popup.every(Boolean)) return
+    if (evidence.appearances[0] !== 1 || evidence.appearances[1] !== 1) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-${token}-settlement-count`,
+        `线上第 ${matchIndex} 场 ${hand} 双端结算弹窗必须各出现一次，实际 ${evidence.appearances.join('/')}`)
+    }
+    if (!evidence.resultSignatures[0] || evidence.resultSignatures[0] !== evidence.resultSignatures[1]) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-${token}-settlement-result`,
+        `线上第 ${matchIndex} 场 ${hand} 双端结算结果不一致`)
+    }
+    if (evidence.draw[0] !== evidence.draw[1]) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-${token}-draw-result`,
+        `线上第 ${matchIndex} 场 ${hand} 双端流局/胡牌结果不一致`)
+    }
+    // 结算确认期间仍可能错误地重放胡牌表现。只有切到下一手（或最终结算）后
+    // 才能封账，否则首次弹窗时的正确计数会掩盖确认阶段出现的第二次播放。
+    if (!finalize) return
+
+    const [effects, sounds] = await Promise.all([
+      Promise.all(pages.map(winEffectHistory)),
+      Promise.all(pages.map(audioHistory)),
+    ])
+    const winEffects = effects.map((history) => history.filter((event) => (
+      event.visible && handToken(event.hand) === token
+    )))
+    const primarySounds = sounds.map((history) => history.filter((event) => (
+      /^(?:hu|zimo)\.mp3$/i.test(event.name) && handToken(event.hand) === token
+    )))
+    const effectSounds = sounds.map((history) => history.filter((event) => (
+      /^hu_effect_sound\.mp3$/i.test(event.name) && handToken(event.hand) === token
+    )))
+    const expectedCount = evidence.draw[0] ? 0 : 1
+    for (let index = 0; index < 2; index += 1) {
+      if (winEffects[index].length !== expectedCount
+        || primarySounds[index].length !== expectedCount
+        || effectSounds[index].length !== expectedCount) {
+        await failWithEvidence(pages, testInfo, consoleLogs,
+          `online-match-${matchIndex}-${token}-win-presentation-count`,
+          `线上第 ${matchIndex} 场 ${hand} ${index === 0 ? '房主' : '客户端'}胡牌特效/声音次数异常：特效 ${winEffects[index].length}，胡/自摸声 ${primarySounds[index].length}，特效声 ${effectSounds[index].length}`)
+      }
+    }
+    if (expectedCount === 1 && (
+      winEffects[0][0].tile !== winEffects[1][0].tile
+      || primarySounds[0][0].name !== primarySounds[1][0].name
+    )) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-${token}-win-presentation-mismatch`,
+        `线上第 ${matchIndex} 场 ${hand} 双端胡牌特效或声音不一致`)
+    }
+
+      const tableStates = await Promise.all(pages.map(readNormalizedTableState)) as [
+        NormalizedTableState | null, NormalizedTableState | null,
+      ]
+    if (tableStates.every(Boolean)) {
+      try {
+        assertTableStatesEqual(tableStates, `第 ${matchIndex} 场 ${hand} 结算：`)
+      } catch (error) {
+        await failWithEvidence(pages, testInfo, consoleLogs,
+          `online-match-${matchIndex}-${token}-table-mismatch`, String(error))
+      }
+    }
+    settledTableStates.set(token, tableStates)
+    verifiedHands.add(token)
+  }
 
   while (Date.now() < deadline) {
+    for (let index = 0; index < consoleLogs.length; index += 1) {
+      const fatal = consoleLogs[index].find((line) => fatalOnlineSignal.test(line))
+      if (fatal) {
+        await failWithEvidence(pages, testInfo, consoleLogs,
+          `online-match-${matchIndex}-forbidden-recovery`,
+          `线上第 ${matchIndex} 场${index === 0 ? '房主' : '客户端'}出现禁止的恢复/重连/旧代次/AI接管信号：${fatal}`)
+      }
+    }
     const labels = await Promise.all([readRoundLabel(host), readRoundLabel(client)])
     const settlementVisible = await Promise.all([host, client].map((page) => (
       page.locator('.round-settlement').isVisible().catch(() => false)
@@ -777,10 +1423,28 @@ async function runEastMatch(options: {
     for (let index = 0; index < settlementEvents.length; index += 1) {
       const events = settlementEvents[index]
       for (const event of events.slice(settlementEventCounts[index])) {
-        const evidence = settlementEvidence.get(event.token) ?? { popup: [0, 0], confirmed: [0, 0] }
-        evidence.popup[index] ||= event.at
+        const evidence = settlementEvidence.get(event.token) ?? {
+          popup: [0, 0], confirmed: [0, 0], appearances: [0, 0],
+          draw: [false, false], resultSignatures: ['', ''],
+        }
+        if (event.appearance) {
+          evidence.popup[index] ||= event.at
+          evidence.appearances[index] += 1
+          evidence.draw[index] = event.draw
+          evidence.resultSignatures[index] = event.resultSignature
+        }
         if (event.confirmed) evidence.confirmed[index] ||= event.at
         settlementEvidence.set(event.token, evidence)
+        if (event.labelMismatch) {
+          await failWithEvidence(pages, testInfo, consoleLogs,
+            `online-match-${matchIndex}-${event.token}-settlement-label-mismatch`,
+            `线上第 ${matchIndex} 场 ${event.token} 结算弹窗与当前手牌局号不一致`)
+        }
+        if (evidence.appearances[index] > 1) {
+          await failWithEvidence(pages, testInfo, consoleLogs,
+            `online-match-${matchIndex}-${event.token}-duplicate-settlement`,
+            `线上第 ${matchIndex} 场 ${event.token} ${index === 0 ? '房主' : '客户端'}结算弹窗重复出现 ${evidence.appearances[index]} 次`)
+        }
       }
       settlementEventCounts[index] = events.length
     }
@@ -809,6 +1473,72 @@ async function runEastMatch(options: {
       } else if (previousHand && settledHand === previousHand && !confirmedAt.every(Boolean)) {
         throw await diagnostics(host, client, consoleLogs,
           `线上第 ${matchIndex} 场 ${previousHand} 未记录双端确认却进入 ${clientHand}`)
+      }
+      if (previousHand) {
+        await verifySettledHand(previousHand, true)
+        const visibleNextStates = await waitForVisibleNextHandStates(pages, clientHand)
+        for (let index = 0; index < visibleNextStates.length; index += 1) {
+          const state = visibleNextStates[index]
+          const side = index === 0 ? '房主' : '客户端'
+          if (state.hand !== clientHand
+            || state.wallCount <= 0
+            || state.wallHeadDrawn <= 0
+            || state.localHandCount <= 0
+            || !state.canvasPresent
+            || state.canvasWidth <= 0
+            || state.canvasHeight <= 0
+            || state.contextLost !== false
+            || state.winEffectVisible) {
+            await failWithEvidence(pages, testInfo, consoleLogs,
+              `online-match-${matchIndex}-${handToken(previousHand)}-visible-transition-failure`,
+              `线上第 ${matchIndex} 场 ${previousHand} → ${clientHand} 时${side}可见牌桌状态异常：${JSON.stringify(state)}`)
+          }
+        }
+        if (visibleNextStates[0].wallCount !== visibleNextStates[1].wallCount
+          || visibleNextStates[0].wallHeadDrawn !== visibleNextStates[1].wallHeadDrawn) {
+          await failWithEvidence(pages, testInfo, consoleLogs,
+            `online-match-${matchIndex}-${handToken(previousHand)}-visible-wall-mismatch`,
+            `线上第 ${matchIndex} 场 ${previousHand} → ${clientHand} 双端公开牌山状态不一致：${JSON.stringify(visibleNextStates)}`)
+        }
+        const nextStates = await waitForSynchronizedTableStates(pages, clientHand)
+        if (nextStates.every(Boolean)) {
+          try {
+            assertTableStatesEqual(nextStates, `第 ${matchIndex} 场 ${previousHand} → ${clientHand}：`)
+          } catch (error) {
+            await failWithEvidence(pages, testInfo, consoleLogs,
+              `online-match-${matchIndex}-${handToken(previousHand)}-transition-mismatch`, String(error))
+          }
+          for (let index = 0; index < 2; index += 1) {
+            const state = nextStates[index]!
+            if (state.wallCount <= 0) {
+              await failWithEvidence(pages, testInfo, consoleLogs,
+                `online-match-${matchIndex}-${handToken(previousHand)}-wall-disappeared`,
+                `线上第 ${matchIndex} 场进入 ${clientHand} 时${index === 0 ? '房主' : '客户端'}牌山凭空消失`)
+            }
+            const concealed = state.players.reduce((sum, player) => sum + player.concealedCount, 0)
+            if (state.openingStage === 'deal' && state.wallHeadDrawn > 0 && concealed <= 0) {
+              await failWithEvidence(pages, testInfo, consoleLogs,
+                `online-match-${matchIndex}-${handToken(previousHand)}-hands-disappeared`,
+                `线上第 ${matchIndex} 场进入 ${clientHand} 发牌后${index === 0 ? '房主' : '客户端'}暗手凭空消失`)
+            }
+            if (state.winEffect) {
+              await failWithEvidence(pages, testInfo, consoleLogs,
+                `online-match-${matchIndex}-${handToken(previousHand)}-stale-win-effect`,
+                `线上第 ${matchIndex} 场进入 ${clientHand} 后仍残留上一手胡牌特效`)
+            }
+            if (state.players.some((player) => player.discards.length || player.melds.length)) {
+              await failWithEvidence(pages, testInfo, consoleLogs,
+                `online-match-${matchIndex}-${handToken(previousHand)}-stale-table-tiles`,
+                `线上第 ${matchIndex} 场进入 ${clientHand} 后仍残留上一手牌河或副露`)
+            }
+          }
+        }
+        transitionIntegrity.push({
+          fromHand: previousHand,
+          toHand: clientHand,
+          settled: settledTableStates.get(handToken(previousHand)) ?? [null, null],
+          next: nextStates,
+        })
       }
       if (activeHand) {
         const completedAt = settledHand === activeHand && settlementStartedAt > 0 ? settlementStartedAt : Date.now()
@@ -879,7 +1609,10 @@ async function runEastMatch(options: {
           console.log(`[ONLINE][第${matchIndex}场] ${activeHand} ${index === 0 ? '房主' : '客户端'}结算弹窗出现`)
         }
       }
-      const evidence = settlementEvidence.get(handToken(activeHand)) ?? { popup: [0, 0], confirmed: [0, 0] }
+      const evidence = settlementEvidence.get(handToken(activeHand)) ?? {
+        popup: [0, 0], confirmed: [0, 0], appearances: [0, 0],
+        draw: [false, false], resultSignatures: ['', ''],
+      }
       evidence.popup = [...popupSeenAt] as [number, number]
       settlementEvidence.set(handToken(activeHand), evidence)
     }
@@ -890,6 +1623,7 @@ async function runEastMatch(options: {
       popupSeenAt = [...currentEvidence.popup] as [number, number]
       confirmedAt = [...currentEvidence.confirmed] as [number, number]
     }
+    if (popupSeenAt.every(Boolean)) await verifySettledHand(activeHand)
     const firstPopupAt = popupSeenAt.find(Boolean) ?? 0
     // 主动恢复最坏包含 5s 心跳发现、3s SDK reconnect 观察和 2.5s 重进缓冲；
     // 双端弹窗仍须在 20s 内同步，否则不算可接受的流畅恢复。
@@ -909,7 +1643,10 @@ async function runEastMatch(options: {
           `线上第 ${matchIndex} 场 ${activeHand} 双端结算弹窗 20 秒仍未同步`)
       }
       // 用 MutationObserver 历史补齐另一端的弹窗时间，保持双确认判定可用。
-      const evidenceNow = settlementEvidence.get(handToken(activeHand)) ?? { popup: [0, 0], confirmed: [0, 0] }
+      const evidenceNow = settlementEvidence.get(handToken(activeHand)) ?? {
+        popup: [0, 0], confirmed: [0, 0], appearances: [0, 0],
+        draw: [false, false], resultSignatures: ['', ''],
+      }
       evidenceNow.popup = popupNow.map((text, index) => (
         popupSeenAt[index] || (text && roundToken(text) === roundToken(activeHand) ? Date.now() : 0)
       )) as [number, number]
@@ -996,7 +1733,10 @@ async function runEastMatch(options: {
     }
 
     const finals = await Promise.all([host, client].map((page) => page.locator('.final-backdrop').isVisible().catch(() => false)))
-    if (finals.every(Boolean)) break
+    if (finals.every(Boolean)) {
+      await verifySettledHand(activeHand, true)
+      break
+    }
     if (confirmedAt.every(Boolean) && Date.now() - Math.max(...confirmedAt) > 10_000) {
       // 主循环可能被 WebGL 取证截图短暂阻塞，错过局号切换。先实时复核两端当前局号：
       // 若已进入下一局或最终结算，说明业务推进正常，只是检测迟到，不算失败。
@@ -1064,16 +1804,19 @@ async function runEastMatch(options: {
   if (openingCycles[0].length !== openingCycles[1].length) {
     console.log(`[ONLINE] 第 ${matchIndex} 场开局动画采样：房主 ${openingCycles[0].length} 次、客户端 ${openingCycles[1].length} 次（采样差异）`)
   }
-  const finalWinEffects = await Promise.all(pages.map(winEffectHistory))
-  expect(finalWinEffects[0].length, `第 ${matchIndex} 场房主未捕获胡牌特效`).toBeGreaterThan(0)
-  expect(finalWinEffects[1].length, `第 ${matchIndex} 场客户端未捕获胡牌特效`).toBeGreaterThan(0)
-  // 双端特效次数不必严格相等：房主端本地引擎与快照路径可能对同一特效各记录
-  // 一次，客户端只有公共消息路径；WebGL 高负载下采样也可能漏帧。每手是否都
-  // 有双端特效已由主循环的成对「捕获双端胡牌特效画面」日志与截图证明。
-  if (finalWinEffects[0].length !== finalWinEffects[1].length) {
-    console.log(`[ONLINE] 第 ${matchIndex} 场特效采样次数：房主 ${finalWinEffects[0].length} 次、客户端 ${finalWinEffects[1].length} 次（采样差异，业务已由双端截图取证）`)
+  const tableTransitions = await Promise.all(pages.map(tableTransitionHistory))
+  const hands = [...new Set(timings.map((item) => item.hand))]
+  for (let index = 0; index < 2; index += 1) {
+    for (const hand of hands) {
+      assertTransitionHistory(
+        tableTransitions[index], hand, index === 0 ? '房主' : '客户端', matchIndex,
+      )
+    }
   }
-  const fault = /PLAYER_COUNT|玩家数[=为](?:0|3)|洗牌承诺超时|\[wall-regress\]|非法状态快照|确认后长时间未收到推进信号|房间已失效|无法连接/i
+  const finalWinEffects = await Promise.all(pages.map(winEffectHistory))
+  expect([...verifiedHands].length, `第 ${matchIndex} 场存在未完成表现完整性验证的手牌`)
+    .toBe(timings.length)
+  const fault = /PLAYER_COUNT|玩家数[=为](?:0|3)|洗牌承诺超时|\[wall-regress\]|非法状态快照|确认后长时间未收到推进信号|房间已失效|无法连接|先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|恢复牌局|已验证重进握手|大厅验证的新 peer 已恢复原座位|丢弃.*(?:旧|权威|代次)|旧权威|AI 代打|AI 接管/i
   for (let index = 0; index < consoleLogs.length; index += 1) {
     expect(consoleLogs[index].filter((line) => fault.test(line)), `线上第 ${matchIndex} 场页面 ${index} 出现应用故障`).toEqual([])
   }
@@ -1082,6 +1825,10 @@ async function runEastMatch(options: {
       roomCode, timings, transitionTimings, huEffectCaptures,
       openingHistories: finalOpeningHistories,
       winEffects: finalWinEffects,
+      audio: await Promise.all(pages.map(audioHistory)),
+      settlementEvents: await Promise.all(pages.map(settlementHistory)),
+      tableTransitions,
+      transitionIntegrity,
       recoveryEvents: consoleLogs.map((logs) => logs.filter((line) => (
         /单次请求当前手牌事实|先释放旧连接再重进|rejoin_ok|恢复牌局/i.test(line)
       ))),
@@ -1095,13 +1842,17 @@ async function runEastMatch(options: {
 
 test('两个线上账号完成两个莲花麻将东风场，每手不超过6分钟', async ({ browser }, testInfo) => {
   const contexts = await Promise.all(ONLINE.accounts.map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })))
+  let activePages: [Page, Page] | null = null
+  let capturedLogs: string[][] = [[], []]
   try {
+    await Promise.all(contexts.map(installAudioProbe))
     // 游戏授权令牌位于当前标签页的 sessionStorage；必须复用授权返回的两个页面，
     // 不能只保留 VibeHub Cookie 后另开标签。
     const pages = [
       await authenticate(contexts[0], ONLINE.accounts[0]),
       await authenticate(contexts[1], ONLINE.accounts[1]),
-    ]
+    ] as [Page, Page]
+    activePages = pages
     const recoveryMarkers = await Promise.all(pages.map(readRecoveryBuildMarkers))
     console.log(`[ONLINE] 线上恢复构建标记：${recoveryMarkers.map((marker) => (
       JSON.stringify(marker)
@@ -1130,6 +1881,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       expectedMarkers,
     ])
     const logs = pages.map(() => [] as string[])
+    capturedLogs = logs
     const errors = pages.map(() => [] as string[])
     pages.forEach((page, index) => {
       page.on('pageerror', (error) => errors[index].push(error.message))
@@ -1162,7 +1914,32 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     }
     expect(new Set(results.map((result) => result.roomCode)).size).toBe(1)
     console.log(`[ONLINE] 同一房间连续两个东风场完整通过：${results[0].roomCode}`)
+  } catch (error) {
+    if (activePages) {
+      await attachDualScreenshots(activePages, testInfo, 'online-two-east-matches-failure')
+      await testInfo.attach('online-two-east-matches-failure-evidence', {
+        body: JSON.stringify({
+          error: String(error),
+          logs: capturedLogs,
+          pages: await Promise.all(activePages.map(async (page) => ({
+            round: await readRoundLabel(page),
+            canvas: await readCanvasHealth(page),
+            table: await readNormalizedTableState(page),
+            settlement: await page.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+            winEffects: await winEffectHistory(page),
+            audio: await audioHistory(page),
+            settlements: await settlementHistory(page),
+            tableTransitions: await tableTransitionHistory(page),
+          }))),
+        }, null, 2),
+        contentType: 'application/json',
+      })
+    }
+    throw error
   } finally {
-    await Promise.all(contexts.map((context) => context.close()))
+    await Promise.race([
+      Promise.all(contexts.map((context) => context.close().catch(() => {}))),
+      new Promise((resolve) => setTimeout(resolve, 15_000)),
+    ])
   }
 })

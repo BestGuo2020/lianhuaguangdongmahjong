@@ -34,6 +34,21 @@ interface OpeningSample {
   dealSerial: number
   dealCount: number
 }
+interface WinPhaseSample {
+  at: number
+  hand: string
+  phase: string
+  wallCount: number
+  wallHeadDrawn: number
+  seats: number[]
+  concealedCounts: number[]
+  discardCounts: number[]
+  meldTileCounts: number[]
+  winEffectVisible: boolean
+  settlementVisible: boolean
+  confirmed: boolean
+  tablePresent: boolean
+}
 
 function readOnlineConfig(): OnlineConfig {
   const raw = readFileSync('tmp/online_test', 'utf8')
@@ -45,7 +60,7 @@ function readOnlineConfig(): OnlineConfig {
 }
 
 const ONLINE = readOnlineConfig()
-test.setTimeout(12_000_000)
+test.setTimeout(30_000_000)
 
 async function selectOnlineMode(page: Page) {
   await page.getByText('联机对战', { exact: false }).first().click()
@@ -76,9 +91,17 @@ async function authenticate(context: BrowserContext, account: Account, manual: b
   let attempts = 0
   let lastAuthProgressAt = Date.now()
   let loadingReloads = 0
+  let authErrorRetries = 0
   let authorized = false
   const deadline = Date.now() + 180_000
   while (Date.now() < deadline && !authorized) {
+    // OAuth 错误页偶尔会滞留，但授权消息已经成功回传游戏页；以游戏页
+    // 的真实登录态为准，避免把已完成授权误判为登录超时。
+    if (await page.getByRole('button', { name: '创建房间', exact: true }).isVisible().catch(() => false)) {
+      authorized = true
+      await popup.close().catch(() => {})
+      break
+    }
     const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
     if (await authorize.isVisible().catch(() => false)) {
       await authorize.click()
@@ -102,8 +125,13 @@ async function authenticate(context: BrowserContext, account: Account, manual: b
         attempts += 1
       }
     } else {
+      const retryAuth = popup.getByRole('button', { name: '重试', exact: true })
       const goLogin = popup.getByRole('button', { name: '去登录', exact: true })
-      if (await goLogin.isVisible().catch(() => false)) {
+      if (authErrorRetries < 3 && await retryAuth.isVisible().catch(() => false)) {
+        await retryAuth.click()
+        authErrorRetries += 1
+        lastAuthProgressAt = Date.now()
+      } else if (await goLogin.isVisible().catch(() => false)) {
         await goLogin.click()
         lastAuthProgressAt = Date.now()
       } else if (Date.now() - lastAuthProgressAt > 20_000 && loadingReloads < 3) {
@@ -226,6 +254,38 @@ async function waitForSettlement(host: Page, client: Page, expectedKey: string, 
   throw new Error(`等待 ${expectedKey} 双端结算弹窗超时（host=${hostLabel} client=${clientLabel}）`)
 }
 
+async function settlementIsDraw(page: Page): Promise<boolean> {
+  const text = await page.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => '')
+  return /流局/.test(text)
+}
+
+/** 流局不计入胡牌专项；双端确认流局后继续推进，直到出现真实胡牌结算。 */
+async function waitForWinningSettlement(
+  host: Page,
+  client: Page,
+  initialKey: string,
+  manualContinue: boolean,
+): Promise<string> {
+  let currentKey = initialKey
+  for (let handIndex = 0; handIndex < 12; handIndex += 1) {
+    await waitForSettlement(host, client, currentKey, 420_000)
+    const draws = await Promise.all([host, client].map(settlementIsDraw))
+    expect(draws[1], `${currentKey} 双端流局/胡牌结果必须一致`).toBe(draws[0])
+    if (!draws[0]) return currentKey
+
+    console.log(`[确认专项] ${currentKey} 为流局，继续推进到真实胡牌后再验证确认模式`)
+    if (manualContinue) {
+      expect(await clickContinue(host), `${currentKey} 流局后房主应能继续`).toBe(true)
+      expect(await clickContinue(client), `${currentKey} 流局后客户端应能继续`).toBe(true)
+    }
+    const next = await waitForNextHand(host, client, currentKey, 70_000)
+    currentKey = handKey(next.hostLabel)
+    expect(currentKey, `流局后应进入有效下一手（${next.hostLabel} | ${next.clientLabel}）`).not.toBe('')
+    expect(handKey(next.clientLabel), '流局后双端下一手必须一致').toBe(currentKey)
+  }
+  throw new Error('连续 12 手仍未出现真实胡牌，无法执行胡牌阶段确认专项')
+}
+
 /** 等待下一手（handKey 变化）出现：用于自动确认/补点确认后的推进判定。 */
 async function waitForNextHand(host: Page, client: Page, currentKey: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs
@@ -296,9 +356,9 @@ async function waitForRoomReady(host: Page, client: Page, roomCode: string, nick
 async function startEastHandToSettlement(
   host: Page,
   client: Page,
-  expectedKey: string,
   suffix: string,
-): Promise<string> {
+  manualContinue: boolean,
+): Promise<{ roomCode: string; winningKey: string }> {
   await enterOnlineLobby(host, `确认专项房主-${suffix}`, 'host')
   await host.getByRole('button', { name: '创建房间', exact: true }).click()
   await host.locator('.game-settings button', { hasText: '玩法' }).click()
@@ -322,6 +382,8 @@ async function startEastHandToSettlement(
   await Promise.all([host, client].map(installHostAutoPlayer))
   // 开局前安装时序采样器：记录每局 136/断点0 → 一骰 → 翻精134 → 二骰 → 断点 → 发牌。
   await Promise.all([host, client].map(installOpeningSampler))
+  // 开局前即开始记录，确保保留胡牌前最后一个稳定牌桌状态。
+  await Promise.all([host, client].map(installWinPhaseSampler))
   const start = host.getByRole('button', { name: /开始对局/ })
   if (!await start.isEnabled().catch(() => false)) {
     await host.getByRole('button', { name: '准备 / 取消准备' }).click()
@@ -333,10 +395,10 @@ async function startEastHandToSettlement(
   // 等开局完成进入东1局，随后自动打牌直到指定局结算。
   const handLabel = await waitForHand(host, '东1局:0', 120_000)
   expect(handLabel).toContain('东1局')
-  console.log(`[确认专项] 房间 ${roomCode} 已进入 ${handLabel}，等待 ${expectedKey} 结算`)
-  await waitForSettlement(host, client, expectedKey, 420_000)
-  console.log(`[确认专项] 房间 ${roomCode} ${expectedKey} 双端结算弹窗已出现`)
-  return roomCode
+  console.log(`[确认专项] 房间 ${roomCode} 已进入 ${handLabel}，等待真实胡牌结算`)
+  const winningKey = await waitForWinningSettlement(host, client, '东1局:0', manualContinue)
+  console.log(`[确认专项] 房间 ${roomCode} ${winningKey} 双端胡牌结算弹窗已出现`)
+  return { roomCode, winningKey }
 }
 
 /** 收集页面控制台关键日志（不记录凭据/牌面）。 */
@@ -347,6 +409,215 @@ function attachConsoleCapture(page: Page, logs: string[]) {
       logs.push(line)
     }
   })
+}
+
+/**
+ * 胡牌阶段牌桌采样器：只记录数量和座位，不读取或保存具体暗牌牌面。
+ * 从开局前持续采样到切局，MutationObserver 捕获 DOM 切换，20ms 定时器捕获
+ * Vue 状态在 DOM 未变化时的短暂清空。
+ */
+async function installWinPhaseSampler(page: Page) {
+  await page.evaluate(() => {
+    type Meld = { tiles?: unknown[] }
+    type Player = {
+      seat?: unknown
+      hand?: unknown[]
+      concealedTileCount?: unknown
+      discards?: unknown[]
+      melds?: Meld[]
+    }
+    type VueInstance = { props?: Record<string, unknown>; parent?: VueInstance | null }
+    const target = window as unknown as {
+      __onlineWinPhaseSamples?: WinPhaseSample[]
+      __onlineWinPhaseSampler?: number
+      __onlineWinPhaseObserver?: MutationObserver
+    }
+    if (target.__onlineWinPhaseSampler) window.clearInterval(target.__onlineWinPhaseSampler)
+    target.__onlineWinPhaseObserver?.disconnect()
+    target.__onlineWinPhaseSamples = []
+    let previous = ''
+    let previousAt = 0
+    const visible = (element: HTMLElement | null) => Boolean(element
+      && element.getClientRects().length
+      && getComputedStyle(element).visibility !== 'hidden'
+      && getComputedStyle(element).display !== 'none'
+      && Number(getComputedStyle(element).opacity) > 0)
+    const readProps = () => {
+      for (const element of document.querySelectorAll('.game-table-hud, .mahjong-scene')) {
+        let instance = (element as Element & { __vueParentComponent?: VueInstance }).__vueParentComponent
+        while (instance) {
+          if (instance.props && 'players' in instance.props && 'wallCount' in instance.props) {
+            return instance.props
+          }
+          instance = instance.parent ?? undefined
+        }
+      }
+      return undefined
+    }
+    const sample = () => {
+      const props = readProps()
+      const hud = document.querySelector<HTMLElement>('.game-table-hud')
+      const canvas = document.querySelector<HTMLCanvasElement>('.mahjong-scene')
+      const settlement = document.querySelector<HTMLElement>('.round-settlement')
+      const players = (Array.isArray(props?.players) ? props?.players : []) as Player[]
+      const entries = players.map((player, index) => ({
+        seat: typeof player.seat === 'number' ? player.seat : index,
+        concealed: typeof player.concealedTileCount === 'number'
+          ? player.concealedTileCount
+          : (player.hand?.length ?? 0),
+        discards: player.discards?.length ?? 0,
+        meldTiles: (player.melds ?? []).reduce((sum, meld) => sum + (meld.tiles?.length ?? 0), 0),
+      })).sort((a, b) => a.seat - b.seat)
+      const numberValue = (value: unknown, fallback = -1) => (
+        typeof value === 'number' && Number.isFinite(value) ? value : fallback
+      )
+      const current: WinPhaseSample = {
+        at: Date.now(),
+        hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+        phase: typeof props?.phase === 'string' ? props.phase : '',
+        wallCount: numberValue(props?.wallCount, Number(hud?.dataset.wallCount ?? -1)),
+        wallHeadDrawn: numberValue(props?.wallHeadDrawn, Number(hud?.dataset.wallHeadDrawn ?? -1)),
+        seats: entries.map((entry) => entry.seat),
+        concealedCounts: entries.map((entry) => entry.concealed),
+        discardCounts: entries.map((entry) => entry.discards),
+        meldTileCounts: entries.map((entry) => entry.meldTiles),
+        winEffectVisible: Number(hud?.dataset.winEffectId ?? -1) >= 0,
+        settlementVisible: visible(settlement),
+        confirmed: visible(document.querySelector<HTMLElement>('.remote-banner'))
+          || Boolean(settlement?.querySelector<HTMLButtonElement>('.result-actions button:disabled')),
+        tablePresent: Boolean(hud && canvas && canvas.width > 0 && canvas.height > 0),
+      }
+      const signature = JSON.stringify({ ...current, at: 0 })
+      if (signature === previous && current.at - previousAt < 250) return
+      previous = signature
+      previousAt = current.at
+      target.__onlineWinPhaseSamples?.push(current)
+    }
+    const observer = new MutationObserver(sample)
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true })
+    target.__onlineWinPhaseObserver = observer
+    target.__onlineWinPhaseSampler = window.setInterval(sample, 20)
+    sample()
+  })
+}
+
+async function winPhaseHistory(page: Page): Promise<WinPhaseSample[]> {
+  return page.evaluate(() => (
+    (window as unknown as { __onlineWinPhaseSamples?: WinPhaseSample[] }).__onlineWinPhaseSamples ?? []
+  ))
+}
+
+function publicCounts(sample: WinPhaseSample) {
+  return {
+    wallCount: sample.wallCount,
+    wallHeadDrawn: sample.wallHeadDrawn,
+    seats: sample.seats,
+    concealedCounts: sample.concealedCounts,
+    discardCounts: sample.discardCounts,
+    meldTileCounts: sample.meldTileCounts,
+  }
+}
+
+function winningWindow(history: WinPhaseSample[], currentKey: string) {
+  const start = history.findIndex((sample) => (
+    handKey(sample.hand) === currentKey
+    && (sample.winEffectVisible || sample.phase === 'win-effect')
+  ))
+  if (start < 0) return []
+  let end = history.length
+  for (let index = start + 1; index < history.length; index += 1) {
+    const sample = history[index]
+    const key = handKey(sample.hand)
+    if (sample.phase === 'opening' || sample.phase === 'dealing' || (key && key !== currentKey)) {
+      end = index
+      break
+    }
+  }
+  return history.slice(Math.max(0, start - 1), end)
+}
+
+async function verifyWinningPhaseIntegrity(
+  pages: [Page, Page],
+  currentKey: string,
+  scenario: string,
+  testInfo: TestInfo,
+) {
+  const histories = await Promise.all(pages.map(winPhaseHistory))
+  const windows = histories.map((history) => winningWindow(history, currentKey))
+  for (let sideIndex = 0; sideIndex < windows.length; sideIndex += 1) {
+    const side = sideIndex === 0 ? '房主' : '客户端'
+    const samples = windows[sideIndex]
+    expect(samples.length, `${scenario}${side}未采集到 ${currentKey} 胡牌阶段`).toBeGreaterThan(2)
+    const winIndex = samples.findIndex((sample) => sample.winEffectVisible || sample.phase === 'win-effect')
+    expect(winIndex, `${scenario}${side}缺少真实胡牌特效阶段`).toBeGreaterThanOrEqual(0)
+    expect(samples.some((sample) => sample.settlementVisible), `${scenario}${side}缺少结算展示阶段`).toBe(true)
+    expect(samples.filter((sample) => !sample.tablePresent), `${scenario}${side}胡牌到切局期间牌桌不得消失`).toEqual([])
+
+    const beforeWin = samples[Math.max(0, winIndex - 1)]
+    const atWin = samples[winIndex]
+    const active = samples.slice(winIndex)
+    expect(atWin.wallCount, `${scenario}${side}胡牌阶段牌山不得归零`).toBeGreaterThan(0)
+    expect(active.filter((sample) => sample.wallCount <= 0), `${scenario}${side}胡牌后牌山不得突然消失`).toEqual([])
+    expect(Math.abs(beforeWin.wallCount - atWin.wallCount), `${scenario}${side}进入胡牌阶段牌山数量不得突变`).toBeLessThanOrEqual(1)
+    expect(new Set(active.map((sample) => sample.wallCount)).size,
+      `${scenario}${side}胡牌后牌山数量应保持稳定`).toBe(1)
+    expect(new Set(active.map((sample) => sample.wallHeadDrawn)).size,
+      `${scenario}${side}胡牌后牌山进度应保持稳定`).toBe(1)
+
+    const concealedAtWin = atWin.concealedCounts
+    expect(concealedAtWin).toHaveLength(4)
+    expect(concealedAtWin.reduce((sum, count) => sum + count, 0),
+      `${scenario}${side}胡牌阶段四家暗手不得整体消失`).toBeGreaterThan(0)
+    for (const sample of active) {
+      expect(sample.seats, `${scenario}${side}胡牌阶段应持续保留四个座位`).toEqual(atWin.seats)
+      expect(sample.concealedCounts.reduce((sum, count) => sum + count, 0),
+        `${scenario}${side}胡牌后四家暗手不得整体清零`).toBeGreaterThan(0)
+      concealedAtWin.forEach((count, index) => {
+        if (count > 0) expect(sample.concealedCounts[index],
+          `${scenario}${side}座位 ${atWin.seats[index]} 的暗手不得突然消失`).toBeGreaterThan(0)
+      })
+      expect(sample.meldTileCounts, `${scenario}${side}胡牌后副露不得消失`).toEqual(atWin.meldTileCounts)
+      expect(sample.discardCounts, `${scenario}${side}胡牌后牌河不得继续回退或整体清零`).toEqual(atWin.discardCounts)
+    }
+
+    // 点炮牌进入胡牌区时允许从牌河移走且最多只移走一张；其它牌河和副露
+    // 在胡牌边界本身也不得被清空。
+    const discardDrop = beforeWin.discardCounts.reduce((sum, count, index) => (
+      sum + Math.max(0, count - (atWin.discardCounts[index] ?? 0))
+    ), 0)
+    expect(discardDrop, `${scenario}${side}进入胡牌阶段牌河最多移走点炮牌一张`).toBeLessThanOrEqual(1)
+    expect(atWin.meldTileCounts, `${scenario}${side}进入胡牌阶段副露不得突变`).toEqual(beforeWin.meldTileCounts)
+  }
+
+  const milestones = windows.map((samples) => ({
+    win: samples.find((sample) => sample.winEffectVisible || sample.phase === 'win-effect')!,
+    settled: samples.find((sample) => sample.settlementVisible)!,
+    last: samples.at(-1)!,
+  }))
+  for (const milestone of ['win', 'settled', 'last'] as const) {
+    expect(publicCounts(milestones[1][milestone]),
+      `${scenario}${currentKey} 双端${milestone}阶段牌山/暗手/牌河/副露计数不一致`)
+      .toEqual(publicCounts(milestones[0][milestone]))
+  }
+  await testInfo.attach(`win-phase-integrity-${scenario}-${currentKey.replace(':', '-')}`, {
+    body: JSON.stringify({
+      scenario, currentKey,
+      host: windows[0],
+      client: windows[1],
+    }, null, 2),
+    contentType: 'application/json',
+  })
+  console.log(`[确认专项][${scenario}] ${currentKey} 胡牌到切局期间牌山、暗手、牌河、副露均保持完整`)
+}
+
+async function expectSingleConfirmationState(
+  confirmed: Page,
+  pending: Page,
+  scenario: string,
+) {
+  await expect(confirmed.locator('.remote-banner')).toBeVisible({ timeout: 5000 })
+  await expect(pending.locator('.remote-banner')).toBeHidden({ timeout: 5000 })
+  console.log(`[确认专项][${scenario}] 单边确认状态已生效，另一端仍未确认`)
 }
 
 /**
@@ -429,8 +700,6 @@ async function installOpeningSampler(page: Page) {
       if (stage == null) {
         if (document.querySelector('.opening-overlay.start-cue')) stage = 'start'
         else if (document.querySelector('.hand-rack.dealing')) stage = 'deal'
-        else if (document.querySelector('.second-dice-note')) stage = 'second-dice-visible'
-        else if (document.querySelector('.flip-indicator')) stage = 'flip-visible'
       }
       const handLabel = document.querySelector('.round-info')?.textContent?.trim() ?? ''
       if (handLabel && handLabel !== previousHandLabel) {
@@ -803,11 +1072,11 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
       const clientLogs: string[] = []
       attachConsoleCapture(host, hostLogs)
       attachConsoleCapture(client, clientLogs)
-      const roomCode = await startEastHandToSettlement(host, client, '东1局:0', `A-${suffix}`)
+      const { roomCode, winningKey } = await startEastHandToSettlement(host, client, `A-${suffix}`, false)
       const settledAt = Date.now()
       // 关键：两端都不点击确认；生产默认 10 秒倒计时应自动确认并进入下一手。
-      console.log(`[确认专项][场景A] ${roomCode} 东1局结算，两端均不手动确认，等待自动确认`)
-      const next = await waitForNextHand(host, client, '东1局:0', 60_000)
+      console.log(`[确认专项][场景A] ${roomCode} ${winningKey} 胡牌结算，两端均不手动确认，等待自动确认`)
+      const next = await waitForNextHand(host, client, winningKey, 60_000)
       const autoConfirmMs = Date.now() - settledAt
       console.log(`[确认专项][场景A] 自动确认耗时 ${autoConfirmMs}ms，进入 ${next.hostLabel} | ${next.clientLabel}`)
 
@@ -816,6 +1085,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
       try {
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景A-东2局', testInfo)
         await verifyOpeningForHand(client, next.clientLabel, '客户端', '场景A-东2局', testInfo)
+        await verifyWinningPhaseIntegrity(pages as [Page, Page], winningKey, 'A-both-auto', testInfo)
       } catch (error) {
         // 输出两端 round_start/动画相关诊断日志，定位动画缺失环节。
         const rsLogs = (logs: string[]) => logs
@@ -846,7 +1116,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
       const clientRecovery = clientLogs.filter((line) => recoveryPattern.test(line))
       await testInfo.attach('scenario-A-auto-confirm', {
         body: JSON.stringify({
-          roomCode, autoConfirmMs,
+          roomCode, winningKey, autoConfirmMs,
           hostNext: next.hostLabel, clientNext: next.clientLabel,
           hostRecoveryLogs: hostRecovery.slice(-5),
           clientRecoveryLogs: clientRecovery.slice(-5),
@@ -879,20 +1149,22 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
 
       // ── 场景 B：仅房主确认，客户端不确认 → 屏障阻止推进；客户端确认后进入下一手 ──
       {
-        const roomCode = await startEastHandToSettlement(host, client, '东1局:0', `B-${suffix}`)
+        const { roomCode, winningKey } = await startEastHandToSettlement(host, client, `B-${suffix}`, true)
         const hostClicked = await clickContinue(host)
         expect(hostClicked, '房主应能点击继续').toBe(true)
         console.log(`[确认专项][场景B] ${roomCode} 仅房主确认，客户端不确认`)
-        await assertBarrierHolds(host, client, '东1局:0', 25_000, hostLogs, testInfo, 'B-host-only')
+        await expectSingleConfirmationState(host, client, '场景B')
+        await assertBarrierHolds(host, client, winningKey, 25_000, hostLogs, testInfo, 'B-host-only')
         const clientClicked = await clickContinue(client)
         expect(clientClicked, '客户端补点继续').toBe(true)
-        const next = await waitForNextHand(host, client, '东1局:0', 30_000)
+        const next = await waitForNextHand(host, client, winningKey, 30_000)
         console.log(`[确认专项][场景B] 通过：屏障阻止单边推进，客户端确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
         // 客户端确认后进入的新一局必须走完整开局时序。
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景B-下一手', testInfo)
         await verifyOpeningForHand(client, next.clientLabel, '客户端', '场景B-下一手', testInfo)
+        await verifyWinningPhaseIntegrity(pages as [Page, Page], winningKey, 'B-host-only', testInfo)
         await testInfo.attach('scenario-B-host-only-confirm', {
-          body: JSON.stringify({ roomCode, hostNext: next.hostLabel, clientNext: next.clientLabel }),
+          body: JSON.stringify({ roomCode, winningKey, hostNext: next.hostLabel, clientNext: next.clientLabel }),
           contentType: 'application/json',
         })
       }
@@ -904,20 +1176,22 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         const clientLabel = await readRoundLabel(client)
         const currentKey = handKey(hostLabel) || handKey(clientLabel)
         expect(currentKey, `场景C 应处于有效手牌（host=${hostLabel} client=${clientLabel}）`).not.toBe('')
-        await waitForSettlement(host, client, currentKey, 420_000)
-        console.log(`[确认专项][场景C] ${currentKey} 双端结算，仅客户端确认，房主不确认`)
+        const winningKey = await waitForWinningSettlement(host, client, currentKey, true)
+        console.log(`[确认专项][场景C] ${winningKey} 双端胡牌结算，仅客户端确认，房主不确认`)
         const clientClicked = await clickContinue(client)
         expect(clientClicked, '客户端应能点击继续').toBe(true)
-        await assertBarrierHolds(host, client, currentKey, 25_000, hostLogs, testInfo, 'C-client-only')
+        await expectSingleConfirmationState(client, host, '场景C')
+        await assertBarrierHolds(host, client, winningKey, 25_000, hostLogs, testInfo, 'C-client-only')
         const hostClicked = await clickContinue(host)
         expect(hostClicked, '房主补点继续').toBe(true)
-        const next = await waitForNextHand(host, client, currentKey, 40_000)
+        const next = await waitForNextHand(host, client, winningKey, 40_000)
         console.log(`[确认专项][场景C] 通过：屏障阻止单边推进，房主确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
         // 房主确认后进入的新一局必须走完整开局时序。
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景C-下一手', testInfo)
         await verifyOpeningForHand(client, next.clientLabel, '客户端', '场景C-下一手', testInfo)
+        await verifyWinningPhaseIntegrity(pages as [Page, Page], winningKey, 'C-client-only', testInfo)
         await testInfo.attach('scenario-C-client-only-confirm', {
-          body: JSON.stringify({ hostNext: next.hostLabel, clientNext: next.clientLabel }),
+          body: JSON.stringify({ winningKey, hostNext: next.hostLabel, clientNext: next.clientLabel }),
           contentType: 'application/json',
         })
       }

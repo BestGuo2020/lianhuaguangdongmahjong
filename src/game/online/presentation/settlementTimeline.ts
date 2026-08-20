@@ -67,10 +67,14 @@ export function createSettlementTimeline({
     serial += 1
     timers.forEach((timer) => globalThis.clearTimeout(timer))
     timers.clear()
-    activeKey = null
     pendingResult = null
     hasResult = false
     revealComplete = false
+  }
+
+  function reset() {
+    cancel()
+    activeKey = null
   }
 
   function effectKey(snapshot: SettlementEffectPayload) {
@@ -183,5 +187,5 @@ export function createSettlementTimeline({
     beginEffect(snapshot, mappedResult)
   }
 
-  return { start, startEffect, cancel }
+  return { start, startEffect, cancel, reset }
 }

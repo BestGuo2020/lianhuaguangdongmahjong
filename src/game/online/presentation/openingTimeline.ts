@@ -74,6 +74,7 @@ export function createOpeningTimeline({
   send,
   onFinished,
   onOpeningDone,
+  waitForTableReady,
   waitForOpeningSnapshot = false,
   openingSnapshotTimeoutMs = 15000,
 }: OpeningTimelineOptions) {
@@ -291,10 +292,7 @@ export function createOpeningTimeline({
     const diceWait = hasSecondDice || hasFlip ? 1900 : 1500
     running = true
     if (waitForOpeningSnapshot && !openingSnapshot) {
-      // 牌桌 3D 资源是表现层依赖，不能成为开局协议的门槛。房主的 opening
-      // 快照已经在 reconciler 中先挂好了四家座位骨架；这里必须先按权威开局
-      // 时间线进入 start/dice/deal。若等待 WebGL/牌面资源，客户端会在慢网下
-      // 一直停在 loading，随后被 playing 快照覆盖，最终只有房主看得到动画。
+      // 先取得权威开局快照并挂载四家座位骨架，GameTableHud 才会创建 3D 场景。
       const capturedSnapshot = await openingSnapshotGate.wait()
       if (capturedSnapshot && !openingSnapshot) openingSnapshot = capturedSnapshot
       console.log(`[client] opening gate wait 结束: snapshot=${openingSnapshot ? `${openingSnapshot.round}:${openingSnapshot.honba}` : '(超时)'} seq=${currentSequence} vs ${sequence}`)
@@ -306,6 +304,11 @@ export function createOpeningTimeline({
         return
       }
     }
+    if (currentSequence !== sequence) return
+    // 正式开场必须晚于牌面下载/解码、图集构建、着色器编译和合成首帧。
+    // 加载失败时该 Promise 保持等待，界面显示可重试错误；绝不能先进入
+    // start/dice/deal 或发送 opening_done，让房主误以为客户端已完成开场。
+    if (waitForTableReady) await waitForTableReady()
     if (currentSequence !== sequence) return
     // round_start 只描述房主要求播放哪一轮动画；真正的轮次、庄家和局面
     // 要等同轮 state_snapshot 到达后才写入本地状态。否则旧 Room 的 round_start

@@ -51,6 +51,7 @@ import {
 } from './protocol/mapper'
 
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+const AUTHORITY_SILENCE_TIMEOUT_MS = 25000
 
 /** 房主自视：把远程动作消息映射到本地权威引擎的动作方法（房主自己就是权威，不走网络）。 */
 function sendToEngine(game: GamePort, message: RemotePlayerActionMessage) {
@@ -162,6 +163,19 @@ export function settlementRecoveryDecision(
     || expectedHand.honba !== currentHand.honba) return 'start'
   if (timerActive) return 'keep'
   return presentationReady ? 'idle' : 'retry'
+}
+
+export function shouldArmAuthoritySilenceTimer(options: {
+  isHost: boolean
+  matchFinished: boolean
+  phase: GamePhase
+  openingRunning: boolean
+}): boolean {
+  return !options.isHost
+    && !options.matchFinished
+    && options.phase !== 'lobby'
+    && options.phase !== 'settled'
+    && !options.openingRunning
 }
 
 /** 仍需等待「下一局确认」的远端 peer：排除已被 AI 接管（掉线）的座位——
@@ -800,6 +814,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     onFinished: applyBufferedAfterOpening,
     onOpeningDone: (round, currentHonba) => {
       if (isHost.value) hostGame.value?.markLocalOpeningReady(round, currentHonba)
+      else armAuthoritySilenceTimer()
     },
     waitForTableReady,
     waitForOpeningSnapshot: Boolean(waitForTableReady),
@@ -1436,12 +1451,23 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
 
   function armAuthoritySilenceTimer() {
     clearAuthoritySilenceTimer()
-    if (isHost.value || state.matchFinished.value || phase.value === 'lobby' || phase.value === 'settled') return
+    if (!shouldArmAuthoritySilenceTimer({
+      isHost: isHost.value,
+      matchFinished: state.matchFinished.value,
+      phase: phase.value,
+      openingRunning: openingTimeline.isRunning(),
+    })) return
     authoritySilenceTimer = window.setTimeout(() => {
       authoritySilenceTimer = null
-      if (isHost.value || state.matchFinished.value || phase.value === 'lobby' || phase.value === 'settled') return
+      if (!shouldArmAuthoritySilenceTimer({
+        isHost: isHost.value,
+        matchFinished: state.matchFinished.value,
+        phase: phase.value,
+        openingRunning: openingTimeline.isRunning(),
+      })) return
       // 不是应用层心跳：只在连续静默达到一次性截止时间后，针对当前手牌请求一次
-      // 权威事实。正常真人 12s 回合倒计时会先产生动作/快照并重置本计时器；若通道
+      // 权威事实。25s 严格大于正常真人 12s 回合倒计时，并与房主远程请求超时对齐；
+      // 否则计时器会与玩家正常决策竞态，把在线玩家误判为半开通道。若通道
       // 半开，send 看似成功但 1s 内仍无任何房主消息，再完整 leave + resume。
       const authorityEpoch = requestCoordinator.getAuthorityEpoch()
       if (!authorityEpoch) {
@@ -1458,10 +1484,15 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       if (!sent) return
       authoritySilenceTimer = window.setTimeout(() => {
         authoritySilenceTimer = null
-        if (isHost.value || state.matchFinished.value || phase.value === 'settled') return
+        if (!shouldArmAuthoritySilenceTimer({
+          isHost: isHost.value,
+          matchFinished: state.matchFinished.value,
+          phase: phase.value,
+          openingRunning: openingTimeline.isRunning(),
+        })) return
         requestAuthorityRecovery('当前手牌事实单次请求仍无响应')
       }, 1000)
-    }, 12000)
+    }, AUTHORITY_SILENCE_TIMEOUT_MS)
   }
 
   function requestAuthorityRecovery(reason: string) {

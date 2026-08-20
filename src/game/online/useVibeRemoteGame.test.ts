@@ -5,6 +5,7 @@ import {
   isSettlementPresentationReady,
   settlementRecoveryDecision,
   shouldRecoverDowngradedSettlement,
+  shouldArmAuthoritySilenceTimer,
   isShuffleStartMessage,
   liveContinuePeers,
 } from './useVibeRemoteGame'
@@ -129,5 +130,29 @@ describe('胡牌后结算表现恢复判定', () => {
     expect(settlementRecoveryDecision(hand, hand, false, false)).toBe('retry')
     expect(settlementRecoveryDecision(hand, hand, false, true)).toBe('idle')
     expect(settlementRecoveryDecision(hand, { round: 4, honba: 1 }, true, false)).toBe('start')
+  })
+})
+
+describe('对局权威静默看门狗', () => {
+  const playing = {
+    isHost: false,
+    matchFinished: false,
+    phase: 'playing' as const,
+    openingRunning: false,
+  }
+
+  it('正常客户端对局启用一次性静默截止时间', () => {
+    expect(shouldArmAuthoritySilenceTimer(playing)).toBe(true)
+  })
+
+  it('开局动画运行期间不得把正常的长表现误判为房主静默', () => {
+    expect(shouldArmAuthoritySilenceTimer({ ...playing, openingRunning: true })).toBe(false)
+  })
+
+  it('房主、大厅、结算和终局均不启用对局静默恢复', () => {
+    expect(shouldArmAuthoritySilenceTimer({ ...playing, isHost: true })).toBe(false)
+    expect(shouldArmAuthoritySilenceTimer({ ...playing, phase: 'lobby' })).toBe(false)
+    expect(shouldArmAuthoritySilenceTimer({ ...playing, phase: 'settled' })).toBe(false)
+    expect(shouldArmAuthoritySilenceTimer({ ...playing, matchFinished: true })).toBe(false)
   })
 })
