@@ -406,19 +406,30 @@ async function waitForHand(page: Page, expectedKey: string, timeoutMs: number) {
 /** 等待「当前结算手牌键」在两端都出现结算弹窗。 */
 async function waitForSettlement(host: Page, client: Page, expectedKey: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs
+  const expectedRound = expectedKey.match(/东[1-4]局/)?.[0] ?? ''
   while (Date.now() < deadline) {
     const hostVisible = await settlementVisible(host)
     const clientVisible = await settlementVisible(client)
     if (hostVisible && clientVisible) {
-      const hostLabel = await readRoundLabel(host)
-      const clientLabel = await readRoundLabel(client)
-      if (handKey(hostLabel) === expectedKey && handKey(clientLabel) === expectedKey) return
+      const [hostLabel, clientLabel, hostSettlement, clientSettlement] = await Promise.all([
+        readRoundLabel(host), readRoundLabel(client),
+        host.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+        client.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+      ])
+      // round-info 可能已经进入当前手，但旧 settlement transition 仍短暂残留。
+      // 必须同时证明两端结算标题属于当前局，不能把东1旧流局与东2新胡牌作比较。
+      if (handKey(hostLabel) === expectedKey && handKey(clientLabel) === expectedKey
+        && (!expectedRound || hostSettlement.includes(expectedRound))
+        && (!expectedRound || clientSettlement.includes(expectedRound))) return
     }
     await host.waitForTimeout(500)
   }
-  const hostLabel = await readRoundLabel(host)
-  const clientLabel = await readRoundLabel(client)
-  throw new Error(`等待 ${expectedKey} 双端结算弹窗超时（host=${hostLabel} client=${clientLabel}）`)
+  const [hostLabel, clientLabel, hostSettlement, clientSettlement] = await Promise.all([
+    readRoundLabel(host), readRoundLabel(client),
+    host.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+    client.locator('.round-settlement').innerText({ timeout: 1000 }).catch(() => ''),
+  ])
+  throw new Error(`等待 ${expectedKey} 双端同局结算弹窗超时（host=${hostLabel}/${hostSettlement.slice(0, 80)} client=${clientLabel}/${clientSettlement.slice(0, 80)}）`)
 }
 
 async function settlementIsDraw(page: Page): Promise<boolean> {
@@ -1219,7 +1230,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
   const suffix = Date.now().toString(36).slice(-5)
 
   // ── 场景 A：双方都不确认 → 生产默认 10 秒自动确认 → 自动进入下一手 ──
-  {
+  if (process.env.ONLINE_CONFIRM_ONLY !== 'manual') {
     const autoPair = await launchAccountBrowserPair()
     const { contexts } = autoPair
     try {
