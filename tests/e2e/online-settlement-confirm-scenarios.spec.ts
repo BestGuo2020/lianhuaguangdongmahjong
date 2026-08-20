@@ -457,9 +457,17 @@ async function waitForWinningSettlement(
 async function waitForNextHand(host: Page, client: Page, currentKey: string, timeoutMs: number) {
   const pages: [Page, Page] = [host, client]
   const deadline = Date.now() + timeoutMs
+  const trace: string[] = []
+  let previous = ''
   while (Date.now() < deadline) {
     const labels = await Promise.all(pages.map(readRoundLabel))
     const keys = labels.map(handKey)
+    const signature = `${keys[0] || '(空)'}|${keys[1] || '(空)'}`
+    if (signature !== previous) {
+      previous = signature
+      trace.push(`${Date.now()}:${signature}`)
+      if (trace.length > 40) trace.shift()
+    }
     // 切局渲染会先短暂清空 round-info；只有两端都出现同一个非空新键
     // 才算推进完成，避免把空字符串当成“下一手”并把开局审计指向空目标。
     if (keys[0] && keys[1] && keys[0] === keys[1] && keys[0] !== currentKey) {
@@ -468,7 +476,7 @@ async function waitForNextHand(host: Page, client: Page, currentKey: string, tim
     await host.waitForTimeout(500)
   }
   const [hostLabel, clientLabel] = await Promise.all(pages.map(readRoundLabel))
-  throw new Error(`等待离开 ${currentKey} 超时（host=${hostLabel || '(空)'} client=${clientLabel || '(空)'}）`)
+  throw new Error(`等待离开 ${currentKey} 超时（host=${hostLabel || '(空)'} client=${clientLabel || '(空)'}；轨迹=${trace.join(' -> ')})`)
 }
 
 /** 正常路径必须一次加入即同步双端 UI roster；禁止离开重入掩盖。 */
@@ -1335,7 +1343,25 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         await assertBarrierHolds(host, client, winningKey, 25_000, hostLogs, testInfo, 'C-client-only')
         const hostClicked = await clickContinue(host)
         expect(hostClicked, '房主补点继续').toBe(true)
-        const next = await waitForNextHand(host, client, winningKey, 180_000)
+        let next: { hostLabel: string; clientLabel: string }
+        try {
+          next = await waitForNextHand(host, client, winningKey, 180_000)
+        } catch (error) {
+          const pageState = await Promise.all(pages.map(async (page) => page.evaluate(() => ({
+            round: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+            phase: document.querySelector<HTMLElement>('.game-table-hud')?.dataset.phase ?? '',
+            openingStage: document.querySelector<HTMLElement>('.game-table-hud')?.dataset.openingStage ?? '',
+            waiting: document.querySelector('.remote-banner')?.textContent?.trim() ?? '',
+          })).catch(() => ({ round: '', phase: '', openingStage: '', waiting: '' }))))
+          await testInfo.attach('scenario-C-next-hand-failure', {
+            body: JSON.stringify({
+              error: String(error), pageState,
+              hostLogs: hostLogs.slice(-80), clientLogs: clientLogs.slice(-80),
+            }, null, 2),
+            contentType: 'application/json',
+          })
+          throw error
+        }
         console.log(`[确认专项][场景C] 通过：屏障阻止单边推进，房主确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
         // 房主确认后进入的新一局必须走完整开局时序。
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景C-下一手', testInfo)
