@@ -1,7 +1,7 @@
 // 真实线上部署回归：凭据与 URL 只在运行时从 tmp/online_test 读取，绝不写入日志/附件。
 // 两个 VibeHub 账号分别作为房主、客人；空余两席由引擎 AI 补齐，连续完成两个东风场。
 import { readFileSync } from 'node:fs'
-import { expect, test, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
+import { chromium, expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
 
 interface Account { email: string; password: string }
 interface OnlineConfig { url: string; accounts: [Account, Account] }
@@ -86,6 +86,9 @@ interface TableTransitionSample {
   meldTileCount: number
   seats: number[]
   concealedCounts: number[]
+  /** 每家已收到的真实牌面张数；不记录任何具体牌值。 */
+  revealedFaceCounts: number[]
+  revealHands: boolean
   discardCounts: number[]
   meldTileCounts: number[]
   winEffectVisible: boolean
@@ -116,6 +119,88 @@ function readOnlineConfig(): OnlineConfig {
 const ONLINE = readOnlineConfig()
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(9_000_000)
+
+const ACCOUNT_BROWSER_ARGS = [
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-features=IntensiveWakeUpThrottling',
+]
+
+// 可为两个真实账号分别注入浏览器级代理，例如：
+// ONLINE_PROXY_SERVERS=http://proxy-a.example:3128,socks5://proxy-b.example:1080
+// 未设置时保持生产默认直连；不在仓库里硬编码机器专属代理。
+const ACCOUNT_PROXY_SERVERS = (process.env.ONLINE_PROXY_SERVERS ?? '')
+  .split(',')
+  .map((server) => server.trim())
+  .filter(Boolean)
+
+function accountProxy(index: number): { proxy?: { server: string } } {
+  const server = ACCOUNT_PROXY_SERVERS[index] ?? ACCOUNT_PROXY_SERVERS[0]
+  return server ? { proxy: { server } } : {}
+}
+
+interface AccountBrowserPair {
+  browsers: [Browser, Browser]
+  contexts: [BrowserContext, BrowserContext]
+}
+
+async function launchAccountBrowserPair(): Promise<AccountBrowserPair> {
+  // VibeHub OAuth 在同一 Chromium 进程内可能串行占用浏览器级 connect 状态；
+  // 两个真实账号分别使用独立进程，等价于两台真实用户设备，而不只是两个 Cookie context。
+  const browsers = await Promise.all(ONLINE.accounts.map((_, index) => chromium.launch({
+    headless: true,
+    args: ACCOUNT_BROWSER_ARGS,
+    ...accountProxy(index),
+  }))) as [Browser, Browser]
+  try {
+    const contexts = await Promise.all(browsers.map((browser) => browser.newContext({
+      viewport: { width: 1280, height: 720 },
+    }))) as [BrowserContext, BrowserContext]
+    return { browsers, contexts }
+  } catch (error) {
+    await Promise.allSettled(browsers.map((browser) => browser.close()))
+    throw error
+  }
+}
+
+async function closeAccountBrowserPair(pair: AccountBrowserPair) {
+  // 每个进程只有一个测试 context；直接关闭浏览器会原子关闭页面/context/进程。
+  // 不再 race 后遗留未收束的 context.close Promise，避免测试主体通过后 worker 不退出。
+  await Promise.allSettled(pair.browsers.map((browser) => browser.close()))
+}
+
+async function replaceAccountBrowser(pair: AccountBrowserPair, index: 0 | 1) {
+  await pair.browsers[index].close().catch(() => {})
+  const browser = await chromium.launch({
+    headless: true,
+    args: ACCOUNT_BROWSER_ARGS,
+    ...accountProxy(index),
+  })
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } })
+  pair.browsers[index] = browser
+  pair.contexts[index] = context
+  await installAudioProbe(context)
+}
+
+async function authenticateAccount(
+  pair: AccountBrowserPair,
+  index: 0 | 1,
+  account: Account,
+): Promise<Page> {
+  let lastError: unknown
+  for (let processAttempt = 1; processAttempt <= 2; processAttempt += 1) {
+    try {
+      return await authenticate(pair.contexts[index], account)
+    } catch (error) {
+      lastError = error
+      if (processAttempt >= 2) break
+      console.log(`[AUTH] 账号槽位 ${index + 1} 的 Chromium 进程授权耗尽，重建进程后进行最后一次尝试`)
+      await replaceAccountBrowser(pair, index)
+    }
+  }
+  throw lastError
+}
 
 const roundToken = (value: string) => value.match(/东[1-4]局/)?.[0] ?? ''
 const handToken = (value: string) => {
@@ -333,9 +418,18 @@ async function authenticate(context: BrowserContext, account: Account, auto = fa
   // 不带该参数时保留线上默认自动确认行为（结算确认专项场景 1 需要）。
   if (manual) params.set('manualContinue', '1')
   if (auto) params.set('auto', '1')
-  await page.goto(`${ONLINE.url}${separator}${params}`, {
-    waitUntil: 'domcontentloaded', timeout: 60_000,
-  })
+  for (let navigationAttempt = 1; navigationAttempt <= 3; navigationAttempt += 1) {
+    try {
+      await page.goto(`${ONLINE.url}${separator}${params}`, {
+        waitUntil: 'domcontentloaded', timeout: 90_000,
+      })
+      break
+    } catch (error) {
+      if (navigationAttempt >= 3) throw error
+      console.log(`[AUTH] 作品页导航第 ${navigationAttempt} 次失败，退避后重试`)
+      await page.waitForTimeout(500 * navigationAttempt)
+    }
+  }
   await selectOnlineMode(page)
   if (await page.getByRole('button', { name: '创建房间', exact: true }).isVisible().catch(() => false)) {
     return page
@@ -396,7 +490,25 @@ async function authenticate(context: BrowserContext, account: Account, auto = fa
     if (gameAuthError && gameAuthError !== errorAtSessionStart) {
       restartReason = '游戏页报告登录失败'
     } else if (popup.isClosed()) {
-      restartReason = '弹窗关闭但游戏大厅未就绪'
+      // 授权按钮会先关闭弹窗，再通过 postMessage/SDK 回调更新游戏页。弹窗关闭不是失败事实；
+      // 等到大厅真实出现，或错误和可重试登录按钮同时出现，才判定本会话结果。
+      const callbackDeadline = Math.min(deadline, Date.now() + 15_000)
+      let callbackError = ''
+      while (Date.now() < callbackDeadline) {
+        if (await lobbyReady()) {
+          console.log(`[AUTH] OAuth 会话 ${session} 回调落地，游戏大厅确认成功`)
+          return page
+        }
+        callbackError = await readGameAuthError()
+        const loginButton = page.getByRole('button', { name: '登录', exact: true })
+        if (callbackError && callbackError !== errorAtSessionStart
+          && await loginButton.isVisible().catch(() => false)
+          && await loginButton.isEnabled().catch(() => false)) break
+        await page.waitForTimeout(250)
+      }
+      restartReason = callbackError && callbackError !== errorAtSessionStart
+        ? '游戏页报告登录失败'
+        : '弹窗关闭后 15 秒游戏大厅仍未就绪'
     } else {
       const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
       const email = popup.locator('input[name=email]')
@@ -481,22 +593,40 @@ async function acceptDisclaimerIfShown(page: Page) {
   }
 }
 
+async function waitForOpeningOrTableLoadError(page: Page, side: string) {
+  const opening = page.locator('.opening-overlay')
+  const finalLoadError = page.locator('.table-loading.has-error')
+  await opening.or(finalLoadError).first().waitFor({ state: 'visible', timeout: 150_000 })
+  if (await finalLoadError.isVisible().catch(() => false)) {
+    const detail = await finalLoadError.innerText({ timeout: 1000 }).catch(() => '牌桌资源加载失败')
+    throw new Error(`${side}牌桌资源自动重试耗尽：${detail.replace(/\s+/g, ' ').trim()}`)
+  }
+}
+
 /** 正常路径必须一次加入即同步双端 roster；不允许用离开/重入掩盖恢复异常。 */
 async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
-  const deadline = Date.now() + 30_000
-  let hostReady = false
-  let clientReady = false
-  let hostSeats = 0
-  let clientSeats = 0
-  while (Date.now() < deadline) {
-    hostReady = await host.getByRole('button', { name: '准备 / 取消准备' }).isVisible().catch(() => false)
-    clientReady = await client.getByRole('button', { name: '准备 / 取消准备' }).isVisible().catch(() => false)
-    hostSeats = await host.locator('.room-seat').count().catch(() => 0)
-    clientSeats = await client.locator('.room-seat').count().catch(() => 0)
-    if (hostReady && clientReady && hostSeats >= 2 && clientSeats >= 2) return
-    await host.waitForTimeout(2_000)
+  const pages: [Page, Page] = [host, client]
+  try {
+    const handles = await Promise.all(pages.map((page) => page.waitForFunction(() => {
+      const ready = [...document.querySelectorAll<HTMLButtonElement>('button')].some((button) => (
+        button.textContent?.trim() === '准备 / 取消准备'
+          && button.getClientRects().length > 0
+          && getComputedStyle(button).visibility !== 'hidden'
+          && getComputedStyle(button).display !== 'none'
+      ))
+      return ready && document.querySelectorAll('.room-seat').length >= 2
+    }, undefined, { timeout: 60_000, polling: 100 })))
+    await Promise.all(handles.map((handle) => handle.dispose()))
+    return
+  } catch {
+    // 失败诊断在各自页面内原子读取，避免跨页面 locator 顺序阻塞产生 0/旧值。
   }
-  throw new Error(`正常加入后 30 秒 roster 仍未同步（room=${roomCode} hostReady=${hostReady} clientReady=${clientReady} hostSeats=${hostSeats} clientSeats=${clientSeats}）；本轮禁止离开重入兜底`)
+  const states = await Promise.all(pages.map((page) => page.evaluate(() => ({
+    ready: [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .some((button) => button.textContent?.trim() === '准备 / 取消准备'),
+    seats: document.querySelectorAll('.room-seat').length,
+  })).catch(() => ({ ready: false, seats: 0 }))))
+  throw new Error(`正常加入后 60 秒 roster 仍未同步（room=${roomCode} states=${JSON.stringify(states)}）；本轮禁止离开重入兜底`)
 }
 
 async function installHostAutoPlayer(page: Page) {
@@ -682,6 +812,26 @@ async function installOpeningSampler(page: Page) {
       const concealedCounts = csvNumbers(hud?.dataset.concealedCounts)
       const discardCounts = csvNumbers(hud?.dataset.discardCounts)
       const meldTileCounts = csvNumbers(hud?.dataset.meldTileCounts)
+      type PlayerProbe = { seat?: unknown; hand?: unknown }
+      let presentationProps: Record<string, unknown> = props
+      let tableInstance = (hud as (HTMLElement & { __vueParentComponent?: VueInstance }) | null)
+        ?.__vueParentComponent
+      while (tableInstance) {
+        if (Array.isArray(tableInstance.props?.players) && 'revealHands' in (tableInstance.props ?? {})) {
+          presentationProps = tableInstance.props ?? props
+          break
+        }
+        tableInstance = tableInstance.parent ?? undefined
+      }
+      const revealedFaceCounts = Array.isArray(presentationProps.players)
+        ? (presentationProps.players as PlayerProbe[])
+            .map((player, index) => ({
+              seat: typeof player.seat === 'number' ? player.seat : index,
+              count: Array.isArray(player.hand) ? player.hand.length : 0,
+            }))
+            .sort((left, right) => left.seat - right.seat)
+            .map((entry) => entry.count)
+        : []
       const completeSeatCounts = seats.length === 4
         && concealedCounts.length === 4
         && discardCounts.length === 4
@@ -698,6 +848,8 @@ async function installOpeningSampler(page: Page) {
         meldTileCount: completeSeatCounts ? meldTileCounts.reduce((sum, count) => sum + count, 0) : -1,
         seats,
         concealedCounts,
+        revealedFaceCounts,
+        revealHands: Boolean(presentationProps.revealHands),
         discardCounts,
         meldTileCounts,
         winEffectVisible: effectVisible,
@@ -1029,6 +1181,44 @@ function assertTransitionHistory(
       previousDealSample = sample
     }
   }
+
+  // 开局结束后继续用同一页面内 20ms 原子历史检查整手牌桌。不同客户端可因
+  // 开局动画缓冲而在不同墙进度进入 playing，但每个客户端自身绝不能回退或消失。
+  const activeTable = samples.slice(openingEnd).filter((sample) => (
+    sample.wallCount > 0 && sample.phase !== 'lobby' && sample.phase !== 'settled'
+  ))
+  let previousActive: TableTransitionSample | null = null
+  for (const sample of activeTable) {
+    expect(sample.seats, `第 ${matchIndex} 场${side}${hand}打牌期间四家座位计数不可读`).toHaveLength(4)
+    expect(sample.concealedCounts, `第 ${matchIndex} 场${side}${hand}打牌期间四家暗手计数不可读`).toHaveLength(4)
+    expect(sample.discardCounts, `第 ${matchIndex} 场${side}${hand}打牌期间四家牌河计数不可读`).toHaveLength(4)
+    expect(sample.meldTileCounts, `第 ${matchIndex} 场${side}${hand}打牌期间四家副露计数不可读`).toHaveLength(4)
+    if (sample.openingStage === '') {
+      expect(sample.concealedCount, `第 ${matchIndex} 场${side}${hand}打牌/胡牌期间四家暗手整体消失`)
+        .toBeGreaterThan(0)
+    }
+    if (previousActive) {
+      expect(sample.wallCount, `第 ${matchIndex} 场${side}${hand}牌山剩余数回增`)
+        .toBeLessThanOrEqual(previousActive.wallCount)
+      expect(sample.wallHeadDrawn, `第 ${matchIndex} 场${side}${hand}牌山摸牌进度回退`)
+        .toBeGreaterThanOrEqual(previousActive.wallHeadDrawn)
+    }
+    previousActive = sample
+  }
+
+  // 胡牌/流局后必须把四家最终手牌真正亮明。concealedTileCount 仍可为 13，
+  // 但若协议只留下 null 占位，mapper 后的 hand 会是 []，画面会出现三家空手。
+  const revealSamples = samples.filter((sample) => sample.revealHands)
+  expect(revealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少亮明四家最终手牌阶段`)
+    .toBeGreaterThan(0)
+  for (const sample of revealSamples) {
+    expect(sample.revealedFaceCounts, `第 ${matchIndex} 场${side}${hand}亮牌阶段真实牌面计数不可读`)
+      .toHaveLength(4)
+    expect(sample.revealedFaceCounts, `第 ${matchIndex} 场${side}${hand}亮牌阶段仍有手牌只有张数、没有牌面`)
+      .toEqual(sample.concealedCounts)
+    expect(sample.revealedFaceCounts.every((count) => count > 0),
+      `第 ${matchIndex} 场${side}${hand}亮牌阶段不得有任何一家空手`).toBe(true)
+  }
 }
 
 async function waitForSynchronizedTableStates(
@@ -1058,28 +1248,58 @@ async function waitForSynchronizedTableStates(
 async function waitForVisibleNextHandStates(
   pages: [Page, Page],
   hand: string,
-  timeoutMs = 90_000,
+  timeoutMs = 150_000,
 ): Promise<[VisibleTableState, VisibleTableState]> {
-  const deadline = Date.now() + timeoutMs
-  let states = await Promise.all(pages.map(readVisibleTableState)) as [VisibleTableState, VisibleTableState]
-  while (Date.now() < deadline) {
-    const ready = states.every((state) => (
-      state.hand === hand
-      && state.wallCount > 0
-      && state.wallHeadDrawn > 0
-      && state.localHandCount > 0
-      && state.canvasPresent
-      && state.canvasWidth > 0
-      && state.canvasHeight > 0
-      && state.contextLost === false
-      && !state.winEffectVisible
-    )) && states[0].wallCount === states[1].wallCount
-      && states[0].wallHeadDrawn === states[1].wallHeadDrawn
-    if (ready) return states
-    await pages[0].waitForTimeout(100)
-    states = await Promise.all(pages.map(readVisibleTableState)) as [VisibleTableState, VisibleTableState]
-  }
-  return states
+  const handles = await Promise.all(pages.map((page) => page.waitForFunction((expectedHand) => {
+    const history = (window as unknown as { __onlineTableTransitions?: TableTransitionSample[] })
+      .__onlineTableTransitions ?? []
+    const samples = history.filter((sample) => sample.hand === expectedHand)
+    return samples.some((sample) => sample.openingStage === 'start')
+      && samples.some((sample) => sample.openingStage === 'deal')
+      && samples.some((sample) => (
+        sample.openingStage === ''
+          && sample.wallCount > 0
+          && sample.wallHeadDrawn > 0
+          && sample.concealedCount > 0
+          && sample.seats.length === 4
+          && sample.concealedCounts.length === 4
+      ))
+  }, hand, { timeout: timeoutMs, polling: 100 })))
+  await Promise.all(handles.map((handle) => handle.dispose()))
+  return Promise.all(pages.map((page) => page.evaluate((expectedHand) => {
+    const history = (window as unknown as { __onlineTableTransitions?: TableTransitionSample[] })
+      .__onlineTableTransitions ?? []
+    const stable = history.find((sample) => (
+      sample.hand === expectedHand
+        && sample.openingStage === ''
+        && sample.wallCount > 0
+        && sample.wallHeadDrawn > 0
+        && sample.concealedCount > 0
+        && sample.seats.length === 4
+        && sample.concealedCounts.length === 4
+    ))
+    const canvas = document.querySelector<HTMLCanvasElement>('.mahjong-scene')
+    const loading = document.querySelector<HTMLElement>('.table-loading')
+    const visible = (element: HTMLElement | null) => Boolean(element
+      && element.getClientRects().length
+      && getComputedStyle(element).visibility !== 'hidden'
+      && getComputedStyle(element).display !== 'none'
+      && Number(getComputedStyle(element).opacity) > 0)
+    const gl = canvas ? (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) : null
+    return {
+      hand: expectedHand,
+      openingStage: stable?.openingStage ?? '__missing__',
+      wallCount: stable?.wallCount ?? -1,
+      wallHeadDrawn: stable?.wallHeadDrawn ?? -1,
+      winEffectVisible: stable?.winEffectVisible ?? true,
+      localHandCount: document.querySelectorAll('.hand-rack .hand-tile-slot').length,
+      canvasPresent: Boolean(canvas),
+      canvasWidth: canvas?.width ?? 0,
+      canvasHeight: canvas?.height ?? 0,
+      contextLost: gl ? gl.isContextLost() : null,
+      loadingVisible: visible(loading),
+    } satisfies VisibleTableState
+  }, hand))) as [VisibleTableState, VisibleTableState]
 }
 
 async function attachDualScreenshots(pages: [Page, Page], testInfo: TestInfo, name: string) {
@@ -1207,6 +1427,7 @@ async function runEastMatch(options: {
   reuseRoom?: boolean
 }) {
   const { host, client, matchIndex, consoleLogs, testInfo, reuseRoom = false } = options
+  const matchLogOffsets = consoleLogs.map((logs) => logs.length)
   const suffix = `${matchIndex}-${Date.now().toString(36).slice(-5)}`
   if (!reuseRoom) {
     await enterOnlineLobby(host, `线上房主-${suffix}`, 'host')
@@ -1244,9 +1465,10 @@ async function runEastMatch(options: {
     await client.getByRole('button', { name: '准备 / 取消准备' }).click()
   }
   await expect(start).toBeEnabled({ timeout: 50_000 })
-  const openingPromises = [host, client].map((page) => page.locator('.opening-overlay').waitFor({
-    state: 'visible', timeout: 90_000,
-  }))
+  const openingPromises = [
+    waitForOpeningOrTableLoadError(host, '房主'),
+    waitForOpeningOrTableLoadError(client, '客户端'),
+  ]
   const matchStartedAt = Date.now()
   await start.click()
   try {
@@ -1368,6 +1590,30 @@ async function runEastMatch(options: {
     next: [NormalizedTableState | null, NormalizedTableState | null]
   }> = []
   const fatalOnlineSignal = /先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|恢复牌局|已验证重进握手|大厅验证的新 peer 已恢复原座位|丢弃.*(?:旧|权威|代次)|旧权威|AI 代打|AI 接管|非法状态快照|\[wall-regress\]/i
+  const safeBoundaryStaleSnapshot = /\[client\] 丢弃旧房主代次消息.*kind:\s*state_snapshot/i
+  // 同房间第二场开始时，Relay 可能一次性冲刷第一场 stop() 前已经发送的快照。
+  // 只在新一场开局完成前把客户端旧 epoch state_snapshot 视为安全边界积压；
+  // 开局完成后的任何旧代次消息仍是活跃旧 runner/持续分叉，必须失败。
+  const postOpeningLogOffsets = consoleLogs.map((logs) => logs.length)
+  const boundaryStaleSnapshots = consoleLogs.map((logs, index) => logs
+    .slice(matchLogOffsets[index], postOpeningLogOffsets[index])
+    .filter((line) => safeBoundaryStaleSnapshot.test(line)))
+  for (let index = 0; index < consoleLogs.length; index += 1) {
+    if (index === 0 && boundaryStaleSnapshots[index].length > 0) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-host-stale-boundary-snapshot`,
+        `线上第 ${matchIndex} 场房主不应收到旧代次边界快照`)
+    }
+    const boundaryFatal = consoleLogs[index]
+      .slice(matchLogOffsets[index], postOpeningLogOffsets[index])
+      .find((line) => fatalOnlineSignal.test(line) && !safeBoundaryStaleSnapshot.test(line))
+    if (boundaryFatal) {
+      await failWithEvidence(pages, testInfo, consoleLogs,
+        `online-match-${matchIndex}-forbidden-boundary-signal`,
+        `线上第 ${matchIndex} 场开局边界出现禁止信号：${boundaryFatal}`)
+    }
+  }
+  const liveMatchLogs = (index: number) => consoleLogs[index].slice(postOpeningLogOffsets[index])
 
   const verifySettledHand = async (hand: string, finalize = false) => {
     const token = handToken(hand)
@@ -1442,7 +1688,7 @@ async function runEastMatch(options: {
 
   while (Date.now() < deadline) {
     for (let index = 0; index < consoleLogs.length; index += 1) {
-      const fatal = consoleLogs[index].find((line) => fatalOnlineSignal.test(line))
+      const fatal = liveMatchLogs(index).find((line) => fatalOnlineSignal.test(line))
       if (fatal) {
         await failWithEvidence(pages, testInfo, consoleLogs,
           `online-match-${matchIndex}-forbidden-recovery`,
@@ -1554,12 +1800,6 @@ async function runEastMatch(options: {
               `online-match-${matchIndex}-${handToken(previousHand)}-visible-transition-failure`,
               `线上第 ${matchIndex} 场 ${previousHand} → ${clientHand} 时${side}可见牌桌状态异常：${JSON.stringify(state)}`)
           }
-        }
-        if (visibleNextStates[0].wallCount !== visibleNextStates[1].wallCount
-          || visibleNextStates[0].wallHeadDrawn !== visibleNextStates[1].wallHeadDrawn) {
-          await failWithEvidence(pages, testInfo, consoleLogs,
-            `online-match-${matchIndex}-${handToken(previousHand)}-visible-wall-mismatch`,
-            `线上第 ${matchIndex} 场 ${previousHand} → ${clientHand} 双端公开牌山状态不一致：${JSON.stringify(visibleNextStates)}`)
         }
         const nextStates = await waitForSynchronizedTableStates(pages, clientHand)
         if (nextStates.every(Boolean)) {
@@ -1883,7 +2123,8 @@ async function runEastMatch(options: {
     .toBe(timings.length)
   const fault = /PLAYER_COUNT|玩家数[=为](?:0|3)|洗牌承诺超时|\[wall-regress\]|非法状态快照|确认后长时间未收到推进信号|房间已失效|无法连接|先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|恢复牌局|已验证重进握手|大厅验证的新 peer 已恢复原座位|丢弃.*(?:旧|权威|代次)|旧权威|AI 代打|AI 接管/i
   for (let index = 0; index < consoleLogs.length; index += 1) {
-    expect(consoleLogs[index].filter((line) => fault.test(line)), `线上第 ${matchIndex} 场页面 ${index} 出现应用故障`).toEqual([])
+    expect(liveMatchLogs(index).filter((line) => fault.test(line)),
+      `线上第 ${matchIndex} 场页面 ${index} 出现应用故障`).toEqual([])
   }
   await testInfo.attach(`online-match-${matchIndex}-result`, {
     body: JSON.stringify({
@@ -1894,6 +2135,7 @@ async function runEastMatch(options: {
       settlementEvents: await Promise.all(pages.map(settlementHistory)),
       tableTransitions,
       transitionIntegrity,
+      boundaryStaleSnapshots: boundaryStaleSnapshots.map((lines) => lines.length),
       recoveryEvents: consoleLogs.map((logs) => logs.filter((line) => (
         /单次请求当前手牌事实|先释放旧连接再重进|rejoin_ok|恢复牌局/i.test(line)
       ))),
@@ -1905,8 +2147,9 @@ async function runEastMatch(options: {
   return { roomCode, timings }
 }
 
-test('两个线上账号完成两个莲花麻将东风场，每手不超过6分钟', async ({ browser }, testInfo) => {
-  const contexts = await Promise.all(ONLINE.accounts.map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })))
+test('两个线上账号完成两个莲花麻将东风场，每手不超过6分钟', async ({}, testInfo) => {
+  const accountPair = await launchAccountBrowserPair()
+  const { contexts } = accountPair
   let activePages: [Page, Page] | null = null
   let capturedLogs: string[][] = [[], []]
   try {
@@ -1914,8 +2157,8 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     // 游戏授权令牌位于当前标签页的 sessionStorage；必须复用授权返回的两个页面，
     // 不能只保留 VibeHub Cookie 后另开标签。
     const pages = [
-      await authenticate(contexts[0], ONLINE.accounts[0]),
-      await authenticate(contexts[1], ONLINE.accounts[1]),
+      await authenticateAccount(accountPair, 0, ONLINE.accounts[0]),
+      await authenticateAccount(accountPair, 1, ONLINE.accounts[1]),
     ] as [Page, Page]
     activePages = pages
     const recoveryMarkers = await Promise.all(pages.map(readRecoveryBuildMarkers))
@@ -2002,9 +2245,6 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     }
     throw error
   } finally {
-    await Promise.race([
-      Promise.all(contexts.map((context) => context.close().catch(() => {}))),
-      new Promise((resolve) => setTimeout(resolve, 15_000)),
-    ])
+    await closeAccountBrowserPair(accountPair)
   }
 })

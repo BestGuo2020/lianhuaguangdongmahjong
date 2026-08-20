@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.E2E_PORT || 4173)
 const baseURL = `http://127.0.0.1:${port}`
+// 线上专项用例自行打开生产 URL 并创建独立 Chromium 进程，不依赖本地 Vite。
+// Windows 上无关的 webServer 可能在测试主体完成后阻塞收尾，允许显式跳过。
+const skipWebServer = process.env.E2E_SKIP_WEBSERVER === '1'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -32,7 +35,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: [
+  webServer: skipWebServer ? undefined : [
     {
       command: `npm run dev -- --port ${port}`,
       url: baseURL,

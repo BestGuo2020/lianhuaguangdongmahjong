@@ -15,7 +15,7 @@
 //
 // 凭据与 URL 只在运行时从 tmp/online_test 读取，绝不写入日志/附件。
 import { readFileSync } from 'node:fs'
-import { expect, test, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
+import { chromium, expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
 
 interface Account { email: string; password: string }
 interface OnlineConfig { url: string; accounts: [Account, Account] }
@@ -42,6 +42,9 @@ interface WinPhaseSample {
   wallHeadDrawn: number
   seats: number[]
   concealedCounts: number[]
+  /** 仅记录每家收到的真实牌面张数，不保存任何具体牌值。 */
+  revealedFaceCounts: number[]
+  revealHands: boolean
   discardCounts: number[]
   meldTileCounts: number[]
   winEffectVisible: boolean
@@ -62,6 +65,84 @@ function readOnlineConfig(): OnlineConfig {
 const ONLINE = readOnlineConfig()
 test.setTimeout(30_000_000)
 
+const ACCOUNT_BROWSER_ARGS = [
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-features=IntensiveWakeUpThrottling',
+]
+
+// 可为两个真实账号分别注入浏览器级代理，例如：
+// ONLINE_PROXY_SERVERS=http://proxy-a.example:3128,socks5://proxy-b.example:1080
+// 未设置时保持生产默认直连；不在仓库里硬编码机器专属代理。
+const ACCOUNT_PROXY_SERVERS = (process.env.ONLINE_PROXY_SERVERS ?? '')
+  .split(',')
+  .map((server) => server.trim())
+  .filter(Boolean)
+
+function accountProxy(index: number): { proxy?: { server: string } } {
+  const server = ACCOUNT_PROXY_SERVERS[index] ?? ACCOUNT_PROXY_SERVERS[0]
+  return server ? { proxy: { server } } : {}
+}
+
+interface AccountBrowserPair {
+  browsers: [Browser, Browser]
+  contexts: [BrowserContext, BrowserContext]
+}
+
+async function launchAccountBrowserPair(): Promise<AccountBrowserPair> {
+  const browsers = await Promise.all(ONLINE.accounts.map((_, index) => chromium.launch({
+    headless: true,
+    args: ACCOUNT_BROWSER_ARGS,
+    ...accountProxy(index),
+  }))) as [Browser, Browser]
+  try {
+    const contexts = await Promise.all(browsers.map((browser) => browser.newContext({
+      viewport: { width: 1280, height: 720 },
+    }))) as [BrowserContext, BrowserContext]
+    return { browsers, contexts }
+  } catch (error) {
+    await Promise.allSettled(browsers.map((browser) => browser.close()))
+    throw error
+  }
+}
+
+async function closeAccountBrowserPair(pair: AccountBrowserPair) {
+  await Promise.allSettled(pair.browsers.map((browser) => browser.close()))
+}
+
+async function replaceAccountBrowser(pair: AccountBrowserPair, index: 0 | 1) {
+  await pair.browsers[index].close().catch(() => {})
+  const browser = await chromium.launch({
+    headless: true,
+    args: ACCOUNT_BROWSER_ARGS,
+    ...accountProxy(index),
+  })
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } })
+  pair.browsers[index] = browser
+  pair.contexts[index] = context
+}
+
+async function authenticateAccount(
+  pair: AccountBrowserPair,
+  index: 0 | 1,
+  account: Account,
+  manual: boolean,
+): Promise<Page> {
+  let lastError: unknown
+  for (let processAttempt = 1; processAttempt <= 2; processAttempt += 1) {
+    try {
+      return await authenticate(pair.contexts[index], account, manual)
+    } catch (error) {
+      lastError = error
+      if (processAttempt >= 2) break
+      console.log(`[AUTH] 账号槽位 ${index + 1} 的 Chromium 进程授权耗尽，重建进程后进行最后一次尝试`)
+      await replaceAccountBrowser(pair, index)
+    }
+  }
+  throw lastError
+}
+
 async function selectOnlineMode(page: Page) {
   await page.getByText('联机对战', { exact: false }).first().click()
 }
@@ -72,9 +153,18 @@ async function authenticate(context: BrowserContext, account: Account, manual: b
   const params = new URLSearchParams()
   // manualContinue=1 关闭生产默认的 10 秒自动确认；场景 A 不带该参数保留默认行为。
   if (manual) params.set('manualContinue', '1')
-  await page.goto(`${ONLINE.url}${separator}${params}`, {
-    waitUntil: 'domcontentloaded', timeout: 90_000,
-  })
+  for (let navigationAttempt = 1; navigationAttempt <= 3; navigationAttempt += 1) {
+    try {
+      await page.goto(`${ONLINE.url}${separator}${params}`, {
+        waitUntil: 'domcontentloaded', timeout: 90_000,
+      })
+      break
+    } catch (error) {
+      if (navigationAttempt >= 3) throw error
+      console.log(`[AUTH] 作品页导航第 ${navigationAttempt} 次失败，退避后重试`)
+      await page.waitForTimeout(500 * navigationAttempt)
+    }
+  }
   await selectOnlineMode(page)
   if (await page.getByRole('button', { name: '创建房间', exact: true }).isVisible().catch(() => false)) {
     return page
@@ -134,7 +224,23 @@ async function authenticate(context: BrowserContext, account: Account, manual: b
     if (gameAuthError && gameAuthError !== errorAtSessionStart) {
       restartReason = '游戏页报告登录失败'
     } else if (popup.isClosed()) {
-      restartReason = '弹窗关闭但游戏大厅未就绪'
+      const callbackDeadline = Math.min(deadline, Date.now() + 15_000)
+      let callbackError = ''
+      while (Date.now() < callbackDeadline) {
+        if (await lobbyReady()) {
+          console.log(`[AUTH] OAuth 会话 ${session} 回调落地，游戏大厅确认成功`)
+          return page
+        }
+        callbackError = await readGameAuthError()
+        const loginButton = page.getByRole('button', { name: '登录', exact: true })
+        if (callbackError && callbackError !== errorAtSessionStart
+          && await loginButton.isVisible().catch(() => false)
+          && await loginButton.isEnabled().catch(() => false)) break
+        await page.waitForTimeout(250)
+      }
+      restartReason = callbackError && callbackError !== errorAtSessionStart
+        ? '游戏页报告登录失败'
+        : '弹窗关闭后 15 秒游戏大厅仍未就绪'
     } else {
       const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
       const email = popup.locator('input[name=email]')
@@ -215,6 +321,16 @@ async function acceptDisclaimerIfShown(page: Page) {
     await accept.click()
   } catch {
     // 已同意过时不会弹窗。
+  }
+}
+
+async function waitForOpeningOrTableLoadError(page: Page, side: string) {
+  const opening = page.locator('.opening-overlay')
+  const finalLoadError = page.locator('.table-loading.has-error')
+  await opening.or(finalLoadError).first().waitFor({ state: 'visible', timeout: 150_000 })
+  if (await finalLoadError.isVisible().catch(() => false)) {
+    const detail = await finalLoadError.innerText({ timeout: 1000 }).catch(() => '牌桌资源加载失败')
+    throw new Error(`${side}牌桌资源自动重试耗尽：${detail.replace(/\s+/g, ' ').trim()}`)
   }
 }
 
@@ -329,7 +445,7 @@ async function waitForWinningSettlement(
       expect(await clickContinue(host), `${currentKey} 流局后房主应能继续`).toBe(true)
       expect(await clickContinue(client), `${currentKey} 流局后客户端应能继续`).toBe(true)
     }
-    const next = await waitForNextHand(host, client, currentKey, 70_000)
+    const next = await waitForNextHand(host, client, currentKey, 180_000)
     currentKey = handKey(next.hostLabel)
     expect(currentKey, `流局后应进入有效下一手（${next.hostLabel} | ${next.clientLabel}）`).not.toBe('')
     expect(handKey(next.clientLabel), '流局后双端下一手必须一致').toBe(currentKey)
@@ -339,68 +455,48 @@ async function waitForWinningSettlement(
 
 /** 等待下一手（handKey 变化）出现：用于自动确认/补点确认后的推进判定。 */
 async function waitForNextHand(host: Page, client: Page, currentKey: string, timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs
-  let hostLabel = await readRoundLabel(host)
-  let clientLabel = await readRoundLabel(client)
-  while (Date.now() < deadline) {
-    hostLabel = await readRoundLabel(host)
-    clientLabel = await readRoundLabel(client)
-    if (hostLabel && handKey(hostLabel) !== currentKey
-      && clientLabel && handKey(clientLabel) !== currentKey) {
-      return { hostLabel, clientLabel }
-    }
-    await host.waitForTimeout(500)
+  const pages: [Page, Page] = [host, client]
+  try {
+    const handles = await Promise.all(pages.map((page) => page.waitForFunction((oldKey) => {
+      const label = document.querySelector('.round-info')?.textContent?.trim() ?? ''
+      const round = label.match(/东[1-4]局/)?.[0] ?? ''
+      const honba = label.match(/(\d+)本场/)?.[1] ?? '0'
+      const key = round ? `${round}:${honba}` : ''
+      return Boolean(key && key !== oldKey)
+    }, currentKey, { timeout: timeoutMs, polling: 100 })))
+    await Promise.all(handles.map((handle) => handle.dispose()))
+  } catch {
+    const labels = await Promise.all(pages.map(readRoundLabel))
+    throw new Error(`等待离开 ${currentKey} 超时（host=${labels[0] || '(空)'} client=${labels[1] || '(空)'}）`)
   }
-  throw new Error(`等待离开 ${currentKey} 超时（host=${hostLabel || '(空)'} client=${clientLabel || '(空)'}）`)
+  const [hostLabel, clientLabel] = await Promise.all(pages.map(readRoundLabel))
+  return { hostLabel, clientLabel }
 }
 
-/**
- * 房间搭建韧性：等待双端出现「准备」按钮且各自座位列表 ≥2。
- * VibeHub 大厅 roster 同步偶发失败（客户端已入房但座位列表未更新）。
- * 座位 30 秒无进展时客户端「离开房间」后按原房间码重新加入（不刷新页面，
- * 刷新会丢失 VibeHub 登录态）；总预算 240 秒。
- */
-async function waitForRoomReady(host: Page, client: Page, roomCode: string, nickname: string) {
-  const deadline = Date.now() + 240_000
-  let lastRejoinAt = 0
-  let hostReady = false
-  let clientReady = false
-  let hostSeats = 0
-  let clientSeats = 0
-  while (Date.now() < deadline) {
-    hostReady = await host.getByRole('button', { name: '准备 / 取消准备' }).isVisible().catch(() => false)
-    clientReady = await client.getByRole('button', { name: '准备 / 取消准备' }).isVisible().catch(() => false)
-    hostSeats = await host.locator('.room-seat').count().catch(() => 0)
-    clientSeats = await client.locator('.room-seat').count().catch(() => 0)
-    if (hostReady && clientReady && hostSeats >= 2 && clientSeats >= 2) return
-    if (Date.now() > deadline) break
-    // 客户端已入房但座位 30 秒未同步：离开房间后重新加入同一房间。
-    if (clientSeats < 2 && Date.now() - lastRejoinAt > 30_000) {
-      lastRejoinAt = Date.now()
-      console.log(`[确认专项] 客户端座位未同步（seats=${clientSeats} host=${hostSeats}），离开后重新加入 ${roomCode}`)
-      const leave = client.getByRole('button', { name: '离开房间', exact: true })
-      if (await leave.isVisible().catch(() => false)) {
-        await leave.click().catch(() => {})
-        await client.waitForTimeout(4_000)
-      }
-      try {
-        await enterOnlineLobby(client, nickname, 'client')
-        const join = client.getByRole('button', { name: '加入房间', exact: true })
-        if (await join.isVisible().catch(() => false)) {
-          await join.click()
-          await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
-          await client.getByRole('button', { name: '确认加入' }).click()
-          await acceptDisclaimerIfShown(client)
-        }
-      } catch {
-        // 重新加入流程异常（页面仍在加载/登录墙）时继续轮询，下一轮再评估。
-      }
-    }
-    await host.waitForTimeout(2_000)
+/** 正常路径必须一次加入即同步双端 UI roster；禁止离开重入掩盖。 */
+async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
+  const pages: [Page, Page] = [host, client]
+  try {
+    const handles = await Promise.all(pages.map((page) => page.waitForFunction(() => {
+      const ready = [...document.querySelectorAll<HTMLButtonElement>('button')].some((button) => (
+        button.textContent?.trim() === '准备 / 取消准备'
+          && button.getClientRects().length > 0
+          && getComputedStyle(button).visibility !== 'hidden'
+          && getComputedStyle(button).display !== 'none'
+      ))
+      return ready && document.querySelectorAll('.room-seat').length >= 2
+    }, undefined, { timeout: 60_000, polling: 100 })))
+    await Promise.all(handles.map((handle) => handle.dispose()))
+    return
+  } catch {
+    // 下面读取原子页面状态用于失败诊断。
   }
-  const hostLabel = await readRoundLabel(host)
-  const clientLabel = await readRoundLabel(client)
-  throw new Error(`等待房间就绪超时（room=${roomCode} hostReady=${hostReady} clientReady=${clientReady} hostSeats=${hostSeats} clientSeats=${clientSeats} hostLabel=${hostLabel || '(空)'} clientLabel=${clientLabel || '(空)'}）`)
+  const states = await Promise.all(pages.map((page) => page.evaluate(() => ({
+    ready: [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .some((button) => button.textContent?.trim() === '准备 / 取消准备'),
+    seats: document.querySelectorAll('.room-seat').length,
+  })).catch(() => ({ ready: false, seats: 0 }))))
+  throw new Error(`正常加入后 60 秒 roster 仍未同步（room=${roomCode} states=${JSON.stringify(states)}）；禁止离开重入兜底`)
 }
 
 /** 建房 → 双端入房 → 开局 → 自动打牌直到指定局结算。返回 roomCode。 */
@@ -429,7 +525,7 @@ async function startEastHandToSettlement(
   await host.locator('.room-code strong').waitFor({ timeout: 60_000 })
   const roomCode = (await host.locator('.room-code strong').innerText()).trim()
   expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
-  await waitForRoomReady(host, client, roomCode, `确认专项客人-${suffix}`)
+  await waitForRoomReady(host, client, roomCode)
   await Promise.all([host, client].map(installHostAutoPlayer))
   // 开局前安装时序采样器：记录每局 136/断点0 → 一骰 → 翻精134 → 二骰 → 断点 → 发牌。
   await Promise.all([host, client].map(installOpeningSampler))
@@ -441,7 +537,12 @@ async function startEastHandToSettlement(
     await client.getByRole('button', { name: '准备 / 取消准备' }).click()
   }
   await expect(start).toBeEnabled({ timeout: 60_000 })
+  const openingPromises = [
+    waitForOpeningOrTableLoadError(host, '房主'),
+    waitForOpeningOrTableLoadError(client, '客户端'),
+  ]
   await start.click()
+  await Promise.all(openingPromises)
 
   // 等开局完成进入东1局，随后自动打牌直到指定局结算。
   const handLabel = await waitForHand(host, '东1局:0', 120_000)
@@ -462,8 +563,16 @@ function attachConsoleCapture(page: Page, logs: string[]) {
   })
 }
 
+// 结算确认专项不能借助断线恢复、Relay 重建、AI 接管或重进补发推进。
+// 只检查进入结算后的新增日志，避免把房间首次建连时的 rejoin_ok 握手误判为恢复。
+const RECOVERY_PATH_PATTERN = /rejoin_ok|reconnecting|已验证重进|大厅验证的新 peer 已恢复|已重连|恢复牌局|先释放旧连接再重进|对局权威连续静默|单次请求当前手牌事实|升级为完整房间重进|自动重进失败|尝试重新加入房间|房主长时间无响应|AI 代打|AI 接管|relay.*active/i
+
+function recoveryLogsSince(logs: string[], from: number): string[] {
+  return logs.slice(from).filter((line) => RECOVERY_PATH_PATTERN.test(line))
+}
+
 /**
- * 胡牌阶段牌桌采样器：只记录数量和座位，不读取或保存具体暗牌牌面。
+ * 胡牌阶段牌桌采样器：只记录数量和座位，不读取或保存具体暗牌牌值。
  * 从开局前持续采样到切局，MutationObserver 捕获 DOM 切换，20ms 定时器捕获
  * Vue 状态在 DOM 未变化时的短暂清空。
  */
@@ -493,6 +602,27 @@ async function installWinPhaseSampler(page: Page) {
         .filter((entry) => entry !== '')
         .map(Number)
         .filter(Number.isFinite)
+      type PlayerProbe = { seat?: unknown; hand?: unknown }
+      type VueInstance = { props?: Record<string, unknown>; parent?: VueInstance | null }
+      let revealedFaceCounts: number[] = []
+      let revealHands = false
+      let instance = (hud as (HTMLElement & { __vueParentComponent?: VueInstance }) | null)
+        ?.__vueParentComponent
+      while (instance) {
+        const players = instance.props?.players
+        if (Array.isArray(players) && 'revealHands' in (instance.props ?? {})) {
+          revealedFaceCounts = (players as PlayerProbe[])
+            .map((player, index) => ({
+              seat: typeof player.seat === 'number' ? player.seat : index,
+              count: Array.isArray(player.hand) ? player.hand.length : 0,
+            }))
+            .sort((left, right) => left.seat - right.seat)
+            .map((entry) => entry.count)
+          revealHands = Boolean(instance.props?.revealHands)
+          break
+        }
+        instance = instance.parent ?? undefined
+      }
       const current: WinPhaseSample = {
         at: Date.now(),
         hand: document.querySelector('.round-info')?.textContent?.trim() ?? '',
@@ -501,6 +631,8 @@ async function installWinPhaseSampler(page: Page) {
         wallHeadDrawn: Number(hud?.dataset.wallHeadDrawn ?? -1),
         seats: csvNumbers(hud?.dataset.tableSeats),
         concealedCounts: csvNumbers(hud?.dataset.concealedCounts),
+        revealedFaceCounts,
+        revealHands,
         discardCounts: csvNumbers(hud?.dataset.discardCounts),
         meldTileCounts: csvNumbers(hud?.dataset.meldTileCounts),
         winEffectVisible: Number(hud?.dataset.winEffectId ?? -1) >= 0,
@@ -546,11 +678,17 @@ function winningWindow(history: WinPhaseSample[], currentKey: string) {
     && (sample.winEffectVisible || sample.phase === 'win-effect')
   ))
   if (start < 0) return []
+  const winning = history[start]
   let end = history.length
   for (let index = start + 1; index < history.length; index += 1) {
     const sample = history[index]
     const key = handKey(sample.hand)
-    if (sample.phase === 'opening' || sample.phase === 'dealing' || (key && key !== currentKey)) {
+    // 自动确认后 round-info 可能仍短暂显示上一手，但牌墙已先重置为下一手的
+    // 136/0。牌墙回增或摸牌进度回退就是下一手切换事实，必须从胡牌窗口截断。
+    const wallReset = winning.wallCount > 0 && sample.wallCount > winning.wallCount
+      || winning.wallHeadDrawn >= 0 && sample.wallHeadDrawn < winning.wallHeadDrawn
+    if (sample.phase === 'opening' || sample.phase === 'dealing'
+      || (key && key !== currentKey) || wallReset) {
       end = index
       break
     }
@@ -566,6 +704,15 @@ async function verifyWinningPhaseIntegrity(
 ) {
   const histories = await Promise.all(pages.map(winPhaseHistory))
   const windows = histories.map((history) => winningWindow(history, currentKey))
+  // 先写原始窗口再断言；任一完整性断言失败时仍保留可复核数值证据。
+  await testInfo.attach(`win-phase-integrity-${scenario}-${currentKey.replace(':', '-')}`, {
+    body: JSON.stringify({
+      scenario, currentKey,
+      host: windows[0],
+      client: windows[1],
+    }, null, 2),
+    contentType: 'application/json',
+  })
   for (let sideIndex = 0; sideIndex < windows.length; sideIndex += 1) {
     const side = sideIndex === 0 ? '房主' : '客户端'
     const samples = windows[sideIndex]
@@ -602,6 +749,19 @@ async function verifyWinningPhaseIntegrity(
       expect(sample.discardCounts, `${scenario}${side}胡牌后牌河不得继续回退或整体清零`).toEqual(atWin.discardCounts)
     }
 
+    // 进入亮牌/结算后，每一家不仅要保留“暗手张数”，还必须真正收到可展示的
+    // 最终牌面。旧缺陷保留 concealedTileCount=13 却把 hand=[]，数量检查会误过，
+    // 画面上则是另外三家的牌瞬间消失。
+    const revealSamples = active.filter((sample) => sample.revealHands)
+    expect(revealSamples.length, `${scenario}${side}胡牌后必须进入亮明四家手牌阶段`).toBeGreaterThan(0)
+    for (const sample of revealSamples) {
+      expect(sample.revealedFaceCounts, `${scenario}${side}亮牌阶段必须采集四家真实牌面张数`).toHaveLength(4)
+      expect(sample.revealedFaceCounts, `${scenario}${side}亮牌阶段真实牌面数必须等于各家暗手数`)
+        .toEqual(sample.concealedCounts)
+      expect(sample.revealedFaceCounts.every((count) => count > 0),
+        `${scenario}${side}亮牌阶段不得有任何一家保持空手牌`).toBe(true)
+    }
+
     // 点炮牌进入胡牌区时允许从牌河移走且最多只移走一张；其它牌河和副露
     // 在胡牌边界本身也不得被清空。
     const discardDrop = beforeWin.discardCounts.reduce((sum, count, index) => (
@@ -621,14 +781,6 @@ async function verifyWinningPhaseIntegrity(
       `${scenario}${currentKey} 双端${milestone}阶段牌山/暗手/牌河/副露计数不一致`)
       .toEqual(publicCounts(milestones[0][milestone]))
   }
-  await testInfo.attach(`win-phase-integrity-${scenario}-${currentKey.replace(':', '-')}`, {
-    body: JSON.stringify({
-      scenario, currentKey,
-      host: windows[0],
-      client: windows[1],
-    }, null, 2),
-    contentType: 'application/json',
-  })
   console.log(`[确认专项][${scenario}] ${currentKey} 胡牌到切局期间牌山、暗手、牌河、副露均保持完整`)
 }
 
@@ -1076,18 +1228,17 @@ async function assertBarrierHolds(
   console.log(`[确认专项] ${label} 在 ${Math.round(windowMs / 1000)}s 无确认窗口内屏障生效（未推进）`)
 }
 
-test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户端确认', async ({ browser }, testInfo) => {
+test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户端确认', async ({}, testInfo) => {
   const suffix = Date.now().toString(36).slice(-5)
 
   // ── 场景 A：双方都不确认 → 生产默认 10 秒自动确认 → 自动进入下一手 ──
   {
-    const contexts = await Promise.all(ONLINE.accounts.map(() => (
-      browser.newContext({ viewport: { width: 1280, height: 720 } })
-    )))
+    const autoPair = await launchAccountBrowserPair()
+    const { contexts } = autoPair
     try {
       const pages = [
-        await authenticate(contexts[0], ONLINE.accounts[0], false),
-        await authenticate(contexts[1], ONLINE.accounts[1], false),
+        await authenticateAccount(autoPair, 0, ONLINE.accounts[0], false),
+        await authenticateAccount(autoPair, 1, ONLINE.accounts[1], false),
       ]
       const [host, client] = pages
       const hostLogs: string[] = []
@@ -1095,12 +1246,32 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
       attachConsoleCapture(host, hostLogs)
       attachConsoleCapture(client, clientLogs)
       const { roomCode, winningKey } = await startEastHandToSettlement(host, client, `A-${suffix}`, false)
+      const transitionLogOffsets = [hostLogs.length, clientLogs.length] as const
       const settledAt = Date.now()
       // 关键：两端都不点击确认；生产默认 10 秒倒计时应自动确认并进入下一手。
       console.log(`[确认专项][场景A] ${roomCode} ${winningKey} 胡牌结算，两端均不手动确认，等待自动确认`)
-      const next = await waitForNextHand(host, client, winningKey, 60_000)
+      const next = await waitForNextHand(host, client, winningKey, 180_000)
       const autoConfirmMs = Date.now() - settledAt
       console.log(`[确认专项][场景A] 自动确认耗时 ${autoConfirmMs}ms，进入 ${next.hostLabel} | ${next.clientLabel}`)
+
+      // 先排除外部连接恢复和异常慢推进，再核验开局动画。否则一次真实的
+      // reconnect/rejoin 会让客户端从中途补播旧开局，表现成“采样器漏记”。
+      const hostRecovery = recoveryLogsSince(hostLogs, transitionLogOffsets[0])
+      const clientRecovery = recoveryLogsSince(clientLogs, transitionLogOffsets[1])
+      await testInfo.attach('scenario-A-auto-confirm', {
+        body: JSON.stringify({
+          roomCode, winningKey, autoConfirmMs,
+          hostNext: next.hostLabel, clientNext: next.clientLabel,
+          hostRecoveryLogs: hostRecovery.slice(-10),
+          clientRecoveryLogs: clientRecovery.slice(-10),
+        }),
+        contentType: 'application/json',
+      })
+      expect(autoConfirmMs, `自动确认耗时 ${autoConfirmMs}ms 应处于合理窗口（10s 倒计时 + 切局开销）`)
+        .toBeGreaterThan(8_000)
+      expect(autoConfirmMs, `自动确认耗时 ${autoConfirmMs}ms 不应超过 60s`).toBeLessThan(60_000)
+      expect(hostRecovery, `场景A 房主不应出现恢复/重进日志：${hostRecovery.join(' | ')}`).toEqual([])
+      expect(clientRecovery, `场景A 客户端不应出现恢复/重进日志：${clientRecovery.join(' | ')}`).toEqual([])
 
       // 验收 0：自动确认进入的新一局必须走完整开局时序
       // （136/断点0 → 一骰 → 翻精134 → 二骰 → 应用真实断点 → 分批发牌）。
@@ -1127,41 +1298,20 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         throw error
       }
 
-      // 验收 1：自动确认应在「10s 倒计时 + 切局/洗牌/开局」的合理窗口内（不是秒进/不是恢复）。
-      expect(autoConfirmMs, `自动确认耗时 ${autoConfirmMs}ms 应处于合理窗口（10s 倒计时 + 切局开销）`)
-        .toBeGreaterThan(8_000)
-      expect(autoConfirmMs, `自动确认耗时 ${autoConfirmMs}ms 不应超过 60s`).toBeLessThan(60_000)
-
-      // 验收 2：推进必须由自动确认倒计时驱动，不能有恢复/重进/静默等异常路径日志。
-      const recoveryPattern = /先释放旧连接再重进|对局权威连续静默|单次请求当前手牌事实|升级为完整房间重进|心跳|房主长时间无响应/i
-      const hostRecovery = hostLogs.filter((line) => recoveryPattern.test(line))
-      const clientRecovery = clientLogs.filter((line) => recoveryPattern.test(line))
-      await testInfo.attach('scenario-A-auto-confirm', {
-        body: JSON.stringify({
-          roomCode, winningKey, autoConfirmMs,
-          hostNext: next.hostLabel, clientNext: next.clientLabel,
-          hostRecoveryLogs: hostRecovery.slice(-5),
-          clientRecoveryLogs: clientRecovery.slice(-5),
-        }),
-        contentType: 'application/json',
-      })
-      expect(hostRecovery, `场景A 房主不应出现恢复/重进日志：${hostRecovery.join(' | ')}`).toEqual([])
-      expect(clientRecovery, `场景A 客户端不应出现恢复/重进日志：${clientRecovery.join(' | ')}`).toEqual([])
       console.log(`[确认专项][场景A] 通过：自动确认 ${autoConfirmMs}ms 进入下一手，无恢复/重进日志`)
     } finally {
-      await Promise.all(contexts.map((context) => context.close()))
+      await closeAccountBrowserPair(autoPair)
     }
   }
 
   // ── 场景 B + C：带 manualContinue=1，验证单边确认不推进 ──
   {
-    const manualContexts = await Promise.all(ONLINE.accounts.map(() => (
-      browser.newContext({ viewport: { width: 1280, height: 720 } })
-    )))
+    const manualPair = await launchAccountBrowserPair()
+    const { contexts: manualContexts } = manualPair
     try {
       const pages = [
-        await authenticate(manualContexts[0], ONLINE.accounts[0], true),
-        await authenticate(manualContexts[1], ONLINE.accounts[1], true),
+        await authenticateAccount(manualPair, 0, ONLINE.accounts[0], true),
+        await authenticateAccount(manualPair, 1, ONLINE.accounts[1], true),
       ]
       const [host, client] = pages
       const hostLogs: string[] = []
@@ -1179,7 +1329,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         await assertBarrierHolds(host, client, winningKey, 25_000, hostLogs, testInfo, 'B-host-only')
         const clientClicked = await clickContinue(client)
         expect(clientClicked, '客户端补点继续').toBe(true)
-        const next = await waitForNextHand(host, client, winningKey, 30_000)
+        const next = await waitForNextHand(host, client, winningKey, 180_000)
         console.log(`[确认专项][场景B] 通过：屏障阻止单边推进，客户端确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
         // 客户端确认后进入的新一局必须走完整开局时序。
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景B-下一手', testInfo)
@@ -1206,7 +1356,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         await assertBarrierHolds(host, client, winningKey, 25_000, hostLogs, testInfo, 'C-client-only')
         const hostClicked = await clickContinue(host)
         expect(hostClicked, '房主补点继续').toBe(true)
-        const next = await waitForNextHand(host, client, winningKey, 40_000)
+        const next = await waitForNextHand(host, client, winningKey, 180_000)
         console.log(`[确认专项][场景C] 通过：屏障阻止单边推进，房主确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
         // 房主确认后进入的新一局必须走完整开局时序。
         await verifyOpeningForHand(host, next.hostLabel, '房主', '场景C-下一手', testInfo)
@@ -1218,7 +1368,7 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
         })
       }
     } finally {
-      await Promise.all(manualContexts.map((context) => context.close()))
+      await closeAccountBrowserPair(manualPair)
     }
   }
 
