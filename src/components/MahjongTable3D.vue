@@ -26,6 +26,7 @@ const props = withDefaults(defineProps<TableProps>(), {
 })
 const emit = defineEmits<{
   ready: []
+  loadError: [message: string]
 }>()
 
 const canvas = ref(null)
@@ -209,6 +210,7 @@ function render(time = 0) {
 }
 
 onMounted(async () => {
+  try {
   // 先让牌桌加载提示完成一次浏览器绘制，再进行 WebGL/几何体初始化。
   // 否则异步组件虽然已经挂载，下面的大段同步工作仍会把画面卡在黑屏。
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -325,8 +327,9 @@ onMounted(async () => {
     tileLayerZ: TILE_LAYER_Z,
   })
 
-  // 静态牌桌与暗牌不依赖牌面图片，必须先绘制首帧，避免线上加载图片时长时间黑屏。
-  // 牌面用应用启动时预加载的共享表（可能已在内存中，直接带真实牌面）。
+  // 所有牌面必须下载并完成图片解码，之后才能创建 3D 图集。
+  await preloadTileImages()
+  if (destroyed) return
   scene.userData.tileImages = preloadedTileImages()
   tableScene.addTable()
   tableTiles.rebuild()
@@ -345,16 +348,21 @@ onMounted(async () => {
     }),
   )
 
-  // 牌面资源在牌桌首帧之后再加载，避免大厅阶段的 34 张图片与 3D chunk
-  // 竞争网络带宽；资源就绪前不启动 3D 动画循环。
-  await preloadTileImages()
+  // compileAsync 等待着色器真正可用；随后提交首帧并跨过两个浏览器合成帧。
+  await renderer.compileAsync(scene, camera)
   if (destroyed) return
-  // 图集在图片就绪前可能已用空底构建，需失效让下一次重建带上真实牌面。
-  tableScene.invalidateTileFaces()
-  tableTiles.rebuild()
-  render()
-  // ready 必须晚于牌面资源和图集重建，否则父层会在发牌资源未就绪时隐藏加载层。
+  renderer.render(scene, camera)
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  if (destroyed) return
+  render(performance.now())
+  // ready 必须晚于资源、图集、着色器和合成首帧，否则父层不得隐藏加载层。
   emit('ready')
+  } catch (error) {
+    if (destroyed) return
+    const message = error instanceof Error ? error.message : '牌桌资源加载失败'
+    emit('loadError', message)
+  }
 })
 
 watch(

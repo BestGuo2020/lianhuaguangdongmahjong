@@ -859,19 +859,43 @@ button { font: inherit; }
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 45%, rgba(18, 61, 39, .78), rgba(4, 12, 8, .94) 72%);
 }
+.table-loading.has-error { pointer-events: auto; }
 .table-loading-card {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 18px;
   border: 1px solid rgba(225, 189, 85, .55);
-  border-radius: 24px;
+  border-radius: 8px;
   background: rgba(7, 24, 17, .88);
   color: #f2d888;
   font-size: 14px;
   letter-spacing: .08em;
   box-shadow: 0 8px 25px rgba(0, 0, 0, .45);
 }
+.table-loading-card.error {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 220px;
+  border-color: rgba(232, 109, 92, .8);
+  color: #f6e7df;
+}
+.table-loading-card.error strong { color: #ffb0a3; }
+.table-loading-card.error span { font-size: 12px; color: rgba(246, 231, 223, .78); }
+.table-loading-card.error button {
+  margin-top: 4px;
+  padding: 7px 18px;
+  border: 1px solid rgba(242, 216, 136, .7);
+  border-radius: 6px;
+  background: #f2d888;
+  color: #183a2b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.table-loading-card.error button:hover,
+.table-loading-card.error button:focus-visible { background: #ffe8a3; }
 .table-loading-spinner {
   width: 15px;
   height: 15px;

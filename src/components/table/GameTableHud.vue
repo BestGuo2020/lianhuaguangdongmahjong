@@ -79,19 +79,34 @@ const emit = defineEmits<{
 
 function handleTableReady() {
   tableReady.value = true
+  tableLoadError.value = ''
   emit('ready')
+}
+
+function handleTableLoadError(message: string) {
+  tableReady.value = false
+  tableLoadError.value = message || '牌桌资源加载失败'
+}
+
+function retryTableLoad() {
+  tableReady.value = false
+  tableLoadError.value = ''
+  tableLoadAttempt.value += 1
 }
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const waitsOpen = ref(false)
 const tableReady = ref(false)
+const tableLoadError = ref('')
+const tableLoadAttempt = ref(0)
 const hoveredDiscard = ref<TileType | null>(null)
 const kongPickerOpen = ref(false)
 const chiPickerOpen = ref(false)
 
 watch(() => props.themeName, () => {
   tableReady.value = false
+  tableLoadError.value = ''
 })
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
@@ -260,7 +275,7 @@ function onAvatarError(entry: GamePlayer) {
     @pointerdown="clearMobileSelection"
   >
     <MahjongTable3D
-      :key="themeName"
+      :key="`${themeName}:${tableLoadAttempt}`"
       :theme-name="themeName"
       :players="players" :local-seat="user.seat" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
@@ -273,12 +288,23 @@ function onAvatarError(entry: GamePlayer) {
       :flip-tile="flipTile"
       :flip-stack="flipStack"
       @ready="handleTableReady"
+      @load-error="handleTableLoadError"
     />
     <Transition name="table-loading">
-      <div v-if="!tableReady" class="table-loading" :class="{ 'table-loading-in-game': phase !== 'lobby' }" role="status" aria-live="polite">
-        <div class="table-loading-card">
-          <span class="table-loading-spinner" aria-hidden="true"></span>
-          <span>牌桌加载中…</span>
+      <div
+        v-if="!tableReady" class="table-loading" :class="{ 'has-error': tableLoadError }"
+        :role="tableLoadError ? 'alert' : 'status'" aria-live="polite"
+      >
+        <div class="table-loading-card" :class="{ error: tableLoadError }">
+          <template v-if="tableLoadError">
+            <strong>牌桌资源加载失败</strong>
+            <span>请检查网络后重试</span>
+            <button type="button" @click="retryTableLoad">重试</button>
+          </template>
+          <template v-else>
+            <span class="table-loading-spinner" aria-hidden="true"></span>
+            <span>牌桌资源加载中…</span>
+          </template>
         </div>
       </div>
     </Transition>
