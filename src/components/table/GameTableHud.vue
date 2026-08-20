@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
@@ -8,6 +8,7 @@ import { tileName } from '../../game/core/rules/tiles'
 import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
+import { createTableLoadRetryController } from './tableLoadRetry'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -78,6 +79,7 @@ const emit = defineEmits<{
 }>()
 
 function handleTableReady() {
+  tableLoadRetry.succeed()
   tableReady.value = true
   tableLoadError.value = ''
   emit('ready')
@@ -85,13 +87,13 @@ function handleTableReady() {
 
 function handleTableLoadError(message: string) {
   tableReady.value = false
-  tableLoadError.value = message || '牌桌资源加载失败'
+  tableLoadRetry.fail(message)
 }
 
 function retryTableLoad() {
   tableReady.value = false
   tableLoadError.value = ''
-  tableLoadAttempt.value += 1
+  tableLoadRetry.manualRetry()
 }
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
@@ -100,14 +102,27 @@ const waitsOpen = ref(false)
 const tableReady = ref(false)
 const tableLoadError = ref('')
 const tableLoadAttempt = ref(0)
+const tableLoadRetry = createTableLoadRetryController({
+  schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+  cancel: (timer) => window.clearTimeout(timer),
+  onRetry: () => {
+    tableLoadError.value = ''
+    tableLoadAttempt.value += 1
+  },
+  onExhausted: (message) => {
+    tableLoadError.value = message || '牌桌资源加载失败'
+  },
+})
 const hoveredDiscard = ref<TileType | null>(null)
 const kongPickerOpen = ref(false)
 const chiPickerOpen = ref(false)
 
 watch(() => props.themeName, () => {
+  tableLoadRetry.reset()
   tableReady.value = false
   tableLoadError.value = ''
 })
+onBeforeUnmount(() => tableLoadRetry.dispose())
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
 // 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
