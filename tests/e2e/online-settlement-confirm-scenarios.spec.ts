@@ -1360,6 +1360,10 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
             }, null, 2),
             contentType: 'application/json',
           })
+          console.log(`[确认专项][场景C失败][房主状态] ${JSON.stringify(pageState[0])}`)
+          console.log(`[确认专项][场景C失败][客户端状态] ${JSON.stringify(pageState[1])}`)
+          console.log(`[确认专项][场景C失败][房主日志] ${hostLogs.slice(-80).join(' | ') || '(无)'}`)
+          console.log(`[确认专项][场景C失败][客户端日志] ${clientLogs.slice(-80).join(' | ') || '(无)'}`)
           throw error
         }
         console.log(`[确认专项][场景C] 通过：屏障阻止单边推进，房主确认后进入 ${next.hostLabel} | ${next.clientLabel}`)
