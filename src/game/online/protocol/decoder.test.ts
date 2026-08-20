@@ -69,6 +69,10 @@ describe('decodeServerMessage', () => {
       ...message,
       players: message.players.map((entry, index) => index === 1 ? { ...entry, hand: [null] } : entry),
     })).toBeNull()
+    expect(decodeServerMessage({
+      ...message,
+      players: message.players.map((entry, index) => index === 1 ? { ...entry, hand: [] } : entry),
+    })).toBeNull()
   })
 
   it('只接受带完整权威边界的公共胡牌特效事件', () => {

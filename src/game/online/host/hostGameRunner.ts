@@ -565,6 +565,21 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
     // 时先进入表现/结算阶段。此时 waitingCount 只是旧请求尾声，不能阻止权威结果
     // 快照；否则点炮等竞争响应会出现“房主结算、客端永远停在旧牌桌”。
     if (!force && !presentationPhase && (waitingCount > 0 || game.phase.value === 'thinking')) return
+    // 切局/终局收尾会先清空旧手牌，再把 phase 从 settled 切走。若在这两个同步
+    // 写入之间广播，客户端会收到 revealHands=true 但四家手牌全空的“结算事实”，
+    // 最终排名出现前会闪现空桌；普通切局也可能在继续倒计时末尾复现同类消失。
+    // 亮牌事实必须是完整终态，任一座位为空就保留上一帧，等待 opening/finished
+    // 的下一条权威相位覆盖。force 重发也不能绕过这条完整性门槛。
+    const requiresCompleteRevealedHands = game.revealHands.value
+      && (game.phase.value === 'revealing' || game.phase.value === 'settled')
+    if (requiresCompleteRevealedHands && game.players.some((player) => player.hand.length === 0)) {
+      console.log('[host] 跳过亮牌已清空但相位尚未切换的过渡快照', {
+        phase: game.phase.value,
+        round: game.round.value,
+        honba: game.honba.value,
+      })
+      return
+    }
     const key = [
       game.phase.value,
       game.round.value,

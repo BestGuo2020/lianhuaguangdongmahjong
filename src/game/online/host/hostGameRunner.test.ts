@@ -707,6 +707,13 @@ describe('startHostGame 无头权威', () => {
     expect(room.sent.some(({ message, to }) => (
       to === 'peer-1' && (message as { kind?: string }).kind === 'state_snapshot'
     ))).toBe(true)
+
+    // 切局/终局同步清理会短暂出现“手牌已空、phase 仍为 settled”。这帧即使
+    // force 补发也不得成为新的公共结算/定向快照，否则亮牌区会在切相位前消失。
+    room.sent.splice(0)
+    runner.game.players.forEach((player) => player.hand.splice(0))
+    runner.resendCurrentState()
+    expect(room.sent).toEqual([])
     runner.stop()
   })
 

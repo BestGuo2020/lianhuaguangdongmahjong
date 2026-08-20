@@ -174,7 +174,9 @@ function isSettlementScores(value: unknown): value is Array<{ seat: number; name
 function isRevealedPlayers(value: unknown): value is ServerPlayerDto[] {
   if (!Array.isArray(value) || value.length !== 4 || !value.every(isPlayer)) return false
   if (new Set(value.map((player) => player.seat)).size !== 4) return false
-  return value.every((player) => player.hand.every((tile) => tile !== null))
+  return value.every((player) => (
+    player.hand.length > 0 && player.hand.every((tile) => tile !== null)
+  ))
 }
 
 function isSnapshot(message: JsonObject): boolean {
