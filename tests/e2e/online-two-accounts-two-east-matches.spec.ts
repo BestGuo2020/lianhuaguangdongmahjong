@@ -1200,30 +1200,18 @@ function assertTransitionHistory(
       && !sample.matchFinished
   ))
   const auditedRevealSamples = revealSamples.filter((sample) => {
-    // 双确认后的 startGame/终局会先同步清掉旧墙与手牌，再提交 opening/dealing
-    // 或最终排名。只允许“此前已有完整四家亮牌”的全零帧在 2s 内紧贴下一条
-    // 权威边界；确认前/倒计时中的空牌没有这个边界，仍会严格失败。
-    const hadCompleteReveal = revealSamples.some((earlier) => (
+    // 与确认专项 winningWindow 使用同一权威边界：新一手/终局重置牌墙代次时
+    // wallHeadDrawn 会从本手结算值回退到 0。只有此前已有完整四家亮牌、随后
+    // 墙与四手全零且摸牌进度明确回退，才属于切局清理；截图中的牌墙仍为 70、
+    // head 未回退，因此仍会进入严格断言。
+    const completeReveal = revealSamples.find((earlier) => (
       earlier.at < sample.at
         && earlier.revealedFaceCounts.length === 4
         && earlier.revealedFaceCounts.every((count) => count > 0)
         && earlier.revealedFaceCounts.every((count, index) => count === earlier.concealedCounts[index])
     ))
-    const nextBoundary = history.find((candidate) => (
-      candidate.at >= sample.at
-        && (
-          candidate.finalVisible
-          || candidate.matchFinished
-          || candidate.phase === 'opening'
-          || candidate.phase === 'dealing'
-          || candidate.openingStage === 'start'
-          || Boolean(candidate.hand && candidate.hand !== hand)
-        )
-    ))
-    const transitionCleanup = hadCompleteReveal
-      && nextBoundary != null
-      && nextBoundary.at - sample.at >= 0
-      && nextBoundary.at - sample.at <= 2000
+    const transitionCleanup = completeReveal != null
+      && sample.wallHeadDrawn < completeReveal.wallHeadDrawn
       && sample.wallCount === 0
       && sample.concealedCounts.length === 4
       && sample.concealedCounts.every((count) => count === 0)
