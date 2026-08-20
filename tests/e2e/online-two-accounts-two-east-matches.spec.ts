@@ -1117,6 +1117,7 @@ function assertTransitionHistory(
   matchIndex: number,
 ) {
   const samples = history.filter((sample) => sample.hand === hand)
+  const terminalAt = history.find((sample) => sample.finalVisible || sample.matchFinished)?.at ?? 0
   expect(samples.length, `第 ${matchIndex} 场${side}${hand}缺少切局状态采样`).toBeGreaterThan(0)
   const start = samples.findIndex((sample) => sample.openingStage === 'start')
   expect(start, `第 ${matchIndex} 场${side}${hand}未记录下一手开局开始`).toBeGreaterThanOrEqual(0)
@@ -1199,9 +1200,23 @@ function assertTransitionHistory(
       && !sample.finalVisible
       && !sample.matchFinished
   ))
-  expect(revealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少亮明四家最终手牌阶段`)
+  const auditedRevealSamples = revealSamples.filter((sample) => {
+    // 最终排名的 Vue Transition 插入前，底层终局会先清掉墙和四家手牌；局号又已
+    // 重置为东1。只允许这组全零状态紧贴权威终局/最终排名（2s 内），普通胡牌
+    // 距离终局数分钟，仍会进入下方严格断言，不能借此掩盖截图中的三家消失。
+    const terminalCleanup = terminalAt > 0
+      && sample.at <= terminalAt
+      && terminalAt - sample.at <= 2000
+      && sample.wallCount === 0
+      && sample.concealedCounts.length === 4
+      && sample.concealedCounts.every((count) => count === 0)
+      && sample.revealedFaceCounts.length === 4
+      && sample.revealedFaceCounts.every((count) => count === 0)
+    return !terminalCleanup
+  })
+  expect(auditedRevealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少非终局的四家亮牌阶段`)
     .toBeGreaterThan(0)
-  for (const sample of revealSamples) {
+  for (const sample of auditedRevealSamples) {
     expect(sample.revealedFaceCounts, `第 ${matchIndex} 场${side}${hand}亮牌阶段真实牌面计数不可读`)
       .toHaveLength(4)
     expect(sample.revealedFaceCounts, `第 ${matchIndex} 场${side}${hand}亮牌阶段仍有手牌只有张数、没有牌面`)
