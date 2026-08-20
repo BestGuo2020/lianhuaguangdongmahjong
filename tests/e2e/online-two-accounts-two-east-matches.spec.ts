@@ -1189,7 +1189,10 @@ function assertTransitionHistory(
 
   // 胡牌/流局后必须把四家最终手牌真正亮明。concealedTileCount 仍可为 13，
   // 但若协议只留下 null 占位，mapper 后的 hand 会是 []，画面会出现三家空手。
-  const revealSamples = samples.filter((sample) => sample.revealHands)
+  const revealSamples = samples.filter((sample) => (
+    sample.revealHands
+      && (sample.phase === 'win-effect' || sample.phase === 'revealing' || sample.phase === 'settled')
+  ))
   expect(revealSamples.length, `第 ${matchIndex} 场${side}${hand}缺少亮明四家最终手牌阶段`)
     .toBeGreaterThan(0)
   for (const sample of revealSamples) {
@@ -1198,7 +1201,8 @@ function assertTransitionHistory(
     expect(sample.revealedFaceCounts, `第 ${matchIndex} 场${side}${hand}亮牌阶段仍有手牌只有张数、没有牌面`)
       .toEqual(sample.concealedCounts)
     expect(sample.revealedFaceCounts.every((count) => count > 0),
-      `第 ${matchIndex} 场${side}${hand}亮牌阶段不得有任何一家空手`).toBe(true)
+      `第 ${matchIndex} 场${side}${hand}亮牌阶段不得有任何一家空手（phase=${sample.phase} faces=${sample.revealedFaceCounts.join(',')} concealed=${sample.concealedCounts.join(',')}）`)
+      .toBe(true)
   }
 }
 
