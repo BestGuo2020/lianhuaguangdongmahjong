@@ -35,6 +35,7 @@ interface Props {
   winEffect: WinEffect | null
   winPresentation: WinPresentation | null
   revealHands: boolean
+  matchFinished: boolean
   winningPlayerIndex: number
   dealer: number
   isUserTurn: boolean
@@ -308,6 +309,7 @@ function onAvatarError(entry: GamePlayer) {
     :data-concealed-counts="tableConcealedData"
     :data-revealed-face-counts="tableFaceCountsData"
     :data-reveal-hands="revealHands ? 1 : 0"
+    :data-match-finished="matchFinished ? 1 : 0"
     :data-discard-counts="tableDiscardsData"
     :data-meld-tile-counts="tableMeldTilesData"
     @pointerdown="clearMobileSelection"
