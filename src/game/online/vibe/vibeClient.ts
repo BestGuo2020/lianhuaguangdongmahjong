@@ -9,7 +9,7 @@ export interface VibeUser {
 /** 作品 slug：VibeHub 试玩路径 https://vibeapps.lumigrav.space/B5AJupT1/ 的第一段。 */
 export const VIBE_WORK_SLUG = 'B5AJupT1'
 
-export type VibeStatus = 'idle' | 'initializing' | 'ready' | 'unavailable' | 'error'
+export type VibeStatus = 'idle' | 'initializing' | 'authenticating' | 'ready' | 'unavailable' | 'error'
 
 /** 是否部署在 lumigrav.space 生产域（仅生产域强制登录）。 */
 export const isVibeHost = typeof window !== 'undefined'
@@ -38,6 +38,7 @@ export const loginRequired = computed(() => (
 
 let client: VibeHubSDK.Client | null = null
 let initPromise: Promise<VibeHubSDK.Client | null> | null = null
+let loginPromise: Promise<VibeUser | null> | null = null
 let stopWatching: (() => void) | null = null
 
 export function isLoggedIn(): boolean {
@@ -92,14 +93,25 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
 
 export async function login(): Promise<VibeUser | null> {
   if (!client) return null
-  try {
-    const user = await client.login()
-    vibeUser.value = user
-    return user
-  } catch (error) {
-    vibeError.value = error instanceof Error ? error.message : String(error)
-    return null
-  }
+  if (loginPromise) return loginPromise
+
+  vibeError.value = ''
+  vibeStatus.value = 'authenticating'
+  loginPromise = (async () => {
+    try {
+      const user = await client.login()
+      vibeUser.value = user
+      vibeError.value = ''
+      return user
+    } catch (error) {
+      vibeError.value = error instanceof Error ? error.message : String(error)
+      return null
+    } finally {
+      vibeStatus.value = 'ready'
+      loginPromise = null
+    }
+  })()
+  return loginPromise
 }
 
 export function logout(): void {

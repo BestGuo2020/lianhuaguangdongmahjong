@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { login, logout, vibeError, vibeStatus, vibeUser } from '../../game/online/vibe/vibeClient'
 
 const displayName = computed(() => vibeUser.value?.name || 'VibeHub 用户')
-const initializing = computed(() => vibeStatus.value === 'initializing')
+const busy = computed(() => vibeStatus.value === 'initializing' || vibeStatus.value === 'authenticating')
 
 async function onLogin() {
   await login()
@@ -18,8 +18,8 @@ async function onLogin() {
     </template>
     <template v-else>
       <span class="vibe-auth-status" aria-live="polite">{{ vibeError ? '登录失败' : '登录后开始多人对战' }}</span>
-      <button type="button" class="vibe-auth-login" :disabled="initializing" @click="onLogin">
-        {{ initializing ? '连接中…' : '登录' }}
+      <button type="button" class="vibe-auth-login" :disabled="busy" @click="onLogin">
+        {{ busy ? '连接中…' : '登录' }}
       </button>
       <p v-if="vibeError" class="vibe-auth-error" role="alert">{{ vibeError }}</p>
     </template>

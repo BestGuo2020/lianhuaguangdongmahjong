@@ -80,73 +80,124 @@ async function authenticate(context: BrowserContext, account: Account, manual: b
     return page
   }
 
-  const openAuthPopup = async () => {
-    const popupPromise = context.waitForEvent('page', { timeout: 30_000 })
-    await page.getByRole('button', { name: '登录', exact: true }).click()
-    return popupPromise
+  const lobbyReady = () => page.getByRole('button', { name: '创建房间', exact: true })
+    .isVisible().catch(() => false)
+  const readGameAuthError = () => page.locator('.vibe-auth-error').innerText({ timeout: 500 })
+    .then((text) => text.trim()).catch(() => '')
+  const describePopup = async (popup: Page, stage: string) => {
+    const rawUrl = popup.isClosed() ? '' : popup.url()
+    let safeUrl = '(closed)'
+    if (rawUrl) {
+      try {
+        const parsed = new URL(rawUrl)
+        safeUrl = `${parsed.origin}${parsed.pathname}`
+      } catch {
+        safeUrl = '(unparseable)'
+      }
+    }
+    const rawTitle = popup.isClosed() ? '' : await popup.title().catch(() => '')
+    const safeTitle = rawTitle.replaceAll(account.email, '[redacted]').slice(0, 120) || '(empty)'
+    return `stage=${stage} popup=${safeUrl} title=${JSON.stringify(safeTitle)}`
   }
-  let popup = await openAuthPopup()
-  let submitted = false
-  let submittedAt = 0
-  let attempts = 0
-  let lastAuthProgressAt = Date.now()
-  let loadingReloads = 0
-  let authErrorRetries = 0
-  let authorized = false
+  const openAuthPopup = async (session: number) => {
+    const loginButton = page.getByRole('button', { name: '登录', exact: true })
+    await expect(loginButton).toBeVisible({ timeout: 30_000 })
+    await expect(loginButton).toBeEnabled({ timeout: 30_000 })
+    const popupPromise = context.waitForEvent('page', { timeout: 30_000 })
+    await loginButton.click()
+    const popup = await popupPromise
+    console.log(`[AUTH] OAuth 会话 ${session} 已打开`)
+    return popup
+  }
+  const maxSessions = 4
+  const stallMs = 25_000
   const deadline = Date.now() + 180_000
-  while (Date.now() < deadline && !authorized) {
-    // OAuth 错误页偶尔会滞留，但授权消息已经成功回传游戏页；以游戏页
-    // 的真实登录态为准，避免把已完成授权误判为登录超时。
-    if (await page.getByRole('button', { name: '创建房间', exact: true }).isVisible().catch(() => false)) {
-      authorized = true
+  let session = 1
+  let popup = await openAuthPopup(session)
+  let submitted = false
+  let authorizeClicked = false
+  let popupRetryClicked = false
+  let popupLoginClicked = false
+  let stage = 'opened'
+  let progressSignature = ''
+  let lastProgressAt = Date.now()
+  let errorAtSessionStart = await readGameAuthError()
+  while (Date.now() < deadline) {
+    if (await lobbyReady()) {
       await popup.close().catch(() => {})
-      break
+      console.log(`[AUTH] OAuth 会话 ${session} 已由游戏大厅确认成功`)
+      return page
     }
-    const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
-    if (await authorize.isVisible().catch(() => false)) {
-      await authorize.click()
-      authorized = true
-      break
-    }
-    const email = popup.locator('input[name=email]')
-    if (await email.isVisible().catch(() => false)) {
-      lastAuthProgressAt = Date.now()
-      if (submitted && Date.now() - submittedAt > 20_000 && attempts < 3) {
-        await popup.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 })
-        submitted = false
-        continue
-      }
-      if (!submitted) {
-        await email.fill(account.email)
-        await popup.locator('input[name=password]').fill(account.password)
-        await popup.getByRole('button', { name: '登录', exact: true }).click()
-        submitted = true
-        submittedAt = Date.now()
-        attempts += 1
-      }
+
+    let restartReason = ''
+    const gameAuthError = await readGameAuthError()
+    if (gameAuthError && gameAuthError !== errorAtSessionStart) {
+      restartReason = '游戏页报告登录失败'
+    } else if (popup.isClosed()) {
+      restartReason = '弹窗关闭但游戏大厅未就绪'
     } else {
+      const authorize = popup.getByRole('button', { name: '同意并进入游戏', exact: true })
+      const email = popup.locator('input[name=email]')
       const retryAuth = popup.getByRole('button', { name: '重试', exact: true })
       const goLogin = popup.getByRole('button', { name: '去登录', exact: true })
-      if (authErrorRetries < 3 && await retryAuth.isVisible().catch(() => false)) {
+      if (!authorizeClicked && await authorize.isVisible().catch(() => false)) {
+        await authorize.click()
+        authorizeClicked = true
+        stage = 'authorization-clicked'
+        lastProgressAt = Date.now()
+      } else if (await email.isVisible().catch(() => false)) {
+        if (!submitted) {
+          await email.fill(account.email)
+          await popup.locator('input[name=password]').fill(account.password)
+          await popup.getByRole('button', { name: '登录', exact: true }).click()
+          submitted = true
+          stage = 'credentials-submitted'
+          lastProgressAt = Date.now()
+        }
+      } else if (!popupRetryClicked && await retryAuth.isVisible().catch(() => false)) {
         await retryAuth.click()
-        authErrorRetries += 1
-        lastAuthProgressAt = Date.now()
-      } else if (await goLogin.isVisible().catch(() => false)) {
+        popupRetryClicked = true
+        stage = 'popup-retry-clicked'
+        lastProgressAt = Date.now()
+      } else if (!popupLoginClicked && await goLogin.isVisible().catch(() => false)) {
         await goLogin.click()
-        lastAuthProgressAt = Date.now()
-      } else if (Date.now() - lastAuthProgressAt > 20_000 && loadingReloads < 3) {
-        await popup.close().catch(() => {})
-        popup = await openAuthPopup()
-        loadingReloads += 1
+        popupLoginClicked = true
         submitted = false
-        lastAuthProgressAt = Date.now()
+        stage = 'popup-login-clicked'
+        lastProgressAt = Date.now()
+      }
+
+      const signature = [popup.url(), await popup.title().catch(() => ''), stage].join('|')
+      if (signature !== progressSignature) {
+        progressSignature = signature
+        lastProgressAt = Date.now()
+      } else if (Date.now() - lastProgressAt >= stallMs) {
+        restartReason = `弹窗 ${Math.round(stallMs / 1000)} 秒无进展`
       }
     }
-    await popup.waitForTimeout(400)
+
+    if (restartReason) {
+      console.log(`[AUTH] OAuth 会话 ${session} 废弃：${restartReason}；${await describePopup(popup, stage)}`)
+      await popup.close().catch(() => {})
+      if (session >= maxSessions) break
+      // 等上一轮 SDK 登录 Promise 因弹窗关闭而完成，再开始全新的 OAuth 会话。
+      session += 1
+      popup = await openAuthPopup(session)
+      submitted = false
+      authorizeClicked = false
+      popupRetryClicked = false
+      popupLoginClicked = false
+      stage = 'opened'
+      progressSignature = ''
+      lastProgressAt = Date.now()
+      errorAtSessionStart = await readGameAuthError()
+      continue
+    }
+    await page.waitForTimeout(400)
   }
-  if (!authorized) throw new Error('VibeHub 登录/授权在 180 秒内未完成')
-  await expect(page.getByRole('button', { name: '创建房间', exact: true })).toBeVisible({ timeout: 30_000 })
-  return page
+  const finalState = await describePopup(popup, stage)
+  await popup.close().catch(() => {})
+  throw new Error(`VibeHub 登录/授权在限定会话内未完成（sessions=${session} ${finalState}）`)
 }
 
 async function enterOnlineLobby(page: Page, nickname: string, role: 'host' | 'client') {

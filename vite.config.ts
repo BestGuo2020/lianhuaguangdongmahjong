@@ -4,6 +4,9 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   test: {
+    // 限定测试发现根目录，避免命令行的 `src` 子串过滤误扫 tmp/.pnpm-store
+    // 中带有 src 路径的历史工作区副本。
+    dir: './src',
     // 单测只跑 src 下的 *.test.ts / *.spec.ts。Playwright 的 e2e（tests/e2e）走
     // `npm run test:e2e`，不能被 vitest 收集，否则 @playwright/test 的
     // test.describe.configure() 会在这里报错。
