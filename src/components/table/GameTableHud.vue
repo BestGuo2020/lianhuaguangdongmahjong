@@ -152,11 +152,15 @@ const tableSeatCounts = computed(() => [...props.players]
   .map((player) => ({
     seat: player.seat,
     concealed: player.concealedTileCount ?? player.hand.length,
+    // 只公开真实牌面张数，不公开牌值。结算亮牌时它必须追上 concealed；
+    // 若仍为 0，说明协议只有 null 暗牌占位，3D 会把该家渲染成空手牌。
+    faces: player.hand.length,
     discards: player.discards.length,
     meldTiles: player.melds.reduce((sum, meld) => sum + meld.tiles.length, 0),
   })))
 const tableSeatsData = computed(() => tableSeatCounts.value.map((entry) => entry.seat).join(','))
 const tableConcealedData = computed(() => tableSeatCounts.value.map((entry) => entry.concealed).join(','))
+const tableFaceCountsData = computed(() => tableSeatCounts.value.map((entry) => entry.faces).join(','))
 const tableDiscardsData = computed(() => tableSeatCounts.value.map((entry) => entry.discards).join(','))
 const tableMeldTilesData = computed(() => tableSeatCounts.value.map((entry) => entry.meldTiles).join(','))
 const jokerGuide = computed(() => {
@@ -302,6 +306,8 @@ function onAvatarError(entry: GamePlayer) {
     :data-win-effect-tile="winEffect?.tile ?? ''"
     :data-table-seats="tableSeatsData"
     :data-concealed-counts="tableConcealedData"
+    :data-revealed-face-counts="tableFaceCountsData"
+    :data-reveal-hands="revealHands ? 1 : 0"
     :data-discard-counts="tableDiscardsData"
     :data-meld-tile-counts="tableMeldTilesData"
     @pointerdown="clearMobileSelection"
