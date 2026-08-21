@@ -1287,3 +1287,41 @@ button { font: inherit; }
 .llm-bubble-enter-from, .llm-bubble-leave-to { opacity: 0; transform: translateY(4px); }
 .seat-top .llm-bubble-leave-to, .seat-top .llm-bubble-enter-from { transform: translateX(-50%) translateY(4px); }
 
+/* ── 移动端/窄屏适配：气泡缩小、贴近座位，避免横跨牌河与操作区 ── */
+@media (max-width: 760px), (max-height: 520px) {
+  .llm-bubble {
+    max-width: min(170px, 44vw);
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  /* 左右座位：气泡改挂座位正上方（尾巴朝下），不往牌桌中央伸 */
+  .seat-left .llm-bubble { left: -4px; top: auto; bottom: calc(100% + 8px); transform: none; }
+  .seat-left .llm-bubble::after {
+    left: 16px; right: auto; top: 100%; margin-top: -6px;
+    border-right: 0; border-left: 0;
+    border-top-color: rgba(225, 189, 85, .55);
+  }
+  .seat-right .llm-bubble { right: -4px; top: auto; bottom: calc(100% + 8px); transform: none; }
+  .seat-right .llm-bubble::after {
+    right: 16px; left: auto; top: 100%; margin-top: -6px;
+    border-right: 0; border-left: 0;
+    border-top-color: rgba(225, 189, 85, .55);
+  }
+  .seat-top .llm-bubble { top: calc(100% + 6px); }
+  .seat-top .llm-bubble::after { top: -12px; }
+}
+
+/* 竖屏：顶部座位靠右/居中时气泡改到座位上方（贴近屏顶），避免盖住 3D 牌山中央 */
+@media (max-width: 760px) and (orientation: portrait) {
+  .seat-top .llm-bubble { top: auto; bottom: calc(100% + 8px); }
+  .seat-top .llm-bubble::after {
+    top: 100%; margin-top: -6px;
+    border-bottom: 0;
+    border-top-color: rgba(225, 189, 85, .55);
+  }
+  .seat-left .llm-bubble, .seat-right .llm-bubble { max-width: min(150px, 46vw); }
+}
+
+
