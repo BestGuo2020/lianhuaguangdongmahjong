@@ -1261,6 +1261,8 @@ button { font: inherit; }
 .llm-bubble {
   position: absolute;
   z-index: 30;
+  /* 锚点偏移超出头像容器时收缩布局会塌成 1~2 字宽：按内容撑开再由 max-width 约束换行 */
+  width: max-content;
   max-width: min(240px, 30vw);
   padding: 6px 11px;
   border: 1px solid rgba(225, 189, 85, .55);
