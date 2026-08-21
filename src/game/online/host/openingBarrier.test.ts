@@ -37,11 +37,16 @@ describe('hostOpeningBarrier', () => {
     await ready
   })
 
-  it('has a timeout fallback', async () => {
-    const barrier = createHostOpeningBarrier(() => ['peer-a'], 1000)
+  it('does not release the engine when the host table is still loading', async () => {
+    const barrier = createHostOpeningBarrier(() => [], 1000)
     const ready = barrier.wait(1, 0)
-    barrier.markLocalReady(1, 0)
     await vi.advanceTimersByTimeAsync(1000)
+    let done = false
+    void ready.then(() => { done = true })
+    await Promise.resolve()
+    expect(done).toBe(false)
+
+    barrier.markLocalReady(1, 0)
     await ready
   })
 })

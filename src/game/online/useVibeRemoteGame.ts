@@ -152,6 +152,22 @@ export function shouldRecoverDowngradedSettlement(
     && !isSettlementPresentationReady(phase, result)
 }
 
+/**
+ * rejoin_ok 只恢复身份，不能把同一房间、同一局已经接受的当前阶段降级回大厅。
+ * 这覆盖快照先到、握手后到的消息乱序，也覆盖手机切网后 SDK 重建 Room 的窗口。
+ */
+export function shouldPreserveRejoinState(
+  currentRoomId: string,
+  messageRoomId: string,
+  currentPhase: GamePhase,
+  currentRound: number,
+): boolean {
+  return currentRoomId.length > 0
+    && currentRoomId === messageRoomId
+    && currentRound >= 1
+    && currentPhase !== 'lobby'
+}
+
 export function settlementRecoveryDecision(
   expectedHand: { round: number; honba: number } | null,
   currentHand: { round: number; honba: number },
@@ -244,6 +260,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     syncVerifiedPeerSeats(seats: Map<string, number>): void
     markLocalOpeningReady(round: number, honba: number): void
     getPeerSeats(): Map<string, number>
+    getConfirmationSeats(): Map<string, number>
     enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
   } | null>(null)
   let handleRoundShuffleStart: (room: VibeHubSDK.Room, message: ShuffleStartMessage, fromPeerId: string) => void = () => {}
@@ -448,7 +465,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         // 用引擎当前的真人座位表（seatStates，重连后 peerId 已 retarget）而非大厅
         // 静态表：重连客户端发来的 continue 携带新 peerId，若按大厅旧 peerId 判定，
         // 永远等不到确认 → 全员卡死在「已确认，等待其他玩家」。
-        const liveSeats = hostGame.value?.getPeerSeats()
+        // 确认屏障必须包含恢复中的真人；getPeerSeats() 是控制器/参与者视图，
+        // 可能在 P2P→Relay 或 AI 状态竞态中暂时漏掉座位，不能用来决定是否推进。
+        const liveSeats = hostGame.value?.getConfirmationSeats()
           ?? new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat]))
         const livePeers = liveContinuePeers(liveSeats, aiSeats)
         // 临时诊断：定位「已确认，等待其他玩家」卡死——打印在等谁、谁已确认。
@@ -1294,23 +1313,28 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       snapshotReconciler.setAuthorityEpoch(msg.authorityEpoch)
       snapshotReconciler.clearPending()
       matchLifecycle.clearRoundBarrier()
-      // rejoin_ok 只确认身份恢复，不确认当前阶段。阶段/结果必须等后续
-      // state_snapshot 覆盖；先清掉本地旧结算，避免旧 Room 的 settled/final UI
-      // 在当前房主快照到达前继续阻塞请求。
-      state.result.value = null
-      state.winEffect.value = null
-      state.winPresentation.value = null
-      state.revealHands.value = false
-      state.winningPlayerIndex.value = -1
-      transientEventPresenter.clear()
-      state.announcement.value = null
-      state.actionPrompt.value = null
-      state.waitingNextRound.value = false
-      // rejoin_ok 只恢复身份，不宣告牌局阶段。清掉旧的终局/结算残留后，
-      // 在首个当前房主 state_snapshot 到达前保持 lobby 占位；playing、settled、
-      // finished 都必须由当前房主快照决定，避免重进窗口自称已进入下一局。
-      state.matchFinished.value = false
-      state.phase.value = 'lobby'
+      const preserveCurrentState = shouldPreserveRejoinState(
+        state.roomId.value,
+        msg.roomId,
+        state.phase.value,
+        state.round.value,
+      )
+      // 若同房间当前局的快照已经先到，rejoin_ok 不能把 settled/playing/dealing
+      // 降级回大厅；后续快照仍可继续校准。只有真正尚未收到当前局事实的 lobby
+      // 状态才清理旧表现并保持大厅占位。
+      if (!preserveCurrentState) {
+        state.result.value = null
+        state.winEffect.value = null
+        state.winPresentation.value = null
+        state.revealHands.value = false
+        state.winningPlayerIndex.value = -1
+        transientEventPresenter.clear()
+        state.announcement.value = null
+        state.actionPrompt.value = null
+        state.waitingNextRound.value = false
+        state.matchFinished.value = false
+        state.phase.value = 'lobby'
+      }
       state.mySeat.value = msg.seat
       if (msg.roomId) state.roomId.value = msg.roomId
       state.sessionStatus.value = 'connected'

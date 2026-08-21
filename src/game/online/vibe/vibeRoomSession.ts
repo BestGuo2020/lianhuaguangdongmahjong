@@ -178,7 +178,9 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
           if (room !== joined) return
           state.roomSeats.value = seats
           const own = seats.find((seat) => seat.peerId === joined.peerId)
-          if (own) state.mySeat.value = own.seat
+          // roster 是房主权威事实；如果当前 peer 暂时不在名单中，必须清掉
+          // 旧座位，避免重连窗口继续显示“已准备”并把 ready 发给旧连接。
+          state.mySeat.value = own?.seat ?? -1
           // 临时诊断：定位「闲家方位是房主方位」的座位分配问题。
           console.log('[client] mySeat:', state.mySeat.value, 'joined.peerId:', joined.peerId, 'seats:', seats.map((s) => `${s.seat}:${s.peerId}`).join(' | '))
         },
@@ -211,7 +213,9 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
   }
 
   async function startMatch(): Promise<void> {
-    if (state.isHost.value) hostLobby?.requestStart()
+    if (!state.isHost.value) return
+    const started = hostLobby?.requestStart() ?? false
+    if (!started) throw new Error('大厅成员状态已变化，请确认所有玩家仍已准备')
   }
 
   async function leaveRoom(): Promise<void> {

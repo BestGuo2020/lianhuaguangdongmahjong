@@ -14,20 +14,17 @@ export interface HostOpeningBarrier {
 
 export function createHostOpeningBarrier(
   getLivePeerIds: () => string[],
-  timeoutMs = 60000,
+  // 保留参数以兼容现有调用方；它不再是放行逻辑的兜底。
+  // 房主 viewer 未 ready 时绝不能让权威引擎先进入首回合。
+  _timeoutMs = 60000,
 ): HostOpeningBarrier {
   let activeRound = -1
   let activeHonba = -1
   let localReady = false
   let peerReady = new Set<string>()
   let resolveWait: (() => void) | null = null
-  let timeout: ReturnType<typeof setTimeout> | null = null
 
   function clearWait() {
-    if (timeout != null) {
-      clearTimeout(timeout)
-      timeout = null
-    }
     resolveWait = null
   }
 
@@ -49,7 +46,6 @@ export function createHostOpeningBarrier(
     activeHonba = honba
     return new Promise<void>((resolve) => {
       resolveWait = resolve
-      timeout = setTimeout(finish, timeoutMs)
       maybeFinish()
     })
   }

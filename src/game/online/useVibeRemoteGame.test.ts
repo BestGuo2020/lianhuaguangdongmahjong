@@ -3,6 +3,7 @@ import {
   allLiveSeatsConfirmed,
   isFutureShuffleHand,
   isSettlementPresentationReady,
+  shouldPreserveRejoinState,
   settlementRecoveryDecision,
   shouldRecoverDowngradedSettlement,
   shouldArmAuthoritySilenceTimer,
@@ -37,6 +38,17 @@ describe('liveContinuePeers（下一局确认关卡）', () => {
     expect(allLiveSeatsConfirmed(boundPeers, new Set(), new Set())).toBe(false)
     expect(allLiveSeatsConfirmed(boundPeers, new Set([1]), new Set())).toBe(true)
     expect(allLiveSeatsConfirmed(boundPeers, new Set(), new Set([1]))).toBe(true)
+  })
+
+  it('确认屏障不能因临时 peer 过滤而跳过未确认真人', () => {
+    // hostGameRunner 的 getConfirmationSeats 会保留 reconnecting/Relay 中的 peer；
+    // 只要 AI 集合没有明确该座位，下一局就必须继续等待该座位确认。
+    const confirmationSeats = new Map([
+      ['still-connected', 1],
+      ['reconnecting-human', 2],
+    ])
+    expect(allLiveSeatsConfirmed(confirmationSeats, new Set(), new Set([1]))).toBe(false)
+    expect(allLiveSeatsConfirmed(confirmationSeats, new Set([2]), new Set([1]))).toBe(true)
   })
 })
 
@@ -130,6 +142,15 @@ describe('胡牌后结算表现恢复判定', () => {
     expect(settlementRecoveryDecision(hand, hand, false, false)).toBe('retry')
     expect(settlementRecoveryDecision(hand, hand, false, true)).toBe('idle')
     expect(settlementRecoveryDecision(hand, { round: 4, honba: 1 }, true, false)).toBe('start')
+  })
+})
+
+describe('重进握手与当前阶段的消息乱序', () => {
+  it('同房间当前局已落地时，迟到 rejoin_ok 不得把客户端降级回大厅', () => {
+    expect(shouldPreserveRejoinState('ROOM01', 'ROOM01', 'settled', 1)).toBe(true)
+    expect(shouldPreserveRejoinState('ROOM01', 'ROOM01', 'playing', 4)).toBe(true)
+    expect(shouldPreserveRejoinState('ROOM01', 'ROOM01', 'lobby', 1)).toBe(false)
+    expect(shouldPreserveRejoinState('ROOM01', 'ROOM02', 'settled', 1)).toBe(false)
   })
 })
 

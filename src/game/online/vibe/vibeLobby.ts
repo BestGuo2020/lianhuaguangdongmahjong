@@ -254,44 +254,51 @@ export function createHostLobby({
       const playerId = message.playerId?.trim() || fromPeerId
       const presentedToken = message.seatToken?.trim() || ''
       const existing = peers.get(fromPeerId)
+      const sameIdentity = [...peers.entries()].find(
+        ([id, seat]) => id !== fromPeerId && seat.playerId === playerId,
+      )
+      let rosterChanged = false
       if (existing) {
         existing.nickname = message.nickname
         existing.avatar = message.avatar
         // peerId 已经绑定到这个座位；重复 hello 只刷新展示信息，不能借机改写
         // playerId，把当前连接变成另一个稳定身份。
         sendSeatToken(existing, fromPeerId)
+        rosterChanged = true
+      } else if (sameIdentity && presentedToken === sameIdentity[1].seatToken) {
+        // seatToken 是房主签发的座位能力凭据。只要凭据正确，新窗口就可以
+        // 原子替换旧 peer，即使 SDK 还没来得及发 reconnecting/leave；否则旧
+        // peer 会暂时占着原座位，新 peer 被分到下一个座位，形成同一账号的
+        // 重复 roster。旧 peer 随后的 leave 也不会误删新连接。
+        clearStaleTimer(sameIdentity[0])
+        peers.delete(sameIdentity[0])
+        peers.set(fromPeerId, {
+          seat: sameIdentity[1].seat,
+          peerId: fromPeerId,
+          nickname: message.nickname,
+          avatar: message.avatar,
+          ready: false,
+          playerId,
+          seatToken: sameIdentity[1].seatToken,
+        })
+        rosterChanged = true
+      } else if (sameIdentity) {
+        // 没有正确 token 时不能夺取旧座位，也不能先分配新座位制造重复账号。
+        // 等旧连接真正离开后，后续 roster/hello 会再次完成正常分配。
+        console.warn('[host] 拒绝重复 playerId 的无效座位续接')
       } else {
         // 刷新重进（peerId 变化）：稳定 playerId 只是索引，真正的续接凭据必须是
         // 房主此前签发、且只通过定向消息发给该座位的 seatToken；昵称和可伪造的
         // localStorage playerId 不能单独夺取旧座位。
-        const sameIdentity = [...peers.entries()].find(
-          ([id, s]) => id !== fromPeerId
-            && s.playerId === playerId
-            && presentedToken === s.seatToken
-            && (isInMatch() || staleTimers.has(id)),
-        )
-        if (sameIdentity) {
-          clearStaleTimer(sameIdentity[0])
-          peers.delete(sameIdentity[0])
-          peers.set(fromPeerId, {
-            seat: sameIdentity[1].seat,
-            peerId: fromPeerId,
-            nickname: message.nickname,
-            avatar: message.avatar,
-            ready: false,
-            playerId,
-            seatToken: sameIdentity[1].seatToken,
-          })
-        } else {
-          const seat = nextSeat()
-          if (seat >= 0) {
-            occupied.add(seat)
-            const seatToken = generateSeatToken()
-            peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, avatar: message.avatar, ready: false, playerId, seatToken })
-          }
+        const seat = nextSeat()
+        if (seat >= 0) {
+          occupied.add(seat)
+          const seatToken = generateSeatToken()
+          peers.set(fromPeerId, { seat, peerId: fromPeerId, nickname: message.nickname, avatar: message.avatar, ready: false, playerId, seatToken })
+          rosterChanged = true
         }
       }
-      broadcast()
+      if (rosterChanged) broadcast()
       // 新 peer 的第一条 hello 可能早于 SDK 广播列表完成；定向回发最新 roster，
       // 避免该客户端只收到一份不含自己的旧/部分 roster 后停止 hello 重试。
       room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats: roster() } satisfies HostLobbyMessage, fromPeerId)
@@ -368,7 +375,10 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
   let pendingStart: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] } | null = null
   let startedShuffleId: string | null = null
   let helloRetry: ReturnType<typeof setTimeout> | null = null
+  let readyRetry: ReturnType<typeof setTimeout> | null = null
   let rosterReadyHelloSent = false
+  let desiredReady: boolean | null = null
+  let lastRosterReady: boolean | null = null
 
   function sendHello() {
     room.send({ type: 'lobby_hello', nickname, avatar, playerId, ...(seatToken ? { seatToken } : {}) } satisfies ClientLobbyMessage)
@@ -379,6 +389,35 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       clearTimeout(helloRetry)
       helloRetry = null
     }
+  }
+
+  function scheduleHelloRetry() {
+    stopRetry()
+    helloRetry = setTimeout(() => {
+      helloRetry = null
+      if (!receivedRoster) sendHello()
+    }, 2000)
+  }
+
+  function stopReadyRetry() {
+    if (readyRetry != null) {
+      clearTimeout(readyRetry)
+      readyRetry = null
+    }
+  }
+
+  function sendReady() {
+    if (assignedSeat == null || desiredReady == null) return
+    room.send({ type: 'lobby_ready', ready: desiredReady } satisfies ClientLobbyMessage)
+    stopReadyRetry()
+    readyRetry = setTimeout(() => {
+      readyRetry = null
+      // 只补发一次；后续由房主 roster 的新 revision 继续驱动确认，避免
+      // 在房主不可达时把准备态变成周期轮询。
+      if (assignedSeat != null && desiredReady != null && lastRosterReady !== desiredReady) {
+        room.send({ type: 'lobby_ready', ready: desiredReady } satisfies ClientLobbyMessage)
+      }
+    }, 2000)
   }
 
   function startIfReady() {
@@ -421,18 +460,34 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       if (message.revision <= lastRosterRevision) return
       const hostSeat = message.seats.find((seat) => seat.seat === 0)
       if (!hostSeat || hostSeat.peerId !== pinnedHostPeerId) return
+      lastRosterRevision = message.revision
       // 收到 roster 不等于座位恢复成功：SDK/Relay 可能先投递房主的旧列表。
       // 只有列表明确包含当前 peerId，才停止 hello 重试并落地座位。
       const assigned = message.seats.some((seat) => seat.peerId === room.peerId)
       if (!assigned) {
-        sendHello()
+        // 旧 peer 可能尚未触发 leave；保留权威 roster，但清掉本地旧座位，
+        // 并只做一次有界 hello 重试，等待旧连接释放后再继承空出的座位。
+        receivedRoster = false
+        assignedSeat = null
+        lastRosterReady = null
+        rosterReadyHelloSent = false
+        pendingStart = null
+        stopReadyRetry()
+        onRoster(message.hostSeat, message.seats)
+        scheduleHelloRetry()
         return
       }
       receivedRoster = true
-      lastRosterRevision = message.revision
       stopRetry()
       assignedSeat = message.seats.find((seat) => seat.peerId === room.peerId)?.seat ?? null
+      lastRosterReady = message.seats.find((seat) => seat.peerId === room.peerId)?.ready ?? null
       onRoster(message.hostSeat, message.seats)
+      if (desiredReady != null) {
+        if (lastRosterReady === desiredReady) stopReadyRetry()
+        else queueMicrotask(() => {
+          if (receivedRoster && assignedSeat != null && desiredReady != null && lastRosterReady !== desiredReady) sendReady()
+        })
+      }
       if (!rosterReadyHelloSent) {
         rosterReadyHelloSent = true
         // 首条 hello 的 roster/rejoin_ok/state_snapshot 可能由房主在同一消息栈连续
@@ -474,8 +529,11 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       lastRosterRevision = 0
       pendingStart = null
       startedShuffleId = null
+      desiredReady = null
+      lastRosterReady = null
       rosterReadyHelloSent = false
       stopRetry()
+      stopReadyRetry()
       sendHello()
       // 首次 hello 可能早于 DataChannel ready；除 SDK join 事件重发外，只做一次
       // 有界握手重试，不建立持续轮询。
@@ -485,10 +543,14 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       }, 2000)
     },
     setReady(ready: boolean) {
-      room.send({ type: 'lobby_ready', ready } satisfies ClientLobbyMessage)
+      // 准备态必须以房主 roster 回显为准。先记录玩家意图，避免 hello/座位
+      // 分配竞态中把 lobby_ready 丢在房主 peers 表建立之前。
+      desiredReady = ready
+      if (assignedSeat != null) sendReady()
     },
     leave() {
       stopRetry()
+      stopReadyRetry()
       room.send({ type: 'lobby_leave' } satisfies ClientLobbyMessage)
     },
   }

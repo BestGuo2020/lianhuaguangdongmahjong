@@ -81,6 +81,15 @@ describe('remoteLobbyController', () => {
     expect(startBgm).toHaveBeenCalledOnce()
   })
 
+  it('resets the starting indicator when the host rejects a stale start request', async () => {
+    const { controller, actions } = setup()
+    vi.mocked(actions.startMatch).mockRejectedValueOnce(new Error('roster changed'))
+
+    await controller.startMatch()
+
+    expect(controller.matchStarting.value).toBe(false)
+  })
+
   it('submits moderation reports with room and player identity', async () => {
     const { controller, alerts } = setup()
     await controller.report('违规玩家')

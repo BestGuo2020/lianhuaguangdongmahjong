@@ -70,6 +70,9 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   getLivePeerSeats(): Map<string, number>
   /** 当前已绑定控制器且尚未被 AI 接管的座位表（包含恢复宽限中的 peer）。 */
   getPeerSeats(): Map<string, number>
+  /** 结算确认屏障使用的座位表：包含所有尚未明确标记为 AI 的真人，
+   * 即使 SDK 当前处于 reconnecting/Relay 切换，也不能从确认要求中移除。 */
+  getConfirmationSeats(): Map<string, number>
   /** 当前仍在 reconnecting 的座位；恢复窗口结束后才会切 AI。 */
   getDisconnectedSeats(): Set<number>
   /** 业务事件触发的单次权威事实补发。 */
@@ -875,6 +878,16 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       const peers = new Map<string, number>()
       for (const state of seatStates) {
         if (state.peerId && !asDisconnectable(state.controller!).isAIControlled()) peers.set(state.peerId, state.seat)
+      }
+      return peers
+    },
+    getConfirmationSeats(): Map<string, number> {
+      const peers = new Map<string, number>()
+      for (const state of seatStates) {
+        // 这里故意不读取 controller.isAIControlled()，也不排除 disconnected。
+        // aiControlledSeats 是房主确认屏障唯一认可的 AI 事实；如果两份状态在
+        // 重连竞态中短暂不一致，宁可等待真人确认，也不能错误推进下一局。
+        if (state.peerId && !aiControlledSeats.has(state.seat)) peers.set(state.peerId, state.seat)
       }
       return peers
     },

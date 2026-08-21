@@ -90,7 +90,7 @@ describe('vibeLobby', () => {
     ])
   })
 
-  it('客户端：hello/ready 发送、roster 接收', () => {
+  it('客户端：hello/ready 发送、roster 接收', async () => {
     const room = createMockVibeRoom(false)
     const received: LobbySeat[][] = []
     const client = createClientLobby({
@@ -102,7 +102,8 @@ describe('vibeLobby', () => {
     client.hello('玩家')
     client.setReady(true)
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_hello')).toBe(true)
-    expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_ready')).toBe(true)
+    // ready 要等房主 roster 确认本端座位后发送，避免 hello/ready 竞态被房主丢弃。
+    expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_ready')).toBe(false)
     room.emit('host-peer', {
       type: 'lobby_roster', hostSeat: 0, revision: 1,
       seats: [
@@ -111,6 +112,8 @@ describe('vibeLobby', () => {
       ],
     })
     expect(received).toHaveLength(1)
+    await Promise.resolve()
+    expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_ready')).toBe(true)
   })
 
   it('客户端只接受房主 roster 的单调 revision，迟到旧名单不能回滚座位', () => {
@@ -498,6 +501,53 @@ describe('vibeLobby', () => {
     expect(final).toHaveLength(2)
     expect(final.map((s) => s.peerId)).toEqual(['host-peer', 'peer-new'])
     restorePeers()
+  })
+
+  it('房主：旧 peer 尚未离开时，带有效 token 的同账号新 peer 原子继承原座位', () => {
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    const host = createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      generateSeatToken: () => 'token-atomic',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+
+    room.emit('peer-old', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2' })
+    room.emit('peer-new', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2', seatToken: 'token-atomic' })
+
+    expect(rosters.at(-1)?.map((seat) => `${seat.seat}:${seat.peerId}`)).toEqual([
+      '0:host-peer', '1:peer-new',
+    ])
+
+    // 旧 peer 的迟到消息不能把新连接的座位或准备态改回去。
+    room.emit('peer-old', { type: 'lobby_ready', ready: true })
+    room.emit('peer-new', { type: 'lobby_ready', ready: true })
+    room.emitPeer({ type: 'leave', id: 'peer-old' })
+    expect(rosters.at(-1)).toEqual([
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 1, peerId: 'peer-new', nickname: '账号2', avatar: '', ready: true },
+    ])
+
+    host.setHostReady(true)
+    expect(host.requestStart()).toBe(true)
+  })
+
+  it('房主：重复 playerId 没有有效 token 时不分配下一个座位', () => {
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+
+    room.emit('peer-old', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2' })
+    room.emit('peer-new', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2' })
+
+    expect(rosters.at(-1)?.map((seat) => `${seat.seat}:${seat.peerId}`)).toEqual([
+      '0:host-peer', '1:peer-old',
+    ])
   })
 
   it('房主：只伪造 playerId、没有房主 token 时不能夺取对局座位', () => {
