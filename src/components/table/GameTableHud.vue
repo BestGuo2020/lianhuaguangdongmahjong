@@ -51,6 +51,10 @@ interface Props {
   userDiscardWaits: WaitInfo | null
   userKongs: TileType[]
   userHasWindKong: boolean
+  /** 多人联机模式：显示托管开关按钮 */
+  autoPlayEnabled?: boolean
+  /** 当前是否已开启托管（联机自动出牌/过牌） */
+  autoPlay?: boolean
   rulesetId?: 'lotus-classic' | 'lotus-legacy'
   secondDice?: [number, number]
   /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
@@ -77,6 +81,7 @@ const emit = defineEmits<{
   gang: [tile: TileType]
   hu: []
   windKong: []
+  toggleAutoPlay: []
 }>()
 
 function handleTableReady() {
@@ -143,6 +148,11 @@ const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
   : null)
 const activeWaits = computed(() => hoveredWaits.value || props.userDiscardWaits || (!props.isUserTurn ? props.userCurrentWaits : null))
+// 托管开关：仅多人联机模式显示；结算/亮相/回大厅等阶段隐藏，其余对局时段（含他人回合）常驻可切换。
+const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
+  && !['lobby', 'win-effect', 'revealing', 'settled', 'finished'].includes(props.phase))
+// 操作按钮行与倒计时同行：任一方可见时整行出现。
+const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn || props.userCurrentWaits) || showAutoPlay.value)
 const tingDiscardTiles = computed(() => new Set(props.userTingOptions.map((option) => option.discard)))
 const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
@@ -255,7 +265,7 @@ function handleTileActivation(index: number, event?: PointerEvent) {
 function clearMobileSelection(event: PointerEvent) {
   if (usesFinePointer() || props.selectedIndex < 0 || event.pointerType === 'mouse') return
   const target = event.target as HTMLElement
-  if (target.closest('.hand-tile-slot, .waiting-tip, .action-bar')) return
+  if (target.closest('.hand-tile-slot, .waiting-tip, .turn-action-row')) return
   emit('clearSelection')
   waitsOpen.value = false
   lastTouchTap = { index: -1, time: 0 }
@@ -410,40 +420,48 @@ function onAvatarError(entry: GamePlayer) {
       </div>
     </section>
 
-    <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
+    <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+      <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
+        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
+        <template v-if="actionPrompt?.type === 'claim'">
+          <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
+          <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+        </template>
+        <template v-else-if="actionPrompt?.type === 'response'">
+          <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
+          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+        </template>
+        <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
+          <button class="action hu" @click="$emit('hu')"><b>胡</b></button>
+          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+        </template>
+        <template v-else-if="actionPrompt?.type === 'chi'">
+          <button class="action primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+        </template>
+        <template v-else>
+          <button v-if="userKongs.length" class="action primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
+          <button v-if="userHasWindKong" class="action primary" @click="$emit('windKong')"><b>风杠</b></button>
+          <button v-if="userCanHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
+        </template>
+      </div>
+      <button
+        v-if="showAutoPlay" class="action autoplay-action" :class="{ active: autoPlay }"
+        :aria-pressed="autoPlay" :aria-label="autoPlay ? '取消托管，恢复手动操作' : '开启托管，自动出牌与过牌'"
+        :title="autoPlay ? '托管中：点击恢复手动' : '点击托管：到您的回合自动出牌/过牌'"
+        @click="$emit('toggleAutoPlay')"
+      ><b>托管</b></button>
+      <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
+    </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
-    </div>
-    <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
-      <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
-      <template v-if="actionPrompt?.type === 'claim'">
-        <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
-        <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
-        <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-        <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
-      </template>
-      <template v-else-if="actionPrompt?.type === 'response'">
-        <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
-        <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-        <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-        <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
-        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
-      </template>
-      <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
-        <button class="action hu" @click="$emit('hu')"><b>胡</b></button>
-        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
-      </template>
-      <template v-else-if="actionPrompt?.type === 'chi'">
-        <button class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-        <button class="action pass" @click="$emit('pass')"><b>过</b></button>
-      </template>
-      <template v-else>
-        <button v-if="userKongs.length" class="action primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
-        <button v-if="userHasWindKong" class="action primary" @click="$emit('windKong')"><b>风杠</b></button>
-        <button v-if="userCanHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
-      </template>
     </div>
 
     <Transition name="modal">
