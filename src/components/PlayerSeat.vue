@@ -16,7 +16,9 @@ const props = withDefaults(defineProps<{
   renderMelds?: boolean
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
-}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined })
+  /** AI 大模型吐槽气泡（可选；由上层管理过期） */
+  bubble?: { text: string; id: number } | null
+}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined, bubble: null })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
 const avatarSrc = ref(props.player.avatar)
@@ -60,5 +62,8 @@ function onAvatarError() {
         <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
       </div>
     </div>
+    <Transition name="llm-bubble">
+      <div v-if="bubble" :key="bubble.id" class="llm-bubble" role="status" aria-live="polite">{{ bubble.text }}</div>
+    </Transition>
   </section>
 </template>

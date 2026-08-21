@@ -66,6 +66,8 @@ interface Props {
   wallBreakIndex?: number
   /** 翻精所在物理墩（0..67），供 3D 在牌山上翻出指示牌 */
   flipStack?: number
+  /** AI 大模型吐槽气泡：key=座位绝对索引，value=最近一条（展示层自管理过期） */
+  llmBubbles?: Record<number, { text: string; id: number }>
 }
 
 const props = defineProps<Props>()
@@ -386,6 +388,7 @@ function onAvatarError(entry: GamePlayer) {
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
+      :bubble="llmBubbles?.[player.seat]"
     />
 
     <Transition name="table-action" mode="out-in">

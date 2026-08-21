@@ -71,10 +71,22 @@ const gameMode = ref<GameMode>('local')
 // AI 大模型（单机人机座位 1-3）：读取 localStorage 配置；配置变更后刷新页面生效。
 const llmOpen = ref(false)
 const llmMessages = ref<string[]>([])
+/** 牌桌气泡：key=座位绝对索引，value=最近一条吐槽（4 秒后自动消失） */
+const llmBubbles = ref<Record<number, { text: string; id: number }>>({})
+let llmBubbleSeq = 0
 const llmHook = {
-  onLlmMessage: (text: string) => {
+  onLlmMessage: (seat: number, text: string) => {
     llmMessages.value.push(text)
     if (llmMessages.value.length > 8) llmMessages.value.shift()
+    const id = (llmBubbleSeq += 1)
+    llmBubbles.value = { ...llmBubbles.value, [seat]: { text, id } }
+    window.setTimeout(() => {
+      if (llmBubbles.value[seat]?.id === id) {
+        const next = { ...llmBubbles.value }
+        delete next[seat]
+        llmBubbles.value = next
+      }
+    }, 4000)
   },
 }
 const localLlm = createLocalLlmControllers(llmHook)
@@ -340,6 +352,7 @@ function changeTableTheme(theme: TableThemeName) {
           :user-has-wind-kong="userHasWindKong"
           :auto-play-enabled="gameMode === 'remote'"
           :auto-play="remoteAutoPlay"
+          :llm-bubbles="llmBubbles"
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
           :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
