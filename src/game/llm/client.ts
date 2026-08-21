@@ -95,7 +95,18 @@ export function cleanMessage(text: string): string {
   return cleaned.trim()
 }
 
-async function callOnce(config: LlmProviderConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<ChatResponse> {
+interface CallOnceOptions {
+  maxTokens?: number
+  /** 连接测试等场景：finish_reason=length 视为成功（证明链路通畅，仅内容被截断） */
+  strictLength?: boolean
+}
+
+async function callOnce(
+  config: LlmProviderConfig,
+  messages: ChatMessage[],
+  signal?: AbortSignal,
+  options: CallOnceOptions = {},
+): Promise<ChatResponse> {
   const url = normalizeBaseUrl(config.baseUrl)
   if (!url) throw new LlmClientError('parse', 'baseUrl 非法（可能包含 userinfo 或不支持协议）')
   const controller = new AbortController()
@@ -114,7 +125,7 @@ async function callOnce(config: LlmProviderConfig, messages: ChatMessage[], sign
         model: config.model,
         messages,
         temperature: 0.4,
-        max_tokens: 64,
+        max_tokens: options.maxTokens ?? 64,
         top_p: 1,
         stream: false,
         n: 1,
@@ -132,7 +143,7 @@ async function callOnce(config: LlmProviderConfig, messages: ChatMessage[], sign
     if (!choice?.message || typeof choice.message.content !== 'string' || !choice.message.content) {
       throw new LlmClientError('parse', 'API 响应格式无效或无内容')
     }
-    if (choice.finish_reason === 'length') {
+    if (choice.finish_reason === 'length' && options.strictLength !== false) {
       throw new LlmClientError('parse', 'finish_reason=length（输出被截断）')
     }
     return { content: choice.message.content, finishReason: choice.finish_reason ?? null }
@@ -172,13 +183,16 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
   return attempt(options.messages)
 }
 
-/** 设置页「测试连接」（§9.1）：探测供应商可用性；Key 不回显、不落日志。 */
+/** 设置页「测试连接」（§9.1）：探测供应商可用性；Key 不回显、不落日志。
+ * 连接测试只看「是否连通且有内容」：finish_reason=length 不算失败
+ * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅）。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
     await callOnce(
       config,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
+      { maxTokens: 8, strictLength: false },
     )
     return { ok: true, message: '连接成功' }
   } catch (error) {

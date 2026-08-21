@@ -285,6 +285,15 @@ describe('testLlmConnection', () => {
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: false })
     expect(badSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('finish_reason=length（模型回复被截断）对连接测试而言是成功', async () => {
+    const spy = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({ choices: [{ message: { content: 'ping 回了一大段话…' }, finish_reason: 'length' }] }),
+    }))
+    vi.stubGlobal('fetch', spy as never)
+    await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
+  })
 })
 
 describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
