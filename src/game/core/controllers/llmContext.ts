@@ -8,8 +8,12 @@ import { windForSeat } from '../presentation/tableLayout'
 
 /** 一次决策请求的局况/可见/版本元数据（规范化协议字段的前端来源） */
 export interface LlmContextMeta {
+  /** 决策者座位（绝对索引） */
+  playerIndex: number
   /** 各座位当前分数（按座位绝对索引，非相对座位） */
   scores: number[]
+  /** 各座位公开弃牌与副露（按座位绝对索引；内容为只读副本） */
+  peers: Array<{ discards: TileType[]; melds: Array<{ type: string; tile: TileType; tiles: TileType[] }> }>
   /** 本座位风（东/南/西/北，按庄家座位旋转） */
   seatWind: string
   /** 场风（东风场恒为东；半庄场前 4 局东、后 4 局南） */
@@ -51,7 +55,12 @@ export function createLlmContextSource(state: LocalGameState, options: LlmContex
     meta(playerIndex: number, kind: 'turn' | 'claim'): LlmContextMeta {
       requestSeq += 1
       return {
+        playerIndex,
         scores: state.players.map((player) => player.score),
+        peers: state.players.map((player) => ({
+          discards: [...player.discards],
+          melds: player.melds.map((meld) => ({ type: meld.type, tile: meld.tile, tiles: [...meld.tiles] })),
+        })),
         seatWind: windForSeat(playerIndex, state.dealer.value),
         roundWind: state.matchType.value === 'hanchan' && state.round.value > 4 ? '南' : '东',
         dealerIndex: state.dealer.value,

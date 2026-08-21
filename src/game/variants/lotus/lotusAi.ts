@@ -66,8 +66,9 @@ export interface LotusRobKongView {
   jokers: TileType[]
 }
 
-/** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌（杠前评估是否破坏听牌/被抢杠）。 */
-export function decideTurn(view: LotusTurnView): LotusTurnDecision {
+/** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌（杠前评估是否破坏听牌/被抢杠）。
+ * random 注入以便引擎建议确定性化；默认 Math.random 维持既有行为。 */
+export function decideTurn(view: LotusTurnView, random: () => number = Math.random): LotusTurnDecision {
   if ((view.ruleset ?? LOTUS_RULESET).win.isWinningHand(view.hand, view.exposedMelds, { jokers: view.jokers })) return { kind: 'win' }
 
   const meldIndex = view.melds.findIndex(
@@ -83,7 +84,7 @@ export function decideTurn(view: LotusTurnView): LotusTurnDecision {
 
   return {
     kind: 'discard',
-    handIndex: chooseDiscardIndex(view.hand, view.jokers, Math.random, {
+    handIndex: chooseDiscardIndex(view.hand, view.jokers, random, {
       exposedMelds: view.exposedMelds,
       visibleTiles: view.visibleTiles,
       publicTiles: view.publicTiles,

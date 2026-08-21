@@ -16,7 +16,11 @@ import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
  * 见 docs/llm-ai-design.md §6.2 / §11 任务 1.1。
  */
 export interface LlmAdapterFields {
+  /** 决策者座位（绝对索引） */
+  playerIndex?: number
   scores?: number[]
+  /** 各座位公开弃牌与副露（按座位绝对索引；只读） */
+  peers?: Array<{ discards: TileType[]; melds: Array<{ type: string; tile: TileType; tiles: TileType[] }> }>
   seatWind?: string
   roundWind?: string
   dealerIndex?: number

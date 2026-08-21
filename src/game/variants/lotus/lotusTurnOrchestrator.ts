@@ -334,6 +334,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   async function requestChi(playerIndex: number, chiOptions: ChiMeld[], tile: TileType, from: number) {
     const player = state.players[playerIndex]
     const action = await options.controllers[playerIndex].requestChi({
+      ...llm.meta(playerIndex, 'claim'),
       hand: player.hand,
       tile,
       from,

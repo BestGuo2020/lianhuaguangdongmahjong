@@ -66,8 +66,9 @@ function emptyQuality(): DiscardQuality {
 /**
  * 决策当前 AI 回合的动作，优先级与原 playAI 一致：
  * 自摸胡 → 补杠 → 暗杠 → 弃牌。杠前评估是否破坏听牌。
+ * random 注入以便引擎建议（LLM 兜底）确定性化；默认 Math.random 维持既有行为。
  */
-export function decideTurn(view: AITurnView): TurnDecision {
+export function decideTurn(view: AITurnView, random: () => number = Math.random): TurnDecision {
   const ruleset = view.ruleset ?? DEFAULT_RULESET
   if (ruleset.win.isWinningHand(view.hand, view.exposedMelds)) return { kind: 'win' }
 
@@ -81,7 +82,7 @@ export function decideTurn(view: AITurnView): TurnDecision {
   // 暗杠：已听牌时放弃（拆散成形手牌得不偿失）
   if (kong && !isTenpai(view.hand, view.exposedMelds, ruleset)) return { kind: 'concealed-kong', tile: kong }
 
-  return { kind: 'discard', handIndex: chooseDiscardIndex(view.hand, Math.random, view.exposedMelds, ruleset) }
+  return { kind: 'discard', handIndex: chooseDiscardIndex(view.hand, random, view.exposedMelds, ruleset) }
 }
 
 /** 当前手牌是否已听牌（打出 1 张后为 3n+1 听牌态且听口非空）。散手直接返回 false 避免重计算。 */

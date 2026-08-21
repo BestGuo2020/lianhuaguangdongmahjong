@@ -70,7 +70,7 @@ export interface LotusClaimContext extends LlmAdapterFields {
   wallCount?: number
 }
 
-export interface LotusChiContext {
+export interface LotusChiContext extends LlmAdapterFields {
   hand: TileType[]
   tile: TileType
   from: number
