@@ -46,6 +46,9 @@ function onAvatarError() {
           :class="scoreDelta > 0 ? 'positive' : 'negative'"
         >{{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}</strong>
       </Transition>
+      <Transition name="llm-bubble">
+        <div v-if="bubble" :key="bubble.id" class="llm-bubble" role="status" aria-live="polite">{{ bubble.text }}</div>
+      </Transition>
     </div>
     <div v-if="renderHand" class="opponent-hand" :class="`hand-${position}`">
       <MahjongTile
@@ -62,8 +65,5 @@ function onAvatarError() {
         <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
       </div>
     </div>
-    <Transition name="llm-bubble">
-      <div v-if="bubble" :key="bubble.id" class="llm-bubble" role="status" aria-live="polite">{{ bubble.text }}</div>
-    </Transition>
   </section>
 </template>
