@@ -153,7 +153,8 @@ export function createRequestCoordinator({
       if (state.actionPrompt.value?.type === 'rob') actions.pass()
     })
     scheduleAutoAction(() => {
-      if (state.actionPrompt.value?.type === 'rob') actions.pass()
+      // 托管：抢杠胡提示即本家可胡，直接胡。
+      if (state.actionPrompt.value?.type === 'rob') actions.hu()
     })
   }
 

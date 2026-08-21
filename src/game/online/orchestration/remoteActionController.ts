@@ -70,20 +70,25 @@ export function createRemoteActionController({
     const hand = user?.hand ?? []
     if (!user || !hand.length) return -1
     const meldCount = structuralMeldCount(user)
+    // 癞子/精牌集合：莲花广麻固定白板癞子；莲花麻将取翻精集合（白板始终可替代，一并保护）。
+    const jokerSet = new Set<TileType>(['white', ...state.jokerTiles.value])
+    const waitsFor = (after: TileType[]) => (state.rulesetId.value === 'lotus-legacy'
+      ? lotusWaitingTiles(after, meldCount, state.jokerTiles.value).length
+      : waitingTiles(after, meldCount).length)
     let bestIndex = hand.length - 1
-    let bestWaits = -1
+    let bestScore = -1
     const seen = new Set<TileType>()
     for (let index = 0; index < hand.length; index += 1) {
       const tile = hand[index]
       if (seen.has(tile)) continue
       seen.add(tile)
       const afterDiscard = hand.filter((_, candidate) => candidate !== index)
-      // 莲花麻将按精牌/白板算听口；经典规则用无精的 waitingTiles。
-      const waits = state.rulesetId.value === 'lotus-legacy'
-        ? lotusWaitingTiles(afterDiscard, meldCount, state.jokerTiles.value).length
-        : waitingTiles(afterDiscard, meldCount).length
-      if (waits > bestWaits) {
-        bestWaits = waits
+      const waits = waitsFor(afterDiscard)
+      const keepsTenpai = waits > 0
+      // 托管出牌策略：不拆听（保持听牌）优先，其次不打癞子/精牌，最后听口更多。
+      const score = (keepsTenpai ? 8 : 0) + (jokerSet.has(tile) ? 0 : 4) + Math.min(waits, 3)
+      if (score > bestScore) {
+        bestScore = score
         bestIndex = index
       }
     }

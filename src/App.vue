@@ -140,9 +140,10 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+  rejoining,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
-} = remoteGame
+} = vibeRemoteGame
 
 // SDK 无服务端房间容量元数据，「剩余房间」不再展示。
 const roomMeta = ref(null)
