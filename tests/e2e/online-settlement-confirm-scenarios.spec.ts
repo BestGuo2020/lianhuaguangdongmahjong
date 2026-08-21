@@ -490,6 +490,18 @@ async function waitForNextHand(host: Page, client: Page, currentKey: string, tim
   throw new Error(`等待离开 ${currentKey} 超时（host=${hostLabel || '(空)'} client=${clientLabel || '(空)'}；轨迹=${trace.join(' -> ')})`)
 }
 
+async function waitForConsistentHand(host: Page, client: Page, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const labels = await Promise.all([host, client].map(readRoundLabel))
+    const keys = labels.map(handKey)
+    if (keys[0] && keys[0] === keys[1]) return { hostLabel: labels[0], clientLabel: labels[1] }
+    await host.waitForTimeout(500)
+  }
+  const labels = await Promise.all([host, client].map(readRoundLabel))
+  throw new Error(`等待双端稳定当前局号超时（host=${labels[0] || '(空)'} client=${labels[1] || '(空)'}）`)
+}
+
 /** 正常路径必须一次加入即同步双端 UI roster；禁止离开重入掩盖。 */
 async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
   const pages: [Page, Page] = [host, client]
@@ -1342,9 +1354,10 @@ test('结算确认三场景：双端自动确认 / 仅房主确认 / 仅客户�
       // ── 场景 C：仅客户端确认，房主不确认 → 屏障阻止推进；房主确认后进入下一手 ──
       {
         // 当前手可能是东2局或东1局·1本场（视 B 的手牌结果），取两端当前一致的手牌键。
-        const hostLabel = await readRoundLabel(host)
-        const clientLabel = await readRoundLabel(client)
-        const currentKey = handKey(hostLabel) || handKey(clientLabel)
+        const current = await waitForConsistentHand(host, client, 30_000)
+        const hostLabel = current.hostLabel
+        const clientLabel = current.clientLabel
+        const currentKey = handKey(hostLabel)
         expect(currentKey, `场景C 应处于有效手牌（host=${hostLabel} client=${clientLabel}）`).not.toBe('')
         const winningKey = await waitForWinningSettlement(host, client, currentKey, true)
         console.log(`[确认专项][场景C] ${winningKey} 双端胡牌结算，仅客户端确认，房主不确认`)
