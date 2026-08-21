@@ -575,3 +575,16 @@ $env:ONLINE_WEAK_NETWORK_ROLE = 'host'   # host / client / both
    点击开始；旧房间不作为修复验收依据。
 
 证据：`tmp/online-phone-client-XD22HH.log`（本次客户端加入/准备日志及中止记录）。
+
+### 11.8 房主牌桌仍加载时客户端先开局的确定性复现（2026-08-21）
+
+针对“房主还没有进入房间（仍在加载牌桌），客户端已经开局，结果东二局无法正常进行”的描述，已用
+`src/game/online/host/openingHostLoading.repro.test.ts` 做到确定性复现。该测试不改生产代码，直接模拟
+东二局开局屏障：客户端先完成牌桌并发送 `opening_done`，房主的 `tableReady` 始终为 `false`。前 59,999ms
+权威引擎仍未进入首回合；当前实现的 60s opening barrier 兜底到期后，权威引擎会继续进入首回合，而房主
+牌桌仍未 ready。测试结果：`1 passed`，执行约 3ms。
+
+这说明现有线上长测难以捕获的窗口是真实存在的：客户端自身的资源门槛并不能代表房主 viewer 已 ready，
+而房主 opening barrier 超时后会放行逻辑引擎。该复现目前是代码级确定性证据，尚未宣称已在生产房间中
+重现完整的东二 UI 卡死；下一步应把“房主 loading 超过屏障期限”作为专项 E2E 故障注入场景，记录两端
+`round_start`、`opening_done`、table-loading 和东二首个 `turn_request` 的时间线。
