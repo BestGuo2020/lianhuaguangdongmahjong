@@ -59,11 +59,11 @@ export function createRemoteMatchLifecycle({
     || (value.round === state.round.value && value.honba < state.honba.value)
   )
 
-  function clearRoundBarrier() {
+  function clearRoundBarrier(preserveWaiting = false) {
     // 这里只清理“等待玩家确认”的表现层屏障；不能清掉 round_start 的去重游标。
     // 否则继续按钮之后，旧 Room 里迟到的同轮 round_start 会再次清空手牌并重播开局。
     pendingRoundStart = null
-    state.waitingNextRound.value = false
+    if (!preserveWaiting) state.waitingNextRound.value = false
   }
 
   function handleRoundStart(message: RoundStartMessage) {

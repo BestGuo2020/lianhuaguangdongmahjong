@@ -201,6 +201,15 @@ describe('remoteMatchLifecycle', () => {
     expect(opening.start).toHaveBeenCalledOnce()
   })
 
+  it('重连清理开局缓存时可以保留已确认等待状态', () => {
+    const { lifecycle, state } = setup()
+    state.waitingNextRound.value = true
+    lifecycle.clearRoundBarrier(true)
+    expect(state.waitingNextRound.value).toBe(true)
+    lifecycle.clearRoundBarrier()
+    expect(state.waitingNextRound.value).toBe(false)
+  })
+
   it('房主 authorityEpoch 变化后允许新生命周期从 sequence=1 开始', () => {
     const { lifecycle, opening } = setup()
     lifecycle.handleRoundStart({

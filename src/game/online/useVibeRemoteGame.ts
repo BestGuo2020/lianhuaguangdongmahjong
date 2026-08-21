@@ -1343,7 +1343,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       resetWinEffectDedup()
       snapshotReconciler.setAuthorityEpoch(msg.authorityEpoch)
       snapshotReconciler.clearPending()
-      matchLifecycle.clearRoundBarrier()
+      matchLifecycle.clearRoundBarrier(preserveSettlementConfirmation)
       // 若同房间当前局的快照已经先到，rejoin_ok 不能把 settled/playing/dealing
       // 降级回大厅；后续快照仍可继续校准。只有真正尚未收到当前局事实的 lobby
       // 状态才清理旧表现并保持大厅占位。
