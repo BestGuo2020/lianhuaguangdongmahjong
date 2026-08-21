@@ -4,6 +4,7 @@ import {
   isFutureShuffleHand,
   isSettlementPresentationReady,
   shouldPreserveRejoinState,
+  shouldPreserveSettlementConfirmationOnRejoin,
   settlementRecoveryDecision,
   shouldRecoverDowngradedSettlement,
   shouldArmAuthoritySilenceTimer,
@@ -151,6 +152,14 @@ describe('重进握手与当前阶段的消息乱序', () => {
     expect(shouldPreserveRejoinState('ROOM01', 'ROOM01', 'playing', 4)).toBe(true)
     expect(shouldPreserveRejoinState('ROOM01', 'ROOM01', 'lobby', 1)).toBe(false)
     expect(shouldPreserveRejoinState('ROOM01', 'ROOM02', 'settled', 1)).toBe(false)
+  })
+
+  it('已确认结算时即使 roomId 尚未写回，也不能把按钮回退成可再次确认', () => {
+    expect(shouldPreserveSettlementConfirmationOnRejoin('', 'ROOM01', 'settled', 1, true)).toBe(true)
+    expect(shouldPreserveSettlementConfirmationOnRejoin('ROOM01', 'ROOM01', 'settled', 1, true)).toBe(true)
+    expect(shouldPreserveSettlementConfirmationOnRejoin('ROOM01', 'ROOM02', 'settled', 1, true)).toBe(false)
+    expect(shouldPreserveSettlementConfirmationOnRejoin('', 'ROOM01', 'playing', 1, true)).toBe(false)
+    expect(shouldPreserveSettlementConfirmationOnRejoin('', 'ROOM01', 'settled', 1, false)).toBe(false)
   })
 })
 

@@ -168,6 +168,20 @@ export function shouldPreserveRejoinState(
     && currentPhase !== 'lobby'
 }
 
+/** 已点击当前局结算确认后，重连握手不能把按钮状态回退成可再次点击。 */
+export function shouldPreserveSettlementConfirmationOnRejoin(
+  currentRoomId: string,
+  messageRoomId: string,
+  currentPhase: GamePhase,
+  currentRound: number,
+  waitingNextRound: boolean,
+): boolean {
+  return waitingNextRound
+    && currentPhase === 'settled'
+    && currentRound >= 1
+    && (currentRoomId.length === 0 || currentRoomId === messageRoomId)
+}
+
 export function settlementRecoveryDecision(
   expectedHand: { round: number; honba: number } | null,
   currentHand: { round: number; honba: number },
@@ -1319,10 +1333,17 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         state.phase.value,
         state.round.value,
       )
+      const preserveSettlementConfirmation = shouldPreserveSettlementConfirmationOnRejoin(
+        state.roomId.value,
+        msg.roomId,
+        state.phase.value,
+        state.round.value,
+        state.waitingNextRound.value,
+      )
       // 若同房间当前局的快照已经先到，rejoin_ok 不能把 settled/playing/dealing
       // 降级回大厅；后续快照仍可继续校准。只有真正尚未收到当前局事实的 lobby
       // 状态才清理旧表现并保持大厅占位。
-      if (!preserveCurrentState) {
+      if (!preserveCurrentState && !preserveSettlementConfirmation) {
         state.result.value = null
         state.winEffect.value = null
         state.winPresentation.value = null
