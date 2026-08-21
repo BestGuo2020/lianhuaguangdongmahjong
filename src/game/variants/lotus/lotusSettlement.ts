@@ -41,7 +41,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     return meldIndex
   }
 
-  return createSettlementTimeline<LotusEndGameOptions>({
+  const timeline = createSettlementTimeline<LotusEndGameOptions>({
     ...options,
     takeRobbedKongTile,
     settleWinningDiscard: (from, tile, winnerIndex) => {
@@ -125,4 +125,33 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       }
     },
   })
+
+  function isLegalWin(winnerIndex: number, endOptions: LotusEndGameOptions) {
+    const winner = state.players[winnerIndex]
+    if (!winner) return false
+    const winningHand = endOptions.robbedKong || !endOptions.selfDraw
+      ? (endOptions.winTile ? [...winner.hand, endOptions.winTile] : null)
+      : winner.hand
+    return winningHand !== null
+      && ruleset.win.isWinningHand(
+        winningHand,
+        options.structuralMeldCount(winnerIndex),
+        {
+          jokers: state.jokerTiles.value,
+          ordinaryJokers: endOptions.winTile
+            && (state.jokerTiles.value.includes(endOptions.winTile) || state.wildcardTiles.value.includes(endOptions.winTile))
+            ? [endOptions.winTile]
+            : [],
+          jokerSubstitutes: state.wildcardTiles.value,
+        },
+      )
+  }
+
+  return {
+    ...timeline,
+    endGame(winnerIndex: number, endOptions: LotusEndGameOptions = {}) {
+      if (!isLegalWin(winnerIndex, endOptions)) return
+      return timeline.endGame(winnerIndex, endOptions)
+    },
+  }
 }

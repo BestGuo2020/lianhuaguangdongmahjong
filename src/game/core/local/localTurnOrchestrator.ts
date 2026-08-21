@@ -142,12 +142,19 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       .map((player, playerIndex) => ({
         playerIndex,
         distance: seatDistance(kongPlayerIndex, playerIndex),
-        canRob: playerIndex !== kongPlayerIndex
-          && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex)),
+        canRob: playerIndex !== kongPlayerIndex && canRobKong(playerIndex, tile),
       }))
       .filter(({ canRob }) => canRob)
       .sort((a, b) => a.distance - b.distance)
       .map(({ playerIndex }) => playerIndex)
+  }
+
+  function canRobKong(playerIndex: number, tile: TileType) {
+    const player = state.players[playerIndex]
+    return Boolean(player)
+      && playerIndex >= 0
+      && playerIndex < state.players.length
+      && ruleset.win.canRobKong(player.hand, tile, options.structuralMeldCount(playerIndex))
   }
 
   function requestAddedKong(playerIndex: number, meldIndex: number, tile: TileType) {
@@ -173,7 +180,9 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
     }
     const action = await options.controllers[robberIndex].requestRobKong(ctx)
     if (hasSettled() || state.pendingKong.value !== kong) return
-    if (action === 'pass') {
+    // 抢杠响应来自远端客户端，必须在收到 hu 后再次用房主状态验牌。
+    // 等待响应期间手牌或杠牌上下文可能已经变化，不能只相信 findRobbers 的快照。
+    if (action === 'pass' || !canRobKong(robberIndex, kong.tile)) {
       const [nextRobber, ...remainingRobbers] = kong.remainingRobbers
       if (nextRobber === undefined) return options.settleAddedKong(kong.playerIndex)
       state.pendingKong.value = { ...kong, remainingRobbers }
@@ -205,7 +214,8 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       melds: player.melds,
       exposedMelds: options.structuralMeldCount(playerIndex),
       kongBloom,
-      skipDraw: Boolean(turnOptions.skipDraw),
+      // 庄家首回合 preDrawn：引擎跳摸，但对远端视作已摸牌（天胡判定）。
+      skipDraw: Boolean(turnOptions.skipDraw) && !Boolean(turnOptions.preDrawn),
       afterKong: Boolean(turnOptions.fromTail),
       ruleset,
     } satisfies TurnContext),

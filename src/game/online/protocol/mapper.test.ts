@@ -99,7 +99,8 @@ describe('protocol seat mapper', () => {
 
     expect(mapped.winPresentation).toMatchObject({
       winnerIndex: 1,
-      sourceIndex: 2,
+      // sourceIndex 是赢家手牌内索引，与座位旋转无关，原样保留。
+      sourceIndex: 0,
       robbedKongPlayerIndex: 3,
     })
   })

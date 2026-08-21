@@ -14,6 +14,8 @@ interface TurnRunnerState {
 export interface TurnOptions {
   skipDraw?: boolean
   fromTail?: boolean
+  /** 庄家开局首回合：已持 14 张（引擎跳摸，但对远端视作已摸牌，用于天胡判定）。 */
+  preDrawn?: boolean
 }
 
 export interface TurnRunnerApi {

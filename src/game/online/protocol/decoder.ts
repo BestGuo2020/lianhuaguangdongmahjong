@@ -29,6 +29,10 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isIntegerBetween(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
+}
+
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
@@ -114,7 +118,11 @@ function isLastDiscard(value: unknown): value is JsonObject {
 
 function isWinPresentation(value: unknown): value is WinPresentation {
   return isObject(value)
-    && isNumber(value.winnerIndex) && isTile(value.tile) && isNumber(value.sourceIndex)
+    && isNumber(value.winnerIndex) && isTile(value.tile)
+    // sourceIndex 是赢家手牌内的索引（drawnTileIndex / hand.lastIndexOf(winTile)），
+    // 不是座位：手牌最多 14+ 张，索引可到 13+。曾误限制在 [-1,3]，胡牌在手牌
+    // 位置 >= 4 时整条快照解码失败，客户端永远进不了结算。
+    && isIntegerBetween(value.sourceIndex, -1, 20)
     && isBoolean(value.robbedKong) && isNumber(value.robbedKongPlayerIndex)
     && isNumber(value.robbedKongMeldIndex)
 }
@@ -145,6 +153,8 @@ function isSnapshot(message: JsonObject): boolean {
     && isNullable(message.result, isRoundResult)
     && isNullable(message.announcement, isAnnouncement)
     && isBoolean(message.matchFinished)
+    // 终局一致性：phase=finished 当且仅当 matchFinished=true（房主/后端同源发送）。
+    && ((message.phase === 'finished') === message.matchFinished)
     && isNullable(message.lastDiscard, isLastDiscard)
     && isNullable(message.winPresentation, isWinPresentation)
     && isNumber(message.winningPlayerIndex)

@@ -25,7 +25,7 @@ interface LotusOpeningOptions {
   playSoundAndWait(name: string, volume?: number): Promise<void>
   announce(text: string, tone?: string): void
   getRoundLabel(): string
-  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
+  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
   ruleset?: RuleSet
 }
@@ -44,7 +44,13 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     resetLocalPlayers(state, 2000)
   }
 
-  async function start(mode?: MatchType) {
+  async function start(mode?: MatchType, startOptions: {
+    waitForTableReady?: () => Promise<void>
+    waitForOpeningReady?: () => Promise<void>
+    initialWall?: TileType[]
+    openingDice?: [number, number]
+    openingSecondDice?: [number, number]
+  } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -57,7 +63,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     const currentSequence = sequence
     resetPlayers()
     // 先立起牌山（环序 136 张），掷骰前即可看到
-    const ring = buildRingWall()
+    const ring = startOptions.initialWall
+      ? [...startOptions.initialWall]
+      : buildRingWall()
     state.wall.value = [...ring]
     state.wallHeadDrawn.value = 0
     state.result.value = null
@@ -73,29 +81,41 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.lastDiscardSound.value = null
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
-    state.openingStage.value = 'start'
     // 第一次掷骰由庄家投掷；第二次会在翻精后切换为翻精目标方。
     state.diceThrowerIndex.value = state.dealer.value
     state.flipTile.value = null
     state.jokerTiles.value = []
     state.wildcardTiles.value = ['white']
     state.flipStack.value = null
+    state.flipSeat.value = null
+    state.firstDice.value = null
     state.secondDice.value = null
     state.wallBreakIndex.value = 0
     state.roundFirstDiscard.value = true
 
+    if (startOptions.waitForTableReady) {
+      await startOptions.waitForTableReady()
+      if (currentSequence !== sequence) return
+    }
+    state.openingStage.value = 'start'
+
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
 
-    // 第一次掷骰：定翻精方位与墩位
-    const firstDice: [number, number] = [roll(), roll()]
+    // 第一次掷骰：定翻精方位与墩位。diceValues 会在第二次掷骰时被覆盖，
+    // 必须把第一次点数单独保留，供联机 round_start 的一骰使用（对齐单人模式）。
+    const firstDice: [number, number] = startOptions.openingDice
+      ? [...startOptions.openingDice] as [number, number]
+      : [roll(), roll()]
     state.diceValues.value = firstDice
+    state.firstDice.value = firstDice
     state.openingStage.value = 'dice'
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
     if (currentSequence !== sequence) return
 
     // 翻精：从牌山翻出指示牌（翻精墩整体移出，牌山空出该墩并立起指示牌）
     const { flipSeat, flipStack, flipTile, jokers } = resolveFlip(ring, state.dealer.value, firstDice)
+    state.flipSeat.value = flipSeat
     state.wall.value = removeFlipStack(ring, flipStack)
     state.flipStack.value = flipStack
     state.flipTile.value = flipTile
@@ -109,7 +129,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 再写入第二次骰子值，确保骰子动画从一开始就显示正确的玩家。
     state.diceThrowerIndex.value = flipSeat
     // 第二次掷骰：两个骰子的点数和作为开牌依据。
-    const secondDice: [number, number] = [roll(), roll()]
+    const secondDice: [number, number] = startOptions.openingSecondDice
+      ? [...startOptions.openingSecondDice] as [number, number]
+      : [roll(), roll()]
     state.diceValues.value = secondDice
     state.secondDice.value = secondDice
     state.openingStage.value = 'dice'
@@ -152,7 +174,11 @@ export function createLotusOpening(options: LotusOpeningOptions) {
         winTile: dealer.hand[dealer.drawnTileIndex] ?? dealer.hand[dealer.hand.length - 1],
       })
     }
-    options.later(() => options.beginTurn(dealerIndex, { skipDraw: true }), 650)
+    if (startOptions.waitForOpeningReady) {
+      await startOptions.waitForOpeningReady()
+      if (currentSequence !== sequence) return
+    }
+    options.later(() => options.beginTurn(dealerIndex, { skipDraw: true, preDrawn: true }), 650)
   }
 
   function roll() {

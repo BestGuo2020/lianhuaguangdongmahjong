@@ -1,6 +1,6 @@
 import type { MatchType, TileType } from '../contracts/types'
 import { createWall, shuffle, sortTiles } from '../rules/tiles'
-import { wallBreakIndex } from '../rules/wallLayout'
+import { wallBreakIndexForDealer } from '../rules/wallLayout'
 import { MATCH_HANDS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
@@ -15,7 +15,7 @@ interface LocalOpeningTimelineOptions {
   playSoundAndWait(name: string, volume?: number): Promise<void>
   announce(text: string, tone?: string): void
   getRoundLabel(): string
-  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean }): unknown
+  beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options: { fourRed: true }): unknown
 }
 
@@ -52,7 +52,12 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
   }
 
-  async function start(mode?: MatchType, startOptions: { waitForTableReady?: () => Promise<void> } = {}) {
+  async function start(mode?: MatchType, startOptions: {
+    waitForTableReady?: () => Promise<void>
+    waitForOpeningReady?: () => Promise<void>
+    initialWall?: TileType[]
+    openingDice?: [number, number]
+  } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
       state.matchType.value = mode
@@ -64,7 +69,9 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     }
     const currentSequence = sequence
     resetPlayers()
-    state.wall.value = shuffle(createWall())
+    state.wall.value = startOptions.initialWall
+      ? [...startOptions.initialWall]
+      : shuffle(createWall())
     state.wallHeadDrawn.value = 0
     state.result.value = null
     state.winEffect.value = null
@@ -80,6 +87,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
     state.diceThrowerIndex.value = state.dealer.value
+    state.wallBreakIndex.value = 0
 
     if (startOptions.waitForTableReady) {
       await startOptions.waitForTableReady()
@@ -89,15 +97,19 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
 
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
-    state.diceValues.value = [
-      Math.floor(Math.random() * 6) + 1,
-      Math.floor(Math.random() * 6) + 1,
-    ]
+    state.diceValues.value = startOptions.openingDice
+      ? [...startOptions.openingDice]
+      : [
+          Math.floor(Math.random() * 6) + 1,
+          Math.floor(Math.random() * 6) + 1,
+        ]
     state.openingStage.value = 'dice'
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1150)])
     if (currentSequence !== sequence) return
 
-    const breakIndex = wallBreakIndex(state.diceValues.value)
+    const breakIndex = wallBreakIndexForDealer(state.diceValues.value, state.dealer.value)
+    // 记录拆墙断点，供房主快照下发（联机模式 3D 牌山开口位置与单人模式一致）。
+    state.wallBreakIndex.value = breakIndex
     state.wall.value = [
       ...state.wall.value.slice(breakIndex),
       ...state.wall.value.slice(0, breakIndex),
@@ -124,7 +136,11 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
     const fourRedWinner = state.players.findIndex((player) => player.redCount >= 4)
     if (fourRedWinner >= 0) return options.endGame(fourRedWinner, { fourRed: true })
     options.announce(`${options.getRoundLabel()} · 开牌`)
-    options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true }), 650)
+    if (startOptions.waitForOpeningReady) {
+      await startOptions.waitForOpeningReady()
+      if (currentSequence !== sequence) return
+    }
+    options.later(() => options.beginTurn(state.dealer.value, { skipDraw: true, preDrawn: true }), 650)
   }
 
   return { start, cancel, resetPlayers }

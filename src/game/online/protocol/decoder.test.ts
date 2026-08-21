@@ -88,4 +88,39 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, flipTile: 'm10' })).toBeNull()
     expect(decodeServerMessage({ ...message, flipStack: '4' })).toBeNull()
   })
+
+  it('treats winPresentation.sourceIndex as a hand-tile index, not a seat', () => {
+    // sourceIndex 是赢家手牌内索引（自摸 drawnTileIndex / 点炮 lastIndexOf(winTile)），
+    // 合法范围可到 13+；曾误限制为座位 [-1,3]，胡牌在手牌位置 >= 4 时整条快照解码失败。
+    const base = {
+      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'thinking',
+      round: 1, dealer: 0, honba: 0, dice: [2, 5], wallCount: 80,
+      wall: ['m1'], headDrawn: 52, currentPlayer: 0, seat: 0,
+      flipTile: null, flipStack: null, openingStack: null,
+      players: [], result: null, announcement: null, matchFinished: false,
+      lastDiscard: null, winningPlayerIndex: -1,
+    }
+    const winning = {
+      winnerIndex: 0, tile: 'm1', sourceIndex: 4, robbedKong: false,
+      robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+    }
+    expect(decodeServerMessage({ ...base, winPresentation: { ...winning, sourceIndex: 13 } })).toBeTruthy()
+    expect(decodeServerMessage({ ...base, winPresentation: winning })).toBeTruthy()
+    expect(decodeServerMessage({ ...base, winPresentation: { ...winning, sourceIndex: 21 } })).toBeNull()
+    expect(decodeServerMessage({ ...base, winPresentation: { ...winning, sourceIndex: 1.5 } })).toBeNull()
+  })
+
+  it('rejects a snapshot with only one terminal flag', () => {
+    const base = {
+      kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'finished',
+      round: 4, dealer: 0, honba: 0, dice: [2, 5], wallCount: 0,
+      wall: [], headDrawn: 136, currentPlayer: -1, seat: 0,
+      flipTile: null, flipStack: null, openingStack: null,
+      players: [], result: null, announcement: null, matchFinished: false,
+      lastDiscard: null, winPresentation: null, winningPlayerIndex: -1,
+    }
+    expect(decodeServerMessage(base)).toBeNull()
+    expect(decodeServerMessage({ ...base, matchFinished: true })).toBeTruthy()
+    expect(decodeServerMessage({ ...base, phase: 'playing', matchFinished: true })).toBeNull()
+  })
 })
