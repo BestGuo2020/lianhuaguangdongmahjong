@@ -1,7 +1,7 @@
 // 真实线上部署回归：凭据与 URL 只在运行时从 tmp/online_test 读取，绝不写入日志/附件。
 // 两个 VibeHub 账号分别作为房主、客人；空余两席由引擎 AI 补齐，连续完成两个东风场。
 import { readFileSync } from 'node:fs'
-import { chromium, expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
+import { chromium, expect, test, type Browser, type BrowserContext, type CDPSession, type Page, type TestInfo } from '@playwright/test'
 
 interface Account { email: string; password: string }
 interface OnlineConfig { url: string; accounts: [Account, Account] }
@@ -1062,6 +1062,106 @@ async function readNormalizedTableState(page: Page): Promise<NormalizedTableStat
       })).sort((a, b) => a.seat - b.seat),
     }
   })
+}
+
+type WeakNetworkRole = 'none' | 'host' | 'client' | 'both'
+
+const weakRoleEnv = process.env.ONLINE_WEAK_NETWORK_ROLE
+const WEAK_NETWORK_ROLE: WeakNetworkRole = weakRoleEnv === 'host'
+  || weakRoleEnv === 'client'
+  || weakRoleEnv === 'both'
+  ? weakRoleEnv
+  : 'none'
+
+const WEAK_NETWORK_CONDITIONS = {
+  offline: false,
+  latency: 600,
+  downloadThroughput: 64 * 1024,
+  uploadThroughput: 32 * 1024,
+  connectionType: 'cellular3g',
+} as const
+
+async function configureWeakNetwork(pages: [Page, Page]): Promise<Array<{ index: number; session: CDPSession }>> {
+  const indexes = WEAK_NETWORK_ROLE === 'host'
+    ? [0]
+    : WEAK_NETWORK_ROLE === 'client'
+      ? [1]
+      : WEAK_NETWORK_ROLE === 'both'
+        ? [0, 1]
+        : []
+  const sessions: Array<{ index: number; session: CDPSession }> = []
+  for (const index of indexes) {
+    const session = await pages[index].context().newCDPSession(pages[index])
+    await session.send('Network.enable')
+    await session.send('Network.emulateNetworkConditions', WEAK_NETWORK_CONDITIONS)
+    sessions.push({ index, session })
+  }
+  return sessions
+}
+
+async function clearWeakNetwork(sessions: Array<{ index: number; session: CDPSession }>) {
+  for (const { session } of sessions) {
+    await session.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+      connectionType: 'none',
+    }).catch(() => {})
+    await session.detach().catch(() => {})
+  }
+}
+
+async function observeWeakNetworkStall(
+  pages: [Page, Page],
+  consoleLogs: string[][],
+  testInfo: TestInfo,
+  role: WeakNetworkRole,
+  reason: string,
+) {
+  const startedAt = Date.now()
+  const samples: Array<{
+    at: number
+    rounds: string[]
+    phases: string[]
+    openingStages: string[]
+    wallCounts: number[]
+    wallHeads: number[]
+    banners: string[][]
+  }> = []
+  let lastSignature = ''
+  while (Date.now() - startedAt < 180_000) {
+    const states = await Promise.all(pages.map(async (page) => page.evaluate(() => {
+      const hud = document.querySelector<HTMLElement>('.game-table-hud')
+      return {
+        round: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+        phase: hud?.dataset.phase ?? '',
+        openingStage: hud?.dataset.openingStage ?? '',
+        wallCount: Number(hud?.dataset.wallCount ?? -1),
+        wallHead: Number(hud?.dataset.wallHeadDrawn ?? -1),
+        banners: [...document.querySelectorAll('.remote-banner')].map((node) => node.textContent?.trim() ?? ''),
+      }
+    }).catch(() => ({ round: '', phase: '', openingStage: '', wallCount: -1, wallHead: -1, banners: [] as string[] }))))
+    const signature = JSON.stringify(states)
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      samples.push({
+        at: Date.now(),
+        rounds: states.map((state) => state.round),
+        phases: states.map((state) => state.phase),
+        openingStages: states.map((state) => state.openingStage),
+        wallCounts: states.map((state) => state.wallCount),
+        wallHeads: states.map((state) => state.wallHead),
+        banners: states.map((state) => state.banners),
+      })
+    }
+    await pages[0].waitForTimeout(1000)
+  }
+  await testInfo.attach(`weak-network-${role}-stall-observation`, {
+    body: JSON.stringify({ role, reason, durationMs: Date.now() - startedAt, samples, consoleLogs }, null, 2),
+    contentType: 'application/json',
+  })
+  console.log(`[ONLINE][弱网:${role}] 异常后观望 180 秒结束，状态变化 ${samples.length} 次`)
 }
 
 async function readFinalStandings(page: Page): Promise<FinalStanding[]> {
@@ -2247,6 +2347,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
   let activePages: [Page, Page] | null = null
   let capturedLogs: string[][] = [[], []]
   let capturedPageErrors: PageErrorRecord[][] = [[], []]
+  let weakNetworkSessions: Array<{ index: number; session: CDPSession }> = []
   try {
     await Promise.all(contexts.map(installAudioProbe))
     // 游戏授权令牌位于当前标签页的 sessionStorage；必须复用授权返回的两个页面，
@@ -2283,6 +2384,14 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       expectedMarkers,
       expectedMarkers,
     ])
+    weakNetworkSessions = await configureWeakNetwork(pages)
+    if (WEAK_NETWORK_ROLE !== 'none') {
+      await testInfo.attach('weak-network-config', {
+        body: JSON.stringify({ role: WEAK_NETWORK_ROLE, conditions: WEAK_NETWORK_CONDITIONS }),
+        contentType: 'application/json',
+      })
+      console.log(`[ONLINE][弱网:${WEAK_NETWORK_ROLE}] 已注入 ${JSON.stringify(WEAK_NETWORK_CONDITIONS)}`)
+    }
     const logs = pages.map(() => [] as string[])
     capturedLogs = logs
     const errors = pages.map(() => [] as PageErrorRecord[])
@@ -2310,11 +2419,19 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       timings: Array<{ hand: string; seconds: number }>
       finalStandings: FinalStanding[]
     }> = []
-    for (let matchIndex = 1; matchIndex <= 2; matchIndex += 1) {
-      results.push(await runEastMatch({
-        host: pages[0], client: pages[1], matchIndex, consoleLogs: logs, testInfo,
-        reuseRoom: matchIndex > 1,
-      }))
+    const matchCount = WEAK_NETWORK_ROLE === 'none' ? 2 : 1
+    for (let matchIndex = 1; matchIndex <= matchCount; matchIndex += 1) {
+      try {
+        results.push(await runEastMatch({
+          host: pages[0], client: pages[1], matchIndex, consoleLogs: logs, testInfo,
+          reuseRoom: matchIndex > 1,
+        }))
+      } catch (error) {
+        if (WEAK_NETWORK_ROLE !== 'none') {
+          await observeWeakNetworkStall(pages, logs, testInfo, WEAK_NETWORK_ROLE, String(error))
+        }
+        throw error
+      }
       for (let index = 0; index < errors.length; index += 1) {
         const matchErrors = errors[index].slice(checkedErrorCounts[index])
         checkedErrorCounts[index] = errors[index].length
@@ -2340,7 +2457,11 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     expect(new Set(results.map((result) => result.roomCode)).size).toBe(1)
-    console.log(`[ONLINE] 同一房间连续两个东风场完整通过：${results[0].roomCode}`)
+    if (WEAK_NETWORK_ROLE === 'none') {
+      console.log(`[ONLINE] 同一房间连续两个东风场完整通过：${results[0].roomCode}`)
+    } else {
+      console.log(`[ONLINE][弱网:${WEAK_NETWORK_ROLE}] 一场东风场完整通过：${results[0].roomCode}`)
+    }
   } catch (error) {
     if (activePages) {
       await attachDualScreenshots(activePages, testInfo, 'online-two-east-matches-failure')
@@ -2365,6 +2486,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     }
     throw error
   } finally {
+    await clearWeakNetwork(weakNetworkSessions)
     await closeAccountBrowserPair(accountPair)
   }
 })
