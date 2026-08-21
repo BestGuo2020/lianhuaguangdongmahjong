@@ -1,12 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- 牌桌金棕风格的简洁机器人线稿图标 -->
-  <g fill="none" stroke="#f5df9c" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M32 13V8" stroke-width="3"/>
-    <circle cx="32" cy="5.5" r="3" fill="#d2aa58" stroke-width="2"/>
-    <rect x="11" y="16" width="42" height="36" rx="10" fill="#2e2519" stroke-width="3"/>
-    <path d="M11 27H7.5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2H11M53 27h3.5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H53" stroke-width="3"/>
-    <rect x="20" y="26" width="7" height="7" rx="2" fill="#f5df9c" stroke="none"/>
-    <rect x="37" y="26" width="7" height="7" rx="2" fill="#f5df9c" stroke="none"/>
-    <path d="M22 42h20M27 42v4M32 42v4M37 42v4" stroke-width="2.5"/>
+  <!-- 机器人图标：天线 + 双耳 + 头部 + 发光眼睛 + 格栅嘴，配合牌桌金色主题 -->
+  <g stroke="#f4cb63" stroke-width="3" stroke-linecap="round" fill="none">
+    <line x1="22" y1="13" x2="22" y2="7"/>
+    <line x1="42" y1="13" x2="42" y2="7"/>
+  </g>
+  <circle cx="22" cy="5.5" r="3.4" fill="#ffd966"/>
+  <circle cx="42" cy="5.5" r="3.4" fill="#ffd966"/>
+  <rect x="4" y="25" width="7" height="16" rx="3" fill="#c9a24f" stroke="#8a6a25" stroke-width="1.5"/>
+  <rect x="53" y="25" width="7" height="16" rx="3" fill="#c9a24f" stroke="#8a6a25" stroke-width="1.5"/>
+  <rect x="12" y="12" width="40" height="41" rx="10" fill="#f2c65c" stroke="#8a6a25" stroke-width="2.5"/>
+  <rect x="17" y="17" width="30" height="31" rx="7" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2"/>
+  <circle cx="25" cy="29" r="5.2" fill="#1d2e1c"/>
+  <circle cx="39" cy="29" r="5.2" fill="#1d2e1c"/>
+  <circle cx="26.8" cy="27.2" r="1.7" fill="#9df3ff"/>
+  <circle cx="40.8" cy="27.2" r="1.7" fill="#9df3ff"/>
+  <g stroke="#1d2e1c" stroke-width="2.4" stroke-linecap="round">
+    <line x1="22" y1="40.5" x2="42" y2="40.5"/>
+    <line x1="22" y1="45" x2="42" y2="45"/>
+    <line x1="26.5" y1="37.5" x2="26.5" y2="48"/>
+    <line x1="32" y1="37.5" x2="32" y2="48"/>
+    <line x1="37.5" y1="37.5" x2="37.5" y2="48"/>
   </g>
 </svg>
