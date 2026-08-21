@@ -295,6 +295,32 @@ describe('testLlmConnection', () => {
     vi.stubGlobal('fetch', spy as never)
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
   })
+
+  it('DeepSeek 端点自动关闭思考模式（thinking.disabled）；其他厂商不追加该字段', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    const spy = vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }),
+      }
+    })
+    vi.stubGlobal('fetch', spy as never)
+    await requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect((capturedBody.thinking as { type: string }).type).toBe('disabled')
+
+    const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1' }
+    let otherBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      otherBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }),
+      }
+    }) as never)
+    await requestLlmDecision({ config: otherConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect(otherBody.thinking).toBeUndefined()
+  })
 })
 
 describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {

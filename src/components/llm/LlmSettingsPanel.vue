@@ -80,7 +80,9 @@ async function testConnection() {
 
       <p class="llm-hint">
         单机人机的 AI 玩家可接入大模型决策（出牌/吃碰杠）。修改后<strong>刷新页面</strong>生效；
-        Key 仅保存在本浏览器。联机房间由服务端配置，与此无关。
+        Key 仅保存在本浏览器。联机房间由服务端配置，与此无关。<br>
+        模型名必须是供应商准确的 API ID（DeepSeek 常见：<code>deepseek-v4-flash</code>（便宜）/ <code>deepseek-v4-pro</code> / <code>deepseek-chat</code>），
+        填错会提示 HTTP 4xx。
       </p>
 
       <label class="llm-row">

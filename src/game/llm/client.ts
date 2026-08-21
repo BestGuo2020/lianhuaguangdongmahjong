@@ -99,6 +99,13 @@ interface CallOnceOptions {
   maxTokens?: number
   /** 连接测试等场景：finish_reason=length 视为成功（证明链路通畅，仅内容被截断） */
   strictLength?: boolean
+  /** 追加到请求体的厂商特有字段（如 DeepSeek 的 thinking 开关） */
+  extraBody?: Record<string, unknown>
+}
+
+/** DeepSeek 官方端点：V4 系列默认开启思考模式（effort=high），会占用决策输出预算。 */
+export function isDeepSeekBaseUrl(baseUrl: string): boolean {
+  return /^https:\/\/api\.deepseek\.com/i.test(baseUrl.trim())
 }
 
 async function callOnce(
@@ -129,6 +136,7 @@ async function callOnce(
         top_p: 1,
         stream: false,
         n: 1,
+        ...(options.extraBody ?? {}),
       }),
       signal: controller.signal,
     })
@@ -169,8 +177,14 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const left = budgetMs - (Date.now() - startedAt)
     if (left <= 0) throw new LlmClientError('timeout', '总预算耗尽')
     const config = { ...options.config, timeoutMs: left }
+    const extraBody = isDeepSeekBaseUrl(config.baseUrl) ? { thinking: { type: 'disabled' } } : undefined
     try {
-      const response = await callOnce(config, [{ role: 'system', content: messages.system }, { role: 'user', content: messages.user }], options.signal)
+      const response = await callOnce(
+        config,
+        [{ role: 'system', content: messages.system }, { role: 'user', content: messages.user }],
+        options.signal,
+        { extraBody },
+      )
       return parseLlmOutput(response.content, options.candidateIds)
     } catch (error) {
       if (error instanceof LlmClientError && error.kind === 'parse' && !errorForRetry) {
@@ -192,7 +206,11 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
       config,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
-      { maxTokens: 8, strictLength: false },
+      {
+        maxTokens: 8,
+        strictLength: false,
+        extraBody: isDeepSeekBaseUrl(config.baseUrl) ? { thinking: { type: 'disabled' } } : undefined,
+      },
     )
     return { ok: true, message: '连接成功' }
   } catch (error) {
