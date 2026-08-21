@@ -1029,11 +1029,11 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     return id
   }
 
-  function clearTimers() {
+  function clearTimers(options: { preserveOpening?: boolean } = {}) {
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
     requestCoordinator.clearCountdown()
-    openingTimeline.cancel()
+    if (!options.preserveOpening) openingTimeline.cancel()
     settlementTimeline.cancel()
     transientEventPresenter.clear()
   }
@@ -1320,13 +1320,6 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       // rejoin_ok 说明会话已恢复，先清掉这个残留和旧 Room 的所有本地请求/计时器，
       // 随后只以当前房主快照及其重新下发的当前请求为准。不能保留旧 pending request，
       // 否则重进后旧回合的 countdown 会继续跑到 3 秒并自动弃牌。
-      clearTimers()
-      requestCoordinator.reset()
-      requestCoordinator.setAuthorityEpoch(msg.authorityEpoch)
-      resetWinEffectDedup()
-      snapshotReconciler.setAuthorityEpoch(msg.authorityEpoch)
-      snapshotReconciler.clearPending()
-      matchLifecycle.clearRoundBarrier()
       const preserveCurrentState = shouldPreserveRejoinState(
         state.roomId.value,
         msg.roomId,
@@ -1340,6 +1333,17 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         state.round.value,
         state.waitingNextRound.value,
       )
+      const preserveOpening = preserveCurrentState
+        && (state.phase.value === 'opening' || state.phase.value === 'dealing')
+      // 同一局开场期间的 Relay/rejoin 不能取消 opening timeline；否则下面仍保留
+      // phase=dealing，但 start/dice/flip/deal 已被取消，牌山会永久停在断点 0。
+      clearTimers({ preserveOpening })
+      requestCoordinator.reset()
+      requestCoordinator.setAuthorityEpoch(msg.authorityEpoch)
+      resetWinEffectDedup()
+      snapshotReconciler.setAuthorityEpoch(msg.authorityEpoch)
+      snapshotReconciler.clearPending()
+      matchLifecycle.clearRoundBarrier()
       // 若同房间当前局的快照已经先到，rejoin_ok 不能把 settled/playing/dealing
       // 降级回大厅；后续快照仍可继续校准。只有真正尚未收到当前局事实的 lobby
       // 状态才清理旧表现并保持大厅占位。
