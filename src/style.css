@@ -495,12 +495,16 @@ button { font: inherit; }
   from { translate: 0 -2px; }
   to { translate: 0 3px; }
 }
-.turn-timer { position: absolute; z-index: 31; right: 10%; bottom: 114px; display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid rgba(231,190,82,.78); border-radius: 18px; background: rgba(9,25,18,.9); color: #ffe078; box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px rgba(230,184,66,.18); text-shadow: 0 2px 5px #000; }
+/* 操作按钮行 + 倒计时同行（右下角一条横排）：吃/碰/杠/胡/听、托管开关与秒表同排显示。 */
+.turn-action-row { position: absolute; z-index: 45; right: 10%; bottom: clamp(150px, 22vh, 210px); display: flex; align-items: center; gap: 10px; }
+.turn-timer { display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid rgba(231,190,82,.78); border-radius: 18px; background: rgba(9,25,18,.9); color: #ffe078; box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px rgba(230,184,66,.18); text-shadow: 0 2px 5px #000; }
 .turn-timer span { font: 800 clamp(34px, 3.2vw, 50px) Georgia, serif; line-height: .9; }.turn-timer small { font-size: clamp(13px, 1vw, 17px); font-weight: 700; }
 .turn-timer.prompt-timer { border-color: rgba(238, 181, 90, .72); box-shadow: 0 0 18px rgba(213, 148, 52, .24); }
 .turn-timer.prompt-timer small { white-space: nowrap; }
 
-.action-bar { position: absolute; z-index: 45; right: 11%; bottom: clamp(116px, 17vh, 164px); display: flex; gap: 9px; align-items: center; }
+.action-bar { display: flex; gap: 9px; align-items: center; }
+.autoplay-action { border-color: #5d8a6f; background: radial-gradient(circle at 42% 33%, #4a7a5e, #22402f 69%, #0c1a12); color: #d8f0e0; }
+.autoplay-action.active { border-color: #d2aa58; background: radial-gradient(circle at 42% 33%, #b98737, #6e4f1e 69%, #241a08); color: #ffe6a5; box-shadow: 0 4px 10px rgba(0,0,0,.48), 0 0 12px rgba(239,190,75,.35), inset 0 0 0 2px rgba(255,255,255,.05); }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid #ae8840; border-radius: 50%; background: radial-gradient(circle at 42% 33%, #806433, #2e2519 69%, #0f0d0a); color: #f5df9c; box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
 .action b { display: block; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
@@ -659,7 +663,7 @@ button { font: inherit; }
 .kong-picker-tiles { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
 .kong-picker-card .kong-picker-tile { --tile-width: clamp(52px, 7vw, 66px); cursor: pointer; }
 .kong-picker-card .kong-picker-tile:not(.disabled):hover { transform: translateY(-4px) rotateX(-3deg) scale(1.04); box-shadow: 0 4px 0 #c0bd92, 0 0 0 2px #f4cb63, 0 8px 8px rgba(0,0,0,.5); }
-.action-bar.kong-picker-open { z-index: 92; }
+.turn-action-row.kong-picker-open { z-index: 92; }
 .result-reopen { position: absolute; z-index: 92; right: 4%; bottom: 5%; padding: 12px 22px; border: 2px solid #d0a64d; border-radius: 24px; background: rgba(7,25,18,.92); color: #f3d27c; font-size: clamp(15px, 1.2vw, 19px); font-weight: 800; box-shadow: 0 7px 22px rgba(0,0,0,.55); cursor: pointer; }
 .result-reopen.continue { right: calc(4% + 170px); border-color: #b98a36; }
 .win-effect-lab { position: fixed; z-index: 150; top: 12px; left: 12px; display: grid; gap: 5px; width: 230px; padding: 10px; border: 1px solid #bd974c; border-radius: 7px; background: rgba(4,16,12,.94); color: #f3dfad; font-size: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
@@ -834,8 +838,6 @@ button { font: inherit; }
 .hand-rack { min-height: 112px; gap: clamp(1px,.15vw,3px); padding: 12px 16px 8px; }
 .hand-rack .mahjong-tile { box-shadow: 0 6px 0 #d8ddd2, 0 10px 0 #4e9b43, 0 15px 9px rgba(0,0,0,.6), inset 0 1px rgba(255,255,255,.9); }
 .hand-rack .hand-tile-slot.drawn { margin-left: clamp(10px, 1vw, 18px); }
-.action-bar { bottom: clamp(150px, 22vh, 210px); }
-.turn-timer { bottom: clamp(220px, 29vh, 280px); }
 
 .last-discard .mahjong-tile { --tile-width: clamp(58px, 6vw, 96px); box-shadow: 0 7px 0 #a7afa0, 0 0 0 3px rgba(255,205,83,.62), 0 17px 18px rgba(0,0,0,.62); }
 .last-discard.from-top { transform: translate(-50%, -75%); }
@@ -1005,7 +1007,7 @@ button { font: inherit; }
   .user-identity strong { font-size: 14px; }
   .user-identity span { font-size: 13px; }
   /* 横向矮窗口中，功能区与计时器并排放在手牌上方，避免被牌面完全遮住。 */
-  .action-bar { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
+  .turn-action-row { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
   .waiting-tip { bottom: 60px; max-width: min(460px, 68vw); }
   .compact-waiting-tip { padding: 5px 7px; border-radius: 7px; }
   .waiting-tiles { gap: 4px; padding: 1px 1px 3px; }
@@ -1017,7 +1019,7 @@ button { font: inherit; }
   .waiting-action .action-icon { width: 46px; height: 46px; }
   .action b { font-size: 16px; }
   .action span { font-size: 9px; }
-  .turn-timer { right: 9%; bottom: 132px; min-width: 67px; padding: 6px 9px 5px; border-radius: 14px; }
+  .turn-timer { min-width: 67px; padding: 6px 9px 5px; border-radius: 14px; }
   .turn-timer span { font-size: 29px; }
   .turn-timer small { font-size: 11px; }
   .lobby { transform: scale(.9); transform-origin: center; inset: -6%; }
@@ -1084,9 +1086,9 @@ button { font: inherit; }
   .user-area { right: 1%; left: 1%; }.user-identity { left: 1%; bottom: 96px; width: 68px; min-width: 0; padding: 4px; }.user-identity > div:last-child { display: flex; }
   .mahjong-tile { --tile-width: min(6.6vw, 38px); }.mahjong-tile.small { --tile-width: min(4.7vw, 25px); }
   .hand-rack { gap: 0; padding-right: 2px; padding-left: 2px; }
-  .action-bar { right: 3%; bottom: 113px; }.action { min-width: 50px; height: 46px; padding: 4px 9px; }.action b { font-size: 15px; }
-  .waiting-action { width: 50px; height: 54px; padding: 0; }
-  .turn-timer { right: 8%; bottom: 174px; min-width: 72px; padding: 7px 10px 6px; }
+  .turn-action-row { right: 3%; bottom: 113px; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }.action { min-width: 46px; height: 42px; padding: 4px 8px; }.action b { font-size: 14px; }
+  .waiting-action { width: 46px; height: 48px; padding: 0; }
+  .turn-timer { min-width: 58px; padding: 5px 8px 4px; border-radius: 14px; }.turn-timer span { font-size: 26px; }
   .lobby-rules { gap: 7px; font-size: 11px; }
 }
 

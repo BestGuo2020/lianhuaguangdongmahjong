@@ -137,6 +137,7 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
+  autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = remoteGame
 
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
@@ -283,6 +284,8 @@ function changeTableTheme(theme: TableThemeName) {
           :user-discard-waits="userDiscardWaits"
           :user-kongs="userKongs"
           :user-has-wind-kong="userHasWindKong"
+          :auto-play-enabled="gameMode === 'remote'"
+          :auto-play="remoteAutoPlay"
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
           :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
@@ -301,6 +304,7 @@ function changeTableTheme(theme: TableThemeName) {
           @gang="userGang"
           @hu="userHu"
           @wind-kong="userWindKong"
+          @toggle-auto-play="toggleAutoPlay"
           @ready="handleTableReady"
         />
 
