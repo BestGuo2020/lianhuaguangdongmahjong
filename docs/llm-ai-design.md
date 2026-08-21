@@ -97,6 +97,7 @@ interface CandidateFeatures {
   specialPattern: string | 'none' | 'n/a'
   safety: '高' | '中' | '低' | 'unknown' | 'n/a'
   efficiency: '优' | '中' | '差' | 'unknown' | 'n/a'
+  scoreDeltaBand?: '高' | '中' | '低' | 'n/a'
   risks: string[]
 }
 ```
@@ -163,6 +164,7 @@ interface CandidateFeatures {
 | `specialPattern` | 特殊牌型潜力 | `specialPatternScore`：十三烂/七星/十三幺/七对（莲花）；广麻无特殊牌型，标 `none` | N/A | ✅ |
 | `safety` | 安全度档位（高/中/低） | 牌河出现 3/2/1 张 + 跟打上家 +12 + 1·4·7 软关系（莲花 `publicSafetyScore`）；广麻用简化版（牌河张数 + 跟打） | 新增 | ✅ |
 | `efficiency` | 相对牌效档位（优/中/差） | 候选集合内的确定性排序，不暴露原始启发式分 | ✅ | ✅ |
+| `scoreDeltaBand` | 候选动作带来的即时自身收益档位 | 在克隆分数状态上调用规则集杠分/收益结算器，再按规则集阈值映射；无即时收益时为 `n/a` | ✅ | ✅ |
 | `isEngineSuggestion` | 引擎建议标记（确定性 top-1 对应的候选） | 决策时先跑一次无随机的 `decideTurn`/`decideClaim` 并标记 | ✅ | ✅ |
 | `risks` | 风险提示 | 补杠：该牌河中出现张数（被抢杠概率）、是否破坏听牌（莲花 `shouldTakeAddedKong` 已有）；暗杠/风杠：是否破坏听牌 | 简化 | ✅ |
 
@@ -172,6 +174,8 @@ interface CandidateFeatures {
 
 - `safety`：河 0 张 = 低；1 张 = 中；≥2 张 或 与上家刚打相同 = 高（广麻简化版）；莲花按 `publicSafetyScore` 阈值 [0,8)=低、[8,20)=中、≥20=高。
 - `efficiency`：先按候选集合内的确定性排序映射为优/中/差；禁止直接使用包含随机扰动或跨规则集不可比的原始分。阈值校准完成后再发布 v1.2，并回写本文档。
+- `efficiency` 的同分候选必须按以下顺序稳定 tie-break：§6.1 固定牌面顺序 → `candidates.ts` 的候选枚举顺序（§4.1/§4.2，实现中唯一的排序事实来源）→ `meldIndex` / `handIndex` / `optionIndex` 数值顺序 → 候选 ID 字典序。
+- `scoreDeltaBand` 由规则集在克隆分数状态上计算：补杠使用 added-kong 结算逻辑，暗杠/乱风杠使用对应 concealed/风杠结算逻辑；当前广麻也有杠分，不能默认标记为 `n/a`。仅无即时分数收益的动作标记 `n/a`。档位阈值与 `safety`/`efficiency` 一起在 v1.2 校准后回写本文档（开放问题 #1）；v1 实现先使用杠分数值的相对档位。
 - Prompt 中不写死“补杠 +6 分”等规则无关数值；若展示收益，只能使用规则集计算出的 `scoreDeltaBand`。
 
 ---
@@ -278,7 +282,7 @@ user：
 
   【候选动作】（必须从中选一个，编号不要写错）：
   A1 出3万  ｜打出后听牌：2万(剩3)、5万(剩2)，共7张｜安全度：低｜牌效：优
-  A2 出7万  ｜不听牌（向听1）｜安全度：中｜牌效：差
+  A2 出7万  ｜听牌：否｜安全度：中｜牌效：差
   A3 补杠5筒 ｜收益档位：中｜风险：河0张，被抢概率较高
   A4 过     ｜（仅响应请求存在）
 
@@ -291,7 +295,7 @@ Prompt 中的玩家昵称、规则摘要和牌面都视为不可信数据，必�
 
 ### 7.2 输出解析（与 weqi parser 同模式，容错）
 
-1. 先整体 `JSON.parse`；失败时用**平衡括号扫描器**提取 JSON 对象，不能用会被字符串大括号打断的简单正则；
+1. 先整体 `JSON.parse`；失败时用**平衡括号扫描器**提取 JSON 对象，不能用会被字符串大括号打断的简单正则。扫描器必须维护 `inString` 与 `escaped` 状态：字符串字面量内的 `{`、`}`、`\"`、`\\` 不参与括号平衡计算；
 2. 校验 `choice` 必须是字符串且属于本次请求的候选 ID 白名单；忽略未知 JSON 字段；
 3. `message` 缺失视为空；非字符串视为无效展示文本；按 Unicode code point 截断至 30 字，移除控制字符后再通过独立事件展示；
 4. JSON 解析失败或候选白名单校验不过时，**反馈重试一次**：把上次错误和精确合法 ID 列表追加进 prompt；再失败则执行引擎建议。HTTP 错误、超时、取消、并发排队超时不进入反馈重试。
@@ -450,8 +454,8 @@ LLM 调用超时 / 取消 / 网络失败 / HTTP 非 2xx / API 错误 / 并发排
 
 | 层 | 用例 | 断言 |
 |---|---|---|
-| 前端（vitest，mock fetch） | 规范协议/Prompt golden 快照（两规则、turn/claim 各一） | `schemaVersion`、规则 ID、癞子字段、可见信息与候选顺序完全一致 |
-| | 解析：合法 choice / 代码块 / 嵌套大括号 / `finish_reason=length` | 合法映射；异常按重试规则处理 |
+| 前端（vitest，mock fetch） | 规范协议/Prompt golden 快照（两规则、turn/claim 各一） | `schemaVersion`、规则 ID、癞子字段、可见信息、候选顺序与 `scoreDeltaBand` 完全一致 |
+| | 解析：合法 choice / 代码块 / 字符串内大括号与转义 / `finish_reason=length` | 合法映射；异常按重试规则处理 |
 | | 非法 choice / JSON 解析失败 → 反馈重试 → 引擎建议 | 调用顺序 2 次 + 回退动作；HTTP 错误不重试 |
 | | 超时、取消、reset、换局、状态版本过期 | 旧响应丢弃，不改变游戏状态 |
 | | 按牌去重候选（`3万 3万 5万` → 2 个候选） | 候选数、稳定顺序与 choice→第一张索引映射 |
@@ -512,7 +516,7 @@ LLM 调用超时 / 取消 / 网络失败 / HTTP 非 2xx / API 错误 / 并发排
 
 ## 18. 开放问题（实现前需确认）
 
-1. **档位阈值校准**：§5 的 `safety`/`efficiency` 先使用候选集合内相对排序；真实对局校准后再发布 v1.2 并回写本文档。
+1. **档位阈值校准**：§5 的 `safety`/`efficiency`/`scoreDeltaBand` 先使用候选集合内相对排序/相对档位；真实对局校准后再发布 v1.2 并回写本文档。
 2. **规范 fixture**：TypeScript/Python 必须各自产生同一组 canonical JSON，差异作为 CI 失败；
 3. **供应商兼容矩阵**：记录 Base URL、CORS、最大上下文、错误格式和 `finish_reason` 行为；供应商不兼容时必须稳定回退；
 4. **提示文案**：默认风格“稳健”的 system 措辞，P1 联调时按实际效果微调并更新 golden prompt；
