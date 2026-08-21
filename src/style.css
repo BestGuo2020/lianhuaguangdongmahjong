@@ -503,10 +503,9 @@ button { font: inherit; }
 .turn-timer.prompt-timer small { white-space: nowrap; }
 
 .action-bar { display: flex; gap: 9px; align-items: center; }
-.autoplay-action { border-color: #5d8a6f; background: radial-gradient(circle at 42% 33%, #4a7a5e, #22402f 69%, #0c1a12); color: #d8f0e0; }
 .autoplay-action .action-icon { display: block; width: 64%; height: 64%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.42)); }
 .autoplay-action.active { border-color: #d2aa58; background: radial-gradient(circle at 42% 33%, #b98737, #6e4f1e 69%, #241a08); color: #ffe6a5; box-shadow: 0 4px 10px rgba(0,0,0,.48), 0 0 12px rgba(239,190,75,.35), inset 0 0 0 2px rgba(255,255,255,.05); }
-.autoplay-action.active .action-icon { filter: drop-shadow(0 0 7px rgba(239,190,75,.95)); }
+.autoplay-action.active .action-icon { filter: brightness(1.12) drop-shadow(0 0 7px rgba(239,190,75,.95)); }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid #ae8840; border-radius: 50%; background: radial-gradient(circle at 42% 33%, #806433, #2e2519 69%, #0f0d0a); color: #f5df9c; box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
 .action b { display: block; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
