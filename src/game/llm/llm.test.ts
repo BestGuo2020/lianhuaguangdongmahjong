@@ -1,5 +1,6 @@
 // LLM 层单元测试（无网络）：解析器 / 客户端重试语义 / 候选与特征 / 合法性复核 / prompt / 配置。
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { computed, isReactive } from 'vue'
 import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, testLlmConnection } from './client'
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
@@ -310,5 +311,17 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     expect(on.controllers).toHaveLength(3)
     const lotusOn = createLotusLlmControllers()
     expect(lotusOn.controllers).toHaveLength(3)
+  })
+
+  it('stats 为响应式对象：computed 随计数变化刷新（回归：设置面板统计恒 0）', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    writeLlmConfig({ enabled: true, apiKey: 'sk-x', baseUrl: 'https://api.deepseek.com/v1' }, storage)
+    const runtime = createLocalLlmControllers()
+    expect(isReactive(runtime.stats)).toBe(true)
+    const counts = computed(() => runtime.stats.requests)
+    expect(counts.value).toBe(0)
+    runtime.stats.requests = 7
+    expect(counts.value).toBe(7)
   })
 })
