@@ -31,24 +31,8 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return isNumber(value) && Number.isInteger(value) && value >= 1
-}
-
-function isIntegerAtLeast(value: unknown, min: number): value is number {
-  return isNumber(value) && Number.isInteger(value) && value >= min
-}
-
 function isIntegerBetween(value: unknown, min: number, max: number): value is number {
-  return isNumber(value) && Number.isInteger(value) && value >= min && value <= max
-}
-
-function isSeat(value: unknown): value is number {
-  return isIntegerBetween(value, SEAT_MIN, SEAT_MAX)
-}
-
-function isMaybeSeat(value: unknown): value is number | null {
-  return value === null || isSeat(value)
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
 }
 
 function isBoolean(value: unknown): value is boolean {
@@ -151,14 +135,13 @@ function isLastDiscard(value: unknown): value is JsonObject {
 
 function isWinPresentation(value: unknown): value is WinPresentation {
   return isObject(value)
-    && isSeat(value.winnerIndex) && isTile(value.tile)
-    // sourceIndex 是赢家手牌内的索引（settlementTimeline 的 getSourceIndex 返回
-    // winner.drawnTileIndex 或 winner.hand.lastIndexOf(winTile)），不是座位：
-    // 手牌最多 14+ 张，索引可到 13+。曾错误限制在 [-1, SEAT_MAX] 导致胡牌在手牌
-    // 位置 >= 4 时 win_effect/round_settled/快照整条解码失败，客户端永远进不了结算。
+    && isNumber(value.winnerIndex) && isTile(value.tile)
+    // sourceIndex 是赢家手牌内的索引（drawnTileIndex / hand.lastIndexOf(winTile)），
+    // 不是座位：手牌最多 14+ 张，索引可到 13+。曾误限制在 [-1,3]，胡牌在手牌
+    // 位置 >= 4 时整条快照解码失败，客户端永远进不了结算。
     && isIntegerBetween(value.sourceIndex, -1, 20)
-    && isBoolean(value.robbedKong) && isIntegerBetween(value.robbedKongPlayerIndex, -1, SEAT_MAX)
-    && isIntegerAtLeast(value.robbedKongMeldIndex, -1)
+    && isBoolean(value.robbedKong) && isNumber(value.robbedKongPlayerIndex)
+    && isNumber(value.robbedKongMeldIndex)
 }
 
 function isDice(value: unknown): value is [number, number] {
@@ -202,6 +185,7 @@ function isSnapshot(message: JsonObject): boolean {
     && isNullable(message.result, isRoundResult)
     && isNullable(message.announcement, isAnnouncement)
     && isBoolean(message.matchFinished)
+    // 终局一致性：phase=finished 当且仅当 matchFinished=true（房主/后端同源发送）。
     && ((message.phase === 'finished') === message.matchFinished)
     && isNullable(message.lastDiscard, isLastDiscard)
     && isNullable(message.winPresentation, isWinPresentation)

@@ -8,7 +8,8 @@ import type { ServerSnapshot } from '../protocol/dto'
  * 永久挂起。
  */
 export interface OpeningSnapshotGate {
-  begin(round: number, honba: number): void
+  /** honba 可省略：单机/旧调用方只认 round+phase；联机调用方带 honba 时要求严格匹配。 */
+  begin(round: number, honba?: number): void
   capture(snapshot: ServerSnapshot): boolean
   wait(): Promise<ServerSnapshot | null>
   cancel(): void
@@ -16,7 +17,7 @@ export interface OpeningSnapshotGate {
 
 export function createOpeningSnapshotGate(timeoutMs = 15000): OpeningSnapshotGate {
   let activeRound = -1
-  let activeHonba = -1
+  let activeHonba: number | null = null
   let snapshot: ServerSnapshot | null = null
   let resolveWait: ((value: ServerSnapshot | null) => void) | null = null
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -34,20 +35,21 @@ export function createOpeningSnapshotGate(timeoutMs = 15000): OpeningSnapshotGat
     clearWait()
     resolve?.(null)
     activeRound = -1
-    activeHonba = -1
+    activeHonba = null
     snapshot = null
   }
 
-  function begin(round: number, honba: number) {
+  function begin(round: number, honba?: number) {
     cancel()
     activeRound = round
-    activeHonba = honba
+    activeHonba = honba ?? null
   }
 
   function capture(value: ServerSnapshot) {
+    const honbaMatches = activeHonba === null || value.honba === activeHonba
     if (
       value.round !== activeRound
-      || value.honba !== activeHonba
+      || !honbaMatches
       || value.phase !== 'opening'
       || snapshot
     ) return false
