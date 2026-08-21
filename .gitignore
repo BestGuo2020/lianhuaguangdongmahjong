@@ -155,9 +155,12 @@ vite.config.ts.timestamp-*
 .claude
 .mcp.json
 
+# Python（signaling/ 自托管信令服务器）
+__pycache__/
+*.py[cod]
+
 /backend/
 
 # 同步工具状态与自动化产物
 .vibehub/
 docs/evidence/
-__pycache__/
