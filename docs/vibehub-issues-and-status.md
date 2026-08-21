@@ -711,6 +711,23 @@ WSL2/Hyper-V/Windows Sandbox/VMware 全部不可用；Docker 未安装。
 当前等待用户用真实手机房主 + 账号 2 在新房间完成 11.7 人工验收。此次发布没有把该人工验收提前
 标记为通过。
 
+## 11.13 结算按钮与自动确认倒计时验收（2026-08-21）
+
+在手动确认房间 `DE2LFZ` 中，结算按钮实测保持：
+
+```text
+等待其他玩家确定...
+disabled = true
+```
+
+在默认自动确认房间 `KEVDBE` 中，房主自动确认记录为 `10:22:14.552`。之后发生多次 Relay/rejoin，
+房主只重放 `round_settled/snapshot`，没有再次触发 `continue` 或重新启动自动确认倒计时；客户端也未
+回退到“确定/继续 (10)”。
+
+证据日志：[`tmp/online-confirm-button-countdown-KEVDBE.json`](../tmp/online-confirm-button-countdown-KEVDBE.json)。
+
+结论：按钮确认后的等待状态保持不变，Relay/rejoin 不会重置房主自动确认倒计时。
+
 ## 11.11 东4局全桌卡死现场与修复（2026-08-21）
 
 现场房间 `LGC3UV` 出现“手机端仍在上一局结算、房主已进入东4发牌、全桌无法继续”。证据已保存：
