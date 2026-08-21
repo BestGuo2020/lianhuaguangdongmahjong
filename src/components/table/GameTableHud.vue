@@ -453,10 +453,10 @@ function onAvatarError(entry: GamePlayer) {
       </div>
       <button
         v-if="showAutoPlay" class="action autoplay-action" :class="{ active: autoPlay }"
-        :aria-pressed="autoPlay" :aria-label="autoPlay ? '取消托管，恢复手动操作' : '开启托管，自动出牌与过牌'"
-        :title="autoPlay ? '托管中：点击恢复手动' : '点击托管：到您的回合自动出牌/过牌'"
+        :aria-pressed="autoPlay" :aria-label="autoPlay ? '取消机器人托管，恢复手动操作' : '开启机器人托管，自动出牌与过牌'"
+        :title="autoPlay ? '机器人托管中：点击恢复手动' : '点击机器人托管：到您的回合自动出牌/过牌'"
         @click="$emit('toggleAutoPlay')"
-      ><b>托管</b></button>
+      ><img class="action-icon" :src="`${imageBase}robot.svg`" alt="" /></button>
       <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">

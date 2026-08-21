@@ -504,7 +504,9 @@ button { font: inherit; }
 
 .action-bar { display: flex; gap: 9px; align-items: center; }
 .autoplay-action { border-color: #5d8a6f; background: radial-gradient(circle at 42% 33%, #4a7a5e, #22402f 69%, #0c1a12); color: #d8f0e0; }
+.autoplay-action .action-icon { display: block; width: 64%; height: 64%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.42)); }
 .autoplay-action.active { border-color: #d2aa58; background: radial-gradient(circle at 42% 33%, #b98737, #6e4f1e 69%, #241a08); color: #ffe6a5; box-shadow: 0 4px 10px rgba(0,0,0,.48), 0 0 12px rgba(239,190,75,.35), inset 0 0 0 2px rgba(255,255,255,.05); }
+.autoplay-action.active .action-icon { filter: drop-shadow(0 0 7px rgba(239,190,75,.95)); }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid #ae8840; border-radius: 50%; background: radial-gradient(circle at 42% 33%, #806433, #2e2519 69%, #0f0d0a); color: #f5df9c; box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
 .action b { display: block; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
@@ -911,6 +913,13 @@ button { font: inherit; }
 .table-loading-leave-active { transition: opacity .2s ease; }
 .table-loading-enter-from,
 .table-loading-leave-to { opacity: 0; }
+/* 开局/对局已经由房主快照确认后，3D 资源仍可能在后台加载；加载层不能
+   盖住 start/dice/deal 表现，否则客户端会只看到房主有动画。 */
+.table-loading-in-game {
+  z-index: 0;
+  background: transparent;
+}
+.table-loading-in-game .table-loading-card { display: none; }
 /* 对局时不使用外层黑色木框，让所有主题的牌桌铺满游戏区域。 */
 .wood-frame:has(.felt-table.has-three-scene) {
   padding: 0;
@@ -1006,8 +1015,8 @@ button { font: inherit; }
   .user-identity .avatar { width: 42px; height: 42px; font-size: 18px; }
   .user-identity strong { font-size: 14px; }
   .user-identity span { font-size: 13px; }
-  /* 横向矮窗口中，功能区与计时器并排放在手牌上方，避免被牌面完全遮住。 */
-  .turn-action-row { right: calc(9% + 92px); bottom: 154px; gap: 6px; }
+  /* 横向矮窗口中，功能区与计时器并排放在手牌上方贴近底角，避免悬浮到牌河区域。 */
+  .turn-action-row { right: 2%; bottom: clamp(84px, 22vh, 112px); gap: 6px; }
   .waiting-tip { bottom: 60px; max-width: min(460px, 68vw); }
   .compact-waiting-tip { padding: 5px 7px; border-radius: 7px; }
   .waiting-tiles { gap: 4px; padding: 1px 1px 3px; }
