@@ -182,14 +182,21 @@ test('账号2加入用户房间并观测一局莲花麻将东风场', async ({},
     const ownSeat = page.locator('.room-seat').filter({ hasText: /账号2客户端-/ }).first()
     const readyDeadline = Date.now() + 30_000
     let readyConfirmed = false
+    let readyAttempts = 0
     while (Date.now() < readyDeadline) {
-      await ready.click().catch(() => {})
       readyConfirmed = await ownSeat.getByText('已准备', { exact: true }).isVisible().catch(() => false)
       if (readyConfirmed) break
+      const explicitlyUnready = await ownSeat.getByText('未准备', { exact: true }).isVisible().catch(() => false)
+      if (explicitlyUnready && readyAttempts < 2) {
+        // 只有 roster 明确仍为未准备时才点击，避免网络延迟期间把已准备再次切回未准备。
+        await ready.click().catch(() => {})
+        readyAttempts += 1
+      }
       await page.waitForTimeout(1500)
     }
     expect(readyConfirmed, `账号2 客户端未在房主 roster 中确认准备（房间 ${ROOM_CODE}）`).toBe(true)
-    console.log(`[PHONE-CLIENT] 已加入并确认准备房间 ${ROOM_CODE}，等待房主开始。`)
+    const seatText = await ownSeat.locator('.room-seat-no').textContent().catch(() => '?')
+    console.log(`[PHONE-CLIENT] 已加入并确认准备房间 ${ROOM_CODE}，客户端座位=${seatText?.trim() ?? '?'}，等待房主开始。`)
     await installClientAutoPlayer(page)
 
     const deadline = Date.now() + 1_800_000
