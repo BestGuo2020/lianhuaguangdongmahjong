@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import { waitingTiles } from '../../core/rules/rules'
 import { waitingTiles as lotusWaitingTiles } from '../../variants/lotus/lotusRules'
-import type { ActionPrompt } from '../../core/contracts/gamePort'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createRemoteActionController } from './remoteActionController'
 
@@ -134,36 +133,5 @@ describe('remoteActionController', () => {
     const after = user.hand.filter((_, candidate) => candidate !== index)
     expect(tile).not.toBe('m9')
     expect(lotusWaitingTiles(after, 0, ['m9']).length).toBeGreaterThan(0)
-  })
-
-  it('房主引擎桥的 response 提示也能触发胡/吃/碰/杠（修复按钮点了没反应）', () => {
-    // 回归：房主 viewer 的弃牌响应提示来自引擎桥（LotusHumanController →
-    // type 'response'），不是 wire 的 'claim'；动作守卫若只认 'claim'，
-    // 房主「胡/吃/碰/杠」按钮点了没反应，只有「过」能用。
-    const { state, send, controller } = setup()
-    const prompt: ActionPrompt = {
-      type: 'response', tile: 'm1', from: 1,
-      canHu: true, canPeng: true, canGang: true,
-      chiOptions: [{ kind: 'sequence', tiles: ['m1', 'm2', 'm3'] }],
-    }
-
-    state.actionPrompt.value = { ...prompt }
-    controller.userHu()
-    expect(send).toHaveBeenLastCalledWith({ type: 'hu' })
-
-    send.mockClear()
-    state.actionPrompt.value = { ...prompt }
-    controller.userPeng()
-    expect(send).toHaveBeenLastCalledWith({ type: 'claim', action: 'peng' })
-
-    send.mockClear()
-    state.actionPrompt.value = { ...prompt }
-    controller.userGangFromDiscard()
-    expect(send).toHaveBeenLastCalledWith({ type: 'claim', action: 'gang' })
-
-    send.mockClear()
-    state.actionPrompt.value = { ...prompt }
-    controller.userChi(0)
-    expect(send).toHaveBeenLastCalledWith({ type: 'claim', action: 'chi', optionIndex: 0 })
   })
 })

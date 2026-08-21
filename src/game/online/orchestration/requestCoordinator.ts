@@ -133,7 +133,7 @@ export function createRequestCoordinator({
       })
       scheduleAutoAction(() => {
         if (state.actionPrompt.value?.type !== 'claim') return
-        // auto 联调：放炮可胡时直接胡（加快对局收敛），否则过。
+        // 托管：放炮可胡时直接胡（加快对局收敛），否则过；吃/碰/杠不自动。
         if (state.actionPrompt.value.canHu) actions.hu()
         else actions.pass()
       })
