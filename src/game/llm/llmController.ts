@@ -49,8 +49,9 @@ export function createLlmStats(): LlmControllerStats {
 }
 
 export interface LlmControllerHooks {
-  /** message 为纯展示文本：展示失败不影响动作执行（§7.4） */
-  onLlmMessage?(text: string): void
+  /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
+   * seat 为说话者的座位绝对索引。 */
+  onLlmMessage?(seat: number, text: string): void
 }
 
 /** 内部：LLM 决定 → 候选动作；失败/非法 → null（回退）。 */
@@ -80,7 +81,7 @@ async function decideCanonical(
     }
     if (output.message) {
       stats.messages += 1
-      hooks.onLlmMessage?.(output.message)
+      hooks.onLlmMessage?.(input.playerIndex, output.message)
     }
     stats.successes += 1
     return candidate.action

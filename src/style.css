@@ -1256,3 +1256,34 @@ button { font: inherit; }
   cursor: pointer;
 }
 
+/* AI 大模型吐槽气泡（挂在玩家座位旁，4 秒自动消失） */
+.llm-bubble {
+  position: absolute;
+  z-index: 30;
+  max-width: min(240px, 30vw);
+  padding: 6px 11px;
+  border: 1px solid rgba(225, 189, 85, .55);
+  border-radius: 12px;
+  background: rgba(7, 25, 18, .95);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5);
+  color: #f2df9f;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  pointer-events: none;
+}
+.llm-bubble::after {
+  content: '';
+  position: absolute;
+  border: 6px solid transparent;
+}
+.seat-top .llm-bubble { top: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+.seat-top .llm-bubble::after { top: -12px; left: 50%; margin-left: -6px; border-bottom-color: rgba(225, 189, 85, .55); }
+.seat-right .llm-bubble { top: 30%; right: calc(100% + 10px); }
+.seat-right .llm-bubble::after { top: 14px; right: -12px; border-left-color: rgba(225, 189, 85, .55); }
+.seat-left .llm-bubble { top: 30%; left: calc(100% + 10px); }
+.seat-left .llm-bubble::after { top: 14px; left: -12px; border-right-color: rgba(225, 189, 85, .55); }
+.llm-bubble-enter-active, .llm-bubble-leave-active { transition: opacity .22s ease, transform .22s ease; }
+.llm-bubble-enter-from, .llm-bubble-leave-to { opacity: 0; transform: translateY(4px); }
+.seat-top .llm-bubble-leave-to, .seat-top .llm-bubble-enter-from { transform: translateX(-50%) translateY(4px); }
+
