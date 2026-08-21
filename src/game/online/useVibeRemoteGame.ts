@@ -1089,7 +1089,11 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // （SDK relay 协商失败/消息丢失），round_start 永远到不了 → 客户端永远卡在
   // 「已确认，等待其他玩家」。超时自动重进：快照会重同步当前局面、waitingNextRound
   // 随 resetAll 清除，客户端回到新一局而不是干等。
-  const CONFIRM_RECOVERY_IDLE_MS = 35_000
+  // 单边确认时，另一位真人可能仍在结算页等待几十秒；房主收到第二次确认后
+  // 还要完成最多 3 轮、每轮 15s 的承诺洗牌重试。若从第一位确认就按 35s
+  // 重进，会在合法屏障刚打开后打断洗牌，造成客户端回到初始局并让房主永远等不到
+  // 当前座位的承诺。90s 覆盖完整重试预算，仍保留有界恢复失败。
+  const CONFIRM_RECOVERY_IDLE_MS = 90_000
   const CONFIRM_RECOVERY_SHUFFLE_MS = 90_000
   let confirmRecoveryTimer: ReturnType<typeof setTimeout> | null = null
   function clearConfirmRecovery() {
