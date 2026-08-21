@@ -11,6 +11,7 @@ import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 import type { RuleSet } from '../../core/rules/ruleset'
 import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
+import { createLlmContextSource } from '../../core/controllers/llmContext'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -43,6 +44,11 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   const { state } = options
   const ruleset = options.ruleset ?? LOTUS_RULESET
   let runner!: ReturnType<typeof createTurnRunner<LotusGameState, LotusController, LotusTurnAction>>
+  // v1.1 LLM 适配：局况/可见牌/请求版本元数据（莲花：翻精为万能、白板为替代牌面）。
+  const llm = createLlmContextSource(state, {
+    jokerTiles: () => state.jokerTiles.value,
+    wildcardTiles: () => state.wildcardTiles.value,
+  })
 
   function hasSettled() {
     return state.phase.value === 'settled'
@@ -244,6 +250,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       return offerNextClaim(remainingClaims, tile, from, decisions)
     }
       const ctx = {
+        ...llm.meta(claimant.playerIndex, 'claim'),
         hand: player.hand,
         exposedMelds: options.structuralMeldCount(claimant.playerIndex),
         canPeng: claimant.canPeng,
@@ -445,6 +452,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     drawFor: options.drawFor,
     endDraw: options.endDraw,
     buildContext: (player, playerIndex, turnOptions, kongBloom) => ({
+      ...llm.meta(playerIndex, 'turn'),
       hand: player.hand,
       melds: player.melds,
       exposedMelds: options.structuralMeldCount(playerIndex),

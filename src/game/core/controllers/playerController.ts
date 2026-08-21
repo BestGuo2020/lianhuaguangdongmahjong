@@ -11,8 +11,29 @@ import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 
 // ── 共享类型 ──
 
+/**
+ * v1.1 LLM 适配字段（可选；Human/Ai 控制器忽略，LLM 控制器消费）。
+ * 见 docs/llm-ai-design.md §6.2 / §11 任务 1.1。
+ */
+export interface LlmAdapterFields {
+  scores?: number[]
+  seatWind?: string
+  roundWind?: string
+  dealerIndex?: number
+  roundIndex?: number
+  requestId?: string
+  stateVersion?: string
+  visibleTiles?: TileType[]
+  publicTiles?: TileType[]
+  upperLastDiscard?: TileType | null
+  earlyRound?: boolean
+  wallCount?: number
+  jokerTiles?: TileType[]
+  wildcardTiles?: TileType[]
+}
+
 /** 回合决策上下文：引擎传给控制器的只读快照 */
-export interface TurnContext {
+export interface TurnContext extends LlmAdapterFields {
   hand: TileType[]
   melds: Meld[]
   /** 公开副露数（结构性，不含花杠），供胡牌判断 */
@@ -27,7 +48,7 @@ export interface TurnContext {
 }
 
 /** 吃碰杠响应上下文 */
-export interface ClaimContext {
+export interface ClaimContext extends LlmAdapterFields {
   hand: TileType[]
   /** 手中至少有两张与弃牌相同的牌时可碰 */
   canPeng: boolean

@@ -5,6 +5,7 @@ import type { Meld, TileType } from '../../core/contracts/types'
 import type { ActionPrompt } from '../../core/contracts/gamePort'
 import { type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
+import type { LlmAdapterFields } from '../../core/controllers/playerController'
 import {
   decideClaim,
   decideRobKong,
@@ -22,7 +23,7 @@ export type LotusTurnAction =
   | { kind: 'wind-kong' }
   | { kind: 'discard'; handIndex: number }
 
-export interface LotusTurnContext {
+export interface LotusTurnContext extends LlmAdapterFields {
   hand: TileType[]
   melds: Meld[]
   exposedMelds: number
@@ -52,7 +53,7 @@ export interface LotusHuContext {
   ruleset?: RuleSet
 }
 
-export interface LotusClaimContext {
+export interface LotusClaimContext extends LlmAdapterFields {
   hand: TileType[]
   exposedMelds: number
   canPeng: boolean
