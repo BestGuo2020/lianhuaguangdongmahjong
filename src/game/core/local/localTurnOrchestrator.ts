@@ -13,6 +13,7 @@ import type { LocalGameState } from './localGameState'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
+import { createLlmContextSource } from '../controllers/llmContext'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -43,6 +44,8 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
   const { state } = options
   const ruleset = options.ruleset ?? DEFAULT_RULESET
   let runner!: ReturnType<typeof createTurnRunner<LocalGameState, PlayerController, TurnAction>>
+  // v1.1 LLM 适配：局况/可见牌/请求版本元数据（广麻：白板为万能，无替代牌面）。
+  const llm = createLlmContextSource(state, { jokerTiles: () => ['white'] })
 
   function hasSettled() {
     return runner.hasSettled()
@@ -102,6 +105,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       from,
       exposedMelds: options.structuralMeldCount(claimant.playerIndex),
       ruleset,
+      ...llm.meta(claimant.playerIndex, 'claim'),
     }
     const action = await options.controllers[claimant.playerIndex].requestClaim(ctx)
     if (hasSettled()) return
@@ -218,6 +222,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       skipDraw: Boolean(turnOptions.skipDraw) && !Boolean(turnOptions.preDrawn),
       afterKong: Boolean(turnOptions.fromTail),
       ruleset,
+      ...llm.meta(playerIndex, 'turn'),
     } satisfies TurnContext),
     requestTurn: (controller, context) => controller.requestTurn(context as TurnContext),
       handleAction: async (action, playerIndex, player, _turnOptions, api) => {
