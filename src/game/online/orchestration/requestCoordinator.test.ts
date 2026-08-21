@@ -97,6 +97,27 @@ describe('requestCoordinator', () => {
     expect(state.actionPrompt.value).toEqual({ type: 'rob', tile: 'p5', from: 3 })
     expect(announce).toHaveBeenCalledWith('可抢杠胡', 'red')
     await vi.advanceTimersByTimeAsync(600)
-    expect(actions.pass).toHaveBeenCalledOnce()
+    expect(actions.hu).toHaveBeenCalledOnce()
+  })
+
+  it('托管时放炮可胡直接胡，否则自动过牌（吃碰杠不自动）', async () => {
+    const huCase = setup({ autoPlay: true })
+    huCase.coordinator.apply({
+      kind: 'claim_request',
+      ctx: { hand: [], canGang: true, tile: 'm5', from: 3, canHu: true },
+    })
+    await vi.advanceTimersByTimeAsync(600)
+    expect(huCase.actions.hu).toHaveBeenCalledOnce()
+    expect(huCase.actions.pass).not.toHaveBeenCalled()
+
+    huCase.coordinator.reset()
+    const passCase = setup({ autoPlay: true })
+    passCase.coordinator.apply({
+      kind: 'claim_request',
+      ctx: { hand: ['m9', 'm9'], canGang: false, tile: 'm9', from: 3 },
+    })
+    await vi.advanceTimersByTimeAsync(600)
+    expect(passCase.actions.pass).toHaveBeenCalledOnce()
+    expect(passCase.actions.hu).not.toHaveBeenCalled()
   })
 })

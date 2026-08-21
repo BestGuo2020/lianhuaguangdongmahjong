@@ -107,7 +107,10 @@ export function createRequestCoordinator({
         if (state.actionPrompt.value?.type === 'claim') actions.pass()
       })
       scheduleAutoAction(() => {
-        if (state.actionPrompt.value?.type === 'claim') actions.pass()
+        if (state.actionPrompt.value?.type !== 'claim') return
+        // 托管：放炮可胡时直接胡（加快对局收敛），否则过；吃/碰/杠不自动。
+        if (state.actionPrompt.value.canHu) actions.hu()
+        else actions.pass()
       })
       return
     }
@@ -125,7 +128,8 @@ export function createRequestCoordinator({
       if (state.actionPrompt.value?.type === 'rob') actions.pass()
     })
     scheduleAutoAction(() => {
-      if (state.actionPrompt.value?.type === 'rob') actions.pass()
+      // 托管：抢杠胡提示即本家可胡，直接胡。
+      if (state.actionPrompt.value?.type === 'rob') actions.hu()
     })
   }
 

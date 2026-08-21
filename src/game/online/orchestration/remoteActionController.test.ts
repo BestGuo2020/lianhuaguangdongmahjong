@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
+import { waitingTiles } from '../../core/rules/rules'
+import { waitingTiles as lotusWaitingTiles } from '../../variants/lotus/lotusRules'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createRemoteActionController } from './remoteActionController'
 
@@ -101,5 +103,34 @@ describe('remoteActionController', () => {
     expect(state.autoPlay.value).toBe(true)
     expect(controller.pickDiscard()).toBeGreaterThanOrEqual(0)
     expect(controller.pickDiscard()).toBeLessThan(user.hand.length)
+  })
+
+  it('托管弃牌不拆听：能保持听牌时优先保持听牌', () => {
+    const { user, controller } = setup()
+    user.hand = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'west', 'north', 'north']
+    const index = controller.pickDiscard()
+    expect(user.hand[index]).toBe('west')
+  })
+
+  it('托管弃牌不打癞子（白板）：存在不拆听的非癞子弃牌时不出白板', () => {
+    const { user, controller } = setup()
+    user.hand = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'east', 'west', 'white']
+    const index = controller.pickDiscard()
+    const tile = user.hand[index]
+    const after = user.hand.filter((_, candidate) => candidate !== index)
+    expect(tile).not.toBe('white')
+    expect(waitingTiles(after).length).toBeGreaterThan(0)
+  })
+
+  it('莲花麻将托管同样保护精牌', () => {
+    const { state, user, controller } = setup()
+    state.rulesetId.value = 'lotus-legacy'
+    state.jokerTiles.value = ['m9']
+    user.hand = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'east', 'm9', 'west']
+    const index = controller.pickDiscard()
+    const tile = user.hand[index]
+    const after = user.hand.filter((_, candidate) => candidate !== index)
+    expect(tile).not.toBe('m9')
+    expect(lotusWaitingTiles(after, 0, ['m9']).length).toBeGreaterThan(0)
   })
 })
