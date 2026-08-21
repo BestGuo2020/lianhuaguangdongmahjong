@@ -28,6 +28,8 @@ interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: LotusController[]
+  /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
+  aiControllers?: LotusController[]
   countdownEnabled?: boolean
   ruleset?: RuleSet
 }
@@ -36,6 +38,7 @@ export function useLotusGame({
   playSound = () => {},
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
+  aiControllers,
   countdownEnabled = true,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
@@ -88,9 +91,7 @@ export function useLotusGame({
   const humanController = new LotusHumanController(humanBridge)
   const controllers: LotusController[] = suppliedControllers ?? [
     humanController,
-    new LotusAiController(),
-    new LotusAiController(),
-    new LotusAiController(),
+    ...(aiControllers && aiControllers.length ? aiControllers : [new LotusAiController(), new LotusAiController(), new LotusAiController()]),
   ]
 
   const timer = createTimerScheduler({

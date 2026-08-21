@@ -1,10 +1,11 @@
 // LLM 层单元测试（无网络）：解析器 / 客户端重试语义 / 候选与特征 / 合法性复核 / prompt / 配置。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision } from './client'
+import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, testLlmConnection } from './client'
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
-import { normalizeBaseUrl } from './config'
+import { normalizeBaseUrl, readLlmConfig, writeLlmConfig } from './config'
+import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
 
@@ -226,5 +227,79 @@ describe('normalizeBaseUrl', () => {
     expect(normalizeBaseUrl('https://user:pass@api.example.com/v1')).toBeNull()
     expect(normalizeBaseUrl('http://api.example.com/v1')).toBeNull()
     expect(normalizeBaseUrl('http://localhost:11434/v1')).toBeTruthy()
+  })
+})
+
+function memoryStorage(): Storage & { data: Map<string, string> } {
+  const data = new Map<string, string>()
+  return {
+    data,
+    get length() { return data.size },
+    clear() { data.clear() },
+    getItem(key: string) { return data.get(key) ?? null },
+    key(index: number) { return [...data.keys()][index] ?? null },
+    removeItem(key: string) { data.delete(key) },
+    setItem(key: string, value: string) { data.set(key, value) },
+  }
+}
+
+describe('llm 配置存取（§9.1）', () => {
+  it('空存储返回默认值与关闭状态', () => {
+    const storage = memoryStorage()
+    const result = readLlmConfig(storage)
+    expect(result.enabled).toBe(false)
+    expect(result.config.apiKey).toBe('')
+    expect(result.config.baseUrl).toBe('https://api.deepseek.com/v1')
+    expect(result.config.model).toBe('deepseek-chat')
+  })
+
+  it('写入/读取回环；enabled 独立存储', () => {
+    const storage = memoryStorage()
+    writeLlmConfig({ enabled: true, baseUrl: 'https://example.com/v1', apiKey: 'sk-x', model: 'm1', style: '话痨' }, storage)
+    const result = readLlmConfig(storage)
+    expect(result.enabled).toBe(true)
+    expect(result.config).toMatchObject({ baseUrl: 'https://example.com/v1', apiKey: 'sk-x', model: 'm1', style: '话痨' })
+  })
+
+  it('configVersion 不匹配或 JSON 损坏时回退默认（不丢 Key 语义由设置页迁移处理）', () => {
+    const storage = memoryStorage()
+    storage.setItem('llm.provider', JSON.stringify({ configVersion: 99, apiKey: 'sk-old' }))
+    expect(readLlmConfig(storage).config.apiKey).toBe('')
+    storage.setItem('llm.provider', '{broken')
+    expect(readLlmConfig(storage).config.baseUrl).toBe('https://api.deepseek.com/v1')
+  })
+})
+
+describe('testLlmConnection', () => {
+  it('2xx → ok；401/429 等非 2xx → 错误信息（只调用一次，不重试）', async () => {
+    const okSpy = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({ choices: [{ message: { content: 'pong' }, finish_reason: 'stop' }] }),
+    }))
+    vi.stubGlobal('fetch', okSpy as never)
+    await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true })
+    expect(okSpy).toHaveBeenCalledTimes(1)
+
+    const badSpy = vi.fn(async () => ({ ok: false, status: 401, text: async () => 'bad key' }))
+    vi.stubGlobal('fetch', badSpy as never)
+    await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: false })
+    expect(badSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
+  it('未配置/未启用 → null 控制器；启用且有 Key → 3 个 LLM 控制器', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const off = createLocalLlmControllers()
+    expect(off.controllers).toBeNull()
+    expect(off.enabled).toBe(false)
+
+    writeLlmConfig({ enabled: true, apiKey: 'sk-x', baseUrl: 'https://api.deepseek.com/v1' }, storage)
+    const on = createLocalLlmControllers()
+    expect(on.enabled).toBe(true)
+    expect(on.controllers).toHaveLength(3)
+    const lotusOn = createLotusLlmControllers()
+    expect(lotusOn.controllers).toHaveLength(3)
   })
 })

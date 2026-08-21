@@ -24,6 +24,8 @@ interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: PlayerController[]
+  /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
+  aiControllers?: PlayerController[]
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   ruleset?: RuleSet
@@ -33,6 +35,7 @@ export function useGame({
   playSound = () => {},
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
+  aiControllers,
   countdownEnabled = true,
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
@@ -75,9 +78,7 @@ export function useGame({
   const humanController = new HumanController(humanBridge)
   const controllers: PlayerController[] = suppliedControllers ?? [
     humanController,
-    new AiController(),
-    new AiController(),
-    new AiController(),
+    ...(aiControllers && aiControllers.length ? aiControllers : [new AiController(), new AiController(), new AiController()]),
   ]
 
   const scheduler = createLocalTimerScheduler({

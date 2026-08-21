@@ -171,3 +171,20 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
   }
   return attempt(options.messages)
 }
+
+/** 设置页「测试连接」（§9.1）：探测供应商可用性；Key 不回显、不落日志。 */
+export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
+  try {
+    await callOnce(
+      config,
+      [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
+      undefined,
+    )
+    return { ok: true, message: '连接成功' }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof LlmClientError ? error.message : String(error),
+    }
+  }
+}

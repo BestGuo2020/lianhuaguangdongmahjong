@@ -7,9 +7,12 @@ import GameShellHeader from './components/shell/GameShellHeader.vue'
 import OrientationGate from './components/shell/OrientationGate.vue'
 import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
+import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
+import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
+import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
@@ -62,16 +65,36 @@ const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
+// AI 大模型（单机人机座位 1-3）：读取 localStorage 配置；配置变更后刷新页面生效。
+const llmOpen = ref(false)
+const llmMessages = ref<string[]>([])
+const llmHook = {
+  onLlmMessage: (text: string) => {
+    llmMessages.value.push(text)
+    if (llmMessages.value.length > 8) llmMessages.value.shift()
+  },
+}
+const localLlm = createLocalLlmControllers(llmHook)
+const lotusLlm = createLotusLlmControllers(llmHook)
+const llmStats = computed<LlmControllerStats>(() => ({
+  requests: localLlm.stats.requests + lotusLlm.stats.requests,
+  successes: localLlm.stats.successes + lotusLlm.stats.successes,
+  fallbacks: localLlm.stats.fallbacks + lotusLlm.stats.fallbacks,
+  messages: localLlm.stats.messages + lotusLlm.stats.messages,
+  invalidActions: localLlm.stats.invalidActions + lotusLlm.stats.invalidActions,
+}))
 const localGame = useGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
   countdownEnabled: false,
+  aiControllers: localLlm.controllers ?? undefined,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
+  aiControllers: lotusLlm.controllers ?? undefined,
 })
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait, waitForTableReady })
 
@@ -382,5 +405,18 @@ function changeTableTheme(theme: TableThemeName) {
       </div>
     </div>
     <RulesPanel :open="rulesOpen" :variant="selectedRule" @close="rulesOpen = false" />
+    <button
+      class="llm-fab"
+      aria-label="AI 设置"
+      title="AI 大模型设置"
+      data-testid="llm-fab"
+      @click="llmOpen = true"
+    >🤖</button>
+    <LlmSettingsPanel
+      :open="llmOpen"
+      :messages="llmMessages"
+      :stats="llmStats"
+      @close="llmOpen = false"
+    />
   </main>
 </template>
