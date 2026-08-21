@@ -24,8 +24,8 @@ interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: PlayerController[]
-  /** 房主权威联机：非本家座位（seat 1-3）的控制器，索引 0→seat1、1→seat2、2→seat3；未提供的座位回退 AI。 */
-  remoteControllers?: Array<PlayerController | undefined>
+  /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
+  aiControllers?: PlayerController[]
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
@@ -41,7 +41,7 @@ export function useGame({
   playSound = () => {},
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
-  remoteControllers,
+  aiControllers,
   countdownEnabled = true,
   instantOpening = false,
   headless = false,
@@ -91,9 +91,7 @@ export function useGame({
   const humanController = new HumanController(humanBridge)
   const controllers: PlayerController[] = suppliedControllers ?? [
     humanController,
-    remoteControllers?.[0] ?? new AiController(),
-    remoteControllers?.[1] ?? new AiController(),
-    remoteControllers?.[2] ?? new AiController(),
+    ...(aiControllers && aiControllers.length ? aiControllers : [new AiController(), new AiController(), new AiController()]),
   ]
 
   const scheduler = createLocalTimerScheduler({

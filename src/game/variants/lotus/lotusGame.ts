@@ -28,8 +28,8 @@ interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   controllers?: LotusController[]
-  /** 房主权威联机：非本家座位（seat 1-3）的控制器，索引 0→seat1、1→seat2、2→seat3；未提供的座位回退 AI。 */
-  remoteControllers?: Array<LotusController | undefined>
+  /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
+  aiControllers?: LotusController[]
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
   instantOpening?: boolean
@@ -44,7 +44,7 @@ export function useLotusGame({
   playSound = () => {},
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
-  remoteControllers,
+  aiControllers,
   countdownEnabled = true,
   instantOpening = false,
   headless = false,
@@ -104,9 +104,7 @@ export function useLotusGame({
   const humanController = new LotusHumanController(humanBridge)
   const controllers: LotusController[] = suppliedControllers ?? [
     humanController,
-    remoteControllers?.[0] ?? new LotusAiController(),
-    remoteControllers?.[1] ?? new LotusAiController(),
-    remoteControllers?.[2] ?? new LotusAiController(),
+    ...(aiControllers && aiControllers.length ? aiControllers : [new LotusAiController(), new LotusAiController(), new LotusAiController()]),
   ]
 
   const timer = createTimerScheduler({

@@ -58,8 +58,8 @@ export function readLlmConfig(storage: Pick<Storage, 'getItem'> = localStorage):
 }
 
 export function writeLlmConfig(
-  storage: Pick<Storage, 'setItem' | 'removeItem'> = localStorage,
   patch: Partial<Omit<LlmProviderConfig, never>> & { enabled?: boolean } = {},
+  storage: Pick<Storage, 'setItem' | 'removeItem'> = localStorage,
 ): LlmProviderConfig {
   const current = readLlmConfig(storage as Storage)
   const next: LlmProviderConfig = {

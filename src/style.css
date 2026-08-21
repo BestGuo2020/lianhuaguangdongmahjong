@@ -1238,3 +1238,21 @@ button { font: inherit; }
   .theme-menu small { font-size: 9px; }
   .theme-menu > button > i { width: 10px; height: 10px; }
 }
+
+/* AI 大模型设置入口（右下角浮动按钮） */
+.llm-fab {
+  position: fixed;
+  z-index: 90;
+  right: 14px;
+  bottom: 14px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(215, 181, 94, .45);
+  border-radius: 50%;
+  background: rgba(7, 25, 18, .92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
