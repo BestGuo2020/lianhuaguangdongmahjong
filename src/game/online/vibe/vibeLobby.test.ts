@@ -514,11 +514,13 @@ describe('vibeLobby', () => {
     })
 
     room.emit('peer-old', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2' })
+    room.emit('peer-old', { type: 'lobby_ready', ready: true })
     room.emit('peer-new', { type: 'lobby_hello', nickname: '账号2', avatar: '', playerId: 'account-2', seatToken: 'token-atomic' })
 
     expect(rosters.at(-1)?.map((seat) => `${seat.seat}:${seat.peerId}`)).toEqual([
       '0:host-peer', '1:peer-new',
     ])
+    expect(rosters.at(-1)?.find((seat) => seat.seat === 1)?.ready).toBe(true)
 
     // 旧 peer 的迟到消息不能把新连接的座位或准备态改回去。
     room.emit('peer-old', { type: 'lobby_ready', ready: true })

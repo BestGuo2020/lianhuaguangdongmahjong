@@ -277,7 +277,10 @@ export function createHostLobby({
           peerId: fromPeerId,
           nickname: message.nickname,
           avatar: message.avatar,
-          ready: false,
+          // 有效 seatToken 证明这是同一玩家的网络重连/刷新；保留旧 peer
+          // 已被房主确认的准备意图。主动 lobby_leave 会先删除旧记录，仍会
+          // 走新玩家路径并保持未准备，避免把主动离开误当成无感重连。
+          ready: sameIdentity[1].ready,
           playerId,
           seatToken: sameIdentity[1].seatToken,
         })
