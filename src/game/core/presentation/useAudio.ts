@@ -25,6 +25,7 @@ const EFFECT_AUDIO_FILES = [
 const EFFECT_WAIT_TIMEOUT_MS = 4_000
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
+interface LlmAudioItem { url: string; seat: number; messageId: number }
 
 export function useAudio() {
   const soundOn = ref(true)
@@ -32,6 +33,9 @@ export function useAudio() {
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()
   const effectObjectUrls = new Set<string>()
+  const llmAudioQueue: LlmAudioItem[] = []
+  let activeLlmAudio: HTMLAudioElement | null = null
+  let activeLlmItem: LlmAudioItem | null = null
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
   let audioContext: AudioContext | null = null
@@ -115,6 +119,52 @@ export function useAudio() {
         finish()
       }, EFFECT_WAIT_TIMEOUT_MS)
     })
+  }
+
+  function pumpLlmAudio() {
+    if (!soundOn.value || activeLlmAudio || !llmAudioQueue.length) return
+    const item = llmAudioQueue.shift()!
+    const audio = new Audio(item.url)
+    activeLlmAudio = audio
+    activeLlmItem = item
+    audio.preload = 'auto'
+    audio.volume = 0.9
+    const finish = () => {
+      if (activeLlmAudio !== audio) return
+      activeLlmAudio = null
+      activeLlmItem = null
+      pumpLlmAudio()
+    }
+    audio.addEventListener('ended', finish, { once: true })
+    audio.addEventListener('error', finish, { once: true })
+    audio.play().catch(finish)
+  }
+
+  /** 联机 LLM 吐槽播放：同座位新语音打断旧语音，全桌最多排队两条。 */
+  function playLlmAudio(url: string, seat: number, messageId: number) {
+    if (!soundOn.value || !url) return
+    for (let index = llmAudioQueue.length - 1; index >= 0; index -= 1) {
+      if (llmAudioQueue[index].seat === seat) llmAudioQueue.splice(index, 1)
+    }
+    if (activeLlmItem?.seat === seat && activeLlmAudio) {
+      activeLlmAudio.pause()
+      activeLlmAudio.currentTime = 0
+      activeLlmAudio = null
+      activeLlmItem = null
+    }
+    llmAudioQueue.push({ url, seat, messageId })
+    while (llmAudioQueue.length > 2) llmAudioQueue.shift()
+    pumpLlmAudio()
+  }
+
+  function stopLlmAudio() {
+    llmAudioQueue.splice(0, llmAudioQueue.length)
+    if (activeLlmAudio) {
+      activeLlmAudio.pause()
+      activeLlmAudio.currentTime = 0
+    }
+    activeLlmAudio = null
+    activeLlmItem = null
   }
 
   function ensureAudioContext(): AudioContext | null {
@@ -223,6 +273,7 @@ export function useAudio() {
       if (bgmWebAudio) void audioContext?.suspend()
       else bgm.pause()
       stopEffects()
+      stopLlmAudio()
     } else if (bgmStarted.value) {
       if (bgmWebAudio && audioContext) {
         if (audioContext.state === 'suspended') void audioContext.resume()
@@ -244,10 +295,11 @@ export function useAudio() {
       bgm.pause()
     }
     stopEffects()
+    stopLlmAudio()
     effectObjectUrls.forEach((url) => URL.revokeObjectURL(url))
     effectObjectUrls.clear()
     effectTemplates.clear()
   })
 
-  return { soundOn, playEffect, playEffectAndWait, startBgm, preloadBgm }
+  return { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm, preloadBgm }
 }

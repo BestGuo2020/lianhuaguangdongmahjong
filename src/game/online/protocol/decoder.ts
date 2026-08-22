@@ -213,6 +213,11 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
       case 'llm_message':
         return isIntegerBetween(raw.seat, 0, 3) && isString(raw.text)
           && raw.text.length > 0 && raw.text.length <= 60 && isNumber(raw.id)
+      case 'llm_audio':
+        return isNumber(raw.messageId) && isIntegerBetween(raw.seat, 0, 3)
+          && isString(raw.audioUrl)
+          && /^\/api\/tts\/audio\/[0-9a-f]{64}\.mp3$/.test(raw.audioUrl)
+          && isBoolean(raw.cached)
       case 'hand_result': return isRoundResult(raw.result)
       case 'continue_prompt': return isNumber(raw.total)
       case 'match_finished':

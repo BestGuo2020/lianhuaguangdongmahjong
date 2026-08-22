@@ -62,7 +62,7 @@ const tableThemeName = ref<TableThemeName>(TABLE_THEME_OPTIONS.some((option) => 
   ? initialThemeCandidate as TableThemeName
   : 'jade')
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
-const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
+const { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
 // AI 大模型（单机人机座位 1-3）：读取 localStorage 配置；配置变更后刷新页面生效。
@@ -115,6 +115,7 @@ const remoteGame = useRemoteGame({
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
+  playLlmAudio,
 })
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。

@@ -20,6 +20,15 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, text: '' })).toBeNull()
   })
 
+  it('accepts hashed TTS audio URLs and rejects arbitrary remote URLs', () => {
+    const message = {
+      kind: 'llm_audio', messageId: 7, seat: 2,
+      audioUrl: `/api/tts/audio/${'a'.repeat(64)}.mp3`, cached: true,
+    }
+    expect(decodeServerMessage(message)).toEqual(message)
+    expect(decodeServerMessage({ ...message, audioUrl: 'https://evil.example/a.mp3' })).toBeNull()
+  })
+
   it('accepts an optional second dice pair on round_start', () => {
     const message = { kind: 'round_start', matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5], secondDice: [4, 6] }
     expect(decodeServerMessage(message)).toBe(message)

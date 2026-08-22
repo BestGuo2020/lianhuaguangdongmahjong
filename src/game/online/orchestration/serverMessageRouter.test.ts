@@ -9,7 +9,7 @@ import type { ServerMessage } from '../protocol/messages'
 const MESSAGE_KINDS: ServerMessageKind[] = [
   'state_snapshot', 'turn_request', 'claim_request', 'rob_kong_request',
   'round_start', 'rejoin_ok', 'rejoin_err', 'table_action', 'score_flow',
-  'announcement', 'llm_message', 'hand_result', 'continue_prompt', 'match_finished',
+  'announcement', 'llm_message', 'llm_audio', 'hand_result', 'continue_prompt', 'match_finished',
   'room_closed', 'pong', 'error',
 ]
 
@@ -38,6 +38,7 @@ const VALID_MESSAGES: ServerMessage[] = [
   { kind: 'score_flow', deltas: [{ playerIndex: 0, amount: 10 }] },
   { kind: 'announcement', text: '碰', tone: 'gold', id: 1 },
   { kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 1 },
+  { kind: 'llm_audio', messageId: 1, seat: 2, audioUrl: `/api/tts/audio/${'a'.repeat(64)}.mp3`, cached: true },
   { kind: 'hand_result', result: { winnerIndex: 0 } },
   { kind: 'continue_prompt', total: 4 },
   { kind: 'match_finished', roomId: 'ROOM', mode: 'east', finalScores: [{ seat: 0, name: 'A', score: 1000 }] },
