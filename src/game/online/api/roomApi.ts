@@ -52,6 +52,17 @@ export interface StartResult {
   status: string
 }
 
+/** 每座位 LLM 配置（开局携带；apiKey 仅存服务端会话内存，不落库/日志/响应） */
+export interface LlmSeatRequest {
+  seat: number
+  baseUrl: string
+  apiKey: string
+  model: string
+  style: string
+  nickname?: string
+  timeoutMs?: number
+}
+
 export interface CloseResult {
   roomId: string
   closed: boolean
@@ -109,10 +120,10 @@ export function readyRoom(
   })
 }
 
-export function startRoom(roomId: string): Promise<StartResult> {
+export function startRoom(roomId: string, llmSeats?: Array<LlmSeatRequest>): Promise<StartResult> {
   return request<StartResult>(`/api/rooms/${encodeURIComponent(roomId)}/start`, {
     method: 'POST',
-    body: '{}',
+    body: JSON.stringify(llmSeats && llmSeats.length ? { llmSeats } : {}),
   })
 }
 

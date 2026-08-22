@@ -10,6 +10,7 @@ import {
   leaveRoom,
   readyRoom,
   startRoom,
+  type LlmSeatRequest,
   type RoomSeatState,
 } from '../api/roomApi'
 import { generateGuestId, type StoredSession } from './remoteSessionStore'
@@ -251,10 +252,10 @@ export function createRemoteRoomLifecycle({
     }
   }
 
-  async function startMatch() {
+  async function startMatch(llmSeats?: Array<LlmSeatRequest>) {
     if (!state.roomId.value) return
     try {
-      await api.startRoom(state.roomId.value)
+      await api.startRoom(state.roomId.value, llmSeats)
     } catch (error) {
       state.sessionError.value = readableError(error, '开局失败')
       throw error

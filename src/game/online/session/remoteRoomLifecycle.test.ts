@@ -112,6 +112,17 @@ describe('remoteRoomLifecycle', () => {
     expect(harness.api.getRoom).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards per-seat LLM configs to startRoom', async () => {
+    const harness = createHarness()
+    harness.state.roomId.value = 'ABC123'
+    const seats = [
+      { seat: 1, baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-chat', style: '话痨' },
+      { seat: 3, baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '稳健', nickname: '小K' },
+    ]
+    await harness.lifecycle.startMatch(seats)
+    expect(harness.api.startRoom).toHaveBeenCalledWith('ABC123', seats)
+  })
+
   it('resumes a persisted session without rejoining through REST', async () => {
     const saved: StoredSession = {
       roomId: 'OLD123', rejoinCode: 'OLD-CODE', nickname: '旧玩家', playerId: 'guest-old', mode: 'hanchan',
