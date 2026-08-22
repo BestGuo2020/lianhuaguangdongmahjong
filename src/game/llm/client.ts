@@ -108,6 +108,11 @@ export function isDeepSeekBaseUrl(baseUrl: string): boolean {
   return /^https:\/\/api\.deepseek\.com/i.test(baseUrl.trim())
 }
 
+/** Anthropic 官方端点：浏览器直连需携带 anthropic-dangerous-direct-browser-access 头。 */
+export function isAnthropicBaseUrl(baseUrl: string): boolean {
+  return /^https:\/\/api\.anthropic\.com/i.test(baseUrl.trim())
+}
+
 async function callOnce(
   config: LlmProviderConfig,
   messages: ChatMessage[],
@@ -127,6 +132,7 @@ async function callOnce(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.apiKey}`,
+        ...(isAnthropicBaseUrl(config.baseUrl) ? { 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
       },
       body: JSON.stringify({
         model: config.model,
