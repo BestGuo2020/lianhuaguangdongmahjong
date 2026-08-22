@@ -30,8 +30,12 @@
 这些是**联机装配/本质差异**文件，两边内容必然不同，改联机时需两边分别改：
 
 - `src/App.vue`、`src/game/core/local/useGame.ts`（远程入口）
+- `src/game/core/contracts/activeGamePort*`、`gamePort*`（P2P 远端端口与权威开局参数）
 - `src/components/lobby/*`（大厅）、`src/components/account/*`、`src/components/shell/GameShellHeader.vue`
 - `src/game/online/orchestration/*`、`presentation/*`、`session/*`、`state/*`（联机编排）
+- `src/game/online/protocol/*`、`src/game/shared/settlement/settlementTimeline.ts`、
+  `src/game/shared/runtime/{matchLifecycle,timerScheduler}.ts`、
+  `src/game/variants/lotus/lotusGame.ts`（P2P 权威边界/无头房主扩展）
 - `index.html`、`vite.config.ts`、`playwright.config.ts`、`src/content/disclaimer.ts`
 
 ## 注意

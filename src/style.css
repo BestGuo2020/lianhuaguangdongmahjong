@@ -601,6 +601,12 @@ button { font: inherit; }
 .dialog-actions .secondary { border: 1px solid rgba(213,184,112,.38); background: rgba(5,23,16,.8); color: #cfc3a5; }
 .dialog-actions .primary { border: 1px solid #d2aa58; background: linear-gradient(135deg, #b98737, #d9b65d 48%, #956622); color: #182218; }
 .dialog-actions button:disabled { filter: grayscale(.7); opacity: .5; cursor: not-allowed; }
+.remote-llm-create-option { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 11px 12px; border: 1px solid rgba(211,174,87,.28); border-radius: 7px; background: rgba(5,23,16,.55); color: #cfc3a5; cursor: pointer; }
+.remote-llm-create-option.disabled { opacity: .55; cursor: not-allowed; }
+.remote-llm-create-option input { margin-top: 3px; accent-color: #d5ab54; }
+.remote-llm-create-option span { display: grid; gap: 3px; }
+.remote-llm-create-option b { color: #e9d7aa; font-size: 13px; }
+.remote-llm-create-option small { color: #81958a; font-size: 11px; line-height: 1.45; }
 .view-rules-link { margin-top: 12px; padding: 4px 0; border: 0; background: transparent; color: #c5a659; font-size: 12px; cursor: pointer; }
 .join-dialog-field { display: grid; gap: 8px; }
 .join-dialog-field span { color: #cfc3a5; font-size: 13px; letter-spacing: .1em; }
@@ -1263,15 +1269,16 @@ button { font: inherit; }
   z-index: 30;
   /* 锚点偏移超出头像容器时收缩布局会塌成 1~2 字宽：按内容撑开再由 max-width 约束换行 */
   width: max-content;
-  max-width: min(240px, 30vw);
-  padding: 6px 11px;
+  max-width: min(320px, 34vw);
+  padding: 9px 14px;
   border: 1px solid rgba(225, 189, 85, .55);
   border-radius: 12px;
   background: rgba(7, 25, 18, .95);
   box-shadow: 0 6px 16px rgba(0, 0, 0, .5);
   color: #f2df9f;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: clamp(15px, 1.05vw, 18px);
+  font-weight: 600;
+  line-height: 1.55;
   white-space: normal;
   pointer-events: none;
 }

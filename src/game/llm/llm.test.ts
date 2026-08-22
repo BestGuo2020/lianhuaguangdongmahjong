@@ -207,17 +207,31 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('【候选动作】')
     expect(prompt.user).toContain('A1')
     expect(prompt.user).toContain('{"choice": "A1"')
-    expect(prompt.user).toContain('引擎建议')
+    expect(prompt.user).toContain('引擎基线建议')
     expect(prompt.user).toContain('【你的牌】')
+    expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
   })
 
-  it('莲花规则摘要与广麻不同', () => {
+  it('莲花广麻明确只支持标准牌型，禁止追逐七对等其他玩法牌型', () => {
+    const built = buildDecisionRequest(baseInput({
+      publicTiles: ['m1'], upperLastDiscard: 'm1',
+    }))
+    const prompt = buildPrompt('稳健', built.request!)
+    expect(prompt.user).toContain('唯一支持的胡牌结构是标准 4 面子+1 将')
+    expect(prompt.user).toContain('不支持七对、十三幺、十三烂、七星十三烂')
+    expect(prompt.user).toContain('弃牌无需考虑点炮风险')
+    expect(prompt.user).not.toContain('安全度：')
+  })
+
+  it('莲花麻将使用双精牌与白板受限替代规则，并允许指定特殊牌型', () => {
     const built = buildDecisionRequest(baseInput({
       ruleCode: 'lotus-legacy', hand: ['m3', 'm4', 'm5'], jokerTiles: ['m5'], wildcardTiles: ['white'],
     }))
     const prompt = buildPrompt('稳健', built.request!)
-    expect(prompt.user).toContain('翻精')
-    expect(prompt.user).toContain('白板为精替代')
+    expect(prompt.user).toContain('翻出的牌面及其同序下一张均为精牌')
+    expect(prompt.user).toContain('白板只能替代上述精牌面或白板本身')
+    expect(prompt.user).toContain('支持的特殊牌型：七对、十三幺、十三烂、七星十三烂')
+    expect(prompt.user).not.toContain('不支持七对')
   })
 })
 
