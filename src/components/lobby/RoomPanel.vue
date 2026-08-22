@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import type { LlmProviderInfo, LlmSeatRequest, RoomSeatState } from '../../game/online/api/roomApi'
 
 interface Props {
@@ -38,14 +38,10 @@ const emit = defineEmits<{
 /** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
 const picks = ref<Record<number, string>>({})
 
-const emptySeats = computed(() => props.roomSeats
-  .map((state, index) => (state ? null : index))
-  .filter((index): index is number => index !== null))
-
 function startPayload() {
   if (!props.effectiveLlmEnabled) return { llmSeats: [] }
   const llmSeats = Object.entries(picks.value)
-    .filter(([, providerId]) => providerId)
+    .filter(([seat, providerId]) => providerId && props.roomSeats[Number(seat)] == null)
     .map(([seat, providerId]) => ({ seat: Number(seat), providerId }))
   return { llmSeats }
 }
@@ -61,31 +57,37 @@ function startPayload() {
     <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
-    <div v-if="isCreator && effectiveLlmEnabled && llmProviders.length" class="room-llm-picks">
-      <p class="room-llm-picks-title">空位大模型（服务端提供商）</p>
-      <label v-for="seat in emptySeats" :key="seat" class="room-llm-pick">
-        <span>空位 {{ seat + 1 }}</span>
-        <select
-          :value="picks[seat] ?? ''"
-          data-testid="room-llm-pick"
-          @change="picks[seat] = ($event.target as HTMLSelectElement).value"
-        >
-          <option value="">服务器默认</option>
-          <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
-            {{ provider.nickname }}（{{ provider.style }}）· {{ provider.name }} {{ provider.model }}
-          </option>
-        </select>
-      </label>
-    </div>
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>
     <div class="room-seats">
-      <div v-for="(seat, index) in roomSeats" :key="index" class="room-seat" :class="{ occupied: !!seat }">
+      <div
+        v-for="(seat, index) in roomSeats"
+        :key="index"
+        class="room-seat"
+        :class="{ occupied: !!seat, 'llm-planned': !seat && effectiveLlmEnabled }"
+      >
         <span class="room-seat-no">{{ index + 1 }}</span>
-        <b>{{ seat?.nickname || '等待加入…' }}</b>
-        <em v-if="seat?.ready">已准备</em>
-        <em v-else-if="seat" class="unready">未准备</em>
+        <template v-if="seat">
+          <b>{{ seat.nickname }}</b>
+          <em v-if="seat.ready">已准备</em>
+          <em v-else class="unready">未准备</em>
+        </template>
+        <select
+          v-else-if="isCreator && effectiveLlmEnabled && llmProviders.length"
+          class="room-seat-provider"
+          :value="picks[index] ?? ''"
+          :aria-label="`空位 ${index + 1} 大模型提供商`"
+          data-testid="room-llm-pick"
+          @change="picks[index] = ($event.target as HTMLSelectElement).value"
+        >
+          <option value="">🤖 自动选择</option>
+          <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
+            {{ provider.nickname }}（{{ provider.style }}）· {{ provider.model }}
+          </option>
+        </select>
+        <b v-else-if="effectiveLlmEnabled">大模型补位</b>
+        <b v-else>等待加入…</b>
       </div>
     </div>
     <div class="room-owner-actions">
@@ -112,31 +114,36 @@ function startPayload() {
 }
 .room-llm-note.on { color: #4caf50; }
 .room-llm-note.off { color: #e6a23c; }
-.room-llm-picks {
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border: 1px dashed rgba(229, 213, 173, 0.35);
-  border-radius: 8px;
+.room-seat.llm-planned {
+  border-color: rgba(91, 190, 126, 0.34);
+  background: linear-gradient(100deg, rgba(38, 102, 67, 0.16), rgba(2, 12, 9, 0.62));
+  color: #94cda4;
 }
-.room-llm-picks-title {
-  margin: 0 0 6px;
-  font-size: 12px;
-  opacity: 0.75;
+.room-seat.llm-planned .room-seat-no {
+  background: rgba(91, 190, 126, 0.2);
+  color: #b8dfbd;
 }
-.room-llm-pick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 13px;
-}
-.room-llm-pick select {
+.room-seat-provider {
   flex: 1;
+  width: 100%;
   min-width: 0;
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(229, 213, 173, 0.35);
-  background: rgba(0, 0, 0, 0.3);
-  color: #e5d5ad;
+  padding: 5px 4px;
+  overflow: hidden;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #d8e7d8;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.room-seat-provider:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(115, 207, 142, 0.55);
+}
+.room-seat-provider option {
+  background: #07150f;
+  color: #e8ddc4;
 }
 </style>
