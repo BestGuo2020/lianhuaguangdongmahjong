@@ -12,6 +12,7 @@ import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRun
 import type { RuleSet } from '../../core/rules/ruleset'
 import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 import { createLlmContextSource } from '../../core/controllers/llmContext'
+import { isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
 interface ClaimCandidate {
   playerIndex: number
@@ -372,7 +373,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     player.melds.push({ type: 'chi', tile, from, tiles: meld.tiles })
     state.currentPlayer.value = playerIndex
     options.tableContext.showTableAction('chi', playerIndex, from, tile, player.melds.length - 1)
-    options.tableContext.playSound('chi.mp3')
+    if (!isLocalLlmSeat(playerIndex)) options.tableContext.playSound('chi.mp3')
   }
 
   // ── 加杠 / 抢杠 ────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { applyWinScore } from './lotusScoring'
 import { removeLastDiscard } from '../../core/rules/actions'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
+import { announceLocalLlmWin, isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
 interface LotusSettlementOptions {
   state: LotusGameState
@@ -43,6 +44,13 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
 
   const timeline = createSettlementTimeline<LotusEndGameOptions>({
     ...options,
+    playSound: (name, volume) => {
+      const suppress = isLocalLlmSeat(state.winningPlayerIndex.value)
+        && (name === 'zimo.mp3' || name === 'hu.mp3' || name === 'hu_effect_sound.mp3')
+      if (!suppress) return volume === undefined
+        ? options.playSound(name)
+        : options.playSound(name, volume)
+    },
     takeRobbedKongTile,
     settleWinningDiscard: (from, tile, winnerIndex) => {
       if (!Number.isInteger(from)) return
@@ -151,6 +159,10 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     ...timeline,
     endGame(winnerIndex: number, endOptions: LotusEndGameOptions = {}) {
       if (!isLegalWin(winnerIndex, endOptions)) return
+      const winType = endOptions.robbedKong
+        ? 'robbed-kong-win'
+        : endOptions.selfDraw ? 'self-draw' : 'discard-win'
+      announceLocalLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }

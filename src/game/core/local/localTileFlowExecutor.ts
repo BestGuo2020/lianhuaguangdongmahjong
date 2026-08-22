@@ -5,6 +5,7 @@ import { PACE_MS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
 import type { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
+import { isLocalLlmSeat } from '../presentation/localLlmVoiceRegistry'
 
 interface LocalTileFlowExecutorOptions {
   state: LocalGameState
@@ -38,7 +39,10 @@ export function createLocalTileFlowExecutor(options: LocalTileFlowExecutorOption
       }
       player.melds.push({ type: 'flower', tile: 'red', tiles: ['red'] })
       options.showTableAction('flower-gang', playerIndex, null, tile, player.melds.length - 1)
-      await Promise.all([options.playSoundAndWait('gang.mp3'), options.wait(PACE_MS.redKongDraw)])
+      await Promise.all([
+        isLocalLlmSeat(playerIndex) ? Promise.resolve() : options.playSoundAndWait('gang.mp3'),
+        options.wait(PACE_MS.redKongDraw),
+      ])
       if (options.state.phase.value === 'settled') return false
       return drawAgain()
     },

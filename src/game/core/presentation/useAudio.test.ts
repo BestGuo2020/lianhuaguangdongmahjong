@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAudio } from './useAudio'
+import { enqueueLlmAudio, resetLlmAudioBusForTests } from './llmAudioBus'
 
 class MockAudio {
   static instances: MockAudio[] = []
@@ -44,6 +45,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetLlmAudioBusForTests()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -54,7 +56,7 @@ describe('useAudio LLM voice ducking', () => {
     const bgm = MockAudio.instances[0]
     expect(bgm.volume).toBe(0.32)
 
-    audio.playLlmAudio('/api/tts/audio/first.mp3', 1, 1)
+    expect(enqueueLlmAudio('/api/tts/audio/first.mp3', 1, 1)).toBe(true)
     const first = MockAudio.instances.find((item) => item.src.endsWith('/first.mp3'))!
     expect(first.volume).toBe(1)
     expect(bgm.volume).toBe(0.08)

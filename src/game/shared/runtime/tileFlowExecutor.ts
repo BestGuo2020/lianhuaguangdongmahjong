@@ -2,6 +2,7 @@ import type { GamePhase, LastDiscard, RefLike } from '../../core/contracts/gameP
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import { sortTiles, tileAudioFile } from '../../core/rules/tiles'
 import type { FollowDealerTracker } from './followDealer'
+import { isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
 interface TileFlowState {
   players: GamePlayer[]
@@ -90,6 +91,15 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     options.controllers[playerIndex].onDiscarded?.()
     state.lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     options.playSound('dapai.mp3', 0.8)
+    if (isLocalLlmSeat(playerIndex)) {
+      // 大模型仍有实体落牌声；牌名由动态吐槽 TTS 取代。
+      state.lastDiscardSound.value = Promise.resolve()
+      state.phase.value = 'checking'
+      options.stopCountdown()
+      options.followDealer?.onDiscard(playerIndex, tile)
+      options.getTurnFlow().routeDiscard(playerIndex, tile)
+      return
+    }
     state.lastDiscardSound.value = new Promise<void>((resolve) => {
       // 牌名音效原本通过 later 延迟 80ms；这里使用独立计时器，避免点炮结算
       // 清理回合定时器时把“正在报牌”的音效一起取消。

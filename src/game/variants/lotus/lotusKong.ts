@@ -8,6 +8,7 @@ import { createKongActionExecutor } from '../../shared/runtime/kongActionExecuto
 import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
+import { isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
 const WIND_MELD_TILES: TileType[] = ['east', 'south', 'west', 'north']
 
@@ -43,7 +44,7 @@ export function createLotusKong(options: LotusKongOptions) {
     const scoreDeltas = (options.ruleset ?? LOTUS_RULESET).score.applyKongScore(state.players, playerIndex, 'concealed')
     options.showTableAction('concealed-gang', playerIndex, null, 'east', player.melds.length - 1)
     options.showScoreFlow(scoreDeltas)
-    options.playSound('gang.mp3')
+    if (!isLocalLlmSeat(playerIndex)) options.playSound('gang.mp3')
   }
 
   return { ...common, performWindKong }

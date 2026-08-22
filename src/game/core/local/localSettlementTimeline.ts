@@ -6,6 +6,7 @@ import type { LocalGameState } from './localGameState'
 import { resolveWinTile } from './matchProgress'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
+import { announceLocalLlmWin, isLocalLlmSeat } from '../presentation/localLlmVoiceRegistry'
 
 interface LocalSettlementTimelineOptions {
   state: LocalGameState
@@ -42,6 +43,13 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
 
   const timeline = createSettlementTimeline<EndGameOptions>({
     ...options,
+    playSound: (name, volume) => {
+      const suppress = isLocalLlmSeat(state.winningPlayerIndex.value)
+        && (name === 'zimo.mp3' || name === 'hu.mp3' || name === 'hu_effect_sound.mp3')
+      if (!suppress) return volume === undefined
+        ? options.playSound(name)
+        : options.playSound(name, volume)
+    },
     resolveWinTile: (winner, endOptions) => resolveWinTile(winner, endOptions),
     takeRobbedKongTile: (playerIndex, tile) => takeRobbedKongTile(playerIndex, tile),
     settleWinningDiscard: (from, tile, winnerIndex) => {
@@ -135,6 +143,10 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     ...timeline,
     endGame(winnerIndex: number, endOptions: EndGameOptions = {}) {
       if (!isLegalWin(winnerIndex, endOptions)) return
+      const winType = endOptions.robbedKong
+        ? 'robbed-kong-win'
+        : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
+      announceLocalLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }
