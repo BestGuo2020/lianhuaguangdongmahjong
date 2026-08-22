@@ -43,6 +43,7 @@ const emptySeats = computed(() => props.roomSeats
   .filter((index): index is number => index !== null))
 
 function startPayload() {
+  if (!props.effectiveLlmEnabled) return { llmSeats: [] }
   const llmSeats = Object.entries(picks.value)
     .filter(([, providerId]) => providerId)
     .map(([seat, providerId]) => ({ seat: Number(seat), providerId }))
@@ -60,7 +61,7 @@ function startPayload() {
     <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
-    <div v-if="isCreator && llmProviders.length" class="room-llm-picks">
+    <div v-if="isCreator && effectiveLlmEnabled && llmProviders.length" class="room-llm-picks">
       <p class="room-llm-picks-title">空位大模型（服务端提供商）</p>
       <label v-for="seat in emptySeats" :key="seat" class="room-llm-pick">
         <span>空位 {{ seat + 1 }}</span>

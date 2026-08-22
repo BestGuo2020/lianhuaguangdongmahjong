@@ -375,7 +375,7 @@ function changeTableTheme(theme: TableThemeName) {
           :leaving="leaving"
           :closing="closing"
           @start-local="startGameWithAudio"
-          @create-room="createRemoteRoom"
+          @create-room="(payload: { llmEnabled: boolean }) => createRemoteRoom(payload.llmEnabled)"
           @join-room="joinRemoteRoom"
           @resume-session="resumeRemoteSession"
           @copy-room="copyRoomCode"

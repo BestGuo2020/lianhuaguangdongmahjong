@@ -52,7 +52,7 @@ const emit = defineEmits<{
   'update:nicknameInput': [value: string]
   'update:joinCode': [value: string]
   startLocal: []
-  createRoom: []
+  createRoom: [payload: { llmEnabled: boolean }]
   joinRoom: []
   resumeSession: []
   copyRoom: []
@@ -67,6 +67,8 @@ const emit = defineEmits<{
 type DialogName = 'create' | 'join' | 'match' | 'rule' | null
 const dialog = ref<DialogName>(null)
 const pickerReturn = ref<'create' | null>(null)
+/** 联机房间专用开关：只控制服务端 LLM，与单机 localStorage provider 完全独立。 */
+const remoteLlmEnabled = ref(false)
 
 const matchOption = computed(() => props.selectedMatch === 'east'
   ? { name: '东风场', description: '一场 4 局' }
@@ -101,7 +103,14 @@ function selectRule(value: RuleVariant) {
 
 function confirmCreate() {
   dialog.value = null
-  emit('createRoom')
+  emit('createRoom', {
+    llmEnabled: remoteLlmEnabled.value && props.roomMeta?.llmAvailable === true,
+  })
+}
+
+function openCreateDialog() {
+  remoteLlmEnabled.value = false
+  dialog.value = 'create'
 }
 
 function confirmJoin() {
@@ -164,7 +173,7 @@ function closeDialog() {
         <template v-if="roomMeta.llmAvailable"> · <span class="room-meta-llm">服务器已启用大模型</span></template>
       </p>
       <div v-if="!roomId" class="remote-entry-actions">
-        <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
+        <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="openCreateDialog">
           {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
         </button>
         <button class="remote-join-btn" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
@@ -210,6 +219,19 @@ function closeDialog() {
           @select-match="openPicker('match', true)"
           @select-rule="openPicker('rule', true)"
         />
+        <label class="remote-llm-create-option" :class="{ disabled: !roomMeta?.llmAvailable }">
+          <input
+            v-model="remoteLlmEnabled"
+            type="checkbox"
+            :disabled="!roomMeta?.llmAvailable"
+            data-testid="remote-llm-enabled"
+          >
+          <span>
+            <b>空位使用服务器大模型</b>
+            <small v-if="roomMeta?.llmAvailable">开局前可为每个空位选择后端提供商，不使用单机 Key</small>
+            <small v-else>服务器未配置联机大模型，空位将使用普通 AI</small>
+          </span>
+        </label>
         <div class="dialog-actions">
           <button class="secondary" type="button" @click="dialog = null">取消</button>
           <button class="primary" type="button" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="confirmCreate">确认创建</button>
