@@ -401,6 +401,9 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 ```
 
 - 同一供应商可注册多个 id（不同风格/昵称）；字段不完整的条目跳过。
+- **中转站 / 聚合 API 同此处理**：baseUrl=中转站地址、key=中转站 key、model=按中转站文档填；
+  同中转站可注册多个 id（同 key 不同模型/风格/昵称）——每座位不同模型而 key 不变；
+  中转站域名不会命中官方特判（DeepSeek 思考关闭 / Anthropic 头），按普通 OpenAI 兼容处理。
 - 未注册任何 `LLM_PROVIDER_*` 时，自动回退**方式 B**（单提供商，`id=default`）——兼容既有部署，行为与旧版一致。
 
 **方式 B：单提供商（兼容，id=default）**：
