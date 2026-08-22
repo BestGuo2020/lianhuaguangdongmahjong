@@ -6,7 +6,7 @@ import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
 import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
-import { avatarForStyle, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
+import { avatarFor, avatarFolderFor, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
@@ -446,12 +446,14 @@ describe('LLM 人设（persona）', () => {
     expect(defaultNicknameFor('https://my.proxy.com/v1', '我的代理')).toBe('我的代理')
   })
 
-  it('自定义昵称优先；对局显示为 昵称（策略）；头像按策略映射', () => {
+  it('自定义昵称优先；对局显示为 昵称（策略）；头像按 供应商文件夹+策略 映射', () => {
     const preset = { id: 'p1', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk', model: 'm', style: '稳健' as const, timeoutMs: 8000, nickname: '大肥鱼二号' }
     expect(effectiveNickname(preset)).toBe('大肥鱼二号')
     expect(displayNameOf('大肥鱼', '激进')).toBe('大肥鱼（激进）')
-    expect(avatarForStyle('激进')).toContain('llm-avatar-jijin')
-    expect(avatarForStyle('话痨')).toContain('llm-avatar-huayao')
-    expect(avatarForStyle('高冷')).toContain('llm-avatar-gaoleng')
+    expect(avatarFor('https://api.deepseek.com/v1', '激进')).toContain('img/llm/deepseek/llm-avatar-jijin.png')
+    expect(avatarFor('https://api.moonshot.cn/v1', '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
+    expect(avatarFor('https://dashscope.aliyuncs.com/compatible-mode/v1', '高冷')).toContain('img/llm/qwen/llm-avatar-gaoleng.png')
+    expect(avatarFor('https://my.proxy.com/v1', '稳健')).toContain('img/llm/custom/llm-avatar-wenjian.png')
+    expect(avatarFolderFor('https://open.bigmodel.cn/api/paas/v4')).toBe('zhipu')
   })
 })
