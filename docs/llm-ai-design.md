@@ -361,7 +361,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 |---|---|---|
 | `llm.providers` | `{configVersion:2, enabled:false, presets:[], activeId:null, seatIds:[null,null,null]}` | 全部配置载体 |
 | `presets[]` | 空 | 每个预置：`{id, name, nickname?, baseUrl, apiKey, model, style, timeoutMs}`；昵称缺省按供应商推导（DeepSeek=大肥鱼，Kimi=Kimi，千问=千问，豆包=豆包，MiniMax=MiniMax，GPT=GPT，智谱=智谱），自定义可编辑 |
-| 座位形象 | — | 对局显示 `昵称（策略）`；头像按策略取 `img/deepseek-strategy.png` 四宫格裁切（左上激进/右上稳健/左下话痨/右下高冷） |
+| 座位形象 | — | 对局显示 `昵称（策略）`；头像按策略取 `img/llm/<供应商英文名>/` 四宫格裁切（左上激进/右上稳健/左下话痨/右下高冷；文件夹：deepseek/kimi/qwen/doubao/minimax/gpt/zhipu，未知=custom） |
 | `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
 | `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
 | `seatStyles` | 全空 | 座位 1-3 → 风格覆盖（激进/稳健/话痨/高冷；null=跟随预置风格）——**支持不同座位不同人设** |

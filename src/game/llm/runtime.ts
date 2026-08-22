@@ -8,7 +8,7 @@ import type { LotusController } from '../variants/lotus/lotusControllers'
 import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats } from './llmController'
 import { presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
-import { avatarForStyle, displayNameOf, effectiveNickname } from './persona'
+import { avatarFor, displayNameOf, effectiveNickname } from './persona'
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -32,7 +32,7 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
 function seedFor(settings: LlmSettings, seat: 1 | 2 | 3): PlayerSeed {
   const preset = presetForSeat(settings, seat) ?? settings.presets[0]
   const style = styleForSeat(settings, seat) ?? preset.style
-  return { name: displayNameOf(effectiveNickname(preset), style), avatar: avatarForStyle(style) }
+  return { name: displayNameOf(effectiveNickname(preset), style), avatar: avatarFor(preset.baseUrl, style) }
 }
 
 function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {
