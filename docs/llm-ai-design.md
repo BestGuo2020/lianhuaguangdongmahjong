@@ -374,23 +374,61 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 
+Key 只在服务器环境变量/`backend/.env` 中；配置入口是**提供商注册表**（联机空位装配见 §9.7，能力公布见 §9.3）。
+
+**方式 A：多提供商（推荐，联机每座位可用不同模型/风格）**：
+
+| env | 说明 |
+|---|---|
+| `LLM_PROVIDER_<ID>_BASE_URL` | OpenAI 兼容根地址，如 `https://api.deepseek.com/v1` |
+| `LLM_PROVIDER_<ID>_API_KEY` | 服务端持有，绝不下发客户端、不写日志 |
+| `LLM_PROVIDER_<ID>_MODEL` | 模型名，如 `deepseek-chat` |
+| `LLM_PROVIDER_<ID>_STYLE` | 可选；激进/稳健/话痨/高冷（非法归一稳健） |
+| `LLM_PROVIDER_<ID>_NICKNAME` | 可选；缺省按 base URL 推导（DeepSeek=大肥鱼等） |
+| `LLM_PROVIDER_<ID>_NAME` | 可选；展示名（缺省=id） |
+| `LLM_PROVIDER_<ID>_TIMEOUT_MS` | 可选；单次预算毫秒（缺省按 `LLM_TIMEOUT_S`） |
+
+```bash
+# 示例：注册两个提供商（id = 变量名中段，小写）
+LLM_PROVIDER_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+LLM_PROVIDER_DEEPSEEK_API_KEY=sk-xxx
+LLM_PROVIDER_DEEPSEEK_MODEL=deepseek-chat
+LLM_PROVIDER_DEEPSEEK_STYLE=稳健
+LLM_PROVIDER_DEEPSEEK_NICKNAME=大肥鱼
+LLM_PROVIDER_KIMI_BASE_URL=https://api.moonshot.cn/v1
+LLM_PROVIDER_KIMI_API_KEY=sk-yyy
+LLM_PROVIDER_KIMI_MODEL=kimi-k2
+```
+
+- 同一供应商可注册多个 id（不同风格/昵称）；字段不完整的条目跳过。
+- 未注册任何 `LLM_PROVIDER_*` 时，自动回退**方式 B**（单提供商，`id=default`）——兼容既有部署，行为与旧版一致。
+
+**方式 B：单提供商（兼容，id=default）**：
+
 | env | 默认 | 说明 |
 |---|---|---|
 | `LLM_ENABLED` | `false` | **默认关**：现有测试/冒烟脚本零影响 |
-| `LLM_API_BASE` | 空 | |
+| `LLM_API_BASE` | 空 | OpenAI 兼容根地址 |
 | `LLM_API_KEY` | 空 | 服务端持有，绝不下发客户端、不写日志 |
 | `LLM_MODEL` | `deepseek-chat` | |
+| `LLM_STYLE` | `稳健` | 出牌风格（仅方式 B 生效；方式 A 用 `<ID>_STYLE`） |
+
+**全局参数（两方式共用）**：
+
+| env | 默认 | 说明 |
+|---|---|---|
 | `LLM_TIMEOUT_S` | `8` | 单次决策总预算，包含 semaphore 获取与最多一次语义重试 |
 | `LLM_POOL_TIMEOUT_S` | `1` | 等待共享并发槽的最长时间，超时直接回退 |
-| `LLM_STYLE` | `稳健` | |
 | `LLM_CONCURRENCY` | `4` | 单进程 `asyncio.Semaphore` 上限，不承诺跨 worker 全局限流 |
 | `LLM_MAX_REQUESTS_PER_ROOM` | `0` | 单房间请求上限，0 表示仅受服务端默认策略限制 |
+
+**能力与公布**：注册表非空 → `llmAvailable=true`；`GET /api/rooms/meta` 公布 `llmProviders: [{id, name, model, style, nickname, avatar}]`（**不含 key**）。
 
 ### 9.3 房间开关（联机）
 
 - `POST /api/rooms` body 增加可选 `llmEnabled: bool = false`（`CreateRoomRequest`）；
 - `RoomSession.llm_enabled` 保存请求值；`_controllers()` 在开局瞬间计算 `effectiveLlmEnabled`，据此选 `LLMPlayer` 或 `AIPlayer`；
-- `GET /api/rooms/meta` 或创建房间响应增加 `llmAvailable`，表示服务端是否同时配置了 `LLM_ENABLED=true`、Base URL、Key 和 Model；
+- `GET /api/rooms/meta` 或创建房间响应增加 `llmAvailable`，表示服务端提供商注册表非空（§9.2）；
 - 房间详情同时返回 `llmEnabled`（用户请求值）与 `effectiveLlmEnabled`（本局实际值）；前端只展示后者；
 - 服务端不可用时，请求 `llmEnabled=true` 静默降级为 `effectiveLlmEnabled=false`，但响应必须明确告知，不得依赖本地 API Key 判断服务器能力。
 
@@ -411,30 +449,14 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 - 后端使用进程级共享 `httpx.AsyncClient`，应用关闭时显式关闭；`LLM_CONCURRENCY` 只约束当前进程。
 - semaphore 获取、HTTP 连接/读取、响应解析和最多一次语义重试共享 `LLM_TIMEOUT_S` 总预算；等待并发槽超过 `LLM_POOL_TIMEOUT_S` 直接回退。
 
-### 9.7 服务端多提供商（联机，v1-in）
+### 9.7 服务端多提供商装配（联机，v1-in）
 
-**配置（服务端，key 只在服务器）**——`backend/.env`（或进程环境变量）：
+服务端注册（配置见 §9.2，Key 不出服务器）；客户端（房主前端）不接触 key。
 
-```bash
-LLM_PROVIDER_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-LLM_PROVIDER_DEEPSEEK_API_KEY=sk-xxx
-LLM_PROVIDER_DEEPSEEK_MODEL=deepseek-chat
-LLM_PROVIDER_DEEPSEEK_STYLE=稳健
-LLM_PROVIDER_DEEPSEEK_NICKNAME=大肥鱼
-LLM_PROVIDER_KIMI_BASE_URL=https://api.moonshot.cn/v1
-LLM_PROVIDER_KIMI_API_KEY=sk-yyy
-LLM_PROVIDER_KIMI_MODEL=kimi-k2
-```
-
-- 提供商 id = 变量段（小写）：`deepseek`、`kimi`…；同模板可注册多个（不同风格/昵称）。
-- 兼容旧全局配置（`LLM_API_BASE/KEY/MODEL`）：未注册 `LLM_PROVIDER_*` 时作为 `id=default` 的单提供商兜底。
-- `GET /api/rooms/meta` 返回 `llmAvailable` + `llmProviders: [{id, name, model, style, nickname, avatar}]`（**不含 key**）。
-
-**开局** `POST /api/rooms/{id}/start` 携带 `llmSeats: [{seat, providerId}]`（seat 0..3 不可重复；`providerId` 须为已注册 id，未知/重复 → 409 `INVALID_LLM_SEATS`）。
-
-**装配与形象**：`RoomSession` 内存保存 `{seat: providerId}` + 默认提供商；`_controllers()` 空位按 `LLMPlayer(config=provider.to_config())` 逐座装配；`_seeds()` 生成 `name = 昵称（策略）` 与 `avatar = img/llm/<供应商英文名>/llm-avatar-<策略>.png`（`app/llm/persona.py`，与前端 persona 规则一致；昵称缺省按 base URL 推导：DeepSeek=大肥鱼等）。`effectiveLlmEnabled = llm_enabled && 服务端注册表非空`。
-
-**前端**：房主在房间面板为每个空位选择服务端提供商（默认=服务器默认）；右下角机器人按钮仅单机显示；设置面板只配置单机人机。
+- **开局** `POST /api/rooms/{id}/start` 携带 `llmSeats: [{seat, providerId}]`（`seat` 0..3 不可重复；`providerId` 须为已注册 id —— 未知/重复 → 409 `INVALID_LLM_SEATS`；大小写不敏感，归一化小写）；
+- **装配**：`RoomSession` 内存保存 `{seat: providerId}` + 默认提供商（`id=default` 优先，否则注册表第一个）；`_controllers()` 空位按 `LLMPlayer(config=provider.to_config())` 逐座装配（未指定座位 → 默认提供商）；`effectiveLlmEnabled = llm_enabled && 注册表非空`；注册表为空 → 启发式 AIPlayer（静默降级）；
+- **形象**：`_seeds()` 生成 `name = 昵称（策略）` 与 `avatar = img/llm/<供应商英文名>/llm-avatar-<策略>.png`（`app/llm/persona.py`，与前端 persona 规则一致；昵称缺省按 base URL 推导：DeepSeek=大肥鱼等；文件夹：deepseek/kimi/qwen/doubao/minimax/gpt/glm/claude，未知=custom）；
+- **前端**：房主在房间面板为每个空位选择服务端提供商（默认=服务器默认，选项显示「昵称（风格）· 名称 模型」）；右下角「🤖 AI 设置」仅单机显示；设置面板只配置单机人机。
 
 ---
 
