@@ -52,15 +52,20 @@ export interface StartResult {
   status: string
 }
 
-/** 每座位 LLM 配置（开局携带；apiKey 仅存服务端会话内存，不落库/日志/响应） */
+/** 每座位引用的服务端提供商（只带 id；key 全在服务端，不经过客户端） */
 export interface LlmSeatRequest {
   seat: number
-  baseUrl: string
-  apiKey: string
+  providerId: string
+}
+
+/** 服务端提供商公开信息（不含 key），房主建房时按 id 选择 */
+export interface LlmProviderInfo {
+  id: string
+  name: string
   model: string
   style: string
-  nickname?: string
-  timeoutMs?: number
+  nickname: string
+  avatar: string
 }
 
 export interface CloseResult {
@@ -73,6 +78,8 @@ export interface RoomMeta {
   max: number
   /** 服务端是否配置了大模型（供大厅提示） */
   llmAvailable?: boolean
+  /** 服务端注册的提供商（不含 key），房主建房时按 id 选择 */
+  llmProviders?: Array<LlmProviderInfo>
 }
 
 export function createRoom(mode: MatchType, capacity: number, playerId?: string,

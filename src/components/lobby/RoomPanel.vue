@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { RoomSeatState } from '../../game/online/api/roomApi'
+import { computed, ref } from 'vue'
+import type { LlmProviderInfo, LlmSeatRequest, RoomSeatState } from '../../game/online/api/roomApi'
 
 interface Props {
   roomId: string
@@ -21,16 +22,32 @@ interface Props {
   effectiveLlmEnabled: boolean
   /** 服务端是否配置了大模型 */
   llmAvailable: boolean
+  /** 服务端注册的提供商（不含 key），房主为空位选择 */
+  llmProviders: Array<LlmProviderInfo>
 }
 
-defineProps<Props>()
-defineEmits<{
+const props = defineProps<Props>()
+const emit = defineEmits<{
   copy: []
   toggleReady: []
-  start: []
+  start: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leave: []
   close: []
 }>()
+
+/** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
+const picks = ref<Record<number, string>>({})
+
+const emptySeats = computed(() => props.roomSeats
+  .map((state, index) => (state ? null : index))
+  .filter((index): index is number => index !== null))
+
+function startPayload() {
+  const llmSeats = Object.entries(picks.value)
+    .filter(([, providerId]) => providerId)
+    .map(([seat, providerId]) => ({ seat: Number(seat), providerId }))
+  return { llmSeats }
+}
 </script>
 
 <template>
@@ -43,6 +60,22 @@ defineEmits<{
     <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
+    <div v-if="isCreator && llmProviders.length" class="room-llm-picks">
+      <p class="room-llm-picks-title">空位大模型（服务端提供商）</p>
+      <label v-for="seat in emptySeats" :key="seat" class="room-llm-pick">
+        <span>空位 {{ seat + 1 }}</span>
+        <select
+          :value="picks[seat] ?? ''"
+          data-testid="room-llm-pick"
+          @change="picks[seat] = ($event.target as HTMLSelectElement).value"
+        >
+          <option value="">服务器默认</option>
+          <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
+            {{ provider.nickname }}（{{ provider.style }}）· {{ provider.name }} {{ provider.model }}
+          </option>
+        </select>
+      </label>
+    </div>
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>
@@ -60,7 +93,7 @@ defineEmits<{
         v-if="isCreator"
         class="start-button room-start"
         :disabled="!allOccupiedReady || matchStarting"
-        @click="$emit('start')"
+        @click="$emit('start', startPayload())"
       ><b>开始对局</b><span>{{ matchStarting ? '正在打扫房间' : (allOccupiedReady ? '全员已准备' : '等待全员准备') }}</span></button>
     </div>
     <div class="room-actions-row">
@@ -78,4 +111,31 @@ defineEmits<{
 }
 .room-llm-note.on { color: #4caf50; }
 .room-llm-note.off { color: #e6a23c; }
+.room-llm-picks {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(229, 213, 173, 0.35);
+  border-radius: 8px;
+}
+.room-llm-picks-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.room-llm-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.room-llm-pick select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(229, 213, 173, 0.35);
+  background: rgba(0, 0, 0, 0.3);
+  color: #e5d5ad;
+}
 </style>

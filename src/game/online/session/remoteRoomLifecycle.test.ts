@@ -112,12 +112,12 @@ describe('remoteRoomLifecycle', () => {
     expect(harness.api.getRoom).toHaveBeenCalledTimes(1)
   })
 
-  it('forwards per-seat LLM configs to startRoom', async () => {
+  it('forwards per-seat provider ids to startRoom', async () => {
     const harness = createHarness()
     harness.state.roomId.value = 'ABC123'
     const seats = [
-      { seat: 1, baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-chat', style: '话痨' },
-      { seat: 3, baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '稳健', nickname: '小K' },
+      { seat: 1, providerId: 'deepseek' },
+      { seat: 3, providerId: 'kimi' },
     ]
     await harness.lifecycle.startMatch(seats)
     expect(harness.api.startRoom).toHaveBeenCalledWith('ABC123', seats)

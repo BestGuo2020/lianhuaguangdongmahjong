@@ -365,6 +365,7 @@ function changeTableTheme(theme: TableThemeName) {
           :llm-enabled="llmEnabled"
           :effective-llm-enabled="effectiveLlmEnabled"
           :llm-available="llmAvailable"
+          :llm-providers="roomMeta?.llmProviders ?? []"
           :my-seat="mySeat"
           :is-creator="isCreator"
           :single-player-only="singlePlayerOnly"
@@ -379,7 +380,7 @@ function changeTableTheme(theme: TableThemeName) {
           @resume-session="resumeRemoteSession"
           @copy-room="copyRoomCode"
           @toggle-ready="toggleReady"
-          @start-remote="startRemoteMatch"
+          @start-remote="(payload: { llmSeats?: Array<{ seat: number; providerId: string }> }) => startRemoteMatch(payload?.llmSeats)"
           @leave-room="leaveRoom"
           @close-room="closeRoom"
           @open-stats="statsOpen = true"
@@ -425,9 +426,10 @@ function changeTableTheme(theme: TableThemeName) {
     </div>
     <RulesPanel :open="rulesOpen" :variant="selectedRule" @close="rulesOpen = false" />
     <button
+      v-if="gameMode === 'local'"
       class="llm-fab"
       aria-label="AI 设置"
-      title="AI 大模型设置"
+      title="AI 大模型设置（联机由服务端提供商配置）"
       data-testid="llm-fab"
       @click="llmOpen = true"
     >🤖</button>

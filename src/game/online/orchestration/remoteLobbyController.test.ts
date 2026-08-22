@@ -104,36 +104,17 @@ describe('remoteLobbyController', () => {
     expect(startBgm).toHaveBeenCalledOnce()
   })
 
-  it('sends per-seat LLM configs in start order when starting the match', async () => {
+  it('forwards server provider selections when starting the match', async () => {
     const { controller, actions } = setup()
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) => key === 'llm.providers' ? JSON.stringify({
-        configVersion: 2,
-        enabled: true,
-        presets: [
-          { id: 'pA', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-chat', style: '稳健', timeoutMs: 8000 },
-          { id: 'pB', name: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '话痨', timeoutMs: 8000, nickname: '小K' },
-        ],
-        activeId: 'pA',
-        seatIds: [null, 'pA', 'pB', null],
-        seatStyles: [null, null, '高冷', null],
-      }) : null,
-      setItem: () => {},
-      removeItem: () => {},
-    })
-    try {
-      // setup 的 roomSeats：0/1 已占 → 空位为座位 2、3（升序）
-      await controller.startMatch()
-      expect(actions.startMatch).toHaveBeenCalledWith([
-        { seat: 2, baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-chat', style: '稳健', timeoutMs: 8000 },
-        { seat: 3, baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '高冷', timeoutMs: 8000, nickname: '小K' },
-      ])
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    const llmSeats = [
+      { seat: 2, providerId: 'deepseek' },
+      { seat: 3, providerId: 'kimi' },
+    ]
+    await controller.startMatch(llmSeats)
+    expect(actions.startMatch).toHaveBeenCalledWith(llmSeats)
   })
 
-  it('sends no LLM configs when the AI settings toggle is disabled', async () => {
+  it('passes an empty selection when no provider was chosen', async () => {
     const { controller, actions } = setup()
     await controller.startMatch()
     expect(actions.startMatch).toHaveBeenCalledWith([])

@@ -8,7 +8,7 @@ import RuleVariantPicker from './RuleVariantPicker.vue'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import type { RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
+import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
 
 interface Props {
@@ -31,6 +31,8 @@ interface Props {
   effectiveLlmEnabled: boolean
   /** 服务端是否配置了大模型 */
   llmAvailable: boolean
+  /** 服务端注册的提供商（不含 key） */
+  llmProviders: Array<LlmProviderInfo>
   mySeat: number
   isCreator: boolean
   allOccupiedReady: boolean
@@ -55,7 +57,7 @@ const emit = defineEmits<{
   resumeSession: []
   copyRoom: []
   toggleReady: []
-  startRemote: []
+  startRemote: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leaveRoom: []
   closeRoom: []
   openStats: []
@@ -179,6 +181,7 @@ function closeDialog() {
         :llm-enabled="llmEnabled"
         :effective-llm-enabled="effectiveLlmEnabled"
         :llm-available="llmAvailable"
+        :llm-providers="llmProviders"
         :my-seat="mySeat"
         :is-creator="isCreator"
         :session-status="sessionStatus"
@@ -191,7 +194,7 @@ function closeDialog() {
         :rule-name="ruleOption.name"
         @copy="$emit('copyRoom')"
         @toggle-ready="$emit('toggleReady')"
-        @start="$emit('startRemote')"
+        @start="$emit('startRemote', $event)"
         @leave="$emit('leaveRoom')"
         @close="$emit('closeRoom')"
       />
