@@ -117,7 +117,8 @@ function presetName(id: string | null): string {
 
       <p class="llm-hint">
         单机人机的 AI 玩家可接入大模型决策（出牌/吃碰杠），可添加多个供应商并<b>给不同座位分配不同模型</b>。
-        修改后<strong>刷新页面</strong>生效；Key 仅保存在本浏览器；联机房间由服务端配置。
+        启用后<b>联机建房</b>空位补位也使用大模型（需服务端配置，配置并开启后房间面板会显示「空位由大模型代打」）。
+        修改后<strong>刷新页面</strong>生效；Key 仅保存在本浏览器；联机房间的模型/风格由服务端配置。
       </p>
 
       <label class="llm-row">
