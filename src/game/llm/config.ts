@@ -23,6 +23,10 @@ export interface LlmProviderPreset extends LlmProviderConfig {
   name: string
   /** 自定义昵称（可选；缺省按供应商推导，如 DeepSeek=大肥鱼） */
   nickname?: string
+  /** 由「自定义」模板创建：可手动指定头像文件夹（如 gpt；留空=自动判定） */
+  fromCustomTemplate?: boolean
+  /** 头像文件夹覆盖（仅自定义模板预置显示/使用；通过 Base URL 自动识别的预置不需要） */
+  avatarFolder?: string
 }
 
 export interface LlmSettings {
@@ -86,10 +90,13 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
   const name = typeof raw.name === 'string' && raw.name ? raw.name : '未命名'
   const id = typeof raw.id === 'string' && raw.id ? raw.id : `p${Math.random().toString(36).slice(2, 8)}`
   const nickname = typeof raw.nickname === 'string' ? raw.nickname : undefined
+  const avatarFolder = typeof raw.avatarFolder === 'string' ? raw.avatarFolder : undefined
   if (!baseUrl && !apiKey && !model) return null
   return {
     id, name, baseUrl, apiKey, model,
     ...(nickname ? { nickname } : {}),
+    ...(raw.fromCustomTemplate === true ? { fromCustomTemplate: true } : {}),
+    ...(avatarFolder ? { avatarFolder } : {}),
     style: validateStyle(raw.style),
     timeoutMs: typeof raw.timeoutMs === 'number' && raw.timeoutMs > 0 ? raw.timeoutMs : DEFAULT_PRESET.timeoutMs,
   }

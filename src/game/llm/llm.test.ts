@@ -6,7 +6,7 @@ import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
 import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
-import { avatarFor, avatarFolderFor, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
+import { avatarFor, avatarFolderFor, avatarFolderOf, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
@@ -470,13 +470,23 @@ describe('LLM 人设（persona）', () => {
     const preset = { id: 'p1', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk', model: 'm', style: '稳健' as const, timeoutMs: 8000, nickname: '大肥鱼二号' }
     expect(effectiveNickname(preset)).toBe('大肥鱼二号')
     expect(displayNameOf('大肥鱼', '激进')).toBe('大肥鱼（激进）')
-    expect(avatarFor('https://api.deepseek.com/v1', '激进')).toContain('img/llm/deepseek/llm-avatar-jijin.png')
-    expect(avatarFor('https://api.moonshot.cn/v1', '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
-    expect(avatarFor('https://dashscope.aliyuncs.com/compatible-mode/v1', '高冷')).toContain('img/llm/qwen/llm-avatar-gaoleng.png')
-    expect(avatarFor('https://my.proxy.com/v1', '稳健')).toContain('img/llm/custom/llm-avatar-wenjian.png')
+    expect(avatarFor({ baseUrl: 'https://api.deepseek.com/v1' }, '激进')).toContain('img/llm/deepseek/llm-avatar-jijin.png')
+    expect(avatarFor({ baseUrl: 'https://api.moonshot.cn/v1' }, '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
+    expect(avatarFor({ baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }, '高冷')).toContain('img/llm/qwen/llm-avatar-gaoleng.png')
+    expect(avatarFor({ baseUrl: 'https://my.proxy.com/v1' }, '稳健')).toContain('img/llm/custom/llm-avatar-wenjian.png')
     expect(avatarFolderFor('https://open.bigmodel.cn/api/paas/v4')).toBe('glm')
-    expect(avatarFor('https://open.bigmodel.cn/api/paas/v4', '稳健')).toContain('img/llm/glm/llm-avatar-wenjian.png')
-    expect(avatarFor('https://api.anthropic.com/v1', '话痨')).toContain('img/llm/claude/llm-avatar-huayao.png')
+    expect(avatarFor({ baseUrl: 'https://open.bigmodel.cn/api/paas/v4' }, '稳健')).toContain('img/llm/glm/llm-avatar-wenjian.png')
+    expect(avatarFor({ baseUrl: 'https://api.anthropic.com/v1' }, '话痨')).toContain('img/llm/claude/llm-avatar-huayao.png')
     expect(defaultNicknameFor('https://api.anthropic.com/v1', 'Claude')).toBe('Claude')
+  })
+
+  it('自定义模板可覆盖头像文件夹；非法字符忽略；模板改 baseUrl 不需要覆盖项', () => {
+    // 中转站（未知域名）：无覆盖 → custom 文件夹（自动识别，无需配置）
+    expect(avatarFolderOf({ baseUrl: 'https://cdxai.cn/v1' })).toBe('custom')
+    // 真·自定义：手动指定文件夹（如借用 gpt 素材）
+    expect(avatarFolderOf({ baseUrl: 'https://cdxai.cn/v1', avatarFolder: 'gpt' })).toBe('gpt')
+    // 非法字符忽略 → 回退自动识别
+    expect(avatarFolderOf({ baseUrl: 'https://cdxai.cn/v1', avatarFolder: '../x' })).toBe('custom')
+    expect(avatarFor({ baseUrl: 'https://cdxai.cn/v1', avatarFolder: 'kimi' }, '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
   })
 })

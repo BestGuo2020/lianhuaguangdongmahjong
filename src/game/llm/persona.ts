@@ -40,10 +40,17 @@ export function defaultNicknameFor(baseUrl: string, presetName: string): string 
   return profile.nickname || (presetName.trim() || 'AI玩家')
 }
 
-/** 头像 URL：按供应商文件夹 + 策略裁切文件。 */
-export function avatarFor(baseUrl: string, style: LlmStyle): string {
-  const folder = avatarFolderFor(baseUrl)
+/** 头像 URL：供应商文件夹（预置指定 > Base URL 自动识别）+ 策略裁切文件。 */
+export function avatarFor(preset: { baseUrl: string; avatarFolder?: string }, style: LlmStyle): string {
+  const folder = avatarFolderOf(preset)
   return `${import.meta.env.BASE_URL}img/llm/${folder}/${STYLE_AVATARS[style]}`
+}
+
+/** 有效头像文件夹：预置指定优先（仅允许字母/数字/下划线/连字符），否则按 Base URL 识别。 */
+export function avatarFolderOf(preset: { baseUrl: string; avatarFolder?: string }): string {
+  const override = preset.avatarFolder?.trim()
+  if (override && /^[a-z0-9_-]+$/i.test(override)) return override
+  return avatarFolderFor(preset.baseUrl)
 }
 
 /** 预置的生效昵称：自定义昵称优先，否则供应商默认。 */

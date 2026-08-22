@@ -32,7 +32,7 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
 function seedFor(settings: LlmSettings, seat: 1 | 2 | 3): PlayerSeed {
   const preset = presetForSeat(settings, seat) ?? settings.presets[0]
   const style = styleForSeat(settings, seat) ?? preset.style
-  return { name: displayNameOf(effectiveNickname(preset), style), avatar: avatarFor(preset.baseUrl, style) }
+  return { name: displayNameOf(effectiveNickname(preset), style), avatar: avatarFor(preset, style) }
 }
 
 function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {
