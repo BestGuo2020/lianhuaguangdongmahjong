@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { LlmProviderInfo, LlmSeatRequest, RoomSeatState } from '../../game/online/api/roomApi'
+import type {
+  LlmProviderInfo,
+  LlmSeatRequest,
+  RoomSeatState,
+  ServerLlmStyle,
+} from '../../game/online/api/roomApi'
 
 interface Props {
   roomId: string
@@ -38,11 +43,34 @@ const emit = defineEmits<{
 /** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
 const picks = ref<Record<number, string>>({})
 
+const ALL_STYLES: ServerLlmStyle[] = ['激进', '稳健', '话痨', '高冷']
+const PICK_SEPARATOR = '::'
+
+function stylesFor(provider: LlmProviderInfo): ServerLlmStyle[] {
+  return provider.styles?.length ? provider.styles : (
+    ALL_STYLES.includes(provider.style) ? ALL_STYLES : ['稳健']
+  )
+}
+
+function pickValue(providerId: string, style: ServerLlmStyle): string {
+  return `${providerId}${PICK_SEPARATOR}${style}`
+}
+
+function parsePick(seat: number, value: string): LlmSeatRequest | null {
+  const separator = value.lastIndexOf(PICK_SEPARATOR)
+  if (separator <= 0) return null
+  const providerId = value.slice(0, separator)
+  const style = value.slice(separator + PICK_SEPARATOR.length) as ServerLlmStyle
+  if (!providerId || !ALL_STYLES.includes(style)) return null
+  return { seat, providerId, style }
+}
+
 function startPayload() {
   if (!props.effectiveLlmEnabled) return { llmSeats: [] }
   const llmSeats = Object.entries(picks.value)
     .filter(([seat, providerId]) => providerId && props.roomSeats[Number(seat)] == null)
-    .map(([seat, providerId]) => ({ seat: Number(seat), providerId }))
+    .map(([seat, value]) => parsePick(Number(seat), value))
+    .filter((item): item is LlmSeatRequest => item !== null)
   return { llmSeats }
 }
 </script>
@@ -82,9 +110,15 @@ function startPayload() {
           @change="picks[index] = ($event.target as HTMLSelectElement).value"
         >
           <option value="">🤖 自动选择</option>
-          <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
-            {{ provider.nickname }}（{{ provider.style }}）· {{ provider.model }}
-          </option>
+          <template v-for="provider in llmProviders" :key="provider.id">
+            <option
+              v-for="style in stylesFor(provider)"
+              :key="`${provider.id}-${style}`"
+              :value="pickValue(provider.id, style)"
+            >
+              {{ provider.nickname }}（{{ style }}）· {{ provider.model }}
+            </option>
+          </template>
         </select>
         <b v-else-if="effectiveLlmEnabled">大模型补位</b>
         <b v-else>等待加入…</b>
@@ -136,6 +170,7 @@ function startPayload() {
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
+  color-scheme: dark;
   cursor: pointer;
 }
 .room-seat-provider:focus-visible {

@@ -53,9 +53,13 @@ export interface StartResult {
 }
 
 /** 每座位引用的服务端提供商（只带 id；key 全在服务端，不经过客户端） */
+export type ServerLlmStyle = '激进' | '稳健' | '话痨' | '高冷'
+
 export interface LlmSeatRequest {
   seat: number
   providerId: string
+  /** 该座位覆盖 provider 默认策略；省略时沿用服务器默认。 */
+  style?: ServerLlmStyle
 }
 
 /** 服务端提供商公开信息（不含 key），房主建房时按 id 选择 */
@@ -63,7 +67,10 @@ export interface LlmProviderInfo {
   id: string
   name: string
   model: string
-  style: string
+  /** 服务端配置的默认策略。 */
+  style: ServerLlmStyle
+  /** 该模型可供座位选择的策略；旧服务端缺失时前端回退默认策略。 */
+  styles?: ServerLlmStyle[]
   nickname: string
   avatar: string
 }

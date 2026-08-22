@@ -94,8 +94,8 @@ describe('remoteLobbyController', () => {
   it('forwards server provider selections when starting the match', async () => {
     const { controller, actions } = setup()
     const llmSeats = [
-      { seat: 2, providerId: 'deepseek' },
-      { seat: 3, providerId: 'kimi' },
+      { seat: 2, providerId: 'deepseek', style: '激进' as const },
+      { seat: 3, providerId: 'kimi', style: '高冷' as const },
     ]
     await controller.startMatch(llmSeats)
     expect(actions.startMatch).toHaveBeenCalledWith(llmSeats)
