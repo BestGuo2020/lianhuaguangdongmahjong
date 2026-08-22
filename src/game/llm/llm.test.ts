@@ -6,6 +6,7 @@ import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
 import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
+import { avatarForStyle, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
@@ -413,5 +414,44 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     const runtime = createLocalLlmControllers()
     expect(runtime.controllers).toHaveLength(3)
     expect(runtime.enabled).toBe(true)
+  })
+
+  it('人设种子：昵称（策略）+ 策略头像；未启用为空', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const off = createLocalLlmControllers()
+    expect(off.seeds).toEqual([])
+
+    saveLlmSettings({
+      enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', 'pa', 'pa'],
+      seatStyles: [null, '高冷', null, null],
+    }, storage)
+    const runtime = createLocalLlmControllers()
+    expect(runtime.seeds).toHaveLength(3)
+    // 座位1（预置B=Kimi，风格覆盖=高冷）→ Kimi（高冷）；头像=高冷裁切
+    expect(runtime.seeds[0].name).toBe('Kimi（高冷）')
+    expect(runtime.seeds[0].avatar).toContain('llm-avatar-gaoleng')
+    // 座位2（预置A=DeepSeek，无覆盖）→ 大肥鱼（稳健）；头像=稳健裁切
+    expect(runtime.seeds[1].name).toBe('大肥鱼（稳健）')
+    expect(runtime.seeds[1].avatar).toContain('llm-avatar-wenjian')
+  })
+})
+
+describe('LLM 人设（persona）', () => {
+  it('供应商默认昵称：DeepSeek=大肥鱼；其余用对应中文名', () => {
+    expect(defaultNicknameFor('https://api.deepseek.com/v1', 'DeepSeek')).toBe('大肥鱼')
+    expect(defaultNicknameFor('https://api.moonshot.cn/v1', 'Kimi')).toBe('Kimi')
+    expect(defaultNicknameFor('https://dashscope.aliyuncs.com/compatible-mode/v1', '通义千问')).toBe('千问')
+    expect(defaultNicknameFor('https://open.bigmodel.cn/api/paas/v4', '智谱')).toBe('智谱')
+    expect(defaultNicknameFor('https://my.proxy.com/v1', '我的代理')).toBe('我的代理')
+  })
+
+  it('自定义昵称优先；对局显示为 昵称（策略）；头像按策略映射', () => {
+    const preset = { id: 'p1', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk', model: 'm', style: '稳健' as const, timeoutMs: 8000, nickname: '大肥鱼二号' }
+    expect(effectiveNickname(preset)).toBe('大肥鱼二号')
+    expect(displayNameOf('大肥鱼', '激进')).toBe('大肥鱼（激进）')
+    expect(avatarForStyle('激进')).toContain('llm-avatar-jijin')
+    expect(avatarForStyle('话痨')).toContain('llm-avatar-huayao')
+    expect(avatarForStyle('高冷')).toContain('llm-avatar-gaoleng')
   })
 })

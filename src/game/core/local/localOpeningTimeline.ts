@@ -3,7 +3,7 @@ import { createWall, shuffle, sortTiles } from '../rules/tiles'
 import { wallBreakIndexForDealer } from '../rules/wallLayout'
 import { MATCH_HANDS } from './localGameConfig'
 import type { LocalGameState } from './localGameState'
-import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
+import { dealInitialHands, resetLocalPlayers, type PlayerSeed } from '../../shared/runtime/localOpening'
 
 interface LocalOpeningTimelineOptions {
   state: LocalGameState
@@ -17,6 +17,8 @@ interface LocalOpeningTimelineOptions {
   getRoundLabel(): string
   beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options: { fourRed: true }): unknown
+  /** AI 座位（1-3）人设种子：昵称/头像（LLM 玩家形象） */
+  playerSeeds?: Array<PlayerSeed>
 }
 
 export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions) {
@@ -29,7 +31,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
   }
 
   function resetPlayers() {
-    resetLocalPlayers(state)
+    resetLocalPlayers(state, undefined, options.playerSeeds)
   }
 
   function resolveDealtReds() {

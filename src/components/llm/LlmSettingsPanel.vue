@@ -4,6 +4,7 @@ import {
   PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
+import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
@@ -170,6 +171,13 @@ function presetName(id: string | null): string {
         <label class="llm-row">
           <span>名称</span>
           <input v-model="selected.name" type="text" data-testid="llm-name">
+        </label>
+        <label class="llm-row">
+          <span>昵称</span>
+          <input
+            v-model="selected.nickname" type="text" data-testid="llm-nickname"
+            :placeholder="`默认：${defaultNicknameFor(selected.baseUrl, selected.name)}（对局显示：昵称（策略））`"
+          >
         </label>
         <label class="llm-row">
           <span>Base URL</span>

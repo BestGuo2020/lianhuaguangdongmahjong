@@ -7,6 +7,7 @@ import { createLocalCountdownController } from '../../core/local/localCountdownC
 import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
 import { createMatchLifecycle } from '../../shared/runtime/matchLifecycle'
 import { createTimerScheduler } from '../../shared/runtime/timerScheduler'
+import type { PlayerSeed } from '../../shared/runtime/localOpening'
 import { tileName } from '../../core/rules/tiles'
 import type { LotusController, LotusHumanBridge } from './lotusControllers'
 import { LotusAiController, LotusHumanController } from './lotusControllers'
@@ -30,6 +31,8 @@ interface UseLotusGameOptions {
   controllers?: LotusController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: LotusController[]
+  /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
+  aiPlayerSeeds?: Array<PlayerSeed>
   countdownEnabled?: boolean
   ruleset?: RuleSet
 }
@@ -39,6 +42,7 @@ export function useLotusGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  aiPlayerSeeds,
   countdownEnabled = true,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
@@ -169,6 +173,7 @@ export function useLotusGame({
     beginTurn,
     ruleset,
     endGame,
+    playerSeeds: aiPlayerSeeds,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {

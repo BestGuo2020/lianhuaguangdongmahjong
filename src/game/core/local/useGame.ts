@@ -19,6 +19,7 @@ import { createLocalTransientEventPresenter } from './localTransientEventPresent
 import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
+import type { PlayerSeed } from '../../shared/runtime/localOpening'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -26,6 +27,8 @@ interface UseGameOptions {
   controllers?: PlayerController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: PlayerController[]
+  /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
+  aiPlayerSeeds?: Array<PlayerSeed>
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   ruleset?: RuleSet
@@ -36,6 +39,7 @@ export function useGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  aiPlayerSeeds,
   countdownEnabled = true,
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
@@ -158,6 +162,7 @@ export function useGame({
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
     endGame,
+    playerSeeds: aiPlayerSeeds,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions) => {

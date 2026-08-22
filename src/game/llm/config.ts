@@ -21,6 +21,8 @@ export interface LlmProviderPreset extends LlmProviderConfig {
   id: string
   /** 展示名（如 "DeepSeek"、"我家Kimi"） */
   name: string
+  /** 自定义昵称（可选；缺省按供应商推导，如 DeepSeek=大肥鱼） */
+  nickname?: string
 }
 
 export interface LlmSettings {
@@ -82,9 +84,11 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
   const model = typeof raw.model === 'string' && raw.model ? raw.model : ''
   const name = typeof raw.name === 'string' && raw.name ? raw.name : '未命名'
   const id = typeof raw.id === 'string' && raw.id ? raw.id : `p${Math.random().toString(36).slice(2, 8)}`
+  const nickname = typeof raw.nickname === 'string' ? raw.nickname : undefined
   if (!baseUrl && !apiKey && !model) return null
   return {
     id, name, baseUrl, apiKey, model,
+    ...(nickname ? { nickname } : {}),
     style: validateStyle(raw.style),
     timeoutMs: typeof raw.timeoutMs === 'number' && raw.timeoutMs > 0 ? raw.timeoutMs : DEFAULT_PRESET.timeoutMs,
   }

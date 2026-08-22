@@ -101,12 +101,14 @@ const localGame = useGame({
   // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
   countdownEnabled: false,
   aiControllers: localLlm.controllers ?? undefined,
+  aiPlayerSeeds: localLlm.seeds.length ? localLlm.seeds : undefined,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
   aiControllers: lotusLlm.controllers ?? undefined,
+  aiPlayerSeeds: lotusLlm.seeds.length ? lotusLlm.seeds : undefined,
 })
 const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait, waitForTableReady })
 

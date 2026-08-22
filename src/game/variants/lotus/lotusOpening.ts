@@ -2,7 +2,7 @@
 import type { MatchType, TileType } from '../../core/contracts/types'
 import { sortTilesWithJokers, tileName } from '../../core/rules/tiles'
 import { MATCH_HANDS } from '../../core/local/localGameConfig'
-import { dealInitialHands, resetLocalPlayers } from '../../shared/runtime/localOpening'
+import { dealInitialHands, resetLocalPlayers, type PlayerSeed } from '../../shared/runtime/localOpening'
 import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
@@ -28,6 +28,8 @@ interface LotusOpeningOptions {
   beginTurn(playerIndex: number, options?: { skipDraw?: boolean; fromTail?: boolean; preDrawn?: boolean }): unknown
   endGame(winnerIndex: number, options?: LotusEndGameOptions): unknown
   ruleset?: RuleSet
+  /** AI 座位（1-3）人设种子：昵称/头像（LLM 玩家形象） */
+  playerSeeds?: Array<PlayerSeed>
 }
 
 export function createLotusOpening(options: LotusOpeningOptions) {
@@ -41,7 +43,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
   }
 
   function resetPlayers() {
-    resetLocalPlayers(state, 2000)
+    resetLocalPlayers(state, 2000, options.playerSeeds)
   }
 
   async function start(mode?: MatchType, startOptions: {
