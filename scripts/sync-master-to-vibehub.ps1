@@ -88,6 +88,11 @@ try {
   Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
   git checkout vibehub
   if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
+  # 合并前的 vibehub tip：keep 文件从中检出，确保「保留 vibehub 版本」语义可靠。
+  # （git checkout --ours 只对带冲突阶段的路径生效；已被自动合并的文件会被忽略，
+  #   脚本早期版本因此失效——keep 文件被 master 合并版覆盖。）
+  $keepBase = git rev-parse HEAD
+  if ($LASTEXITCODE -ne 0) { throw 'git rev-parse HEAD failed' }
   git merge master --no-commit --no-ff -X theirs
 
   # 新版 git（ort 合并后端，2.34+）对 modify/delete 冲突不随 -X theirs 自动解决：
@@ -110,8 +115,8 @@ try {
 
   # Files that must always keep vibehub's own version (P2P vs WS differ by nature); 定义见上方。
   Write-Host '==> restoring vibehub online files'
-  git checkout --ours -- $vibehubKeep
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout --ours failed' }
+  git checkout $keepBase -- $vibehubKeep
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout keep files failed' }
 
   # Master-only WebSocket files that vibehub does not use（定义见上方）：合并后若仍存在则移除。
   $existing = $masterOnly | Where-Object { Test-Path $_ }
