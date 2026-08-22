@@ -166,6 +166,13 @@ async function connectGame(options: Parameters<typeof useRemoteGame>[0] = {}) {
 // ─── 测试用例 ─────────────────────────────────────────────
 
 describe('useRemoteGame 座位旋转与快照应用', () => {
+  it('把服务端 LLM 吐槽转交给牌桌气泡回调', async () => {
+    const onLlmMessage = vi.fn()
+    await connectGame({ onLlmMessage })
+    mockSocket!.receive({ kind: 'llm_message', seat: 1, text: '这一手稳住。', id: 3 })
+    expect(onLlmMessage).toHaveBeenCalledWith(1, '这一手稳住。')
+  })
+
   it('把本家排到 players[0]，隐藏他人手牌，映射座位索引', async () => {
     const game = await connectGame()
     mockSocket!.receive(makeSnapshot())

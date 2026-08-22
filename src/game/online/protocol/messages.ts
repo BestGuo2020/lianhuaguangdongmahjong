@@ -36,6 +36,7 @@ export type ServerMessage =
   | { kind: 'table_action'; event: TableActionEvent }
   | { kind: 'score_flow'; deltas: ScoreDelta[] }
   | { kind: 'announcement'; text: string; tone: string; id?: number }
+  | { kind: 'llm_message'; seat: number; text: string; id: number }
   | { kind: 'hand_result'; result: RoundResult }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }> }

@@ -9,7 +9,7 @@ import type { ServerMessage } from '../protocol/messages'
 const MESSAGE_KINDS: ServerMessageKind[] = [
   'state_snapshot', 'turn_request', 'claim_request', 'rob_kong_request',
   'round_start', 'rejoin_ok', 'rejoin_err', 'table_action', 'score_flow',
-  'announcement', 'hand_result', 'continue_prompt', 'match_finished',
+  'announcement', 'llm_message', 'hand_result', 'continue_prompt', 'match_finished',
   'room_closed', 'pong', 'error',
 ]
 
@@ -37,6 +37,7 @@ const VALID_MESSAGES: ServerMessage[] = [
   { kind: 'table_action', event: { id: 1, type: 'peng', actorIndex: 0, sourceIndex: 1, tile: 'm1', meldIndex: 0 } },
   { kind: 'score_flow', deltas: [{ playerIndex: 0, amount: 10 }] },
   { kind: 'announcement', text: '碰', tone: 'gold', id: 1 },
+  { kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 1 },
   { kind: 'hand_result', result: { winnerIndex: 0 } },
   { kind: 'continue_prompt', total: 4 },
   { kind: 'match_finished', roomId: 'ROOM', mode: 'east', finalScores: [{ seat: 0, name: 'A', score: 1000 }] },

@@ -110,7 +110,12 @@ const lotusGame = useLotusGame({
   aiControllers: lotusLlm.controllers ?? undefined,
   aiPlayerSeeds: lotusLlm.seeds.length ? lotusLlm.seeds : undefined,
 })
-const remoteGame = useRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait, waitForTableReady })
+const remoteGame = useRemoteGame({
+  playSound: playEffect,
+  playSoundAndWait: playEffectAndWait,
+  waitForTableReady,
+  onLlmMessage: llmHook.onLlmMessage,
+})
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)

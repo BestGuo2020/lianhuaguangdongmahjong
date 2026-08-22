@@ -13,6 +13,13 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ kind: 'hand_result', result: { winTile: 'm10' } })).toBeNull()
   })
 
+  it('accepts bounded LLM bubble messages and rejects malformed seats/text', () => {
+    const message = { kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 7 }
+    expect(decodeServerMessage(message)).toEqual(message)
+    expect(decodeServerMessage({ ...message, seat: 4 })).toBeNull()
+    expect(decodeServerMessage({ ...message, text: '' })).toBeNull()
+  })
+
   it('accepts an optional second dice pair on round_start', () => {
     const message = { kind: 'round_start', matchStarted: true, round: 1, dealer: 0, honba: 0, dice: [2, 5], secondDice: [4, 6] }
     expect(decodeServerMessage(message)).toBe(message)

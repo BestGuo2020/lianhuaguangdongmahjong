@@ -210,6 +210,9 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
         ))
       case 'announcement':
         return isString(raw.text) && isString(raw.tone) && isOptional(raw.id, isNumber)
+      case 'llm_message':
+        return isIntegerBetween(raw.seat, 0, 3) && isString(raw.text)
+          && raw.text.length > 0 && raw.text.length <= 60 && isNumber(raw.id)
       case 'hand_result': return isRoundResult(raw.result)
       case 'continue_prompt': return isNumber(raw.total)
       case 'match_finished':

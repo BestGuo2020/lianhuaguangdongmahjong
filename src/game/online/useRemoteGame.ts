@@ -45,9 +45,15 @@ interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   waitForTableReady?: () => Promise<void>
+  onLlmMessage?: (seat: number, text: string) => void
 }
 
-export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {}, waitForTableReady }: UseRemoteGameOptions = {}) {
+export function useRemoteGame({
+  playSound = () => {},
+  playSoundAndWait = async () => {},
+  waitForTableReady,
+  onLlmMessage = () => {},
+}: UseRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
   const state = createRemoteGameState({
     guestId: sessionStore.loadGuestId() || '',
@@ -330,6 +336,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     table_action: transientEventPresenter.handleTableAction,
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
+    llm_message: (msg) => onLlmMessage(msg.seat, msg.text),
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
