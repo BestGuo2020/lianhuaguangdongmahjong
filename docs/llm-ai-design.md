@@ -15,11 +15,11 @@
 |---|---|---|
 | ✅ v1-in | 本地单机人机（广麻 + 莲花） | 前端设置页用户填写，存 localStorage，**浏览器直连供应商** |
 | ✅ v1-in | 联机房间空座 AI 补位（master WebSocket 房间） | 服务端环境变量 |
+| ✅ v1-in | 联机空座**每座位独立大模型**（不同供应商/模型/风格 + 各自头像昵称） | 用户建房/开局请求携带；**仅会话内存**，不落库/日志/响应（见 §9.7） |
 
 | 明确排除 | 原因 |
 |---|---|
 | ❌ 真人超时 / 断线 AI 代打挂 LLM | 可靠性兜底，永不依赖外部服务（`RemotePlayer._ai` 保持启发式） |
-| ❌ 联机用户自填 provider | v2；联机统一服务端配置，key 不进房间系统 |
 | ❌ 本地请求走后端代理 | 前端直连；CORS、HTTPS 与 Key 边界见 §9.1、§9.5。Key 只发送给用户选择的供应商，不发送到本项目后端 |
 | ❌ vibehub 分支的联机开关 | 其 lobby / 联机层为独立实现（keep 清单）；该功能随 master 同步，vibehub 空座补位复用前端控制器属 v2 |
 
@@ -400,7 +400,8 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 ### 9.5 Key、隐私与日志
 
 - 前端 Key 只允许存在带版本的 localStorage 配置中，不能进入 URL、路由、异常、埋点、Prompt、服务器日志或房间消息。
-- 后端 Key 只从环境变量读取，不下发客户端；日志统一使用供应商、模型和错误类别，不记录 Authorization、完整请求体或完整响应体。
+- 后端 Key 只从环境变量读取（服务端全局配置），不下发客户端；日志统一使用供应商、模型和错误类别，不记录 Authorization、完整请求体或完整响应体。
+- **每座位自带配置（§9.7）例外**：Key 由房主随 `POST /api/rooms/{id}/start` 携带，仅存储在 RoomSession 会话内存（字段名 `_llm_seat_configs`），存活期=对局；**不落库、不进任何日志与接口响应**；校验失败只返回错误码 `INVALID_LLM_SEATS`，不得回显请求体。前端只在「启用」时发送（与把 Key 交给自己的后端同信任边界）。
 - Prompt 含有玩家手牌和局况，发送前必须获得本地用户对第三方供应商的明确授权；默认关闭 LLM。
 - 展示型 `message` 必须按纯文本渲染，不能执行 HTML/Markdown，也不能改变动作或局面。
 
@@ -408,6 +409,14 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 
 - 后端使用进程级共享 `httpx.AsyncClient`，应用关闭时显式关闭；`LLM_CONCURRENCY` 只约束当前进程。
 - semaphore 获取、HTTP 连接/读取、响应解析和最多一次语义重试共享 `LLM_TIMEOUT_S` 总预算；等待并发槽超过 `LLM_POOL_TIMEOUT_S` 直接回退。
+
+### 9.7 每座位 LLM 配置（联机，v1-in）
+
+- 开局 `POST /api/rooms/{id}/start` 可选携带 `llmSeats: [{seat, baseUrl, apiKey, model, style, nickname?, timeoutMs?}]`（`seat` 0..3，不可重复；`baseUrl` 须可规范化且远端仅 https；`apiKey`/`model` 非空；`style` 非法归一稳健；`nickname` ≤20）；
+- `RoomSession` 按 `{seat: 条目}` 保存（仅内存）；`_controllers()` 对空位优先使用座位配置（`LLMPlayer(config=座位配置)`），无座配时回退服务端全局配置，再回退启发式 AIPlayer；
+- `effectiveLlmEnabled = llm_enabled && (llmAvailable || 携带了座位配置)`；
+- **形象**：`_seeds()` 为空座生成 `name = 昵称（策略）`（昵称缺省按供应商推导：DeepSeek=大肥鱼等）与 `avatar = img/llm/<供应商英文名>/llm-avatar-<策略>.png`（供应商识别与前端 persona 规则一致：deepseek/kimi/qwen/doubao/minimax/gpt/glm/claude，未知=custom）；镜像实现位于后端 `app/llm/persona.py`；
+- 映射约定：设置面板 1/2/3 号预置按**空位座位号升序**依次使用（开局瞬间由房主前端 `buildLlmSeats` 组包）；座位方位（上/对/下）映射不作承诺（联机座位随加入顺序变化）。
 - 每房间、每局和每进程都应记录请求计数；达到预算时只使用启发式 AI，不阻塞游戏循环。
 - 房间关闭、换局、控制器 reset 或状态版本变化时取消任务并释放 semaphore；取消不得产生未处理异常或悬挂 Future。
 
