@@ -362,6 +362,26 @@ describe('testLlmConnection', () => {
     await requestLlmDecision({ config: otherConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
     expect(otherBody.thinking).toBeUndefined()
   })
+
+  it('Anthropic 端点自动携带浏览器直连头；其他厂商不携带', async () => {
+    let captured = {} as Record<string, string>
+    const spy = vi.fn(async (_url: string, init: RequestInit) => {
+      captured = init.headers as Record<string, string>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }),
+      }
+    })
+    vi.stubGlobal('fetch', spy as never)
+    await requestLlmDecision({
+      config: { ...config, baseUrl: 'https://api.anthropic.com/v1' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })
+    expect(captured['anthropic-dangerous-direct-browser-access']).toBe('true')
+
+    await requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect(captured['anthropic-dangerous-direct-browser-access']).toBeUndefined()
+  })
 })
 
 describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
