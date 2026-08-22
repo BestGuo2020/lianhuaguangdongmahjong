@@ -23,6 +23,9 @@ const EFFECT_AUDIO_FILES = [
   'didu.ogg',
 ]
 const EFFECT_WAIT_TIMEOUT_MS = 4_000
+const BGM_VOLUME = 0.32
+const BGM_DUCKED_VOLUME = 0.08
+const BGM_DUCK_RAMP_SECONDS = 0.12
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
 interface LlmAudioItem { url: string; seat: number; messageId: number }
@@ -48,7 +51,7 @@ export function useAudio() {
   const bgm = new Audio(`${AUDIO_BASE}bg.ogg`)
   bgm.preload = 'auto'
   bgm.loop = true
-  bgm.volume = 0.32
+  bgm.volume = BGM_VOLUME
   let bgmFallbackSrc: string | null = null
 
   function createTemplate(src: string) {
@@ -121,6 +124,16 @@ export function useAudio() {
     })
   }
 
+  function setBgmDucked(ducked: boolean) {
+    const target = ducked ? BGM_DUCKED_VOLUME : BGM_VOLUME
+    bgm.volume = target
+    if (!bgmGain || !audioContext) return
+    const now = audioContext.currentTime
+    bgmGain.gain.cancelScheduledValues(now)
+    bgmGain.gain.setValueAtTime(bgmGain.gain.value, now)
+    bgmGain.gain.linearRampToValueAtTime(target, now + BGM_DUCK_RAMP_SECONDS)
+  }
+
   function pumpLlmAudio() {
     if (!soundOn.value || activeLlmAudio || !llmAudioQueue.length) return
     const item = llmAudioQueue.shift()!
@@ -128,12 +141,14 @@ export function useAudio() {
     activeLlmAudio = audio
     activeLlmItem = item
     audio.preload = 'auto'
-    audio.volume = 0.9
+    audio.volume = 1
+    setBgmDucked(true)
     const finish = () => {
       if (activeLlmAudio !== audio) return
       activeLlmAudio = null
       activeLlmItem = null
       pumpLlmAudio()
+      if (!activeLlmAudio) setBgmDucked(false)
     }
     audio.addEventListener('ended', finish, { once: true })
     audio.addEventListener('error', finish, { once: true })
@@ -165,6 +180,7 @@ export function useAudio() {
     }
     activeLlmAudio = null
     activeLlmItem = null
+    setBgmDucked(false)
   }
 
   function ensureAudioContext(): AudioContext | null {
@@ -231,7 +247,7 @@ export function useAudio() {
     if (ctx.state === 'suspended') void ctx.resume()
     if (!bgmGain) {
       bgmGain = ctx.createGain()
-      bgmGain.gain.value = 0.32
+      bgmGain.gain.value = activeLlmAudio ? BGM_DUCKED_VOLUME : BGM_VOLUME
       bgmGain.connect(ctx.destination)
     }
     const source = ctx.createBufferSource()
