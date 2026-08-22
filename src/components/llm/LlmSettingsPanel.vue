@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { readLlmConfig, writeLlmConfig, normalizeBaseUrl } from '../../game/llm/config'
+import { computed, ref, watch } from 'vue'
+import {
+  PROVIDER_TEMPLATES, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
+  type LlmProviderPreset, type LlmSettings,
+} from '../../game/llm/config'
 import { testLlmConnection } from '../../game/llm/client'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
@@ -11,22 +14,22 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: [] }>()
 
-const enabled = ref(false)
-const baseUrl = ref('')
-const apiKey = ref('')
-const model = ref('')
-const style = ref<'激进' | '稳健' | '话痨' | '高冷'>('稳健')
+/** 工作副本（打开时从存储载入；保存时整体写回） */
+const settings = ref<LlmSettings>({
+  enabled: false, presets: [], activeId: null, seatIds: [null, null, null, null],
+})
+const selectedId = ref<string | null>(null)
+const templateIndex = ref(0)
 const savedMark = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 
+const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
+const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
+
 function load() {
-  const { config, enabled: on } = readLlmConfig()
-  enabled.value = on
-  baseUrl.value = config.baseUrl
-  apiKey.value = config.apiKey
-  model.value = config.model
-  style.value = config.style
+  settings.value = readLlmSettings()
+  selectedId.value = settings.value.activeId ?? settings.value.presets[0]?.id ?? null
   savedMark.value = false
   testResult.value = null
 }
@@ -34,39 +37,71 @@ function load() {
 watch(() => props.open, (open) => { if (open) load() })
 
 function save() {
-  writeLlmConfig({
-    enabled: enabled.value,
-    baseUrl: baseUrl.value.trim(),
-    apiKey: apiKey.value.trim(),
-    model: model.value.trim() || 'deepseek-chat',
-    style: style.value,
-  })
+  // 清理空预置（无 baseUrl/key/model 的残壳）
+  settings.value.presets = settings.value.presets.filter((preset) => preset.baseUrl || preset.apiKey || preset.model)
+  if (!settings.value.activeId || !settings.value.presets.some((preset) => preset.id === settings.value.activeId)) {
+    settings.value.activeId = settings.value.presets[0]?.id ?? null
+  }
+  saveLlmSettings(settings.value)
   savedMark.value = true
   testResult.value = null
 }
 
+function addFromTemplate() {
+  const template = PROVIDER_TEMPLATES[templateIndex.value] ?? PROVIDER_TEMPLATES[PROVIDER_TEMPLATES.length - 1]
+  const preset: LlmProviderPreset = {
+    id: newPresetId(),
+    name: template.name,
+    baseUrl: template.baseUrl,
+    apiKey: '',
+    model: template.model,
+    style: '稳健',
+    timeoutMs: 8000,
+  }
+  settings.value.presets.push(preset)
+  selectedId.value = preset.id
+  if (!settings.value.activeId) settings.value.activeId = preset.id
+  savedMark.value = false
+}
+
+function removeSelected() {
+  const target = selected.value
+  if (!target) return
+  settings.value.presets = settings.value.presets.filter((preset) => preset.id !== target.id)
+  if (settings.value.activeId === target.id) {
+    settings.value.activeId = settings.value.presets[0]?.id ?? null
+  }
+  settings.value.seatIds = settings.value.seatIds.map((seatId) => (seatId === target.id ? null : seatId))
+  selectedId.value = settings.value.activeId
+}
+
 function clearKey() {
-  apiKey.value = ''
-  writeLlmConfig({ apiKey: '', enabled: false })
+  if (selected.value) selected.value.apiKey = ''
   savedMark.value = true
 }
 
 async function testConnection() {
+  const preset = selected.value
+  if (!preset) return
   testing.value = true
   testResult.value = null
   try {
-    const url = normalizeBaseUrl(baseUrl.value.trim())
-    testResult.value = await testLlmConnection({
-      baseUrl: baseUrl.value.trim(),
-      apiKey: apiKey.value.trim(),
-      model: model.value.trim() || 'deepseek-chat',
-      style: style.value,
-      timeoutMs: 8000,
+    const url = normalizeBaseUrl(preset.baseUrl)
+    const result = await testLlmConnection({
+      baseUrl: preset.baseUrl,
+      apiKey: preset.apiKey,
+      model: preset.model,
+      style: preset.style,
+      timeoutMs: preset.timeoutMs,
     })
-    if (testResult.value.ok && !url) testResult.value = { ok: false, message: 'baseUrl 非法（检查协议与地址，不支持带账号信息的链接）' }
+    testResult.value = result.ok && !url ? { ok: false, message: 'baseUrl 非法（检查协议与地址，不支持带账号信息的链接）' } : result
   } finally {
     testing.value = false
   }
+}
+
+function presetName(id: string | null): string {
+  return settings.value.presets.find((preset) => preset.id === id)?.name ?? '跟随默认'
 }
 </script>
 
@@ -79,49 +114,92 @@ async function testConnection() {
       </header>
 
       <p class="llm-hint">
-        单机人机的 AI 玩家可接入大模型决策（出牌/吃碰杠）。修改后<strong>刷新页面</strong>生效；
-        Key 仅保存在本浏览器。联机房间由服务端配置，与此无关。<br>
-        模型名必须是供应商准确的 API ID（DeepSeek 常见：<code>deepseek-v4-flash</code>（便宜）/ <code>deepseek-v4-pro</code> / <code>deepseek-chat</code>），
-        填错会提示 HTTP 4xx。
+        单机人机的 AI 玩家可接入大模型决策（出牌/吃碰杠），可添加多个供应商并<b>给不同座位分配不同模型</b>。
+        修改后<strong>刷新页面</strong>生效；Key 仅保存在本浏览器；联机房间由服务端配置。
       </p>
 
       <label class="llm-row">
         <span>启用</span>
-        <input v-model="enabled" type="checkbox" data-testid="llm-enabled">
+        <input v-model="settings.enabled" type="checkbox" data-testid="llm-enabled">
       </label>
-      <label class="llm-row">
-        <span>Base URL</span>
-        <input v-model="baseUrl" type="text" placeholder="https://api.deepseek.com/v1" data-testid="llm-base-url" spellcheck="false">
-      </label>
-      <label class="llm-row">
-        <span>API Key</span>
-        <input v-model="apiKey" type="password" autocomplete="off" placeholder="sk-…" data-testid="llm-api-key">
-      </label>
-      <label class="llm-row">
-        <span>模型</span>
-        <input v-model="model" type="text" placeholder="deepseek-chat" data-testid="llm-model" spellcheck="false">
-      </label>
-      <label class="llm-row">
-        <span>风格</span>
-        <select v-model="style" data-testid="llm-style">
-          <option value="激进">激进</option>
-          <option value="稳健">稳健</option>
-          <option value="话痨">话痨</option>
-          <option value="高冷">高冷</option>
-        </select>
-      </label>
+
+      <!-- 供应商列表 -->
+      <div class="llm-provider-list" data-testid="llm-provider-list">
+        <button
+          v-for="preset in settings.presets" :key="preset.id"
+          class="llm-provider-item" :class="{ active: preset.id === selectedId, default: preset.id === settings.activeId }"
+          data-testid="llm-provider-item" @click="selectedId = preset.id"
+        >
+          <b>{{ preset.name }}</b>
+          <span>{{ preset.model || preset.baseUrl || '（未配置）' }}</span>
+        </button>
+        <div class="llm-provider-add">
+          <select v-model.number="templateIndex" data-testid="llm-template" aria-label="添加模板">
+            <option v-for="(template, index) in PROVIDER_TEMPLATES" :key="template.name" :value="index">{{ template.name }}</option>
+          </select>
+          <button data-testid="llm-add" @click="addFromTemplate">＋添加</button>
+        </div>
+      </div>
+
+      <!-- 所选供应商编辑 -->
+      <template v-if="selected">
+        <div class="llm-seat-assign">
+          <p class="llm-sub-title">座位分配（谁用哪个模型）</p>
+          <button
+            class="llm-seat-row" :class="{ chosen: settings.activeId === selected.id }"
+            data-testid="llm-seat-default" @click="settings.activeId = selected.id"
+          >
+            <span>默认预置：</span><b>{{ settings.activeId === selected.id ? '✓ ' + selected.name : presetName(settings.activeId) }}</b>
+          </button>
+          <label v-for="(label, index) in seatLabels" :key="label" class="llm-seat-row">
+            <span>{{ label }}：</span>
+            <select v-model="settings.seatIds[index + 1]" data-testid="llm-seat" @click.stop>
+              <option :value="null">跟随默认（{{ presetName(settings.activeId) }}）</option>
+              <option v-for="preset in settings.presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="llm-row">
+          <span>名称</span>
+          <input v-model="selected.name" type="text" data-testid="llm-name">
+        </label>
+        <label class="llm-row">
+          <span>Base URL</span>
+          <input v-model="selected.baseUrl" type="text" placeholder="https://api.deepseek.com/v1" data-testid="llm-base-url" spellcheck="false">
+        </label>
+        <label class="llm-row">
+          <span>API Key</span>
+          <input v-model="selected.apiKey" type="password" autocomplete="off" placeholder="sk-…" data-testid="llm-api-key">
+        </label>
+        <label class="llm-row">
+          <span>模型</span>
+          <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
+        </label>
+        <label class="llm-row">
+          <span>风格</span>
+          <select v-model="selected.style" data-testid="llm-style">
+            <option value="激进">激进</option>
+            <option value="稳健">稳健</option>
+            <option value="话痨">话痨</option>
+            <option value="高冷">高冷</option>
+          </select>
+        </label>
+
+        <div class="llm-actions">
+          <button data-testid="llm-remove" @click="removeSelected">删除该供应商</button>
+        </div>
+      </template>
 
       <div class="llm-actions">
         <button data-testid="llm-save" @click="save">保存</button>
-        <button data-testid="llm-test" :disabled="testing" @click="testConnection">
+        <button data-testid="llm-test" :disabled="!selected || testing" @click="testConnection">
           {{ testing ? '测试中…' : '测试连接' }}
         </button>
-        <button data-testid="llm-clear-key" @click="clearKey">清除 Key</button>
+        <button data-testid="llm-clear-key" :disabled="!selected" @click="clearKey">清除当前 Key</button>
       </div>
       <p v-if="savedMark" class="llm-status ok">已保存（刷新页面后生效）</p>
-      <p v-if="testResult" class="llm-status" :class="testResult.ok ? 'ok' : 'err'">
-        {{ testResult.message }}
-      </p>
+      <p v-if="testResult" class="llm-status" :class="testResult.ok ? 'ok' : 'err'">{{ testResult.message }}</p>
 
       <div class="llm-stats">
         <h3>本局 AI 统计</h3>
@@ -136,7 +214,7 @@ async function testConnection() {
 
 <style scoped>
 .llm-panel {
-  position: fixed; z-index: 100; top: 0; right: 0; bottom: 0; width: min(390px, 92vw);
+  position: fixed; z-index: 100; top: 0; right: 0; bottom: 0; width: min(410px, 94vw);
   padding: 26px 24px; overflow: auto; border-left: 1px solid #997439;
   background: linear-gradient(160deg, #102b23, #071510 65%);
   box-shadow: -22px 0 60px rgba(0, 0, 0, .65);
@@ -147,17 +225,34 @@ async function testConnection() {
 .llm-close { border: 0; background: transparent; color: #8ca296; font-size: 16px; cursor: pointer; }
 .llm-hint { color: #9db0a6; line-height: 1.6; }
 .llm-hint strong { color: #f3d27c; }
+.llm-hint b { color: #e5d5ad; }
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
-.llm-row span { color: #a6b5ad; }
-.llm-row input, .llm-row select {
+.llm-row > span { color: #a6b5ad; }
+.llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;
 }
-.llm-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-.llm-actions button {
+.llm-provider-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.llm-provider-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border: 1px solid rgba(213, 171, 84, .18); border-radius: 8px;
+  background: transparent; color: #d0c39e; cursor: pointer; text-align: left;
+}
+.llm-provider-item b { color: #e8dcc0; }
+.llm-provider-item span { max-width: 55%; overflow: hidden; font-size: 11px; color: #8ca296; text-overflow: ellipsis; white-space: nowrap; }
+.llm-provider-item.active { border-color: rgba(225, 189, 85, .6); background: rgba(211, 174, 87, .08); }
+.llm-provider-item.default::after { content: '默认'; margin-left: 6px; color: #f3d27c; font-size: 10px; }
+.llm-provider-add { display: flex; gap: 8px; }
+.llm-provider-add select { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px; background: rgba(5, 18, 13, .8); color: #e8dcc0; }
+.llm-provider-add button, .llm-actions button {
   padding: 8px 14px; border: 1px solid #d0a64d; border-radius: 18px;
   background: transparent; color: #f3d27c; cursor: pointer; font-size: 12px;
 }
+.llm-seat-assign { margin: 10px 0; padding: 10px; border: 1px solid rgba(213, 171, 84, .18); border-radius: 8px; }
+.llm-sub-title { margin: 0 0 6px; color: #8ca296; font-size: 11px; letter-spacing: .14em; }
+.llm-seat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.llm-seat-row.chosen { color: #f3d27c; }
+.llm-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .llm-actions button:disabled { opacity: .5; cursor: default; }
 .llm-status { margin: 8px 0; }
 .llm-status.ok { color: #9fce9f; }

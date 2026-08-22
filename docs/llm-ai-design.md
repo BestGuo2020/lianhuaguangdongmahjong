@@ -355,17 +355,19 @@ LLM 调用超时 / 取消 / 网络失败 / HTTP 非 2xx / API 错误 / 并发排
 
 ### 9.1 前端（localStorage，设置 UI 提供）
 
+v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分配；v1（`llm.provider` 单预置）首次读取时自动迁移为"默认"预置。
+
 | key | 默认 | 说明 |
 |---|---|---|
-| `llm.configVersion` | `1` | 配置结构版本，未来迁移不覆盖用户旧配置 |
-| `llm.enabled` | `false` | 人机是否使用大模型 |
-| `llm.baseUrl` | `https://api.deepseek.com/v1` | OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL |
-| `llm.apiKey` | 空 | 仅存本地浏览器；只发送给用户选择的供应商，**不发送本项目后端、不落日志** |
-| `llm.model` | `deepseek-chat` | |
-| `llm.style` | `稳健` | 激进 / 稳健 / 话痨 / 高冷 |
-| `llm.timeoutMs` | `8000` | 一次决策的总预算，包含连接、排队、解析和最多一次语义重试 |
+| `llm.providers` | `{configVersion:2, enabled:false, presets:[], activeId:null, seatIds:[null,null,null]}` | 全部配置载体 |
+| `presets[]` | 空 | 每个预置：`{id, name, baseUrl, apiKey, model, style, timeoutMs}` |
+| `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
+| `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
+| 常用模板 | — | DeepSeek / Kimi / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱 / 自定义（Base URL + 示例模型） |
 
-前端必须要求 HTTPS（localhost 开发环境除外），提供“测试连接”和“清除 Key”操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理。
+- `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
+- 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
+- DeepSeek 官方端点自动追加 `thinking:{type:'disabled'}`（关闭默认思考模式，避免占用决策输出预算），其他厂商不追加。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 

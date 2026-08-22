@@ -5,7 +5,7 @@ import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, te
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
-import { normalizeBaseUrl, readLlmConfig, writeLlmConfig } from './config'
+import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat } from './config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
@@ -244,30 +244,59 @@ function memoryStorage(): Storage & { data: Map<string, string> } {
   }
 }
 
-describe('llm 配置存取（§9.1）', () => {
-  it('空存储返回默认值与关闭状态', () => {
-    const storage = memoryStorage()
-    const result = readLlmConfig(storage)
+describe('llm 配置 v2（多预置 + 座位分配）', () => {
+  const presetA = { id: 'pa', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-v4-flash', style: '稳健' as const, timeoutMs: 8000 }
+  const presetB = { id: 'pb', name: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '话痨' as const, timeoutMs: 8000 }
+  const presetC = { id: 'pc', name: 'Qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKey: 'sk-c', model: 'qwen-plus', style: '稳健' as const, timeoutMs: 8000 }
+
+  it('空存储回退空配置（关闭状态）', () => {
+    const result = readLlmSettings(memoryStorage())
     expect(result.enabled).toBe(false)
-    expect(result.config.apiKey).toBe('')
-    expect(result.config.baseUrl).toBe('https://api.deepseek.com/v1')
-    expect(result.config.model).toBe('deepseek-chat')
+    expect(result.presets).toEqual([])
   })
 
-  it('写入/读取回环；enabled 独立存储', () => {
+  it('保存/读取回环：多预置 + 默认预置 + 座位分配', () => {
     const storage = memoryStorage()
-    writeLlmConfig({ enabled: true, baseUrl: 'https://example.com/v1', apiKey: 'sk-x', model: 'm1', style: '话痨' }, storage)
-    const result = readLlmConfig(storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [presetA, presetB, presetC],
+      activeId: presetA.id,
+      seatIds: [null, presetB.id, presetC.id, null],
+    }, storage)
+    const result = readLlmSettings(storage)
     expect(result.enabled).toBe(true)
-    expect(result.config).toMatchObject({ baseUrl: 'https://example.com/v1', apiKey: 'sk-x', model: 'm1', style: '话痨' })
+    expect(result.presets).toHaveLength(3)
+    expect(result.activeId).toBe('pa')
+    expect(result.seatIds[1]).toBe('pb')
+    expect(result.seatIds[2]).toBe('pc')
+    expect(result.seatIds[3]).toBeNull()
   })
 
-  it('configVersion 不匹配或 JSON 损坏时回退默认（不丢 Key 语义由设置页迁移处理）', () => {
+  it('v1 单预置自动迁移到 v2 默认预置', () => {
     const storage = memoryStorage()
-    storage.setItem('llm.provider', JSON.stringify({ configVersion: 99, apiKey: 'sk-old' }))
-    expect(readLlmConfig(storage).config.apiKey).toBe('')
-    storage.setItem('llm.provider', '{broken')
-    expect(readLlmConfig(storage).config.baseUrl).toBe('https://api.deepseek.com/v1')
+    storage.setItem('llm.provider', JSON.stringify({ configVersion: 1, baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-legacy', model: 'deepseek-chat', style: '稳健', timeoutMs: 8000 }))
+    storage.setItem('llm.enabled', '1')
+    const migrated = readLlmSettings(storage)
+    expect(migrated.enabled).toBe(true)
+    expect(migrated.presets).toHaveLength(1)
+    expect(migrated.presets[0]).toMatchObject({ apiKey: 'sk-legacy', model: 'deepseek-chat', name: '默认' })
+    expect(migrated.activeId).toBe(migrated.presets[0].id)
+    // 迁移后 v2 已写回、v1 清理
+    expect(storage.getItem('llm.provider')).toBeNull()
+    expect(storage.getItem('llm.providers')).not.toBeNull()
+  })
+
+  it('损坏配置回退空配置', () => {
+    const storage = memoryStorage()
+    storage.setItem('llm.providers', '{broken')
+    expect(readLlmSettings(storage).presets).toEqual([])
+  })
+
+  it('presetForSeat：座位指定优先，否则默认预置', () => {
+    const settings = { enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', null, null] as Array<string | null> }
+    expect(presetForSeat(settings, 1)?.id).toBe('pb')
+    expect(presetForSeat(settings, 2)?.id).toBe('pa')
+    expect(presetForSeat(settings, 3)?.id).toBe('pa')
   })
 })
 
@@ -324,6 +353,9 @@ describe('testLlmConnection', () => {
 })
 
 describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
+  const presetA = { id: 'pa', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-a', model: 'deepseek-v4-flash', style: '稳健' as const, timeoutMs: 8000 }
+  const presetB = { id: 'pb', name: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', apiKey: 'sk-b', model: 'kimi-k2', style: '话痨' as const, timeoutMs: 8000 }
+
   it('未配置/未启用 → null 控制器；启用且有 Key → 3 个 LLM 控制器', () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
@@ -331,7 +363,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     expect(off.controllers).toBeNull()
     expect(off.enabled).toBe(false)
 
-    writeLlmConfig({ enabled: true, apiKey: 'sk-x', baseUrl: 'https://api.deepseek.com/v1' }, storage)
+    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
     const on = createLocalLlmControllers()
     expect(on.enabled).toBe(true)
     expect(on.controllers).toHaveLength(3)
@@ -342,12 +374,32 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
   it('stats 为响应式对象：computed 随计数变化刷新（回归：设置面板统计恒 0）', () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
-    writeLlmConfig({ enabled: true, apiKey: 'sk-x', baseUrl: 'https://api.deepseek.com/v1' }, storage)
+    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
     const runtime = createLocalLlmControllers()
     expect(isReactive(runtime.stats)).toBe(true)
     const counts = computed(() => runtime.stats.requests)
     expect(counts.value).toBe(0)
     runtime.stats.requests = 7
     expect(counts.value).toBe(7)
+  })
+
+  it('启用但 Key 为空 → 关闭（不向无 Key 供应商发请求）', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({ enabled: true, presets: [{ ...presetA, apiKey: '' }], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
+    const runtime = createLocalLlmControllers()
+    expect(runtime.enabled).toBe(true)   // 允许空 Key（设置页可先填 Key）
+    expect(runtime.controllers).toHaveLength(3) // 控制器装配（请求时无 Key 会回退启发式）
+  })
+
+  it('多预置 + 座位分配：三个座位按各自预置装配', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', 'pa', 'pa'],
+    }, storage)
+    const runtime = createLocalLlmControllers()
+    expect(runtime.controllers).toHaveLength(3)
+    expect(runtime.enabled).toBe(true)
   })
 })
