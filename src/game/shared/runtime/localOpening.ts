@@ -10,21 +10,34 @@ interface OpeningState {
   dealAnimation: RefLike<DealAnimation>
 }
 
+/** AI 座位种子（座位 1-3，下标 0..2）：昵称/头像由 LLM 人设覆盖 */
+export interface PlayerSeed {
+  name: string
+  avatar: string
+  score?: number
+}
+
 export function resetLocalPlayers(
   state: Pick<OpeningState, 'players'>,
   defaultScore?: number,
+  aiSeeds?: Array<PlayerSeed>,
 ) {
   const previousScores = state.players.map((player) => player.score)
-  state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => ({
-    ...player,
-    score: previousScores[index] ?? defaultScore ?? player.score,
-    seat: index,
-    hand: [],
-    discards: [],
-    melds: [],
-    redCount: 0,
-    drawnTileIndex: -1,
-  })))
+  state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => {
+    const aiSeed = index > 0 ? aiSeeds?.[index - 1] : undefined
+    return {
+      ...player,
+      name: aiSeed?.name ?? player.name,
+      avatar: aiSeed?.avatar ?? player.avatar,
+      score: aiSeed?.score ?? previousScores[index] ?? defaultScore ?? player.score,
+      seat: index,
+      hand: [],
+      discards: [],
+      melds: [],
+      redCount: 0,
+      drawnTileIndex: -1,
+    }
+  }))
 }
 
 export interface InitialDealOptions<S extends OpeningState> {
