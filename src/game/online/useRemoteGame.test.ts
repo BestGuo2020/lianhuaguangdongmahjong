@@ -622,6 +622,20 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     expect(game.phase.value).toBe('settled')
     expect(game.result.value?.winnerIndex).toBe(0)   // 服务端 2 → 本家
   })
+
+  it('hand_result 兜底分支也不为大模型赢家播放原始胡牌音效', async () => {
+    const sounds: string[] = []
+    await connectGame({ playSound: (name: string) => { sounds.push(name) } })
+    mockSocket!.receive(makeSnapshot({
+      players: SERVER_PLAYERS.map((player) => (
+        player.seat === 2 ? { ...player, isLlm: true } : player
+      )),
+    }))
+
+    mockSocket!.receive({ kind: 'hand_result', result: WINNER_RESULT })
+    expect(sounds).not.toContain('zimo.mp3')
+    expect(sounds).not.toContain('hu.mp3')
+  })
 })
 
 describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {

@@ -349,7 +349,8 @@ export function useRemoteGame({
       // 点炮/抢杠/地胡播 hu，自摸/天胡播 zimo（对齐结算时间线的音效逻辑）。
       const winType = mapped?.winType
       const isDiscardStyle = winType === 'discard' || winType === 'robbed-kong' || winType === 'dihu'
-      playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
+      const winner = mapped?.winnerIndex ?? -1
+      if (!players[winner]?.isLlm) playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
       later(() => {
         phase.value = 'settled'
         result.value = mapped

@@ -48,6 +48,22 @@ describe('transientEventPresenter', () => {
     expect(playSound).toHaveBeenCalledWith('chi.mp3')
   })
 
+  it('大模型座位吃碰杠时保留桌面动作但不播放原始人声', () => {
+    const { state, presenter, playSound } = setup()
+    state.players.push(...[0, 1, 2, 3].map((seat) => ({
+      name: `P${seat}`, avatar: '', isLlm: seat === 1, score: 1000, seat,
+      hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+    })))
+    presenter.handleTableAction({
+      kind: 'table_action',
+      // 本家服务端座位 2；actor 3 映射成本地座位 1。
+      event: { id: 9, type: 'discard-gang', actorIndex: 3, sourceIndex: 0, tile: 'm1', meldIndex: 0 },
+    })
+
+    expect(state.tableActionEvent.value?.actorIndex).toBe(1)
+    expect(playSound).not.toHaveBeenCalled()
+  })
+
   it('开局期间忽略桌面动作，胡牌动作不重复播放结算音效', () => {
     const { state, presenter, playSound, setOpening } = setup()
     setOpening(true)

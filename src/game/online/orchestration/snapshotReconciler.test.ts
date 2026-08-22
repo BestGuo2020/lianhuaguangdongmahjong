@@ -4,9 +4,9 @@ import type { ServerSnapshot } from '../protocol/dto'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createSnapshotReconciler } from './snapshotReconciler'
 
-function player(seat: number): GamePlayer {
+function player(seat: number, isLlm = false): GamePlayer {
   return {
-    name: `P${seat}`, avatar: '', score: 1000, seat, hand: [], discards: [],
+    name: `P${seat}`, avatar: '', isLlm, score: 1000, seat, hand: [], discards: [],
     melds: [], redCount: 0, drawnTileIndex: -1,
   }
 }
@@ -15,7 +15,7 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   return {
     kind: 'state_snapshot', roomId: 'ABC123', mode: 'east', phase: 'drawing',
     round: 1, dealer: 0, honba: 0, wallCount: 80, wall: [], headDrawn: 52,
-    currentPlayer: 2, players: [0, 1, 2, 3].map(player), seat: 2,
+    currentPlayer: 2, players: [0, 1, 2, 3].map((seat) => player(seat)), seat: 2,
     result: null, announcement: null, matchFinished: false, lastDiscard: null,
     winPresentation: null, winningPlayerIndex: -1,
     ...overrides,
@@ -94,6 +94,17 @@ describe('snapshotReconciler', () => {
     setShowingResult(false)
     reconciler.flush()
     expect(state.round.value).toBe(3)
+  })
+
+  it('大模型座位出牌只更新牌桌，不播放打牌声和牌名', () => {
+    const { state, reconciler, playSound } = setup()
+    reconciler.apply(snapshot({
+      players: [player(0, true), player(1), player(2), player(3)],
+      lastDiscard: { tile: 'm5', from: 0, id: 9 },
+    }))
+
+    expect(state.lastDiscard.value).toMatchObject({ tile: 'm5', from: 2 })
+    expect(playSound).not.toHaveBeenCalled()
   })
 
   it('分别把结算与场次结束快照交给对应时间线和收尾回调', () => {

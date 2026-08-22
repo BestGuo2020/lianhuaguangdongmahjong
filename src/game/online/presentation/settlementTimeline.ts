@@ -89,8 +89,13 @@ export function createSettlementTimeline({
       reducedMotion: reduceMotion,
       id: Date.now(),
     }
-    playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
-    if (!reduceMotion) {
+    const llmWinner = snapshot.players.find(
+      (player) => player.seat === snapshot.winningPlayerIndex,
+    )?.isLlm === true
+    if (!llmWinner) {
+      playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+    }
+    if (!reduceMotion && !llmWinner) {
       later(() => {
         if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)
       }, WIN_EFFECT_SOUND_DELAY)

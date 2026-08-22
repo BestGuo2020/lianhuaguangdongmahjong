@@ -19,7 +19,7 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   }
 }
 
-function harness() {
+function harness(reduced = true) {
   const state = {
     phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
@@ -31,7 +31,7 @@ function harness() {
     mapPresentation: (value) => value ? { ...value, winnerIndex: 0 } : null,
     toLocalSeat: (seat) => (seat - 2 + 4) % 4,
     playSound: (name) => sounds.push(name),
-    reducedMotion: () => true,
+    reducedMotion: () => reduced,
   })
   return { state, sounds, timeline }
 }
@@ -65,6 +65,19 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('settled')
     expect(state.revealHands.value).toBe(true)
     expect(state.result.value?.draw).toBe(true)
+  })
+
+  it('大模型赢家由 TTS 播报，不播放自摸/胡牌及特效原声', async () => {
+    const { sounds, timeline } = harness(false)
+    timeline.start(snapshot({
+      players: [{
+        name: 'LLM', avatar: '', isLlm: true, score: 1000, seat: 2,
+        hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+      }],
+    }))
+
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(sounds).toEqual([])
   })
 
   it('cancels pending settlement transitions', async () => {

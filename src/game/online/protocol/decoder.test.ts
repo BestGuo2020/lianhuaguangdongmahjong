@@ -57,7 +57,7 @@ describe('decodeServerMessage', () => {
       // lotus-classic 无翻精时后端发送 null 而非省略；decoder 用 isNullable 校验。
       flipTile: null, flipStack: null, openingStack: null,
       players: [{
-        name: 'P0', avatar: '', score: 1000, seat: 0, hand: [null], discards: [],
+        name: 'P0', avatar: '', isLlm: true, score: 1000, seat: 0, hand: [null], discards: [],
         melds: [{ type: 'flower', tile: 'red', tiles: ['red'], from: null, added: null, pending: null }],
         redCount: 1, drawnTileIndex: -1,
       }],
@@ -66,6 +66,10 @@ describe('decodeServerMessage', () => {
     }
 
     expect(decodeServerMessage(message)).toBe(message)
+    expect(decodeServerMessage({
+      ...message,
+      players: [{ ...message.players[0], isLlm: 'yes' }],
+    })).toBeNull()
   })
 
   it('validates optional opening metadata on snapshots', () => {

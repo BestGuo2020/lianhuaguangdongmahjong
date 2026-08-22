@@ -19,6 +19,8 @@ export interface Meld {
 export interface GamePlayer {
   name: string
   avatar: string
+  /** 联机服务端大模型座位；用于屏蔽重复的原始动作音效。 */
+  isLlm?: boolean
   score: number
   seat: number
   hand: TileType[]
