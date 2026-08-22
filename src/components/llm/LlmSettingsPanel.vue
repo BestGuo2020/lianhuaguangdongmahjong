@@ -47,7 +47,9 @@ function save() {
 }
 
 function addFromTemplate() {
-  const template = PROVIDER_TEMPLATES[templateIndex.value] ?? PROVIDER_TEMPLATES[PROVIDER_TEMPLATES.length - 1]
+  const chosen = templateIndex.value
+  const template = PROVIDER_TEMPLATES[chosen] ?? PROVIDER_TEMPLATES[PROVIDER_TEMPLATES.length - 1]
+  const isCustomTemplate = chosen >= PROVIDER_TEMPLATES.length - 1
   const preset: LlmProviderPreset = {
     id: newPresetId(),
     name: template.name,
@@ -56,6 +58,7 @@ function addFromTemplate() {
     model: template.model,
     style: '稳健',
     timeoutMs: 8000,
+    ...(isCustomTemplate ? { fromCustomTemplate: true } : {}),
   }
   settings.value.presets.push(preset)
   selectedId.value = preset.id
@@ -177,6 +180,13 @@ function presetName(id: string | null): string {
           <input
             v-model="selected.nickname" type="text" data-testid="llm-nickname"
             :placeholder="`默认：${defaultNicknameFor(selected.baseUrl, selected.name)}（对局显示：昵称（策略））`"
+          >
+        </label>
+        <label v-if="selected.fromCustomTemplate" class="llm-row">
+          <span>头像文件夹</span>
+          <input
+            v-model="selected.avatarFolder" type="text" data-testid="llm-avatar-folder"
+            placeholder="如 gpt；留空=自动（custom）"
           >
         </label>
         <label class="llm-row">
