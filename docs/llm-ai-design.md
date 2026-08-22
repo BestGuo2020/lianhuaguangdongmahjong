@@ -363,6 +363,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 | `presets[]` | 空 | 每个预置：`{id, name, baseUrl, apiKey, model, style, timeoutMs}` |
 | `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
 | `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
+| `seatStyles` | 全空 | 座位 1-3 → 风格覆盖（激进/稳健/话痨/高冷；null=跟随预置风格）——**支持不同座位不同人设** |
 | 常用模板 | — | DeepSeek / Kimi / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱 / 自定义（Base URL + 示例模型） |
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；

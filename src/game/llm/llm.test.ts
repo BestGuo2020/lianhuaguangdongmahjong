@@ -5,7 +5,7 @@ import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, te
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
-import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat } from './config'
+import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
@@ -255,13 +255,14 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(result.presets).toEqual([])
   })
 
-  it('保存/读取回环：多预置 + 默认预置 + 座位分配', () => {
+  it('保存/读取回环：多预置 + 默认预置 + 座位分配 + 座位风格', () => {
     const storage = memoryStorage()
     saveLlmSettings({
       enabled: true,
       presets: [presetA, presetB, presetC],
       activeId: presetA.id,
       seatIds: [null, presetB.id, presetC.id, null],
+      seatStyles: [null, '话痨', null, null],
     }, storage)
     const result = readLlmSettings(storage)
     expect(result.enabled).toBe(true)
@@ -270,6 +271,8 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(result.seatIds[1]).toBe('pb')
     expect(result.seatIds[2]).toBe('pc')
     expect(result.seatIds[3]).toBeNull()
+    expect(result.seatStyles[1]).toBe('话痨')
+    expect(result.seatStyles[2]).toBeNull()
   })
 
   it('v1 单预置自动迁移到 v2 默认预置', () => {
@@ -293,10 +296,18 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
   })
 
   it('presetForSeat：座位指定优先，否则默认预置', () => {
-    const settings = { enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', null, null] as Array<string | null> }
+    const settings: LlmSettings = { enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', null, null], seatStyles: [null, null, null, null] }
     expect(presetForSeat(settings, 1)?.id).toBe('pb')
     expect(presetForSeat(settings, 2)?.id).toBe('pa')
     expect(presetForSeat(settings, 3)?.id).toBe('pa')
+  })
+
+  it('styleForSeat：座位风格覆盖优先，否则预置风格', () => {
+    const settings: LlmSettings = { enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', null, null], seatStyles: [null, '高冷', null, null] }
+    // 座位 1 用预置 B（风格 话痨）但被座位风格覆盖为 高冷
+    expect(styleForSeat(settings, 1)).toBe('高冷')
+    // 座位 2 用预置 A（默认 风格 稳健），无覆盖 → 稳健
+    expect(styleForSeat(settings, 2)).toBe('稳健')
   })
 })
 
@@ -363,7 +374,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     expect(off.controllers).toBeNull()
     expect(off.enabled).toBe(false)
 
-    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
+    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null], seatStyles: [null, null, null, null] }, storage)
     const on = createLocalLlmControllers()
     expect(on.enabled).toBe(true)
     expect(on.controllers).toHaveLength(3)
@@ -374,7 +385,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
   it('stats 为响应式对象：computed 随计数变化刷新（回归：设置面板统计恒 0）', () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
-    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
+    saveLlmSettings({ enabled: true, presets: [presetA], activeId: 'pa', seatIds: [null, null, null, null], seatStyles: [null, null, null, null] }, storage)
     const runtime = createLocalLlmControllers()
     expect(isReactive(runtime.stats)).toBe(true)
     const counts = computed(() => runtime.stats.requests)
@@ -386,7 +397,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
   it('启用但 Key 为空 → 关闭（不向无 Key 供应商发请求）', () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
-    saveLlmSettings({ enabled: true, presets: [{ ...presetA, apiKey: '' }], activeId: 'pa', seatIds: [null, null, null, null] }, storage)
+    saveLlmSettings({ enabled: true, presets: [{ ...presetA, apiKey: '' }], activeId: 'pa', seatIds: [null, null, null, null], seatStyles: [null, null, null, null] }, storage)
     const runtime = createLocalLlmControllers()
     expect(runtime.enabled).toBe(true)   // 允许空 Key（设置页可先填 Key）
     expect(runtime.controllers).toHaveLength(3) // 控制器装配（请求时无 Key 会回退启发式）
@@ -397,6 +408,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     vi.stubGlobal('localStorage', storage)
     saveLlmSettings({
       enabled: true, presets: [presetA, presetB], activeId: 'pa', seatIds: [null, 'pb', 'pa', 'pa'],
+      seatStyles: [null, null, null, null],
     }, storage)
     const runtime = createLocalLlmControllers()
     expect(runtime.controllers).toHaveLength(3)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  PROVIDER_TEMPLATES, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
+  PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { testLlmConnection } from '../../game/llm/client'
@@ -15,9 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 /** 工作副本（打开时从存储载入；保存时整体写回） */
-const settings = ref<LlmSettings>({
-  enabled: false, presets: [], activeId: null, seatIds: [null, null, null, null],
-})
+const settings = ref<LlmSettings>(emptyLlmSettings())
 const selectedId = ref<string | null>(null)
 const templateIndex = ref(0)
 const savedMark = ref(false)
@@ -144,7 +142,7 @@ function presetName(id: string | null): string {
       <!-- 所选供应商编辑 -->
       <template v-if="selected">
         <div class="llm-seat-assign">
-          <p class="llm-sub-title">座位分配（谁用哪个模型）</p>
+          <p class="llm-sub-title">座位分配（谁用哪个模型 + 什么风格）</p>
           <button
             class="llm-seat-row" :class="{ chosen: settings.activeId === selected.id }"
             data-testid="llm-seat-default" @click="settings.activeId = selected.id"
@@ -153,10 +151,19 @@ function presetName(id: string | null): string {
           </button>
           <label v-for="(label, index) in seatLabels" :key="label" class="llm-seat-row">
             <span>{{ label }}：</span>
-            <select v-model="settings.seatIds[index + 1]" data-testid="llm-seat" @click.stop>
-              <option :value="null">跟随默认（{{ presetName(settings.activeId) }}）</option>
-              <option v-for="preset in settings.presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option>
-            </select>
+            <div class="llm-seat-picks">
+              <select v-model="settings.seatIds[index + 1]" data-testid="llm-seat" @click.stop>
+                <option :value="null">跟随默认（{{ presetName(settings.activeId) }}）</option>
+                <option v-for="preset in settings.presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option>
+              </select>
+              <select v-model="settings.seatStyles[index + 1]" data-testid="llm-seat-style" @click.stop>
+                <option :value="null">风格：跟随</option>
+                <option value="激进">激进</option>
+                <option value="稳健">稳健</option>
+                <option value="话痨">话痨</option>
+                <option value="高冷">高冷</option>
+              </select>
+            </div>
           </label>
         </div>
 
@@ -252,6 +259,8 @@ function presetName(id: string | null): string {
 .llm-sub-title { margin: 0 0 6px; color: #8ca296; font-size: 11px; letter-spacing: .14em; }
 .llm-seat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
 .llm-seat-row.chosen { color: #f3d27c; }
+.llm-seat-picks { display: flex; gap: 6px; min-width: 0; flex: 1; justify-content: flex-end; }
+.llm-seat-picks select { max-width: 55%; }
 .llm-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .llm-actions button:disabled { opacity: .5; cursor: default; }
 .llm-status { margin: 8px 0; }
