@@ -96,7 +96,7 @@ describe('snapshotReconciler', () => {
     expect(state.round.value).toBe(3)
   })
 
-  it('大模型座位出牌只更新牌桌，不播放打牌声和牌名', () => {
+  it('大模型座位出牌保留落牌声，但不播放牌名人声', () => {
     const { state, reconciler, playSound } = setup()
     reconciler.apply(snapshot({
       players: [player(0, true), player(1), player(2), player(3)],
@@ -104,7 +104,8 @@ describe('snapshotReconciler', () => {
     }))
 
     expect(state.lastDiscard.value).toMatchObject({ tile: 'm5', from: 2 })
-    expect(playSound).not.toHaveBeenCalled()
+    expect(playSound).toHaveBeenCalledTimes(1)
+    expect(playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
   })
 
   it('分别把结算与场次结束快照交给对应时间线和收尾回调', () => {
