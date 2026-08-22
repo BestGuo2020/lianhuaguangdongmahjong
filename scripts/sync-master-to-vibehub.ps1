@@ -38,19 +38,6 @@ try {
     Write-Host 'before they are overwritten by this sync. Continuing anyway...' -ForegroundColor Yellow
   }
 
-  Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
-  git checkout vibehub
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
-  git merge master --no-commit --no-ff -X theirs
-  if ($LASTEXITCODE -ne 0) { throw 'git merge failed' }
-
-  $unresolved = git diff --name-only --diff-filter=U
-  if ($unresolved) {
-    Write-Host 'unresolved conflicts remain; aborting (resolve manually, then git merge --continue):' -ForegroundColor Red
-    Write-Host $unresolved
-    exit 1
-  }
-
   # Files that must always keep vibehub's own version (P2P vs WS differ by nature).
   $vibehubKeep = @(
     'index.html'
@@ -81,14 +68,11 @@ try {
     'src/game/online/state/remoteGameState.ts'
     'src/game/online/state/remoteGameState.test.ts'
   )
-  Write-Host '==> restoring vibehub online files'
-  git checkout --ours -- $vibehubKeep
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout --ours failed' }
 
   # Master-only WebSocket files that vibehub does not use.
   # Note: a plain merge keeps vibehub's deletions, so these paths usually do not exist
-  # after merging; they only reappear if master later MODIFIES one of them
-  # (modify/delete conflict resolved by -X theirs). Remove whichever ones exist.
+  # after merging; they only reappear when master MODIFIES one of them
+  # (modify/delete conflict). Resolve by keeping the deletion.
   $masterOnly = @(
     'src/game/online/api'
     'src/game/online/session/remoteRoomLifecycle.ts'
@@ -100,6 +84,36 @@ try {
     'src/game/online/useRemoteGame.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
+
+  Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
+  git checkout vibehub
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
+  git merge master --no-commit --no-ff -X theirs
+
+  # 新版 git（ort 合并后端，2.34+）对 modify/delete 冲突不随 -X theirs 自动解决：
+  # master-only 文件在 vibehub 上已删除、而 master 又修改了它们时会留下未解决冲突。
+  # 按本脚本既定语义处理：这些文件对 vibehub 不存在 → 一律保留删除。
+  $unresolved = @(git diff --name-only --diff-filter=U)
+  foreach ($file in $unresolved) {
+    if ($file -like 'src/game/online/api/*' -or $file -in $masterOnly) {
+      git rm --quiet -f -- $file
+      Write-Host "==> 按删除解决 modify/delete 冲突: $file"
+    }
+  }
+  $unresolved = @(git diff --name-only --diff-filter=U)
+  if ($unresolved) {
+    Write-Host 'unresolved conflicts remain; aborting (resolve manually, then git merge --continue):' -ForegroundColor Red
+    Write-Host $unresolved
+    git merge --abort
+    exit 1
+  }
+
+  # Files that must always keep vibehub's own version (P2P vs WS differ by nature); 定义见上方。
+  Write-Host '==> restoring vibehub online files'
+  git checkout --ours -- $vibehubKeep
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout --ours failed' }
+
+  # Master-only WebSocket files that vibehub does not use（定义见上方）：合并后若仍存在则移除。
   $existing = $masterOnly | Where-Object { Test-Path $_ }
   if ($existing) {
     Write-Host '==> removing master-only WebSocket files'
