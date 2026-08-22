@@ -30,6 +30,8 @@ export interface LlmSettings {
   activeId: string | null
   /** 座位 → 预置 id（下标 1..3；null=跟随默认） */
   seatIds: Array<string | null>
+  /** 座位 → 风格覆盖（下标 1..3；null=跟随预置风格）——不同座位可用不同风格 */
+  seatStyles: Array<LlmStyle | null>
 }
 
 export const CONFIG_VERSION = 2
@@ -57,11 +59,19 @@ export const PROVIDER_TEMPLATES: Array<{ name: string; baseUrl: string; model: s
 ]
 
 export function emptyLlmSettings(): LlmSettings {
-  return { enabled: false, presets: [], activeId: null, seatIds: [null, null, null, null] }
+  return {
+    enabled: false, presets: [], activeId: null,
+    seatIds: [null, null, null, null],
+    seatStyles: [null, null, null, null],
+  }
 }
 
 function validateStyle(value: unknown): LlmStyle {
   return (['激进', '稳健', '话痨', '高冷'] as const).includes(value as LlmStyle) ? value as LlmStyle : DEFAULT_PRESET.style
+}
+
+function validateStyleOrNull(value: unknown): LlmStyle | null {
+  return value === null || value === undefined ? null : validateStyle(value)
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -92,6 +102,10 @@ export function readLlmSettings(storage: Pick<Storage, 'getItem' | 'setItem' | '
           .filter((preset): preset is LlmProviderPreset => preset !== null)
         const rawSeats = Array.isArray(parsed.seatIds) ? parsed.seatIds : []
         const seatIds: Array<string | null> = [null, rawSeats[1] ?? null, rawSeats[2] ?? null, rawSeats[3] ?? null]
+        const rawStyles = Array.isArray(parsed.seatStyles) ? parsed.seatStyles : []
+        const seatStyles: Array<LlmStyle | null> = [
+          null, validateStyleOrNull(rawStyles[1]), validateStyleOrNull(rawStyles[2]), validateStyleOrNull(rawStyles[3]),
+        ]
         const activeId = typeof parsed.activeId === 'string' && presets.some((preset) => preset.id === parsed.activeId)
           ? parsed.activeId
           : presets[0]?.id ?? null
@@ -100,6 +114,7 @@ export function readLlmSettings(storage: Pick<Storage, 'getItem' | 'setItem' | '
           presets,
           activeId,
           seatIds,
+          seatStyles,
         }
       }
     }
@@ -116,6 +131,7 @@ export function readLlmSettings(storage: Pick<Storage, 'getItem' | 'setItem' | '
             presets: [preset],
             activeId: preset.id,
             seatIds: [null, null, null, null],
+            seatStyles: [null, null, null, null],
           }
           try {
             storage.setItem(STORAGE_KEY, JSON.stringify({ configVersion: CONFIG_VERSION, ...migrated }))
@@ -144,6 +160,13 @@ export function presetForSeat(settings: LlmSettings, seat: 1 | 2 | 3): LlmProvid
   const seatId = settings.seatIds[seat]
   const preset = settings.presets.find((item) => item.id === (seatId || settings.activeId))
   return preset ?? null
+}
+
+/** 该座位的实际风格：座位覆盖优先，否则预置风格。 */
+export function styleForSeat(settings: LlmSettings, seat: 1 | 2 | 3): LlmStyle | null {
+  const preset = presetForSeat(settings, seat)
+  if (!preset) return null
+  return settings.seatStyles[seat] ?? preset.style
 }
 
 /** 唯一 id（不含用户可读信息） */
