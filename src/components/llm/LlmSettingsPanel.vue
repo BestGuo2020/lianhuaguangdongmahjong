@@ -58,6 +58,7 @@ function addFromTemplate() {
     model: template.model,
     style: '稳健',
     timeoutMs: 8000,
+    ttsVoiceKey: 'auto',
     ...(isCustomTemplate ? { fromCustomTemplate: true } : {}),
   }
   settings.value.presets.push(preset)
@@ -210,6 +211,15 @@ function presetName(id: string | null): string {
             <option value="稳健">稳健</option>
             <option value="话痨">话痨</option>
             <option value="高冷">高冷</option>
+          </select>
+        </label>
+        <label class="llm-row">
+          <span>单机音色</span>
+          <select v-model="selected.ttsVoiceKey" data-testid="llm-tts-voice">
+            <option value="auto">自动识别模型</option>
+            <option value="deepseek">DeepSeek · 4196</option>
+            <option value="relay_gpt">GPT · 4194</option>
+            <option value="default">策略默认音色</option>
           </select>
         </label>
 

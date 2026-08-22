@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GamePlayer } from '../contracts/types'
 import { WIN_EFFECT_DURATION, WIN_REVEAL_DURATION } from '../presentation/winEffect'
 import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 import { createLocalGameState } from './localGameState'
 import { createLocalSettlementTimeline } from './localSettlementTimeline'
+import { registerLocalLlmVoiceSeat, resetLocalLlmVoiceRegistryForTests } from '../presentation/localLlmVoiceRegistry'
 
 function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
   return {
@@ -11,6 +12,8 @@ function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
     discards: [], melds: [], redCount: 0, drawnTileIndex: hand.length - 1,
   }
 }
+
+afterEach(() => resetLocalLlmVoiceRegistryForTests())
 
 describe('localSettlementTimeline', () => {
   it('rejects a non-winning settlement request even when a caller bypasses the turn orchestrator', () => {
@@ -106,5 +109,33 @@ describe('localSettlementTimeline', () => {
     expect(state.winEffect.value).toMatchObject({ winnerIndex: 0, tile: 'm9' })
     expect(state.winPresentation.value).toMatchObject({ discardWin: true, tile: 'm9' })
     expect(playSound).toHaveBeenCalledWith('hu.mp3')
+  })
+
+  it('LLM 赢家用策略台词播报自摸，并屏蔽原始胡牌人声', () => {
+    const state = createLocalGameState()
+    state.phase.value = 'thinking'
+    state.players.push(
+      player(0),
+      player(1, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east']),
+      player(2), player(3),
+    )
+    const announce = vi.fn()
+    registerLocalLlmVoiceSeat(1, '高冷', announce)
+    const playSound = vi.fn()
+    const timeline = createLocalSettlementTimeline({
+      state,
+      clearTimers: vi.fn(),
+      later: vi.fn(() => 1),
+      playSound,
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '东一局',
+    })
+
+    timeline.endGame(1)
+
+    expect(announce).toHaveBeenCalledWith('自摸。')
+    expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
+    expect(playSound).not.toHaveBeenCalledWith('hu_effect_sound.mp3', expect.anything())
   })
 })

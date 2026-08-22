@@ -9,6 +9,8 @@ import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats } from './llmController'
 import { presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
 import { avatarFor, displayNameOf, effectiveNickname } from './persona'
+import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
+import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -41,14 +43,32 @@ function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {
   return { settings, stats }
 }
 
+function hooksForSeat(
+  preset: LlmProviderPreset,
+  style: LlmProviderPreset['style'],
+  hooks: LlmControllerHooks,
+): LlmControllerHooks {
+  const voiceKey = resolveLocalTtsVoiceKey(preset)
+  const deliver = (seat: number, text: string) => {
+    hooks.onLlmMessage?.(seat, text)
+    // TTS 是纯表现副作用；失败、限流或网关离线都不能影响动作执行。
+    void getLocalTtsClient().speak(seat, text, voiceKey, style)
+  }
+  return { onLlmMessage: deliver }
+}
+
 /** 莲花广麻（lotus-classic）本地人机座位 1-3 的 LLM 控制器（按座位预置+风格装配）。 */
 export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): LocalLlmRuntime<PlayerController> {
   const { settings, stats } = baseRuntime()
   const usable = settings.enabled && settings.presets.length > 0
+  clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
-    return new CoreLlmController(toProviderConfig(preset, styleForSeat(settings, seat) ?? preset.style), hooks, stats)
+    const style = styleForSeat(settings, seat) ?? preset.style
+    const seatHooks = hooksForSeat(preset, style, hooks)
+    registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text))
+    return new CoreLlmController(toProviderConfig(preset, style), seatHooks, stats)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }
@@ -58,10 +78,14 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
 export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): LocalLlmRuntime<LotusController> {
   const { settings, stats } = baseRuntime()
   const usable = settings.enabled && settings.presets.length > 0
+  clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
-    return new LotusLlmController(toProviderConfig(preset, styleForSeat(settings, seat) ?? preset.style), hooks, stats)
+    const style = styleForSeat(settings, seat) ?? preset.style
+    const seatHooks = hooksForSeat(preset, style, hooks)
+    registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text))
+    return new LotusLlmController(toProviderConfig(preset, style), seatHooks, stats)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }

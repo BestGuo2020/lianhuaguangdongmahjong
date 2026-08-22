@@ -4,6 +4,7 @@
 // 这里只负责「把某个动作在牌桌上执行掉」。
 import { applyKongScore, matchingCount } from './rules'
 import type { GamePlayer, ScoreDelta, TableActionType, TileType } from '../contracts/types'
+import { isLocalLlmSeat } from '../presentation/localLlmVoiceRegistry'
 
 export function removeMatches(hand: TileType[], tile: TileType, amount: number): TileType[] {
   const next = [...hand]
@@ -45,7 +46,7 @@ export function performPeng(ctx: ActionContext, playerIndex: number, tile: TileT
   player.melds.push({ type: 'peng', tile, from, tiles: [tile, tile, tile] })
   ctx.currentPlayer.value = playerIndex
   ctx.showTableAction('peng', playerIndex, from, tile, player.melds.length - 1)
-  ctx.playSound('peng.mp3')
+  if (!isLocalLlmSeat(playerIndex)) ctx.playSound('peng.mp3')
 }
 
 /**
@@ -65,5 +66,5 @@ export function performDiscardGang(ctx: ActionContext, playerIndex: number, tile
   ctx.currentPlayer.value = playerIndex
   ctx.showTableAction('discard-gang', playerIndex, from, tile, player.melds.length - 1)
   ctx.showScoreFlow(scoreDeltas)
-  ctx.playSound('gang.mp3')
+  if (!isLocalLlmSeat(playerIndex)) ctx.playSound('gang.mp3')
 }

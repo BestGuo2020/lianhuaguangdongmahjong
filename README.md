@@ -170,8 +170,17 @@ npm run test:e2e
 客户端环境变量均以 Vite 的 `VITE_` 前缀声明：
 
 - `VITE_API_BASE`（可选）：联机模式 REST 与 WebSocket 的服务基址。默认使用页面当前 origin；本地开发由 Vite 代理 `/api`、`/ws` 到 `127.0.0.1:8000`。后端部署到独立域名或端口时设置，例如 `VITE_API_BASE=https://api.example.com`。该值在构建时通过 `import.meta.env` 注入。
+- `VITE_LOCAL_TTS_BASE_URL`（可选）：单机大模型吐槽的独立 TTS 网关基址。
+  master 默认沿用 `VITE_API_BASE`/同源 `/api`；`*.lumigrav.space` 未显式配置时
+  回退生产网关。该地址只传短文本与白名单音色，不包含百度 Key/Secret。
 
 代码通过 Vite 内置的 `import.meta.env.BASE_URL` 拼接音频、图片和头像资源路径。不要把密钥放入前端环境变量或提交到仓库。
+
+单机大模型启用后，吐槽文字会立即显示，同时异步请求独立的
+`POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，讲话期间自动压低
+BGM；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别，也可
+指定 DeepSeek/GPT/策略默认音色。此链路位于共享 `game/llm` 与
+`game/core/presentation`，master 与 vibehub 使用同一实现，不依赖 WebSocket/P2P。
 
 ## 目录结构
 

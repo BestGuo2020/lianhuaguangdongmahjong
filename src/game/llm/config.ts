@@ -6,6 +6,7 @@
 import type { RuleCode } from './schema'
 
 export type LlmStyle = '激进' | '稳健' | '话痨' | '高冷'
+export type LlmTtsVoiceKey = 'auto' | 'default' | 'deepseek' | 'relay_gpt'
 
 /** 单次调用配置（运行时/客户端使用） */
 export interface LlmProviderConfig {
@@ -27,6 +28,8 @@ export interface LlmProviderPreset extends LlmProviderConfig {
   fromCustomTemplate?: boolean
   /** 头像文件夹覆盖（仅自定义模板预置显示/使用；通过 Base URL 自动识别的预置不需要） */
   avatarFolder?: string
+  /** 单机 TTS 发音人映射；auto 按供应商头像档案推导。 */
+  ttsVoiceKey?: LlmTtsVoiceKey
 }
 
 export interface LlmSettings {
@@ -81,6 +84,12 @@ function validateStyleOrNull(value: unknown): LlmStyle | null {
   return value === null || value === undefined ? null : validateStyle(value)
 }
 
+function validateTtsVoiceKey(value: unknown): LlmTtsVoiceKey {
+  return (['auto', 'default', 'deepseek', 'relay_gpt'] as const).includes(value as LlmTtsVoiceKey)
+    ? value as LlmTtsVoiceKey
+    : 'auto'
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null {
@@ -97,6 +106,7 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
     ...(nickname ? { nickname } : {}),
     ...(raw.fromCustomTemplate === true ? { fromCustomTemplate: true } : {}),
     ...(avatarFolder ? { avatarFolder } : {}),
+    ttsVoiceKey: validateTtsVoiceKey(raw.ttsVoiceKey),
     style: validateStyle(raw.style),
     timeoutMs: typeof raw.timeoutMs === 'number' && raw.timeoutMs > 0 ? raw.timeoutMs : DEFAULT_PRESET.timeoutMs,
   }

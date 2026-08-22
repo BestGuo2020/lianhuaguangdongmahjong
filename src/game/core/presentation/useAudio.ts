@@ -1,4 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { registerLlmAudioPlayer } from './llmAudioBus'
 
 const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`
 const SUIT_AUDIO_FILES = ['m', 'p', 's'].flatMap((suit) => (
@@ -23,8 +24,12 @@ const EFFECT_AUDIO_FILES = [
   'didu.ogg',
 ]
 const EFFECT_WAIT_TIMEOUT_MS = 4_000
+const BGM_VOLUME = 0.32
+const BGM_DUCKED_VOLUME = 0.08
+const BGM_DUCK_RAMP_SECONDS = 0.12
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
+interface LlmAudioItem { url: string; seat: number; messageId: number }
 
 export function useAudio() {
   const soundOn = ref(true)
@@ -32,6 +37,9 @@ export function useAudio() {
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()
   const effectObjectUrls = new Set<string>()
+  const llmAudioQueue: LlmAudioItem[] = []
+  let activeLlmAudio: HTMLAudioElement | null = null
+  let activeLlmItem: LlmAudioItem | null = null
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
   let audioContext: AudioContext | null = null
@@ -44,7 +52,7 @@ export function useAudio() {
   const bgm = new Audio(`${AUDIO_BASE}bg.ogg`)
   bgm.preload = 'auto'
   bgm.loop = true
-  bgm.volume = 0.32
+  bgm.volume = BGM_VOLUME
   let bgmFallbackSrc: string | null = null
 
   function createTemplate(src: string) {
@@ -117,6 +125,68 @@ export function useAudio() {
     })
   }
 
+  function setBgmDucked(ducked: boolean) {
+    const target = ducked ? BGM_DUCKED_VOLUME : BGM_VOLUME
+    bgm.volume = target
+    if (!bgmGain || !audioContext) return
+    const now = audioContext.currentTime
+    bgmGain.gain.cancelScheduledValues(now)
+    bgmGain.gain.setValueAtTime(bgmGain.gain.value, now)
+    bgmGain.gain.linearRampToValueAtTime(target, now + BGM_DUCK_RAMP_SECONDS)
+  }
+
+  function pumpLlmAudio() {
+    if (!soundOn.value || activeLlmAudio || !llmAudioQueue.length) return
+    const item = llmAudioQueue.shift()!
+    const audio = new Audio(item.url)
+    activeLlmAudio = audio
+    activeLlmItem = item
+    audio.preload = 'auto'
+    audio.volume = 1
+    setBgmDucked(true)
+    const finish = () => {
+      if (activeLlmAudio !== audio) return
+      activeLlmAudio = null
+      activeLlmItem = null
+      pumpLlmAudio()
+      if (!activeLlmAudio) setBgmDucked(false)
+    }
+    audio.addEventListener('ended', finish, { once: true })
+    audio.addEventListener('error', finish, { once: true })
+    audio.play().catch(finish)
+  }
+
+  /** 联机 LLM 吐槽播放：同座位新语音打断旧语音，全桌最多排队两条。 */
+  function playLlmAudio(url: string, seat: number, messageId: number) {
+    if (!soundOn.value || !url) return
+    for (let index = llmAudioQueue.length - 1; index >= 0; index -= 1) {
+      if (llmAudioQueue[index].seat === seat) llmAudioQueue.splice(index, 1)
+    }
+    if (activeLlmItem?.seat === seat && activeLlmAudio) {
+      activeLlmAudio.pause()
+      activeLlmAudio.currentTime = 0
+      activeLlmAudio = null
+      activeLlmItem = null
+    }
+    llmAudioQueue.push({ url, seat, messageId })
+    while (llmAudioQueue.length > 2) llmAudioQueue.shift()
+    pumpLlmAudio()
+  }
+
+  function stopLlmAudio() {
+    llmAudioQueue.splice(0, llmAudioQueue.length)
+    if (activeLlmAudio) {
+      activeLlmAudio.pause()
+      activeLlmAudio.currentTime = 0
+    }
+    activeLlmAudio = null
+    activeLlmItem = null
+    setBgmDucked(false)
+  }
+
+  // 单机 TTS 通过共享总线接入；两分支的 App.vue 均无需感知该实现。
+  const unregisterLlmAudioPlayer = registerLlmAudioPlayer(playLlmAudio)
+
   function ensureAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null
     if (!audioContext) {
@@ -181,7 +251,7 @@ export function useAudio() {
     if (ctx.state === 'suspended') void ctx.resume()
     if (!bgmGain) {
       bgmGain = ctx.createGain()
-      bgmGain.gain.value = 0.32
+      bgmGain.gain.value = activeLlmAudio ? BGM_DUCKED_VOLUME : BGM_VOLUME
       bgmGain.connect(ctx.destination)
     }
     const source = ctx.createBufferSource()
@@ -223,6 +293,7 @@ export function useAudio() {
       if (bgmWebAudio) void audioContext?.suspend()
       else bgm.pause()
       stopEffects()
+      stopLlmAudio()
     } else if (bgmStarted.value) {
       if (bgmWebAudio && audioContext) {
         if (audioContext.state === 'suspended') void audioContext.resume()
@@ -234,6 +305,7 @@ export function useAudio() {
   })
 
   onBeforeUnmount(() => {
+    unregisterLlmAudioPlayer()
     removeBgmPrimeListeners()
     if (bgmWebAudio) {
       bgmSource?.stop()
@@ -244,10 +316,11 @@ export function useAudio() {
       bgm.pause()
     }
     stopEffects()
+    stopLlmAudio()
     effectObjectUrls.forEach((url) => URL.revokeObjectURL(url))
     effectObjectUrls.clear()
     effectTemplates.clear()
   })
 
-  return { soundOn, playEffect, playEffectAndWait, startBgm, preloadBgm }
+  return { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm, preloadBgm }
 }

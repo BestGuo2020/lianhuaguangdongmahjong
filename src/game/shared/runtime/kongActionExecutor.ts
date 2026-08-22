@@ -2,6 +2,7 @@ import type { RefLike } from '../../core/contracts/gamePort'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import type { GamePlayer, ScoreDelta, TableActionType, TileType } from '../../core/contracts/types'
 import { removeMatches } from '../../core/rules/actions'
+import { isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
 interface KongState {
   players: GamePlayer[]
@@ -35,7 +36,7 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
     player.melds.push({ type: 'angang', tile, tiles: [tile, tile, tile, tile] })
     options.showTableAction('concealed-gang', playerIndex, null, tile, player.melds.length - 1)
     options.showScoreFlow(options.scoreKong(state.players, playerIndex, 'concealed'))
-    options.playSound('gang.mp3')
+    if (!isLocalLlmSeat(playerIndex)) options.playSound('gang.mp3')
     if (!noContinue) options.later(() => { options.beginTurn(playerIndex, { fromTail: true }) }, 350)
   }
   function declareAddedKong(playerIndex: number, meldIndex: number, tile: TileType) {
@@ -51,7 +52,7 @@ export function createKongActionExecutor(options: KongActionExecutorOptions) {
     }
     state.phase.value = 'kong'
     options.showTableAction('added-gang', playerIndex, null, tile, meldIndex)
-    options.playSound('gang.mp3')
+    if (!isLocalLlmSeat(playerIndex)) options.playSound('gang.mp3')
   }
   function settleAddedKong(playerIndex: number) {
     const player = state.players[playerIndex]
