@@ -20,7 +20,8 @@ const PROVIDER_PROFILES: Array<{ pattern: RegExp; folder: string; nickname: stri
   { pattern: /volces\.com|ark\.cn-beijing/i, folder: 'doubao', nickname: '豆包' },
   { pattern: /api\.minimax\.chat/i, folder: 'minimax', nickname: 'MiniMax' },
   { pattern: /api\.openai\.com/i, folder: 'gpt', nickname: 'GPT' },
-  { pattern: /open\.bigmodel\.cn/i, folder: 'zhipu', nickname: '智谱' },
+  { pattern: /open\.bigmodel\.cn/i, folder: 'glm', nickname: '智谱' },
+  { pattern: /api\.anthropic\.com/i, folder: 'claude', nickname: 'Claude' },
 ]
 
 function profileFor(baseUrl: string): { folder: string; nickname: string } {
