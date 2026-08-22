@@ -1,87 +1,154 @@
-// LLM 提供商配置：类型 + localStorage 持久化（带 configVersion 的版本化存储）。
-// docs/llm-ai-design.md §9.1：Key 只存本地浏览器，只发送用户选择的供应商，不落日志。
-import type { Band } from './schema'
+// LLM 供应商配置 v2 —— 多预置 + 按座位分配。
+// 存储（带 configVersion 的版本化迁移）：
+//   llm.providers : { configVersion: 2, enabled, presets: LlmProviderPreset[], activeId, seatIds }
+//   （旧 v1 的 llm.provider 在迁移时并入）
+// 安全约定（§9.1/§9.5）：Key 只存本地浏览器、只发送给用户选择的供应商、不落日志。
+import type { RuleCode } from './schema'
 
+export type LlmStyle = '激进' | '稳健' | '话痨' | '高冷'
+
+/** 单次调用配置（运行时/客户端使用） */
 export interface LlmProviderConfig {
   baseUrl: string
   apiKey: string
   model: string
-  /** 激进 / 稳健 / 话痨 / 高冷 */
-  style: '激进' | '稳健' | '话痨' | '高冷'
-  /** 一次决策的总预算（连接+解析+最多一次语义重试），默认 8000ms */
+  style: LlmStyle
+  /** 一次决策的总预算（含连接/解析/一次语义重试） */
   timeoutMs: number
 }
 
-export const DEFAULT_PROVIDER: Omit<LlmProviderConfig, 'apiKey'> = {
+export interface LlmProviderPreset extends LlmProviderConfig {
+  id: string
+  /** 展示名（如 "DeepSeek"、"我家Kimi"） */
+  name: string
+}
+
+export interface LlmSettings {
+  enabled: boolean
+  presets: LlmProviderPreset[]
+  /** 默认预置 id（未单独指定座位的 AI 使用） */
+  activeId: string | null
+  /** 座位 → 预置 id（下标 1..3；null=跟随默认） */
+  seatIds: Array<string | null>
+}
+
+export const CONFIG_VERSION = 2
+const STORAGE_KEY = 'llm.providers'
+const LEGACY_KEY = 'llm.provider'
+const LEGACY_ENABLED_KEY = 'llm.enabled'
+
+export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> = {
   baseUrl: 'https://api.deepseek.com/v1',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
   style: '稳健',
   timeoutMs: 8000,
 }
 
-export const CONFIG_VERSION = 1
+/** 常用供应商模板（Base URL + 示例模型，模型名需按官方文档核对） */
+export const PROVIDER_TEMPLATES: Array<{ name: string; baseUrl: string; model: string }> = [
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
+  { name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2-0711-preview' },
+  { name: '通义千问 (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  { name: '豆包 (Volcano Ark)', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
+  { name: 'MiniMax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
+  { name: 'OpenAI (GPT)', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { name: '智谱 (GLM)', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { name: '自定义', baseUrl: '', model: '' },
+]
 
-const STORAGE_KEY = 'llm.provider'
-const ENABLED_KEY = 'llm.enabled'
+export function emptyLlmSettings(): LlmSettings {
+  return { enabled: false, presets: [], activeId: null, seatIds: [null, null, null, null] }
+}
 
-export function readLlmConfig(storage: Pick<Storage, 'getItem'> = localStorage): {
-  config: LlmProviderConfig
-  enabled: boolean
-} {
-  let enabled = false
-  let config: LlmProviderConfig = { ...DEFAULT_PROVIDER, apiKey: '' }
+function validateStyle(value: unknown): LlmStyle {
+  return (['激进', '稳健', '话痨', '高冷'] as const).includes(value as LlmStyle) ? value as LlmStyle : DEFAULT_PRESET.style
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null {
+  const baseUrl = typeof raw.baseUrl === 'string' && raw.baseUrl ? raw.baseUrl : ''
+  const apiKey = typeof raw.apiKey === 'string' ? raw.apiKey : ''
+  const model = typeof raw.model === 'string' && raw.model ? raw.model : ''
+  const name = typeof raw.name === 'string' && raw.name ? raw.name : '未命名'
+  const id = typeof raw.id === 'string' && raw.id ? raw.id : `p${Math.random().toString(36).slice(2, 8)}`
+  if (!baseUrl && !apiKey && !model) return null
+  return {
+    id, name, baseUrl, apiKey, model,
+    style: validateStyle(raw.style),
+    timeoutMs: typeof raw.timeoutMs === 'number' && raw.timeoutMs > 0 ? raw.timeoutMs : DEFAULT_PRESET.timeoutMs,
+  }
+}
+
+/** 读取 v2 配置；无 v2 时从 v1（单预置）迁移。 */
+export function readLlmSettings(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = localStorage): LlmSettings {
   try {
-    const rawEnabled = storage.getItem(ENABLED_KEY)
-    if (rawEnabled != null) enabled = rawEnabled === '1'
     const raw = storage.getItem(STORAGE_KEY)
     if (raw != null) {
-      const parsed = JSON.parse(raw) as { configVersion?: number } & Partial<LlmProviderConfig>
-      // 版本迁移：configVersion 不匹配时丢弃旧配置（保留用户 key 的迁移由设置页处理）
+      const parsed = JSON.parse(raw) as Record<string, unknown>
       if (parsed.configVersion === CONFIG_VERSION) {
-        config = {
-          baseUrl: typeof parsed.baseUrl === 'string' && parsed.baseUrl ? parsed.baseUrl : DEFAULT_PROVIDER.baseUrl,
-          apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
-          model: typeof parsed.model === 'string' && parsed.model ? parsed.model : DEFAULT_PROVIDER.model,
-          style: (['激进', '稳健', '话痨', '高冷'] as const).includes(parsed.style as never)
-            ? parsed.style
-            : DEFAULT_PROVIDER.style,
-          timeoutMs: typeof parsed.timeoutMs === 'number' && parsed.timeoutMs > 0
-            ? parsed.timeoutMs
-            : DEFAULT_PROVIDER.timeoutMs,
+        const presets = (Array.isArray(parsed.presets) ? parsed.presets : [])
+          .map((item) => normalizePreset(isRecord(item) ? item : {}))
+          .filter((preset): preset is LlmProviderPreset => preset !== null)
+        const rawSeats = Array.isArray(parsed.seatIds) ? parsed.seatIds : []
+        const seatIds: Array<string | null> = [null, rawSeats[1] ?? null, rawSeats[2] ?? null, rawSeats[3] ?? null]
+        const activeId = typeof parsed.activeId === 'string' && presets.some((preset) => preset.id === parsed.activeId)
+          ? parsed.activeId
+          : presets[0]?.id ?? null
+        return {
+          enabled: parsed.enabled === true,
+          presets,
+          activeId,
+          seatIds,
+        }
+      }
+    }
+    // ── v1 迁移：单预置 → v2 默认预置 ──
+    const legacy = storage.getItem(LEGACY_KEY)
+    if (legacy != null) {
+      const parsed = JSON.parse(legacy) as Record<string, unknown>
+      if (parsed.configVersion === 1) {
+        const preset = normalizePreset(parsed)
+        if (preset) {
+          preset.name = '默认'
+          const migrated: LlmSettings = {
+            enabled: storage.getItem(LEGACY_ENABLED_KEY) === '1',
+            presets: [preset],
+            activeId: preset.id,
+            seatIds: [null, null, null, null],
+          }
+          try {
+            storage.setItem(STORAGE_KEY, JSON.stringify({ configVersion: CONFIG_VERSION, ...migrated }))
+            storage.removeItem(LEGACY_KEY)
+            storage.removeItem(LEGACY_ENABLED_KEY)
+          } catch { /* 读也不受影响 */ }
+          return migrated
         }
       }
     }
   } catch {
-    // 配置损坏时回退默认（key 为空 → 人机禁用 LLM）
+    // 损坏配置回退空集（Key 为空 → 人机禁用 LLM）
   }
-  return { config, enabled }
+  return emptyLlmSettings()
 }
 
-export function writeLlmConfig(
-  patch: Partial<Omit<LlmProviderConfig, never>> & { enabled?: boolean } = {},
-  storage: Pick<Storage, 'setItem' | 'removeItem'> = localStorage,
-): LlmProviderConfig {
-  const current = readLlmConfig(storage as Storage)
-  const next: LlmProviderConfig = {
-    ...current.config,
-    ...(patch.baseUrl !== undefined ? { baseUrl: patch.baseUrl } : {}),
-    ...(patch.apiKey !== undefined ? { apiKey: patch.apiKey } : {}),
-    ...(patch.model !== undefined ? { model: patch.model } : {}),
-    ...(patch.style !== undefined ? { style: patch.style } : {}),
-    ...(patch.timeoutMs !== undefined ? { timeoutMs: patch.timeoutMs } : {}),
-  }
-  storage.setItem(STORAGE_KEY, JSON.stringify({
-    configVersion: CONFIG_VERSION,
-    baseUrl: next.baseUrl,
-    apiKey: next.apiKey,
-    model: next.model,
-    style: next.style,
-    timeoutMs: next.timeoutMs,
-  }))
-  if (patch.enabled !== undefined) {
-    storage.setItem(ENABLED_KEY, patch.enabled ? '1' : '0')
-  }
-  return next
+export function saveLlmSettings(
+  settings: LlmSettings,
+  storage: Pick<Storage, 'setItem'> = localStorage,
+): void {
+  storage.setItem(STORAGE_KEY, JSON.stringify({ configVersion: CONFIG_VERSION, ...settings }))
+}
+
+/** 按座位取实际使用的预置（座位未指定 → 默认预置）；返回 null 表示该座位不可用 LLM。 */
+export function presetForSeat(settings: LlmSettings, seat: 1 | 2 | 3): LlmProviderPreset | null {
+  const seatId = settings.seatIds[seat]
+  const preset = settings.presets.find((item) => item.id === (seatId || settings.activeId))
+  return preset ?? null
+}
+
+/** 唯一 id（不含用户可读信息） */
+export function newPresetId(): string {
+  return `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
 /** 设置页「测试连接」用：探测供应商可用性（不落日志，不回显 key）。 */
@@ -102,4 +169,4 @@ export function normalizeBaseUrl(baseUrl: string): string | null {
   return `${trimmed}/chat/completions`
 }
 
-export type { Band }
+export type { RuleCode }
