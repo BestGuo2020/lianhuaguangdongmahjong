@@ -28,6 +28,12 @@ export interface RemoteRoomState {
   isCreator: Ref<boolean>
   roomSeats: Ref<Array<RoomSeatState | null>>
   roomTimeLimit: Ref<number | null>
+  /** 房主请求的空座 AI 补位是否使用大模型（llmEnabled） */
+  llmEnabled: Ref<boolean>
+  /** 实际生效（请求 && 服务端配置齐全） */
+  effectiveLlmEnabled: Ref<boolean>
+  /** 服务端是否配置了大模型 */
+  llmAvailable: Ref<boolean>
   rulesetId: Ref<RuleVariant>
   storedSession: Ref<StoredSession | null>
   phase: Ref<GamePhase>
@@ -125,6 +131,9 @@ export function createRemoteRoomLifecycle({
       state.isCreator.value = state.creatorSeat.value != null
         && state.mySeat.value === state.creatorSeat.value
       state.roomTimeLimit.value = info.timeLimitSeconds ?? null
+      state.llmEnabled.value = info.llmEnabled === true
+      state.effectiveLlmEnabled.value = info.effectiveLlmEnabled === true
+      state.llmAvailable.value = info.llmAvailable === true
     } catch {
       // 轮询失败等待下一次刷新。
     }
@@ -146,6 +155,9 @@ export function createRemoteRoomLifecycle({
     state.sessionStatus.value = 'idle'
     state.phase.value = 'lobby'
     state.roomSeats.value = []
+    state.llmEnabled.value = false
+    state.effectiveLlmEnabled.value = false
+    state.llmAvailable.value = false
   }
 
   async function enterRoom(id: string, name: string, mode: MatchType, code: string) {
@@ -183,14 +195,17 @@ export function createRemoteRoomLifecycle({
   }
 
   async function createRemoteRoom(mode: MatchType, capacity: number,
-    rulesetId: RuleVariant = state.rulesetId.value) {
+    rulesetId: RuleVariant = state.rulesetId.value, llmEnabled?: boolean) {
     state.sessionError.value = ''
     state.sessionStatus.value = 'creating'
     try {
-      const info = await api.createRoom(mode, capacity, state.playerId.value, rulesetId)
+      const info = await api.createRoom(mode, capacity, state.playerId.value, rulesetId, llmEnabled)
       state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
       state.isCreator.value = true
       state.roomTimeLimit.value = info.timeLimitSeconds ?? null
+      state.llmEnabled.value = info.llmEnabled === true
+      state.effectiveLlmEnabled.value = info.effectiveLlmEnabled === true
+      state.llmAvailable.value = info.llmAvailable === true
       ensurePlayerId()
       const joined = await api.joinRoom(info.roomId, state.nickname.value, state.playerId.value)
       await enterRoom(joined.roomId, joined.nickname, info.mode, joined.rejoinCode)

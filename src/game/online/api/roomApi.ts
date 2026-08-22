@@ -17,6 +17,12 @@ export interface RoomInfo {
   status: 'lobby' | 'playing' | 'finished' | 'error' | 'closed'
   creatorSeat: number | null
   timeLimitSeconds?: number
+  /** 房主请求的空座 AI 补位是否使用大模型 */
+  llmEnabled?: boolean
+  /** 实际生效（房主请求 && 服务端配置齐全）；false = 空座由普通 AI 补位 */
+  effectiveLlmEnabled?: boolean
+  /** 服务端是否配置了大模型（llmAvailable） */
+  llmAvailable?: boolean
   seats: Array<RoomSeatState | null>
 }
 
@@ -54,13 +60,18 @@ export interface CloseResult {
 export interface RoomMeta {
   active: number
   max: number
+  /** 服务端是否配置了大模型（供大厅提示） */
+  llmAvailable?: boolean
 }
 
 export function createRoom(mode: MatchType, capacity: number, playerId?: string,
-  rulesetId: RuleVariant = 'lotus-classic'): Promise<RoomInfo> {
+  rulesetId: RuleVariant = 'lotus-classic', llmEnabled?: boolean): Promise<RoomInfo> {
   return request<RoomInfo>('/api/rooms', {
     method: 'POST',
-    body: JSON.stringify({ mode, capacity, playerId, rulesetId }),
+    body: JSON.stringify({
+      mode, capacity, playerId, rulesetId,
+      ...(llmEnabled === true ? { llmEnabled: true } : {}),
+    }),
   })
 }
 

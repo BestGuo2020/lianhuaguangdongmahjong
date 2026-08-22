@@ -5,15 +5,22 @@ import type { MatchType } from '../../core/contracts/types'
 import { reportPlayer, type ReportRequest } from '../api/moderationApi'
 import type { RoomSeatState } from '../api/roomApi'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import { readLlmSettings } from '../../llm/config'
 
 export interface RemoteLobbyActions {
-  createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant): Promise<void>
+  createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant,
+    llmEnabled?: boolean): Promise<void>
   joinRoom(code: string): Promise<void>
   toggleReady(): Promise<void>
   startMatch(): Promise<void>
   leaveRoom(): Promise<void>
   closeRoom(): Promise<void>
   resumeSession(): Promise<void>
+}
+
+/** 联机建房的空座补位是否使用大模型：读取设置面板「启用」开关（无 localStorage 环境返回 false）。 */
+function readLlmEnabled(): boolean {
+  try { return readLlmSettings().enabled } catch { return false }
 }
 
 interface RemoteLobbyEnvironment {
@@ -99,6 +106,7 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     options.nickname.value = name
     void options.guardEntry(() => void options.actions.createRoom(
       options.selectedMatch.value, 4, options.selectedRule?.value ?? 'lotus-classic',
+      readLlmEnabled(),
     ))
   }
 

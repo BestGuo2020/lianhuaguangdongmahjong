@@ -51,7 +51,28 @@ describe('remoteLobbyController', () => {
     controller.createRoom()
     expect(actions.createRoom).not.toHaveBeenCalled()
     runPending()
-  expect(actions.createRoom).toHaveBeenCalledWith('hanchan', 4, 'lotus-classic')
+    // 无 localStorage 环境 → 设置开关视为关闭
+    expect(actions.createRoom).toHaveBeenCalledWith('hanchan', 4, 'lotus-classic', false)
+  })
+
+  it('requests LLM filler seats when the AI settings toggle is enabled', () => {
+    const { controller, actions, runPending } = setup()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => key === 'llm.providers' ? JSON.stringify({
+        configVersion: 2, enabled: true, presets: [], activeId: null,
+        seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+      }) : null,
+      setItem: () => {},
+      removeItem: () => {},
+    })
+    try {
+      controller.nicknameInput.value = '莲花客'
+      controller.createRoom()
+      runPending()
+      expect(actions.createRoom).toHaveBeenCalledWith('hanchan', 4, 'lotus-classic', true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('blocks duplicate leave/close operations while one is in flight', async () => {

@@ -25,6 +25,12 @@ interface Props {
   sessionError: string
   roomTimeLimit: number | null
   roomSeats: Array<RoomSeatState | null>
+  /** 房主请求的空座 AI 补位是否使用大模型 */
+  llmEnabled: boolean
+  /** 实际生效（请求 && 服务端配置齐全） */
+  effectiveLlmEnabled: boolean
+  /** 服务端是否配置了大模型 */
+  llmAvailable: boolean
   mySeat: number
   isCreator: boolean
   allOccupiedReady: boolean
@@ -153,6 +159,7 @@ function closeDialog() {
       </label>
       <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
         剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
+        <template v-if="roomMeta.llmAvailable"> · <span class="room-meta-llm">服务器已启用大模型</span></template>
       </p>
       <div v-if="!roomId" class="remote-entry-actions">
         <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
@@ -169,6 +176,9 @@ function closeDialog() {
         :room-id="roomId"
         :room-time-limit="roomTimeLimit"
         :room-seats="roomSeats"
+        :llm-enabled="llmEnabled"
+        :effective-llm-enabled="effectiveLlmEnabled"
+        :llm-available="llmAvailable"
         :my-seat="mySeat"
         :is-creator="isCreator"
         :session-status="sessionStatus"

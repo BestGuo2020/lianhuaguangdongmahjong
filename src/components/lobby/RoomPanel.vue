@@ -15,6 +15,12 @@ interface Props {
   closing: boolean
   matchName: string
   ruleName: string
+  /** 房主请求的空座 AI 补位是否使用大模型 */
+  llmEnabled: boolean
+  /** 实际生效（请求 && 服务端配置齐全） */
+  effectiveLlmEnabled: boolean
+  /** 服务端是否配置了大模型 */
+  llmAvailable: boolean
 }
 
 defineProps<Props>()
@@ -33,6 +39,10 @@ defineEmits<{
       房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
     </div>
     <div class="room-game-config"><b>{{ matchName }}</b><span>·</span><b>{{ ruleName }}</b></div>
+    <p v-if="effectiveLlmEnabled" class="room-llm-note on">🤖 空位由大模型代打</p>
+    <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
+      已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
+    </p>
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>
@@ -59,3 +69,13 @@ defineEmits<{
     </div>
   </div>
 </template>
+
+<style scoped>
+.room-llm-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.room-llm-note.on { color: #4caf50; }
+.room-llm-note.off { color: #e6a23c; }
+</style>

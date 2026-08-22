@@ -16,6 +16,9 @@ function createHarness(savedSession: StoredSession | null = null) {
     isCreator: ref(false),
     roomSeats: ref([]),
     roomTimeLimit: ref(null),
+    llmEnabled: ref(false),
+    effectiveLlmEnabled: ref(false),
+    llmAvailable: ref(false),
     rulesetId: ref('lotus-classic'),
     storedSession: ref(savedSession),
     phase: ref('lobby'),
@@ -35,11 +38,13 @@ function createHarness(savedSession: StoredSession | null = null) {
     createRoom: vi.fn(async () => ({
       roomId: 'ABC123', mode: 'east' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 0,
       timeLimitSeconds: 3600, rulesetId: 'lotus-classic' as const, seats: [null, null, null, null],
+      llmEnabled: true, effectiveLlmEnabled: true, llmAvailable: true,
     })),
     getRoom: vi.fn(async () => ({
       roomId: 'ABC123', mode: 'hanchan' as const, capacity: 4, status: 'lobby' as const, creatorSeat: 2,
       timeLimitSeconds: 3600,
       rulesetId: 'lotus-legacy' as const, seats: [null, null, { seat: 2, nickname: '莲花', ready: false, connected: true }, null],
+      llmEnabled: true, effectiveLlmEnabled: true, llmAvailable: true,
     })),
     joinRoom: vi.fn(async () => ({
       roomId: 'ABC123', seat: 2, nickname: '莲花', rejoinCode: 'AAAA-BBBB',
@@ -69,14 +74,26 @@ describe('remoteRoomLifecycle', () => {
     await harness.lifecycle.createRoom('east', 4)
 
     expect(harness.state.playerId.value).not.toBe('')
-    expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value, 'lotus-classic')
+    expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value, 'lotus-classic', undefined)
     expect(harness.state.roomId.value).toBe('ABC123')
+    expect(harness.state.effectiveLlmEnabled.value).toBe(true)
     expect(harness.state.rejoinCode.value).toBe('AAAA-BBBB')
     expect(harness.state.sessionStatus.value).toBe('connected')
     expect(harness.socket.open).toHaveBeenCalledOnce()
     expect(harness.sessionStore.saveSession).toHaveBeenCalledWith(expect.objectContaining({
       roomId: 'ABC123', rejoinCode: 'AAAA-BBBB', mode: 'east',
     }))
+    harness.lifecycle.stopPolling()
+  })
+
+  it('forwards the request to use LLM filler seats when creating a room', async () => {
+    const harness = createHarness()
+
+    await harness.lifecycle.createRoom('east', 4, 'lotus-classic', true)
+
+    expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value, 'lotus-classic', true)
+    expect(harness.state.llmEnabled.value).toBe(true)
+    expect(harness.state.effectiveLlmEnabled.value).toBe(true)
     harness.lifecycle.stopPolling()
   })
 

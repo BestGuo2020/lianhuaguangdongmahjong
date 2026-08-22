@@ -174,6 +174,7 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
+  llmEnabled, effectiveLlmEnabled, llmAvailable,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = remoteGame
 
@@ -361,6 +362,9 @@ function changeTableTheme(theme: TableThemeName) {
           :session-error="sessionError"
           :room-time-limit="roomTimeLimit"
           :room-seats="roomSeats"
+          :llm-enabled="llmEnabled"
+          :effective-llm-enabled="effectiveLlmEnabled"
+          :llm-available="llmAvailable"
           :my-seat="mySeat"
           :is-creator="isCreator"
           :single-player-only="singlePlayerOnly"

@@ -55,7 +55,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   })
   const {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, autoPlay, storedSession,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, llmEnabled, effectiveLlmEnabled,
+    llmAvailable, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
@@ -79,7 +80,8 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
   const roomLifecycle = createRemoteRoomLifecycle({
     state: {
       sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-      creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, storedSession,
+      creatorSeat, isCreator, roomSeats, roomTimeLimit, llmEnabled, effectiveLlmEnabled,
+      llmAvailable, rulesetId, storedSession,
       phase, matchType, matchFinished, players,
     },
     sessionStore,
@@ -388,6 +390,7 @@ export function useRemoteGame({ playSound = () => {}, playSoundAndWait = async (
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
     playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, waitingNextRound,
+    llmEnabled, effectiveLlmEnabled, llmAvailable,
     rulesetId,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality,   // 0-3 信号质量（越大连接越好）

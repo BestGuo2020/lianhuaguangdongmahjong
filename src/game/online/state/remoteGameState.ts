@@ -39,6 +39,9 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
   const roomTimeLimit = ref<number | null>(null)
+  const llmEnabled = ref(false)
+  const effectiveLlmEnabled = ref(false)
+  const llmAvailable = ref(false)
   const rulesetId = ref<RuleVariant>('lotus-classic')
   const autoPlay = ref(options.autoPlay ?? autoPlayFromUrl())
   const storedSession = ref<StoredSession | null>(options.storedSession ?? null)
@@ -85,7 +88,8 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
 
   return {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, rulesetId, autoPlay, storedSession,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, llmEnabled, effectiveLlmEnabled,
+    llmAvailable, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
