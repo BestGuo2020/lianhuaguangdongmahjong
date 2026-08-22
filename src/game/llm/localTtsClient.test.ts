@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerLlmAudioPlayer, resetLlmAudioBusForTests } from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset } from './config'
-import { LocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
+import { LocalTtsClient, resolveLocalTtsBaseUrl, resolveLocalTtsVoiceKey } from './localTtsClient'
 
 function preset(overrides: Partial<LlmProviderPreset> = {}): LlmProviderPreset {
   return {
@@ -14,6 +14,7 @@ function preset(overrides: Partial<LlmProviderPreset> = {}): LlmProviderPreset {
 afterEach(() => {
   resetLlmAudioBusForTests()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('LocalTtsClient', () => {
@@ -23,6 +24,13 @@ describe('LocalTtsClient', () => {
       baseUrl: 'https://proxy.example/v1', avatarFolder: 'gpt',
     }))).toBe('relay_gpt')
     expect(resolveLocalTtsVoiceKey(preset({ ttsVoiceKey: 'default' }))).toBe('default')
+  })
+
+  it('本机两分支统一直连 8000 网关，lumigrav 使用生产回退', () => {
+    vi.stubGlobal('location', { hostname: '127.0.0.1' })
+    expect(resolveLocalTtsBaseUrl()).toBe('http://127.0.0.1:8000')
+    vi.stubGlobal('location', { hostname: 'room.lumigrav.space' })
+    expect(resolveLocalTtsBaseUrl()).toBe('https://lianhuaguangdongmahjong.guoguo-labs.online')
   })
 
   it('合并相同合成请求，并把每个座位的音频交给共享播放总线', async () => {

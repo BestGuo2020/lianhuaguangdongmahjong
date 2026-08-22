@@ -21,6 +21,11 @@ function trimBase(value: string): string {
 export function resolveLocalTtsBaseUrl(): string {
   const configured = import.meta.env.VITE_LOCAL_TTS_BASE_URL || import.meta.env.VITE_API_BASE
   if (configured) return trimBase(configured)
+  if (typeof location !== 'undefined'
+    && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    // vibehub 的本地 Vite 不代理 /api；两分支开发环境统一直连独立网关。
+    return 'http://127.0.0.1:8000'
+  }
   if (typeof location !== 'undefined' && location.hostname.endsWith('lumigrav.space')) {
     return VIBEHUB_GATEWAY_FALLBACK
   }
