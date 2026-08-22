@@ -31,6 +31,8 @@ interface UseLotusGameOptions {
   controllers?: LotusController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: LotusController[]
+  /** P2P 房主权威：非本家座位的远端控制器，优先于单机 AI 控制器。 */
+  remoteControllers?: Array<LotusController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed>
   countdownEnabled?: boolean
@@ -48,6 +50,7 @@ export function useLotusGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  remoteControllers,
   aiPlayerSeeds,
   countdownEnabled = true,
   instantOpening = false,
@@ -108,7 +111,9 @@ export function useLotusGame({
   const humanController = new LotusHumanController(humanBridge)
   const controllers: LotusController[] = suppliedControllers ?? [
     humanController,
-    ...(aiControllers && aiControllers.length ? aiControllers : [new LotusAiController(), new LotusAiController(), new LotusAiController()]),
+    remoteControllers?.[0] ?? aiControllers?.[0] ?? new LotusAiController(),
+    remoteControllers?.[1] ?? aiControllers?.[1] ?? new LotusAiController(),
+    remoteControllers?.[2] ?? aiControllers?.[2] ?? new LotusAiController(),
   ]
 
   const timer = createTimerScheduler({

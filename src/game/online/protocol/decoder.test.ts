@@ -217,6 +217,7 @@ describe('decodeServerMessage', () => {
     // 合法范围可到 13+；曾误限制为座位 [-1,3]，胡牌在手牌位置 >= 4 时整条快照解码失败。
     const base = {
       kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'thinking',
+      authorityEpoch: 'epoch-1', sequence: 1, requestId: null, requestSeq: null,
       round: 1, dealer: 0, honba: 0, dice: [2, 5], wallCount: 80,
       wall: ['m1'], headDrawn: 52, currentPlayer: 0, seat: 0,
       flipTile: null, flipStack: null, openingStack: null,
@@ -236,6 +237,7 @@ describe('decodeServerMessage', () => {
   it('rejects a snapshot with only one terminal flag', () => {
     const base = {
       kind: 'state_snapshot', roomId: 'ROOM01', mode: 'east', phase: 'finished',
+      authorityEpoch: 'epoch-1', sequence: 1, requestId: null, requestSeq: null,
       round: 4, dealer: 0, honba: 0, dice: [2, 5], wallCount: 0,
       wall: [], headDrawn: 136, currentPlayer: -1, seat: 0,
       flipTile: null, flipStack: null, openingStack: null,

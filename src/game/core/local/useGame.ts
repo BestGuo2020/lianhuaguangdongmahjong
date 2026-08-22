@@ -27,6 +27,8 @@ interface UseGameOptions {
   controllers?: PlayerController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: PlayerController[]
+  /** P2P 房主权威：非本家座位的远端控制器，优先于单机 AI 控制器。 */
+  remoteControllers?: Array<PlayerController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed>
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
@@ -45,6 +47,7 @@ export function useGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  remoteControllers,
   aiPlayerSeeds,
   countdownEnabled = true,
   instantOpening = false,
@@ -95,7 +98,9 @@ export function useGame({
   const humanController = new HumanController(humanBridge)
   const controllers: PlayerController[] = suppliedControllers ?? [
     humanController,
-    ...(aiControllers && aiControllers.length ? aiControllers : [new AiController(), new AiController(), new AiController()]),
+    remoteControllers?.[0] ?? aiControllers?.[0] ?? new AiController(),
+    remoteControllers?.[1] ?? aiControllers?.[1] ?? new AiController(),
+    remoteControllers?.[2] ?? aiControllers?.[2] ?? new AiController(),
   ]
 
   const scheduler = createLocalTimerScheduler({

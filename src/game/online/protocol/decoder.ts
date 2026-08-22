@@ -31,8 +31,24 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= 1
+}
+
+function isIntegerAtLeast(value: unknown, min: number): value is number {
+  return isNumber(value) && Number.isInteger(value) && value >= min
+}
+
 function isIntegerBetween(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
+}
+
+function isSeat(value: unknown): value is number {
+  return isIntegerBetween(value, SEAT_MIN, SEAT_MAX)
+}
+
+function isMaybeSeat(value: unknown): value is number | null {
+  return value === null || isSeat(value)
 }
 
 function isBoolean(value: unknown): value is boolean {
