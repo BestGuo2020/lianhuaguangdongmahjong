@@ -116,7 +116,7 @@ function closeDialog() {
 
 <template>
   <section class="lobby">
-    <p class="eyebrow">LINGNAN GUANGDONG MAHJONG</p>
+    <p class="eyebrow">LIANHUA MAHJONG COLLECTIONS</p>
     <h1>莲花<span>广麻</span></h1>
     <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
     <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
