@@ -259,6 +259,18 @@ function presetName(id: string | null): string {
 .llm-sub-title { margin: 0 0 6px; color: #8ca296; font-size: 11px; letter-spacing: .14em; }
 .llm-seat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
 .llm-seat-row.chosen { color: #f3d27c; }
+/* 默认预置是个 button：覆盖浏览器默认亮色背景，保持与面板暗色一致 */
+button.llm-seat-row {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #d0c39e;
+  text-align: left;
+  cursor: pointer;
+}
+button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
 .llm-seat-picks { display: flex; gap: 6px; min-width: 0; flex: 1; justify-content: flex-end; }
 .llm-seat-picks select { max-width: 55%; }
 .llm-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
