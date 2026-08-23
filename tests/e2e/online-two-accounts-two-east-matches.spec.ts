@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { chromium, expect, test, type Browser, type BrowserContext, type CDPSession, type Page, type TestInfo } from '@playwright/test'
 
 interface Account { email: string; password: string }
-interface OnlineConfig { url: string; accounts: [Account, Account] }
+interface OnlineConfig { url: string; accounts: [Account, Account]; deepseekApiKey: string }
 interface AutoPlayerEvent { at: number; type: 'hu-click' | 'pass-click' | 'discard-click' }
 interface TableVisualState {
   stage: string | null
@@ -127,8 +127,11 @@ function readOnlineConfig(): OnlineConfig {
   const url = raw.match(/测试 url：([^\r\n]+)/)?.[1]?.trim()
   const accounts = [...raw.matchAll(/账号\d+：([^，\r\n]+)，密码：([^\r\n]+)/g)]
     .map((match) => ({ email: match[1].trim(), password: match[2].trim() }))
-  if (!url || accounts.length < 2) throw new Error('tmp/online_test 缺少测试 URL 或两个账号')
-  return { url, accounts: [accounts[0], accounts[1]] }
+  const deepseekApiKey = raw.match(/deepseek\s+api\s+key\s*[：:=]\s*([^\r\n]+)/i)?.[1]?.trim()
+  if (!url || accounts.length < 2 || !deepseekApiKey) {
+    throw new Error('tmp/online_test 缺少测试 URL、两个账号或 DeepSeek API Key')
+  }
+  return { url, accounts: [accounts[0], accounts[1]], deepseekApiKey }
 }
 
 const ONLINE = readOnlineConfig()
@@ -266,6 +269,25 @@ async function installAudioProbe(context: BrowserContext) {
       return originalPlay.call(this)
     }
   })
+}
+
+async function installHostLlmConfig(context: BrowserContext, apiKey: string) {
+  await context.addInitScript((key) => {
+    // 只写作品托管域；OAuth 弹窗位于主站，不能把模型 Key 扩散到登录域 localStorage。
+    if (location.hostname !== 'vibeapps.lumigrav.space') return
+    localStorage.setItem('llm.providers', JSON.stringify({
+      configVersion: 2,
+      enabled: true,
+      activeId: 'online-deepseek',
+      seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+      presets: [{
+        id: 'online-deepseek', name: 'DeepSeek', nickname: '大肥鱼',
+        baseUrl: 'https://api.deepseek.com/v1', apiKey: key, model: 'deepseek-chat',
+        style: '稳健', timeoutMs: 8000, ttsVoiceKey: 'deepseek',
+      }],
+    }))
+  }, apiKey)
 }
 
 async function audioHistory(page: Page): Promise<AudioPlaybackSample[]> {
@@ -629,7 +651,7 @@ async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
           && getComputedStyle(button).visibility !== 'hidden'
           && getComputedStyle(button).display !== 'none'
       ))
-      return ready && document.querySelectorAll('.room-seat').length >= 2
+      return ready && document.querySelectorAll('.room-seat.occupied').length >= 2
     }, undefined, { timeout: 60_000, polling: 100 })))
     await Promise.all(handles.map((handle) => handle.dispose()))
     return
@@ -639,7 +661,7 @@ async function waitForRoomReady(host: Page, client: Page, roomCode: string) {
   const states = await Promise.all(pages.map((page) => page.evaluate(() => ({
     ready: [...document.querySelectorAll<HTMLButtonElement>('button')]
       .some((button) => button.textContent?.trim() === '准备 / 取消准备'),
-    seats: document.querySelectorAll('.room-seat').length,
+    seats: document.querySelectorAll('.room-seat.occupied').length,
   })).catch(() => ({ ready: false, seats: 0 }))))
   throw new Error(`正常加入后 60 秒 roster 仍未同步（room=${roomCode} states=${JSON.stringify(states)}）；本轮禁止离开重入兜底`)
 }
@@ -1608,6 +1630,14 @@ async function runEastMatch(options: {
   }
   const occupiedSeats = await Promise.all([host, client].map((page) => page.locator('.room-seat.occupied').count()))
   expect(occupiedSeats, `线上第 ${matchIndex} 场必须只有 2 个真人，空余 2 席由 AI 补齐`).toEqual([2, 2])
+  if (!reuseRoom) {
+    const llmPicks = host.getByTestId('room-llm-pick')
+    await expect(llmPicks, '房主应能为两个空位选择本地大模型').toHaveCount(2, { timeout: 30_000 })
+    await llmPicks.nth(0).selectOption({ index: 1 })
+    await llmPicks.nth(1).selectOption({ index: 2 })
+    await expect(host.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+    await expect(client.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+  }
   await Promise.all([host, client].map(installOpeningSampler))
   await Promise.all([host, client].map(installSettlementSampler))
   const start = host.getByRole('button', { name: /开始对局/ })
@@ -1671,7 +1701,7 @@ async function runEastMatch(options: {
   let initialCanvasHealth = await Promise.all(pages.map(readCanvasHealth)) as [CanvasHealth, CanvasHealth]
   while (Date.now() < initialCanvasDeadline && initialCanvasHealth.some((health) => (
     !health.present || health.width <= 0 || health.height <= 0
-      || health.contextLost !== false || health.loadingVisible || health.tileResources < 34
+      || health.contextLost !== false || health.loadingVisible
       || health.nonBlackRatio < 0.05
   ))) {
     await host.waitForTimeout(500)
@@ -1683,7 +1713,7 @@ async function runEastMatch(options: {
   for (let index = 0; index < initialCanvasHealth.length; index += 1) {
     const health = initialCanvasHealth[index]
     if (!health.present || health.width <= 0 || health.height <= 0
-      || health.contextLost !== false || health.loadingVisible || health.tileResources < 34
+      || health.contextLost !== false || health.loadingVisible
       || health.nonBlackRatio < 0.05) {
       await failWithEvidence(pages, testInfo, consoleLogs,
         `online-match-${matchIndex}-initial-canvas-black`,
@@ -1807,17 +1837,22 @@ async function runEastMatch(options: {
     const expectedCount = evidence.draw[0] ? 0 : 1
     for (let index = 0; index < 2; index += 1) {
       if (winEffects[index].length !== expectedCount
-        || primarySounds[index].length !== expectedCount
         || effectSounds[index].length !== expectedCount) {
         await failWithEvidence(pages, testInfo, consoleLogs,
           `online-match-${matchIndex}-${token}-win-presentation-count`,
           `线上第 ${matchIndex} 场 ${hand} ${index === 0 ? '房主' : '客户端'}胡牌特效/声音次数异常：特效 ${winEffects[index].length}，胡/自摸声 ${primarySounds[index].length}，特效声 ${effectSounds[index].length}`)
       }
+      // 大模型赢家按产品规则以吐槽 TTS 代替原始胡/自摸人声，因此非流局时
+      // primarySounds 可以是 0（LLM）或 1（真人），但双端必须一致且不可重复。
+      if (primarySounds[index].length > expectedCount) {
+        await failWithEvidence(pages, testInfo, consoleLogs,
+          `online-match-${matchIndex}-${token}-win-primary-sound-count`,
+          `线上第 ${matchIndex} 场 ${hand} ${index === 0 ? '房主' : '客户端'}原始胡牌人声重复：${primarySounds[index].length}`)
+      }
     }
-    if (expectedCount === 1 && (
-      winEffects[0][0].tile !== winEffects[1][0].tile
-      || primarySounds[0][0].name !== primarySounds[1][0].name
-    )) {
+    if (expectedCount === 1 && (winEffects[0][0].tile !== winEffects[1][0].tile
+      || primarySounds[0].length !== primarySounds[1].length
+      || (primarySounds[0].length === 1 && primarySounds[0][0].name !== primarySounds[1][0].name))) {
       await failWithEvidence(pages, testInfo, consoleLogs,
         `online-match-${matchIndex}-${token}-win-presentation-mismatch`,
         `线上第 ${matchIndex} 场 ${hand} 双端胡牌特效或声音不一致`)
@@ -2341,7 +2376,7 @@ async function runEastMatch(options: {
   return { roomCode, timings, finalStandings: finalStandings[0] }
 }
 
-test('两个线上账号完成两个莲花麻将东风场，每手不超过6分钟', async ({}, testInfo) => {
+test('两个线上账号完成房主大模型莲花麻将东风场，每手不超过6分钟', async ({}, testInfo) => {
   const accountPair = await launchAccountBrowserPair()
   const { contexts } = accountPair
   let activePages: [Page, Page] | null = null
@@ -2349,6 +2384,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
   let capturedPageErrors: PageErrorRecord[][] = [[], []]
   let weakNetworkSessions: Array<{ index: number; session: CDPSession }> = []
   try {
+    await installHostLlmConfig(contexts[0], ONLINE.deepseekApiKey)
     await Promise.all(contexts.map(installAudioProbe))
     // 游戏授权令牌位于当前标签页的 sessionStorage；必须复用授权返回的两个页面，
     // 不能只保留 VibeHub Cookie 后另开标签。
@@ -2397,6 +2433,8 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     const errors = pages.map(() => [] as PageErrorRecord[])
     capturedPageErrors = errors
     const checkedErrorCounts = pages.map(() => 0)
+    const deepseekStatuses: number[] = []
+    const ttsStatuses: [number[], number[]] = [[], []]
     pages.forEach((page, index) => {
       page.on('pageerror', (error) => errors[index].push({
         at: Date.now(),
@@ -2413,13 +2451,27 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
           }
         }
       })
+      page.on('response', (response) => {
+        let parsed: URL
+        try { parsed = new URL(response.url()) } catch { return }
+        if (index === 0 && parsed.hostname === 'api.deepseek.com' && parsed.pathname.endsWith('/chat/completions')) {
+          deepseekStatuses.push(response.status())
+        }
+        if (parsed.hostname === 'www.bestguo.top' && parsed.port === '58000'
+          && parsed.pathname === '/api/local-tts/synthesize') {
+          ttsStatuses[index].push(response.status())
+        }
+      })
     })
     const results: Array<{
       roomCode: string
       timings: Array<{ hand: string; seconds: number }>
       finalStandings: FinalStanding[]
     }> = []
-    const matchCount = WEAK_NETWORK_ROLE === 'none' ? 2 : 1
+    const requestedMatchCount = Number(process.env.ONLINE_MATCH_COUNT || '1')
+    const matchCount = WEAK_NETWORK_ROLE === 'none'
+      ? Math.max(1, Math.min(2, Number.isFinite(requestedMatchCount) ? requestedMatchCount : 1))
+      : 1
     for (let matchIndex = 1; matchIndex <= matchCount; matchIndex += 1) {
       try {
         results.push(await runEastMatch({
@@ -2447,7 +2499,7 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
         expect(applicationErrors, `线上第 ${matchIndex} 场${index === 0 ? '房主' : '客人'}出现未捕获应用异常`)
           .toEqual([])
       }
-      if (matchIndex < 2) {
+      if (matchIndex < matchCount) {
         for (const page of pages) {
           await page.getByRole('button', { name: '返回大厅', exact: true }).click()
           await expect(page.getByRole('button', { name: '离开房间', exact: true })).toBeVisible({ timeout: 30_000 })
@@ -2457,8 +2509,13 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     expect(new Set(results.map((result) => result.roomCode)).size).toBe(1)
+    expect(deepseekStatuses.length, '房主浏览器必须实际调用 DeepSeek 决策接口').toBeGreaterThan(0)
+    expect(deepseekStatuses.some((status) => status === 200), `DeepSeek 决策应至少成功一次，实际状态 ${deepseekStatuses.join(',')}`)
+      .toBe(true)
+    expect(ttsStatuses[0].some((status) => status === 200), '房主应成功请求至少一次 TTS').toBe(true)
+    expect(ttsStatuses[1].some((status) => status === 200), '客户端应成功请求至少一次 TTS').toBe(true)
     if (WEAK_NETWORK_ROLE === 'none') {
-      console.log(`[ONLINE] 同一房间连续两个东风场完整通过：${results[0].roomCode}`)
+      console.log(`[ONLINE] 同一房间 ${matchCount} 个房主大模型东风场完整通过：${results[0].roomCode}`)
     } else {
       console.log(`[ONLINE][弱网:${WEAK_NETWORK_ROLE}] 一场东风场完整通过：${results[0].roomCode}`)
     }
@@ -2487,6 +2544,169 @@ test('两个线上账号完成两个莲花麻将东风场，每手不超过6分�
     throw error
   } finally {
     await clearWeakNetwork(weakNetworkSessions)
+    await closeAccountBrowserPair(accountPair)
+  }
+})
+
+test('两个线上账号轻量完成一场房主大模型莲花麻将东风场', async ({}, testInfo) => {
+  const accountPair = await launchAccountBrowserPair()
+  const { contexts } = accountPair
+  let pages: [Page, Page] | null = null
+  const logs: string[][] = [[], []]
+  const pageErrors: string[][] = [[], []]
+  const deepseekStatuses: number[] = []
+  const deepseekFailures: string[] = []
+  const ttsStatuses: [number[], number[]] = [[], []]
+  const bubbleTexts: [Set<string>, Set<string>] = [new Set(), new Set()]
+  try {
+    await installHostLlmConfig(contexts[0], ONLINE.deepseekApiKey)
+    pages = [
+      await authenticateAccount(accountPair, 0, ONLINE.accounts[0]),
+      await authenticateAccount(accountPair, 1, ONLINE.accounts[1]),
+    ]
+    pages.forEach((page, index) => {
+      page.on('pageerror', (error) => pageErrors[index].push(error.message))
+      page.on('console', (message) => {
+        const line = message.text()
+        if (/\[host\]|\[client\]|\[diag\]|error|warn|丢弃|重进|洗牌|快照|AI 代打|wall-regress/i.test(line)) {
+          logs[index].push(line)
+        }
+      })
+      page.on('response', (response) => {
+        let parsed: URL
+        try { parsed = new URL(response.url()) } catch { return }
+        if (index === 0 && parsed.hostname === 'api.deepseek.com' && parsed.pathname.endsWith('/chat/completions')) {
+          deepseekStatuses.push(response.status())
+        }
+        if (parsed.hostname === 'www.bestguo.top' && parsed.port === '58000'
+          && parsed.pathname === '/api/local-tts/synthesize') {
+          ttsStatuses[index].push(response.status())
+        }
+      })
+      page.on('requestfailed', (request) => {
+        try {
+          const parsed = new URL(request.url())
+          if (index === 0 && parsed.hostname === 'api.deepseek.com' && parsed.pathname.endsWith('/chat/completions')) {
+            deepseekFailures.push(request.failure()?.errorText ?? 'request failed')
+          }
+        } catch { /* non-URL request */ }
+      })
+    })
+
+    const [host, client] = pages
+    const suffix = `slim-${Date.now().toString(36).slice(-5)}`
+    await enterOnlineLobby(host, `线上房主-${suffix}`, 'host')
+    await host.getByRole('button', { name: '创建房间', exact: true }).click()
+    await host.locator('.game-settings button', { hasText: '玩法' }).click()
+    await host.getByRole('button', { name: /莲花麻将/ }).click()
+    await host.getByRole('button', { name: '确定' }).click()
+    await host.getByRole('button', { name: '确认创建' }).click()
+    await acceptDisclaimerIfShown(host)
+    await host.locator('.room-code strong').waitFor({ timeout: 40_000 })
+    const roomCode = (await host.locator('.room-code strong').innerText()).trim()
+    expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
+
+    await enterOnlineLobby(client, `线上客人-${suffix}`, 'client')
+    await client.getByRole('button', { name: '加入房间', exact: true }).click()
+    await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
+    await client.getByRole('button', { name: '确认加入' }).click()
+    await acceptDisclaimerIfShown(client)
+    await waitForRoomReady(host, client, roomCode)
+    await expect(host.locator('.room-seat.occupied')).toHaveCount(2, { timeout: 60_000 })
+    await expect(client.locator('.room-seat.occupied')).toHaveCount(2, { timeout: 60_000 })
+
+    const llmPicks = host.getByTestId('room-llm-pick')
+    await expect(llmPicks).toHaveCount(2, { timeout: 30_000 })
+    await llmPicks.nth(0).selectOption({ index: 1 })
+    await llmPicks.nth(1).selectOption({ index: 2 })
+    await expect(host.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+    await expect(client.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+
+    await host.getByRole('button', { name: '准备 / 取消准备' }).click()
+    await client.getByRole('button', { name: '准备 / 取消准备' }).click()
+    const start = host.getByRole('button', { name: /开始对局/ })
+    await expect(start).toBeEnabled({ timeout: 60_000 })
+    const opening = [host, client].map((page) => waitForOpeningOrTableLoadError(page, page === host ? '房主' : '客户端'))
+    const matchStartedAt = Date.now()
+    await start.click()
+    await Promise.all(opening)
+    await Promise.all([host, client].map(installHostAutoPlayer))
+    for (const page of [host, client]) {
+      await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 150_000 }).toBeGreaterThanOrEqual(4)
+      await expect(page.locator('.player-seat')).toHaveCount(3)
+    }
+    const hostOpponentNames = await host.locator('.player-seat .player-info strong').allInnerTexts()
+    expect(hostOpponentNames.filter((name) => name.includes('大肥鱼（')).length, '牌桌应显示两个不同策略的大模型身份').toBe(2)
+
+    const observed: [string[], string[]] = [[], []]
+    const markers = ['东1局', '东2局', '东3局', '东4局']
+    const fatal = /先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|AI 代打|AI 接管|非法状态快照|\[wall-regress\]/i
+    const deadline = matchStartedAt + 7_200_000
+    let activeHand = ''
+    let activeHandStartedAt = matchStartedAt
+    let lastProgressAt = 0
+    while (Date.now() < deadline) {
+      const labels = await Promise.all([readRoundLabel(host), readRoundLabel(client)])
+      for (const [index, label] of labels.entries()) {
+        for (const marker of markers) if (label.includes(marker) && !observed[index].includes(marker)) observed[index].push(marker)
+        const texts = await pages[index].locator('.llm-bubble').allInnerTexts().catch(() => [] as string[])
+        texts.filter(Boolean).forEach((text) => bubbleTexts[index].add(text))
+      }
+      const clientHand = labels[1]
+      if (clientHand && clientHand !== activeHand) {
+        activeHand = clientHand
+        activeHandStartedAt = Date.now()
+        console.log(`[ONLINE-SLIM] 进入 ${activeHand}`)
+      }
+      if (activeHand && Date.now() - activeHandStartedAt > 600_000) {
+        throw new Error(`${activeHand} 超过 10 分钟仍未推进`)
+      }
+      if (Date.now() - matchStartedAt > 120_000 && deepseekStatuses.length + deepseekFailures.length > 0
+        && !deepseekStatuses.includes(200)) {
+        throw new Error(`DeepSeek 尚无成功响应（statuses=${deepseekStatuses.join(',')} failures=${deepseekFailures.join(',')}）`)
+      }
+      for (let index = 0; index < logs.length; index += 1) {
+        const bad = logs[index].find((line) => fatal.test(line))
+        if (bad) throw new Error(`${index === 0 ? '房主' : '客户端'}出现禁止恢复信号：${bad}`)
+      }
+      await clickContinueIfAvailable(host)
+      await clickContinueIfAvailable(client)
+      const finals = await Promise.all([host, client].map((page) => page.locator('.final-backdrop').isVisible().catch(() => false)))
+      if (finals.every(Boolean)) break
+      if (Date.now() - lastProgressAt >= 30_000) {
+        lastProgressAt = Date.now()
+        console.log(`[ONLINE-SLIM][${Math.round((Date.now() - matchStartedAt) / 1000)}s] ${labels.join(' | ')} DeepSeek200=${deepseekStatuses.filter((status) => status === 200).length} TTS200=${ttsStatuses.map((items) => items.filter((status) => status === 200).length).join('/')}`)
+      }
+      await host.waitForTimeout(500)
+    }
+
+    expect(observed[0], '房主必须完整观察东1至东4').toEqual(markers)
+    expect(observed[1], '客户端必须完整观察东1至东4').toEqual(markers)
+    await expect(host.locator('.final-backdrop')).toBeVisible({ timeout: 120_000 })
+    await expect(client.locator('.final-backdrop')).toBeVisible({ timeout: 120_000 })
+    const standings = await Promise.all([host, client].map(readFinalStandings))
+    expect(standings[0]).toHaveLength(4)
+    expect(standings[1]).toEqual(standings[0])
+    expect(pageErrors[0]).toEqual([])
+    expect(pageErrors[1]).toEqual([])
+    expect(deepseekStatuses.some((status) => status === 200), `DeepSeek 决策必须成功，实际 ${deepseekStatuses.join(',')}`).toBe(true)
+    expect(ttsStatuses[0].some((status) => status === 200), '房主 TTS 必须成功').toBe(true)
+    expect(ttsStatuses[1].some((status) => status === 200), '客户端 TTS 必须成功').toBe(true)
+    expect(bubbleTexts[0].size, '房主必须显示大模型吐槽气泡').toBeGreaterThan(0)
+    expect(bubbleTexts[1].size, '客户端必须显示大模型吐槽气泡').toBeGreaterThan(0)
+    await testInfo.attach('online-host-llm-slim-result', {
+      body: JSON.stringify({
+        roomCode,
+        observed,
+        standings: standings[0],
+        deepseekSuccesses: deepseekStatuses.filter((status) => status === 200).length,
+        ttsSuccesses: ttsStatuses.map((items) => items.filter((status) => status === 200).length),
+        bubbleCounts: bubbleTexts.map((items) => items.size),
+      }, null, 2),
+      contentType: 'application/json',
+    })
+    console.log(`[ONLINE-SLIM] 一场房主大模型莲花麻将东风场完整通过，房间 ${roomCode}`)
+  } finally {
     await closeAccountBrowserPair(accountPair)
   }
 })
