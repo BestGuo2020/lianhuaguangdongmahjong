@@ -24,11 +24,16 @@ interface LocalSettlementTimelineOptions {
   structuralMeldCount(playerIndex: number): number
   getRoundLabel(): string
   ruleset?: RuleSet
+  /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
+  isLlmVoiceSeat?: (seat: number) => boolean
+  announceLlmWin?: (seat: number, type: 'self-draw' | 'discard-win' | 'robbed-kong-win') => boolean
 }
 
 export function createLocalSettlementTimeline(options: LocalSettlementTimelineOptions) {
   const { state } = options
   const ruleset = options.ruleset ?? DEFAULT_RULESET
+  const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
+  const announceLlmWin = options.announceLlmWin ?? announceLocalLlmWin
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -44,7 +49,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
   const timeline = createSettlementTimeline<EndGameOptions>({
     ...options,
     playSound: (name, volume) => {
-      const suppress = isLocalLlmSeat(state.winningPlayerIndex.value)
+      const suppress = isLlmVoiceSeat(state.winningPlayerIndex.value)
         && (name === 'zimo.mp3' || name === 'hu.mp3' || name === 'hu_effect_sound.mp3')
       if (!suppress) return volume === undefined
         ? options.playSound(name)
@@ -146,7 +151,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
-      announceLocalLlmWin(winnerIndex, winType)
+      announceLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }

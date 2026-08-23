@@ -24,11 +24,16 @@ interface LotusSettlementOptions {
   structuralMeldCount(playerIndex: number): number
   getRoundLabel(): string
   ruleset?: RuleSet
+  /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
+  isLlmVoiceSeat?: (seat: number) => boolean
+  announceLlmWin?: (seat: number, type: 'self-draw' | 'discard-win' | 'robbed-kong-win') => boolean
 }
 
 export function createLotusSettlement(options: LotusSettlementOptions) {
   const { state } = options
   const ruleset = options.ruleset ?? LOTUS_RULESET
+  const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
+  const announceLlmWin = options.announceLlmWin ?? announceLocalLlmWin
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -45,7 +50,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
   const timeline = createSettlementTimeline<LotusEndGameOptions>({
     ...options,
     playSound: (name, volume) => {
-      const suppress = isLocalLlmSeat(state.winningPlayerIndex.value)
+      const suppress = isLlmVoiceSeat(state.winningPlayerIndex.value)
         && (name === 'zimo.mp3' || name === 'hu.mp3' || name === 'hu_effect_sound.mp3')
       if (!suppress) return volume === undefined
         ? options.playSound(name)
@@ -162,7 +167,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : endOptions.selfDraw ? 'self-draw' : 'discard-win'
-      announceLocalLlmWin(winnerIndex, winType)
+      announceLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }

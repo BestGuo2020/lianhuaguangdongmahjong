@@ -138,4 +138,33 @@ describe('localSettlementTimeline', () => {
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     expect(playSound).not.toHaveBeenCalledWith('hu_effect_sound.mp3', expect.anything())
   })
+
+  it('allows a headless online engine to bypass the single-player LLM voice registry', () => {
+    const state = createLocalGameState()
+    state.phase.value = 'thinking'
+    state.players.push(
+      player(0),
+      player(1, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east']),
+      player(2), player(3),
+    )
+    const leakedSinglePlayerAnnouncement = vi.fn()
+    registerLocalLlmVoiceSeat(1, '高冷', leakedSinglePlayerAnnouncement)
+    const onlineAnnouncement = vi.fn(() => false)
+    const timeline = createLocalSettlementTimeline({
+      state,
+      clearTimers: vi.fn(),
+      later: vi.fn(() => 1),
+      playSound: vi.fn(),
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '东一局',
+      isLlmVoiceSeat: () => false,
+      announceLlmWin: onlineAnnouncement,
+    })
+
+    timeline.endGame(1)
+
+    expect(onlineAnnouncement).toHaveBeenCalledWith(1, 'self-draw')
+    expect(leakedSinglePlayerAnnouncement).not.toHaveBeenCalled()
+  })
 })
