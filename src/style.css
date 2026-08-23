@@ -1257,9 +1257,14 @@ button { font: inherit; }
   border-radius: 50%;
   background: rgba(7, 25, 18, .92);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
-  font-size: 19px;
   line-height: 1;
   cursor: pointer;
+}
+.llm-fab img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin: auto;
 }
 
 /* AI 大模型吐槽气泡（锚定头像，4 秒自动消失）：
