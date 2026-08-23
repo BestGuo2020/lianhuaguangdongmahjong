@@ -1,5 +1,6 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { registerLlmAudioPlayer, subscribeLocalLlmAudio } from './llmAudioBus'
+import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
 const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`
 const SUIT_AUDIO_FILES = ['m', 'p', 's'].flatMap((suit) => (
@@ -27,9 +28,17 @@ const EFFECT_WAIT_TIMEOUT_MS = 4_000
 const BGM_VOLUME = 0.32
 const BGM_DUCKED_VOLUME = 0.08
 const BGM_DUCK_RAMP_SECONDS = 0.12
+const NORMAL_LLM_AUDIO_TTL_MS = 3_000
+const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
-interface LlmAudioItem { url: string; seat: number; messageId: number }
+interface LlmAudioItem {
+  url: string
+  seat: number
+  messageId: number
+  priority: LlmSpeechPriority
+  enqueuedAt: number
+}
 
 export function useAudio() {
   const soundOn = ref(true)
@@ -136,8 +145,20 @@ export function useAudio() {
   }
 
   function pumpLlmAudio() {
-    if (!soundOn.value || activeLlmAudio || !llmAudioQueue.length) return
-    const item = llmAudioQueue.shift()!
+    if (!soundOn.value || activeLlmAudio) return
+    let item: LlmAudioItem | undefined
+    while (llmAudioQueue.length) {
+      const candidate = llmAudioQueue.shift()!
+      const ttl = candidate.priority === 'important' ? IMPORTANT_LLM_AUDIO_TTL_MS : NORMAL_LLM_AUDIO_TTL_MS
+      if (Date.now() - candidate.enqueuedAt <= ttl) {
+        item = candidate
+        break
+      }
+    }
+    if (!item) {
+      setBgmDucked(false)
+      return
+    }
     const audio = new Audio(item.url)
     activeLlmAudio = audio
     activeLlmItem = item
@@ -156,20 +177,26 @@ export function useAudio() {
     audio.play().catch(finish)
   }
 
-  /** 联机 LLM 吐槽播放：同座位新语音打断旧语音，全桌最多排队两条。 */
-  function playLlmAudio(url: string, seat: number, messageId: number) {
+  /** 普通吐槽忙时直接丢弃；关键/胜利台词可打断普通语音，且只保留最新一条待播。 */
+  function playLlmAudio(
+    url: string,
+    seat: number,
+    messageId: number,
+    priority: LlmSpeechPriority = 'normal',
+  ) {
     if (!soundOn.value || !url) return
-    for (let index = llmAudioQueue.length - 1; index >= 0; index -= 1) {
-      if (llmAudioQueue[index].seat === seat) llmAudioQueue.splice(index, 1)
+    if (priority === 'normal' && (activeLlmAudio || llmAudioQueue.length)) return
+    if (priority === 'important') {
+      llmAudioQueue.splice(0, llmAudioQueue.length)
     }
-    if (activeLlmItem?.seat === seat && activeLlmAudio) {
+    if (activeLlmAudio && priority === 'important' && activeLlmItem?.priority === 'normal') {
       activeLlmAudio.pause()
       activeLlmAudio.currentTime = 0
       activeLlmAudio = null
       activeLlmItem = null
     }
-    llmAudioQueue.push({ url, seat, messageId })
-    while (llmAudioQueue.length > 2) llmAudioQueue.shift()
+    llmAudioQueue.push({ url, seat, messageId, priority, enqueuedAt: Date.now() })
+    while (llmAudioQueue.length > 1) llmAudioQueue.shift()
     pumpLlmAudio()
   }
 
