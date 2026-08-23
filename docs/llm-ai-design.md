@@ -353,7 +353,7 @@ LLM 调用超时 / 取消 / 网络失败 / HTTP 非 2xx / API 错误 / 并发排
 ```
 
 - "引擎建议"= 在候选枚举阶段同时跑一次**无随机、确定性 tie-break** 的启发式决策（`decideTurn`/`decideClaim`），存为 `engineSuggestion`；回退即执行它，**零额外耗时**。
-- 总请求预算必须明确：默认 8000ms 包含 semaphore 获取、HTTP、解析和最多一次语义重试；前后端统一采用该总预算。
+- 总请求预算必须明确：固定 20000ms，包含 semaphore 获取、HTTP、解析和最多一次语义重试；前后端统一采用该总预算。
 - LLMPlayer 的 `request_rob_kong` 不覆盖（继承 AIPlayer：能抢必抢）。
 
 ---
@@ -426,7 +426,7 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 
 | env | 默认 | 说明 |
 |---|---|---|
-| `LLM_TIMEOUT_S` | `8` | 单次决策总预算，包含 semaphore 获取与最多一次语义重试 |
+| `LLM_TIMEOUT_S` | `20` | 单次决策总预算，包含 semaphore 获取与最多一次语义重试 |
 | `LLM_POOL_TIMEOUT_S` | `1` | 等待共享并发槽的最长时间，超时直接回退 |
 | `LLM_CONCURRENCY` | `4` | 单进程 `asyncio.Semaphore` 上限，不承诺跨 worker 全局限流 |
 | `LLM_MAX_REQUESTS_PER_ROOM` | `0` | 单房间请求上限，0 表示仅受服务端默认策略限制 |
@@ -477,7 +477,7 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 | 消息 | `[system(人设+约束), user(§7.1 模板)]` |
 | 温度 / max_tokens | 0.4 / 64 |
 | 重试 | 仅 JSON/choice 语义错误反馈重试 1 次；网络/HTTP/超时不重试 |
-| 超时 | 8000ms 总预算（前端 AbortController / 后端 pool timeout + `asyncio.wait_for`） |
+| 超时 | 20000ms 总预算（前端 AbortController / 后端 pool timeout + `asyncio.wait_for`） |
 | 解析 | 整体 JSON → 平衡括号扫描 → 编号白名单 → `finish_reason` 检查 |
 | 成本参考 | 只作估算，不写入功能断言；实现需提供每房间/每局请求计数，避免费用失控 |
 

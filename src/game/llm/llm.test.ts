@@ -282,6 +282,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     const result = readLlmSettings(storage)
     expect(result.enabled).toBe(true)
     expect(result.presets).toHaveLength(3)
+    expect(result.presets.every((preset) => preset.timeoutMs === 20_000)).toBe(true)
     expect(result.activeId).toBe('pa')
     expect(result.seatIds[1]).toBe('pb')
     expect(result.seatIds[2]).toBe('pc')
@@ -298,6 +299,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(migrated.enabled).toBe(true)
     expect(migrated.presets).toHaveLength(1)
     expect(migrated.presets[0]).toMatchObject({ apiKey: 'sk-legacy', model: 'deepseek-chat', name: '默认' })
+    expect(migrated.presets[0].timeoutMs).toBe(20_000)
     expect(migrated.activeId).toBe(migrated.presets[0].id)
     // 迁移后 v2 已写回、v1 清理
     expect(storage.getItem('llm.provider')).toBeNull()

@@ -7,7 +7,7 @@ import type { PlayerController } from '../core/controllers/playerController'
 import type { LotusController } from '../variants/lotus/lotusControllers'
 import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats } from './llmController'
-import { presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
+import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
 import { avatarFor, displayNameOf, effectiveNickname } from './persona'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
@@ -27,7 +27,7 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
     apiKey: preset.apiKey,
     model: preset.model,
     style,
-    timeoutMs: preset.timeoutMs,
+    timeoutMs: LLM_DECISION_TIMEOUT_MS,
   }
 }
 

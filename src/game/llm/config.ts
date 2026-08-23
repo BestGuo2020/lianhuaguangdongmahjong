@@ -44,6 +44,7 @@ export interface LlmSettings {
 }
 
 export const CONFIG_VERSION = 2
+export const LLM_DECISION_TIMEOUT_MS = 20_000
 const STORAGE_KEY = 'llm.providers'
 const LEGACY_KEY = 'llm.provider'
 const LEGACY_ENABLED_KEY = 'llm.enabled'
@@ -52,7 +53,7 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
   baseUrl: 'https://api.deepseek.com/v1',
   model: 'deepseek-v4-flash',
   style: '稳健',
-  timeoutMs: 8000,
+  timeoutMs: LLM_DECISION_TIMEOUT_MS,
 }
 
 /** 常用供应商模板（Base URL + 示例模型，模型名需按官方文档核对） */
@@ -108,7 +109,8 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
     ...(avatarFolder ? { avatarFolder } : {}),
     ttsVoiceKey: validateTtsVoiceKey(raw.ttsVoiceKey),
     style: validateStyle(raw.style),
-    timeoutMs: typeof raw.timeoutMs === 'number' && raw.timeoutMs > 0 ? raw.timeoutMs : DEFAULT_PRESET.timeoutMs,
+    // 决策预算为产品级统一参数；读取旧 localStorage 时同步把历史 8 秒配置升级为 20 秒。
+    timeoutMs: LLM_DECISION_TIMEOUT_MS,
   }
 }
 

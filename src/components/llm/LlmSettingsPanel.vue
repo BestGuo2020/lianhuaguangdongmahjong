@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
+  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
@@ -57,7 +57,7 @@ function addFromTemplate() {
     apiKey: '',
     model: template.model,
     style: '稳健',
-    timeoutMs: 8000,
+    timeoutMs: LLM_DECISION_TIMEOUT_MS,
     ttsVoiceKey: 'auto',
     ...(isCustomTemplate ? { fromCustomTemplate: true } : {}),
   }
