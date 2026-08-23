@@ -2,7 +2,7 @@ import { dispatchLocalLlmAudio } from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset, LlmStyle, LlmTtsVoiceKey } from './config'
 import { avatarFolderOf } from './persona'
 
-const VIBEHUB_GATEWAY_FALLBACK = 'https://lianhuaguangdongmahjong.guoguo-labs.online'
+const VIBEHUB_GATEWAY_FALLBACK = 'https://www.bestguo.top:58000'
 const AUDIO_PATH_RE = /^\/api\/local-tts\/audio\/[0-9a-f]{64}\.mp3$/
 const REQUEST_TIMEOUT_MS = 8_000
 

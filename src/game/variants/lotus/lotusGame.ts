@@ -32,7 +32,7 @@ interface UseLotusGameOptions {
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: LotusController[]
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
-  aiPlayerSeeds?: Array<PlayerSeed>
+  aiPlayerSeeds?: Array<PlayerSeed | undefined>
   countdownEnabled?: boolean
   ruleset?: RuleSet
 }

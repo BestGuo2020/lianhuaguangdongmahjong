@@ -30,7 +30,7 @@ describe('LocalTtsClient', () => {
     vi.stubGlobal('location', { hostname: '127.0.0.1' })
     expect(resolveLocalTtsBaseUrl()).toBe('')
     vi.stubGlobal('location', { hostname: 'room.lumigrav.space' })
-    expect(resolveLocalTtsBaseUrl()).toBe('https://lianhuaguangdongmahjong.guoguo-labs.online')
+    expect(resolveLocalTtsBaseUrl()).toBe('https://www.bestguo.top:58000')
   })
 
   it('合并相同合成请求，并把每个座位的音频交给共享播放总线', async () => {

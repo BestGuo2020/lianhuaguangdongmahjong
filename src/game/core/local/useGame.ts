@@ -28,7 +28,7 @@ interface UseGameOptions {
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: PlayerController[]
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
-  aiPlayerSeeds?: Array<PlayerSeed>
+  aiPlayerSeeds?: Array<PlayerSeed | undefined>
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   ruleset?: RuleSet
