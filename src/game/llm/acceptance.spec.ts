@@ -28,7 +28,7 @@ function provider(): LlmProviderConfig {
     apiKey: loadApiKey(),
     model: 'deepseek-chat',
     style: '稳健',
-    timeoutMs: 8000,
+    timeoutMs: 20_000,
   }
 }
 
