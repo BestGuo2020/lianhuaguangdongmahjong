@@ -71,6 +71,15 @@ function snapshot(): ServerSnapshot {
 }
 
 describe('protocol seat mapper', () => {
+  it('presentation-only state follows local array positions rather than retained absolute player.seat', () => {
+    const mapped = mapServerSnapshotToLocal(snapshot(), 2)
+    const bubbles: Record<number, string> = { 1: '下家', 2: '对家', 3: '上家' }
+
+    expect(mapped.players.map((item) => item.seat)).toEqual([2, 3, 0, 1])
+    expect(mapped.players.slice(1).map((_player, index) => bubbles[index + 1])).toEqual(['下家', '对家', '上家'])
+    expect(mapped.players.slice(1).map((player) => bubbles[player.seat])).not.toEqual(['下家', '对家', '上家'])
+  })
+
   it('maps every seat-sensitive snapshot field into the local perspective', () => {
     const source = snapshot()
     const mapped = mapServerSnapshotToLocal(source, 2)

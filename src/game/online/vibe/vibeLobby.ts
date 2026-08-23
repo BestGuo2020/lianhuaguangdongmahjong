@@ -71,7 +71,7 @@ const VOICE_KEYS = new Set(['default', 'deepseek', 'relay_gpt'])
 
 function isPublicAiSeats(value: unknown): value is PublicAiSeat[] {
   if (value === undefined) return true
-  if (!Array.isArray(value) || value.length > 3) return false
+  if (!Array.isArray(value) || value.length > 2) return false
   const seats = new Set<number>()
   return value.every((raw) => {
     if (typeof raw !== 'object' || raw === null) return false
@@ -201,8 +201,9 @@ export function createHostLobby({
   }
 
   function nextSeat(): number {
+    const reserved = new Set<number>(plannedAiSeats.map((ai) => ai.seat))
     for (let seat = 1; seat < capacity; seat++) {
-      if (!occupied.has(seat)) return seat
+      if (!occupied.has(seat) && !reserved.has(seat)) return seat
     }
     return -1
   }

@@ -99,6 +99,8 @@ export function resolveHostLlmSelections(
   const privateSeats: HostLlmSeatSelection[] = []
   const publicSeats: PublicAiSeat[] = []
   for (const item of raw) {
+    // 房主也是真人，联机至少两名真人开局，因此最多只能硬预留两个 AI 座位。
+    if (privateSeats.length >= 2) break
     if (![1, 2, 3].includes(item.seat) || seen.has(item.seat) || occupiedSeats.has(item.seat)) continue
     if (!VIBE_LLM_STYLES.includes(item.style)) continue
     const preset = presetById(settings, item.presetId)

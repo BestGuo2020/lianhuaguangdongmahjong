@@ -61,4 +61,15 @@ describe('vibe host LLM runtime', () => {
     expect(core.seeds[1]).toMatchObject({ name: '大肥鱼（话痨）', isLlm: true })
     expect(lotus.profiles.get(2)).toMatchObject({ style: '话痨', voiceKey: 'deepseek' })
   })
+
+  it('最多接受两个硬预留大模型座位，为第二名真人保留一席', () => {
+    const resolved = resolveHostLlmSelections([
+      { seat: 1, presetId: 'deepseek', style: '激进' },
+      { seat: 2, presetId: 'deepseek', style: '稳健' },
+      { seat: 3, presetId: 'gpt', style: '高冷' },
+    ], new Set([0]), settings())
+
+    expect(resolved.privateSeats.map((item) => item.seat)).toEqual([1, 2])
+    expect(resolved.publicSeats).toHaveLength(2)
+  })
 })

@@ -62,7 +62,7 @@ describe('vibeLobby', () => {
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_start')).toBe(true)
   })
 
-  it('房主只广播大模型公开身份，真人加入同座位后计划自动失效', () => {
+  it('房主硬预留大模型座位，真人加入时跳到下一个未预留座位', () => {
     const room = createMockVibeRoom(true)
     const host = createHostLobby({
       room, capacity: 4, hostNickname: '房主', hostAvatar: '', onStart: () => {},
@@ -80,8 +80,30 @@ describe('vibeLobby', () => {
 
     room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     const second = [...room.sent].reverse().find((entry) => (entry.message as { type?: string }).type === 'lobby_roster')
-      ?.message as { aiSeats?: unknown[] }
-    expect(second.aiSeats).toEqual([])
+      ?.message as { aiSeats?: unknown[]; seats?: LobbySeat[] }
+    expect(second.aiSeats).toHaveLength(1)
+    expect(second.seats?.find((seat) => seat.peerId === 'peer1')?.seat).toBe(2)
+  })
+
+  it('两个大模型预留座位时，第二名真人只能进入剩余座位', () => {
+    const room = createMockVibeRoom(true)
+    const host = createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '', onStart: () => {},
+    })
+    host.setAiSeats([
+      {
+        seat: 1, kind: 'llm', nickname: 'AI1', displayName: 'AI1（激进）', avatar: '',
+        model: 'm1', style: '激进', voiceKey: 'deepseek',
+      },
+      {
+        seat: 2, kind: 'llm', nickname: 'AI2', displayName: 'AI2（稳健）', avatar: '',
+        model: 'm2', style: '稳健', voiceKey: 'deepseek',
+      },
+    ])
+
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+
+    expect(host.roster().find((seat) => seat.peerId === 'peer1')?.seat).toBe(3)
   })
 
   it('房主独玩（无 peer）不能开局：联机至少需要两名真人', () => {
@@ -213,6 +235,24 @@ describe('vibeLobby', () => {
       type: 'lobby_start', shuffleId: 's', seatCount: 4, rosterRevision: 1,
       participants: [{ seat: 0, peerId: 'host-peer' }, { seat: 1, peerId: 'peer-1' }],
     })).toBe(true)
+  })
+
+  it('lobby 协议拒绝三个大模型预留，始终为第二名真人保留座位', () => {
+    const aiSeats = ([1, 2, 3] as const).map((seat) => ({
+      seat,
+      kind: 'llm' as const,
+      nickname: `AI${seat}`,
+      displayName: `AI${seat}（稳健）`,
+      avatar: '',
+      model: 'deepseek-chat',
+      style: '稳健' as const,
+      voiceKey: 'deepseek' as const,
+    }))
+    expect(isHostLobbyMessage({
+      type: 'lobby_roster', hostSeat: 0, revision: 1,
+      seats: [{ seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false }],
+      aiSeats,
+    })).toBe(false)
   })
 
   it('迟到的旧 rosterRevision 开局不能覆盖当前名单', () => {
