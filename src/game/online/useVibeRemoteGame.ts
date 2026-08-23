@@ -471,7 +471,7 @@ export function useVibeRemoteGame({
             announcedWinEvents.add(message.event.id)
             emitHostLlmMessage(
               message.event.actorIndex,
-              vibeLlmWinLine(message.event.type, profile.style),
+              vibeLlmWinLine(message.event.type, profile.style, announcedWinEvents.size - 1),
               profile,
               'important',
             )

@@ -23,6 +23,7 @@ import {
 import { resolveLocalTtsVoiceKey } from '../../llm/localTtsClient'
 import { avatarFor, displayNameOf, effectiveNickname } from '../../llm/persona'
 import { compactLlmSpeechText, LlmSpeechPolicy, type LlmSpeechPriority } from '../../llm/speechPolicy'
+import { llmWinLine, type LlmWinType } from '../../llm/winLines'
 
 export const VIBE_LLM_STYLES: LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
 
@@ -217,20 +218,8 @@ export function createVibeLotusLlmRuntime(
   }
 }
 
-const WIN_LINES: Record<'self-draw' | 'discard-win' | 'robbed-kong-win', Record<LlmStyle, string>> = {
-  'self-draw': {
-    激进: '自摸！这局我收下了！', 稳健: '自摸，稳稳收下。', 话痨: '自摸啦！这手终于等到了！', 高冷: '自摸。',
-  },
-  'discard-win': {
-    激进: '吃胡！这张我等很久了！', 稳健: '吃胡，多谢送牌。', 话痨: '吃胡啦！这张正好送到手上！', 高冷: '吃胡。',
-  },
-  'robbed-kong-win': {
-    激进: '抢杠胡！这杠开不得！', 稳健: '抢杠胡，时机刚好。', 话痨: '抢杠胡啦！这张我可等着呢！', 高冷: '抢杠胡。',
-  },
-}
-
-export function vibeLlmWinLine(type: keyof typeof WIN_LINES, style: LlmStyle): string {
-  return WIN_LINES[type][style]
+export function vibeLlmWinLine(type: LlmWinType, style: LlmStyle, sequence = 0): string {
+  return llmWinLine(type, style, sequence)
 }
 
 export function supportsVibeLlmRule(rule: RuleVariant): boolean {

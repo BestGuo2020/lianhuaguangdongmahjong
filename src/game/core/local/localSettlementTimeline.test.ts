@@ -134,7 +134,7 @@ describe('localSettlementTimeline', () => {
 
     timeline.endGame(1)
 
-    expect(announce).toHaveBeenCalledWith('自摸。')
+    expect(announce).toHaveBeenCalledWith('自摸，意料之中。')
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     expect(playSound).not.toHaveBeenCalledWith('hu_effect_sound.mp3', expect.anything())
   })
