@@ -10,6 +10,7 @@ import type { ServerSnapshot } from './dto'
 import type { ServerMeldDto, ServerPlayerDto } from './dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { LlmStyle, LlmTtsVoiceKey } from '../../llm/config'
+import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
 export interface RoundStartMessage {
   kind: 'round_start'
@@ -90,7 +91,7 @@ export type ServerMessage =
   | { kind: 'table_action'; event: TableActionEvent; authorityEpoch?: string; round?: number }
   | { kind: 'score_flow'; deltas: ScoreDelta[]; authorityEpoch?: string; round?: number }
   | { kind: 'announcement'; text: string; tone: string; id?: number; authorityEpoch?: string; round?: number }
-  | { kind: 'llm_message'; roomId: string; authorityEpoch: string; round: number; sequence: number; id: number; seat: number; text: string; style: LlmStyle; voiceKey: Exclude<LlmTtsVoiceKey, 'auto'> }
+  | { kind: 'llm_message'; roomId: string; authorityEpoch: string; round: number; sequence: number; id: number; seat: number; text: string; style: LlmStyle; voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; priority?: LlmSpeechPriority }
   | { kind: 'hand_result'; result: RoundResult; authorityEpoch?: string; round?: number }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }>; authorityEpoch?: string; sequence?: number; round?: number }

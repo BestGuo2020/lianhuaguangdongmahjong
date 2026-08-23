@@ -297,6 +297,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isSeat(raw.seat) && isString(raw.text) && raw.text.length > 0 && raw.text.length <= 60
           && isString(raw.style) && LLM_STYLES.has(raw.style)
           && isString(raw.voiceKey) && LLM_VOICE_KEYS.has(raw.voiceKey)
+          && isOptional(raw.priority, (value) => value === 'normal' || value === 'important')
       case 'hand_result':
         return isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
           && isRoundResult(raw.result)

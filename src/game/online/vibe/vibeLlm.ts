@@ -17,9 +17,11 @@ import {
   LotusLlmController,
   createLlmStats,
   type LlmControllerStats,
+  type LlmMessageMeta,
 } from '../../llm/llmController'
 import { resolveLocalTtsVoiceKey } from '../../llm/localTtsClient'
 import { avatarFor, displayNameOf, effectiveNickname } from '../../llm/persona'
+import { compactLlmSpeechText, LlmSpeechPolicy, type LlmSpeechPriority } from '../../llm/speechPolicy'
 
 export const VIBE_LLM_STYLES: LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
 
@@ -113,7 +115,7 @@ export function resolveHostLlmSelections(
 }
 
 interface RuntimeHooks {
-  onMessage(seat: number, text: string, profile: PublicAiSeat): void
+  onMessage(seat: number, text: string, profile: PublicAiSeat, priority: LlmSpeechPriority): void
 }
 
 export interface VibeHostLlmRuntime<C> {
@@ -163,11 +165,17 @@ export function createVibeCoreLlmRuntime(
 ): VibeHostLlmRuntime<PlayerController> {
   const selected = selectedProfiles(selections, settings)
   const stats = createLlmStats()
+  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const item = selected.get(seat)
     return item
       ? new CoreLlmController(providerConfig(item.preset, item.profile.style), {
-          onLlmMessage: (speaker, text) => hooks.onMessage(speaker, text, item.profile),
+          onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
+            const priority = meta?.priority ?? 'normal'
+            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
+            const compact = compactLlmSpeechText(text)
+            if (compact) hooks.onMessage(speaker, compact, item.profile, priority)
+          },
         }, stats)
       : new AiController()
   })
@@ -186,11 +194,17 @@ export function createVibeLotusLlmRuntime(
 ): VibeHostLlmRuntime<LotusController> {
   const selected = selectedProfiles(selections, settings)
   const stats = createLlmStats()
+  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const item = selected.get(seat)
     return item
       ? new LotusLlmController(providerConfig(item.preset, item.profile.style), {
-          onLlmMessage: (speaker, text) => hooks.onMessage(speaker, text, item.profile),
+          onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
+            const priority = meta?.priority ?? 'normal'
+            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
+            const compact = compactLlmSpeechText(text)
+            if (compact) hooks.onMessage(speaker, compact, item.profile, priority)
+          },
         }, stats)
       : new LotusAiController()
   })

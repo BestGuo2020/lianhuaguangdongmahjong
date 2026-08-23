@@ -47,6 +47,7 @@ import {
 import { getLocalTtsClient } from '../llm/localTtsClient'
 import type { PlayerController } from '../core/controllers/playerController'
 import type { LotusController } from '../variants/lotus/lotusControllers'
+import type { LlmSpeechPriority } from '../llm/speechPolicy'
 import { useGame } from '../core/local/useGame'
 import { useLotusGame } from '../variants/lotus/lotusGame'
 import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
@@ -435,7 +436,12 @@ export function useVibeRemoteGame({
       }
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
       const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
-      const emitHostLlmMessage = (seat: number, text: string, profile: PublicAiSeat) => {
+      const emitHostLlmMessage = (
+        seat: number,
+        text: string,
+        profile: PublicAiSeat,
+        priority: LlmSpeechPriority = 'normal',
+      ) => {
         const runner = hostGame.value
         if (!runner || !text.trim()) return
         llmMessageSequence += 1
@@ -450,6 +456,7 @@ export function useVibeRemoteGame({
           text: text.trim().slice(0, 60),
           style: profile.style,
           voiceKey: profile.voiceKey,
+          priority,
         }
         room.send(message)
         handleMessage(message)
@@ -462,7 +469,12 @@ export function useVibeRemoteGame({
           const profile = activeHostLlmRuntime?.profiles.get(message.event.actorIndex)
           if (profile) {
             announcedWinEvents.add(message.event.id)
-            emitHostLlmMessage(message.event.actorIndex, vibeLlmWinLine(message.event.type, profile.style), profile)
+            emitHostLlmMessage(
+              message.event.actorIndex,
+              vibeLlmWinLine(message.event.type, profile.style),
+              profile,
+              'important',
+            )
           }
         }
         handleMessage(message)
@@ -805,7 +817,9 @@ export function useVibeRemoteGame({
     const localSeat = toLocal(message.seat)
     onLlmMessage(localSeat, message.text)
     // 各端只调用已部署的 TTS 网关；LLM Key 始终只在房主浏览器。
-    void getLocalTtsClient().speak(localSeat, message.text, message.voiceKey, message.style)
+    void getLocalTtsClient().speak(
+      localSeat, message.text, message.voiceKey, message.style, message.priority ?? 'normal',
+    )
   }
 
   const settlementTimeline = createSettlementTimeline({
