@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAudio } from './useAudio'
-import { enqueueLlmAudio, resetLlmAudioBusForTests } from './llmAudioBus'
+import { dispatchLocalLlmAudio, resetLlmAudioBusForTests } from './llmAudioBus'
 
 class MockAudio {
   static instances: MockAudio[] = []
@@ -39,6 +39,12 @@ class MockAudio {
 beforeEach(() => {
   MockAudio.instances = []
   vi.stubGlobal('Audio', MockAudio)
+  const testWindow = Object.assign(new EventTarget(), {
+    location: { href: 'http://localhost:5173/' },
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+  })
+  vi.stubGlobal('window', testWindow)
   // 音效预加载与本测试无关；保持请求 pending，避免创建数十个模板 Audio。
   vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -56,8 +62,9 @@ describe('useAudio LLM voice ducking', () => {
     const bgm = MockAudio.instances[0]
     expect(bgm.volume).toBe(0.32)
 
-    expect(enqueueLlmAudio('/api/tts/audio/first.mp3', 1, 1)).toBe(true)
-    const first = MockAudio.instances.find((item) => item.src.endsWith('/first.mp3'))!
+    const firstUrl = `/api/local-tts/audio/${'a'.repeat(64)}.mp3`
+    expect(dispatchLocalLlmAudio(firstUrl, 1, 1)).toBe(true)
+    const first = MockAudio.instances.find((item) => item.src === firstUrl)!
     expect(first.volume).toBe(1)
     expect(bgm.volume).toBe(0.08)
 

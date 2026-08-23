@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { registerLlmAudioPlayer } from './llmAudioBus'
+import { registerLlmAudioPlayer, subscribeLocalLlmAudio } from './llmAudioBus'
 
 const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`
 const SUIT_AUDIO_FILES = ['m', 'p', 's'].flatMap((suit) => (
@@ -186,6 +186,7 @@ export function useAudio() {
 
   // 单机 TTS 通过共享总线接入；两分支的 App.vue 均无需感知该实现。
   const unregisterLlmAudioPlayer = registerLlmAudioPlayer(playLlmAudio)
+  const unsubscribeLocalLlmAudio = subscribeLocalLlmAudio(playLlmAudio)
 
   function ensureAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null
@@ -306,6 +307,7 @@ export function useAudio() {
 
   onBeforeUnmount(() => {
     unregisterLlmAudioPlayer()
+    unsubscribeLocalLlmAudio()
     removeBgmPrimeListeners()
     if (bgmWebAudio) {
       bgmSource?.stop()

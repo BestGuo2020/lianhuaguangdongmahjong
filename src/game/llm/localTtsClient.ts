@@ -1,4 +1,4 @@
-import { enqueueLlmAudio, hasLlmAudioPlayer } from '../core/presentation/llmAudioBus'
+import { dispatchLocalLlmAudio } from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset, LlmStyle, LlmTtsVoiceKey } from './config'
 import { avatarFolderOf } from './persona'
 
@@ -23,8 +23,8 @@ export function resolveLocalTtsBaseUrl(): string {
   if (configured) return trimBase(configured)
   if (typeof location !== 'undefined'
     && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    // vibehub 的本地 Vite 不代理 /api；两分支开发环境统一直连独立网关。
-    return 'http://127.0.0.1:8000'
+    // 本地统一走同源 /api proxy，避免 localhost → 127.0.0.1 跨源/PNA 拦截。
+    return ''
   }
   if (typeof location !== 'undefined' && location.hostname.endsWith('lumigrav.space')) {
     return VIBEHUB_GATEWAY_FALLBACK
@@ -48,15 +48,19 @@ function normalizeText(text: string): string {
 export class LocalTtsClient {
   private readonly inflight = new Map<string, Promise<string | null>>()
   private readonly negativeUntil = new Map<string, number>()
+  private readonly fetchImpl: FetchLike
   private messageId = 0
 
   constructor(
     private readonly baseUrl = resolveLocalTtsBaseUrl(),
-    private readonly fetchImpl: FetchLike = fetch,
-  ) {}
+    fetchImpl: FetchLike = fetch,
+  ) {
+    // Window.fetch 是带宿主品牌检查的原生方法；作为类字段调用会把 this 错绑为
+    // LocalTtsClient，Chromium 抛 Illegal invocation。显式绑定 globalThis。
+    this.fetchImpl = fetchImpl.bind(globalThis)
+  }
 
   async speak(seat: number, text: string, voiceKey: string, style: LlmStyle): Promise<boolean> {
-    if (!hasLlmAudioPlayer()) return false
     const normalized = normalizeText(text)
     if (!normalized) return false
     const key = JSON.stringify([normalized, voiceKey, style])
@@ -77,7 +81,7 @@ export class LocalTtsClient {
       return false
     }
     this.messageId += 1
-    return enqueueLlmAudio(url, seat, this.messageId)
+    return dispatchLocalLlmAudio(url, seat, this.messageId)
   }
 
   private async synthesize(text: string, voiceKey: string, style: LlmStyle): Promise<string | null> {
@@ -90,11 +94,18 @@ export class LocalTtsClient {
         body: JSON.stringify({ text, voiceKey, style }),
         signal: controller.signal,
       })
-      if (!response.ok) return null
+      if (!response.ok) {
+        if (import.meta.env.DEV) console.warn(`[LocalTTS] synthesize HTTP ${response.status}`)
+        return null
+      }
       const payload = await response.json() as Partial<LocalTtsResponse>
       if (typeof payload.audioUrl !== 'string' || !AUDIO_PATH_RE.test(payload.audioUrl)) return null
       return this.baseUrl ? `${this.baseUrl}${payload.audioUrl}` : payload.audioUrl
-    } catch {
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        const reason = error instanceof Error ? `${error.name}: ${error.message}` : 'unknown'
+        console.warn(`[LocalTTS] synthesize failed: ${reason}`)
+      }
       return null
     } finally {
       globalThis.clearTimeout(timeout)
