@@ -17,6 +17,13 @@ export default defineConfig({
   base: './',
   server: {
     port: 4173,
+    proxy: {
+      // 单机 TTS 网关；保持与 master 本地开发一致的同源 /api 调用。
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
     // 本地联调 WebRTC：通过 hosts 把 127.0.0.1 伪装成 *.lumigrav.space 域名
     // （VibeHub SDK 只给该域提供服务），因此放开 Vite 的 Host 头校验。
     allowedHosts: true,
