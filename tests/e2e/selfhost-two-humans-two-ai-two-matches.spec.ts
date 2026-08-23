@@ -7,8 +7,23 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
 const SIGNALING = 'wss://www.bestguo.top:58787'
 const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
-const APP = `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}`
-const APP_AUTO = `${APP}&auto=1`
+const USE_LOCAL_MOCK = process.env.E2E_LOCAL_MOCK === '1'
+const USE_LOCAL_SIGNALING = process.env.E2E_LOCAL_SIGNALING === '1'
+const APP = USE_LOCAL_MOCK
+  ? 'http://127.0.0.1:5173/?mockPeer=e2e-host'
+  : USE_LOCAL_SIGNALING
+  ? 'http://127.0.0.1:5173/?selfHost=ws://127.0.0.1:8787'
+  : `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}`
+const APP_AUTO = USE_LOCAL_MOCK
+  ? 'http://127.0.0.1:5173/?mockPeer=e2e-client&auto=1'
+  : `${APP}&auto=1`
+const USE_HOST_LLM = process.env.E2E_HOST_LLM === '1'
+const MATCH_COUNT = Number(process.env.E2E_MATCH_COUNT || '2')
+
+interface FakeLlmStats {
+  decisions: number
+  tts: number
+}
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(4_800_000)
@@ -94,8 +109,9 @@ async function runEastMatch(options: {
   matchIndex: number
   consoleLogs: string[][]
   testInfo: TestInfo
+  fakeLlmStats?: FakeLlmStats
 }) {
-  const { host, client, matchIndex, consoleLogs, testInfo } = options
+  const { host, client, matchIndex, consoleLogs, testInfo, fakeLlmStats } = options
   const matchLogStarts = consoleLogs.map((logs) => logs.length)
   const suffix = `${matchIndex}-${Date.now().toString(36).slice(-5)}`
 
@@ -120,9 +136,18 @@ async function runEastMatch(options: {
     await page.getByRole('button', { name: '准备 / 取消准备' }).waitFor({ timeout: 40_000 })
   }
 
-  // 大厅只有两个真人席；开局后由引擎补齐两个 AI。
-  await expect(host.locator('.room-seat')).toHaveCount(2)
-  await expect(client.locator('.room-seat')).toHaveCount(2)
+  // 大厅固定显示四席，其中两个真人已占座，剩余两席由普通 AI 或房主大模型补位。
+  await expect(host.locator('.room-seat')).toHaveCount(4)
+  await expect(client.locator('.room-seat')).toHaveCount(4)
+  await expect(host.locator('.room-seat.occupied')).toHaveCount(2, { timeout: 40_000 })
+  await expect(client.locator('.room-seat.occupied')).toHaveCount(2, { timeout: 40_000 })
+  if (USE_HOST_LLM) {
+    const picks = host.getByTestId('room-llm-pick')
+    await expect(picks).toHaveCount(2)
+    for (let index = 0; index < 2; index += 1) await picks.nth(index).selectOption({ index: 1 })
+    await expect(host.locator('.room-seat.llm-planned')).toHaveCount(2)
+    await expect(client.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+  }
   await host.getByRole('button', { name: '准备 / 取消准备' }).click()
   await client.getByRole('button', { name: '准备 / 取消准备' }).click()
   const start = host.getByRole('button', { name: /开始对局/ })
@@ -303,18 +328,73 @@ async function runEastMatch(options: {
     const banners = await page.locator('.remote-banner').allInnerTexts().catch(() => [] as string[])
     expect(banners.join('\n')).not.toMatch(/网络断开|连接中断|尝试重新加入/)
   }
+  if (USE_HOST_LLM) {
+    expect(fakeLlmStats?.decisions ?? 0, '房主浏览器应实际发起 LLM 决策').toBeGreaterThan(0)
+    expect(fakeLlmStats?.tts ?? 0, '双方应为 LLM 吐槽请求 TTS').toBeGreaterThan(0)
+  }
 
   console.log(`[2H2AI] 第 ${matchIndex} 个东风场通过，房间 ${roomCode}，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`)
   return roomCode
 }
 
-test('2 真人 + 2 AI 连续打完两个莲花麻将东风场', async ({ browser }, testInfo) => {
+test('2 真人 + 2 AI 连续打完莲花麻将东风场', async ({ browser }, testInfo) => {
   const rooms: string[] = []
-  for (let matchIndex = 1; matchIndex <= 2; matchIndex += 1) {
+  for (let matchIndex = 1; matchIndex <= MATCH_COUNT; matchIndex += 1) {
     // 每个东风场使用全新 context：避免长时间 WebGL/SwiftShader 资源占用影响
     // 上一场终局后的指针点击，也确保两场是两个真正独立的房间/会话。
-    const contexts = await Promise.all([0, 1].map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })))
-    const pages = await Promise.all(contexts.map((context) => context.newPage()))
+    const contexts = USE_LOCAL_MOCK
+      ? [await browser.newContext({ viewport: { width: 1280, height: 720 } })]
+      : await Promise.all([0, 1].map(() => browser.newContext({ viewport: { width: 1280, height: 720 } })))
+    const fakeLlmStats: FakeLlmStats = { decisions: 0, tts: 0 }
+    if (USE_HOST_LLM) {
+      await contexts[0].addInitScript(() => {
+        localStorage.setItem('llm.providers', JSON.stringify({
+          configVersion: 2,
+          enabled: true,
+          activeId: 'e2e-deepseek',
+          seatIds: [null, null, null, null],
+          seatStyles: [null, null, null, null],
+          presets: [{
+            id: 'e2e-deepseek', name: 'E2E DeepSeek', nickname: '测试大肥鱼',
+            baseUrl: 'https://llm.test/v1', apiKey: 'test-only-key', model: 'fake-deepseek',
+            style: '稳健', timeoutMs: 8000, ttsVoiceKey: 'deepseek',
+          }],
+        }))
+      })
+    }
+    const pages = USE_LOCAL_MOCK
+      ? await Promise.all([contexts[0].newPage(), contexts[0].newPage()])
+      : await Promise.all(contexts.map((context) => context.newPage()))
+    if (USE_HOST_LLM) {
+      await pages[0].route('https://llm.test/**', async (route) => {
+        fakeLlmStats.decisions += 1
+        const body = route.request().postDataJSON() as { messages?: Array<{ content?: string }> }
+        const prompt = body.messages?.map((message) => message.content ?? '').join('\n') ?? ''
+        const candidateIds = [...prompt.matchAll(/"id"\s*:\s*"([^"]+)"/g)].map((match) => match[1])
+        const choice = candidateIds[0] ?? 'D0'
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ choice, message: '这手按计划来。' }) }, finish_reason: 'stop' }],
+          }),
+        })
+      })
+      for (const page of pages) {
+        await page.route('**/api/local-tts/synthesize', async (route) => {
+          fakeLlmStats.tts += 1
+          const key = 'a'.repeat(64)
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ cacheKey: key, audioUrl: `/api/local-tts/audio/${key}.mp3`, cached: true }),
+          })
+        })
+        await page.route('**/api/local-tts/audio/*.mp3', async (route) => {
+          await route.fulfill({ status: 206, contentType: 'audio/mpeg', body: 'ID3' })
+        })
+      }
+    }
     const pageErrors = pages.map(() => [] as string[])
     const consoleLogs = pages.map(() => [] as string[])
     pages.forEach((page, index) => {
@@ -327,13 +407,16 @@ test('2 真人 + 2 AI 连续打完两个莲花麻将东风场', async ({ browser
       })
     })
     try {
-      rooms.push(await runEastMatch({ host: pages[0], client: pages[1], matchIndex, consoleLogs, testInfo }))
+      rooms.push(await runEastMatch({ host: pages[0], client: pages[1], matchIndex, consoleLogs, testInfo, fakeLlmStats }))
       expect(pageErrors[0], `第 ${matchIndex} 场房主出现未捕获异常`).toEqual([])
       expect(pageErrors[1], `第 ${matchIndex} 场客人出现未捕获异常`).toEqual([])
+    } catch (error) {
+      console.log(`[2H2AI][失败诊断] pageErrors=${JSON.stringify(pageErrors)} logs=${JSON.stringify(consoleLogs.map((logs) => logs.slice(-80)))}`)
+      throw error
     } finally {
       await Promise.all(contexts.map((context) => context.close()))
     }
   }
-  expect(new Set(rooms).size, '两个东风场应使用两个独立房间').toBe(2)
-  console.log(`[2H2AI] 两个东风场完整通过：${rooms.join(' → ')}`)
+  expect(new Set(rooms).size, '每个东风场应使用独立房间').toBe(MATCH_COUNT)
+  console.log(`[2H2AI] ${MATCH_COUNT} 个东风场完整通过：${rooms.join(' → ')}`)
 })
