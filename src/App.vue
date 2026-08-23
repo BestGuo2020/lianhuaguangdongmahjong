@@ -26,6 +26,7 @@ import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/thr
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
+const robotIconUrl = `${import.meta.env.BASE_URL}img/robot.svg`
 
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
@@ -455,7 +456,7 @@ function changeTableTheme(theme: TableThemeName) {
       title="AI 大模型设置"
       data-testid="llm-fab"
       @click="llmOpen = true"
-    >🤖</button>
+    ><img :src="robotIconUrl" alt="" aria-hidden="true"></button>
     <LlmSettingsPanel
       :open="llmOpen"
       :messages="llmMessages"
