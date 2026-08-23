@@ -5,6 +5,7 @@ import type { PlayerSeed } from '../../shared/runtime/localOpening'
 import type { LotusController } from '../../variants/lotus/lotusControllers'
 import { LotusAiController } from '../../variants/lotus/lotusControllers'
 import {
+  LLM_DECISION_TIMEOUT_MS,
   presetForSeat,
   readLlmSettings,
   type LlmProviderPreset,
@@ -131,7 +132,7 @@ function providerConfig(preset: LlmProviderPreset, style: LlmStyle) {
     apiKey: preset.apiKey,
     model: preset.model,
     style,
-    timeoutMs: preset.timeoutMs,
+    timeoutMs: LLM_DECISION_TIMEOUT_MS,
   }
 }
 
