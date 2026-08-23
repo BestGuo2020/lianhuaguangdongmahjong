@@ -383,12 +383,13 @@ function onAvatarError(entry: GamePlayer) {
         </div>
       </div>
     </Transition>
+    <!-- players 已按本家视角排序，但 player.seat 保留服务器绝对座位；气泡必须按本地索引读取。 -->
     <PlayerSeat
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
-      :bubble="llmBubbles?.[player.seat]"
+      :bubble="llmBubbles?.[index + 1]"
     />
 
     <Transition name="table-action" mode="out-in">
