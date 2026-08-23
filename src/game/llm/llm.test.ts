@@ -5,7 +5,7 @@ import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, te
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
-import { normalizeBaseUrl, readLlmSettings, saveLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
+import { normalizeBaseUrl, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
 import { avatarFor, avatarFolderFor, avatarFolderOf, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import type { DecisionInput } from './candidates'
@@ -325,6 +325,48 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(styleForSeat(settings, 1)).toBe('高冷')
     // 座位 2 用预置 A（默认 风格 稳健），无覆盖 → 稳健
     expect(styleForSeat(settings, 2)).toBe('稳健')
+  })
+
+  it('JSON 导出不含 Key；导入保留同 id 的本机 Key 与座位分配', () => {
+    const settings: LlmSettings = {
+      enabled: true,
+      presets: [presetA, presetB],
+      activeId: 'pa',
+      seatIds: [null, 'pb', 'pa', null],
+      seatStyles: [null, '高冷', null, '话痨'],
+    }
+    const json = serializeLlmSettings(settings)
+    expect(json).not.toContain('sk-a')
+    expect(json).not.toContain('sk-b')
+    expect(json).not.toContain('apiKey')
+
+    const imported = parseLlmSettingsJson(json, settings)
+    expect(imported.enabled).toBe(true)
+    expect(imported.presets.map((preset) => preset.apiKey)).toEqual(['sk-a', 'sk-b'])
+    expect(imported.presets.every((preset) => preset.timeoutMs === 20_000)).toBe(true)
+    expect(imported.activeId).toBe('pa')
+    expect(imported.seatIds).toEqual([null, 'pb', 'pa', null])
+    expect(imported.seatStyles).toEqual([null, '高冷', null, '话痨'])
+
+    const fresh = parseLlmSettingsJson(json)
+    expect(fresh.presets.every((preset) => preset.apiKey === '')).toBe(true)
+  })
+
+  it('JSON 导入拒绝坏格式、未知版本和重复 id，并忽略文件内 Key', () => {
+    expect(() => parseLlmSettingsJson('{broken')).toThrow('JSON 格式无效')
+    expect(() => parseLlmSettingsJson(JSON.stringify({ kind: 'other', version: 1, settings: {} })))
+      .toThrow('不是受支持的莲花广麻大模型配置文件')
+
+    const parsed = JSON.parse(serializeLlmSettings({
+      enabled: true,
+      presets: [presetA], activeId: 'pa',
+      seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    })) as { settings: { presets: Array<Record<string, unknown>> } }
+    parsed.settings.presets[0].apiKey = 'injected-key'
+    parsed.settings.presets.push({ ...parsed.settings.presets[0] })
+    expect(() => parseLlmSettingsJson(JSON.stringify(parsed))).toThrow('预置 id 重复')
+    parsed.settings.presets.pop()
+    expect(parseLlmSettingsJson(JSON.stringify(parsed)).presets[0].apiKey).toBe('')
   })
 })
 

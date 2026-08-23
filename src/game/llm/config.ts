@@ -45,6 +45,8 @@ export interface LlmSettings {
 
 export const CONFIG_VERSION = 2
 export const LLM_DECISION_TIMEOUT_MS = 20_000
+export const LLM_SETTINGS_FILE_KIND = 'lianhua-guangma-llm-settings'
+export const LLM_SETTINGS_FILE_VERSION = 1
 const STORAGE_KEY = 'llm.providers'
 const LEGACY_KEY = 'llm.provider'
 const LEGACY_ENABLED_KEY = 'llm.enabled'
@@ -177,6 +179,82 @@ export function saveLlmSettings(
   storage: Pick<Storage, 'setItem'> = localStorage,
 ): void {
   storage.setItem(STORAGE_KEY, JSON.stringify({ configVersion: CONFIG_VERSION, ...settings }))
+}
+
+/**
+ * 导出可迁移的模型配置。API Key 与运行时 timeout 不写入文件：前者避免泄漏，
+ * 后者始终使用当前产品级预算，避免旧备份恢复过时值。
+ */
+export function serializeLlmSettings(settings: LlmSettings): string {
+  const presets = settings.presets.map(({ apiKey: _apiKey, timeoutMs: _timeoutMs, ...preset }) => preset)
+  return JSON.stringify({
+    kind: LLM_SETTINGS_FILE_KIND,
+    version: LLM_SETTINGS_FILE_VERSION,
+    settings: {
+      enabled: settings.enabled,
+      presets,
+      activeId: settings.activeId,
+      seatIds: settings.seatIds,
+      seatStyles: settings.seatStyles,
+    },
+  }, null, 2)
+}
+
+/**
+ * 解析导入文件。文件中的 apiKey 永远忽略；同 id 的本机预置保留原 Key，
+ * 新预置留空，用户检查并点击“保存”后才写入 localStorage。
+ */
+export function parseLlmSettingsJson(text: string, current: LlmSettings = emptyLlmSettings()): LlmSettings {
+  let root: unknown
+  try {
+    root = JSON.parse(text)
+  } catch {
+    throw new Error('JSON 格式无效')
+  }
+  if (!isRecord(root)
+    || root.kind !== LLM_SETTINGS_FILE_KIND
+    || root.version !== LLM_SETTINGS_FILE_VERSION
+    || !isRecord(root.settings)) {
+    throw new Error('不是受支持的莲花广麻大模型配置文件')
+  }
+  const rawSettings = root.settings
+  if (!Array.isArray(rawSettings.presets)) throw new Error('presets 必须是数组')
+  const currentKeys = new Map(current.presets.map((preset) => [preset.id, preset.apiKey]))
+  const presets = rawSettings.presets.map((item, index) => {
+    if (!isRecord(item)) throw new Error(`第 ${index + 1} 个预置格式无效`)
+    const id = typeof item.id === 'string' ? item.id : ''
+    const preset = normalizePreset({ ...item, apiKey: currentKeys.get(id) ?? '' })
+    if (!preset) throw new Error(`第 ${index + 1} 个预置缺少 Base URL 或模型`)
+    return preset
+  })
+  const ids = new Set<string>()
+  for (const preset of presets) {
+    if (ids.has(preset.id)) throw new Error(`预置 id 重复：${preset.id}`)
+    ids.add(preset.id)
+  }
+  const activeId = typeof rawSettings.activeId === 'string' && ids.has(rawSettings.activeId)
+    ? rawSettings.activeId
+    : presets[0]?.id ?? null
+  const rawSeats = Array.isArray(rawSettings.seatIds) ? rawSettings.seatIds : []
+  const seatIds: Array<string | null> = [null, 1, 2, 3].map((_, index) => {
+    if (index === 0) return null
+    const id = rawSeats[index]
+    return typeof id === 'string' && ids.has(id) ? id : null
+  })
+  const rawStyles = Array.isArray(rawSettings.seatStyles) ? rawSettings.seatStyles : []
+  const seatStyles: Array<LlmStyle | null> = [
+    null,
+    validateStyleOrNull(rawStyles[1]),
+    validateStyleOrNull(rawStyles[2]),
+    validateStyleOrNull(rawStyles[3]),
+  ]
+  return {
+    enabled: rawSettings.enabled === true,
+    presets,
+    activeId,
+    seatIds,
+    seatStyles,
+  }
 }
 
 /** 按座位取实际使用的预置（座位未指定 → 默认预置）；返回 null 表示该座位不可用 LLM。 */
