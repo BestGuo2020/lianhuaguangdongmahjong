@@ -26,9 +26,9 @@ describe('LocalTtsClient', () => {
     expect(resolveLocalTtsVoiceKey(preset({ ttsVoiceKey: 'default' }))).toBe('default')
   })
 
-  it('本机两分支统一直连 8000 网关，lumigrav 使用生产回退', () => {
+  it('本机两分支统一走同源代理，lumigrav 使用生产回退', () => {
     vi.stubGlobal('location', { hostname: '127.0.0.1' })
-    expect(resolveLocalTtsBaseUrl()).toBe('http://127.0.0.1:8000')
+    expect(resolveLocalTtsBaseUrl()).toBe('')
     vi.stubGlobal('location', { hostname: 'room.lumigrav.space' })
     expect(resolveLocalTtsBaseUrl()).toBe('https://lianhuaguangdongmahjong.guoguo-labs.online')
   })
@@ -61,11 +61,28 @@ describe('LocalTtsClient', () => {
     ])
   })
 
-  it('无播放器或网关响应非法时静默失败，不阻塞游戏', async () => {
+  it('以 Window/globalThis 作为 this 调用原生风格 fetch', async () => {
+    const key = 'b'.repeat(64)
+    const fetchMock = vi.fn(function (this: unknown) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(new Response(JSON.stringify({
+        cacheKey: key,
+        audioUrl: `/api/local-tts/audio/${key}.mp3`,
+        cached: false,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+    registerLlmAudioPlayer(() => {})
+    const client = new LocalTtsClient('', fetchMock as typeof fetch)
+
+    await expect(client.speak(1, '绑定测试', 'deepseek', '稳健')).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('即使播放器未注册也会请求网关；响应非法时静默失败', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ audioUrl: 'https://evil/a.mp3' })))
     const client = new LocalTtsClient('', fetchMock as typeof fetch)
     expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
 
     registerLlmAudioPlayer(() => {})
     expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
