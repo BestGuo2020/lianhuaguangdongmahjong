@@ -32,6 +32,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const robotIconUrl = `${import.meta.env.BASE_URL}img/robot.svg`
 const emit = defineEmits<{
   copy: []
   toggleReady: []
@@ -81,7 +82,9 @@ function startPayload() {
       房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
     </div>
     <div class="room-game-config"><b>{{ matchName }}</b><span>·</span><b>{{ ruleName }}</b></div>
-    <p v-if="effectiveLlmEnabled" class="room-llm-note on">🤖 空位由大模型代打</p>
+    <p v-if="effectiveLlmEnabled" class="room-llm-note on">
+      <img :src="robotIconUrl" alt="" aria-hidden="true">空位由大模型代打
+    </p>
     <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
@@ -101,25 +104,30 @@ function startPayload() {
           <em v-if="seat.ready">已准备</em>
           <em v-else class="unready">未准备</em>
         </template>
-        <select
+        <span
           v-else-if="isCreator && effectiveLlmEnabled && llmProviders.length"
-          class="room-seat-provider"
-          :value="picks[index] ?? ''"
-          :aria-label="`空位 ${index + 1} 大模型提供商`"
-          data-testid="room-llm-pick"
-          @change="picks[index] = ($event.target as HTMLSelectElement).value"
+          class="room-seat-provider-wrap"
         >
-          <option value="">🤖 自动选择</option>
-          <template v-for="provider in llmProviders" :key="provider.id">
-            <option
-              v-for="style in stylesFor(provider)"
-              :key="`${provider.id}-${style}`"
-              :value="pickValue(provider.id, style)"
-            >
-              {{ provider.nickname }}（{{ style }}）· {{ provider.model }}
-            </option>
-          </template>
-        </select>
+          <img :src="robotIconUrl" alt="" aria-hidden="true">
+          <select
+            class="room-seat-provider"
+            :value="picks[index] ?? ''"
+            :aria-label="`空位 ${index + 1} 大模型提供商`"
+            data-testid="room-llm-pick"
+            @change="picks[index] = ($event.target as HTMLSelectElement).value"
+          >
+            <option value="">自动选择</option>
+            <template v-for="provider in llmProviders" :key="provider.id">
+              <option
+                v-for="style in stylesFor(provider)"
+                :key="`${provider.id}-${style}`"
+                :value="pickValue(provider.id, style)"
+              >
+                {{ provider.nickname }}（{{ style }}）· {{ provider.model }}
+              </option>
+            </template>
+          </select>
+        </span>
         <b v-else-if="effectiveLlmEnabled">大模型补位</b>
         <b v-else>等待加入…</b>
       </div>
@@ -142,10 +150,15 @@ function startPayload() {
 
 <style scoped>
 .room-llm-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.5;
 }
+.room-llm-note img { width: 18px; height: 18px; }
 .room-llm-note.on { color: #4caf50; }
 .room-llm-note.off { color: #e6a23c; }
 .room-seat.llm-planned {
@@ -172,6 +185,18 @@ function startPayload() {
   text-overflow: ellipsis;
   color-scheme: dark;
   cursor: pointer;
+}
+.room-seat-provider-wrap {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+.room-seat-provider-wrap > img {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
 }
 .room-seat-provider:focus-visible {
   border-radius: 4px;
