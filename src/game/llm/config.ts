@@ -45,6 +45,7 @@ export interface LlmSettings {
 
 export const CONFIG_VERSION = 2
 export const LLM_DECISION_TIMEOUT_MS = 20_000
+export const QWEN_DECISION_TIMEOUT_MS = 8_000
 export const LLM_SETTINGS_FILE_KIND = 'lianhua-guangma-llm-settings'
 export const LLM_SETTINGS_FILE_VERSION = 1
 const STORAGE_KEY = 'llm.providers'
@@ -62,7 +63,7 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
 export const PROVIDER_TEMPLATES: Array<{ name: string; baseUrl: string; model: string }> = [
   { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   { name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2-0711-preview' },
-  { name: '通义千问 (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  { name: '通义千问 (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
   { name: '豆包 (Volcano Ark)', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
   { name: 'MiniMax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
   { name: 'OpenAI (GPT)', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },

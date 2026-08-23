@@ -3,7 +3,7 @@
 // 仅「JSON 解析失败 / choice 不在白名单」允许一次语义重试；网络/超时/HTTP 直接抛错（不回退语义重试）。
 import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
-import { normalizeBaseUrl } from './config'
+import { normalizeBaseUrl, QWEN_DECISION_TIMEOUT_MS } from './config'
 import { withFeedbackRetry } from './prompt'
 
 export class LlmClientError extends Error {
@@ -108,6 +108,32 @@ export function isDeepSeekBaseUrl(baseUrl: string): boolean {
   return /^https:\/\/api\.deepseek\.com/i.test(baseUrl.trim())
 }
 
+/** 百炼 Qwen 3.5–3.8 默认开启混合思考；麻将候选选择使用非思考模式。 */
+export function isQwenThinkingModel(config: Pick<LlmProviderConfig, 'baseUrl' | 'model'>): boolean {
+  const officialEndpoint = /(?:dashscope\.aliyuncs\.com|\.maas\.aliyuncs\.com)(?:\/|$)/i.test(config.baseUrl.trim())
+  const thinkingModel = /^qwen3\.(?:5|6|7|8)(?:[.-]|$)/i.test(config.model.trim())
+  return officialEndpoint && thinkingModel
+}
+
+export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
+  return isQwenThinkingModel(config)
+    ? Math.min(config.timeoutMs, QWEN_DECISION_TIMEOUT_MS)
+    : config.timeoutMs
+}
+
+function providerExtraBody(
+  config: LlmProviderConfig,
+  structuredOutput: boolean,
+): Record<string, unknown> | undefined {
+  const body: Record<string, unknown> = {}
+  if (isDeepSeekBaseUrl(config.baseUrl)) body.thinking = { type: 'disabled' }
+  if (isQwenThinkingModel(config)) {
+    body.enable_thinking = false
+    if (structuredOutput) body.response_format = { type: 'json_object' }
+  }
+  return Object.keys(body).length ? body : undefined
+}
+
 /** Anthropic 官方端点：浏览器直连需携带 anthropic-dangerous-direct-browser-access 头。 */
 export function isAnthropicBaseUrl(baseUrl: string): boolean {
   return /^https:\/\/api\.anthropic\.com/i.test(baseUrl.trim())
@@ -177,13 +203,13 @@ async function callOnce(
  * 总预算 = config.timeoutMs（含重试，重试时剩余预算按已用时长折算）。
  */
 export async function requestLlmDecision(options: LlmDecisionOptions): Promise<LlmOutput> {
-  const budgetMs = options.config.timeoutMs
+  const budgetMs = effectiveDecisionTimeoutMs(options.config)
   const startedAt = Date.now()
   const attempt = async (messages: PromptPair, errorForRetry?: string): Promise<LlmOutput> => {
     const left = budgetMs - (Date.now() - startedAt)
     if (left <= 0) throw new LlmClientError('timeout', '总预算耗尽')
     const config = { ...options.config, timeoutMs: left }
-    const extraBody = isDeepSeekBaseUrl(config.baseUrl) ? { thinking: { type: 'disabled' } } : undefined
+    const extraBody = providerExtraBody(config, true)
     try {
       const response = await callOnce(
         config,
@@ -208,14 +234,15 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
  * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅）。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
+    const effectiveConfig = { ...config, timeoutMs: effectiveDecisionTimeoutMs(config) }
     await callOnce(
-      config,
+      effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
       {
         maxTokens: 8,
         strictLength: false,
-        extraBody: isDeepSeekBaseUrl(config.baseUrl) ? { thinking: { type: 'disabled' } } : undefined,
+        extraBody: providerExtraBody(effectiveConfig, false),
       },
     )
     return { ok: true, message: '连接成功' }

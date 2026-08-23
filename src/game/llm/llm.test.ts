@@ -1,7 +1,7 @@
 // LLM 层单元测试（无网络）：解析器 / 客户端重试语义 / 候选与特征 / 合法性复核 / prompt / 配置。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computed, isReactive } from 'vue'
-import { extractJsonObject, parseLlmOutput, cleanMessage, requestLlmDecision, testLlmConnection } from './client'
+import { cleanMessage, effectiveDecisionTimeoutMs, extractJsonObject, isQwenThinkingModel, parseLlmOutput, requestLlmDecision, testLlmConnection } from './client'
 import { buildDecisionRequest } from './candidates'
 import { isActionLegal } from './llmController'
 import { buildPrompt } from './prompt'
@@ -438,7 +438,7 @@ describe('testLlmConnection', () => {
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
   })
 
-  it('DeepSeek 端点自动关闭思考模式（thinking.disabled）；其他厂商不追加该字段', async () => {
+  it('DeepSeek 与千问 3.7 自动关闭思考；千问同时请求 JSON Object', async () => {
     let capturedBody: Record<string, unknown> = {}
     const spy = vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -451,6 +451,26 @@ describe('testLlmConnection', () => {
     await requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
     expect((capturedBody.thinking as { type: string }).type).toBe('disabled')
 
+    const qwenConfig = {
+      ...config,
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.7-plus',
+      timeoutMs: 20_000,
+    }
+    let qwenBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      qwenBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }),
+      }
+    }) as never)
+    await requestLlmDecision({ config: qwenConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect(isQwenThinkingModel(qwenConfig)).toBe(true)
+    expect(effectiveDecisionTimeoutMs(qwenConfig)).toBe(8_000)
+    expect(qwenBody.enable_thinking).toBe(false)
+    expect(qwenBody.response_format).toEqual({ type: 'json_object' })
+
     const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1' }
     let otherBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
@@ -462,6 +482,7 @@ describe('testLlmConnection', () => {
     }) as never)
     await requestLlmDecision({ config: otherConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
     expect(otherBody.thinking).toBeUndefined()
+    expect(otherBody.enable_thinking).toBeUndefined()
   })
 
   it('Anthropic 端点自动携带浏览器直连头；其他厂商不携带', async () => {

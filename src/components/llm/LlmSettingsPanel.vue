@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
+  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, QWEN_DECISION_TIMEOUT_MS, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
-import { testLlmConnection } from '../../game/llm/client'
+import { isQwenThinkingModel, testLlmConnection } from '../../game/llm/client'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
 const props = defineProps<{
@@ -249,6 +249,9 @@ function presetName(id: string | null): string {
           <span>模型</span>
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
+        <p v-if="isQwenThinkingModel(selected)" class="llm-provider-hint" data-testid="llm-qwen-fast-hint">
+          千问 3.5–3.8 将自动关闭深度思考，并使用 {{ QWEN_DECISION_TIMEOUT_MS / 1000 }} 秒决策预算。
+        </p>
         <label class="llm-row">
           <span>风格</span>
           <select v-model="selected.style" data-testid="llm-style">
@@ -318,6 +321,7 @@ function presetName(id: string | null): string {
 .llm-hint b { color: #e5d5ad; }
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
 .llm-row > span { color: #a6b5ad; }
+.llm-provider-hint { margin: -2px 0 9px 94px; color: #d8bd75; font-size: 11px; line-height: 1.5; }
 .llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;
