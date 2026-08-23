@@ -6,7 +6,7 @@ import {
 } from '../protocol/mapper'
 
 type TransientState = Pick<RemoteGameState,
-  'announcement' | 'tableActionEvent' | 'scoreFlowEvent'
+  'announcement' | 'tableActionEvent' | 'scoreFlowEvent' | 'players'
 >
 type TableActionMessage = Extract<ServerMessage, { kind: 'table_action' }>
 type ScoreFlowMessage = Extract<ServerMessage, { kind: 'score_flow' }>
@@ -62,6 +62,7 @@ export function createTransientEventPresenter({
 
     // 胡牌声音由结算时间线统一播放，避免 table_action 与 settled 快照双响。
     if (event.type === 'self-draw' || event.type === 'robbed-kong-win') return
+    if (state.players[event.actorIndex]?.isLlm) return
     const sound = ACTION_SOUNDS[event.type]
     if (sound) playSound(sound)
   }

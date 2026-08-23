@@ -35,6 +35,18 @@ import { createRemoteActionController, type RemotePlayerActionMessage } from './
 import { createTransientEventPresenter } from './presentation/transientEventPresenter'
 import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle'
 import type { LobbySeat } from './vibe/vibeLobby'
+import {
+  createVibeCoreLlmRuntime,
+  createVibeLotusLlmRuntime,
+  resolveHostLlmSelections,
+  vibeLlmWinLine,
+  type HostLlmSeatSelection,
+  type PublicAiSeat,
+  type VibeHostLlmRuntime,
+} from './vibe/vibeLlm'
+import { getLocalTtsClient } from '../llm/localTtsClient'
+import type { PlayerController } from '../core/controllers/playerController'
+import type { LotusController } from '../variants/lotus/lotusControllers'
 import { useGame } from '../core/local/useGame'
 import { useLotusGame } from '../variants/lotus/lotusGame'
 import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
@@ -230,9 +242,15 @@ interface UseVibeRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   waitForTableReady?: () => Promise<void>
+  onLlmMessage?: (localSeat: number, text: string) => void
 }
 
-export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = async () => {}, waitForTableReady }: UseVibeRemoteGameOptions = {}) {
+export function useVibeRemoteGame({
+  playSound = () => {},
+  playSoundAndWait = async () => {},
+  waitForTableReady,
+  onLlmMessage = () => {},
+}: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
   const sessionNamespace = import.meta.env.DEV ? `mock:${getMockPeerId()}` : undefined
@@ -260,6 +278,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   // SDK 大厅状态：isHost + LobbySeat 座位表（取代 isCreator/creatorSeat/rejoinCode）。
   const isHost = ref(false)
   const lobbySeats = ref<LobbySeat[]>([])
+  const plannedAiSeats = ref<PublicAiSeat[]>([])
+  let hostLlmSelections: HostLlmSeatSelection[] = []
+  let activeHostLlmRuntime: VibeHostLlmRuntime<PlayerController> | VibeHostLlmRuntime<LotusController> | null = null
+  let llmMessageSequence = 0
+  let lastPresentedLlmSequence = 0
+  let lastPresentedLlmEpoch = ''
 
   // 房主对局引擎（开局后懒创建）：房主 UI 直接用它；客户端 UI 用快照状态。
   const hostGame = shallowRef<{
@@ -293,7 +317,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const roomSession = createVibeRoomSession({
     state: {
       roomId, mySeat, nickname, avatar, playerId,
-      roomSeats: lobbySeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
+      roomSeats: lobbySeats, aiSeats: plannedAiSeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
       phase,
     },
     loadSavedRoom: () => sessionStore.loadSession(),
@@ -379,6 +403,12 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         })
         return
       }
+      llmMessageSequence = 0
+      lastPresentedLlmSequence = 0
+      const occupiedSeats = new Set(seatByPeer.values())
+      const resolvedLlm = resolveHostLlmSelections(hostLlmSelections, occupiedSeats)
+      hostLlmSelections = resolvedLlm.privateSeats
+      plannedAiSeats.value = resolvedLlm.publicSeats
       const seatNames = new Map<number, string>()
       const seatAvatars = new Map<number, string>()
       // round_shuffle_start 是瞬时消息。对局中刷新/Relay 切换可能恰好发生在它发送
@@ -405,8 +435,41 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       }
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
       const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
-      const onLocalEvent = (message: ServerMessage) => handleMessage(message)
+      const emitHostLlmMessage = (seat: number, text: string, profile: PublicAiSeat) => {
+        const runner = hostGame.value
+        if (!runner || !text.trim()) return
+        llmMessageSequence += 1
+        const message: ServerMessage = {
+          kind: 'llm_message',
+          roomId: room.roomId,
+          authorityEpoch: runner.authorityEpoch,
+          round: runner.game.round.value,
+          sequence: llmMessageSequence,
+          id: llmMessageSequence,
+          seat,
+          text: text.trim().slice(0, 60),
+          style: profile.style,
+          voiceKey: profile.voiceKey,
+        }
+        room.send(message)
+        handleMessage(message)
+      }
+      const announcedWinEvents = new Set<number>()
+      const onLocalEvent = (message: ServerMessage) => {
+        if (message.kind === 'table_action'
+          && !announcedWinEvents.has(message.event.id)
+          && (message.event.type === 'self-draw' || message.event.type === 'discard-win' || message.event.type === 'robbed-kong-win')) {
+          const profile = activeHostLlmRuntime?.profiles.get(message.event.actorIndex)
+          if (profile) {
+            announcedWinEvents.add(message.event.id)
+            emitHostLlmMessage(message.event.actorIndex, vibeLlmWinLine(message.event.type, profile.style), profile)
+          }
+        }
+        handleMessage(message)
+      }
       if (rulesetId.value === 'lotus-legacy') {
+        const llmRuntime = createVibeLotusLlmRuntime(resolvedLlm.privateSeats, { onMessage: emitHostLlmMessage })
+        activeHostLlmRuntime = llmRuntime
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
@@ -417,6 +480,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           createController: (r, peerId, onPending, onAI, requestContext) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI, requestContext),
           createGame: (controllers, waitForOpeningReady) => useLotusGame({
             remoteControllers: controllers,
+            aiControllers: llmRuntime.controllers,
+            aiPlayerSeeds: llmRuntime.seeds,
             countdownEnabled: false,
             headless: true,
             waitForOpeningReady,
@@ -429,6 +494,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
           openingBarrier: true,
         })
       } else {
+        const llmRuntime = createVibeCoreLlmRuntime(resolvedLlm.privateSeats, { onMessage: emitHostLlmMessage })
+        activeHostLlmRuntime = llmRuntime
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
@@ -439,6 +506,8 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
            createController: (r, peerId, onPending, onAI, requestContext) => new RemotePlayerController(r, peerId, onPending, undefined, onAI, requestContext),
           createGame: (controllers, waitForOpeningReady) => useGame({
             remoteControllers: controllers,
+            aiControllers: llmRuntime.controllers,
+            aiPlayerSeeds: llmRuntime.seeds,
             countdownEnabled: false,
             headless: true,
             waitForOpeningReady,
@@ -725,12 +794,27 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   const mySeatLocal = computed(() => (mySeat.value >= 0 ? mySeat.value : -1))
   const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
 
+  function presentLlmMessage(message: Extract<ServerMessage, { kind: 'llm_message' }>) {
+    if (message.roomId !== roomId.value) return
+    if (lastPresentedLlmEpoch !== message.authorityEpoch) {
+      lastPresentedLlmEpoch = message.authorityEpoch
+      lastPresentedLlmSequence = 0
+    }
+    if (message.sequence <= lastPresentedLlmSequence) return
+    lastPresentedLlmSequence = message.sequence
+    const localSeat = toLocal(message.seat)
+    onLlmMessage(localSeat, message.text)
+    // 各端只调用已部署的 TTS 网关；LLM Key 始终只在房主浏览器。
+    void getLocalTtsClient().speak(localSeat, message.text, message.voiceKey, message.style)
+  }
+
   const settlementTimeline = createSettlementTimeline({
     state: { phase, result, winEffect, winPresentation, revealHands, winningPlayerIndex },
     mapResult: (value) => mapResult(value),
     mapPresentation: (value) => mapWinPresentation(value),
     toLocalSeat: toLocal,
     playSound,
+    isLlmSeat: (localSeat) => state.players[localSeat]?.isLlm === true,
     onResultMissingAfterReveal: (settledRound, settledHonba) => {
       console.warn('[client] 亮牌动画结束仍缺少结算结果，单次请求房主补发结算事实')
       armSettlementRecovery(settledRound, settledHonba, 0, true)
@@ -1412,6 +1496,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     table_action: transientEventPresenter.handleTableAction,
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
+    llm_message: presentLlmMessage,
     // 房主当前只通过 state_snapshot 广播结算结果；hand_result 是旧协议的瞬时
     // 事件，不能单独修改 phase/result。否则旧 Room 的迟到事件会让客户端提前
     // 进入结算页，随后与房主的下一局快照分叉。
@@ -1664,6 +1749,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
       || decoded.kind === 'table_action'
       || decoded.kind === 'score_flow'
       || decoded.kind === 'announcement'
+      || decoded.kind === 'llm_message'
       || decoded.kind === 'hand_result'
       || decoded.kind === 'match_finished'
       || decoded.kind === 'rejoin_ok'
@@ -1690,7 +1776,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
         return
       }
     }
-    if (!isHost.value && (decoded.kind === 'win_effect' || decoded.kind === 'round_settled' || decoded.kind === 'match_finished' || decoded.kind === 'rejoin_ok')
+    if (!isHost.value && (decoded.kind === 'win_effect' || decoded.kind === 'round_settled' || decoded.kind === 'match_finished' || decoded.kind === 'rejoin_ok' || decoded.kind === 'llm_message')
       && room && decoded.roomId !== room.roomId) {
       console.warn('[client] 丢弃其他房间的房主消息', {
         fromPeerId, kind: decoded.kind, roomId: decoded.roomId, currentRoomId: room.roomId,
@@ -1806,6 +1892,9 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   async function leaveRoom() {
     hostGame.value?.stop()
     hostGame.value = null
+    activeHostLlmRuntime = null
+    hostLlmSelections = []
+    plannedAiSeats.value = []
     closeConnection()
     resetAll()
     // 未终局的对局不计入战绩：丢弃本场累计（终局前正常退出/房主解散都走这里）。
@@ -1835,8 +1924,17 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
     sessionStore.clearSession()
     sessionVersion.value += 1
   }
+  function configureAiSeats(selections: HostLlmSeatSelection[]) {
+    if (!isHost.value || state.phase.value !== 'lobby') return
+    const occupied = new Set(lobbySeats.value.map((seat) => seat.seat))
+    const resolved = resolveHostLlmSelections(selections, occupied)
+    hostLlmSelections = resolved.privateSeats
+    plannedAiSeats.value = resolved.publicSeats
+    roomSession.setAiSeats(resolved.publicSeats)
+  }
   const remoteActions = {
     ...roomSession,
+    configureAiSeats,
     async leaveRoom() {
       await roomSession.leaveRoom()
       clearSavedSession()
@@ -1858,7 +1956,7 @@ export function useVibeRemoteGame({ playSound = () => {}, playSoundAndWait = asy
   return defineGamePort({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
-    isHost, hostGame, roomSeats: lobbySeats, roomTimeLimit, waitingNextRound, rulesetId,
+    isHost, hostGame, roomSeats: lobbySeats, aiSeats: plannedAiSeats, roomTimeLimit, waitingNextRound, rulesetId,
     savedSessionExists,
     scheduleRejoinRetry,
     resetRejoinRetry,

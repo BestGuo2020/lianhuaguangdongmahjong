@@ -122,6 +122,8 @@ export function createSnapshotReconciler({
     lastDiscardIdApplied = discard.id
     if (opening.isRunning()) return
     playSound('dapai.mp3', 0.8)
+    // 大模型保留实体落牌声，但不播放牌名人声；其表达统一由吐槽 TTS 承担。
+    if (snapshot.players.find((player) => player.seat === discard.from)?.isLlm) return
     const audio = tileAudioFile(discard.tile)
     if (audio) later(() => playSound(audio), 80)
   }

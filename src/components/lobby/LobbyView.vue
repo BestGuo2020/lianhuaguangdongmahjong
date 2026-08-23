@@ -10,6 +10,7 @@ import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
 import { loginRequired } from '../../game/online/vibe/vibeClient'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
+import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
 import LoginButton from '../account/LoginButton.vue'
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
   sessionError: string
   roomTimeLimit: number | null
   roomSeats: LobbySeat[]
+  aiSeats: PublicAiSeat[]
+  llmOptions: HostLlmOption[]
   mySeat: number
   isHost: boolean
   allOccupiedReady: boolean
@@ -48,6 +51,7 @@ const emit = defineEmits<{
   copyRoom: []
   toggleReady: []
   startRemote: []
+  configureAiSeats: [selections: HostLlmSeatSelection[]]
   leaveRoom: []
   closeRoom: []
   openStats: []
@@ -166,6 +170,8 @@ function closeDialog() {
           :room-id="roomId"
           :room-time-limit="roomTimeLimit"
           :room-seats="roomSeats"
+          :ai-seats="aiSeats"
+          :llm-options="llmOptions"
           :my-seat="mySeat"
           :is-host="isHost"
           :session-status="sessionStatus"
@@ -179,6 +185,7 @@ function closeDialog() {
           @copy="$emit('copyRoom')"
           @toggle-ready="$emit('toggleReady')"
           @start="$emit('startRemote')"
+          @configure-ai-seats="$emit('configureAiSeats', $event)"
           @leave="$emit('leaveRoom')"
           @close="$emit('closeRoom')"
         />

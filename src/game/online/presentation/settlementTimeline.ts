@@ -35,6 +35,7 @@ export interface SettlementTimelineOptions {
   mapPresentation: (presentation: WinPresentation | null) => WinPresentation | null
   toLocalSeat: (seat: number) => number
   playSound: (name: string, volume?: number) => unknown
+  isLlmSeat?: (localSeat: number) => boolean
   reducedMotion?: () => boolean
   onResultMissingAfterReveal?: (round: number, honba: number) => void
 }
@@ -45,6 +46,7 @@ export function createSettlementTimeline({
   mapPresentation,
   toLocalSeat,
   playSound,
+  isLlmSeat = () => false,
   reducedMotion = prefersReducedMotion,
   onResultMissingAfterReveal,
 }: SettlementTimelineOptions) {
@@ -129,7 +131,9 @@ export function createSettlementTimeline({
       reducedMotion: reduceMotion,
       id: Date.now(),
     }
-    playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+    if (!isLlmSeat(state.winningPlayerIndex.value)) {
+      playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+    }
     if (!reduceMotion) {
       later(() => {
         if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)

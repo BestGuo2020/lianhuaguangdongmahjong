@@ -16,6 +16,8 @@ const TABLE_ACTION_TYPES = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
   'wind-kong', 'self-draw', 'discard-win', 'robbed-kong-win',
 ])
+const LLM_STYLES = new Set(['激进', '稳健', '话痨', '高冷'])
+const LLM_VOICE_KEYS = new Set(['default', 'deepseek', 'relay_gpt'])
 const SEAT_MIN = 0
 const SEAT_MAX = 3
 
@@ -101,6 +103,7 @@ function isMeld(value: unknown): value is ServerMeldDto {
 function isPlayer(value: unknown): value is ServerPlayerDto {
   if (!isObject(value)) return false
   return isString(value.name) && isString(value.avatar)
+    && isOptional(value.isLlm, isBoolean)
     && isNumber(value.score) && isSeat(value.seat)
     // 服务端会用 null 遮蔽其他玩家的暗牌；mapper 在进入核心状态时继续按牌背处理。
     && Array.isArray(value.hand) && value.hand.every((tile) => tile === null || isTile(tile))
@@ -287,6 +290,13 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
       case 'announcement':
         return isString(raw.text) && isString(raw.tone) && isOptional(raw.id, isPositiveInteger)
           && isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
+      case 'llm_message':
+        return isString(raw.roomId) && raw.roomId.length > 0
+          && isString(raw.authorityEpoch) && raw.authorityEpoch.length > 0
+          && isPositiveInteger(raw.round) && isPositiveInteger(raw.sequence) && isPositiveInteger(raw.id)
+          && isSeat(raw.seat) && isString(raw.text) && raw.text.length > 0 && raw.text.length <= 60
+          && isString(raw.style) && LLM_STYLES.has(raw.style)
+          && isString(raw.voiceKey) && LLM_VOICE_KEYS.has(raw.voiceKey)
       case 'hand_result':
         return isString(raw.authorityEpoch) && isPositiveInteger(raw.round)
           && isRoundResult(raw.result)

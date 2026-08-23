@@ -30,7 +30,7 @@ interface UseGameOptions {
   /** P2P 房主权威：非本家座位的远端控制器，优先于单机 AI 控制器。 */
   remoteControllers?: Array<PlayerController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
-  aiPlayerSeeds?: Array<PlayerSeed>
+  aiPlayerSeeds?: Array<PlayerSeed | undefined>
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */

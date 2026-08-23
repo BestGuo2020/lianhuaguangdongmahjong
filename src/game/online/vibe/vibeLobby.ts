@@ -4,8 +4,9 @@
 // 每个 handler 都会收到每条消息 → 各 handler 必须按自己的消息类型过滤。故本模块的
 // 消息统一用 `type: 'lobby_*'` 前缀，与游戏消息（`kind: 'state_snapshot'` 等）隔离。
 //
-// 房主（host）维护座位表并广播 roster；客户端发 hello/ready，收 roster/start/closed。
+// 房主（host）维护座位表与空位大模型公开身份并广播 roster；客户端发 hello/ready，收 roster/start/closed。
 // remoteRoomLifecycle 将改用本协议，替换 REST 的 room/seat/ready/start。
+import type { PublicAiSeat } from './vibeLlm'
 
 export interface LobbySeat {
   seat: number
@@ -18,6 +19,14 @@ export interface LobbySeat {
 export interface LobbyParticipant {
   seat: number
   peerId: string
+}
+
+export interface LobbyStartDetails {
+  shuffleId: string
+  seatCount: number
+  rosterRevision: number
+  participants: LobbyParticipant[]
+  aiSeats: PublicAiSeat[]
 }
 
 interface HostedSeat extends LobbySeat {
@@ -35,14 +44,14 @@ export type ClientLobbyMessage =
 
 // host → client
 export type HostLobbyMessage =
-  | { type: 'lobby_roster'; hostSeat: number; revision: number; seats: LobbySeat[] }
+  | { type: 'lobby_roster'; hostSeat: number; revision: number; seats: LobbySeat[]; aiSeats?: PublicAiSeat[] }
   | { type: 'lobby_seat_token'; seat: number; token: string }
   /** 房主锁定首局承诺洗牌的实际参与者和对应 roster 版本；缺失即拒绝开局。 */
-  | { type: 'lobby_start'; shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] }
+  | { type: 'lobby_start'; shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[]; aiSeats?: PublicAiSeat[] }
   | { type: 'lobby_closed' }
 
 function isLobbyParticipants(value: unknown, seatCount: number): value is LobbyParticipant[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > seatCount) return false
+  if (!Array.isArray(value) || value.length < 2 || value.length > seatCount) return false
   const seats = new Set<number>()
   const peers = new Set<string>()
   return value.every((item) => {
@@ -55,6 +64,29 @@ function isLobbyParticipants(value: unknown, seatCount: number): value is LobbyP
     peers.add(participant.peerId)
     return true
   }) && seats.has(0)
+}
+
+const LLM_STYLES = new Set(['激进', '稳健', '话痨', '高冷'])
+const VOICE_KEYS = new Set(['default', 'deepseek', 'relay_gpt'])
+
+function isPublicAiSeats(value: unknown): value is PublicAiSeat[] {
+  if (value === undefined) return true
+  if (!Array.isArray(value) || value.length > 3) return false
+  const seats = new Set<number>()
+  return value.every((raw) => {
+    if (typeof raw !== 'object' || raw === null) return false
+    const item = raw as Record<string, unknown>
+    if (!Number.isInteger(item.seat) || (item.seat as number) < 1 || (item.seat as number) > 3
+      || seats.has(item.seat as number) || item.kind !== 'llm'
+      || typeof item.nickname !== 'string' || item.nickname.length < 1 || item.nickname.length > 24
+      || typeof item.displayName !== 'string' || item.displayName.length < 1 || item.displayName.length > 32
+      || typeof item.avatar !== 'string' || item.avatar.length > 256
+      || typeof item.model !== 'string' || item.model.length < 1 || item.model.length > 80
+      || typeof item.style !== 'string' || !LLM_STYLES.has(item.style)
+      || typeof item.voiceKey !== 'string' || !VOICE_KEYS.has(item.voiceKey)) return false
+    seats.add(item.seat as number)
+    return true
+  })
 }
 
 export function isClientLobbyMessage(message: unknown): message is ClientLobbyMessage {
@@ -91,6 +123,8 @@ export function isHostLobbyMessage(message: unknown): message is HostLobbyMessag
         peerIds.add(item.peerId)
         return true
       }) && seatNumbers.has(value.hostSeat as number)
+        && isPublicAiSeats(value.aiSeats)
+        && (value.aiSeats as PublicAiSeat[] | undefined ?? []).every((ai) => !seatNumbers.has(ai.seat))
   }
   if (value.type === 'lobby_seat_token') {
     return Number.isInteger(value.seat) && (value.seat as number) >= 0 && (value.seat as number) <= 3
@@ -102,6 +136,10 @@ export function isHostLobbyMessage(message: unknown): message is HostLobbyMessag
       && Number.isInteger(value.seatCount) && (value.seatCount as number) >= 1 && (value.seatCount as number) <= 4
       && Number.isInteger(value.rosterRevision) && (value.rosterRevision as number) >= 1
       && isLobbyParticipants(value.participants, value.seatCount as number)
+      && isPublicAiSeats(value.aiSeats)
+      && (value.aiSeats as PublicAiSeat[] | undefined ?? []).every((ai) => (
+        !(value.participants as LobbyParticipant[]).some((participant) => participant.seat === ai.seat)
+      ))
   }
   return value.type === 'lobby_closed'
 }
@@ -114,9 +152,9 @@ export interface HostLobbyOptions {
   hostNickname: string
   hostAvatar: string
   /** 每次座位表变化时回调（房主自己的 UI 也用同一份座位表）。 */
-  onRoster?: (seats: LobbySeat[]) => void
+  onRoster?: (seats: LobbySeat[], aiSeats: PublicAiSeat[]) => void
   /** 全员就绪并请求开局时回调。 */
-  onStart: (details: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] }) => void
+  onStart: (details: LobbyStartDetails) => void
   /** 掉线宽限（ms）：peer 失联（SDK 只报 reconnecting、不报 leave）超过该时长仍不恢复 → 释放座位。默认 10s。 */
   staleGraceMs?: number
   /** 测试注入；生产默认使用不可预测的主机签发随机 token。 */
@@ -140,6 +178,7 @@ export function createHostLobby({
   const relayPeers = new Set<string>()
   let hostReady = false
   let rosterRevision = 0
+  let plannedAiSeats: PublicAiSeat[] = []
 
   function roster(): LobbySeat[] {
     const publicPeers = [...peers.values()].map(({ playerId: _playerId, seatToken: _seatToken, ...seat }) => seat)
@@ -152,8 +191,9 @@ export function createHostLobby({
   function broadcast() {
     rosterRevision += 1
     const seats = roster()
-    room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats } satisfies HostLobbyMessage)
-    onRoster?.(seats)
+    const aiSeats = plannedAiSeats.filter((ai) => !occupied.has(ai.seat))
+    room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats, aiSeats } satisfies HostLobbyMessage)
+    onRoster?.(seats, aiSeats)
   }
 
   function sendSeatToken(seat: HostedSeat, peerId: string) {
@@ -168,8 +208,8 @@ export function createHostLobby({
   }
 
   function allReady(): boolean {
-    // 允许无 peer（房主独玩，空席 AI 补位）；有 peer 时须全员就绪。
-    return hostReady && [...peers.values()].every((seat) => seat.ready)
+    // 联机房间至少需要两名真人；空席仍可由 AI 补位，但房主不能独自开局。
+    return peers.size >= 1 && hostReady && [...peers.values()].every((seat) => seat.ready)
   }
 
   function removePeer(peerId: string) {
@@ -304,7 +344,10 @@ export function createHostLobby({
       if (rosterChanged) broadcast()
       // 新 peer 的第一条 hello 可能早于 SDK 广播列表完成；定向回发最新 roster，
       // 避免该客户端只收到一份不含自己的旧/部分 roster 后停止 hello 重试。
-      room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats: roster() } satisfies HostLobbyMessage, fromPeerId)
+      room.send({
+        type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats: roster(),
+        aiSeats: plannedAiSeats.filter((ai) => !occupied.has(ai.seat)),
+      } satisfies HostLobbyMessage, fromPeerId)
       const assigned = peers.get(fromPeerId)
       if (assigned) sendSeatToken(assigned, fromPeerId)
     } else if (message.type === 'lobby_ready') {
@@ -328,6 +371,10 @@ export function createHostLobby({
 
   return {
     roster,
+    setAiSeats(aiSeats: PublicAiSeat[]) {
+      plannedAiSeats = isPublicAiSeats(aiSeats) ? [...aiSeats] : []
+      broadcast()
+    },
     setHostReady(ready: boolean) {
       hostReady = ready
       broadcast()
@@ -344,8 +391,9 @@ export function createHostLobby({
       broadcast()
       const startRosterRevision = rosterRevision
       const participants = roster().map(({ seat, peerId }) => ({ seat, peerId }))
-      room.send({ type: 'lobby_start', shuffleId, seatCount, rosterRevision: startRosterRevision, participants } satisfies HostLobbyMessage)
-      onStart({ shuffleId, seatCount, rosterRevision: startRosterRevision, participants })
+      const aiSeats = plannedAiSeats.filter((ai) => !occupied.has(ai.seat))
+      room.send({ type: 'lobby_start', shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats } satisfies HostLobbyMessage)
+      onStart({ shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats })
       return true
     },
     close() {
@@ -360,9 +408,9 @@ export function createHostLobby({
 
 export interface ClientLobbyOptions {
   room: VibeHubSDK.Room
-  onRoster: (hostSeat: number, seats: LobbySeat[]) => void
+  onRoster: (hostSeat: number, seats: LobbySeat[], aiSeats: PublicAiSeat[]) => void
   onSeatToken?: (token: string) => void
-  onStart: (details: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] }) => void
+  onStart: (details: LobbyStartDetails) => void
   onClosed: () => void
 }
 
@@ -375,7 +423,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
   let pinnedHostPeerId: string | null = null
   let receivedRoster = false
   let lastRosterRevision = 0
-  let pendingStart: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] } | null = null
+  let pendingStart: LobbyStartDetails | null = null
   let startedShuffleId: string | null = null
   let helloRetry: ReturnType<typeof setTimeout> | null = null
   let readyRetry: ReturnType<typeof setTimeout> | null = null
@@ -476,7 +524,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
         rosterReadyHelloSent = false
         pendingStart = null
         stopReadyRetry()
-        onRoster(message.hostSeat, message.seats)
+        onRoster(message.hostSeat, message.seats, message.aiSeats ?? [])
         scheduleHelloRetry()
         return
       }
@@ -484,7 +532,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       stopRetry()
       assignedSeat = message.seats.find((seat) => seat.peerId === room.peerId)?.seat ?? null
       lastRosterReady = message.seats.find((seat) => seat.peerId === room.peerId)?.ready ?? null
-      onRoster(message.hostSeat, message.seats)
+      onRoster(message.hostSeat, message.seats, message.aiSeats ?? [])
       if (desiredReady != null) {
         if (lastRosterReady === desiredReady) stopReadyRetry()
         else queueMicrotask(() => {
@@ -515,7 +563,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
     } else if (message.type === 'lobby_start') {
       // SDK 不保证 roster 与 lobby_start 的到达顺序；没有本端座位时先缓存，
       // 禁止在 mySeat=-1 的半会话里启动承诺洗牌/发牌动画。
-      pendingStart = message
+      pendingStart = { ...message, aiSeats: message.aiSeats ?? [] }
       startIfReady()
     }
     else if (message.type === 'lobby_closed') onClosed()

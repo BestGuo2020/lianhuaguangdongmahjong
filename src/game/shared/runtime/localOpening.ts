@@ -15,6 +15,7 @@ export interface PlayerSeed {
   name: string
   avatar: string
   score?: number
+  isLlm?: boolean
 }
 
 export function resetLocalPlayers(
@@ -30,6 +31,7 @@ export function resetLocalPlayers(
       name: aiSeed?.name ?? player.name,
       avatar: aiSeed?.avatar ?? player.avatar,
       score: aiSeed?.score ?? previousScores[index] ?? defaultScore ?? player.score,
+      isLlm: aiSeed?.isLlm ?? false,
       seat: index,
       hand: [],
       discards: [],

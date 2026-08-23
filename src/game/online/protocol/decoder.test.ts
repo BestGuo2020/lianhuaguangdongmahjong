@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { decodeServerMessage } from './decoder'
 
 describe('decodeServerMessage', () => {
+  it('accepts a bounded host LLM message and rejects malformed public fields', () => {
+    const message = {
+      kind: 'llm_message', roomId: 'ROOM01', authorityEpoch: 'epoch-1', round: 1,
+      sequence: 1, id: 1, seat: 2, text: '这张先留着。', style: '稳健', voiceKey: 'deepseek',
+    }
+    expect(decodeServerMessage(message)).toEqual(message)
+    expect(decodeServerMessage({ ...message, text: 'x'.repeat(61) })).toBeNull()
+    expect(decodeServerMessage({ ...message, voiceKey: 'api-key' })).toBeNull()
+  })
   it('accepts a structurally valid protocol message', () => {
     const message = { kind: 'announcement', authorityEpoch: 'epoch-1', round: 1, text: '杠', tone: 'gold', id: 7 }
     expect(decodeServerMessage(message)).toBe(message)

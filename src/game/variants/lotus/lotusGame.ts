@@ -34,7 +34,7 @@ interface UseLotusGameOptions {
   /** P2P 房主权威：非本家座位的远端控制器，优先于单机 AI 控制器。 */
   remoteControllers?: Array<LotusController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
-  aiPlayerSeeds?: Array<PlayerSeed>
+  aiPlayerSeeds?: Array<PlayerSeed | undefined>
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
   instantOpening?: boolean

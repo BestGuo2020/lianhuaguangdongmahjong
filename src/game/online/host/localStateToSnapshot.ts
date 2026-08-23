@@ -59,6 +59,7 @@ function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
   return {
     name: player.name,
     avatar: player.avatar,
+    isLlm: player.isLlm === true,
     score: player.score,
     seat: player.seat,
     discards: [...player.discards],

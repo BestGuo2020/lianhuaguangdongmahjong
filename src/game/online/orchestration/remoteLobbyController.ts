@@ -97,7 +97,7 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
   const closing = ref(false)
   const allOccupiedReady = computed(() => {
     const seats = options.roomSeats.value
-    return seats.length > 0 && seats.every((seat) => seat.ready)
+    return seats.length >= 2 && seats.every((seat) => seat.ready)
   })
 
   function createRoom() {

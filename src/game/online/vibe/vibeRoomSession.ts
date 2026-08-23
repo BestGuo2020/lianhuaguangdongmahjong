@@ -9,7 +9,8 @@ import type { Ref } from 'vue'
 import type { MatchType } from '../../core/contracts/types'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import { createRoom as createVibeRoom, getRoomMeta, joinRoom as joinVibeRoom } from './vibeRoom'
-import { createClientLobby, createHostLobby, type LobbyParticipant, type LobbySeat } from './vibeLobby'
+import { createClientLobby, createHostLobby, type LobbyStartDetails, type LobbySeat } from './vibeLobby'
+import type { PublicAiSeat } from './vibeLlm'
 
 export interface VibeRoomSessionState {
   roomId: Ref<string>
@@ -18,6 +19,7 @@ export interface VibeRoomSessionState {
   avatar: Ref<string>
   playerId: Ref<string>
   roomSeats: Ref<LobbySeat[]>
+  aiSeats: Ref<PublicAiSeat[]>
   sessionStatus: Ref<string>
   sessionError: Ref<string>
   rulesetId: Ref<RuleVariant>
@@ -30,7 +32,7 @@ export interface VibeRoomSessionState {
 export interface VibeRoomSessionOptions {
   state: VibeRoomSessionState
   /** 全员就绪并开局后的回调（房主/客户端都会收到 lobby_start）。 */
-  onStart: (room: VibeHubSDK.Room, details: { shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[] }) => void
+  onStart: (room: VibeHubSDK.Room, details: LobbyStartDetails) => void
   /** 房主关闭房间时的回调（客户端收到 lobby_closed）。 */
   onClosed: () => void
   /** 客户端收到房主定向签发的座位续接凭据。 */
@@ -72,6 +74,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     state.roomId.value = ''
     state.mySeat.value = -1
     state.roomSeats.value = []
+    state.aiSeats.value = []
     state.isHost.value = false
     state.sessionStatus.value = 'idle'
   }
@@ -88,13 +91,22 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
       state.matchType.value = mode
       state.rulesetId.value = rulesetId
       state.roomSeats.value = [{ seat: 0, peerId: created.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false }]
+      state.aiSeats.value = []
       hostLobby = createHostLobby({
         room: created,
         capacity,
         hostNickname: state.nickname.value,
         hostAvatar: state.avatar.value,
-        onRoster: (seats) => { if (room === created) state.roomSeats.value = seats },
-        onStart: (details) => { if (room === created) onStart(created, details) },
+        onRoster: (seats, aiSeats) => {
+          if (room !== created) return
+          state.roomSeats.value = seats
+          state.aiSeats.value = aiSeats
+        },
+        onStart: (details) => {
+          if (room !== created) return
+          state.aiSeats.value = details.aiSeats
+          onStart(created, details)
+        },
         // 对局中（phase != lobby）掉线座位锁定给 AI 代打，不能释放给新玩家。
         isInMatch: () => state.phase.value !== 'lobby',
       })
@@ -147,13 +159,22 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
         state.roomSeats.value = [{
           seat: 0, peerId: joined.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false,
         }]
+        state.aiSeats.value = []
         hostLobby = createHostLobby({
           room: joined,
           capacity,
           hostNickname: state.nickname.value,
           hostAvatar: state.avatar.value,
-          onRoster: (seats) => { if (room === joined) state.roomSeats.value = seats },
-          onStart: (details) => { if (room === joined) onStart(joined, details) },
+          onRoster: (seats, aiSeats) => {
+            if (room !== joined) return
+            state.roomSeats.value = seats
+            state.aiSeats.value = aiSeats
+          },
+          onStart: (details) => {
+            if (room !== joined) return
+            state.aiSeats.value = details.aiSeats
+            onStart(joined, details)
+          },
           isInMatch: () => state.phase.value !== 'lobby',
         })
         // 宣告自己是新房主（携带 mode/ruleset/max），让其他玩家能加入并读对局元数据。
@@ -174,9 +195,10 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
       }
       clientLobby = createClientLobby({
         room: joined,
-        onRoster: (_hostSeat, seats) => {
+        onRoster: (_hostSeat, seats, aiSeats) => {
           if (room !== joined) return
           state.roomSeats.value = seats
+          state.aiSeats.value = aiSeats
           const own = seats.find((seat) => seat.peerId === joined.peerId)
           // roster 是房主权威事实；如果当前 peer 暂时不在名单中，必须清掉
           // 旧座位，避免重连窗口继续显示“已准备”并把 ready 发给旧连接。
@@ -190,7 +212,11 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
         onSeatToken: (token) => {
           if (room === joined) onSeatToken?.(token)
         },
-        onStart: (details) => { if (room === joined) onStart(joined, details) },
+        onStart: (details) => {
+          if (room !== joined) return
+          state.aiSeats.value = details.aiSeats
+          onStart(joined, details)
+        },
         onClosed: () => { if (room === joined) onClosed() },
       })
       const savedToken = saved?.roomId === joined.roomId ? saved.seatToken : undefined
@@ -216,6 +242,11 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     if (!state.isHost.value) return
     const started = hostLobby?.requestStart() ?? false
     if (!started) throw new Error('大厅成员状态已变化，请确认所有玩家仍已准备')
+  }
+
+  function setAiSeats(aiSeats: PublicAiSeat[]): void {
+    if (!state.isHost.value) return
+    hostLobby?.setAiSeats(aiSeats)
   }
 
   async function leaveRoom(): Promise<void> {
@@ -252,6 +283,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     joinRoom,
     toggleReady,
     startMatch,
+    setAiSeats,
     leaveRoom,
     closeRoom,
     resumeSession,

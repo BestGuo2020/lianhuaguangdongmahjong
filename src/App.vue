@@ -23,6 +23,7 @@ import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeCli
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/three/tableTheme'
+import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -92,6 +93,7 @@ const llmHook = {
 }
 const localLlm = createLocalLlmControllers(llmHook)
 const lotusLlm = createLotusLlmControllers(llmHook)
+const vibeLlmOptions = listHostLlmOptions()
 const llmStats = computed<LlmControllerStats>(() => ({
   requests: localLlm.stats.requests + lotusLlm.stats.requests,
   successes: localLlm.stats.successes + lotusLlm.stats.successes,
@@ -114,7 +116,12 @@ const lotusGame = useLotusGame({
   aiControllers: lotusLlm.controllers ?? undefined,
   aiPlayerSeeds: lotusLlm.seeds.length ? lotusLlm.seeds : undefined,
 })
-const vibeRemoteGame = useVibeRemoteGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait, waitForTableReady })
+const vibeRemoteGame = useVibeRemoteGame({
+  playSound: playEffect,
+  playSoundAndWait: playEffectAndWait,
+  waitForTableReady,
+  onLlmMessage: llmHook.onLlmMessage,
+})
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
@@ -178,7 +185,7 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, aiSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
   rejoining,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = vibeRemoteGame
@@ -392,6 +399,8 @@ function changeTableTheme(theme: TableThemeName) {
           :session-error="sessionError"
           :room-time-limit="roomTimeLimit"
           :room-seats="roomSeats"
+          :ai-seats="aiSeats"
+          :llm-options="vibeLlmOptions"
           :my-seat="mySeat"
           :is-host="isHost"
           :single-player-only="singlePlayerOnly"
@@ -406,6 +415,7 @@ function changeTableTheme(theme: TableThemeName) {
           @copy-room="copyRoomCode"
           @toggle-ready="toggleReady"
           @start-remote="startRemoteMatch"
+          @configure-ai-seats="remoteActions.configureAiSeats"
           @leave-room="leaveRoom"
           @close-room="closeRoom"
           @open-stats="statsOpen = true"

@@ -62,7 +62,29 @@ describe('vibeLobby', () => {
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_start')).toBe(true)
   })
 
-  it('房主独玩（无 peer）也能开局：空席 AI 补位', () => {
+  it('房主只广播大模型公开身份，真人加入同座位后计划自动失效', () => {
+    const room = createMockVibeRoom(true)
+    const host = createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '', onStart: () => {},
+    })
+    host.setAiSeats([{
+      seat: 1, kind: 'llm', nickname: '大肥鱼', displayName: '大肥鱼（激进）',
+      avatar: '/img/llm/deepseek/llm-avatar-jijin.png', model: 'deepseek-chat',
+      style: '激进', voiceKey: 'deepseek',
+    }])
+    const first = [...room.sent].reverse().find((entry) => (entry.message as { type?: string }).type === 'lobby_roster')
+      ?.message as { aiSeats?: unknown[] }
+    expect(first.aiSeats).toHaveLength(1)
+    expect(JSON.stringify(first)).not.toContain('apiKey')
+    expect(JSON.stringify(first)).not.toContain('baseUrl')
+
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    const second = [...room.sent].reverse().find((entry) => (entry.message as { type?: string }).type === 'lobby_roster')
+      ?.message as { aiSeats?: unknown[] }
+    expect(second.aiSeats).toEqual([])
+  })
+
+  it('房主独玩（无 peer）不能开局：联机至少需要两名真人', () => {
     const room = createMockVibeRoom(true)
     let started = false
     const host = createHostLobby({
@@ -70,8 +92,8 @@ describe('vibeLobby', () => {
       onStart: () => { started = true },
     })
     host.setHostReady(true)
-    expect(host.requestStart()).toBe(true)
-    expect(started).toBe(true)
+    expect(host.requestStart()).toBe(false)
+    expect(started).toBe(false)
   })
 
   it('房主收到 lobby_leave 后释放座位', () => {
@@ -182,6 +204,10 @@ describe('vibeLobby', () => {
     expect(isHostLobbyMessage({
       type: 'lobby_start', shuffleId: 's', seatCount: 1, rosterRevision: 1,
       participants: [{ seat: 1, peerId: 'peer-1' }],
+    })).toBe(false)
+    expect(isHostLobbyMessage({
+      type: 'lobby_start', shuffleId: 's', seatCount: 4, rosterRevision: 1,
+      participants: [{ seat: 0, peerId: 'host-peer' }],
     })).toBe(false)
     expect(isHostLobbyMessage({
       type: 'lobby_start', shuffleId: 's', seatCount: 4, rosterRevision: 1,
