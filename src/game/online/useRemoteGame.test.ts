@@ -177,8 +177,8 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     const playLlmAudio = vi.fn()
     await connectGame({ playLlmAudio })
     const audioUrl = `/api/tts/audio/${'a'.repeat(64)}.mp3`
-    mockSocket!.receive({ kind: 'llm_audio', messageId: 3, seat: 1, audioUrl, cached: false })
-    expect(playLlmAudio).toHaveBeenCalledWith(expect.stringContaining(audioUrl), 1, 3)
+    mockSocket!.receive({ kind: 'llm_audio', messageId: 3, seat: 1, audioUrl, cached: false, priority: 'important' })
+    expect(playLlmAudio).toHaveBeenCalledWith(expect.stringContaining(audioUrl), 1, 3, 'important')
   })
 
   it('把本家排到 players[0]，隐藏他人手牌，映射座位索引', async () => {

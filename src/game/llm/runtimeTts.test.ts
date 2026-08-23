@@ -60,7 +60,9 @@ describe('单机 LLM runtime TTS', () => {
     })
     await Promise.resolve()
 
-    expect(bubble).toHaveBeenCalledWith(1, '这手先稳住。')
-    expect(mocks.speak).toHaveBeenCalledWith(1, '这手先稳住。', 'deepseek', '稳健')
+    expect(bubble).toHaveBeenCalledWith(1, '这手先稳住。', expect.objectContaining({
+      priority: 'normal', decision: 'turn', actionKind: 'discard',
+    }))
+    expect(mocks.speak).toHaveBeenCalledWith(1, '这手先稳住。', 'deepseek', '稳健', 'normal')
   })
 })

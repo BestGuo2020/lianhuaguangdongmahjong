@@ -57,7 +57,7 @@ afterEach(() => {
 })
 
 describe('useAudio LLM voice ducking', () => {
-  it('吐槽期间压低 BGM、语音满音量，队列播完后恢复 BGM', () => {
+  it('普通吐槽播放期间丢弃后来普通语音，不再积压到下一圈', () => {
     const audio = useAudio()
     const bgm = MockAudio.instances[0]
     expect(bgm.volume).toBe(0.32)
@@ -69,12 +69,25 @@ describe('useAudio LLM voice ducking', () => {
     expect(bgm.volume).toBe(0.08)
 
     audio.playLlmAudio('/api/tts/audio/second.mp3', 2, 2)
+    expect(MockAudio.instances.some((item) => item.src.endsWith('/second.mp3'))).toBe(false)
     first.emit('ended')
-    const second = MockAudio.instances.find((item) => item.src.endsWith('/second.mp3'))!
-    expect(second.volume).toBe(1)
-    expect(bgm.volume).toBe(0.08)
+    expect(bgm.volume).toBe(0.32)
+  })
 
-    second.emit('ended')
+  it('关键胜利语音打断普通吐槽并在结束后恢复 BGM', () => {
+    const audio = useAudio()
+    const bgm = MockAudio.instances[0]
+    const firstUrl = `/api/local-tts/audio/${'a'.repeat(64)}.mp3`
+    dispatchLocalLlmAudio(firstUrl, 1, 1)
+    const first = MockAudio.instances.find((item) => item.src === firstUrl)!
+
+    audio.playLlmAudio('/api/tts/audio/win.mp3', 2, 2, 'important')
+
+    expect(first.pause).toHaveBeenCalledOnce()
+    const win = MockAudio.instances.find((item) => item.src.endsWith('/win.mp3'))!
+    expect(win.play).toHaveBeenCalledOnce()
+    expect(bgm.volume).toBe(0.08)
+    win.emit('ended')
     expect(bgm.volume).toBe(0.32)
   })
 })

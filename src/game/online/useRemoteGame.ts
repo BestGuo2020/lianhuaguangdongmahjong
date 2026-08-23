@@ -46,7 +46,7 @@ interface UseRemoteGameOptions {
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   waitForTableReady?: () => Promise<void>
   onLlmMessage?: (seat: number, text: string) => void
-  playLlmAudio?: (url: string, seat: number, messageId: number) => void
+  playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
 }
 
 export function useRemoteGame({
@@ -339,7 +339,7 @@ export function useRemoteGame({
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
     llm_message: (msg) => onLlmMessage(msg.seat, msg.text),
-    llm_audio: (msg) => playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId),
+    llm_audio: (msg) => playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId, msg.priority ?? 'normal'),
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return

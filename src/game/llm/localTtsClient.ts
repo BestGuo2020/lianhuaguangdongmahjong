@@ -1,5 +1,6 @@
 import { dispatchLocalLlmAudio } from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset, LlmStyle, LlmTtsVoiceKey } from './config'
+import type { LlmSpeechPriority } from './speechPolicy'
 import { avatarFolderOf } from './persona'
 
 const VIBEHUB_GATEWAY_FALLBACK = 'https://www.bestguo.top:58000'
@@ -60,7 +61,13 @@ export class LocalTtsClient {
     this.fetchImpl = fetchImpl.bind(globalThis)
   }
 
-  async speak(seat: number, text: string, voiceKey: string, style: LlmStyle): Promise<boolean> {
+  async speak(
+    seat: number,
+    text: string,
+    voiceKey: string,
+    style: LlmStyle,
+    priority: LlmSpeechPriority = 'normal',
+  ): Promise<boolean> {
     const normalized = normalizeText(text)
     if (!normalized) return false
     const key = JSON.stringify([normalized, voiceKey, style])
@@ -81,7 +88,7 @@ export class LocalTtsClient {
       return false
     }
     this.messageId += 1
-    return dispatchLocalLlmAudio(url, seat, this.messageId)
+    return dispatchLocalLlmAudio(url, seat, this.messageId, priority)
   }
 
   private async synthesize(text: string, voiceKey: string, style: LlmStyle): Promise<string | null> {

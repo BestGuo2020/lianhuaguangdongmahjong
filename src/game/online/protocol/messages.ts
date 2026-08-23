@@ -8,6 +8,7 @@ import type {
 import type { ServerSnapshot } from './dto'
 import type { ServerMeldDto } from './dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
 export interface RoundStartMessage {
   kind: 'round_start'
@@ -36,8 +37,8 @@ export type ServerMessage =
   | { kind: 'table_action'; event: TableActionEvent }
   | { kind: 'score_flow'; deltas: ScoreDelta[] }
   | { kind: 'announcement'; text: string; tone: string; id?: number }
-  | { kind: 'llm_message'; seat: number; text: string; id: number }
-  | { kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean }
+  | { kind: 'llm_message'; seat: number; text: string; id: number; priority?: LlmSpeechPriority }
+  | { kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean; priority?: LlmSpeechPriority }
   | { kind: 'hand_result'; result: RoundResult }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }> }

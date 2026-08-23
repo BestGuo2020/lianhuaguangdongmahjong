@@ -4,6 +4,13 @@ import type { Candidate, DecisionRequest, RuleCode, TileName } from './schema'
 
 export const STYLES = ['激进', '稳健', '话痨', '高冷'] as const
 
+const STYLE_SPEECH_GUIDE: Record<string, string> = {
+  话痨: '话痨可以较常给吐槽，但不要每次决策都说话。',
+  激进: '激进只在进攻或关键选择时给吐槽，普通摸打多省略 message。',
+  稳健: '稳健仅偶尔点评关键选择，大多数普通摸打省略 message。',
+  高冷: '高冷应极少说话，除非关键动作，否则省略 message。',
+}
+
 const RULE_SUMMARIES: Record<RuleCode, string> = {
   'lotus-classic': [
     '莲花广麻：白板为癞子，可代任意牌；唯一支持的胡牌结构是标准 4 面子+1 将；',
@@ -22,7 +29,8 @@ function systemPrompt(style: string): string {
   return [
     `你是广东麻将桌上的牌友，风格：${style}。`,
     '你的任务只有一件事：从候选动作列表中选择一个编号。',
-    '你可以额外给出一句 ≤30 字的牌桌吐槽；吐槽会通过独立事件展示，不参与动作执行。',
+    '你可以额外给出一句 ≤16 字的牌桌吐槽；吐槽会通过独立事件展示，不参与动作执行。',
+    STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     '候选动作均已由游戏引擎判定合法；当前玩法的规则摘要和候选特征是唯一权威事实。',
     '只按当前玩法决策，严禁套用国标麻将、日麻或其他麻将规则；规则摘要未列出的特殊牌型一律视为不支持。',
     '你绝对不能：输出候选列表之外的编号、解释思考过程、输出多个候选、评价规则合法性。',
@@ -99,7 +107,7 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
   items.push('{"choice": "A1", "message": "就你了！"}')
   const user = [
     ...items,
-    'choice 必须是上面列出的编号；message 可省略（输出空字符串或省略字段），≤30 字。',
+    'choice 必须是上面列出的编号；message 可省略（输出空字符串或省略字段），≤16 字。',
   ].join('\n')
 
   return { system: systemPrompt(style), user }

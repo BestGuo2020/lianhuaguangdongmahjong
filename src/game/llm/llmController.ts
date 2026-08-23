@@ -35,6 +35,7 @@ import { buildPrompt } from './prompt'
 import { requestLlmDecision } from './client'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction } from './schema'
+import type { LlmSpeechPriority } from './speechPolicy'
 
 export interface LlmControllerStats {
   requests: number
@@ -51,8 +52,19 @@ export function createLlmStats(): LlmControllerStats {
 export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
-  onLlmMessage?(seat: number, text: string): void
+  onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void
 }
+
+export interface LlmMessageMeta {
+  priority: LlmSpeechPriority
+  decision?: DecisionInput['decision']
+  actionKind?: CanonicalAction['kind']
+  source?: 'decision' | 'win'
+}
+
+const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
+  'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
+])
 
 /** 内部：LLM 决定 → 候选动作；失败/非法 → null（回退）。 */
 async function decideCanonical(
@@ -81,7 +93,12 @@ async function decideCanonical(
     }
     if (output.message) {
       stats.messages += 1
-      hooks.onLlmMessage?.(input.playerIndex, output.message)
+      hooks.onLlmMessage?.(input.playerIndex, output.message, {
+        priority: IMPORTANT_SPEECH_ACTIONS.has(candidate.action.kind) ? 'important' : 'normal',
+        decision: input.decision,
+        actionKind: candidate.action.kind,
+        source: 'decision',
+      })
     }
     stats.successes += 1
     return candidate.action
