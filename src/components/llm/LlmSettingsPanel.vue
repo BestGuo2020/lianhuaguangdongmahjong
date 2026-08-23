@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, QWEN_DECISION_TIMEOUT_MS, emptyLlmSettings, normalizeBaseUrl, newPresetId, readLlmSettings, saveLlmSettings,
+  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, QWEN_DECISION_TIMEOUT_MS, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
@@ -22,6 +22,10 @@ const templateIndex = ref(0)
 const savedMark = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
+const importInput = ref<HTMLInputElement | null>(null)
+const transferStatus = ref<{ ok: boolean; message: string } | null>(null)
+
+const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
 const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
@@ -31,6 +35,7 @@ function load() {
   selectedId.value = settings.value.activeId ?? settings.value.presets[0]?.id ?? null
   savedMark.value = false
   testResult.value = null
+  transferStatus.value = null
 }
 
 watch(() => props.open, (open) => { if (open) load() })
@@ -100,6 +105,45 @@ async function testConnection() {
     testResult.value = result.ok && !url ? { ok: false, message: 'baseUrl 非法（检查协议与地址，不支持带账号信息的链接）' } : result
   } finally {
     testing.value = false
+  }
+}
+
+function exportSettingsJson() {
+  const blob = new Blob([serializeLlmSettings(settings.value)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `lianhua-llm-settings-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+  transferStatus.value = { ok: true, message: 'JSON 已导出（不含 API Key）' }
+}
+
+function chooseImportFile() {
+  importInput.value?.click()
+}
+
+async function importSettingsJson(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  transferStatus.value = null
+  try {
+    if (!file.name.toLowerCase().endsWith('.json')) throw new Error('请选择 .json 文件')
+    if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON 文件不能超过 1 MB')
+    settings.value = parseLlmSettingsJson(await file.text(), settings.value)
+    selectedId.value = settings.value.activeId ?? settings.value.presets[0]?.id ?? null
+    savedMark.value = false
+    testResult.value = null
+    transferStatus.value = { ok: true, message: '已导入，请检查配置后点击“保存”' }
+  } catch (error) {
+    transferStatus.value = {
+      ok: false,
+      message: error instanceof Error ? error.message : '导入失败',
+    }
   }
 }
 
@@ -237,9 +281,17 @@ function presetName(id: string | null): string {
           {{ testing ? '测试中…' : '测试连接' }}
         </button>
         <button data-testid="llm-clear-key" :disabled="!selected" @click="clearKey">清除当前 Key</button>
+        <button data-testid="llm-export-json" :disabled="settings.presets.length === 0" @click="exportSettingsJson">导出 JSON</button>
+        <button data-testid="llm-import-json" @click="chooseImportFile">导入 JSON</button>
+        <input
+          ref="importInput" class="llm-import-input" type="file" accept="application/json,.json"
+          data-testid="llm-import-file" @change="importSettingsJson"
+        >
       </div>
+      <p class="llm-transfer-hint">导出文件不包含 API Key；导入后需检查并点击保存。</p>
       <p v-if="savedMark" class="llm-status ok">已保存（刷新页面后生效）</p>
       <p v-if="testResult" class="llm-status" :class="testResult.ok ? 'ok' : 'err'">{{ testResult.message }}</p>
+      <p v-if="transferStatus" class="llm-status" :class="transferStatus.ok ? 'ok' : 'err'">{{ transferStatus.message }}</p>
 
       <div class="llm-stats">
         <h3>本局 AI 统计</h3>
@@ -309,6 +361,8 @@ button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
 .llm-seat-picks select { max-width: 55%; }
 .llm-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .llm-actions button:disabled { opacity: .5; cursor: default; }
+.llm-import-input { display: none; }
+.llm-transfer-hint { margin: 7px 0 0; color: #84978d; font-size: 11px; line-height: 1.5; }
 .llm-status { margin: 8px 0; }
 .llm-status.ok { color: #9fce9f; }
 .llm-status.err { color: #e79a9a; }
