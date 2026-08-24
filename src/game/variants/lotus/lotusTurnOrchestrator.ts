@@ -145,6 +145,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       canPeng: count >= 2,
       canGang: count >= 3,
       chiOptions,
+      visibleTiles: visibleTilesFor(playerIndex),
       ruleset,
     }
     const action = await options.controllers[playerIndex].requestDiscardHu(ctx)

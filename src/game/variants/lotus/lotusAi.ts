@@ -5,6 +5,7 @@ import { removeMatches } from '../../core/rules/actions'
 import { HONORS } from '../../core/rules/tiles'
 import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
+import { hasReadyDiscard, projectKongBloom } from './kongProjection'
 
 function wildcardSet(jokers: TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
@@ -66,9 +67,22 @@ export interface LotusRobKongView {
   jokers: TileType[]
 }
 
-/** 回合决策：自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌（杠前评估是否破坏听牌/被抢杠）。
+/** 回合决策：杠后全听特例 → 自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌。
  * random 注入以便引擎建议确定性化；默认 Math.random 维持既有行为。 */
 export function decideTurn(view: LotusTurnView, random: () => number = Math.random): LotusTurnDecision {
+  const guaranteedConcealedKong = (view.ruleset ?? LOTUS_RULESET).win
+    .concealedKongs(view.hand, { jokers: view.jokers })
+    .find((tile) => projectKongBloom({
+      kind: 'concealed-kong', hand: view.hand, exposedMelds: view.exposedMelds,
+      jokers: view.jokers, tile, visibleTiles: view.visibleTiles,
+    }).guaranteedKongBloom)
+  if (guaranteedConcealedKong) return { kind: 'concealed-kong', tile: guaranteedConcealedKong }
+
+  if (windKong(view.hand, view.jokers) && projectKongBloom({
+    kind: 'wind-kong', hand: view.hand, exposedMelds: view.exposedMelds,
+    jokers: view.jokers, visibleTiles: view.visibleTiles,
+  }).guaranteedKongBloom) return { kind: 'wind-kong' }
+
   if ((view.ruleset ?? LOTUS_RULESET).win.isWinningHand(view.hand, view.exposedMelds, { jokers: view.jokers })) return { kind: 'win' }
 
   const meldIndex = view.melds.findIndex(
@@ -97,12 +111,7 @@ export function decideTurn(view: LotusTurnView, random: () => number = Math.rand
 
 /** 当前手牌是否已听牌（存在打出某张后听口非空）。 */
 function isTenpai(hand: TileType[], exposedMelds: number, jokers: TileType[]): boolean {
-  const jokerSet = wildcardSet(jokers)
-  const hasNatural = hand.some((tile) => !jokerSet.has(tile))
-  return hand.some((tile, index) => {
-    if (hasNatural && jokerSet.has(tile)) return false
-    return waitingTiles(hand.filter((_, candidateIndex) => candidateIndex !== index), exposedMelds, jokers).length > 0
-  })
+  return hasReadyDiscard(hand, exposedMelds, jokers)
 }
 
 /**
