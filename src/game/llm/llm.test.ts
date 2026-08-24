@@ -167,6 +167,16 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     expect(built.request?.engineSuggestion).toBeTruthy()
   })
 
+  it('莲花：四面听东南西北时不向所有模型提供破坏听牌的风杠候选', () => {
+    const hand = ['s3', 's4', 's5', 'east', 'south', 'west', 'north', 'p9'] as never
+    const built = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', hand, exposedMelds: 2, visibleTiles: hand,
+      jokerTiles: [], wildcardTiles: ['white'],
+    }))
+    expect(built.request?.candidates.some((candidate) => candidate.action.kind === 'wind-kong')).toBe(false)
+    expect(built.request?.candidates.find((candidate) => candidate.label === '出9筒')?.features.ready).toBe(true)
+  })
+
   it('候选特征回填：听口明细 + 剩余张数（含自己手牌的可见计数）', () => {
     // 14 张手牌，打出 s2 后单骑听 2条（自己手牌仍有 2 张 s2 → 剩余 2）
     const hand = ['m1', 'm1', 'm1', 'm2', 'm2', 'm2', 'm3', 'm3', 'm3', 's1', 's1', 's1', 's2', 's2'] as never
@@ -222,6 +232,14 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
       ruleCode: 'lotus-legacy', hand: ['m5', 'white', 'm3'],
       jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
     }), { kind: 'discard', handIndex: 0 })).toBe(false)
+  })
+
+  it('二次校验拒绝会拆掉四面听的风杠', () => {
+    const hand = ['s3', 's4', 's5', 'east', 'south', 'west', 'north', 'p9'] as never
+    expect(isActionLegal(baseInput({
+      ruleCode: 'lotus-legacy', hand, exposedMelds: 2, visibleTiles: hand,
+      jokerTiles: [], wildcardTiles: ['white'],
+    }), { kind: 'wind-kong' })).toBe(false)
   })
 
   it('win 永远拒绝（只能引擎短路产生）', () => {

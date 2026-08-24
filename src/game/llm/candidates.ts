@@ -9,6 +9,7 @@ import { decideTurn as lotusDecideTurn, decideClaim as lotusDecideClaim } from '
 import {
   LOTUS_RULESET, evaluateBasePattern, windKong, waitingTiles as lotusWaitingTiles, type BasePattern, type ChiMeld,
 } from '../variants/lotus/lotusRules'
+import { hasReadyDiscard, projectKongBloom } from '../variants/lotus/kongProjection'
 import {
   tileName, type Candidate, type CanonicalAction, type DecisionKind, type DecisionRequest,
   type RuleCode, type StateSnapshotV1, type TileName,
@@ -89,7 +90,13 @@ function waitsOf(input: DecisionInput, hand: TileType[]): TileType[] {
 }
 
 function isTenpai(input: DecisionInput, hand: TileType[]): boolean {
-  return waitsOf(input, hand).length > 0
+  if (isLotus(input)) return hasReadyDiscard(hand, input.exposedMelds, jokersOf(input))
+  const protectedTiles = protectedDiscardTiles(input)
+  const hasNatural = hand.some((tile) => !protectedTiles.has(tile))
+  return hand.some((tile, index) => {
+    if (hasNatural && protectedTiles.has(tile)) return false
+    return waitsOf(input, hand.filter((_, candidateIndex) => candidateIndex !== index)).length > 0
+  })
 }
 
 /** 基础牌效分：同牌×4 + 相邻靠张×2 + 字牌罚 6（与两套启发式一致的确定性简化）。 */
@@ -347,6 +354,7 @@ export function buildDecisionRequest(input: DecisionInput): BuiltRequest {
 function turnCandidates(input: DecisionInput): Candidate[] {
   const candidates: Candidate[] = []
   const skipDraw = input.skipDraw ?? false
+  const currentReady = isLotus(input) && isTenpai(input, input.hand)
   // skipDraw：只允许出牌（§4.1；胡由控制器短路，杠非法）
   if (!skipDraw) {
     input.melds.forEach((meld, meldIndex) => {
@@ -355,10 +363,22 @@ function turnCandidates(input: DecisionInput): Candidate[] {
       }
     })
     for (const tile of concealedKongsOf(input)) {
-      candidates.push(candidateOf(input, { id: `G${tile}`, label: `暗杠${tileName(tile)}`, action: { kind: 'concealed-kong', tile } }))
+      const guaranteed = isLotus(input) && projectKongBloom({
+        kind: 'concealed-kong', hand: input.hand, exposedMelds: input.exposedMelds,
+        jokers: jokersOf(input), tile, visibleTiles: input.visibleTiles,
+      }).guaranteedKongBloom
+      if (!currentReady || guaranteed) {
+        candidates.push(candidateOf(input, { id: `G${tile}`, label: `暗杠${tileName(tile)}`, action: { kind: 'concealed-kong', tile } }))
+      }
     }
     if (isLotus(input) && windKong(input.hand, jokersOf(input))) {
-      candidates.push(candidateOf(input, { id: 'GW', label: '乱风杠', action: { kind: 'wind-kong' } }))
+      const guaranteed = projectKongBloom({
+        kind: 'wind-kong', hand: input.hand, exposedMelds: input.exposedMelds,
+        jokers: jokersOf(input), visibleTiles: input.visibleTiles,
+      }).guaranteedKongBloom
+      if (!currentReady || guaranteed) {
+        candidates.push(candidateOf(input, { id: 'GW', label: '乱风杠', action: { kind: 'wind-kong' } }))
+      }
     }
   }
   const discardScores: Array<{ index: number; heuristic: number }> = []

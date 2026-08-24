@@ -27,6 +27,7 @@ import {
 } from '../variants/lotus/lotusControllers'
 import { decideRobKong as lotusDecideRobKong } from '../variants/lotus/lotusAi'
 import { LOTUS_RULESET, type ChiMeld } from '../variants/lotus/lotusRules'
+import { hasReadyDiscard, projectKongBloom } from '../variants/lotus/kongProjection'
 import { decideRobKong as coreDecideRobKong } from '../core/controllers/ai'
 import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import type { TileType } from '../core/contracts/types'
@@ -137,10 +138,23 @@ export function isActionLegal(input: DecisionInput, action: CanonicalAction): bo
     const kongs = input.ruleCode === 'lotus-legacy'
       ? LOTUS_RULESET.win.concealedKongs(hand, { jokers: input.jokerTiles ?? [] })
       : DEFAULT_RULESET.win.concealedKongs(hand)
-    return kongs.includes(action.tile)
+    if (!kongs.includes(action.tile)) return false
+    if (input.ruleCode !== 'lotus-legacy') return true
+    const jokers = input.jokerTiles ?? []
+    const guaranteed = projectKongBloom({
+      kind: 'concealed-kong', hand, exposedMelds: input.exposedMelds,
+      jokers, tile: action.tile, visibleTiles: input.visibleTiles,
+    }).guaranteedKongBloom
+    return guaranteed || !hasReadyDiscard(hand, input.exposedMelds, jokers)
   }
   if (action.kind === 'wind-kong') {
-    return input.ruleCode === 'lotus-legacy' && windKongInternal(hand)
+    if (input.ruleCode !== 'lotus-legacy' || !windKongInternal(hand)) return false
+    const jokers = input.jokerTiles ?? []
+    const guaranteed = projectKongBloom({
+      kind: 'wind-kong', hand, exposedMelds: input.exposedMelds,
+      jokers, visibleTiles: input.visibleTiles,
+    }).guaranteedKongBloom
+    return guaranteed || !hasReadyDiscard(hand, input.exposedMelds, jokers)
   }
   if (action.kind === 'gang') return (input.canGang ?? false) === true
   if (action.kind === 'peng') return (input.canPeng ?? false) === true
@@ -277,6 +291,18 @@ export class LotusLlmController implements LotusController {
   }
 
   async requestTurn(ctx: LotusTurnContext): Promise<LotusTurnAction> {
+    if (!ctx.skipDraw) {
+      for (const tile of LOTUS_RULESET.win.concealedKongs(ctx.hand, { jokers: ctx.jokers })) {
+        if (projectKongBloom({
+          kind: 'concealed-kong', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
+          jokers: ctx.jokers, tile, visibleTiles: ctx.visibleTiles,
+        }).guaranteedKongBloom) return { kind: 'concealed-kong', tile }
+      }
+      if (projectKongBloom({
+        kind: 'wind-kong', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
+        jokers: ctx.jokers, visibleTiles: ctx.visibleTiles,
+      }).guaranteedKongBloom) return { kind: 'wind-kong' }
+    }
     if (!ctx.skipDraw && LOTUS_RULESET.win.isWinningHand(ctx.hand, ctx.exposedMelds, { jokers: ctx.jokers })) {
       return { kind: 'win' }
     }
@@ -298,6 +324,10 @@ export class LotusLlmController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
+    if (ctx.canGang && projectKongBloom({
+      kind: 'discard-gang', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
+      jokers: ctx.jokers, tile: ctx.tile, visibleTiles: ctx.visibleTiles,
+    }).guaranteedKongBloom) return { kind: 'gang' }
     // v1：点炮胡引擎短路（§3）
     const ordinaryJokers = (ctx.jokers.includes(ctx.tile) || ctx.tile === 'white') ? [ctx.tile] : []
     return LOTUS_RULESET.win.isWinningHand(
@@ -309,6 +339,10 @@ export class LotusLlmController implements LotusController {
 
   async requestClaim(ctx: LotusClaimContext): Promise<LotusClaimAction> {
     if (!ctx.canPeng && !ctx.canGang && !ctx.chiOptions.length) return { kind: 'pass' }
+    if (ctx.canGang && projectKongBloom({
+      kind: 'discard-gang', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
+      jokers: ctx.jokers, tile: ctx.tile, visibleTiles: ctx.visibleTiles,
+    }).guaranteedKongBloom) return { kind: 'gang' }
     const action = await decideCanonical(this.config, {
       ruleCode: 'lotus-legacy',
       decision: 'claim',

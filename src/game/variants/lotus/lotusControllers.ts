@@ -12,6 +12,7 @@ import {
   decideTurn,
 } from './lotusAi'
 import type { LotusTurnDecision } from './lotusAi'
+import { projectKongBloom } from './kongProjection'
 import { createPendingAction } from '../../shared/runtime/pendingAction'
 
 // ── 动作与上下文类型 ──────────────────────────────────────────────
@@ -50,6 +51,7 @@ export interface LotusHuContext {
   canPeng: boolean
   canGang: boolean
   chiOptions: ChiMeld[]
+  visibleTiles?: TileType[]
   ruleset?: RuleSet
 }
 
@@ -341,6 +343,10 @@ export class LotusAiController implements LotusController {
   }
 
   async requestDiscardHu(ctx: LotusHuContext): Promise<LotusHuAction> {
+    if (ctx.canGang && projectKongBloom({
+      kind: 'discard-gang', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
+      jokers: ctx.jokers, tile: ctx.tile, visibleTiles: ctx.visibleTiles,
+    }).guaranteedKongBloom) return { kind: 'gang' }
     return (ctx.ruleset ?? LOTUS_RULESET).win.isWinningHand(
       [...ctx.hand, ctx.tile],
       ctx.exposedMelds,

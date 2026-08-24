@@ -166,6 +166,14 @@ describe('弃牌启发式', () => {
 })
 
 describe('莲花麻将 AI 杠决策评估', () => {
+  it('四面听东南西北时不把风牌拆成风杠', () => {
+    // 两副露后的摸牌态：打出 p9 后，3条4条5条 + 东南西北听任一风牌。
+    const hand: TileType[] = ['s3', 's4', 's5', 'east', 'south', 'west', 'north', 'p9']
+    const decision = decideTurn(turnView(hand, [], 2, false, []))
+    expect(decision.kind).toBe('discard')
+    if (decision.kind === 'discard') expect(hand[decision.handIndex]).toBe('p9')
+  })
+
   it('已听牌时放弃暗杠（避免拆散成形手牌）', () => {
     // 手牌接近成形（含 4 张 east 可暗杠，但剩余手牌已是 3 面子 + 将对）
     const hand: TileType[] = ['east', 'east', 'east', 'east', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north']
