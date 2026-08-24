@@ -116,6 +116,15 @@ export function useLotusGame({
     remoteControllers?.[2] ?? aiControllers?.[2] ?? new LotusAiController(),
   ]
 
+  // 设置页只在大厅开放；保存后替换内部数组，使下一次开局读取新的 AI 控制器。
+  // 调用方不能直接替换 aiControllers 参数，因为下游编排器持有的是这个数组的引用。
+  function replaceAiControllers(nextControllers?: LotusController[] | null) {
+    const replacement = nextControllers && nextControllers.length
+      ? nextControllers
+      : [new LotusAiController(), new LotusAiController(), new LotusAiController()]
+    controllers.splice(1, Math.max(0, controllers.length - 1), ...replacement)
+  }
+
   const timer = createTimerScheduler({
     controllers,
     stopCountdown: () => countdown?.stop(),
@@ -336,6 +345,7 @@ export function useLotusGame({
     ...matchLifecycle,
     tileName,
     humanController,
+    replaceAiControllers,
   })
 }
 
