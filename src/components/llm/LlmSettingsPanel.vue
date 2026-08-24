@@ -13,7 +13,7 @@ const props = defineProps<{
   messages: string[]
   stats: LlmControllerStats
 }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; saved: [] }>()
 
 /** 工作副本（打开时从存储载入；保存时整体写回） */
 const settings = ref<LlmSettings>(emptyLlmSettings())
@@ -49,6 +49,7 @@ function save() {
   saveLlmSettings(settings.value)
   savedMark.value = true
   testResult.value = null
+  emit('saved')
 }
 
 function addFromTemplate() {
@@ -164,7 +165,7 @@ function presetName(id: string | null): string {
         单机人机的 AI 玩家可接入大模型决策（出牌/吃碰杠），可添加多个供应商并<b>给不同座位分配不同模型</b>。
         <b>联机房间不走这里：</b>空位大模型由<b>服务端注册的提供商</b>提供（建房时在房间面板为每个空位选择，
         如「大肥鱼（激进）」，key 全在服务端），无需在本页填写 Key。
-        修改后<strong>刷新页面</strong>生效；Key 仅保存在本浏览器、仅浏览器直连所填供应商。
+        修改后保存，开局时生效；开局后不能继续修改。Key 仅保存在本浏览器、仅浏览器直连所填供应商。
       </p>
 
       <label class="llm-row">
@@ -286,7 +287,7 @@ function presetName(id: string | null): string {
         >
       </div>
       <p class="llm-transfer-hint">导出文件不包含 API Key；导入后需检查并点击保存。</p>
-      <p v-if="savedMark" class="llm-status ok">已保存（刷新页面后生效）</p>
+      <p v-if="savedMark" class="llm-status ok">已保存（开局时生效）</p>
       <p v-if="testResult" class="llm-status" :class="testResult.ok ? 'ok' : 'err'">{{ testResult.message }}</p>
       <p v-if="transferStatus" class="llm-status" :class="transferStatus.ok ? 'ok' : 'err'">{{ transferStatus.message }}</p>
 

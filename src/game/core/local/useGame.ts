@@ -85,6 +85,15 @@ export function useGame({
     ...(aiControllers && aiControllers.length ? aiControllers : [new AiController(), new AiController(), new AiController()]),
   ]
 
+  // 设置页只在大厅开放；保存后替换内部数组，使下一次开局读取新的 AI 控制器。
+  // 调用方不能直接替换 aiControllers 参数，因为下游编排器持有的是这个数组的引用。
+  function replaceAiControllers(nextControllers?: PlayerController[] | null) {
+    const replacement = nextControllers && nextControllers.length
+      ? nextControllers
+      : [new AiController(), new AiController(), new AiController()]
+    controllers.splice(1, Math.max(0, controllers.length - 1), ...replacement)
+  }
+
   const scheduler = createLocalTimerScheduler({
     controllers,
     stopCountdown: () => countdown?.stop(),
@@ -282,5 +291,6 @@ export function useGame({
     tileName,
     ...debugScenarios,
     humanController,
+    replaceAiControllers,
   })
 }

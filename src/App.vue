@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
 import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
@@ -66,7 +66,7 @@ const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.
 const { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
-// AI 大模型（单机人机座位 1-3）：读取 localStorage 配置；配置变更后刷新页面生效。
+// AI 大模型（单机人机座位 1-3）：仅大厅可配置；保存后立即装配到下一次开局。
 const llmOpen = ref(false)
 const llmMessages = ref<string[]>([])
 /** 牌桌气泡：key=座位绝对索引，value=最近一条吐槽（4 秒后自动消失） */
@@ -87,29 +87,32 @@ const llmHook = {
     }, 4000)
   },
 }
-const localLlm = createLocalLlmControllers(llmHook)
-const lotusLlm = createLotusLlmControllers(llmHook)
+const localLlm = shallowRef(createLocalLlmControllers(llmHook))
+const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
+// 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
+const localLlmSeeds = localLlm.value.seeds
+const lotusLlmSeeds = lotusLlm.value.seeds
 const llmStats = computed<LlmControllerStats>(() => ({
-  requests: localLlm.stats.requests + lotusLlm.stats.requests,
-  successes: localLlm.stats.successes + lotusLlm.stats.successes,
-  fallbacks: localLlm.stats.fallbacks + lotusLlm.stats.fallbacks,
-  messages: localLlm.stats.messages + lotusLlm.stats.messages,
-  invalidActions: localLlm.stats.invalidActions + lotusLlm.stats.invalidActions,
+  requests: localLlm.value.stats.requests + lotusLlm.value.stats.requests,
+  successes: localLlm.value.stats.successes + lotusLlm.value.stats.successes,
+  fallbacks: localLlm.value.stats.fallbacks + lotusLlm.value.stats.fallbacks,
+  messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
+  invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
 }))
 const localGame = useGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
   countdownEnabled: false,
-  aiControllers: localLlm.controllers ?? undefined,
-  aiPlayerSeeds: localLlm.seeds.length ? localLlm.seeds : undefined,
+  aiControllers: localLlm.value.controllers ?? undefined,
+  aiPlayerSeeds: localLlmSeeds,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
-  aiControllers: lotusLlm.controllers ?? undefined,
-  aiPlayerSeeds: lotusLlm.seeds.length ? lotusLlm.seeds : undefined,
+  aiControllers: lotusLlm.value.controllers ?? undefined,
+  aiPlayerSeeds: lotusLlmSeeds,
 })
 const remoteGame = useRemoteGame({
   playSound: playEffect,
@@ -190,6 +193,7 @@ const { roomMeta } = useRoomAvailability(gameMode, roomId)
 const disclaimerGate = useDisclaimerGate(playerId)
 
 function startGameWithAudio() {
+  llmOpen.value = false
   resetTableReady()
   startBgm()
   // 音效在后台缓存，不能阻塞玩家创建和 3D 牌桌首次渲染。
@@ -230,7 +234,25 @@ const showLobby = computed(() => (
 ))
 watch(showLobby, (value) => {
   if (value) resetTableReady()
+  else llmOpen.value = false
 }, { immediate: true })
+
+function applyLlmSettings() {
+  // 保存事件只会在大厅触发；运行中的对局不会被切换模型打断。
+  if (!showLobby.value || gameMode.value !== 'local') return
+
+  const nextLocalLlm = createLocalLlmControllers(llmHook)
+  localGame.replaceAiControllers(nextLocalLlm.controllers)
+  localLlmSeeds.splice(0, localLlmSeeds.length, ...nextLocalLlm.seeds)
+  nextLocalLlm.seeds = localLlmSeeds
+  localLlm.value = nextLocalLlm
+
+  const nextLotusLlm = createLotusLlmControllers(llmHook)
+  lotusGame.replaceAiControllers(nextLotusLlm.controllers)
+  lotusLlmSeeds.splice(0, lotusLlmSeeds.length, ...nextLotusLlm.seeds)
+  nextLotusLlm.seeds = lotusLlmSeeds
+  lotusLlm.value = nextLotusLlm
+}
 // 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
 // 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
 const humanSeats = computed(() => (
@@ -433,7 +455,7 @@ function changeTableTheme(theme: TableThemeName) {
     </div>
     <RulesPanel :open="rulesOpen" :variant="selectedRule" @close="rulesOpen = false" />
     <button
-      v-if="gameMode === 'local'"
+      v-if="gameMode === 'local' && showLobby"
       class="llm-fab"
       aria-label="AI 设置"
       title="AI 大模型设置（联机由服务端提供商配置）"
@@ -441,10 +463,11 @@ function changeTableTheme(theme: TableThemeName) {
       @click="llmOpen = true"
     ><img :src="robotIconUrl" alt="" aria-hidden="true"></button>
     <LlmSettingsPanel
-      :open="llmOpen"
+      :open="llmOpen && showLobby"
       :messages="llmMessages"
       :stats="llmStats"
       @close="llmOpen = false"
+      @saved="applyLlmSettings"
     />
   </main>
 </template>

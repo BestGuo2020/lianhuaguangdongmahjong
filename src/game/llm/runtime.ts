@@ -1,7 +1,7 @@
 // LLM 运行时装配 —— 供 App.vue 在创建本地人机引擎时注入 AI 控制器（座位 1-3）。
 // 决策：读取 v2 配置（readLlmSettings），支持**每个座位使用不同预置与不同风格**（未指定则跟随默认）。
 // 启用且已填 Key 时才返回 LLM 控制器，否则返回 null（引擎沿用默认启发式 AI）。
-// 配置变更后刷新页面生效。stats 用 reactive 包装：设置面板的 computed 依赖它才能实时刷新。
+// 配置保存后由 App 重新装配到尚未开局的本地引擎。stats 用 reactive 包装：设置面板的 computed 依赖它才能实时刷新。
 import { reactive } from 'vue'
 import type { PlayerController } from '../core/controllers/playerController'
 import type { LotusController } from '../variants/lotus/lotusControllers'
