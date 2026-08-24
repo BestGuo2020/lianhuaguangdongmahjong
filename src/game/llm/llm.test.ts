@@ -8,6 +8,7 @@ import { buildPrompt } from './prompt'
 import { normalizeBaseUrl, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings, presetForSeat, styleForSeat, type LlmSettings } from './config'
 import { avatarFor, avatarFolderFor, avatarFolderOf, defaultNicknameFor, displayNameOf, effectiveNickname } from './persona'
 import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
+import { tileFromName, tileName } from './schema'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
 
@@ -125,6 +126,26 @@ function baseInput(overrides: Partial<DecisionInput> = {}): DecisionInput {
 }
 
 describe('buildDecisionRequest：候选枚举与特征', () => {
+  it('LLM 字牌使用完整且唯一的中文名，并保持发财/白板候选绑定', () => {
+    const honorNames = ['east', 'south', 'west', 'north', 'red', 'green', 'white'].map((tile) => tileName(tile as never))
+    expect(honorNames).toEqual(['东风', '南风', '西风', '北风', '红中', '发财', '白板'])
+    expect(new Set(honorNames).size).toBe(honorNames.length)
+    expect(tileFromName('发财')).toBe('green')
+    expect(tileFromName('白板')).toBe('white')
+
+    const built = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', hand: ['green', 'white'], visibleTiles: ['green', 'white'],
+      jokerTiles: ['green', 'white'], wildcardTiles: ['white'],
+    }))
+    expect(built.request?.candidates
+      .filter((candidate) => candidate.action.kind === 'discard')
+      .map((candidate) => ({ label: candidate.label, action: candidate.action })))
+      .toEqual([
+        { label: '出发财', action: { kind: 'discard', handIndex: 0 } },
+        { label: '出白板', action: { kind: 'discard', handIndex: 1 } },
+      ])
+  })
+
   it('出牌按牌面去重：3万 3万 5万 → 2 个候选', () => {
     const built = buildDecisionRequest(baseInput())
     expect(built.request?.candidates.filter((c) => c.action.kind === 'discard').map((c) => c.label))
@@ -214,7 +235,7 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
       ruleCode: 'lotus-legacy', hand, visibleTiles: hand,
       jokerTiles: [], wildcardTiles: ['white'],
     }))
-    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南')
+    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南风')
     expect(discardSouth?.features.specialPattern).toContain('七对子听牌')
   })
 })

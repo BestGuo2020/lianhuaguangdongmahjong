@@ -187,11 +187,11 @@ interface CandidateFeatures {
 
 | 内部 | 文本 | 内部 | 文本 |
 |---|---|---|---|
-| `m1`~`m9` | 1万~9万 | `east` | 东 |
-| `p1`~`p9` | 1筒~9筒 | `south` | 南 |
-| `s1`~`s9` | 1条~9条 | `west` | 西 |
-| `red` | 红中 | `north` | 北 |
-| `white` | 白板（广麻=癞子牌面） | `green` | 发 |
+| `m1`~`m9` | 1万~9万 | `east` | 东风 |
+| `p1`~`p9` | 1筒~9筒 | `south` | 南风 |
+| `s1`~`s9` | 1条~9条 | `west` | 西风 |
+| `red` | 红中 | `north` | 北风 |
+| `white` | 白板（广麻=癞子牌面） | `green` | 发财 |
 
 ### 6.2 可见状态（来自 ctx，前后端同构）
 
@@ -201,12 +201,12 @@ interface CandidateFeatures {
   "requestId": "turn-42-0007",
   "stateVersion": "round-2-action-118",
   "ruleCode": "lotus-legacy",
-  "hand": ["3万","5万","白板","东","东"],
+  "hand": ["3万","5万","白板","东风","东风"],
   "melds": [{"type":"peng","tile":"5筒","tiles":["5筒","5筒","5筒"]}],
   "snapshots": {
     "self":  {"discards": ["1万","9万"]},
     "upper": {"discards": ["2筒","5筒","6万"], "melds": []},
-    "opposite": {"discards": ["北","红中"]},
+    "opposite": {"discards": ["北风","红中"]},
     "lower": {"discards": ["9条","9条"]}
   },
   "upperLastDiscard": "6万",
