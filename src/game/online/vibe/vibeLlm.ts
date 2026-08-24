@@ -174,9 +174,10 @@ export function createVibeCoreLlmRuntime(
       ? new CoreLlmController(providerConfig(item.preset, item.profile.style), {
           onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
             const priority = meta?.priority ?? 'normal'
-            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
             const compact = compactLlmSpeechText(text)
-            if (compact) hooks.onMessage(speaker, compact, item.profile, priority)
+            if (!compact) return
+            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
+            hooks.onMessage(speaker, compact, item.profile, priority)
           },
         }, stats)
       : new AiController()
@@ -203,9 +204,10 @@ export function createVibeLotusLlmRuntime(
       ? new LotusLlmController(providerConfig(item.preset, item.profile.style), {
           onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
             const priority = meta?.priority ?? 'normal'
-            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
             const compact = compactLlmSpeechText(text)
-            if (compact) hooks.onMessage(speaker, compact, item.profile, priority)
+            if (!compact) return
+            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
+            hooks.onMessage(speaker, compact, item.profile, priority)
           },
         }, stats)
       : new LotusAiController()

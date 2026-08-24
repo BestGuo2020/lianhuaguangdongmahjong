@@ -53,9 +53,9 @@ function hooksForSeat(
   const voiceKey = resolveLocalTtsVoiceKey(preset)
   const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = (seat, text, meta) => {
     const priority = meta?.priority ?? 'normal'
-    if (!speechPolicy.admit({ seat, style, priority })) return
     const compact = compactLlmSpeechText(text)
     if (!compact) return
+    if (!speechPolicy.admit({ seat, style, priority })) return
     hooks.onLlmMessage?.(seat, compact, meta)
     // TTS 是纯表现副作用；失败、限流或网关离线都不能影响动作执行。
     void getLocalTtsClient().speak(seat, compact, voiceKey, style, priority)

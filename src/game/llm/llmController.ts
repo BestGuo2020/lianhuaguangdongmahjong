@@ -34,6 +34,7 @@ import type { TileType } from '../core/contracts/types'
 import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
 import { requestLlmDecision } from './client'
+import { compactLlmSpeechText } from './speechPolicy'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
@@ -67,6 +68,19 @@ const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
 
+function fallbackDecisionSpeech(action: CanonicalAction): string {
+  switch (action.kind) {
+    case 'added-kong':
+    case 'concealed-kong':
+    case 'wind-kong':
+    case 'gang': return '这杠我开了。'
+    case 'peng': return '碰一个。'
+    case 'chi': return '顺手吃了。'
+    case 'pass': return '先看看。'
+    default: return '这张先走。'
+  }
+}
+
 /** 内部：LLM 决定 → 候选动作；失败/非法 → null（回退）。 */
 async function decideCanonical(
   config: LlmProviderConfig,
@@ -92,15 +106,14 @@ async function decideCanonical(
       stats.invalidActions += 1
       return built.fallbackAction
     }
-    if (output.message) {
-      stats.messages += 1
-      hooks.onLlmMessage?.(input.playerIndex, output.message, {
-        priority: IMPORTANT_SPEECH_ACTIONS.has(candidate.action.kind) ? 'important' : 'normal',
-        decision: input.decision,
-        actionKind: candidate.action.kind,
-        source: 'decision',
-      })
-    }
+    const speech = compactLlmSpeechText(output.message) || fallbackDecisionSpeech(candidate.action)
+    stats.messages += 1
+    hooks.onLlmMessage?.(input.playerIndex, speech, {
+      priority: IMPORTANT_SPEECH_ACTIONS.has(candidate.action.kind) ? 'important' : 'normal',
+      decision: input.decision,
+      actionKind: candidate.action.kind,
+      source: 'decision',
+    })
     stats.successes += 1
     return candidate.action
   } catch {
