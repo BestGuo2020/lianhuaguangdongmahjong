@@ -51,7 +51,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     ...options,
     playSound: (name, volume) => {
       const suppress = isLlmVoiceSeat(state.winningPlayerIndex.value)
-        && (name === 'zimo.mp3' || name === 'hu.mp3' || name === 'hu_effect_sound.mp3')
+        && (name === 'zimo.mp3' || name === 'hu.mp3')
       if (!suppress) return volume === undefined
         ? options.playSound(name)
         : options.playSound(name, volume)

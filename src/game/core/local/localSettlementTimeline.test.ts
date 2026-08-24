@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GamePlayer } from '../contracts/types'
-import { WIN_EFFECT_DURATION, WIN_REVEAL_DURATION } from '../presentation/winEffect'
+import { WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../presentation/winEffect'
 import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 import { createLocalGameState } from './localGameState'
 import { createLocalSettlementTimeline } from './localSettlementTimeline'
@@ -111,7 +111,7 @@ describe('localSettlementTimeline', () => {
     expect(playSound).toHaveBeenCalledWith('hu.mp3')
   })
 
-  it('LLM 赢家用策略台词播报自摸，并屏蔽原始胡牌人声', () => {
+  it('LLM 赢家用策略台词替代胡牌人声，但保留胡牌特效音', () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -122,10 +122,11 @@ describe('localSettlementTimeline', () => {
     const announce = vi.fn()
     registerLocalLlmVoiceSeat(1, '高冷', announce)
     const playSound = vi.fn()
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
     const timeline = createLocalSettlementTimeline({
       state,
       clearTimers: vi.fn(),
-      later: vi.fn(() => 1),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound,
       showTableAction: vi.fn(),
       structuralMeldCount: () => 0,
@@ -136,7 +137,8 @@ describe('localSettlementTimeline', () => {
 
     expect(announce).toHaveBeenCalledWith('自摸。')
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
-    expect(playSound).not.toHaveBeenCalledWith('hu_effect_sound.mp3', expect.anything())
+    scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
+    expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
   })
 
   it('allows a headless online engine to bypass the single-player LLM voice registry', () => {

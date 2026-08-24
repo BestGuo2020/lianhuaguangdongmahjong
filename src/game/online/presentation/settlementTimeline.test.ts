@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
+import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import { createSettlementTimeline } from './settlementTimeline'
@@ -67,7 +67,7 @@ describe('settlementTimeline', () => {
     expect(state.result.value?.draw).toBe(true)
   })
 
-  it('大模型赢家由 TTS 播报，不播放自摸/胡牌及特效原声', async () => {
+  it('大模型赢家由 TTS 替代自摸/胡牌人声，但仍播放胡牌特效音', async () => {
     const { sounds, timeline } = harness(false)
     timeline.start(snapshot({
       players: [{
@@ -76,8 +76,9 @@ describe('settlementTimeline', () => {
       }],
     }))
 
-    await vi.advanceTimersByTimeAsync(10000)
     expect(sounds).toEqual([])
+    await vi.advanceTimersByTimeAsync(WIN_EFFECT_SOUND_DELAY)
+    expect(sounds).toEqual(['hu_effect_sound.mp3'])
   })
 
   it('cancels pending settlement transitions', async () => {

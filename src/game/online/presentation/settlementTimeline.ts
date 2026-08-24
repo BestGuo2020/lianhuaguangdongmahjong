@@ -95,7 +95,7 @@ export function createSettlementTimeline({
     if (!llmWinner) {
       playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     }
-    if (!reduceMotion && !llmWinner) {
+    if (!reduceMotion) {
       later(() => {
         if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)
       }, WIN_EFFECT_SOUND_DELAY)
