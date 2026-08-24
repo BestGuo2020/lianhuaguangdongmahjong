@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
+import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import { createSettlementTimeline } from './settlementTimeline'
@@ -19,7 +19,7 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   }
 }
 
-function harness() {
+function harness(reduced = true, llmSeat = false) {
   const state = {
     phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
@@ -32,7 +32,8 @@ function harness() {
     mapPresentation: (value) => value ? { ...value, winnerIndex: 0 } : null,
     toLocalSeat: (seat) => (seat - 2 + 4) % 4,
     playSound: (name) => sounds.push(name),
-    reducedMotion: () => true,
+    isLlmSeat: () => llmSeat,
+    reducedMotion: () => reduced,
     onResultMissingAfterReveal,
   })
   return { state, sounds, timeline, onResultMissingAfterReveal }
@@ -147,6 +148,15 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('win-effect')
     expect(state.winEffect.value).not.toBeNull()
     expect(sounds).toEqual(['zimo.mp3', 'zimo.mp3'])
+  })
+
+  it('大模型赢家由 TTS 替代自摸/胡牌人声，但仍播放胡牌特效音', async () => {
+    const { sounds, timeline } = harness(false, true)
+    timeline.start(snapshot())
+
+    expect(sounds).toEqual([])
+    await vi.advanceTimersByTimeAsync(WIN_EFFECT_SOUND_DELAY)
+    expect(sounds).toEqual(['hu_effect_sound.mp3'])
   })
 
   it('cancels pending settlement transitions', async () => {
