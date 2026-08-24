@@ -65,4 +65,32 @@ describe('单机 LLM runtime TTS', () => {
     }))
     expect(mocks.speak).toHaveBeenCalledWith(1, '这手先稳住。', 'deepseek', '稳健', 'normal')
   })
+
+  it('幕后词或空台词改用自然兜底，再进入统一频率控制', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+        ttsVoiceKey: 'deepseek',
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    mocks.requestLlmDecision.mockResolvedValueOnce({ choice: 'A1', message: '听引擎的？' })
+    const bubble = vi.fn()
+    const runtime = createLocalLlmControllers({ onLlmMessage: bubble })
+
+    await runtime.controllers![0].requestTurn({
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'],
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    })
+    await Promise.resolve()
+
+    expect(bubble).toHaveBeenCalledWith(1, '这张先走。', expect.objectContaining({ priority: 'normal' }))
+    expect(mocks.speak).toHaveBeenCalledWith(1, '这张先走。', 'deepseek', '稳健', 'normal')
+  })
 })
