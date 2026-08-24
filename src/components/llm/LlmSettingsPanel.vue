@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  LLM_DECISION_TIMEOUT_MS, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
+  LLM_DECISION_TIMEOUT_MS, LLM_PROVIDER_TYPES, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
-import { isQwenThinkingModel, testLlmConnection } from '../../game/llm/client'
+import { testLlmConnection } from '../../game/llm/client'
+import { reasoningPolicyUsable, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
 const props = defineProps<{
@@ -28,6 +29,7 @@ const transferStatus = ref<{ ok: boolean; message: string } | null>(null)
 const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
+const reasoningPolicy = computed(() => selected.value ? resolveReasoningPolicy(selected.value) : null)
 const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
 
 function load() {
@@ -59,6 +61,7 @@ function addFromTemplate() {
   const preset: LlmProviderPreset = {
     id: newPresetId(),
     name: template.name,
+    providerType: template.providerType,
     baseUrl: template.baseUrl,
     apiKey: '',
     model: template.model,
@@ -97,6 +100,7 @@ async function testConnection() {
   try {
     const url = normalizeBaseUrl(preset.baseUrl)
     const result = await testLlmConnection({
+      providerType: preset.providerType,
       baseUrl: preset.baseUrl,
       apiKey: preset.apiKey,
       model: preset.model,
@@ -238,6 +242,12 @@ function presetName(id: string | null): string {
           >
         </label>
         <label class="llm-row">
+          <span>供应商协议</span>
+          <select v-model="selected.providerType" data-testid="llm-provider-type">
+            <option v-for="item in LLM_PROVIDER_TYPES" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+        </label>
+        <label class="llm-row">
           <span>Base URL</span>
           <input v-model="selected.baseUrl" type="text" placeholder="https://api.deepseek.com/v1" data-testid="llm-base-url" spellcheck="false">
         </label>
@@ -249,8 +259,11 @@ function presetName(id: string | null): string {
           <span>模型</span>
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
-        <p v-if="isQwenThinkingModel(selected)" class="llm-provider-hint" data-testid="llm-qwen-fast-hint">
-          千问 3.5–3.8 将自动关闭深度思考，并使用 {{ QWEN_DECISION_TIMEOUT_MS / 1000 }} 秒决策预算。
+        <p
+          v-if="reasoningPolicy" class="llm-provider-hint"
+          :class="{ invalid: !reasoningPolicyUsable(reasoningPolicy) }" data-testid="llm-reasoning-policy-hint"
+        >
+          {{ reasoningPolicy.message }}
         </p>
         <label class="llm-row">
           <span>风格</span>
@@ -322,6 +335,7 @@ function presetName(id: string | null): string {
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
 .llm-row > span { color: #a6b5ad; }
 .llm-provider-hint { margin: -2px 0 9px 94px; color: #d8bd75; font-size: 11px; line-height: 1.5; }
+.llm-provider-hint.invalid { color: #f08f82; }
 .llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;

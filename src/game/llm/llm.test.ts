@@ -235,7 +235,7 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
       ruleCode: 'lotus-legacy', hand, visibleTiles: hand,
       jokerTiles: [], wildcardTiles: ['white'],
     }))
-    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南')
+    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南风')
     expect(discardSouth?.features.specialPattern).toContain('七对子听牌')
   })
 })
@@ -506,7 +506,7 @@ describe('testLlmConnection', () => {
     expect(qwenBody.enable_thinking).toBe(false)
     expect(qwenBody.response_format).toEqual({ type: 'json_object' })
 
-    const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1' }
+    const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1', model: 'gpt-4o-mini' }
     let otherBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       otherBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -518,6 +518,60 @@ describe('testLlmConnection', () => {
     await requestLlmDecision({ config: otherConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
     expect(otherBody.thinking).toBeUndefined()
     expect(otherBody.enable_thinking).toBeUndefined()
+  })
+
+  it('旧预置缺少 providerType 时按地址/模型迁移并在导出中保留', () => {
+    const storage = memoryStorage()
+    storage.setItem('llm.providers', JSON.stringify({
+      configVersion: 2, enabled: true,
+      presets: [{ id: 'q1', name: 'Qwen', baseUrl: 'https://proxy.example.com/v1', apiKey: 'sk', model: 'qwen3.7-plus', style: '稳健' }],
+      activeId: 'q1', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    }))
+    const settings = readLlmSettings(storage)
+    expect(settings.presets[0].providerType).toBe('qwen')
+    expect(JSON.parse(serializeLlmSettings(settings)).settings.presets[0].providerType).toBe('qwen')
+  })
+
+  it('Kimi K2.6 经自定义代理仍关闭思考并覆盖官方采样参数', async () => {
+    let captured: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }] }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: { ...config, providerType: 'kimi', baseUrl: 'https://proxy.example.com/v1', model: 'kimi-k2.6' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })
+    expect(captured.thinking).toEqual({ type: 'disabled' })
+    expect(captured.temperature).toBe(0.6)
+    expect(captured.top_p).toBe(0.95)
+  })
+
+  it('关闭参数被代理吞掉并返回思考内容时拒绝响应', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        choices: [{ message: { content: '{"choice":"A1"}', reasoning_content: '仍在思考' }, finish_reason: 'stop' }],
+        usage: { completion_tokens_details: { reasoning_tokens: 12 } },
+      }),
+    })) as never)
+    await expect(requestLlmDecision({
+      config: { ...config, providerType: 'qwen', baseUrl: 'https://proxy.example.com/v1', model: 'qwen3.7-plus' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).rejects.toMatchObject({ kind: 'reasoning' })
+  })
+
+  it('未知或推理专用模型在发出网络请求前拒绝', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    await expect(requestLlmDecision({
+      config: { ...config, providerType: 'minimax', model: 'MiniMax-M2.7' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).rejects.toMatchObject({ kind: 'config' })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('Anthropic 端点自动携带浏览器直连头；其他厂商不携带', async () => {

@@ -304,7 +304,7 @@ Prompt 中的玩家昵称、规则摘要和牌面都视为不可信数据，必�
 
 ### 7.3 温度与采样（前后端一致默认值）
 
-`temperature: 0.4`（既有风格又可控）、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；不启用 `response_format`（部分兼容端不支持，靠解析容错）。若供应商返回 `finish_reason=length` 或无文本内容，视为解析失败并只允许一次语义重试。
+默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（如 Kimi K2.5/K2.6 非思考模式的 `temperature: 0.6`、`top_p: 0.95`）。千问结构化输出启用 `response_format: {type:"json_object"}`。若供应商返回 `finish_reason=length`、无文本内容或在强制非思考后仍返回 `reasoning_content/reasoning_tokens`，立即回退启发式，不进入普通语义重试。
 
 ### 7.4 吐槽展示事件
 
@@ -368,7 +368,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 | key | 默认 | 说明 |
 |---|---|---|
 | `llm.providers` | `{configVersion:2, enabled:false, presets:[], activeId:null, seatIds:[null,null,null]}` | 全部配置载体 |
-| `presets[]` | 空 | 每个预置：`{id, name, nickname?, baseUrl, apiKey, model, style, timeoutMs}`；昵称缺省按供应商推导（DeepSeek=大肥鱼，Kimi=Kimi，千问=千问，豆包=豆包，MiniMax=MiniMax，GPT=GPT，智谱=智谱），自定义可编辑 |
+| `presets[]` | 空 | 每个预置：`{id, name, nickname?, providerType?, baseUrl, apiKey, model, style, timeoutMs}`；`providerType` 在自定义代理下仍决定供应商非思考参数，旧配置按地址/模型迁移；昵称缺省按供应商推导，自定义可编辑 |
 | 座位形象 | — | 对局显示 `昵称（策略）`；头像按策略取 `img/llm/<供应商英文名>/` 四宫格裁切（左上激进/右上稳健/左下话痨/右下高冷；文件夹：deepseek/kimi/qwen/doubao/minimax/gpt/zhipu，未知=custom） |
 | `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
 | `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
@@ -377,7 +377,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
 - 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
-- DeepSeek 官方端点自动追加 `thinking:{type:'disabled'}`（关闭默认思考模式，避免占用决策输出预算），其他厂商不追加。
+- 请求前由统一能力矩阵判定：可切换模型追加供应商专用关闭参数；天然非思考模型直接调用；推理专用或未知模型拒绝并回退。自定义代理必须选择正确 `providerType`。响应仍出现 `reasoning_content/reasoning_tokens` 时视为代理吞掉参数并立即回退。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 
