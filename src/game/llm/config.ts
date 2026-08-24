@@ -45,7 +45,6 @@ export interface LlmSettings {
 
 export const CONFIG_VERSION = 2
 export const LLM_DECISION_TIMEOUT_MS = 20_000
-export const QWEN_DECISION_TIMEOUT_MS = 8_000
 export const LLM_SETTINGS_FILE_KIND = 'lianhua-guangma-llm-settings'
 export const LLM_SETTINGS_FILE_VERSION = 1
 const STORAGE_KEY = 'llm.providers'

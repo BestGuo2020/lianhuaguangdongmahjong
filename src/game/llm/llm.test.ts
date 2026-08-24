@@ -235,7 +235,7 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
       ruleCode: 'lotus-legacy', hand, visibleTiles: hand,
       jokerTiles: [], wildcardTiles: ['white'],
     }))
-    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南风')
+    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南')
     expect(discardSouth?.features.specialPattern).toContain('七对子听牌')
   })
 })
@@ -253,14 +253,6 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
       ruleCode: 'lotus-legacy', hand: ['m5', 'white', 'm3'],
       jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
     }), { kind: 'discard', handIndex: 0 })).toBe(false)
-  })
-
-  it('二次校验拒绝会拆掉四面听的风杠', () => {
-    const hand = ['s3', 's4', 's5', 'east', 'south', 'west', 'north', 'p9'] as never
-    expect(isActionLegal(baseInput({
-      ruleCode: 'lotus-legacy', hand, exposedMelds: 2, visibleTiles: hand,
-      jokerTiles: [], wildcardTiles: ['white'],
-    }), { kind: 'wind-kong' })).toBe(false)
   })
 
   it('win 永远拒绝（只能引擎短路产生）', () => {

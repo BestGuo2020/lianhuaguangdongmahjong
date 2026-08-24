@@ -11,6 +11,21 @@ interface LocalLlmSeatVoice {
 
 const seats = new Map<number, LocalLlmSeatVoice>()
 
+const WIN_LINES: Record<LocalLlmWinType, Record<LocalLlmVoiceStyle, string>> = {
+  'self-draw': {
+    激进: '自摸！这局我收下了！', 稳健: '自摸，稳稳收下。',
+    话痨: '自摸啦！这手终于等到了！', 高冷: '自摸。',
+  },
+  'discard-win': {
+    激进: '放枪！这张我等很久了！', 稳健: '放枪，多谢送牌。',
+    话痨: '放枪啦！这张正好送到手上！', 高冷: '放枪。',
+  },
+  'robbed-kong-win': {
+    激进: '抢杠胡！这杠开不得！', 稳健: '抢杠胡，时机刚好。',
+    话痨: '抢杠胡啦！这张我可等着呢！', 高冷: '抢杠胡。',
+  },
+}
+
 export function clearLocalLlmVoiceSeats(): void {
   seats.clear()
 }
