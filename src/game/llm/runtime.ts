@@ -23,6 +23,7 @@ export interface LocalLlmRuntime<C> {
 
 function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['style']) {
   return {
+    providerType: preset.providerType,
     baseUrl: preset.baseUrl,
     apiKey: preset.apiKey,
     model: preset.model,

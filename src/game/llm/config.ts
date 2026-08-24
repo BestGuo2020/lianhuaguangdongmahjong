@@ -7,9 +7,19 @@ import type { RuleCode } from './schema'
 
 export type LlmStyle = '激进' | '稳健' | '话痨' | '高冷'
 export type LlmTtsVoiceKey = 'auto' | 'default' | 'deepseek' | 'relay_gpt'
+export type LlmProviderType = 'deepseek' | 'qwen' | 'kimi' | 'doubao' | 'minimax' | 'openai' | 'glm' | 'claude' | 'custom'
+
+export const LLM_PROVIDER_TYPES: Array<{ value: LlmProviderType; label: string }> = [
+  { value: 'deepseek', label: 'DeepSeek' }, { value: 'qwen', label: '通义千问' },
+  { value: 'kimi', label: 'Kimi' }, { value: 'doubao', label: '豆包' },
+  { value: 'minimax', label: 'MiniMax' }, { value: 'openai', label: 'OpenAI / GPT' },
+  { value: 'glm', label: '智谱 GLM' }, { value: 'claude', label: 'Claude' },
+  { value: 'custom', label: '自定义 OpenAI 兼容协议' },
+]
 
 /** 单次调用配置（运行时/客户端使用） */
 export interface LlmProviderConfig {
+  providerType?: LlmProviderType
   baseUrl: string
   apiKey: string
   model: string
@@ -53,6 +63,7 @@ const LEGACY_KEY = 'llm.provider'
 const LEGACY_ENABLED_KEY = 'llm.enabled'
 
 export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> = {
+  providerType: 'deepseek',
   baseUrl: 'https://api.deepseek.com/v1',
   model: 'deepseek-v4-flash',
   style: '稳健',
@@ -60,17 +71,36 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
 }
 
 /** 常用供应商模板（Base URL + 示例模型，模型名需按官方文档核对） */
-export const PROVIDER_TEMPLATES: Array<{ name: string; baseUrl: string; model: string }> = [
-  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
-  { name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2-0711-preview' },
-  { name: '通义千问 (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
-  { name: '豆包 (Volcano Ark)', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
-  { name: 'MiniMax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
-  { name: 'OpenAI (GPT)', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  { name: '智谱 (GLM)', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  { name: 'Claude (Anthropic)', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514' },
-  { name: '自定义', baseUrl: '', model: '' },
+export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProviderType; baseUrl: string; model: string }> = [
+  { name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
+  { name: 'Kimi (Moonshot)', providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
+  { name: '通义千问 (DashScope)', providerType: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
+  { name: '豆包 (Volcano Ark)', providerType: 'doubao', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
+  { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
+  { name: 'OpenAI (GPT)', providerType: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { name: '智谱 (GLM)', providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { name: 'Claude (Anthropic)', providerType: 'claude', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514' },
+  { name: '自定义', providerType: 'custom', baseUrl: '', model: '' },
 ]
+
+export function inferLlmProviderType(baseUrl: string, model: string): LlmProviderType {
+  const source = `${baseUrl} ${model}`.toLowerCase()
+  if (/deepseek/.test(source)) return 'deepseek'
+  if (/(?:dashscope|\.maas\.aliyuncs|qwen|qwq)/.test(source)) return 'qwen'
+  if (/(?:moonshot|kimi)/.test(source)) return 'kimi'
+  if (/(?:volces|volcengine|doubao)/.test(source)) return 'doubao'
+  if (/minimax/.test(source)) return 'minimax'
+  if (/(?:api\.openai\.com|\bgpt-|\bo[134](?:[.-]|\s|$))/.test(source)) return 'openai'
+  if (/(?:bigmodel|\bglm-)/.test(source)) return 'glm'
+  if (/(?:anthropic|\bclaude)/.test(source)) return 'claude'
+  return 'custom'
+}
+
+function validateProviderType(value: unknown, baseUrl: string, model: string): LlmProviderType {
+  return LLM_PROVIDER_TYPES.some((item) => item.value === value)
+    ? value as LlmProviderType
+    : inferLlmProviderType(baseUrl, model)
+}
 
 export function emptyLlmSettings(): LlmSettings {
   return {
@@ -106,7 +136,7 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
   const avatarFolder = typeof raw.avatarFolder === 'string' ? raw.avatarFolder : undefined
   if (!baseUrl && !apiKey && !model) return null
   return {
-    id, name, baseUrl, apiKey, model,
+    id, name, baseUrl, apiKey, model, providerType: validateProviderType(raw.providerType, baseUrl, model),
     ...(nickname ? { nickname } : {}),
     ...(raw.fromCustomTemplate === true ? { fromCustomTemplate: true } : {}),
     ...(avatarFolder ? { avatarFolder } : {}),

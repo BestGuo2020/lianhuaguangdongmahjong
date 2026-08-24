@@ -5,10 +5,11 @@ import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
 import { normalizeBaseUrl, QWEN_DECISION_TIMEOUT_MS } from './config'
 import { withFeedbackRetry } from './prompt'
+import { reasoningPolicyUsable, resolveReasoningPolicy } from './reasoningPolicy'
 
 export class LlmClientError extends Error {
   constructor(
-    readonly kind: 'http' | 'timeout' | 'network' | 'parse',
+    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'config' | 'reasoning',
     message: string,
   ) {
     super(message)
@@ -99,20 +100,14 @@ interface CallOnceOptions {
   maxTokens?: number
   /** 连接测试等场景：finish_reason=length 视为成功（证明链路通畅，仅内容被截断） */
   strictLength?: boolean
-  /** 追加到请求体的厂商特有字段（如 DeepSeek 的 thinking 开关） */
+  /** 追加到请求体的供应商能力矩阵字段。 */
   extraBody?: Record<string, unknown>
-}
-
-/** DeepSeek 官方端点：V4 系列默认开启思考模式（effort=high），会占用决策输出预算。 */
-export function isDeepSeekBaseUrl(baseUrl: string): boolean {
-  return /^https:\/\/api\.deepseek\.com/i.test(baseUrl.trim())
 }
 
 /** 百炼 Qwen 3.5–3.8 默认开启混合思考；麻将候选选择使用非思考模式。 */
 export function isQwenThinkingModel(config: Pick<LlmProviderConfig, 'baseUrl' | 'model'>): boolean {
-  const officialEndpoint = /(?:dashscope\.aliyuncs\.com|\.maas\.aliyuncs\.com)(?:\/|$)/i.test(config.baseUrl.trim())
-  const thinkingModel = /^qwen3\.(?:5|6|7|8)(?:[.-]|$)/i.test(config.model.trim())
-  return officialEndpoint && thinkingModel
+  const resolved = resolveReasoningPolicy(config)
+  return resolved.providerType === 'qwen' && resolved.mode === 'explicit-off'
 }
 
 export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
@@ -125,12 +120,10 @@ function providerExtraBody(
   config: LlmProviderConfig,
   structuredOutput: boolean,
 ): Record<string, unknown> | undefined {
-  const body: Record<string, unknown> = {}
-  if (isDeepSeekBaseUrl(config.baseUrl)) body.thinking = { type: 'disabled' }
-  if (isQwenThinkingModel(config)) {
-    body.enable_thinking = false
-    if (structuredOutput) body.response_format = { type: 'json_object' }
-  }
+  const resolved = resolveReasoningPolicy(config)
+  if (!reasoningPolicyUsable(resolved)) throw new LlmClientError('config', resolved.message)
+  const body: Record<string, unknown> = { ...resolved.requestBody }
+  if (resolved.providerType === 'qwen' && structuredOutput) body.response_format = { type: 'json_object' }
   return Object.keys(body).length ? body : undefined
 }
 
@@ -177,7 +170,9 @@ async function callOnce(
       throw new LlmClientError('http', `HTTP ${response.status}: ${detail}`)
     }
     const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown }; finish_reason?: string | null }>
+      choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown }; finish_reason?: string | null }>
+      reasoning?: unknown
+      usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } }
     }
     const choice = body.choices?.[0]
     if (!choice?.message || typeof choice.message.content !== 'string' || !choice.message.content) {
@@ -185,6 +180,15 @@ async function callOnce(
     }
     if (choice.finish_reason === 'length' && options.strictLength !== false) {
       throw new LlmClientError('parse', 'finish_reason=length（输出被截断）')
+    }
+    const reasoningContent = choice.message.reasoning_content
+    const reasoningTokens = body.usage?.completion_tokens_details?.reasoning_tokens
+    const leakedReasoning = (typeof reasoningContent === 'string' && reasoningContent.trim().length > 0)
+      || (typeof reasoningTokens === 'number' && reasoningTokens > 0)
+      || (typeof body.reasoning === 'string' && body.reasoning.trim().length > 0)
+      || (Array.isArray(body.reasoning) && body.reasoning.length > 0)
+    if (leakedReasoning) {
+      throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
     }
     return { content: choice.message.content, finishReason: choice.finish_reason ?? null }
   } catch (error) {
