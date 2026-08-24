@@ -7,7 +7,7 @@ import { matchingCount, applyKongScore } from '../core/rules/rules'
 import { decideTurn as coreDecideTurn, decideClaim as coreDecideClaim } from '../core/controllers/ai'
 import { decideTurn as lotusDecideTurn, decideClaim as lotusDecideClaim } from '../variants/lotus/lotusAi'
 import {
-  LOTUS_RULESET, windKong, waitingTiles as lotusWaitingTiles, type ChiMeld,
+  LOTUS_RULESET, evaluateBasePattern, windKong, waitingTiles as lotusWaitingTiles, type BasePattern, type ChiMeld,
 } from '../variants/lotus/lotusRules'
 import {
   tileName, type Candidate, type CanonicalAction, type DecisionKind, type DecisionRequest,
@@ -56,12 +56,21 @@ export interface BuiltRequest {
 
 const isLotus = (input: DecisionInput) => input.ruleCode === 'lotus-legacy'
 
+const SPECIAL_PATTERN_LABELS: Partial<Record<BasePattern, string>> = {
+  sevenPairs: '七对子', shiSanLan: '十三烂', qiXing: '七星十三烂', thirteenOrphans: '十三幺',
+}
+
 function jokersOf(input: DecisionInput): TileType[] {
   return input.jokerTiles ?? (isLotus(input) ? [] : [])
 }
 
 function wildcardsOf(input: DecisionInput): TileType[] {
   return input.wildcardTiles ?? (isLotus(input) ? ['white'] : [])
+}
+
+/** 广麻保护白板；莲花麻将保护双精牌和受限替代白板。 */
+export function protectedDiscardTiles(input: DecisionInput): Set<TileType> {
+  return new Set(isLotus(input) ? [...jokersOf(input), ...wildcardsOf(input)] : ['white'])
 }
 
 function countsOf(input: DecisionInput): Map<TileType, number> {
@@ -84,7 +93,7 @@ function isTenpai(input: DecisionInput, hand: TileType[]): boolean {
 }
 
 /** 基础牌效分：同牌×4 + 相邻靠张×2 + 字牌罚 6（与两套启发式一致的确定性简化）。 */
-export function heuristicScore(hand: TileType[], tile: TileType): number {
+export function heuristicScore(hand: TileType[], tile: TileType, protectedTiles: ReadonlySet<TileType> = new Set()): number {
   const same = matchingCount(hand, tile) - 1
   const suited = /^([mps])([1-9])$/.exec(tile)
   let neighbors = 0
@@ -94,7 +103,20 @@ export function heuristicScore(hand: TileType[], tile: TileType): number {
     neighbors += hand.includes(`${suited[1]}${rank + 1}` as TileType) ? 1 : 0
   }
   const honor = suited ? 0 : 6
-  return same * 4 + neighbors * 2 + honor
+  return same * 4 + neighbors * 2 + honor + (protectedTiles.has(tile) ? 100 : 0)
+}
+
+function specialPatternOf(input: DecisionInput, hand: TileType[], waits: TileType[]): string {
+  if (!isLotus(input) || input.exposedMelds > 0 || waits.length === 0) return 'none'
+  const patterns = new Set<string>()
+  for (const wait of waits) {
+    const result = evaluateBasePattern(
+      [...hand, wait], input.exposedMelds, jokersOf(input), [], wildcardsOf(input),
+    )
+    const label = result ? SPECIAL_PATTERN_LABELS[result.pattern] : undefined
+    if (label) patterns.add(`${label}听牌`)
+  }
+  return patterns.size ? [...patterns].join('、') : 'none'
 }
 
 function safetyBand(input: DecisionInput, tile: TileType): '高' | '中' | '低' {
@@ -139,8 +161,11 @@ function featuresOf(
       ? quality.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) }))
       : 'n/a'
     base.effectiveRemaining = quality.ready ? quality.effectiveRemaining : 'n/a'
-    base.specialPattern = 'none'
+    base.specialPattern = specialPatternOf(input, after, quality.waits)
     base.safety = safetyBand(input, input.hand[id])
+    if (protectedDiscardTiles(input).has(input.hand[id])) {
+      base.risks.push('癞子/精牌，通常必须保留；当前无普通牌可打')
+    }
     return base
   }
   if (action.kind === 'gang') {
@@ -337,8 +362,11 @@ function turnCandidates(input: DecisionInput): Candidate[] {
     }
   }
   const discardScores: Array<{ index: number; heuristic: number }> = []
+  const protectedTiles = protectedDiscardTiles(input)
+  const hasNaturalDiscard = input.hand.some((tile) => !protectedTiles.has(tile))
   const seen = new Set<TileType>()
   input.hand.forEach((tile, handIndex) => {
+    if (hasNaturalDiscard && protectedTiles.has(tile)) return
     if (seen.has(tile)) return
     seen.add(tile)
     candidates.push({
@@ -348,7 +376,7 @@ function turnCandidates(input: DecisionInput): Candidate[] {
       features: { ready: 'unknown' as const, waits: 'n/a' as const, effectiveRemaining: 'n/a' as const, specialPattern: 'none', safety: 'unknown' as const, efficiency: '差', risks: [] },
       legalityKey: `discard:${tile}`,
     })
-    discardScores.push({ index: candidates.length - 1, heuristic: heuristicScore(input.hand, tile) })
+    discardScores.push({ index: candidates.length - 1, heuristic: heuristicScore(input.hand, tile, protectedTiles) })
   })
   // 听口/安全度回填 + 确定性档位
   const bands = bandedEfficiency(discardScores.map((d) => ({ index: d.index, heuristic: d.heuristic })), 'discard')

@@ -30,7 +30,7 @@ import { LOTUS_RULESET, type ChiMeld } from '../variants/lotus/lotusRules'
 import { decideRobKong as coreDecideRobKong } from '../core/controllers/ai'
 import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import type { TileType } from '../core/contracts/types'
-import { buildDecisionRequest, type DecisionInput } from './candidates'
+import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
 import { requestLlmDecision } from './client'
 import type { LlmProviderConfig } from './config'
@@ -112,7 +112,9 @@ async function decideCanonical(
 export function isActionLegal(input: DecisionInput, action: CanonicalAction): boolean {
   const { hand } = input
   if (action.kind === 'discard') {
-    return Number.isInteger(action.handIndex) && action.handIndex >= 0 && action.handIndex < hand.length
+    if (!Number.isInteger(action.handIndex) || action.handIndex < 0 || action.handIndex >= hand.length) return false
+    const protectedTiles = protectedDiscardTiles(input)
+    return !(protectedTiles.has(hand[action.handIndex]) && hand.some((tile) => !protectedTiles.has(tile)))
   }
   if (action.kind === 'added-kong') {
     const meld = input.melds[action.meldIndex]

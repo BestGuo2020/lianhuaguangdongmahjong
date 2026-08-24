@@ -175,6 +175,38 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     expect(discard?.features.ready).toBe(true)
     expect(discard?.features.waits).toEqual(expect.arrayContaining([{ tile: '2条', remaining: 2 }]))
   })
+
+  it('有普通牌时不生成广麻白板或莲花双精/白板弃牌候选', () => {
+    const classic = buildDecisionRequest(baseInput({ hand: ['white', 'm3', 'm5'] }))
+    expect(classic.request?.candidates.map((candidate) => candidate.label)).not.toContain('出白板')
+
+    const legacy = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', hand: ['m5', 'm6', 'white', 'm3'],
+      jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
+    }))
+    expect(legacy.request?.candidates.map((candidate) => candidate.label))
+      .toEqual(expect.not.arrayContaining(['出5万', '出6万', '出白板']))
+  })
+
+  it('全手只剩受保护牌时仍生成候选并标记风险', () => {
+    const built = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', hand: ['m5', 'm6', 'white'],
+      jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
+    }))
+    const discards = built.request?.candidates.filter((candidate) => candidate.action.kind === 'discard') ?? []
+    expect(discards).toHaveLength(3)
+    expect(discards.every((candidate) => candidate.features.risks.some((risk) => risk.includes('癞子/精牌')))).toBe(true)
+  })
+
+  it('莲花麻将特殊牌型听牌由规则引擎标注', () => {
+    const hand = ['m1', 'm1', 'm2', 'm2', 'm3', 'm3', 'p1', 'p1', 'p2', 'p2', 's1', 's1', 'east', 'south'] as never
+    const built = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', hand, visibleTiles: hand,
+      jokerTiles: [], wildcardTiles: ['white'],
+    }))
+    const discardSouth = built.request?.candidates.find((candidate) => candidate.label === '出南')
+    expect(discardSouth?.features.specialPattern).toContain('七对子听牌')
+  })
 })
 
 describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
@@ -182,6 +214,14 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
     const input = baseInput()
     expect(isActionLegal(input, { kind: 'discard', handIndex: 0 })).toBe(true)
     expect(isActionLegal(input, { kind: 'discard', handIndex: 3 })).toBe(false)
+  })
+
+  it('有普通牌时二次校验拒绝弃癞子或精牌', () => {
+    expect(isActionLegal(baseInput({ hand: ['white', 'm3'] }), { kind: 'discard', handIndex: 0 })).toBe(false)
+    expect(isActionLegal(baseInput({
+      ruleCode: 'lotus-legacy', hand: ['m5', 'white', 'm3'],
+      jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
+    }), { kind: 'discard', handIndex: 0 })).toBe(false)
   })
 
   it('win 永远拒绝（只能引擎短路产生）', () => {
@@ -210,6 +250,8 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('引擎基线建议')
     expect(prompt.user).toContain('【你的牌】')
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
+    expect(prompt.system).toContain('决策优先级')
+    expect(prompt.user).toContain('默认优先')
   })
 
   it('莲花广麻明确只支持标准牌型，禁止追逐七对等其他玩法牌型', () => {
@@ -220,6 +262,7 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('唯一支持的胡牌结构是标准 4 面子+1 将')
     expect(prompt.user).toContain('不支持七对、十三幺、十三烂、七星十三烂')
     expect(prompt.user).toContain('弃牌无需考虑点炮风险')
+    expect(prompt.user).toContain('只可自摸或抢杠胡')
     expect(prompt.user).not.toContain('安全度：')
   })
 
