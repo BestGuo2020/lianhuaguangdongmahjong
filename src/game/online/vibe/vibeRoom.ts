@@ -4,6 +4,7 @@
 // SDK 没有「服务端签发房间码 / 座位 / rejoinCode」概念：房间码就是 roomId，由建房方
 // 自己生成并认领（room.join 后 isHost 为 true）。码冲突时重新生成重试。
 import { getVibeClient } from './vibeClient'
+import type { TableThemeName } from '../../../components/table/three/tableTheme'
 
 // 6 位房间码字母表：去掉易混淆字符（0/O、1/I、U），与旧后端一致。
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -13,6 +14,7 @@ export interface RoomConfig {
   mode: 'east' | 'hanchan'
   rulesetId: 'lotus-classic' | 'lotus-legacy'
   capacity: number
+  tableThemeName?: TableThemeName
 }
 
 function requireClient(): VibeHubSDK.Client {
@@ -41,6 +43,7 @@ export async function createRoom(config: RoomConfig, attempts = 5): Promise<Vibe
         max: config.capacity,
         mode: config.mode,
         rulesetId: config.rulesetId,
+        tableThemeName: config.tableThemeName ?? 'jade',
       })
       return room
     }

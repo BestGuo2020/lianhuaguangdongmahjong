@@ -20,6 +20,7 @@ function makeState() {
     rulesetId: ref<'lotus-classic' | 'lotus-legacy'>('lotus-classic'),
     matchType: ref<'east' | 'hanchan'>('east'),
     isHost: ref(false),
+    tableThemeName: ref<'jade' | 'rosewood' | 'majsoul' | 'happyMahjong' | 'llm'>('jade'),
     phase: ref('lobby'),
   }
 }
@@ -83,6 +84,21 @@ describe('vibeRoomSession', () => {
     })
     await session.joinRoom('HOSTED1')
     expect(state.isHost.value).toBe(false)
+  })
+
+  it('建房时保存房主桌面主题，并通过会话状态保持', async () => {
+    const state = makeState()
+    const session = createVibeRoomSession({
+      state,
+      onStart: () => {},
+      onClosed: () => {},
+      loadSavedRoom: () => null,
+    })
+
+    await session.createRoom('east', 4, 'lotus-classic', 'llm')
+
+    expect(state.isHost.value).toBe(true)
+    expect(state.tableThemeName.value).toBe('llm')
   })
 
   it('旧会话重进时若 SDK 把客户端提升为 host，则安全拒绝无状态接管', async () => {

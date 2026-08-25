@@ -62,6 +62,58 @@ describe('vibeLobby', () => {
     expect(room.sent.some((s) => (s.message as { type: string }).type === 'lobby_start')).toBe(true)
   })
 
+  it('房主主题通过 roster/start 广播，切换后客户端采用新主题', () => {
+    const hostRoom = createMockVibeRoom(true)
+    const host = createHostLobby({
+      room: hostRoom, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      initialTableThemeName: 'llm', onStart: () => {},
+    })
+    hostRoom.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    let latestRoster = [...hostRoom.sent].reverse().find((entry) => (
+      (entry.message as { type?: string }).type === 'lobby_roster'
+    ))?.message as { tableThemeName?: string }
+    expect(latestRoster.tableThemeName).toBe('llm')
+
+    host.setTableTheme('rosewood')
+    latestRoster = [...hostRoom.sent].reverse().find((entry) => (
+      (entry.message as { type?: string }).type === 'lobby_roster'
+    ))?.message as { tableThemeName?: string }
+    expect(latestRoster.tableThemeName).toBe('rosewood')
+
+    host.setHostReady(true)
+    hostRoom.emit('peer1', { type: 'lobby_ready', ready: true })
+    expect(host.requestStart()).toBe(true)
+    const start = [...hostRoom.sent].reverse().find((entry) => (
+      (entry.message as { type?: string }).type === 'lobby_start'
+    ))?.message as { tableThemeName?: string }
+    expect(start.tableThemeName).toBe('rosewood')
+
+    const clientRoom = createMockVibeRoom(false)
+    const receivedThemes: string[] = []
+    const client = createClientLobby({
+      room: clientRoom,
+      onRoster: (_hostSeat, _seats, _aiSeats, tableThemeName) => receivedThemes.push(tableThemeName),
+      onStart: () => {},
+      onClosed: () => {},
+    })
+    client.hello('玩家')
+    clientRoom.emit('host-peer', {
+      type: 'lobby_roster', hostSeat: 0, revision: 1, tableThemeName: 'llm',
+      seats: [
+        { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+        { seat: 1, peerId: clientRoom.peerId, nickname: '玩家', avatar: '', ready: false },
+      ],
+    })
+    expect(receivedThemes).toEqual(['llm'])
+  })
+
+  it('大厅协议拒绝未知桌面主题', () => {
+    expect(isHostLobbyMessage({
+      type: 'lobby_roster', hostSeat: 0, revision: 1, tableThemeName: 'unknown',
+      seats: [{ seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false }],
+    })).toBe(false)
+  })
+
   it('房主硬预留大模型座位，真人加入时跳到下一个未预留座位', () => {
     const room = createMockVibeRoom(true)
     const host = createHostLobby({

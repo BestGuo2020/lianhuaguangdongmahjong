@@ -11,6 +11,8 @@ import type { RuleVariant } from '../../core/rules/ruleVariants'
 import { createRoom as createVibeRoom, getRoomMeta, joinRoom as joinVibeRoom } from './vibeRoom'
 import { createClientLobby, createHostLobby, type LobbyStartDetails, type LobbySeat } from './vibeLobby'
 import type { PublicAiSeat } from './vibeLlm'
+import type { TableThemeName } from '../../../components/table/three/tableTheme'
+import { isTableThemeName } from '../../../components/table/three/tableThemePreference'
 
 export interface VibeRoomSessionState {
   roomId: Ref<string>
@@ -25,6 +27,7 @@ export interface VibeRoomSessionState {
   rulesetId: Ref<RuleVariant>
   matchType: Ref<MatchType>
   isHost: Ref<boolean>
+  tableThemeName: Ref<TableThemeName>
   /** 对局相位（'lobby' = 大厅；其余 = 对局中），供 hostLobby 判定掉线座位是否可释放。 */
   phase: Ref<string>
 }
@@ -79,17 +82,18 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     state.sessionStatus.value = 'idle'
   }
 
-  async function createRoom(mode: MatchType, capacity: number, rulesetId: RuleVariant) {
+  async function createRoom(mode: MatchType, capacity: number, rulesetId: RuleVariant, tableThemeName: TableThemeName = 'jade') {
     state.sessionError.value = ''
     state.sessionStatus.value = 'creating'
     try {
-      const created = await createVibeRoom({ mode, rulesetId, capacity })
+      const created = await createVibeRoom({ mode, rulesetId, capacity, tableThemeName })
       room = created
       state.isHost.value = true
       state.roomId.value = created.roomId
       state.mySeat.value = 0
       state.matchType.value = mode
       state.rulesetId.value = rulesetId
+      state.tableThemeName.value = tableThemeName
       state.roomSeats.value = [{ seat: 0, peerId: created.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false }]
       state.aiSeats.value = []
       hostLobby = createHostLobby({
@@ -97,6 +101,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
         capacity,
         hostNickname: state.nickname.value,
         hostAvatar: state.avatar.value,
+        initialTableThemeName: tableThemeName,
         onRoster: (seats, aiSeats) => {
           if (room !== created) return
           state.roomSeats.value = seats
@@ -155,6 +160,8 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
           : 'lotus-classic'
         state.matchType.value = mode
         state.rulesetId.value = ruleset
+        const tableThemeName = isTableThemeName(meta?.tableThemeName as string) ? meta?.tableThemeName as TableThemeName : 'jade'
+        state.tableThemeName.value = tableThemeName
         const capacity = typeof meta?.max === 'number' ? meta.max : 4
         state.roomSeats.value = [{
           seat: 0, peerId: joined.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false,
@@ -165,6 +172,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
           capacity,
           hostNickname: state.nickname.value,
           hostAvatar: state.avatar.value,
+          initialTableThemeName: tableThemeName,
           onRoster: (seats, aiSeats) => {
             if (room !== joined) return
             state.roomSeats.value = seats
@@ -184,6 +192,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
           max: capacity,
           mode,
           rulesetId: ruleset,
+          tableThemeName,
         })
         state.sessionStatus.value = 'connected'
         return
@@ -192,13 +201,15 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
       if (meta) {
         if (meta.mode === 'east' || meta.mode === 'hanchan') state.matchType.value = meta.mode
         if (meta.rulesetId === 'lotus-classic' || meta.rulesetId === 'lotus-legacy') state.rulesetId.value = meta.rulesetId
+        if (isTableThemeName(meta.tableThemeName as string)) state.tableThemeName.value = meta.tableThemeName as TableThemeName
       }
       clientLobby = createClientLobby({
         room: joined,
-        onRoster: (_hostSeat, seats, aiSeats) => {
+        onRoster: (_hostSeat, seats, aiSeats, tableThemeName) => {
           if (room !== joined) return
           state.roomSeats.value = seats
           state.aiSeats.value = aiSeats
+          state.tableThemeName.value = tableThemeName
           const own = seats.find((seat) => seat.peerId === joined.peerId)
           // roster 是房主权威事实；如果当前 peer 暂时不在名单中，必须清掉
           // 旧座位，避免重连窗口继续显示“已准备”并把 ready 发给旧连接。
@@ -215,6 +226,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
         onStart: (details) => {
           if (room !== joined) return
           state.aiSeats.value = details.aiSeats
+          state.tableThemeName.value = details.tableThemeName
           onStart(joined, details)
         },
         onClosed: () => { if (room === joined) onClosed() },
@@ -247,6 +259,20 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
   function setAiSeats(aiSeats: PublicAiSeat[]): void {
     if (!state.isHost.value) return
     hostLobby?.setAiSeats(aiSeats)
+  }
+
+  function setTableTheme(tableThemeName: TableThemeName): void {
+    if (!state.isHost.value) return
+    state.tableThemeName.value = tableThemeName
+    hostLobby?.setTableTheme(tableThemeName)
+    void room?.announce({
+      listed: false,
+      open: true,
+      max: 4,
+      mode: state.matchType.value,
+      rulesetId: state.rulesetId.value,
+      tableThemeName,
+    })
   }
 
   async function leaveRoom(): Promise<void> {
@@ -284,6 +310,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     toggleReady,
     startMatch,
     setAiSeats,
+    setTableTheme,
     leaveRoom,
     closeRoom,
     resumeSession,

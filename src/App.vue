@@ -22,7 +22,8 @@ import { useAudio } from './game/core/presentation/useAudio'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
-import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/three/tableTheme'
+import type { TableThemeName } from './components/table/three/tableTheme'
+import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -59,9 +60,9 @@ function resetTableReady() {
   tableReadyPromise = null
 }
 const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
-const tableThemeName = ref<TableThemeName>(TABLE_THEME_OPTIONS.some((option) => option.value === initialThemeCandidate)
-  ? initialThemeCandidate as TableThemeName
-  : 'jade')
+const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate)
+const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
+const explicitTableThemeSelected = ref(initialTableTheme.explicit)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
 
@@ -93,6 +94,12 @@ const llmHook = {
 }
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
+
+function preferLlmTableTheme(llmEnabled: boolean) {
+  if (shouldAutoUseLlmTheme(llmEnabled, explicitTableThemeSelected.value)) tableThemeName.value = 'llm'
+}
+
+preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
@@ -124,6 +131,7 @@ const vibeRemoteGame = useVibeRemoteGame({
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
+  getTableThemeName: () => tableThemeName.value,
 })
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
@@ -190,8 +198,16 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
 const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, aiSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
   rejoining,
+  roomTableThemeName,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = vibeRemoteGame
+
+watch(roomTableThemeName, (themeName) => {
+  if (gameMode.value === 'remote' && roomId.value) tableThemeName.value = themeName
+})
+watch([gameMode, roomId], ([mode, currentRoomId]) => {
+  if (mode === 'remote' && currentRoomId) tableThemeName.value = roomTableThemeName.value
+})
 
 // SDK 无服务端房间容量元数据，「剩余房间」不再展示。
 const roomMeta = ref(null)
@@ -282,6 +298,7 @@ function applyLlmSettings() {
   lotusLlmSeeds.splice(0, lotusLlmSeeds.length, ...nextLotusLlm.seeds)
   nextLotusLlm.seeds = lotusLlmSeeds
   lotusLlm.value = nextLotusLlm
+  preferLlmTableTheme(nextLocalLlm.enabled || nextLotusLlm.enabled)
 }
 // 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
 // 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
@@ -305,10 +322,15 @@ const continueCountdown = useRemoteContinueCountdown({
 })
 
 function changeTableTheme(theme: TableThemeName) {
+  if (gameMode.value === 'remote' && roomId.value && !isHost.value) {
+    tableThemeName.value = roomTableThemeName.value
+    return
+  }
   tableThemeName.value = theme
+  explicitTableThemeSelected.value = true
+  if (gameMode.value === 'remote' && roomId.value && isHost.value) remoteActions.configureTableTheme(theme)
   const url = new URL(window.location.href)
-  if (theme === 'jade') url.searchParams.delete('theme')
-  else url.searchParams.set('theme', theme)
+  url.searchParams.set('theme', theme)
   window.history.replaceState(window.history.state, '', url)
 }
 
@@ -316,7 +338,7 @@ function changeTableTheme(theme: TableThemeName) {
 
 <template>
   <OrientationGate />
-  <main class="game-app">
+  <main class="game-app" :data-table-theme="tableThemeName">
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting' && !matchFinished" class="remote-banner" role="status">{{ phase === 'lobby' ? '网络断开，正在重连…' : '房主连接中断，等待恢复…' }}</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId && !matchFinished" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && rejoining" class="remote-banner" role="status">尝试重新加入房间…</div>

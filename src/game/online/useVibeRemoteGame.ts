@@ -62,6 +62,8 @@ import {
   mapWinPresentationToLocal,
   toLocalSeat,
 } from './protocol/mapper'
+import type { TableThemeName } from '../../components/table/three/tableTheme'
+import { isTableThemeName } from '../../components/table/three/tableThemePreference'
 
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 const AUTHORITY_SILENCE_TIMEOUT_MS = 25000
@@ -244,6 +246,7 @@ interface UseVibeRemoteGameOptions {
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   waitForTableReady?: () => Promise<void>
   onLlmMessage?: (localSeat: number, text: string) => void
+  getTableThemeName?: () => TableThemeName
 }
 
 export function useVibeRemoteGame({
@@ -251,6 +254,7 @@ export function useVibeRemoteGame({
   playSoundAndWait = async () => {},
   waitForTableReady,
   onLlmMessage = () => {},
+  getTableThemeName = () => 'jade',
 }: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
@@ -280,6 +284,8 @@ export function useVibeRemoteGame({
   const isHost = ref(false)
   const lobbySeats = ref<LobbySeat[]>([])
   const plannedAiSeats = ref<PublicAiSeat[]>([])
+  const initialTableThemeName = getTableThemeName()
+  const roomTableThemeName = ref<TableThemeName>(isTableThemeName(initialTableThemeName) ? initialTableThemeName : 'jade')
   let hostLlmSelections: HostLlmSeatSelection[] = []
   let activeHostLlmRuntime: VibeHostLlmRuntime<PlayerController> | VibeHostLlmRuntime<LotusController> | null = null
   let llmMessageSequence = 0
@@ -319,6 +325,7 @@ export function useVibeRemoteGame({
     state: {
       roomId, mySeat, nickname, avatar, playerId,
       roomSeats: lobbySeats, aiSeats: plannedAiSeats, sessionStatus, sessionError, rulesetId, matchType, isHost,
+      tableThemeName: roomTableThemeName,
       phase,
     },
     loadSavedRoom: () => sessionStore.loadSession(),
@@ -1946,9 +1953,18 @@ export function useVibeRemoteGame({
     plannedAiSeats.value = resolved.publicSeats
     roomSession.setAiSeats(resolved.publicSeats)
   }
+  function configureTableTheme(themeName: TableThemeName) {
+    if (!isHost.value || !isTableThemeName(themeName)) return
+    roomTableThemeName.value = themeName
+    roomSession.setTableTheme(themeName)
+  }
   const remoteActions = {
     ...roomSession,
+    createRoom: (mode: MatchType, capacity: number, rulesetId: 'lotus-classic' | 'lotus-legacy' = 'lotus-classic') => (
+      roomSession.createRoom(mode, capacity, rulesetId, getTableThemeName())
+    ),
     configureAiSeats,
+    configureTableTheme,
     async leaveRoom() {
       await roomSession.leaveRoom()
       clearSavedSession()
@@ -1971,6 +1987,7 @@ export function useVibeRemoteGame({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, aiSeats: plannedAiSeats, roomTimeLimit, waitingNextRound, rulesetId,
+    roomTableThemeName,
     savedSessionExists,
     scheduleRejoinRetry,
     resetRejoinRetry,

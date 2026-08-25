@@ -7,6 +7,8 @@
 // 房主（host）维护座位表与空位大模型公开身份并广播 roster；客户端发 hello/ready，收 roster/start/closed。
 // remoteRoomLifecycle 将改用本协议，替换 REST 的 room/seat/ready/start。
 import type { PublicAiSeat } from './vibeLlm'
+import type { TableThemeName } from '../../../components/table/three/tableTheme'
+import { isTableThemeName } from '../../../components/table/three/tableThemePreference'
 
 export interface LobbySeat {
   seat: number
@@ -27,6 +29,7 @@ export interface LobbyStartDetails {
   rosterRevision: number
   participants: LobbyParticipant[]
   aiSeats: PublicAiSeat[]
+  tableThemeName: TableThemeName
 }
 
 interface HostedSeat extends LobbySeat {
@@ -44,10 +47,10 @@ export type ClientLobbyMessage =
 
 // host → client
 export type HostLobbyMessage =
-  | { type: 'lobby_roster'; hostSeat: number; revision: number; seats: LobbySeat[]; aiSeats?: PublicAiSeat[] }
+  | { type: 'lobby_roster'; hostSeat: number; revision: number; seats: LobbySeat[]; aiSeats?: PublicAiSeat[]; tableThemeName?: TableThemeName }
   | { type: 'lobby_seat_token'; seat: number; token: string }
   /** 房主锁定首局承诺洗牌的实际参与者和对应 roster 版本；缺失即拒绝开局。 */
-  | { type: 'lobby_start'; shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[]; aiSeats?: PublicAiSeat[] }
+  | { type: 'lobby_start'; shuffleId: string; seatCount: number; rosterRevision: number; participants: LobbyParticipant[]; aiSeats?: PublicAiSeat[]; tableThemeName?: TableThemeName }
   | { type: 'lobby_closed' }
 
 function isLobbyParticipants(value: unknown, seatCount: number): value is LobbyParticipant[] {
@@ -125,6 +128,7 @@ export function isHostLobbyMessage(message: unknown): message is HostLobbyMessag
       }) && seatNumbers.has(value.hostSeat as number)
         && isPublicAiSeats(value.aiSeats)
         && (value.aiSeats as PublicAiSeat[] | undefined ?? []).every((ai) => !seatNumbers.has(ai.seat))
+        && (value.tableThemeName === undefined || isTableThemeName(value.tableThemeName as string))
   }
   if (value.type === 'lobby_seat_token') {
     return Number.isInteger(value.seat) && (value.seat as number) >= 0 && (value.seat as number) <= 3
@@ -140,6 +144,7 @@ export function isHostLobbyMessage(message: unknown): message is HostLobbyMessag
       && (value.aiSeats as PublicAiSeat[] | undefined ?? []).every((ai) => (
         !(value.participants as LobbyParticipant[]).some((participant) => participant.seat === ai.seat)
       ))
+      && (value.tableThemeName === undefined || isTableThemeName(value.tableThemeName as string))
   }
   return value.type === 'lobby_closed'
 }
@@ -151,6 +156,7 @@ export interface HostLobbyOptions {
   capacity: number
   hostNickname: string
   hostAvatar: string
+  initialTableThemeName?: TableThemeName
   /** 每次座位表变化时回调（房主自己的 UI 也用同一份座位表）。 */
   onRoster?: (seats: LobbySeat[], aiSeats: PublicAiSeat[]) => void
   /** 全员就绪并请求开局时回调。 */
@@ -164,7 +170,7 @@ export interface HostLobbyOptions {
 }
 
 export function createHostLobby({
-  room, capacity, hostNickname, hostAvatar, onRoster, onStart,
+  room, capacity, hostNickname, hostAvatar, initialTableThemeName = 'jade', onRoster, onStart,
   staleGraceMs = 10000, isInMatch = () => false,
   generateSeatToken = () => {
     if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
@@ -179,6 +185,7 @@ export function createHostLobby({
   let hostReady = false
   let rosterRevision = 0
   let plannedAiSeats: PublicAiSeat[] = []
+  let tableThemeName = initialTableThemeName
 
   function roster(): LobbySeat[] {
     const publicPeers = [...peers.values()].map(({ playerId: _playerId, seatToken: _seatToken, ...seat }) => seat)
@@ -192,7 +199,7 @@ export function createHostLobby({
     rosterRevision += 1
     const seats = roster()
     const aiSeats = plannedAiSeats.filter((ai) => !occupied.has(ai.seat))
-    room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats, aiSeats } satisfies HostLobbyMessage)
+    room.send({ type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats, aiSeats, tableThemeName } satisfies HostLobbyMessage)
     onRoster?.(seats, aiSeats)
   }
 
@@ -347,7 +354,7 @@ export function createHostLobby({
       // 避免该客户端只收到一份不含自己的旧/部分 roster 后停止 hello 重试。
       room.send({
         type: 'lobby_roster', hostSeat: 0, revision: rosterRevision, seats: roster(),
-        aiSeats: plannedAiSeats.filter((ai) => !occupied.has(ai.seat)),
+        aiSeats: plannedAiSeats.filter((ai) => !occupied.has(ai.seat)), tableThemeName,
       } satisfies HostLobbyMessage, fromPeerId)
       const assigned = peers.get(fromPeerId)
       if (assigned) sendSeatToken(assigned, fromPeerId)
@@ -376,6 +383,10 @@ export function createHostLobby({
       plannedAiSeats = isPublicAiSeats(aiSeats) ? [...aiSeats] : []
       broadcast()
     },
+    setTableTheme(themeName: TableThemeName) {
+      tableThemeName = themeName
+      broadcast()
+    },
     setHostReady(ready: boolean) {
       hostReady = ready
       broadcast()
@@ -393,8 +404,8 @@ export function createHostLobby({
       const startRosterRevision = rosterRevision
       const participants = roster().map(({ seat, peerId }) => ({ seat, peerId }))
       const aiSeats = plannedAiSeats.filter((ai) => !occupied.has(ai.seat))
-      room.send({ type: 'lobby_start', shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats } satisfies HostLobbyMessage)
-      onStart({ shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats })
+      room.send({ type: 'lobby_start', shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats, tableThemeName } satisfies HostLobbyMessage)
+      onStart({ shuffleId, seatCount, rosterRevision: startRosterRevision, participants, aiSeats, tableThemeName })
       return true
     },
     close() {
@@ -409,7 +420,7 @@ export function createHostLobby({
 
 export interface ClientLobbyOptions {
   room: VibeHubSDK.Room
-  onRoster: (hostSeat: number, seats: LobbySeat[], aiSeats: PublicAiSeat[]) => void
+  onRoster: (hostSeat: number, seats: LobbySeat[], aiSeats: PublicAiSeat[], tableThemeName: TableThemeName) => void
   onSeatToken?: (token: string) => void
   onStart: (details: LobbyStartDetails) => void
   onClosed: () => void
@@ -525,7 +536,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
         rosterReadyHelloSent = false
         pendingStart = null
         stopReadyRetry()
-        onRoster(message.hostSeat, message.seats, message.aiSeats ?? [])
+        onRoster(message.hostSeat, message.seats, message.aiSeats ?? [], message.tableThemeName ?? 'jade')
         scheduleHelloRetry()
         return
       }
@@ -533,7 +544,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       stopRetry()
       assignedSeat = message.seats.find((seat) => seat.peerId === room.peerId)?.seat ?? null
       lastRosterReady = message.seats.find((seat) => seat.peerId === room.peerId)?.ready ?? null
-      onRoster(message.hostSeat, message.seats, message.aiSeats ?? [])
+      onRoster(message.hostSeat, message.seats, message.aiSeats ?? [], message.tableThemeName ?? 'jade')
       if (desiredReady != null) {
         if (lastRosterReady === desiredReady) stopReadyRetry()
         else queueMicrotask(() => {
@@ -564,7 +575,7 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
     } else if (message.type === 'lobby_start') {
       // SDK 不保证 roster 与 lobby_start 的到达顺序；没有本端座位时先缓存，
       // 禁止在 mySeat=-1 的半会话里启动承诺洗牌/发牌动画。
-      pendingStart = { ...message, aiSeats: message.aiSeats ?? [] }
+      pendingStart = { ...message, aiSeats: message.aiSeats ?? [], tableThemeName: message.tableThemeName ?? 'jade' }
       startIfReady()
     }
     else if (message.type === 'lobby_closed') onClosed()
