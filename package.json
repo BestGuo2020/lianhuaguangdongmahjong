@@ -15,6 +15,7 @@
     "test": "vitest run src",
     "test:e2e": "playwright test",
     "vibehub:solo": "node scripts/vibehub-solo-playwright.mjs",
+    "deploy:vibehub": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path $env:LOCALAPPDATA 'VibeHub\\bin\\vibehub-windows-x64.exe') update --slug B5AJupT1 --dir dist --note-file tmp\\vibehub-update-note.txt\"",
     "sync:vibehub": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-master-to-vibehub.ps1"
   },
   "dependencies": {
