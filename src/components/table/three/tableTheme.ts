@@ -1,13 +1,24 @@
 import type * as THREE from 'three'
 
 // 牌桌主题配置：把原来硬编码在 staticTableScene.ts 里的所有共享材质参数抽成数据。
-// 换肤 = 换一份 TableTheme；贴图类（map/envMap）由创建方注入，不在这里配置。
+// 换肤 = 换一份 TableTheme；运行时 Texture 仍由创建方注入，主题这里只保存可序列化的图片地址与变换参数。
 
 /** MeshPhysicalMaterial 参数（排除需要创建方注入的贴图字段）。 */
 export type PhysicalParams = Omit<THREE.MeshPhysicalMaterialParameters, 'map' | 'envMap'>
 
 /** MeshStandardMaterial 参数（排除需要创建方注入的贴图字段）。 */
 export type StandardParams = Omit<THREE.MeshStandardMaterialParameters, 'map' | 'envMap'>
+
+/** 单张方形桌布纹理；由 MahjongTable3D 异步加载后注入静态场景。 */
+export interface TableSurfaceTextureConfig {
+  url: string
+  /** 以纹理中心为轴旋转，单位为弧度。 */
+  rotation?: number
+  offset?: [number, number]
+  repeat?: [number, number]
+  /** map 会与材质底色相乘；图片主题通常使用纯白避免染色。 */
+  tint?: THREE.ColorRepresentation
+}
 
 export interface TableTheme {
   /** 牌桌台身、鎏金边、麻将机等静态部件的材质。 */
@@ -33,6 +44,8 @@ export interface TableTheme {
   tableFelt?: boolean
   /** 桌面暗角强度 0-1：台面中心亮、向四周渐暗（径向渐变压暗边缘），不传不启用。 */
   tableVignette?: number
+  /** 外部桌布图片；优先级高于 tableFelt / tableVignette 的程序纹理。 */
+  tableSurfaceTexture?: TableSurfaceTextureConfig
   /** 木质包边：台面四周一圈程序木纹框（雀魂等木框桌用），与 plainSurface 配合。 */
   woodTrim?: boolean
   /** 木纹三段颜色（canvas 程序纹理），不传用默认深棕。 */
@@ -611,12 +624,99 @@ export const happyMahjongTheme: TableTheme = {
   },
 }
 
+/** 大模型专属主题：Q 版双模型对决桌布 + 深蓝星轨桌体；麻将牌材质保持默认绿色。 */
+export const llmTheme: TableTheme = {
+  ...defaultTableTheme,
+  table: {
+    ...defaultTableTheme.table,
+    jade: {
+      color: 0x10265c,
+      emissive: 0x030a20,
+      emissiveIntensity: .08,
+      roughness: .72,
+      metalness: 0,
+      clearcoat: .08,
+      clearcoatRoughness: .5,
+    },
+    darkJade: {
+      ...defaultTableTheme.table.darkJade,
+      color: 0x071329,
+      emissive: 0x020817,
+      emissiveIntensity: .12,
+      roughness: .54,
+      metalness: .12,
+      clearcoat: .28,
+    },
+    gold: {
+      ...defaultTableTheme.table.gold,
+      color: 0xc6a27f,
+      emissive: 0x2a190d,
+      emissiveIntensity: .24,
+      roughness: .34,
+      metalness: .78,
+    },
+    goldHighlight: {
+      ...defaultTableTheme.table.goldHighlight,
+      color: 0xe4c4a0,
+      emissive: 0x342011,
+      emissiveIntensity: .3,
+      roughness: .28,
+      metalness: .82,
+    },
+    machine: {
+      ...defaultTableTheme.table.machine,
+      color: 0x0b1737,
+      roughness: .42,
+      metalness: .18,
+      clearcoat: .42,
+    },
+    machineTop: {
+      ...defaultTableTheme.table.machineTop,
+      roughness: .4,
+      metalness: .12,
+      clearcoat: .42,
+    },
+    machineBottom: {
+      ...defaultTableTheme.table.machineBottom,
+      color: 0x020615,
+      roughness: .55,
+      metalness: .2,
+    },
+  },
+  tableFelt: false,
+  tableVignette: undefined,
+  tableSurfaceTexture: {
+    url: `${import.meta.env.BASE_URL}img/llm-table.webp`,
+    tint: 0xffffff,
+  },
+  plainSurface: true,
+  edgeTrim: {
+    color: 0x101d43,
+    emissive: 0x03091c,
+    emissiveIntensity: .12,
+    roughness: .5,
+    metalness: .14,
+    clearcoat: .22,
+    clearcoatRoughness: .38,
+  },
+  edgeTrimWidth: .65,
+  edgeAccent: true,
+  rimLight: {
+    color: 0x67a8ff,
+    intensity: 1.1,
+  },
+  // tile / highlight 直接继承 defaultTableTheme，不改变牌面、绿色牌背与选中高亮。
+  tile: defaultTableTheme.tile,
+  highlight: defaultTableTheme.highlight,
+}
+
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
 export const TABLE_THEMES: Record<string, TableTheme> = {
   jade: defaultTableTheme,
   rosewood: rosewoodTheme,
   majsoul: majsoulTheme,
   happyMahjong: happyMahjongTheme,
+  llm: llmTheme,
 }
 
 export const TABLE_THEME_OPTIONS = [
@@ -624,6 +724,7 @@ export const TABLE_THEME_OPTIONS = [
   { value: 'majsoul', label: '雀魂风', description: '蓝灰台面与木质边框' },
   { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
   { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
+  { value: 'llm', label: '大模型专属', description: '双模型娘化对决与深蓝星轨' },
 ] as const
 
 export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']

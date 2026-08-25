@@ -72,14 +72,14 @@ describe('单机 LLM runtime TTS', () => {
     saveLlmSettings({
       enabled: true,
       presets: [{
-        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        id: 'deepseek', name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1',
         apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
         ttsVoiceKey: 'deepseek',
       }],
       activeId: 'deepseek', seatIds: [null, null, null, null],
       seatStyles: [null, null, null, null],
     }, storage)
-    mocks.requestLlmDecision.mockResolvedValueOnce({ choice: 'A1', message: '跟引擎走，稳。' })
+    mocks.requestLlmDecision.mockResolvedValueOnce({ choice: 'A1', message: '听引擎的？' })
     const bubble = vi.fn()
     const runtime = createLocalLlmControllers({ onLlmMessage: bubble })
 

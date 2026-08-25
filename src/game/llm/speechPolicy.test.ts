@@ -29,7 +29,7 @@ describe('LlmSpeechPolicy', () => {
   })
 
   it('drops backstage language and internal candidate ids', () => {
-    expect(compactLlmSpeechText('跟引擎走，稳。')).toBe('')
+    expect(compactLlmSpeechText('听引擎的？')).toBe('')
     expect(compactLlmSpeechText('候选A1最合适。')).toBe('')
     expect(compactLlmSpeechText('AI建议这么打。')).toBe('')
     expect(compactLlmSpeechText('wait一下,先看牌。')).toBe('wait一下,先看牌。')

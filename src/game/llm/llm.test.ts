@@ -255,6 +255,14 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
     }), { kind: 'discard', handIndex: 0 })).toBe(false)
   })
 
+  it('二次校验拒绝会拆掉四面听的风杠', () => {
+    const hand = ['s3', 's4', 's5', 'east', 'south', 'west', 'north', 'p9'] as never
+    expect(isActionLegal(baseInput({
+      ruleCode: 'lotus-legacy', hand, exposedMelds: 2, visibleTiles: hand,
+      jokerTiles: [], wildcardTiles: ['white'],
+    }), { kind: 'wind-kong' })).toBe(false)
+  })
+
   it('win 永远拒绝（只能引擎短路产生）', () => {
     expect(isActionLegal(baseInput(), { kind: 'win' })).toBe(false)
   })
