@@ -304,6 +304,7 @@ function onAvatarError(entry: GamePlayer) {
 <template>
   <div
     class="game-table-hud"
+    :data-table-theme="themeName"
     :data-phase="phase"
     :data-opening-stage="openingStage ?? ''"
     :data-dice-values="diceValues.join(',')"

@@ -22,7 +22,8 @@ import { useRemoteContinueCountdown } from './game/online/presentation/useRemote
 import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
-import { TABLE_THEME_OPTIONS, type TableThemeName } from './components/table/three/tableTheme'
+import type { TableThemeName } from './components/table/three/tableTheme'
+import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -59,9 +60,9 @@ function resetTableReady() {
   tableReadyPromise = null
 }
 const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
-const tableThemeName = ref<TableThemeName>(TABLE_THEME_OPTIONS.some((option) => option.value === initialThemeCandidate)
-  ? initialThemeCandidate as TableThemeName
-  : 'jade')
+const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate)
+const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
+const explicitTableThemeSelected = ref(initialTableTheme.explicit)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
@@ -89,6 +90,15 @@ const llmHook = {
 }
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
+
+function preferLlmTableTheme(llmEnabled: boolean) {
+  if (shouldAutoUseLlmTheme(llmEnabled, explicitTableThemeSelected.value)) {
+    tableThemeName.value = 'llm'
+  }
+}
+
+// 本地配置在 setup 阶段同步读取；无 URL 明确主题时，首屏直接采用大模型专属主题。
+preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
@@ -188,6 +198,9 @@ const {
   autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = remoteGame
 
+// 联机房间的大模型能力可能在恢复会话或房间元数据返回后才生效。
+watch(effectiveLlmEnabled, (enabled) => preferLlmTableTheme(enabled), { immediate: true })
+
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
 const disclaimerGate = useDisclaimerGate(playerId)
@@ -252,6 +265,8 @@ function applyLlmSettings() {
   lotusLlmSeeds.splice(0, lotusLlmSeeds.length, ...nextLotusLlm.seeds)
   nextLotusLlm.seeds = lotusLlmSeeds
   lotusLlm.value = nextLotusLlm
+
+  preferLlmTableTheme(nextLocalLlm.enabled || nextLotusLlm.enabled)
 }
 // 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
 // 远程模式以 REST 加入占座的座位为准（AI 补位不在 roomSeats 中）。
@@ -276,9 +291,10 @@ const continueCountdown = useRemoteContinueCountdown({
 
 function changeTableTheme(theme: TableThemeName) {
   tableThemeName.value = theme
+  explicitTableThemeSelected.value = true
   const url = new URL(window.location.href)
-  if (theme === 'jade') url.searchParams.delete('theme')
-  else url.searchParams.set('theme', theme)
+  // 手动选择（包括墨玉）始终写入 URL，确保 LLM 开启时刷新后仍尊重用户覆盖。
+  url.searchParams.set('theme', theme)
   window.history.replaceState(window.history.state, '', url)
 }
 
@@ -286,7 +302,7 @@ function changeTableTheme(theme: TableThemeName) {
 
 <template>
   <OrientationGate />
-  <main class="game-app">
+  <main class="game-app" :data-table-theme="tableThemeName">
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting'" class="remote-banner" role="status">网络断开，正在重连…</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>

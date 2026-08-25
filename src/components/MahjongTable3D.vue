@@ -8,7 +8,7 @@ import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS }
 import { createDicePresenter } from './table/three/dicePresenter'
 import { createPerfHud } from './table/three/perfHud'
 import { createStaticTableScene } from './table/three/staticTableScene'
-import { tableThemeByName } from './table/three/tableTheme'
+import { tableThemeByName, type TableTheme } from './table/three/tableTheme'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
@@ -79,6 +79,32 @@ function own(resource) {
 function ownDynamic(resource) {
   dynamicResources.push(resource)
   return resource
+}
+
+async function loadTableSurfaceTexture(theme: TableTheme | undefined) {
+  const config = theme?.tableSurfaceTexture
+  if (!config || !renderer) return undefined
+
+  try {
+    const texture = await new THREE.TextureLoader().loadAsync(config.url)
+    if (destroyed) {
+      texture.dispose()
+      return undefined
+    }
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+    texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+    texture.center.set(.5, .5)
+    texture.rotation = config.rotation ?? 0
+    if (config.offset) texture.offset.set(...config.offset)
+    if (config.repeat) texture.repeat.set(...config.repeat)
+    texture.needsUpdate = true
+    return own(texture)
+  } catch (error) {
+    // 主题图片是纯视觉增强；加载失败时保留深蓝材质，不能阻塞开局 ready 门闸。
+    console.warn('牌桌主题纹理加载失败，已回退纯色桌面', error)
+    return undefined
+  }
 }
 
 
@@ -256,6 +282,8 @@ onMounted(async () => {
   scene.add(keyLight)
   shadowLight = keyLight
   const activeTheme = tableThemeByName(props.themeName ?? new URLSearchParams(window.location.search).get('theme'))
+  const surfaceTexture = await loadTableSurfaceTexture(activeTheme)
+  if (destroyed) return
   const rimLight = new THREE.DirectionalLight(activeTheme?.rimLight?.color ?? 0x3acb8b, activeTheme?.rimLight?.intensity ?? 1.6)
   rimLight.position.set(8, 5, -8)
   scene.add(rimLight)
@@ -266,7 +294,8 @@ onMounted(async () => {
     scene,
     props,
     playAreaOffsetZ: PLAY_AREA_OFFSET_Z,
-    theme: tableThemeByName(props.themeName ?? new URLSearchParams(window.location.search).get('theme')),
+    theme: activeTheme,
+    surfaceTexture,
     own,
     ownDynamic,
     trackTileMaterial,

@@ -17,6 +17,8 @@ interface TableSceneOptions {
   playAreaOffsetZ: number
   /** 主题配置；不传则用 defaultTableTheme。换肤 = 传另一份 TableTheme。 */
   theme?: TableTheme
+  /** 已解码的外部桌布纹理；存在时优先于程序化桌面纹理。 */
+  surfaceTexture?: THREE.Texture
   own<T>(resource: T): T
   ownDynamic<T>(resource: T): T
   trackTileMaterial(material: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial
@@ -608,7 +610,11 @@ function addStaticMesh(geometry, material, x, y, z) {
 function addTable() {
   const jade = own(new THREE.MeshPhysicalMaterial({
     ...theme.table.jade,
-    ...(theme.tableFelt || theme.tableVignette ? { map: makeTableSurfaceTexture() } : {}),
+    ...(options.surfaceTexture
+      ? { map: options.surfaceTexture, color: theme.tableSurfaceTexture?.tint ?? 0xffffff }
+      : theme.tableFelt || theme.tableVignette
+        ? { map: makeTableSurfaceTexture() }
+        : {}),
   }))
   const darkJade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.darkJade }))
   const gold = own(new THREE.MeshPhysicalMaterial({ ...theme.table.gold }))
