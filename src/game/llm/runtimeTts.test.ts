@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  speak: vi.fn(async () => true),
+  speak: vi.fn(async (...args: any[]) => {
+    args[5]?.onStarted?.()
+    return true
+  }),
   requestLlmDecision: vi.fn(async () => ({ choice: 'A1', message: '这手先稳住。' })),
 }))
 
@@ -63,7 +66,10 @@ describe('单机 LLM runtime TTS', () => {
     expect(bubble).toHaveBeenCalledWith(1, '这手先稳住。', expect.objectContaining({
       priority: 'normal', decision: 'turn', actionKind: 'discard',
     }))
-    expect(mocks.speak).toHaveBeenCalledWith(1, '这手先稳住。', 'deepseek', '稳健', 'normal')
+    expect(mocks.speak).toHaveBeenCalledWith(
+      1, '这手先稳住。', 'deepseek', '稳健', 'normal',
+      expect.objectContaining({ onStarted: expect.any(Function) }),
+    )
   })
 
   it('幕后词或空台词改用自然兜底，再进入统一频率控制', async () => {
@@ -91,6 +97,70 @@ describe('单机 LLM runtime TTS', () => {
     await Promise.resolve()
 
     expect(bubble).toHaveBeenCalledWith(1, '这张先走。', expect.objectContaining({ priority: 'normal' }))
-    expect(mocks.speak).toHaveBeenCalledWith(1, '这张先走。', 'deepseek', '稳健', 'normal')
+    expect(mocks.speak).toHaveBeenCalledWith(
+      1, '这张先走。', 'deepseek', '稳健', 'normal',
+      expect.objectContaining({ onStarted: expect.any(Function) }),
+    )
+  })
+
+  it('静音或 TTS 失败时仍显示气泡并放行动作', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    mocks.speak.mockResolvedValueOnce(false)
+    const bubble = vi.fn()
+    const runtime = createLocalLlmControllers({ onLlmMessage: bubble })
+
+    await expect(runtime.controllers![0].requestTurn({
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'],
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    })).resolves.toEqual(expect.objectContaining({ kind: 'discard' }))
+    expect(bubble).toHaveBeenCalledOnce()
+  })
+
+  it('有声时等 playing 才显示气泡，并等播放中点才返回动作', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    let startPlayback!: () => void
+    let reachMidpoint!: () => void
+    mocks.speak.mockImplementationOnce((...args: any[]) => {
+      startPlayback = () => args[5]?.onStarted?.()
+      return new Promise<boolean>((resolve) => { reachMidpoint = () => resolve(true) })
+    })
+    const bubble = vi.fn()
+    const runtime = createLocalLlmControllers({ onLlmMessage: bubble })
+    let actionResolved = false
+    const action = runtime.controllers![0].requestTurn({
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'],
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    }).then((value) => { actionResolved = true; return value })
+
+    await vi.waitFor(() => expect(mocks.speak).toHaveBeenCalled())
+    expect(bubble).not.toHaveBeenCalled()
+    expect(actionResolved).toBe(false)
+    startPlayback()
+    expect(bubble).toHaveBeenCalledOnce()
+    expect(actionResolved).toBe(false)
+    reachMidpoint()
+    await expect(action).resolves.toEqual(expect.objectContaining({ kind: 'discard' }))
   })
 })

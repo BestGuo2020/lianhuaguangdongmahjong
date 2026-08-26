@@ -1,4 +1,9 @@
-import { dispatchLocalLlmAudio } from '../core/presentation/llmAudioBus'
+import {
+  cancelLocalLlmAudioPlayback,
+  canPlayLocalLlmAudio,
+  playLocalLlmAudioUntilMidpoint,
+  type LlmAudioPlaybackHooks,
+} from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset, LlmStyle, LlmTtsVoiceKey } from './config'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { avatarFolderOf } from './persona'
@@ -46,9 +51,15 @@ function normalizeText(text: string): string {
   return text.normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, 30)
 }
 
+function estimateMidpointMs(text: string): number {
+  // 中文 TTS 通常约 4～5 字/秒；只在媒体 duration 尚不可用时兜底。
+  return Math.min(2_500, Math.max(600, [...text].length * 120))
+}
+
 export class LocalTtsClient {
   private readonly inflight = new Map<string, Promise<string | null>>()
   private readonly negativeUntil = new Map<string, number>()
+  private readonly activeControllers = new Set<AbortController>()
   private readonly fetchImpl: FetchLike
   private messageId = 0
 
@@ -67,9 +78,12 @@ export class LocalTtsClient {
     voiceKey: string,
     style: LlmStyle,
     priority: LlmSpeechPriority = 'normal',
+    hooks: LlmAudioPlaybackHooks = {},
   ): Promise<boolean> {
     const normalized = normalizeText(text)
     if (!normalized) return false
+    // 静音时不请求 TTS 网关；runtime 会立即显示气泡并继续动作。
+    if (!canPlayLocalLlmAudio()) return false
     const key = JSON.stringify([normalized, voiceKey, style])
     if ((this.negativeUntil.get(key) ?? 0) > Date.now()) return false
     let request = this.inflight.get(key)
@@ -88,11 +102,21 @@ export class LocalTtsClient {
       return false
     }
     this.messageId += 1
-    return dispatchLocalLlmAudio(url, seat, this.messageId, priority)
+    return playLocalLlmAudioUntilMidpoint(url, seat, this.messageId, priority, {
+      ...hooks,
+      fallbackMidpointMs: hooks.fallbackMidpointMs ?? estimateMidpointMs(normalized),
+    })
+  }
+
+  cancel(): void {
+    this.activeControllers.forEach((controller) => controller.abort())
+    this.activeControllers.clear()
+    cancelLocalLlmAudioPlayback()
   }
 
   private async synthesize(text: string, voiceKey: string, style: LlmStyle): Promise<string | null> {
     const controller = new AbortController()
+    this.activeControllers.add(controller)
     const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     try {
       const response = await this.fetchImpl(`${this.baseUrl}/api/local-tts/synthesize`, {
@@ -115,6 +139,7 @@ export class LocalTtsClient {
       }
       return null
     } finally {
+      this.activeControllers.delete(controller)
       globalThis.clearTimeout(timeout)
     }
   }

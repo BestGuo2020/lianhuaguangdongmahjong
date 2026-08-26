@@ -53,7 +53,8 @@ export function createTurnRunner<S extends TurnRunnerState, C, A>(
   let kongDrawPlayerIndex = -1
 
   function hasSettled() {
-    return state.phase.value === 'settled'
+    return state.phase.value === 'lobby'
+      || state.phase.value === 'settled'
       || state.phase.value === 'finished'
       || state.phase.value === 'win-effect'
       || state.phase.value === 'revealing'

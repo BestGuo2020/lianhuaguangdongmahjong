@@ -4,7 +4,20 @@
  */
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
-export type LlmAudioPlayer = (url: string, seat: number, messageId: number, priority?: LlmSpeechPriority) => void
+export interface LlmAudioPlaybackHooks {
+  /** HTMLAudio 真正进入 playing 状态时触发；本地气泡据此与声音同步出现。 */
+  onStarted?: () => void
+  /** duration 暂不可用时的动作放行兜底（从 playing 开始计时）。 */
+  fallbackMidpointMs?: number
+}
+
+export type LlmAudioPlayer = (
+  url: string,
+  seat: number,
+  messageId: number,
+  priority?: LlmSpeechPriority,
+  hooks?: LlmAudioPlaybackHooks,
+) => void | boolean | Promise<void | boolean>
 
 const LOCAL_LLM_AUDIO_EVENT = 'lianhua:local-llm-audio'
 const LOCAL_AUDIO_PATH_RE = /^\/api\/local-tts\/audio\/[0-9a-f]{64}\.mp3$/
@@ -17,11 +30,52 @@ interface LocalLlmAudioDetail {
 }
 
 let player: LlmAudioPlayer | null = null
+let playerEnabled: (() => boolean) | null = null
+let cancelPlayback: (() => void) | null = null
 
-export function registerLlmAudioPlayer(next: LlmAudioPlayer): () => void {
+export function registerLlmAudioPlayer(
+  next: LlmAudioPlayer,
+  isEnabled: () => boolean = () => true,
+  cancel: () => void = () => {},
+): () => void {
   player = next
+  playerEnabled = isEnabled
+  cancelPlayback = cancel
   return () => {
-    if (player === next) player = null
+    if (player === next) {
+      player = null
+      playerEnabled = null
+      cancelPlayback = null
+    }
+  }
+}
+
+/** 静音/音效关闭时让 TTS 客户端在网络合成前快速退出。 */
+export function canPlayLocalLlmAudio(): boolean {
+  return Boolean(player && playerEnabled?.())
+}
+
+export function cancelLocalLlmAudioPlayback(): void {
+  cancelPlayback?.()
+}
+
+/**
+ * 单机动作时间线专用：等待播放器真正开始，并在播放中点返回。
+ * 返回 false 表示静音、未注册、播放失败或被取消，调用方应显示气泡并立即放行动作。
+ */
+export async function playLocalLlmAudioUntilMidpoint(
+  url: string,
+  seat: number,
+  messageId: number,
+  priority: LlmSpeechPriority = 'normal',
+  hooks: LlmAudioPlaybackHooks = {},
+): Promise<boolean> {
+  const activePlayer = player
+  if (!activePlayer || !playerEnabled?.()) return false
+  try {
+    return await activePlayer(url, seat, messageId, priority, hooks) !== false
+  } catch {
+    return false
   }
 }
 
@@ -77,4 +131,6 @@ export function subscribeLocalLlmAudio(next: LlmAudioPlayer): () => void {
 
 export function resetLlmAudioBusForTests(): void {
   player = null
+  playerEnabled = null
+  cancelPlayback = null
 }

@@ -41,7 +41,7 @@ describe('LocalTtsClient', () => {
       cached: false,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     const played: Array<{ url: string; seat: number; messageId: number }> = []
-    registerLlmAudioPlayer((url, seat, messageId) => played.push({ url, seat, messageId }))
+    registerLlmAudioPlayer((url, seat, messageId) => { played.push({ url, seat, messageId }) })
     const client = new LocalTtsClient('https://tts.example.com', fetchMock as typeof fetch)
 
     const result = await Promise.all([
@@ -78,13 +78,22 @@ describe('LocalTtsClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('即使播放器未注册也会请求网关；响应非法时静默失败', async () => {
+  it('播放器未注册或静音时不请求 TTS 网关', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ audioUrl: '/api/local-tts/audio/invalid.mp3' })))
+    const client = new LocalTtsClient('', fetchMock as typeof fetch)
+
+    expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
+    registerLlmAudioPlayer(() => {}, () => false)
+    expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('播放器可用但网关响应非法时静默失败', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ audioUrl: 'https://evil/a.mp3' })))
     const client = new LocalTtsClient('', fetchMock as typeof fetch)
-    expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
 
     registerLlmAudioPlayer(() => {})
     expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
