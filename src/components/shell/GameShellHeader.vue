@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { BASE_SCORE } from '../../game/core/rules/rules'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { GamePhase } from '../../game/core/contracts/gamePort'
+import { useAudioControls } from '../../game/core/presentation/useAudio'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
@@ -14,21 +15,26 @@ interface Props {
   honba: number
   roomId: string
   signalQuality: number
-  soundOn: boolean
+  signalWarningThreshold?: number
   themeName: TableThemeName
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  signalWarningThreshold: 0,
+})
 const emit = defineEmits<{
   quit: []
-  toggleSound: []
   openRules: []
   changeTheme: [theme: TableThemeName]
 }>()
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const themeMenuOpen = ref(false)
-const header = ref<HTMLElement | null>(null)
+const audioMenuOpen = ref(false)
+const themePicker = ref<HTMLElement | null>(null)
+const audioPicker = ref<HTMLElement | null>(null)
+const { soundOn, bgmOn, effectsOn } = useAudioControls()
+const hasAudibleAudio = computed(() => soundOn.value && (bgmOn.value || effectsOn.value))
 const signalText = computed(() => (
   { 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' }[props.signalQuality] ?? ''
 ))
@@ -39,7 +45,19 @@ function chooseTheme(theme: TableThemeName) {
 }
 
 function closeThemeMenu(event: PointerEvent) {
-  if (!header.value?.contains(event.target as Node)) themeMenuOpen.value = false
+  const target = event.target as Node
+  if (!themePicker.value?.contains(target)) themeMenuOpen.value = false
+  if (!audioPicker.value?.contains(target)) audioMenuOpen.value = false
+}
+
+function toggleThemeMenu() {
+  audioMenuOpen.value = false
+  themeMenuOpen.value = !themeMenuOpen.value
+}
+
+function toggleAudioMenu() {
+  themeMenuOpen.value = false
+  audioMenuOpen.value = !audioMenuOpen.value
 }
 
 onMounted(() => document.addEventListener('pointerdown', closeThemeMenu))
@@ -58,18 +76,18 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
         class="signal-icon"
         :src="`${imageBase}signal-${signalQuality}.png`"
         :alt="signalText"
-        :title="signalQuality <= 0 ? `${signalText}，可能被 AI 托管` : signalText"
+        :title="signalQuality <= signalWarningThreshold ? `${signalText}，可能被 AI 托管` : signalText"
       />
-      <span v-if="gameMode === 'remote' && signalQuality <= 0" class="signal-warn">{{ signalText }}</span>
+      <span v-if="gameMode === 'remote' && signalQuality <= signalWarningThreshold" class="signal-warn">{{ signalText }}</span>
     </div>
     <nav>
-      <div ref="header" class="theme-picker">
+      <div ref="themePicker" class="theme-picker">
         <button
           class="theme-toggle"
           aria-label="切换牌桌主题"
           :aria-expanded="themeMenuOpen"
           title="切换牌桌主题"
-          @click.stop="themeMenuOpen = !themeMenuOpen"
+          @click.stop="toggleThemeMenu"
         >
           <span class="theme-toggle-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         </button>
@@ -95,9 +113,32 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
         title="退出对局"
         @click="emit('quit')"
       ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
-      <button class="icon-button" :aria-label="soundOn ? '关闭声音' : '开启声音'" @click="emit('toggleSound')">
-        <img :src="`${imageBase}${soundOn ? 'audio.png' : 'mute.png'}`" alt="" />
-      </button>
+      <div ref="audioPicker" class="audio-picker">
+        <button
+          class="icon-button"
+          aria-label="声音设置"
+          :aria-expanded="audioMenuOpen"
+          title="声音设置"
+          @click.stop="toggleAudioMenu"
+        >
+          <img :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
+        </button>
+        <div v-if="audioMenuOpen" class="audio-menu" role="group" aria-label="声音设置">
+          <p>声音设置</p>
+          <button role="switch" :aria-checked="soundOn" @click="soundOn = !soundOn">
+            <span><strong>声音总开关</strong><small>同时控制 BGM 与音效</small></span>
+            <i :class="{ active: soundOn }" aria-hidden="true"></i>
+          </button>
+          <button role="switch" :aria-checked="bgmOn" :disabled="!soundOn" @click="bgmOn = !bgmOn">
+            <span><strong>BGM</strong><small>牌桌背景音乐</small></span>
+            <i :class="{ active: bgmOn }" aria-hidden="true"></i>
+          </button>
+          <button role="switch" :aria-checked="effectsOn" :disabled="!soundOn" @click="effectsOn = !effectsOn">
+            <span><strong>音效</strong><small>牌声、提示音与角色语音</small></span>
+            <i :class="{ active: effectsOn }" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
       <button class="icon-button" aria-label="查看规则" @click="emit('openRules')">
         <img :src="`${imageBase}manual.png`" alt="" />
       </button>

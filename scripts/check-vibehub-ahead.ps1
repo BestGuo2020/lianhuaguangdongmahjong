@@ -19,7 +19,6 @@ try {
     'src/components/account/StatsOverlay.vue'
     'src/components/lobby/LobbyView.vue'
     'src/components/lobby/RoomPanel.vue'
-    'src/components/shell/GameShellHeader.vue'
     'src/content/disclaimer.ts'
     'src/game/core/local/useGame.ts'
     'src/game/online/orchestration/remoteActionController.ts'

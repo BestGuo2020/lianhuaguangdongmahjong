@@ -16,7 +16,7 @@
 1. UI/规则/牌桌改动一律在 `master` 分支提交；提交后**必须**运行 `pnpm sync:vibehub` 同步到 vibehub（脚本要求 master 工作区干净，有未提交改动会中止并提示）。
 2. 联机层文件两边本质不同，同步时脚本自动保留 vibehub 版本（脚本内 `$vibehubKeep` 清单）：
    - `src/App.vue`、`src/game/core/local/useGame.ts`（远程入口）
-   - `src/components/lobby/*`、`src/components/account/*`、`src/components/shell/GameShellHeader.vue`
+   - `src/components/lobby/*`、`src/components/account/*`
    - `src/game/online/orchestration/*`、`presentation/*`、`session/*`、`state/*`
    - `index.html`、`vite.config.ts`、`playwright.config.ts`、`src/content/disclaimer.ts`
    **不要**手动在 vibehub 上改这些文件，也不要尝试把它们合并进 master。

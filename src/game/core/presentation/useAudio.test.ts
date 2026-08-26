@@ -1,5 +1,6 @@
+import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAudio } from './useAudio'
+import { AUDIO_PREFERENCES_STORAGE_KEY, useAudio } from './useAudio'
 import { dispatchLocalLlmAudio, resetLlmAudioBusForTests } from './llmAudioBus'
 
 class MockAudio {
@@ -47,6 +48,11 @@ beforeEach(() => {
   vi.stubGlobal('window', testWindow)
   // 音效预加载与本测试无关；保持请求 pending，避免创建数十个模板 Audio。
   vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+  const stored = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
@@ -89,5 +95,69 @@ describe('useAudio LLM voice ducking', () => {
     expect(bgm.volume).toBe(0.08)
     win.emit('ended')
     expect(bgm.volume).toBe(0.32)
+  })
+})
+
+describe('useAudio preferences', () => {
+  it('restores and persists the global, BGM, and effects switches independently', async () => {
+    localStorage.setItem(AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify({
+      soundOn: false,
+      bgmOn: true,
+      effectsOn: false,
+    }))
+    const audio = useAudio()
+
+    expect(audio.soundOn.value).toBe(false)
+    expect(audio.bgmOn.value).toBe(true)
+    expect(audio.effectsOn.value).toBe(false)
+
+    audio.soundOn.value = true
+    audio.bgmOn.value = false
+    audio.effectsOn.value = true
+    await nextTick()
+
+    expect(JSON.parse(localStorage.getItem(AUDIO_PREFERENCES_STORAGE_KEY)!)).toEqual({
+      soundOn: true,
+      bgmOn: false,
+      effectsOn: true,
+    })
+  })
+
+  it('keeps effects playable while BGM is disabled', async () => {
+    const audio = useAudio()
+    const bgm = MockAudio.instances[0]
+
+    audio.bgmOn.value = false
+    await nextTick()
+    expect(bgm.pause).toHaveBeenCalled()
+
+    const effect = audio.playEffect('click.mp3') as unknown as MockAudio
+    expect(effect).not.toBeNull()
+    expect(effect.play).toHaveBeenCalledOnce()
+  })
+
+  it('blocks effects and voices without muting BGM when only effects are disabled', async () => {
+    const audio = useAudio()
+    const bgm = MockAudio.instances[0]
+
+    audio.effectsOn.value = false
+    await nextTick()
+
+    expect(audio.playEffect('click.mp3')).toBeNull()
+    audio.playLlmAudio('/api/tts/audio/blocked.mp3', 1, 1)
+    expect(MockAudio.instances.some((item) => item.src.endsWith('/blocked.mp3'))).toBe(false)
+    expect(bgm.pause).not.toHaveBeenCalled()
+  })
+
+  it('uses the global switch as a master gate without changing child preferences', async () => {
+    const audio = useAudio()
+    audio.soundOn.value = false
+    await nextTick()
+
+    expect(audio.bgmOn.value).toBe(true)
+    expect(audio.effectsOn.value).toBe(true)
+    expect(audio.playEffect('click.mp3')).toBeNull()
+    await audio.startBgm()
+    expect(MockAudio.instances[0].play).not.toHaveBeenCalled()
   })
 })

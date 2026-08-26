@@ -31,7 +31,7 @@
 
 - `src/App.vue`、`src/game/core/local/useGame.ts`（远程入口）
 - `src/game/core/contracts/activeGamePort*`、`gamePort*`（P2P 远端端口与权威开局参数）
-- `src/components/lobby/*`（大厅）、`src/components/account/*`、`src/components/shell/GameShellHeader.vue`
+- `src/components/lobby/*`（大厅）、`src/components/account/*`
 - `src/game/online/orchestration/*`、`presentation/*`、`session/*`、`state/*`（联机编排）
 - `src/game/online/protocol/*`、`src/game/shared/settlement/settlementTimeline.ts`、
   `src/game/shared/runtime/{matchLifecycle,timerScheduler}.ts`、
