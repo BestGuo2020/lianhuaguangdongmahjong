@@ -1,4 +1,5 @@
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getCurrentInstance, inject, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
 import { registerLlmAudioPlayer, subscribeLocalLlmAudio } from './llmAudioBus'
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
@@ -36,6 +37,20 @@ interface AudioPreferences {
   soundOn: boolean
   bgmOn: boolean
   effectsOn: boolean
+}
+
+export interface AudioControls {
+  soundOn: Ref<boolean>
+  bgmOn: Ref<boolean>
+  effectsOn: Ref<boolean>
+}
+
+const AUDIO_CONTROLS_KEY: InjectionKey<AudioControls> = Symbol('audio-controls')
+
+export function useAudioControls(): AudioControls {
+  const controls = inject(AUDIO_CONTROLS_KEY, null)
+  if (!controls) throw new Error('Audio controls must be used below useAudio()')
+  return controls
 }
 
 const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
@@ -81,6 +96,10 @@ export function useAudio() {
   const soundOn = ref(initialPreferences.soundOn)
   const bgmOn = ref(initialPreferences.bgmOn)
   const effectsOn = ref(initialPreferences.effectsOn)
+  const controls: AudioControls = { soundOn, bgmOn, effectsOn }
+  // App 根组件在 setup 中初始化音频；子组件直接注入控制状态，避免两条联机分支
+  // 各自维护一套声音 props/事件接线。
+  if (getCurrentInstance()) provide(AUDIO_CONTROLS_KEY, controls)
   const bgmStarted = ref(false)
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()

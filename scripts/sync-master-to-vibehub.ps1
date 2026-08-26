@@ -48,7 +48,6 @@ try {
     'src/components/lobby/LobbyView.vue'
     'src/components/lobby/RoomPanel.vue'
     'src/components/settlement/SettlementOverlay.vue'
-    'src/components/shell/GameShellHeader.vue'
     'src/content/disclaimer.ts'
     'src/game/core/local/useGame.ts'
     'src/game/core/contracts/activeGamePort.ts'

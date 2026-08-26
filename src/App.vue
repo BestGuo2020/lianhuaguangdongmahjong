@@ -64,7 +64,7 @@ const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate)
 const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
 const explicitTableThemeSelected = ref(initialTableTheme.explicit)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
-const { soundOn, bgmOn, effectsOn, playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
+const { playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
 const gameMode = ref<GameMode>('local')
 // AI 大模型（单机人机座位 1-3）：仅大厅可配置；保存后立即装配到下一次开局。
@@ -317,14 +317,9 @@ function changeTableTheme(theme: TableThemeName) {
           :honba="honba"
           :room-id="roomId"
           :signal-quality="signalQuality"
-          :sound-on="soundOn"
-          :bgm-on="bgmOn"
-          :effects-on="effectsOn"
+          :signal-warning-threshold="1"
           :theme-name="tableThemeName"
           @quit="quitMatch"
-          @toggle-sound="soundOn = !soundOn"
-          @toggle-bgm="bgmOn = !bgmOn"
-          @toggle-effects="effectsOn = !effectsOn"
           @open-rules="rulesOpen = true"
           @change-theme="changeTableTheme"
         />
