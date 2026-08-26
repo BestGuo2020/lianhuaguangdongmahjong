@@ -74,6 +74,12 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       sourceIndex: endOptions.robbedKong ? (endOptions.robbedKongPlayerIndex ?? null) : null,
     }),
     getWinSound: ({ endOptions }) => endOptions.robbedKong ? 'hu.mp3' : 'zimo.mp3',
+    onWinStart: ({ winnerIndex, endOptions }) => {
+      const winType = endOptions.robbedKong
+        ? 'robbed-kong-win'
+        : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
+      announceLlmWin(winnerIndex, winType)
+    },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3
       const { horses, hits } = drawHorses(state.wall.value, 8, relativeSeat)
@@ -148,10 +154,6 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     ...timeline,
     endGame(winnerIndex: number, endOptions: EndGameOptions = {}) {
       if (!isLegalWin(winnerIndex, endOptions)) return
-      const winType = endOptions.robbedKong
-        ? 'robbed-kong-win'
-        : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
-      announceLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }

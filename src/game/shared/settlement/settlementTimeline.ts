@@ -89,6 +89,8 @@ export interface SettlementTimelineOptions<E extends SettlementEndOptions, S ext
   getSourceIndex?(context: SettlementWinContext<E>): number
   getTableAction?(context: SettlementWinContext<E>): { type: TableActionType; sourceIndex: number | null }
   getWinSound?(context: SettlementWinContext<E>): string
+  /** 清理旧回合控制器之后、启动胜利表现之前触发；用于开启不会被本次 reset 取消的胜利语音。 */
+  onWinStart?(context: SettlementWinContext<E>): void
   finalizeWin(context: SettlementWinContext<E>): RoundResult
   endDraw(context: SettlementDrawContext): RoundResult
 }
@@ -138,6 +140,7 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       winTile,
       scoresBefore: [],
     }
+    options.onWinStart?.(context)
     const sourceIndex = options.getSourceIndex?.(context)
       ?? (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
     const tableAction = options.getTableAction?.(context) ?? {

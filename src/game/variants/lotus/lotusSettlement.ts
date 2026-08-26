@@ -78,6 +78,12 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         : (endOptions.sourceFrom ?? null),
     }),
     getWinSound: ({ endOptions }) => endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3',
+    onWinStart: ({ winnerIndex, endOptions }) => {
+      const winType = endOptions.robbedKong
+        ? 'robbed-kong-win'
+        : endOptions.selfDraw ? 'self-draw' : 'discard-win'
+      announceLlmWin(winnerIndex, winType)
+    },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<LotusEndGameOptions>): RoundResult => {
       const winHand = endOptions.winHand ?? winner.hand
       const flags = {
@@ -164,10 +170,6 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     ...timeline,
     endGame(winnerIndex: number, endOptions: LotusEndGameOptions = {}) {
       if (!isLegalWin(winnerIndex, endOptions)) return
-      const winType = endOptions.robbedKong
-        ? 'robbed-kong-win'
-        : endOptions.selfDraw ? 'self-draw' : 'discard-win'
-      announceLlmWin(winnerIndex, winType)
       return timeline.endGame(winnerIndex, endOptions)
     },
   }
