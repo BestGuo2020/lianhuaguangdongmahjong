@@ -168,7 +168,7 @@ button { font: inherit; }
 .top-bar nav { display: flex; gap: 8px; }
 .top-bar button { width: clamp(34px, 2.8vw, 44px); height: clamp(34px, 2.8vw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25vw, 20px); cursor: pointer; }
 .top-bar button:hover { background: rgba(215,174,83,.18); border-color: #b99549; }
-.theme-picker { position: relative; }
+.theme-picker, .audio-picker { position: relative; }
 .theme-toggle { display: grid; place-items: center; padding: 0; }
 .theme-toggle-mark { display: grid; grid-template-columns: repeat(2, 7px); gap: 2px; width: 17px; height: 17px; transform: rotate(45deg); }
 .theme-toggle-mark i { display: block; border: 1px solid rgba(255,239,179,.78); border-radius: 2px; background: #2a7287; box-shadow: 0 0 3px rgba(255,213,102,.22); }
@@ -186,6 +186,20 @@ button { font: inherit; }
 .theme-menu small { margin-top: 2px; overflow: hidden; color: #91a399; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .theme-menu > button > i { width: 10px; height: 10px; flex: 0 0 auto; margin-left: 8px; border: 1px solid #84785e; border-radius: 50%; box-shadow: inset 0 0 0 2px #092018; }
 .theme-menu > button.active > i { border-color: #f0c96a; background: #f0c96a; }
+.audio-menu { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: min(224px, calc(100vw - 12px)); padding: 8px; border: 1px solid rgba(213,171,84,.58); border-radius: 9px; background: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%); box-shadow: 0 18px 42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.05); }
+.audio-menu::before { content: ""; position: absolute; top: -5px; right: 14px; width: 9px; height: 9px; border-top: 1px solid rgba(213,171,84,.58); border-left: 1px solid rgba(213,171,84,.58); background: #123024; transform: rotate(45deg); }
+.audio-menu > p { margin: 2px 7px 7px; color: #c5a659; font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
+.top-bar .audio-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: auto; min-height: 45px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; }
+.audio-menu > button:hover { border-color: rgba(213,171,84,.35); background: rgba(213,171,84,.1); }
+.audio-menu > button:disabled { opacity: .46; cursor: not-allowed; }
+.audio-menu > button:disabled:hover { border-color: transparent; background: transparent; }
+.audio-menu strong, .audio-menu small { display: block; }
+.audio-menu strong { color: #eadbb7; font: 700 14px "Noto Serif SC", serif; }
+.audio-menu small { margin-top: 2px; color: #91a399; font-size: 10px; white-space: nowrap; }
+.audio-menu > button > i { position: relative; width: 31px; height: 17px; flex: 0 0 auto; margin-left: 10px; border: 1px solid #766f5e; border-radius: 99px; background: #24322d; transition: background .18s ease, border-color .18s ease; }
+.audio-menu > button > i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #9c9a8e; transition: transform .18s ease, background .18s ease; }
+.audio-menu > button > i.active { border-color: #f0c96a; background: rgba(240,201,106,.3); }
+.audio-menu > button > i.active::after { background: #f0c96a; transform: translateX(14px); }
 .top-bar .icon-button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; }
 .top-bar .icon-button:hover { border: 0; background: transparent; }
 .icon-button img { display: block; width: 86%; height: 86%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.42)); transition: transform .18s ease, filter .18s ease; }
@@ -1224,7 +1238,7 @@ button { font: inherit; }
 
 /* 移动端主题菜单：覆盖顶栏圆形按钮的通用尺寸，避免菜单选项被压成竖排。 */
 @media (max-width: 700px), (max-height: 480px) {
-  .theme-menu {
+  .theme-menu, .audio-menu {
     width: min(210px, calc(100vw - 12px));
     max-height: min(280px, calc(100vh - 14px));
     overflow-y: auto;
@@ -1386,6 +1400,18 @@ button { font: inherit; }
   background: linear-gradient(155deg, rgba(15, 31, 78, .99), rgba(4, 9, 30, .99) 72%);
   box-shadow: 0 18px 42px rgba(0,0,0,.66), inset 0 1px rgba(255,255,255,.07);
 }
+.game-app[data-table-theme="llm"] .audio-menu {
+  border-color: rgba(118, 217, 255, .48);
+  background: linear-gradient(155deg, rgba(15, 31, 78, .99), rgba(4, 9, 30, .99) 72%);
+  box-shadow: 0 18px 42px rgba(0,0,0,.66), inset 0 1px rgba(255,255,255,.07);
+}
+.game-app[data-table-theme="llm"] .audio-menu::before { border-color: rgba(118,217,255,.48); background: #10204f; }
+.game-app[data-table-theme="llm"] .audio-menu > p { color: #e0bc98; }
+.game-app[data-table-theme="llm"] .audio-menu > button:hover { border-color: rgba(118,217,255,.4); background: rgba(79,143,255,.16); }
+.game-app[data-table-theme="llm"] .audio-menu strong { color: var(--llm-text); }
+.game-app[data-table-theme="llm"] .audio-menu small { color: var(--llm-muted); }
+.game-app[data-table-theme="llm"] .audio-menu > button > i.active { border-color: var(--llm-cyan); background: rgba(118,217,255,.25); }
+.game-app[data-table-theme="llm"] .audio-menu > button > i.active::after { background: var(--llm-cyan); box-shadow: 0 0 7px rgba(118,217,255,.72); }
 .game-app[data-table-theme="llm"] .theme-menu::before {
   border-color: rgba(118, 217, 255, .48);
   background: #10204f;

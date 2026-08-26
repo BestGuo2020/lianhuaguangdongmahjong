@@ -30,6 +30,42 @@ const BGM_DUCKED_VOLUME = 0.08
 const BGM_DUCK_RAMP_SECONDS = 0.12
 const NORMAL_LLM_AUDIO_TTL_MS = 3_000
 const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
+export const AUDIO_PREFERENCES_STORAGE_KEY = 'lianhua-guangma:audio-preferences:v1'
+
+interface AudioPreferences {
+  soundOn: boolean
+  bgmOn: boolean
+  effectsOn: boolean
+}
+
+const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
+  soundOn: true,
+  bgmOn: true,
+  effectsOn: true,
+}
+
+function readAudioPreferences(): AudioPreferences {
+  try {
+    const stored = globalThis.localStorage?.getItem(AUDIO_PREFERENCES_STORAGE_KEY)
+    if (!stored) return DEFAULT_AUDIO_PREFERENCES
+    const parsed = JSON.parse(stored) as Partial<AudioPreferences>
+    return {
+      soundOn: typeof parsed.soundOn === 'boolean' ? parsed.soundOn : true,
+      bgmOn: typeof parsed.bgmOn === 'boolean' ? parsed.bgmOn : true,
+      effectsOn: typeof parsed.effectsOn === 'boolean' ? parsed.effectsOn : true,
+    }
+  } catch {
+    return DEFAULT_AUDIO_PREFERENCES
+  }
+}
+
+function persistAudioPreferences(preferences: AudioPreferences) {
+  try {
+    globalThis.localStorage?.setItem(AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences))
+  } catch {
+    // 隐私模式或存储配额异常时只放弃持久化，不影响本局声音控制。
+  }
+}
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
 interface LlmAudioItem {
@@ -41,7 +77,10 @@ interface LlmAudioItem {
 }
 
 export function useAudio() {
-  const soundOn = ref(true)
+  const initialPreferences = readAudioPreferences()
+  const soundOn = ref(initialPreferences.soundOn)
+  const bgmOn = ref(initialPreferences.bgmOn)
+  const effectsOn = ref(initialPreferences.effectsOn)
   const bgmStarted = ref(false)
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()
@@ -91,7 +130,7 @@ export function useAudio() {
   void effectsReady
 
   function playEffect(name: string, volume = 1, onFinish?: () => void): EffectAudio | null {
-    if (!soundOn.value || !name) return null
+    if (!soundOn.value || !effectsOn.value || !name) return null
     const template = effectTemplates.get(name)
     const audio = (template
       ? template.cloneNode(true)
@@ -114,7 +153,7 @@ export function useAudio() {
   }
 
   function playEffectAndWait(name: string, volume = 1): Promise<void> {
-    if (!soundOn.value || !name) return Promise.resolve()
+    if (!soundOn.value || !effectsOn.value || !name) return Promise.resolve()
     return new Promise<void>((resolve) => {
       let timeoutId: number | undefined
       const finish = () => {
@@ -145,7 +184,7 @@ export function useAudio() {
   }
 
   function pumpLlmAudio() {
-    if (!soundOn.value || activeLlmAudio) return
+    if (!soundOn.value || !effectsOn.value || activeLlmAudio) return
     let item: LlmAudioItem | undefined
     while (llmAudioQueue.length) {
       const candidate = llmAudioQueue.shift()!
@@ -184,7 +223,7 @@ export function useAudio() {
     messageId: number,
     priority: LlmSpeechPriority = 'normal',
   ) {
-    if (!soundOn.value || !url) return
+    if (!soundOn.value || !effectsOn.value || !url) return
     if (priority === 'normal' && (activeLlmAudio || llmAudioQueue.length)) return
     if (priority === 'important') {
       llmAudioQueue.splice(0, llmAudioQueue.length)
@@ -293,9 +332,9 @@ export function useAudio() {
 
   async function startBgm() {
     bgmStarted.value = true
-    if (!soundOn.value) return
+    if (!soundOn.value || !bgmOn.value) return
     await preloadBgm()   // 确保 buffer 就绪，避免开局静音
-    if (!bgmStarted.value || !soundOn.value) return
+    if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
     if (bgmWebAudio && bgmBuffer) {
       playBgmWebAudio()
     } else if (bgmFallbackSrc && bgm.src !== bgmFallbackSrc) {
@@ -315,13 +354,17 @@ export function useAudio() {
     activeEffects.clear()
   }
 
-  watch(soundOn, (enabled) => {
-    if (!enabled) {
+  watch([soundOn, bgmOn, effectsOn], ([globalEnabled, bgmEnabled, effectsEnabled]) => {
+    persistAudioPreferences({
+      soundOn: globalEnabled,
+      bgmOn: bgmEnabled,
+      effectsOn: effectsEnabled,
+    })
+
+    if (!globalEnabled || !bgmEnabled) {
       // Web Audio：suspend 保留播放位置，再次开启时 resume 无缝续播
       if (bgmWebAudio) void audioContext?.suspend()
       else bgm.pause()
-      stopEffects()
-      stopLlmAudio()
     } else if (bgmStarted.value) {
       if (bgmWebAudio && audioContext) {
         if (audioContext.state === 'suspended') void audioContext.resume()
@@ -329,6 +372,11 @@ export function useAudio() {
       } else {
         bgm.play().catch(() => {})
       }
+    }
+
+    if (!globalEnabled || !effectsEnabled) {
+      stopEffects()
+      stopLlmAudio()
     }
   })
 
@@ -351,5 +399,14 @@ export function useAudio() {
     effectTemplates.clear()
   })
 
-  return { soundOn, playEffect, playEffectAndWait, playLlmAudio, startBgm, preloadBgm }
+  return {
+    soundOn,
+    bgmOn,
+    effectsOn,
+    playEffect,
+    playEffectAndWait,
+    playLlmAudio,
+    startBgm,
+    preloadBgm,
+  }
 }
