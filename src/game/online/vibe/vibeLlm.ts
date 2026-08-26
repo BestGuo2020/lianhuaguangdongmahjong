@@ -22,7 +22,7 @@ import {
 } from '../../llm/llmController'
 import { resolveLocalTtsVoiceKey } from '../../llm/localTtsClient'
 import { avatarFor, displayNameOf, effectiveNickname } from '../../llm/persona'
-import { compactLlmSpeechText, LlmSpeechPolicy, type LlmSpeechPriority } from '../../llm/speechPolicy'
+import { compactLlmSpeechText, type LlmSpeechPriority } from '../../llm/speechPolicy'
 import { llmWinLine, type LlmWinType } from '../../llm/winLines'
 
 export const VIBE_LLM_STYLES: LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
@@ -117,7 +117,82 @@ export function resolveHostLlmSelections(
 }
 
 interface RuntimeHooks {
-  onMessage(seat: number, text: string, profile: PublicAiSeat, priority: LlmSpeechPriority): void
+  onMessage(seat: number, text: string, profile: PublicAiSeat, priority: LlmSpeechPriority): void | Promise<void>
+}
+
+export interface VibeLlmSpeechIdentity {
+  roomId: string
+  authorityEpoch: string
+  round: number
+  id: number
+}
+
+export interface VibeLlmSpeechAck extends VibeLlmSpeechIdentity {
+  type: 'llm_speech_midpoint'
+}
+
+function speechKey(value: VibeLlmSpeechIdentity): string {
+  return `${value.roomId}:${value.authorityEpoch}:${value.round}:${value.id}`
+}
+
+export function vibeLlmSpeechAckOf(value: VibeLlmSpeechIdentity): VibeLlmSpeechAck {
+  return { type: 'llm_speech_midpoint', ...value }
+}
+
+export function isVibeLlmSpeechAck(value: unknown): value is VibeLlmSpeechAck {
+  if (typeof value !== 'object' || value === null) return false
+  const item = value as Partial<VibeLlmSpeechAck>
+  return item.type === 'llm_speech_midpoint'
+    && typeof item.roomId === 'string' && item.roomId.length > 0
+    && typeof item.authorityEpoch === 'string' && item.authorityEpoch.length > 0
+    && Number.isInteger(item.round) && item.round! > 0
+    && Number.isInteger(item.id) && item.id! > 0
+}
+
+interface PendingSpeechBarrier {
+  peers: Set<string>
+  timer: ReturnType<typeof globalThis.setTimeout>
+  finish(): void
+}
+
+/** 房主权威动作等待所有当前在线真人客户端到达本地语音中点；超时必须放行。 */
+export function createVibeLlmSpeechBarrier(timeoutMs = 15_000) {
+  const pending = new Map<string, PendingSpeechBarrier>()
+
+  function cancel(value?: VibeLlmSpeechIdentity) {
+    const keys = value ? [speechKey(value)] : [...pending.keys()]
+    for (const key of keys) pending.get(key)?.finish()
+  }
+
+  function wait(value: VibeLlmSpeechIdentity, peerIds: Iterable<string>): Promise<void> {
+    const key = speechKey(value)
+    cancel(value)
+    const peers = new Set([...peerIds].filter(Boolean))
+    if (!peers.size) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      let finished = false
+      const finish = () => {
+        if (finished) return
+        finished = true
+        const current = pending.get(key)
+        if (current?.finish === finish) pending.delete(key)
+        globalThis.clearTimeout(timer)
+        resolve()
+      }
+      const timer = globalThis.setTimeout(finish, timeoutMs)
+      pending.set(key, { peers, timer, finish })
+    })
+  }
+
+  function acknowledge(value: unknown, fromPeerId: string): boolean {
+    if (!isVibeLlmSpeechAck(value)) return false
+    const item = pending.get(speechKey(value))
+    if (!item || !item.peers.delete(fromPeerId)) return false
+    if (!item.peers.size) item.finish()
+    return true
+  }
+
+  return { wait, acknowledge, cancel }
 }
 
 export interface VibeHostLlmRuntime<C> {
@@ -167,17 +242,15 @@ export function createVibeCoreLlmRuntime(
 ): VibeHostLlmRuntime<PlayerController> {
   const selected = selectedProfiles(selections, settings)
   const stats = createLlmStats()
-  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const item = selected.get(seat)
     return item
       ? new CoreLlmController(providerConfig(item.preset, item.profile.style), {
-          onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
+          onLlmMessage: async (speaker, text, meta?: LlmMessageMeta) => {
             const priority = meta?.priority ?? 'normal'
             const compact = compactLlmSpeechText(text)
             if (!compact) return
-            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
-            hooks.onMessage(speaker, compact, item.profile, priority)
+            await hooks.onMessage(speaker, compact, item.profile, priority)
           },
         }, stats)
       : new AiController()
@@ -197,17 +270,15 @@ export function createVibeLotusLlmRuntime(
 ): VibeHostLlmRuntime<LotusController> {
   const selected = selectedProfiles(selections, settings)
   const stats = createLlmStats()
-  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const item = selected.get(seat)
     return item
       ? new LotusLlmController(providerConfig(item.preset, item.profile.style), {
-          onLlmMessage: (speaker, text, meta?: LlmMessageMeta) => {
+          onLlmMessage: async (speaker, text, meta?: LlmMessageMeta) => {
             const priority = meta?.priority ?? 'normal'
             const compact = compactLlmSpeechText(text)
             if (!compact) return
-            if (!speechPolicy.admit({ seat: speaker, style: item.profile.style, priority })) return
-            hooks.onMessage(speaker, compact, item.profile, priority)
+            await hooks.onMessage(speaker, compact, item.profile, priority)
           },
         }, stats)
       : new LotusAiController()

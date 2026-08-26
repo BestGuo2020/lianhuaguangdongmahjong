@@ -36,9 +36,12 @@ import { createTransientEventPresenter } from './presentation/transientEventPres
 import { createRemoteMatchLifecycle } from './orchestration/remoteMatchLifecycle'
 import type { LobbySeat } from './vibe/vibeLobby'
 import {
+  createVibeLlmSpeechBarrier,
   createVibeCoreLlmRuntime,
   createVibeLotusLlmRuntime,
+  isVibeLlmSpeechAck,
   resolveHostLlmSelections,
+  vibeLlmSpeechAckOf,
   vibeLlmWinLine,
   type HostLlmSeatSelection,
   type PublicAiSeat,
@@ -291,6 +294,7 @@ export function useVibeRemoteGame({
   let llmMessageSequence = 0
   let lastPresentedLlmSequence = 0
   let lastPresentedLlmEpoch = ''
+  const vibeLlmSpeechBarrier = createVibeLlmSpeechBarrier()
 
   // 房主对局引擎（开局后懒创建）：房主 UI 直接用它；客户端 UI 用快照状态。
   const hostGame = shallowRef<{
@@ -413,6 +417,7 @@ export function useVibeRemoteGame({
       }
       llmMessageSequence = 0
       lastPresentedLlmSequence = 0
+      vibeLlmSpeechBarrier.cancel()
       const occupiedSeats = new Set(seatByPeer.values())
       const resolvedLlm = resolveHostLlmSelections(hostLlmSelections, occupiedSeats)
       hostLlmSelections = resolvedLlm.privateSeats
@@ -443,7 +448,7 @@ export function useVibeRemoteGame({
       }
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
       const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
-      const emitHostLlmMessage = (
+      const emitHostLlmMessage = async (
         seat: number,
         text: string,
         profile: PublicAiSeat,
@@ -452,7 +457,7 @@ export function useVibeRemoteGame({
         const runner = hostGame.value
         if (!runner || !text.trim()) return
         llmMessageSequence += 1
-        const message: ServerMessage = {
+        const message: Extract<ServerMessage, { kind: 'llm_message' }> = {
           kind: 'llm_message',
           roomId: room.roomId,
           authorityEpoch: runner.authorityEpoch,
@@ -465,8 +470,22 @@ export function useVibeRemoteGame({
           voiceKey: profile.voiceKey,
           priority,
         }
-        room.send(message)
-        handleMessage(message)
+        const connectedPeers = new Set(room.peers().filter((peer) => peer.open).map((peer) => peer.id))
+        const expectedPeers = [...runner.getPeerSeats().entries()]
+          .filter(([peerId, boundSeat]) => (
+            peerId !== room.peerId
+            && connectedPeers.has(peerId)
+            && !runner.aiControlledSeats.has(boundSeat)
+          ))
+          .map(([peerId]) => peerId)
+        const peerMidpoints = vibeLlmSpeechBarrier.wait(message, expectedPeers)
+        try {
+          room.send(message)
+        } catch {
+          vibeLlmSpeechBarrier.cancel(message)
+        }
+        // 房主本机与所有当前在线真人客户端到达各自语音中点后，权威控制器才返回动作。
+        await Promise.all([presentLlmMessage(message), peerMidpoints])
       }
       const announcedWinEvents = new Set<number>()
       const onLocalEvent = (message: ServerMessage) => {
@@ -476,7 +495,7 @@ export function useVibeRemoteGame({
           const profile = activeHostLlmRuntime?.profiles.get(message.event.actorIndex)
           if (profile) {
             announcedWinEvents.add(message.event.id)
-            emitHostLlmMessage(
+            void emitHostLlmMessage(
               message.event.actorIndex,
               vibeLlmWinLine(message.event.type, profile.style, announcedWinEvents.size - 1),
               profile,
@@ -700,6 +719,10 @@ export function useVibeRemoteGame({
         maybeAdvanceRound()
       }
       room.onMessage((message, fromPeerId) => {
+        if (isVibeLlmSpeechAck(message)) {
+          vibeLlmSpeechBarrier.acknowledge(message, fromPeerId)
+          return
+        }
         if (message && typeof message === 'object' && (message as { type?: unknown }).type === 'continue') {
           const value = message as { type?: unknown; round?: unknown; authorityEpoch?: unknown }
           const currentGame = hostGame.value?.game
@@ -813,7 +836,7 @@ export function useVibeRemoteGame({
   const mySeatLocal = computed(() => (mySeat.value >= 0 ? mySeat.value : -1))
   const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
 
-  function presentLlmMessage(message: Extract<ServerMessage, { kind: 'llm_message' }>) {
+  async function presentLlmMessage(message: Extract<ServerMessage, { kind: 'llm_message' }>): Promise<void> {
     if (message.roomId !== roomId.value) return
     if (lastPresentedLlmEpoch !== message.authorityEpoch) {
       lastPresentedLlmEpoch = message.authorityEpoch
@@ -822,11 +845,25 @@ export function useVibeRemoteGame({
     if (message.sequence <= lastPresentedLlmSequence) return
     lastPresentedLlmSequence = message.sequence
     const localSeat = toLocal(message.seat)
-    onLlmMessage(localSeat, message.text)
+    let bubbleShown = false
+    const showBubble = () => {
+      if (bubbleShown) return
+      bubbleShown = true
+      onLlmMessage(localSeat, message.text)
+    }
     // 各端只调用已部署的 TTS 网关；LLM Key 始终只在房主浏览器。
-    void getLocalTtsClient().speak(
+    await getLocalTtsClient().speak(
       localSeat, message.text, message.voiceKey, message.style, message.priority ?? 'normal',
+      { onStarted: showBubble },
     )
+    // 静音、合成/播放失败或取消：不走/不等 TTS，但气泡必须出现。
+    if (!bubbleShown) showBubble()
+    if (!isHost.value) {
+      const room = roomSession.getRoom()
+      if (room && room.roomId === message.roomId && roomId.value === message.roomId) {
+        room.send(vibeLlmSpeechAckOf(message), room.hostId ?? undefined)
+      }
+    }
   }
 
   const settlementTimeline = createSettlementTimeline({
@@ -1107,6 +1144,8 @@ export function useVibeRemoteGame({
   const { nextRound, returnToLobby: lifecycleReturnToLobby } = matchLifecycle
   function returnToLobby() {
     resetWinEffectDedup()
+    vibeLlmSpeechBarrier.cancel()
+    getLocalTtsClient().cancel()
     if (isHost.value) {
       const runner = hostGame.value
       runner?.game.returnToLobby()
@@ -1517,7 +1556,7 @@ export function useVibeRemoteGame({
     table_action: transientEventPresenter.handleTableAction,
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
-    llm_message: presentLlmMessage,
+    llm_message: (message) => { void presentLlmMessage(message) },
     // 房主当前只通过 state_snapshot 广播结算结果；hand_result 是旧协议的瞬时
     // 事件，不能单独修改 phase/result。否则旧 Room 的迟到事件会让客户端提前
     // 进入结算页，随后与房主的下一局快照分叉。
@@ -1895,6 +1934,8 @@ export function useVibeRemoteGame({
   }
 
   function closeConnection() {
+    vibeLlmSpeechBarrier.cancel()
+    getLocalTtsClient().cancel()
     transport.close()
     clearTimers()
     clearHostGoneTimer()
