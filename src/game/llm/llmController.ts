@@ -54,7 +54,8 @@ export function createLlmStats(): LlmControllerStats {
 export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
-  onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void
+  onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void | Promise<void>
+  onReset?(): void
 }
 
 export interface LlmMessageMeta {
@@ -108,12 +109,16 @@ async function decideCanonical(
     }
     const speech = compactLlmSpeechText(output.message) || fallbackDecisionSpeech(candidate.action)
     stats.messages += 1
-    hooks.onLlmMessage?.(input.playerIndex, speech, {
-      priority: IMPORTANT_SPEECH_ACTIONS.has(candidate.action.kind) ? 'important' : 'normal',
-      decision: input.decision,
-      actionKind: candidate.action.kind,
-      source: 'decision',
-    })
+    try {
+      await hooks.onLlmMessage?.(input.playerIndex, speech, {
+        priority: IMPORTANT_SPEECH_ACTIONS.has(candidate.action.kind) ? 'important' : 'normal',
+        decision: input.decision,
+        actionKind: candidate.action.kind,
+        source: 'decision',
+      })
+    } catch {
+      // 气泡/TTS 是表现层；失败时仍执行已经通过合法性校验的模型动作。
+    }
     stats.successes += 1
     return candidate.action
   } catch {
@@ -275,7 +280,7 @@ export class CoreLlmController implements PlayerController {
   }
 
   onDiscarded(): void {}
-  reset(): void {}
+  reset(): void { this.hooks.onReset?.() }
 }
 
 /** 莲花麻将（lotus-legacy）LLM 控制器。 */
@@ -389,7 +394,7 @@ export class LotusLlmController implements LotusController {
   }
 
   onDiscarded(): void {}
-  reset(): void {}
+  reset(): void { this.hooks.onReset?.() }
 }
 
 function mapTurnAction(action: CanonicalAction): TurnAction {

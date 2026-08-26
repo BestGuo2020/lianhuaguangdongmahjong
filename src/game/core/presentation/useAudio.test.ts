@@ -11,6 +11,7 @@ class MockAudio {
   loop = false
   volume = 1
   currentTime = 0
+  duration = 4
   readonly pause = vi.fn()
   readonly play = vi.fn(async () => {})
   private listeners = new Map<string, Array<() => void>>()
@@ -63,6 +64,53 @@ afterEach(() => {
 })
 
 describe('useAudio LLM voice ducking', () => {
+  it('单机语音在 playing 时显示气泡，并到实际播放中点才放行动作', async () => {
+    const audio = useAudio()
+    const started = vi.fn()
+    const url = `/api/local-tts/audio/${'b'.repeat(64)}.mp3`
+    let settled = false
+    const midpoint = audio.playLocalLlmAudioUntilMidpoint(url, 2, 1, 'normal', { onStarted: started })
+      .then((value) => { settled = true; return value })
+    const voice = MockAudio.instances.find((item) => item.src === url)!
+
+    expect(started).not.toHaveBeenCalled()
+    voice.emit('playing')
+    expect(started).toHaveBeenCalledOnce()
+    expect(settled).toBe(false)
+
+    voice.currentTime = 1.9
+    voice.emit('timeupdate')
+    expect(settled).toBe(false)
+    voice.currentTime = 2
+    voice.emit('timeupdate')
+    await expect(midpoint).resolves.toBe(true)
+    voice.emit('ended')
+  })
+
+  it('单机语音串行播放但不丢弃，后一动作等待自己的新台词中点', async () => {
+    const audio = useAudio()
+    const firstUrl = `/api/local-tts/audio/${'c'.repeat(64)}.mp3`
+    const secondUrl = `/api/local-tts/audio/${'d'.repeat(64)}.mp3`
+    const firstMidpoint = audio.playLocalLlmAudioUntilMidpoint(firstUrl, 1, 1)
+    const secondMidpoint = audio.playLocalLlmAudioUntilMidpoint(secondUrl, 2, 2)
+    const first = MockAudio.instances.find((item) => item.src === firstUrl)!
+
+    expect(MockAudio.instances.some((item) => item.src === secondUrl)).toBe(false)
+    first.emit('playing')
+    first.currentTime = 2
+    first.emit('timeupdate')
+    await expect(firstMidpoint).resolves.toBe(true)
+    first.emit('ended')
+
+    const second = MockAudio.instances.find((item) => item.src === secondUrl)!
+    expect(second).toBeDefined()
+    second.emit('playing')
+    second.currentTime = 2
+    second.emit('timeupdate')
+    await expect(secondMidpoint).resolves.toBe(true)
+    second.emit('ended')
+  })
+
   it('普通吐槽播放期间丢弃后来普通语音，不再积压到下一圈', () => {
     const audio = useAudio()
     const bgm = MockAudio.instances[0]

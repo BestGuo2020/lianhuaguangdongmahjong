@@ -1,6 +1,10 @@
 import { getCurrentInstance, inject, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
-import { registerLlmAudioPlayer, subscribeLocalLlmAudio } from './llmAudioBus'
+import {
+  registerLlmAudioPlayer,
+  subscribeLocalLlmAudio,
+  type LlmAudioPlaybackHooks,
+} from './llmAudioBus'
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
 const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/`
@@ -31,6 +35,7 @@ const BGM_DUCKED_VOLUME = 0.08
 const BGM_DUCK_RAMP_SECONDS = 0.12
 const NORMAL_LLM_AUDIO_TTL_MS = 3_000
 const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
+const LLM_AUDIO_PLAYBACK_TIMEOUT_MS = 12_000
 export const AUDIO_PREFERENCES_STORAGE_KEY = 'lianhua-guangma:audio-preferences:v1'
 
 interface AudioPreferences {
@@ -89,6 +94,11 @@ interface LlmAudioItem {
   messageId: number
   priority: LlmSpeechPriority
   enqueuedAt: number
+  waitForMidpoint?: boolean
+  onStarted?: () => void
+  fallbackMidpointMs?: number
+  resolveMidpoint?: (played: boolean) => void
+  cancel?: () => void
 }
 
 export function useAudio() {
@@ -202,16 +212,25 @@ export function useAudio() {
     bgmGain.gain.linearRampToValueAtTime(target, now + BGM_DUCK_RAMP_SECONDS)
   }
 
+  function settleLlmMidpoint(item: LlmAudioItem, played: boolean) {
+    const resolve = item.resolveMidpoint
+    if (!resolve) return
+    item.resolveMidpoint = undefined
+    resolve(played)
+  }
+
   function pumpLlmAudio() {
     if (!soundOn.value || !effectsOn.value || activeLlmAudio) return
     let item: LlmAudioItem | undefined
     while (llmAudioQueue.length) {
       const candidate = llmAudioQueue.shift()!
       const ttl = candidate.priority === 'important' ? IMPORTANT_LLM_AUDIO_TTL_MS : NORMAL_LLM_AUDIO_TTL_MS
-      if (Date.now() - candidate.enqueuedAt <= ttl) {
+      // 单机等待中的动作不会过期：动作尚未执行，台词仍属于当前决策。
+      if (candidate.waitForMidpoint || Date.now() - candidate.enqueuedAt <= ttl) {
         item = candidate
         break
       }
+      settleLlmMidpoint(candidate, false)
     }
     if (!item) {
       setBgmDucked(false)
@@ -223,16 +242,70 @@ export function useAudio() {
     audio.preload = 'auto'
     audio.volume = 1
     setBgmDucked(true)
-    const finish = () => {
+    let finished = false
+    let started = false
+    let fallbackTimer = 0
+    const playbackTimer = window.setTimeout(() => {
+      audio.pause()
+      finish(false)
+    }, LLM_AUDIO_PLAYBACK_TIMEOUT_MS)
+    const clearPlaybackTimers = () => {
+      window.clearTimeout(playbackTimer)
+      if (fallbackTimer) window.clearTimeout(fallbackTimer)
+    }
+    const finish = (played: boolean) => {
+      if (finished) return
+      finished = true
+      clearPlaybackTimers()
+      settleLlmMidpoint(item, played)
       if (activeLlmAudio !== audio) return
       activeLlmAudio = null
       activeLlmItem = null
       pumpLlmAudio()
       if (!activeLlmAudio) setBgmDucked(false)
     }
-    audio.addEventListener('ended', finish, { once: true })
-    audio.addEventListener('error', finish, { once: true })
-    audio.play().catch(finish)
+    const maybeResolveMidpoint = () => {
+      if (!started || !item.resolveMidpoint) return
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0 && audio.currentTime >= duration / 2) {
+        settleLlmMidpoint(item, true)
+      }
+    }
+    const refreshMidpointFallback = () => {
+      if (!started || !item.resolveMidpoint) return
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        if (fallbackTimer) {
+          window.clearTimeout(fallbackTimer)
+          fallbackTimer = 0
+        }
+        maybeResolveMidpoint()
+        return
+      }
+      if (!fallbackTimer) {
+        fallbackTimer = window.setTimeout(
+          () => settleLlmMidpoint(item, true),
+          item.fallbackMidpointMs ?? 1_500,
+        )
+      }
+    }
+    const handleStarted = () => {
+      if (started) return
+      started = true
+      try { item.onStarted?.() } catch { /* 展示失败不能阻塞语音和动作 */ }
+      refreshMidpointFallback()
+    }
+    item.cancel = () => {
+      audio.pause()
+      audio.currentTime = 0
+      finish(false)
+    }
+    audio.addEventListener('playing', handleStarted, { once: true })
+    audio.addEventListener('timeupdate', maybeResolveMidpoint)
+    audio.addEventListener('durationchange', refreshMidpointFallback)
+    audio.addEventListener('ended', () => finish(started), { once: true })
+    audio.addEventListener('error', () => finish(false), { once: true })
+    audio.play().catch(() => finish(false))
   }
 
   /** 普通吐槽忙时直接丢弃；关键/胜利台词可打断普通语音，且只保留最新一条待播。 */
@@ -245,32 +318,52 @@ export function useAudio() {
     if (!soundOn.value || !effectsOn.value || !url) return
     if (priority === 'normal' && (activeLlmAudio || llmAudioQueue.length)) return
     if (priority === 'important') {
-      llmAudioQueue.splice(0, llmAudioQueue.length)
+      llmAudioQueue.splice(0, llmAudioQueue.length).forEach((item) => settleLlmMidpoint(item, false))
     }
     if (activeLlmAudio && priority === 'important' && activeLlmItem?.priority === 'normal') {
-      activeLlmAudio.pause()
-      activeLlmAudio.currentTime = 0
-      activeLlmAudio = null
-      activeLlmItem = null
+      activeLlmItem.cancel?.()
     }
     llmAudioQueue.push({ url, seat, messageId, priority, enqueuedAt: Date.now() })
     while (llmAudioQueue.length > 1) llmAudioQueue.shift()
     pumpLlmAudio()
   }
 
+  /** 单机 LLM：不丢弃台词；实际播放开始时显示气泡，播放到中点时放行动作。 */
+  function playLocalLlmAudioUntilMidpoint(
+    url: string,
+    seat: number,
+    messageId: number,
+    priority: LlmSpeechPriority = 'normal',
+    hooks: LlmAudioPlaybackHooks = {},
+  ): Promise<boolean> {
+    if (!soundOn.value || !effectsOn.value || !url) return Promise.resolve(false)
+    return new Promise<boolean>((resolve) => {
+      llmAudioQueue.push({
+        url, seat, messageId, priority, enqueuedAt: Date.now(),
+        waitForMidpoint: true,
+        onStarted: hooks.onStarted,
+        fallbackMidpointMs: hooks.fallbackMidpointMs,
+        resolveMidpoint: resolve,
+      })
+      pumpLlmAudio()
+    })
+  }
+
   function stopLlmAudio() {
-    llmAudioQueue.splice(0, llmAudioQueue.length)
-    if (activeLlmAudio) {
-      activeLlmAudio.pause()
-      activeLlmAudio.currentTime = 0
-    }
+    llmAudioQueue.splice(0, llmAudioQueue.length).forEach((item) => settleLlmMidpoint(item, false))
+    activeLlmItem?.cancel?.()
+    if (activeLlmAudio) activeLlmAudio.pause()
     activeLlmAudio = null
     activeLlmItem = null
     setBgmDucked(false)
   }
 
   // 单机 TTS 通过共享总线接入；两分支的 App.vue 均无需感知该实现。
-  const unregisterLlmAudioPlayer = registerLlmAudioPlayer(playLlmAudio)
+  const unregisterLlmAudioPlayer = registerLlmAudioPlayer(
+    playLocalLlmAudioUntilMidpoint,
+    () => soundOn.value && effectsOn.value,
+    stopLlmAudio,
+  )
   const unsubscribeLocalLlmAudio = subscribeLocalLlmAudio(playLlmAudio)
 
   function ensureAudioContext(): AudioContext | null {
@@ -425,6 +518,7 @@ export function useAudio() {
     playEffect,
     playEffectAndWait,
     playLlmAudio,
+    playLocalLlmAudioUntilMidpoint,
     startBgm,
     preloadBgm,
   }
