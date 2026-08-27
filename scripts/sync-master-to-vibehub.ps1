@@ -132,7 +132,9 @@ try {
   $existing = $masterOnly | Where-Object { Test-Path $_ }
   if ($existing) {
     Write-Host '==> removing master-only WebSocket files'
-    git rm --quiet -r -- $existing
+    # 这些路径已在 $masterOnly 中显式声明为 vibehub 必须删除。master 新增文件会以
+    # staged add 进入未提交 merge，普通 git rm 会拒绝；这里用 -f 落实既定删除语义。
+    git rm --quiet -r -f -- $existing
     if ($LASTEXITCODE -ne 0) { throw 'git rm failed' }
   } else {
     Write-Host '==> no master-only files to remove'
