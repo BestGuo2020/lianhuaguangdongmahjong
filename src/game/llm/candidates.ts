@@ -262,13 +262,24 @@ function removeClaimed(input: DecisionInput, action: Extract<CanonicalAction, { 
 
 /** 副露后（再弃一张）的最佳听口质量。 */
 function bestDiscardQuality(input: DecisionInput, hand: TileType[], exposedMelds: number) {
-  let best: ReturnType<typeof qualityOf> | null = null
+  let best: (ReturnType<typeof qualityOf> & { discardedTile: TileType; discardIndex: number }) | null = null
   for (let index = 0; index < hand.length; index += 1) {
     const after = hand.filter((_, i) => i !== index)
-    const quality = qualityOf(input, after, exposedMelds)
+    const quality = {
+      ...qualityOf(input, after, exposedMelds),
+      discardedTile: hand[index],
+      discardIndex: index,
+    }
     if (best === null || compareHandProgress(quality.progress, best.progress) > 0) best = quality
   }
   return best
+}
+
+function pengWouldDiscardClaimedTile(input: DecisionInput): boolean {
+  if (!input.tile) return false
+  const afterPeng = removeClaimed(input, { kind: 'peng' })
+  const best = bestDiscardQuality(input, afterPeng, input.exposedMelds + 1)
+  return best?.discardedTile === input.tile
 }
 
 /** 杠分（即时收益）档位：在克隆分数上应用规则集杠分，delta>0 按档位。 */
@@ -431,7 +442,9 @@ function claimCandidates(input: DecisionInput): Candidate[] {
   if (canGang) {
     candidates.push({ id: 'G', label: `杠${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'gang' }, features: featuresOf(input, { kind: 'gang' }, '中'), legalityKey: 'gang' })
   }
-  if (canPeng) {
+  // 若碰后最佳动作是把手中第 3 张同牌原样打回，大明杠在本规则下严格占优：
+  // 最终结构不差，并额外获得杠分与尾牌补摸。不要把这个劣质碰候选交给 LLM。
+  if (canPeng && !(canGang && pengWouldDiscardClaimedTile(input))) {
     candidates.push({ id: 'P', label: `碰${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'peng' }, features: featuresOf(input, { kind: 'peng' }, '中'), legalityKey: 'peng' })
   }
   ;(input.chiOptions ?? []).forEach((meld, optionIndex) => {

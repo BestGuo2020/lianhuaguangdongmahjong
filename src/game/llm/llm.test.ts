@@ -172,6 +172,20 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     expect(built.request?.candidates.find((c) => c.id === 'G')?.features.scoreDeltaBand).toBeDefined()
   })
 
+  it('可大明杠且碰后会把第 3 张同牌打回时，不向 LLM 提供碰候选', () => {
+    const hand = [
+      'east', 'east', 'east',
+      'm1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north',
+    ] as never
+    const built = buildDecisionRequest(baseInput({
+      decision: 'claim', hand, tile: 'east', from: 1, canPeng: true, canGang: true,
+      visibleTiles: [...hand, 'east'], publicTiles: ['east'],
+    }))
+
+    expect(built.request?.candidates.map((candidate) => candidate.id)).toEqual(['Z', 'G'])
+    expect(built.request?.engineSuggestion).toBe('G')
+  })
+
   it('skipDraw=true：只允许出牌（无杠候选）', () => {
     const input = baseInput({ skipDraw: true, hand: ['m3', 'm3', 'm3', 'm3'], melds: [] })
     const built = buildDecisionRequest(input)
