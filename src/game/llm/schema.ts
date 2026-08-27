@@ -14,6 +14,9 @@ export type TileName = string
 export type Band = '高' | '中' | '低'
 
 export interface CandidateFeatures {
+  shanten: number | 'n/a'
+  ukeire: number | 'n/a'
+  effectiveTiles: Array<{ tile: TileName; remaining: number }> | 'n/a'
   ready: boolean | 'unknown'
   waits: Array<{ tile: TileName; remaining: number }> | 'n/a'
   effectiveRemaining: number | 'n/a'

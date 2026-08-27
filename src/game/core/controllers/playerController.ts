@@ -324,7 +324,14 @@ export class AiController implements PlayerController {
       ctx.kongBloom,
       ctx.ruleset,
     )
-    const decision: TurnDecision = decideTurn(view)
+    Object.assign(view, {
+      playerIndex: ctx.playerIndex,
+      visibleTiles: ctx.visibleTiles,
+      publicTiles: ctx.publicTiles,
+      peers: ctx.peers,
+      wallCount: ctx.wallCount,
+    })
+    const decision: TurnDecision = decideTurn(view, this.random)
     return this.mapTurnDecision(decision)
   }
 
@@ -335,6 +342,11 @@ export class AiController implements PlayerController {
       tile: ctx.tile,
       from: ctx.from,
       exposedMelds: ctx.exposedMelds,
+      playerIndex: ctx.playerIndex,
+      visibleTiles: ctx.visibleTiles,
+      publicTiles: ctx.publicTiles,
+      peers: ctx.peers,
+      wallCount: ctx.wallCount,
       ruleset: ctx.ruleset,
     })
     if (decision === 'gang') return { kind: 'gang' }
@@ -345,7 +357,13 @@ export class AiController implements PlayerController {
       const afterPeng = removeMatches(ctx.hand, ctx.tile, 2)
       if (!afterPeng.length) return { kind: 'pass' }
       // 预计算碰后弃牌索引，实现 AI 的单次碰+出牌闭环
-      const discardIndex = chooseDiscardIndex(afterPeng, this.random, ctx.exposedMelds + 1, ctx.ruleset ?? DEFAULT_RULESET)
+      const discardIndex = chooseDiscardIndex(
+        afterPeng,
+        this.random,
+        ctx.exposedMelds + 1,
+        ctx.ruleset ?? DEFAULT_RULESET,
+        ctx,
+      )
       return { kind: 'peng', discardIndex }
     }
     return { kind: 'pass' }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseDiscardIndex, decideClaim, decideRobKong, decideTurn, makeTurnView } from './ai'
 import type { AITurnView } from './ai'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
+import { DEFAULT_RULESET } from '../rules/ruleset'
 
 function view(hand: TileType[], melds: Meld[] = [], exposedMelds = 0, kongBloom = false): AITurnView {
   return { hand, melds, exposedMelds, kongBloom }
@@ -75,6 +76,16 @@ describe('chooseDiscardIndex 弃牌启发式', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east', 'east', 'north', 'white']
     const index = chooseDiscardIndex(hand, () => 0, 0)
     expect(hand[index]).toBe('north')
+  })
+
+  it('同向听时选择实际有效进张更多的舍牌', () => {
+    const hand: TileType[] = [
+      'm1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3',
+      'east', 'east', 'south', 'west', 'north',
+    ]
+    const visibleTiles: TileType[] = [...hand, 'south', 'south', 'south']
+    const index = chooseDiscardIndex(hand, () => 0, 0, DEFAULT_RULESET, { visibleTiles })
+    expect(hand[index]).toBe('south')
   })
 })
 
