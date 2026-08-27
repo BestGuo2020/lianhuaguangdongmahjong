@@ -34,10 +34,10 @@ import type { TileType } from '../core/contracts/types'
 import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
 import { requestLlmDecision } from './client'
-import { compactLlmSpeechText } from './speechPolicy'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
+import { decisionSpeech } from './decisionSpeech'
 
 export interface LlmControllerStats {
   requests: number
@@ -69,19 +69,6 @@ const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
 
-function fallbackDecisionSpeech(action: CanonicalAction): string {
-  switch (action.kind) {
-    case 'added-kong':
-    case 'concealed-kong':
-    case 'wind-kong':
-    case 'gang': return '这杠我开了。'
-    case 'peng': return '碰一个。'
-    case 'chi': return '顺手吃了。'
-    case 'pass': return '先看看。'
-    default: return '这张先走。'
-  }
-}
-
 /** 内部：LLM 决定 → 候选动作；失败/非法 → null（回退）。 */
 async function decideCanonical(
   config: LlmProviderConfig,
@@ -107,7 +94,8 @@ async function decideCanonical(
       stats.invalidActions += 1
       return built.fallbackAction
     }
-    const speech = compactLlmSpeechText(output.message) || fallbackDecisionSpeech(candidate.action)
+    // 模型只决定 choice；台词在动作合法性确认后由程序生成，杜绝“说留着却打出”等矛盾。
+    const speech = decisionSpeech(candidate.action, config.style, stats.messages)
     stats.messages += 1
     try {
       await hooks.onLlmMessage?.(input.playerIndex, speech, {

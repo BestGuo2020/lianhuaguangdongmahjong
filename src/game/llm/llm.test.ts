@@ -293,7 +293,7 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
 })
 
 describe('prompt 构建', () => {
-  it('包含候选编号、默认参考、必填牌桌台词与输出 JSON 约束', () => {
+  it('包含候选编号、默认参考与仅 choice 输出约束', () => {
     const built = buildDecisionRequest(baseInput())
     const prompt = buildPrompt('稳健', built.request!)
     expect(prompt.system).toContain('牌友')
@@ -302,9 +302,10 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('{"choice": "A1"')
     expect(prompt.user).toContain('【默认参考】')
     expect(prompt.system).not.toContain('游戏引擎')
-    expect(prompt.system).toContain('每次都必须提供一句非空')
-    expect(prompt.system).toContain('严禁提及或复述决策机制')
-    expect(prompt.user).toContain('message 必须非空')
+    expect(prompt.system).toContain('台词由程序在动作确认后生成')
+    expect(prompt.system).toContain('不要输出 message')
+    expect(prompt.user).toContain('{"choice": "A1"}')
+    expect(prompt.user).toContain('不要输出 message')
     expect(prompt.user).toContain('【你的牌】')
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
     expect(prompt.system).toContain('决策优先级')
