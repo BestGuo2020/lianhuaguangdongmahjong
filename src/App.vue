@@ -17,6 +17,7 @@ import { createActiveGamePort, type GameMode } from './game/core/contracts/activ
 import { useRemoteGame } from './game/online/useRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
+import { useWakuDemoAuth } from './game/online/session/useWakuDemoAuth'
 import { useRoomAvailability } from './game/online/session/useRoomAvailability'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
@@ -204,6 +205,7 @@ watch(effectiveLlmEnabled, (enabled) => preferLlmTableTheme(enabled), { immediat
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
 const disclaimerGate = useDisclaimerGate(playerId)
+const wakuAuth = useWakuDemoAuth()
 
 function startGameWithAudio() {
   llmOpen.value = false
@@ -239,6 +241,10 @@ const {
   report: reportPlayer,
   toggleReady,
 } = lobbyController
+
+watch(() => wakuAuth.account.value?.displayName, (displayName) => {
+  if (displayName && !nicknameInput.value.trim()) nicknameInput.value = displayName.slice(0, 12)
+}, { immediate: true })
 
 const statsOpen = ref(false)
 const showLobby = computed(() => (
@@ -418,6 +424,10 @@ function changeTableTheme(theme: TableThemeName) {
           :copied="copied"
           :leaving="leaving"
           :closing="closing"
+          :waku-authenticated="wakuAuth.authenticated.value"
+          :waku-account-name="wakuAuth.account.value?.displayName ?? ''"
+          :waku-auth-loading="wakuAuth.loading.value"
+          :waku-auth-error="wakuAuth.error.value"
           @start-local="startGameWithAudio"
           @create-room="(payload: { llmEnabled: boolean }) => createRemoteRoom(payload.llmEnabled)"
           @join-room="joinRemoteRoom"
@@ -429,6 +439,8 @@ function changeTableTheme(theme: TableThemeName) {
           @close-room="closeRoom"
           @open-stats="statsOpen = true"
           @open-rules="rulesOpen = true"
+          @waku-login="wakuAuth.login"
+          @waku-logout="wakuAuth.logout"
         />
 
         <SettlementOverlay

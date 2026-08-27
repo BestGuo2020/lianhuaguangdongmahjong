@@ -1,7 +1,7 @@
 // 远程 REST 基础设施：统一服务地址、JSON 编解码与错误模型。
-const API_HOST = typeof location !== 'undefined' ? location.host : 'localhost'
+const PAGE_ORIGIN = typeof location !== 'undefined' ? location.origin : 'http://localhost'
 
-export const API_BASE = import.meta.env.VITE_API_BASE || `http://${API_HOST}`
+export const API_BASE = import.meta.env.VITE_API_BASE || PAGE_ORIGIN
 
 export class RemoteApiError extends Error {
   code: string
@@ -17,6 +17,7 @@ export class RemoteApiError extends Error {
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })

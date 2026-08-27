@@ -40,6 +40,10 @@ interface Props {
   copied: boolean
   leaving: boolean
   closing: boolean
+  wakuAuthenticated: boolean
+  wakuAccountName: string
+  wakuAuthLoading: boolean
+  wakuAuthError: string
   /** 可按产品策略隐藏联机入口；当前莲花旧版也支持联机。 */
   singlePlayerOnly?: boolean
 }
@@ -62,6 +66,8 @@ const emit = defineEmits<{
   closeRoom: []
   openStats: []
   openRules: []
+  wakuLogin: []
+  wakuLogout: []
 }>()
 
 type DialogName = 'create' | 'join' | 'match' | 'rule' | null
@@ -131,6 +137,11 @@ function closeDialog() {
   }
   dialog.value = null
 }
+
+function toggleWakuDemoAuth() {
+  if (props.wakuAuthenticated) emit('wakuLogout')
+  else emit('wakuLogin')
+}
 </script>
 
 <template>
@@ -138,6 +149,18 @@ function closeDialog() {
     <p class="eyebrow">LIANHUA MAHJONG COLLECTIONS</p>
     <h1>莲花<span>广麻</span></h1>
     <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
+    <div class="waku-account" :class="{ authenticated: wakuAuthenticated }">
+      <div>
+        <b>{{ wakuAuthenticated ? (wakuAccountName || 'WakuDemo 玩家') : 'WakuDemo 账号' }}</b>
+        <small>{{ wakuAuthenticated ? '已安全登录' : '登录后关联平台身份' }}</small>
+      </div>
+      <button
+        type="button"
+        :disabled="wakuAuthLoading"
+        @click="toggleWakuDemoAuth"
+      >{{ wakuAuthLoading ? '处理中…' : (wakuAuthenticated ? '退出' : '登录') }}</button>
+    </div>
+    <p v-if="wakuAuthError" class="waku-auth-error" role="alert">{{ wakuAuthError }}</p>
     <button v-if="storedSession && !roomId" class="continue-session" @click="$emit('resumeSession')">
       ⏵ 继续对局<template v-if="storedSession.roomId">（房间 {{ storedSession.roomId }}）</template>
     </button>

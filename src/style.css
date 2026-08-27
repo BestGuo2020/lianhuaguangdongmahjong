@@ -565,6 +565,14 @@ button { font: inherit; }
 .start-button b { display: block; font: 900 20px "Noto Serif SC", serif; letter-spacing: .22em; }.start-button span { display: block; margin-top: 3px; font-size: 11px; opacity: .78; letter-spacing: .12em; }
 .start-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .lobby-links { display: flex; align-items: center; gap: 18px; margin-top: 14px; }
+.waku-account { width: min(420px, 88vw); display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px auto 2px; padding: 10px 13px; border: 1px solid rgba(211,174,87,.2); border-radius: 8px; background: rgba(3,18,13,.58); }
+.waku-account.authenticated { border-color: rgba(92,185,132,.4); }
+.waku-account div { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+.waku-account b { color: #e9d9ae; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waku-account small { color: #82998d; font-size: 11px; margin-top: 2px; }
+.waku-account button { flex: none; border: 1px solid rgba(211,174,87,.35); border-radius: 6px; padding: 6px 13px; background: rgba(15,49,37,.9); color: #d8c796; cursor: pointer; }
+.waku-account button:disabled { cursor: wait; opacity: .55; }
+.waku-auth-error { width: min(420px, 88vw); margin: 4px auto 0; color: #e0a06a; font-size: 12px; text-align: left; }
 .text-button { border: 0; background: transparent; color: #9aafa3; font-size: 13px; cursor: pointer; }
 .text-button:hover { color: #d3bf8d; }
 .repository-link { display: inline-flex; align-items: center; gap: 5px; color: #9aafa3; font-size: 13px; text-decoration: none; }
