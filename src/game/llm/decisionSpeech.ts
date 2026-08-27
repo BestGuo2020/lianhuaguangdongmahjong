@@ -6,7 +6,7 @@ type DecisionSpeechKind = CanonicalAction['kind']
 const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
   discard: {
     激进: ['这张不要了。', '先打出去。', '这一张走。'],
-    稳健: ['这张先走。', '先打这一张。', '稳稳出牌。'],
+    稳健: ['这张先走。', '先打这一张。', '按牌路来。'],
     话痨: ['先把这张放出去。', '这一张先打掉。', '轮到我出牌啦。'],
     高冷: ['打。', '这张。', '出牌。'],
   },
@@ -42,7 +42,7 @@ const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
   },
   'concealed-kong': {
     激进: ['暗杠，开！', '四张在手，杠！', '直接暗杠！'],
-    稳健: ['暗杠。', '这手开暗杠。', '稳稳暗杠。'],
+    稳健: ['暗杠。', '这手开暗杠。', '暗杠正合适。'],
     话痨: ['四张都在手，暗杠！', '藏得好好的，开杠啦！', '这一组正好暗杠！'],
     高冷: ['暗杠。', '杠。', '开。'],
   },

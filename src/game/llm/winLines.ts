@@ -5,7 +5,7 @@ export type LlmWinType = 'self-draw' | 'discard-win' | 'robbed-kong-win'
 export const LLM_WIN_LINES: Record<LlmWinType, Record<LlmStyle, readonly string[]>> = {
   'self-draw': {
     激进: ['自摸，这桌归我管！', '牌到手了，全都坐好！', '自摸拿下，谁还不服！'],
-    稳健: ['自摸，水到渠成。', '牌路算准了，承让。', '稳稳自摸，不急不躁。'],
+    稳健: ['自摸，水到渠成。', '牌路算准了，承让。', '自摸到手，不急不躁。'],
     话痨: ['自摸啦，终于等到你！', '好家伙，这都能自摸！', '这一摸，快乐来得突然！'],
     高冷: ['自摸，意料之中。', '牌到了，仅此而已。', '自摸，刚刚好。'],
   },

@@ -17,4 +17,10 @@ describe('LLM win lines', () => {
     expect(llmWinLine('self-draw', '高冷', 1)).toBe('牌到了，仅此而已。')
     expect(llmWinLine('self-draw', '高冷', 3)).toBe('自摸，意料之中。')
   })
+
+  it('稳健性格不使用“稳稳”措辞', () => {
+    for (const styles of Object.values(LLM_WIN_LINES)) {
+      expect(styles.稳健.every((line) => !line.includes('稳稳'))).toBe(true)
+    }
+  })
 })

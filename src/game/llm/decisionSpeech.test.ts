@@ -19,4 +19,10 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(decisionSpeech({ kind: 'discard', handIndex: 0 }, '稳健', 0)).toBe('这张先走。')
     expect(decisionSpeech({ kind: 'discard', handIndex: 0 }, '稳健', 3)).toBe('这张先走。')
   })
+
+  it('稳健性格不使用“稳稳”措辞', () => {
+    for (const styles of Object.values(DECISION_SPEECH_LINES)) {
+      expect(styles.稳健.every((line) => !line.includes('稳稳'))).toBe(true)
+    }
+  })
 })
