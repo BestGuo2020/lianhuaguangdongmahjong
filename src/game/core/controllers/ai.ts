@@ -70,6 +70,9 @@ interface DiscardQuality {
   /** 离胡牌还差的有效张数（听口 × 剩余可用张，简化用听口数） */
   score: number
   progress?: HandProgress
+  /** bestDiscardQuality 返回时记录对应舍牌，用于识别“碰后原样打回”。 */
+  discardedTile?: TileType
+  discardIndex?: number
 }
 
 function emptyQuality(): DiscardQuality {
@@ -220,7 +223,11 @@ export function decideClaim(view: AIClaimView): ClaimDecision {
     afterPeng.push(tile)
   }
   const afterQuality = bestDiscardQuality(afterPeng, exposedMelds + 1, ruleset, view.visibleTiles)
-  return betterQuality(afterQuality, baseline) ? 'peng' : 'pass'
+  if (!betterQuality(afterQuality, baseline)) return 'pass'
+  // 手牌原有 3 张时，碰只拿走 2 张；若最佳后续动作是把第 3 张原样打回，
+  // 大明杠得到同等最终结构，额外获得杠分和尾牌补摸，严格支配该碰法。
+  if (view.canGang && afterQuality.discardedTile === view.tile) return 'gang'
+  return 'peng'
 }
 
 function removeMatchingTiles(hand: TileType[], tile: TileType | undefined, amount: number) {
@@ -250,7 +257,11 @@ function bestDiscardQuality(
   if (!hand.length) return emptyQuality()
   let best: DiscardQuality | null = null
   for (let index = 0; index < hand.length; index += 1) {
-    const quality = discardQuality(hand, index, exposedMelds, ruleset, visibleTiles)
+    const quality = {
+      ...discardQuality(hand, index, exposedMelds, ruleset, visibleTiles),
+      discardedTile: hand[index],
+      discardIndex: index,
+    }
     if (best === null || betterQuality(quality, best)) best = quality
   }
   return best ?? emptyQuality()

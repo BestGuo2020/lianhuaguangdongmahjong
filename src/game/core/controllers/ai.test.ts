@@ -94,6 +94,17 @@ describe('decideClaim 吃碰杠响应', () => {
     expect(decideClaim({ hand: ['east', 'east', 'east', 'm1'], canGang: true })).toBe('gang')
   })
 
+  it('三张同牌可大明杠时不会碰后把第 3 张原样打回', () => {
+    const hand: TileType[] = [
+      'east', 'east', 'east',
+      'm1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'north',
+    ]
+    expect(decideClaim({
+      hand, canGang: true, tile: 'east', exposedMelds: 0,
+      visibleTiles: [...hand, 'east'],
+    })).toBe('gang')
+  })
+
   it('canGang 为假且无 tile 信息时默认 peng（向后兼容）', () => {
     expect(decideClaim({ hand: ['east', 'east', 'm1'], canGang: false })).toBe('peng')
   })
