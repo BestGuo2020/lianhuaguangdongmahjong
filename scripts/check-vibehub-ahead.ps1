@@ -12,6 +12,7 @@ Push-Location $root
 try {
   # Files that vibehub always keeps its own version (online layer) - same list as sync-master-to-vibehub.ps1
   $vibehubKeep = @(
+    'package.json'
     'index.html'
     'vite.config.ts'
     'playwright.config.ts'
@@ -19,8 +20,14 @@ try {
     'src/components/account/StatsOverlay.vue'
     'src/components/lobby/LobbyView.vue'
     'src/components/lobby/RoomPanel.vue'
+    'src/components/settlement/SettlementOverlay.vue'
     'src/content/disclaimer.ts'
     'src/game/core/local/useGame.ts'
+    'src/game/core/local/useGame.test.ts'
+    'src/game/core/contracts/activeGamePort.ts'
+    'src/game/core/contracts/activeGamePort.test.ts'
+    'src/game/core/contracts/gamePort.ts'
+    'src/game/core/contracts/gamePort.test.ts'
     'src/game/online/orchestration/remoteActionController.ts'
     'src/game/online/orchestration/remoteActionController.test.ts'
     'src/game/online/orchestration/remoteLobbyController.ts'
@@ -31,14 +38,28 @@ try {
     'src/game/online/orchestration/requestCoordinator.test.ts'
     'src/game/online/orchestration/snapshotReconciler.ts'
     'src/game/online/orchestration/snapshotReconciler.test.ts'
-    'src/game/online/presentation/openingTimeline.ts'
-    'src/game/online/presentation/openingTimeline.test.ts'
+    'src/game/online/orchestration/serverMessageRouter.ts'
+    'src/game/online/orchestration/serverMessageRouter.test.ts'
+    'src/game/online/presentation'
+    'src/game/online/protocol'
     'src/game/online/session/remoteSessionStore.ts'
     'src/game/online/session/remoteSessionStore.test.ts'
     'src/game/online/session/useDisclaimerGate.ts'
     'src/game/online/state/remoteGameState.ts'
     'src/game/online/state/remoteGameState.test.ts'
+    'src/game/shared/runtime/matchLifecycle.ts'
+    'src/game/shared/runtime/timerScheduler.ts'
+    'src/game/shared/settlement/settlementTimeline.ts'
+    'src/game/variants/lotus/lotusGame.ts'
+    'tests/e2e/local-game.smoke.spec.ts'
   )
+
+  function Test-VibehubKeep([string]$path) {
+    foreach ($keep in $vibehubKeep) {
+      if ($path -eq $keep -or $path.StartsWith("$keep/")) { return $true }
+    }
+    return $false
+  }
 
   # Files present on BOTH branches (shared) are the only candidates for "vibehub ahead".
   $masterFiles = @(git ls-tree -r --name-only master)
@@ -48,7 +69,7 @@ try {
   $differing = @(git diff --name-only master vibehub)
   $ahead = @()
   foreach ($path in $differing) {
-    if ($vibehubKeep -contains $path) { continue }
+    if (Test-VibehubKeep $path) { continue }
     if ($shared -notcontains $path) { continue }   # branch-exclusive files are not "ahead"
     $ahead += $path
   }
