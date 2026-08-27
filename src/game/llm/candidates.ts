@@ -14,6 +14,7 @@ import {
   tileName, type Candidate, type CanonicalAction, type DecisionKind, type DecisionRequest,
   type RuleCode, type StateSnapshotV1, type TileName,
 } from './schema'
+import { compareHandProgress, evaluateHandProgress } from '../shared/ai/handProgress'
 
 export interface DecisionInput {
   ruleCode: RuleCode
@@ -81,8 +82,7 @@ function countsOf(input: DecisionInput): Map<TileType, number> {
 }
 
 /** 听口：给定手牌（3n+1 听牌态）能胡的牌。 */
-function waitsOf(input: DecisionInput, hand: TileType[]): TileType[] {
-  const exposed = input.exposedMelds
+function waitsOf(input: DecisionInput, hand: TileType[], exposed = input.exposedMelds): TileType[] {
   if (isLotus(input)) {
     return lotusWaitingTiles(hand, exposed, jokersOf(input), wildcardsOf(input))
   }
@@ -140,13 +140,20 @@ function remaining(input: DecisionInput, tile: TileType): number {
 }
 
 /** 打出某张后的听口质量（听牌 + 听口明细 + 有效剩余）。 */
-function qualityOf(input: DecisionInput, after: TileType[]) {
-  const waits = waitsOf(input, after)
-  if (waits.length === 0) {
-    return { ready: false as const, waits: [] as TileType[], effectiveRemaining: 0 }
+function qualityOf(input: DecisionInput, after: TileType[], exposedMelds = input.exposedMelds) {
+  const progress = evaluateHandProgress(after, {
+    exposedMelds,
+    wildcardTiles: isLotus(input) ? [...jokersOf(input), ...wildcardsOf(input)] : ['white'],
+    visibleTiles: input.visibleTiles ?? input.hand,
+    waitingTiles: (tiles) => waitsOf(input, tiles, exposedMelds),
+    specialHands: isLotus(input),
+  })
+  return {
+    ready: progress.shanten === 0,
+    waits: progress.waits,
+    effectiveRemaining: progress.effectiveRemaining,
+    progress,
   }
-  const effectiveRemaining = waits.reduce((sum, tile) => sum + remaining(input, tile), 0)
-  return { ready: true as const, waits, effectiveRemaining }
 }
 
 function featuresOf(
@@ -156,6 +163,7 @@ function featuresOf(
 ): Candidate['features'] {
   const id = action.kind === 'discard' ? action.handIndex : action.kind === 'added-kong' ? action.meldIndex : -1
   const base: Candidate['features'] = {
+    shanten: 'n/a', ukeire: 'n/a', effectiveTiles: 'n/a',
     ready: 'unknown', waits: 'n/a', effectiveRemaining: 'n/a',
     specialPattern: 'n/a', safety: 'unknown', efficiency, risks: [],
   }
@@ -163,6 +171,11 @@ function featuresOf(
   if (action.kind === 'discard') {
     const after = input.hand.filter((_, index) => index !== id)
     const quality = qualityOf(input, after)
+    base.shanten = quality.progress.shanten
+    base.ukeire = quality.progress.ukeire
+    base.effectiveTiles = quality.progress.effectiveTiles.map((item) => ({
+      tile: tileName(item.tile), remaining: item.remaining,
+    }))
     base.ready = quality.ready
     base.waits = quality.ready
       ? quality.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) }))
@@ -187,6 +200,9 @@ function featuresOf(
     const best = bestDiscardQuality(input, after, input.exposedMelds + 1)
     if (best) {
       base.ready = best.ready
+      base.shanten = best.progress.shanten
+      base.ukeire = best.progress.ukeire
+      base.effectiveTiles = best.progress.effectiveTiles.map((item) => ({ tile: tileName(item.tile), remaining: item.remaining }))
       base.waits = best.ready ? best.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) })) : 'n/a'
       base.effectiveRemaining = best.ready ? best.effectiveRemaining : 'n/a'
     }
@@ -195,8 +211,8 @@ function featuresOf(
     // 副露后仍有可弃牌由控制器自校验；这里只评估听口 vs 现状
     const baseline = bestDiscardQuality(input, input.hand, input.exposedMelds)
     const post = best
-    base.efficiency = post && baseline && post.waits.length > baseline.waits.length ? '优'
-      : post && baseline && post.waits.length === baseline.waits.length ? '中' : '差'
+    const comparison = post && baseline ? compareHandProgress(post.progress, baseline.progress) : -1
+    base.efficiency = comparison > 0 ? '优' : comparison === 0 ? '中' : '差'
     return base
   }
   if (action.kind === 'added-kong' || action.kind === 'concealed-kong' || action.kind === 'wind-kong') {
@@ -246,11 +262,11 @@ function removeClaimed(input: DecisionInput, action: Extract<CanonicalAction, { 
 
 /** 副露后（再弃一张）的最佳听口质量。 */
 function bestDiscardQuality(input: DecisionInput, hand: TileType[], exposedMelds: number) {
-  let best: { ready: boolean; waits: TileType[]; effectiveRemaining: number } | null = null
+  let best: ReturnType<typeof qualityOf> | null = null
   for (let index = 0; index < hand.length; index += 1) {
     const after = hand.filter((_, i) => i !== index)
-    const quality = qualityOf(input, after)
-    if (best === null || quality.waits.length > best.waits.length) best = quality
+    const quality = qualityOf(input, after, exposedMelds)
+    if (best === null || compareHandProgress(quality.progress, best.progress) > 0) best = quality
   }
   return best
 }
@@ -393,7 +409,7 @@ function turnCandidates(input: DecisionInput): Candidate[] {
       id: `A${discardScores.length + 1}`,
       label: `出${tileName(tile)}`,
       action: { kind: 'discard', handIndex },
-      features: { ready: 'unknown' as const, waits: 'n/a' as const, effectiveRemaining: 'n/a' as const, specialPattern: 'none', safety: 'unknown' as const, efficiency: '差', risks: [] },
+      features: { shanten: 'n/a', ukeire: 'n/a', effectiveTiles: 'n/a', ready: 'unknown' as const, waits: 'n/a' as const, effectiveRemaining: 'n/a' as const, specialPattern: 'none', safety: 'unknown' as const, efficiency: '差', risks: [] },
       legalityKey: `discard:${tile}`,
     })
     discardScores.push({ index: candidates.length - 1, heuristic: heuristicScore(input.hand, tile, protectedTiles) })

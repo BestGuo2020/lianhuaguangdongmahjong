@@ -14,6 +14,7 @@ function player(seat: number, hand: GamePlayer['hand']): GamePlayer {
 describe('localTurnOrchestrator', () => {
   it('offers a discard response to the nearest eligible seat first', async () => {
     const state = createLocalGameState()
+    state.phase.value = 'playing'
     state.players.push(
       player(0, []),
       player(1, ['m1', 'm1', 'p2']),
@@ -62,6 +63,7 @@ describe('localTurnOrchestrator', () => {
 
   it('手中有对子时，给本地玩家传递可碰状态', async () => {
     const state = createLocalGameState()
+    state.phase.value = 'playing'
     state.players.push(
       player(0, []),
       player(1, ['m9', 'm9', 'p2']),

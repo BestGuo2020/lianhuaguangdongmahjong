@@ -165,3 +165,4 @@ __pycache__/
 # 同步工具状态与自动化产物
 .vibehub/
 docs/evidence/
+work/

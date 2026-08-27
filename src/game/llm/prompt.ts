@@ -57,6 +57,11 @@ function waitsText(waits: Array<{ tile: TileName; remaining: number }>): string 
 function candidateLine(candidate: Candidate, ruleCode: RuleCode): string {
   const features = candidate.features
   const parts: string[] = []
+  if (features.shanten !== 'n/a') parts.push(`向听：${features.shanten}`)
+  if (features.ukeire !== 'n/a') parts.push(`有效进张：${features.ukeire}张`)
+  if (features.effectiveTiles !== 'n/a' && features.effectiveTiles.length) {
+    parts.push(`进张：${waitsText(features.effectiveTiles)}`)
+  }
   const readyPrefix = candidate.action.kind === 'peng' ? '碰后最佳弃牌可听'
     : candidate.action.kind === 'chi' ? '吃后最佳弃牌可听'
       : '打出后听牌'

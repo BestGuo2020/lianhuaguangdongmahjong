@@ -6,9 +6,22 @@ import { HONORS } from '../../core/rules/tiles'
 import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { hasReadyDiscard, projectKongBloom } from './kongProjection'
+import { compareHandProgress, evaluateHandProgress, type HandProgress } from '../../shared/ai/handProgress'
 
 function wildcardSet(jokers: TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
+}
+
+const waitingCache = new Map<string, TileType[]>()
+
+function aiWaitingTiles(hand: TileType[], exposedMelds: number, jokers: TileType[]) {
+  const key = `${exposedMelds}|${[...jokers].sort().join(',')}|${[...hand].sort().join(',')}`
+  const cached = waitingCache.get(key)
+  if (cached) return cached
+  const waits = waitingTiles(hand, exposedMelds, jokers)
+  if (waitingCache.size >= 20_000) waitingCache.delete(waitingCache.keys().next().value!)
+  waitingCache.set(key, waits)
+  return waits
 }
 
 export type LotusTurnDecision =
@@ -191,7 +204,9 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   }
 
   const best = candidates
-    .filter((candidate) => compareQuality(candidate.quality, baseline) > 0)
+    // 未听散手不因一阶估值就贸然开副露；至少动作后听牌，或现状本就听牌，才比较投影。
+    .filter((candidate) => (candidate.quality.ready || baseline.ready)
+      && compareQuality(candidate.quality, baseline) > 0)
     .sort((a, b) => compareQuality(b.quality, a.quality) || claimActionPriority(a.action) - claimActionPriority(b.action))[0]
   return best?.action ?? { kind: 'pass' }
 }
@@ -219,6 +234,7 @@ interface DiscardQuality {
   heuristic: number
   safetyScore: number
   netScore: number
+  progress: HandProgress
 }
 
 function emptyQuality(): DiscardQuality {
@@ -230,7 +246,20 @@ function emptyQuality(): DiscardQuality {
     heuristic: Number.POSITIVE_INFINITY,
     safetyScore: 0,
     netScore: Number.NEGATIVE_INFINITY,
+    progress: { shanten: 8, waits: [], effectiveTiles: [], ukeire: 0, effectiveRemaining: 0 },
   }
+}
+
+function lotusProgress(
+  hand: TileType[], exposedMelds: number, jokers: TileType[], visibleTiles: TileType[] = hand,
+) {
+  return evaluateHandProgress(hand, {
+    exposedMelds,
+    wildcardTiles: [...wildcardSet(jokers)],
+    visibleTiles,
+    waitingTiles: (tiles, exposed) => aiWaitingTiles(tiles, exposed, jokers),
+    specialHands: true,
+  })
 }
 
 function currentHandQuality(
@@ -242,7 +271,8 @@ function currentHandQuality(
   _upperLastDiscard?: TileType,
   wallCount?: number,
 ): DiscardQuality {
-  const waits = waitingTiles(hand, exposedMelds, jokers)
+  const progress = lotusProgress(hand, exposedMelds, jokers, visibleTiles)
+  const waits = progress.waits
   const specialScore = specialPatternScore(hand, exposedMelds, jokers)
   const lateGame = (wallCount ?? 99) <= 8
   const attackScore = handQualityAttackScore(waits, waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0), specialScore, lateGame)
@@ -254,12 +284,16 @@ function currentHandQuality(
     heuristic: 0,
     safetyScore: 0,
     netScore: attackScore,
+    progress,
   }
 }
 
 function compareQuality(a: DiscardQuality, b: DiscardQuality): number {
   if (a.ready !== b.ready) return a.ready ? 1 : -1
   if (a.netScore !== b.netScore) return a.netScore - b.netScore
+  if (!a.ready && a.specialScore !== b.specialScore) return a.specialScore - b.specialScore
+  const progress = compareHandProgress(a.progress, b.progress)
+  if (progress !== 0) return progress
   if (a.effectiveRemaining !== b.effectiveRemaining) return a.effectiveRemaining - b.effectiveRemaining
   if (a.waits.length !== b.waits.length) return a.waits.length - b.waits.length
   if (a.specialScore !== b.specialScore) return a.specialScore - b.specialScore
@@ -315,9 +349,13 @@ function discardQuality(
   publicTiles: TileType[] = [],
   upperLastDiscard?: TileType,
   wallCount?: number,
+  includeProgress = true,
 ): DiscardQuality {
-  const waits = waitingTiles(afterDiscard, exposedMelds, jokers)
+  const waits = aiWaitingTiles(afterDiscard, exposedMelds, jokers)
   const effectiveRemaining = waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0)
+  const progress = includeProgress
+    ? lotusProgress(afterDiscard, exposedMelds, jokers, visibleTiles)
+    : { shanten: waits.length ? 0 : 8, waits, effectiveTiles: [], ukeire: effectiveRemaining, effectiveRemaining }
   const specialScore = specialPatternScore(afterDiscard, exposedMelds, jokers)
   const safetyScore = publicSafetyScore(discarded, publicTiles, upperLastDiscard)
   const lateGame = (wallCount ?? 99) <= 8
@@ -330,6 +368,7 @@ function discardQuality(
     heuristic: discardHeuristic(afterDiscard, discarded, jokers, earlyRound),
     safetyScore,
     netScore: attackScore + safetyScore * (lateGame && waits.length ? 4 : 2),
+    progress,
   }
 }
 
@@ -480,7 +519,7 @@ export function chooseDiscardIndex(
   const candidates = hand.some((tile) => !jokerSet.has(tile))
     ? hand.map((tile, index) => ({ tile, index })).filter(({ tile }) => !jokerSet.has(tile))
     : hand.map((tile, index) => ({ tile, index }))
-  const scored = candidates.map(({ tile, index }) => {
+  const preliminary = candidates.map(({ tile, index }) => {
     const same = matchingCount(hand, tile) - 1
     const suited = /^([mps])([1-9])$/.exec(tile)
     let neighbors = 0
@@ -503,12 +542,35 @@ export function chooseDiscardIndex(
         options.publicTiles ?? [],
         options.upperLastDiscard,
         options.wallCount,
+        false,
       )
     return { index, score, quality }
   })
-  scored.sort((a, b) => {
+  preliminary.sort((a, b) => {
     if (a.quality && b.quality) return compareQuality(b.quality, a.quality) || a.score - b.score
     return a.score - b.score
   })
-  return scored[0]?.index ?? 0
+  if (options.wallCount != null && options.wallCount > 60) return preliminary[0]?.index ?? 0
+  const shortlist = preliminary.slice(0, 3).map((item) => {
+    const tile = hand[item.index]
+    return {
+      ...item,
+      quality: options.exposedMelds == null ? null : discardQuality(
+        hand.filter((_, candidateIndex) => candidateIndex !== item.index),
+        tile,
+        options.exposedMelds,
+        jokers,
+        options.visibleTiles ?? hand,
+        options.earlyRound ?? false,
+        options.publicTiles ?? [],
+        options.upperLastDiscard,
+        options.wallCount,
+      ),
+    }
+  })
+  shortlist.sort((a, b) => {
+    if (a.quality && b.quality) return compareQuality(b.quality, a.quality) || a.score - b.score
+    return a.score - b.score
+  })
+  return shortlist[0]?.index ?? 0
 }
