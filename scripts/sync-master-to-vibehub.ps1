@@ -40,6 +40,7 @@ try {
 
   # Files that must always keep vibehub's own version (P2P vs WS differ by nature).
   $vibehubKeep = @(
+    'package.json'
     'index.html'
     'vite.config.ts'
     'playwright.config.ts'
@@ -77,6 +78,7 @@ try {
     'src/game/shared/runtime/timerScheduler.ts'
     'src/game/shared/settlement/settlementTimeline.ts'
     'src/game/variants/lotus/lotusGame.ts'
+    'tests/e2e/local-game.smoke.spec.ts'
   )
 
   # Master-only WebSocket files that vibehub does not use.
