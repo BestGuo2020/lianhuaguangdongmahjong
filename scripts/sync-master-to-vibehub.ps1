@@ -129,10 +129,19 @@ try {
   git checkout $keepBase -- $vibehubKeep
   if ($LASTEXITCODE -ne 0) { throw 'git checkout keep files failed' }
 
+  # 工作流文件必须跟随 master，否则旧版同步脚本会在 vibehub 上反复复活；
+  # .gitignore 保持一致也可避免 Windows 切分支时留下无法覆盖的本地修改。
+  git checkout master -- .gitignore scripts/sync-master-to-vibehub.ps1
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout workflow files failed' }
+
   # Master-only WebSocket files that vibehub does not use（定义见上方）：合并后若仍存在则移除。
   # 用索引中的实际文件列表清理，而不是 Test-Path 目录。未提交 merge 里的 staged add
   # 可能让目录存在但普通路径展开漏掉新文件（如 authApi.ts），最终留下悬空 import。
-  $trackedMasterOnly = @(git ls-files -- $masterOnly)
+  $trackedMasterOnly = @()
+  foreach ($path in $masterOnly) {
+    $trackedMasterOnly += @(git ls-files -- $path)
+  }
+  $trackedMasterOnly = @($trackedMasterOnly | Sort-Object -Unique)
   if ($trackedMasterOnly) {
     Write-Host '==> removing master-only WebSocket files'
     # 这些路径已在 $masterOnly 中显式声明为 vibehub 必须删除。master 新增文件会以
@@ -155,6 +164,7 @@ try {
 
   Write-Host '==> switching back to master'
   git checkout master
+  if ($LASTEXITCODE -ne 0) { throw 'git checkout master after sync failed' }
   Write-Host 'sync done. It is recommended to run tests on vibehub: pnpm test' -ForegroundColor Green
 } finally {
   Pop-Location
