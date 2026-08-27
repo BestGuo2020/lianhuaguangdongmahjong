@@ -88,6 +88,7 @@ try {
     'src/game/online/session/remoteRoomLifecycle.ts'
     'src/game/online/session/remoteRoomLifecycle.test.ts'
     'src/game/online/session/useRoomAvailability.ts'
+    'src/game/online/session/useWakuDemoAuth.ts'
     'src/game/online/transport/roomSocket.ts'
     'src/game/online/transport/roomSocket.test.ts'
     'src/game/online/useRemoteGame.ts'
@@ -129,12 +130,14 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'git checkout keep files failed' }
 
   # Master-only WebSocket files that vibehub does not use（定义见上方）：合并后若仍存在则移除。
-  $existing = $masterOnly | Where-Object { Test-Path $_ }
-  if ($existing) {
+  # 用索引中的实际文件列表清理，而不是 Test-Path 目录。未提交 merge 里的 staged add
+  # 可能让目录存在但普通路径展开漏掉新文件（如 authApi.ts），最终留下悬空 import。
+  $trackedMasterOnly = @(git ls-files -- $masterOnly)
+  if ($trackedMasterOnly) {
     Write-Host '==> removing master-only WebSocket files'
     # 这些路径已在 $masterOnly 中显式声明为 vibehub 必须删除。master 新增文件会以
     # staged add 进入未提交 merge，普通 git rm 会拒绝；这里用 -f 落实既定删除语义。
-    git rm --quiet -r -f -- $existing
+    git rm --quiet -r -f -- $trackedMasterOnly
     if ($LASTEXITCODE -ne 0) { throw 'git rm failed' }
   } else {
     Write-Host '==> no master-only files to remove'
