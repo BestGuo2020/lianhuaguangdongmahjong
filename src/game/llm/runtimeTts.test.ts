@@ -72,6 +72,35 @@ describe('单机 LLM runtime TTS', () => {
     )
   })
 
+  it('连续普通弃牌只展示首条，后续动作照常执行', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+        ttsVoiceKey: 'deepseek',
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers({ onLlmMessage: bubble }).controllers![0]
+    const context = {
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    }
+
+    await expect(controller.requestTurn(context as never)).resolves.toEqual(expect.objectContaining({ kind: 'discard' }))
+    await expect(controller.requestTurn(context as never)).resolves.toEqual(expect.objectContaining({ kind: 'discard' }))
+
+    expect(mocks.requestLlmDecision).toHaveBeenCalledTimes(2)
+    expect(mocks.speak).toHaveBeenCalledTimes(1)
+    expect(bubble).toHaveBeenCalledTimes(1)
+  })
+
   it('矛盾或幕后模型台词不会进入展示链路', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)

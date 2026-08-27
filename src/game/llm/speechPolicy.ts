@@ -2,12 +2,19 @@ import type { LlmStyle } from './config'
 
 export type LlmSpeechPriority = 'normal' | 'important'
 
-const GLOBAL_NORMAL_COOLDOWN_MS = 2_000
+const GLOBAL_NORMAL_COOLDOWN_MS = 6_000
 const STYLE_NORMAL_COOLDOWN_MS: Record<LlmStyle, number> = {
-  话痨: 3_000,
-  激进: 5_000,
-  稳健: 7_000,
-  高冷: 10_000,
+  话痨: 8_000,
+  激进: 12_000,
+  稳健: 16_000,
+  高冷: 24_000,
+}
+/** 普通弃牌/过牌的确定性抽稀：首次说，之后每 N 次可发言机会说一次。 */
+const STYLE_NORMAL_EVERY: Record<LlmStyle, number> = {
+  话痨: 2,
+  激进: 3,
+  稳健: 4,
+  高冷: 6,
 }
 const MAX_SPEECH_CODE_POINTS = 16
 const BACKSTAGE_TERMS = [
@@ -22,10 +29,11 @@ export interface LlmSpeechCandidate {
   priority?: LlmSpeechPriority
 }
 
-/** 联机权威层使用；单机 runtime 采用“语音中点放行动作”，不调用此限流器。 */
+/** 单机与联机共用：关键动作直通，普通弃牌/过牌按全桌冷却、座位冷却和性格频率抽稀。 */
 export class LlmSpeechPolicy {
   private lastGlobalAt = Number.NEGATIVE_INFINITY
   private readonly lastSeatAt = new Map<number, number>()
+  private readonly normalAttempts = new Map<number, number>()
 
   constructor(private readonly now: () => number = () => Date.now()) {}
 
@@ -40,6 +48,9 @@ export class LlmSpeechPolicy {
     if (at - this.lastGlobalAt < GLOBAL_NORMAL_COOLDOWN_MS) return false
     if (at - (this.lastSeatAt.get(candidate.seat) ?? Number.NEGATIVE_INFINITY)
       < STYLE_NORMAL_COOLDOWN_MS[candidate.style]) return false
+    const attempt = (this.normalAttempts.get(candidate.seat) ?? 0) + 1
+    this.normalAttempts.set(candidate.seat, attempt)
+    if ((attempt - 1) % STYLE_NORMAL_EVERY[candidate.style] !== 0) return false
     this.lastGlobalAt = at
     this.lastSeatAt.set(candidate.seat, at)
     return true
@@ -48,6 +59,7 @@ export class LlmSpeechPolicy {
   reset(): void {
     this.lastGlobalAt = Number.NEGATIVE_INFINITY
     this.lastSeatAt.clear()
+    this.normalAttempts.clear()
   }
 }
 
@@ -68,5 +80,6 @@ export function compactLlmSpeechText(text: string): string {
 export const LLM_SPEECH_POLICY_LIMITS = {
   globalNormalCooldownMs: GLOBAL_NORMAL_COOLDOWN_MS,
   styleNormalCooldownMs: STYLE_NORMAL_COOLDOWN_MS,
+  styleNormalEvery: STYLE_NORMAL_EVERY,
   maxSpeechCodePoints: MAX_SPEECH_CODE_POINTS,
 } as const
