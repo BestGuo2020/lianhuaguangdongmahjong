@@ -11,7 +11,7 @@ import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, 
 import { avatarFor, displayNameOf, effectiveNickname } from './persona'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
-import { compactLlmSpeechText } from './speechPolicy'
+import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -49,10 +49,12 @@ function hooksForSeat(
   preset: LlmProviderPreset,
   style: LlmProviderPreset['style'],
   hooks: LlmControllerHooks,
+  speechPolicy: LlmSpeechPolicy,
 ): LlmControllerHooks {
   const voiceKey = resolveLocalTtsVoiceKey(preset)
   const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
     const priority = meta?.priority ?? 'normal'
+    if (!speechPolicy.admit({ seat, style, priority })) return
     const compact = compactLlmSpeechText(text)
     if (!compact) return
     let bubbleShown = false
@@ -65,7 +67,13 @@ function hooksForSeat(
     await getLocalTtsClient().speak(seat, compact, voiceKey, style, priority, { onStarted: showBubble })
     if (!bubbleShown) showBubble()
   }
-  return { onLlmMessage: deliver, onReset: () => getLocalTtsClient().cancel() }
+  return {
+    onLlmMessage: deliver,
+    onReset: () => {
+      getLocalTtsClient().cancel()
+      speechPolicy.reset()
+    },
+  }
 }
 
 /** 莲花广麻（lotus-classic）本地人机座位 1-3 的 LLM 控制器（按座位预置+风格装配）。 */
@@ -74,10 +82,11 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
   const usable = settings.enabled && settings.presets.length > 0
   clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
+  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const seatHooks = hooksForSeat(preset, style, hooks)
+    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))
@@ -93,10 +102,11 @@ export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): Local
   const usable = settings.enabled && settings.presets.length > 0
   clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
+  const speechPolicy = new LlmSpeechPolicy()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const seatHooks = hooksForSeat(preset, style, hooks)
+    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))
