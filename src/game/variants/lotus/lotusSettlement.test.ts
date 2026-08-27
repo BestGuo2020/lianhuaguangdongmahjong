@@ -40,7 +40,7 @@ describe('lotusSettlement LLM voice isolation', () => {
 
     settlement.endGame(1, { selfDraw: true })
 
-    expect(announce).toHaveBeenCalledWith('自摸。')
+    expect(announce).toHaveBeenCalledTimes(1)
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)

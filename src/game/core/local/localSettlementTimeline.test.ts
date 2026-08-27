@@ -135,7 +135,7 @@ describe('localSettlementTimeline', () => {
 
     timeline.endGame(1)
 
-    expect(announce).toHaveBeenCalledWith('自摸。')
+    expect(announce).toHaveBeenCalledWith('自摸，意料之中。')
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
