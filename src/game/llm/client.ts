@@ -104,9 +104,13 @@ interface CallOnceOptions {
   maxTokens?: number
   /** 连接测试等场景：finish_reason=length 视为成功（证明链路通畅，仅内容被截断） */
   strictLength?: boolean
+  /** 连接测试可用空 content 判定链路已连通。 */
+  allowEmptyContent?: boolean
   /** 追加到请求体的供应商能力矩阵字段。 */
   extraBody?: Record<string, unknown>
   allowReasoning?: boolean
+  /** 只放宽响应验证，不改变请求参数。 */
+  acceptReasoningResponse?: boolean
 }
 
 /** 百炼 Qwen 3.5–3.8 默认开启混合思考；麻将候选选择使用非思考模式。 */
@@ -180,7 +184,9 @@ async function callOnce(
       usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } }
     }
     const choice = body.choices?.[0]
-    if (!choice?.message || typeof choice.message.content !== 'string' || !choice.message.content) {
+    if (!choice?.message
+      || typeof choice.message.content !== 'string'
+      || (!choice.message.content && options.allowEmptyContent !== true)) {
       throw new LlmClientError('parse', 'API 响应格式无效或无内容')
     }
     if (choice.finish_reason === 'length' && options.strictLength !== false) {
@@ -192,7 +198,7 @@ async function callOnce(
       || (typeof reasoningTokens === 'number' && reasoningTokens > 0)
       || (typeof body.reasoning === 'string' && body.reasoning.trim().length > 0)
       || (Array.isArray(body.reasoning) && body.reasoning.length > 0)
-    if (leakedReasoning && !options.allowReasoning) {
+    if (leakedReasoning && !options.allowReasoning && !options.acceptReasoningResponse) {
       throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
     }
     return { content: choice.message.content, finishReason: choice.finish_reason ?? null }
@@ -220,13 +226,20 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const left = budgetMs - (Date.now() - startedAt)
     if (left <= 0) throw new LlmClientError('timeout', '总预算耗尽')
     const config = { ...options.config, timeoutMs: left }
+    const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
+    const alwaysThinking = reasoningPolicy.mode === 'always-on'
     const extraBody = providerExtraBody(config, true, options.reasoning === true)
     try {
       const response = await callOnce(
         config,
         [{ role: 'system', content: messages.system }, { role: 'user', content: messages.user }],
         options.signal,
-        { extraBody, allowReasoning: options.reasoning, maxTokens: options.reasoning ? 512 : undefined },
+        {
+          extraBody,
+          allowReasoning: options.reasoning === true || alwaysThinking,
+          acceptReasoningResponse: options.reasoning === true || alwaysThinking,
+          maxTokens: options.reasoning || alwaysThinking ? 512 : undefined,
+        },
       )
       return parseLlmOutput(response.content, options.candidateIds)
     } catch (error) {
@@ -249,14 +262,19 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
       ...config,
       timeoutMs: Math.min(config.timeoutMs, LLM_CONNECTION_TEST_TIMEOUT_MS),
     }
+    const reasoningPolicy = resolveReasoningPolicy(effectiveConfig)
+    const alwaysThinking = reasoningPolicy.mode === 'always-on'
     await callOnce(
       effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
       {
-        maxTokens: 8,
+        maxTokens: alwaysThinking ? 512 : 8,
         strictLength: false,
+        allowEmptyContent: true,
         extraBody: providerExtraBody(effectiveConfig, false),
+        allowReasoning: alwaysThinking,
+        acceptReasoningResponse: true,
       },
     )
     return { ok: true, message: '连接成功' }

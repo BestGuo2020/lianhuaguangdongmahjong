@@ -543,6 +543,27 @@ describe('testLlmConnection', () => {
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
   })
 
+  it('GLM-5.3 Flash 连接测试允许只返回思考内容，并使用 low + 512 tokens', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '', reasoning_content: '正在思考' }, finish_reason: 'length' }],
+          usage: { completion_tokens_details: { reasoning_tokens: 512 } },
+        }),
+      }
+    }) as never)
+    await expect(testLlmConnection({
+      ...config, providerType: 'custom', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
+    })).resolves.toEqual({ ok: true, message: '连接成功' })
+    expect(capturedBody).toMatchObject({
+      model: 'z-ai/glm-5.3-flash', max_tokens: 512,
+      thinking: { type: 'enabled' }, reasoning_effort: 'low',
+    })
+  })
+
   it('DeepSeek 与千问 3.7 自动关闭思考；千问同时请求 JSON Object', async () => {
     let capturedBody: Record<string, unknown> = {}
     const spy = vi.fn(async (_url: string, init: RequestInit) => {
@@ -618,6 +639,33 @@ describe('testLlmConnection', () => {
     expect(captured.thinking).toEqual({ type: 'disabled' })
     expect(captured.temperature).toBe(0.6)
     expect(captured.top_p).toBe(0.95)
+  })
+
+  it('GLM-5.3 Flash 决策接受 reasoning_content，最终只解析 content', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{
+            message: { content: '{"choice":"A1","message":"稳住。"}', reasoning_content: '先分析候选牌' },
+            finish_reason: 'stop',
+          }],
+          usage: { completion_tokens_details: { reasoning_tokens: 80 } },
+        }),
+      }
+    }) as never)
+    await expect(requestLlmDecision({
+      config: {
+        ...config, providerType: 'custom', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
+      },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(capturedBody).toMatchObject({
+      model: 'z-ai/glm-5.3-flash', max_tokens: 512,
+      thinking: { type: 'enabled' }, reasoning_effort: 'low',
+    })
   })
 
   it('关闭参数被代理吞掉并返回思考内容时拒绝响应', async () => {

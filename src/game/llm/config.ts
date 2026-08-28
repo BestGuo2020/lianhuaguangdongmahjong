@@ -13,7 +13,7 @@ export const LLM_PROVIDER_TYPES: Array<{ value: LlmProviderType; label: string }
   { value: 'deepseek', label: 'DeepSeek' }, { value: 'qwen', label: '通义千问' },
   { value: 'kimi', label: 'Kimi' }, { value: 'doubao', label: '豆包' },
   { value: 'minimax', label: 'MiniMax' }, { value: 'openai', label: 'OpenAI / GPT' },
-  { value: 'glm', label: '智谱 GLM' }, { value: 'claude', label: 'Claude' },
+  { value: 'glm', label: '智谱 GLM（含兼容中转）' }, { value: 'claude', label: 'Claude' },
   { value: 'custom', label: '自定义 OpenAI 兼容协议' },
 ]
 
@@ -80,7 +80,8 @@ export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProvider
   { name: '豆包 (Volcano Ark)', providerType: 'doubao', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
   { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
   { name: 'OpenAI (GPT)', providerType: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  { name: '智谱 (GLM)', providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { name: '智谱 (GLM)', providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash' },
+  { name: 'GLM 5.3 Flash (OrcaRouter)', providerType: 'glm', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash' },
   { name: 'Claude (Anthropic)', providerType: 'claude', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514' },
   { name: '自定义', providerType: 'custom', baseUrl: '', model: '' },
 ]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inferLlmProviderType, type LlmProviderConfig, type LlmProviderType } from './config'
+import { inferLlmProviderType, PROVIDER_TEMPLATES, type LlmProviderConfig, type LlmProviderType } from './config'
 import { resolveReasoningPolicy } from './reasoningPolicy'
 
 function config(providerType: LlmProviderType, model: string): LlmProviderConfig {
@@ -36,6 +36,26 @@ describe('LLM 非思考能力矩阵', () => {
     expect(resolveReasoningPolicy(config('custom', 'mystery-model')).mode).toBe('unknown')
     expect(resolveReasoningPolicy(config('qwen', 'qwen3.7-plus')).mode).toBe('explicit-off')
     expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
+  })
+
+  it('GLM-5.3 Flash 经自定义中转自动识别，固定使用最低思考强度', () => {
+    const result = resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'))
+    expect(result).toMatchObject({
+      providerType: 'glm', mode: 'always-on',
+      requestBody: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
+    })
+    expect(resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'), true).requestBody)
+      .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'low' })
+  })
+
+  it('GLM 预设同时提供官方端点和 OrcaRouter 兼容中转', () => {
+    expect(PROVIDER_TEMPLATES).toEqual(expect.arrayContaining([
+      expect.objectContaining({ providerType: 'glm', model: 'glm-5.3-flash' }),
+      {
+        name: 'GLM 5.3 Flash (OrcaRouter)', providerType: 'glm',
+        baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
+      },
+    ]))
   })
 
   it.each([
