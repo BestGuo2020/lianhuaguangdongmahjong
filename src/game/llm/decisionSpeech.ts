@@ -70,9 +70,15 @@ export function resolveDecisionSpeech(
   action: CanonicalAction,
   style: LlmStyle,
   sequence = 0,
+  facts: { isDealer?: boolean } = {},
 ): string {
   const compact = compactLlmSpeechText(message)
-  if (compact) return compact
+  const deniesDealer = /我(?:可|并)?不是庄家|我非庄家|我不坐庄/.test(compact)
+  const claimsDealer = /本庄|庄家(?:是|就是)我|我(?:可是|就是|是|当|来当|在当|要当|坐|来坐|在坐)庄家?|这把我坐庄|我是东家/.test(compact)
+  const contradictsDealer = facts.isDealer === false
+    ? claimsDealer && !deniesDealer
+    : facts.isDealer === true ? deniesDealer : false
+  if (compact && !contradictsDealer) return compact
   return decisionSpeech(action, style, sequence)
 }
 

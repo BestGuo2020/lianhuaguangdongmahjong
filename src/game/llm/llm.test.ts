@@ -304,6 +304,8 @@ describe('prompt 构建', () => {
     expect(prompt.system).not.toContain('游戏引擎')
     expect(prompt.system).toContain('烟雾弹')
     expect(prompt.system).toContain('不要求公开真实意图')
+    expect(prompt.system).toContain('公开事实必须如实')
+    expect(prompt.user).toContain('你是庄家')
     expect(prompt.system).not.toContain('不要使用“稳稳”一词')
     expect(prompt.user).toContain('"message": "有点意思。"')
     expect(prompt.user).toContain('message 必须非空')
@@ -311,6 +313,14 @@ describe('prompt 构建', () => {
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
     expect(prompt.system).toContain('决策优先级')
     expect(prompt.user).toContain('默认优先')
+  })
+
+  it('明确告诉非庄家其本人不是庄家，不要求模型猜绝对座位编号', () => {
+    const built = buildDecisionRequest(baseInput({ playerIndex: 2, dealerIndex: 0, seatWind: '西' }))
+    const prompt = buildPrompt('激进', built.request!)
+    expect(built.request?.state.isDealer).toBe(false)
+    expect(prompt.user).toContain('你是「西」家｜你不是庄家')
+    expect(prompt.user).not.toContain('庄家座位「0」')
   })
 
   it('莲花广麻明确只支持标准牌型，禁止追逐七对等其他玩法牌型', () => {

@@ -32,6 +32,7 @@ function systemPrompt(style: string): string {
     '每次都提供一句非空且 ≤16 字的牌桌台词。',
     STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     'message 可以是情绪、闲聊、吹嘘或烟雾弹，不要求解释 choice，也不要求公开真实意图。',
+    '烟雾弹只能针对牌路和意图；是否庄家、门风、场风等公开事实必须如实。',
     'message 严禁提及或复述决策机制、内部标识及幕后说明。',
     '候选动作均已按当前玩法校验合法；当前玩法的规则摘要和候选特征是唯一权威事实。',
     '决策优先级：硬规则与风险警告 > 保持听牌 > 特殊牌型听牌与有效剩余 > 默认参考 > 安全度与简化牌效。',
@@ -92,7 +93,8 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
   const items: string[] = []
   const ruleSummary = RULE_SUMMARIES[request.ruleCode]
   const decisionName = request.decision === 'turn' ? '摸牌后出牌' : '他家弃牌响应'
-  items.push(line('局况', `「${ruleSummary}」｜第「${state.roundIndex}」局｜你是「${state.seatWind}」家（庄家座位「${state.dealerIndex}」）｜${decisionName}｜剩牌「${state.wallCount}」张｜分数「${state.scores.join('/')}」`))
+  const dealerStatus = state.isDealer ? '你是庄家' : '你不是庄家'
+  items.push(line('局况', `「${ruleSummary}」｜第「${state.roundIndex}」局｜你是「${state.seatWind}」家｜${dealerStatus}｜${decisionName}｜剩牌「${state.wallCount}」张｜分数「${state.scores.join('/')}」`))
   items.push(line('你的牌', `「${handText}」`))
   items.push(line('你的副露', `「${meldText}」`))
   items.push(line('牌河', `你：「${discardText('self')}」｜上家：「${discardText('upper')}」｜对家：「${discardText('opposite')}」｜下家：「${discardText('lower')}」`))

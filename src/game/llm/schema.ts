@@ -87,6 +87,8 @@ export interface StateSnapshotV1 {
   seatWind: string
   roundWind: string
   dealerIndex: number
+  /** 当前决策者本人是否为庄家；避免模型猜测绝对座位编号。 */
+  isDealer: boolean
   roundIndex: number
   dihu: boolean
 }

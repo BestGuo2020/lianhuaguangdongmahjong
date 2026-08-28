@@ -32,4 +32,16 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(resolveDecisionSpeech('稳稳出牌。', action, '稳健')).toBe('稳稳出牌。')
     expect(resolveDecisionSpeech('按候选A1来。', action, '话痨')).toBe('先把这张放出去。')
   })
+
+  it('允许牌路烟雾弹，但非庄家不能冒充庄家', () => {
+    const action = { kind: 'discard', handIndex: 0 } as const
+    expect(resolveDecisionSpeech('这张留着。', action, '激进', 0, { isDealer: false }))
+      .toBe('这张留着。')
+    expect(resolveDecisionSpeech('我就是庄家！', action, '激进', 0, { isDealer: false }))
+      .toBe('这张不要了。')
+    expect(resolveDecisionSpeech('庄家就是我！', action, '激进', 0, { isDealer: true }))
+      .toBe('庄家就是我!')
+    expect(resolveDecisionSpeech('我不是庄家。', action, '稳健', 0, { isDealer: true }))
+      .toBe('这张先走。')
+  })
 })

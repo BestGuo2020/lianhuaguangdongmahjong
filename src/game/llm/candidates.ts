@@ -347,6 +347,8 @@ function snapshotOf(input: DecisionInput): StateSnapshotV1 {
     seatWind: input.seatWind ?? '',
     roundWind: input.roundWind ?? '',
     dealerIndex: input.dealerIndex ?? -1,
+    isDealer: input.dealerIndex != null && input.dealerIndex >= 0
+      && input.playerIndex === input.dealerIndex,
     roundIndex: input.roundIndex ?? 0,
     dihu: false,
   }
