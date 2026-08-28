@@ -192,6 +192,8 @@ interface LlmMetaLike {
   wallCount?: number
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  turnOrigin?: DecisionInput['turnOrigin']
+  drawnTile?: TileType | null
 }
 
 /** metaOf 返回：除调用方显式提供的字段外，全部可选项。 */
@@ -215,7 +217,9 @@ function metaOf(input: LlmMetaLike): DecisionMeta {
     wallCount: input.wallCount,
     jokerTiles: input.jokerTiles,
     wildcardTiles: input.wildcardTiles,
-  } satisfies Pick<DecisionInput, 'playerIndex' | 'scores' | 'peers' | 'seatWind' | 'roundWind' | 'dealerIndex' | 'roundIndex' | 'requestId' | 'stateVersion' | 'visibleTiles' | 'publicTiles' | 'upperLastDiscard' | 'earlyRound' | 'wallCount' | 'jokerTiles' | 'wildcardTiles'>
+    turnOrigin: input.turnOrigin,
+    drawnTile: input.drawnTile,
+  } satisfies Pick<DecisionInput, 'playerIndex' | 'scores' | 'peers' | 'seatWind' | 'roundWind' | 'dealerIndex' | 'roundIndex' | 'requestId' | 'stateVersion' | 'visibleTiles' | 'publicTiles' | 'upperLastDiscard' | 'earlyRound' | 'wallCount' | 'jokerTiles' | 'wildcardTiles' | 'turnOrigin' | 'drawnTile'>
 }
 
 /** 广麻（lotus-classic）LLM 控制器。 */

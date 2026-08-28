@@ -78,7 +78,14 @@ export function resolveDecisionSpeech(
   const contradictsDealer = facts.isDealer === false
     ? claimsDealer && !deniesDealer
     : facts.isDealer === true ? deniesDealer : false
-  if (compact && !contradictsDealer) return compact
+  const claimedAction = /吃定了|我要吃|我吃了|这牌我吃|直接吃/.test(compact) ? 'chi'
+    : /我要碰|我碰了|碰一个|直接碰|这牌我碰/.test(compact) ? 'peng'
+      : /我要杠|我杠了|开杠|大明杠|暗杠|补杠|风杠|直接杠/.test(compact) ? 'gang'
+        : /我过了|这次我过|我要过/.test(compact) ? 'pass' : null
+  const actionMatchesClaim = !claimedAction
+    || claimedAction === action.kind
+    || (claimedAction === 'gang' && ['gang', 'added-kong', 'concealed-kong', 'wind-kong'].includes(action.kind))
+  if (compact && !contradictsDealer && actionMatchesClaim) return compact
   return decisionSpeech(action, style, sequence)
 }
 

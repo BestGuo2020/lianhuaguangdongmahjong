@@ -34,6 +34,8 @@ export interface LlmAdapterFields {
   wallCount?: number
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  turnOrigin?: 'draw' | 'peng' | 'chi' | 'kong-draw' | 'opening'
+  drawnTile?: TileType | null
 }
 
 /** 回合决策上下文：引擎传给控制器的只读快照 */

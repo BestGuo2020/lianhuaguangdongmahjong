@@ -134,7 +134,7 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
           )
         } else {
           options.later(
-            () => { void beginTurn(claimant.playerIndex, { skipDraw: true }) },
+            () => { void beginTurn(claimant.playerIndex, { skipDraw: true, afterClaim: 'peng' }) },
             PACE_MS.skipDrawPengDelay,
           )
         }
@@ -221,6 +221,10 @@ export function createLocalTurnOrchestrator(options: LocalTurnOrchestratorOption
       // 庄家首回合 preDrawn：引擎跳摸，但对远端视作已摸牌（天胡判定）。
       skipDraw: Boolean(turnOptions.skipDraw) && !Boolean(turnOptions.preDrawn),
       afterKong: Boolean(turnOptions.fromTail),
+      turnOrigin: turnOptions.fromTail ? 'kong-draw'
+        : turnOptions.afterClaim ?? (turnOptions.preDrawn ? 'opening' : 'draw'),
+      drawnTile: !turnOptions.skipDraw && player.drawnTileIndex >= 0
+        ? player.hand[player.drawnTileIndex] ?? null : null,
       ruleset,
       ...llm.meta(playerIndex, 'turn'),
     } satisfies TurnContext),
