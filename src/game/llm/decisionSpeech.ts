@@ -3,6 +3,16 @@ import type { CanonicalAction } from './schema'
 import { compactLlmSpeechText } from './speechPolicy'
 
 type DecisionSpeechKind = CanonicalAction['kind']
+type RelativeSeat = '上家' | '对家' | '下家'
+
+export interface DecisionSpeechFacts {
+  isDealer?: boolean
+  publicMeldTypes?: Partial<Record<RelativeSeat, readonly string[]>>
+  currentDiscard?: { from: RelativeSeat; tile: string } | null
+}
+
+const PUBLIC_ACTION_PATTERN = /(上家|对家|下家)(?:刚才|刚刚|刚|已经|又|也)?(暗杠|明杠|补杠|杠|碰|吃)(?:了|过|成)?/g
+const PUBLIC_DISCARD_PATTERN = /(上家|对家|下家)(?:刚才|刚刚|刚)?(?:打出|打了|打的|出了)(?:一张)?([1-9][万筒条]|东风|南风|西风|北风|红中|发财|白板)?/g
 
 const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
   discard: {
@@ -70,7 +80,7 @@ export function resolveDecisionSpeech(
   action: CanonicalAction,
   style: LlmStyle,
   sequence = 0,
-  facts: { isDealer?: boolean } = {},
+  facts: DecisionSpeechFacts = {},
 ): string {
   const compact = compactLlmSpeechText(message)
   const deniesDealer = /我(?:可|并)?不是庄家|我非庄家|我不坐庄/.test(compact)
@@ -78,14 +88,34 @@ export function resolveDecisionSpeech(
   const contradictsDealer = facts.isDealer === false
     ? claimsDealer && !deniesDealer
     : facts.isDealer === true ? deniesDealer : false
-  const claimedAction = /吃定了|我要吃|我吃了|这牌我吃|直接吃/.test(compact) ? 'chi'
-    : /我要碰|我碰了|碰一个|直接碰|这牌我碰/.test(compact) ? 'peng'
-      : /我要杠|我杠了|开杠|大明杠|暗杠|补杠|风杠|直接杠/.test(compact) ? 'gang'
-        : /我过了|这次我过|我要过/.test(compact) ? 'pass' : null
+  const contradictsPublicAction = [...compact.matchAll(PUBLIC_ACTION_PATTERN)].some((match) => {
+    const seat = match[1] as RelativeSeat
+    const claim = match[2]
+    const types = facts.publicMeldTypes?.[seat]
+    if (!types) return false
+    if (claim === '吃') return !types.includes('chi')
+    if (claim === '碰') return !types.includes('peng')
+    if (claim === '暗杠') return !types.includes('angang')
+    if (claim === '明杠' || claim === '补杠') return !types.includes('gang')
+    return !types.some((type) => type === 'gang' || type === 'angang')
+  })
+  const contradictsCurrentDiscard = facts.currentDiscard
+    ? [...compact.matchAll(PUBLIC_DISCARD_PATTERN)].some((match) => {
+      const from = match[1] as RelativeSeat
+      const tile = match[2]
+      return from !== facts.currentDiscard!.from || Boolean(tile && tile !== facts.currentDiscard!.tile)
+    })
+    : false
+  // 先移除“下家杠了”等他家公开事实，再判断剩余文本是否承诺了自己的动作。
+  const selfSpeech = compact.replace(PUBLIC_ACTION_PATTERN, '')
+  const claimedAction = /吃定了|我要吃|我吃了|这牌我吃|直接吃/.test(selfSpeech) ? 'chi'
+    : /我要碰|我碰了|碰一个|直接碰|这牌我碰/.test(selfSpeech) ? 'peng'
+      : /我要杠|我杠了|开杠|大明杠|暗杠|补杠|风杠|直接杠/.test(selfSpeech) ? 'gang'
+        : /我过了|这次我过|我要过/.test(selfSpeech) ? 'pass' : null
   const actionMatchesClaim = !claimedAction
     || claimedAction === action.kind
     || (claimedAction === 'gang' && ['gang', 'added-kong', 'concealed-kong', 'wind-kong'].includes(action.kind))
-  if (compact && !contradictsDealer && actionMatchesClaim) return compact
+  if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard && actionMatchesClaim) return compact
   return decisionSpeech(action, style, sequence)
 }
 

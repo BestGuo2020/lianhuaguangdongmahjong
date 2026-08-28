@@ -32,10 +32,11 @@ function systemPrompt(style: string): string {
     '每次都提供一句非空且 ≤16 字的牌桌台词。',
     STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     'message 可以是情绪、闲聊、吹嘘或烟雾弹，不要求解释 choice，也不要求公开真实意图。',
-    '烟雾弹只能针对牌路和意图；是否庄家、门风、场风等公开事实必须如实。',
+    '烟雾弹只能针对牌路和意图；是否庄家、门风、场风、暗手与副露的归属、谁吃碰杠、谁打出当前弃牌等公开事实必须如实。',
     '吃、碰、杠、过等公开动作承诺必须与 choice 一致；不能说要吃却选择不吃。',
     'message 严禁提及或复述决策机制、内部标识及幕后说明。',
     '候选动作均已按当前玩法校验合法；当前玩法的规则摘要和候选特征是唯一权威事实。',
+    '暗手不包含已成组的吃碰杠；副露/杠组会明确标注“碰、吃、明杠、暗杠”，不得仅因桌面共出现四张同牌就把碰误称为杠。',
     '决策优先级：硬规则与风险警告 > 保持听牌 > 特殊牌型听牌与有效剩余 > 默认参考 > 安全度与简化牌效。',
     '若其他候选没有被更高优先级特征明确证明更好，优先采用默认参考。',
     '只按当前玩法决策，严禁套用国标麻将、日麻或其他麻将规则；规则摘要未列出的特殊牌型一律视为不支持。',
@@ -55,6 +56,17 @@ function joinLines(lines: Array<string | undefined>): string {
 
 function waitsText(waits: Array<{ tile: TileName; remaining: number }>): string {
   return waits.map((wait) => `${wait.tile}(剩${wait.remaining})`).join('、')
+}
+
+const MELD_LABELS: Record<string, string> = {
+  peng: '碰', chi: '吃', gang: '明杠', angang: '暗杠', flower: '花牌',
+}
+
+function meldText(meld: DecisionRequest['state']['melds'][number]): string {
+  const label = MELD_LABELS[meld.type] ?? meld.type
+  if (meld.type === 'peng') return `${label}：${meld.tile}×3`
+  if (meld.type === 'gang' || meld.type === 'angang') return `${label}：${meld.tile}×4`
+  return `${label}：${meld.tiles.join('、')}`
 }
 
 function candidateLine(candidate: Candidate, ruleCode: RuleCode): string {
@@ -86,10 +98,10 @@ function candidateLine(candidate: Candidate, ruleCode: RuleCode): string {
 export function buildPrompt(style: string, request: DecisionRequest): { system: string; user: string } {
   const { state } = request
   const handText = state.hand.join(' ')
-  const meldText = state.melds.length ? state.melds.map((meld) => `${meld.tile}(${meld.tiles.join('、')})`).join(' ') : '（无）'
+  const ownMeldText = state.melds.length ? state.melds.map(meldText).join('；') : '（无）'
   const discardText = (name: string) => state.snapshots[name].discards.join(' ') || '（无）'
   const meldsText = (name: string) => state.snapshots[name].melds
-    .map((meld) => `${meld.tile}(${meld.tiles.join('、')})`).join(' ') || '（无）'
+    .map(meldText).join('；') || '（无）'
 
   const items: string[] = []
   const ruleSummary = RULE_SUMMARIES[request.ruleCode]
@@ -101,12 +113,15 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
             : '摸牌后出牌'
   const dealerStatus = state.isDealer ? '你是庄家' : '你不是庄家'
   items.push(line('局况', `「${ruleSummary}」｜第「${state.roundIndex}」局｜你是「${state.seatWind}」家｜${dealerStatus}｜${decisionName}｜剩牌「${state.wallCount}」张｜分数「${state.scores.join('/')}」`))
-  items.push(line('你的牌', `「${handText}」`))
+  items.push(line('你的暗手（不含副露/杠组）', `「${handText}」`))
   if (state.drawnTile) items.push(line('刚摸到', `「${state.drawnTile}」`))
-  if (state.claimTile) items.push(line('当前弃牌', `「${state.claimFrom ?? '他家'}」打出「${state.claimTile}」`))
-  items.push(line('你的副露', `「${meldText}」`))
+  if (state.claimTile) {
+    items.push(line('当前弃牌', `「${state.claimFrom ?? '他家'}」打出「${state.claimTile}」`))
+    items.push(line('当前弃牌归属', '这张仍是待响应的弃牌，不会自动并入任何玩家已有的碰组；只有成组牌明确标为杠才算杠'))
+  }
+  items.push(line('你的副露/杠组（已从暗手移除）', `「${ownMeldText}」`))
   items.push(line('牌河', `你：「${discardText('self')}」｜上家：「${discardText('upper')}」｜对家：「${discardText('opposite')}」｜下家：「${discardText('lower')}」`))
-  items.push(line('各家副露', `上家：「${meldsText('upper')}」｜对家：「${meldsText('opposite')}」｜下家：「${meldsText('lower')}」`))
+  items.push(line('各家公开副露/杠组', `上家：「${meldsText('upper')}」｜对家：「${meldsText('opposite')}」｜下家：「${meldsText('lower')}」`))
   if (request.ruleCode === 'lotus-legacy') {
     items.push(line('上家刚打', `「${state.upperLastDiscard ?? '（无）'}」（仅对上家较安全，不代表对其他玩家安全）`))
     const jokerText = state.jokerTiles.join('、') || '（无）'
