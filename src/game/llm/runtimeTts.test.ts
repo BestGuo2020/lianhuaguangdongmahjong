@@ -160,7 +160,7 @@ describe('单机 LLM runtime TTS', () => {
     expect(bubble).toHaveBeenCalledTimes(1)
   })
 
-  it('允许与真实动作不一致的牌桌烟雾弹', async () => {
+  it('点名已选弃牌并说留着时回退动作一致台词', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
     saveLlmSettings({
@@ -173,7 +173,7 @@ describe('单机 LLM runtime TTS', () => {
       activeId: 'deepseek', seatIds: [null, null, null, null],
       seatStyles: [null, null, null, null],
     }, storage)
-    mocks.requestLlmDecision.mockResolvedValueOnce({ choice: 'A1', message: '这张留着。' })
+    mocks.requestLlmDecision.mockResolvedValueOnce({ choice: 'A1', message: '1万留着当宝，先走它！' })
     const bubble = vi.fn()
     const runtime = createLocalLlmControllers({ onLlmMessage: bubble })
 
@@ -184,9 +184,9 @@ describe('单机 LLM runtime TTS', () => {
     })
     await Promise.resolve()
 
-    expect(bubble).toHaveBeenCalledWith(1, '这张留着。', expect.objectContaining({ priority: 'normal' }))
+    expect(bubble).toHaveBeenCalledWith(1, '这张先走。', expect.objectContaining({ priority: 'normal' }))
     expect(mocks.speak).toHaveBeenCalledWith(
-      1, '这张留着。', 'deepseek', '稳健', 'normal',
+      1, '这张先走。', 'deepseek', '稳健', 'normal',
       expect.objectContaining({ onStarted: expect.any(Function) }),
     )
   })

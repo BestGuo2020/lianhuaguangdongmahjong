@@ -11,8 +11,8 @@ const STYLE_NORMAL_COOLDOWN_MS: Record<LlmStyle, number> = {
 }
 /** 普通弃牌/过牌的确定性抽稀：首次说，之后每 N 次可发言机会说一次。 */
 const STYLE_NORMAL_EVERY: Record<LlmStyle, number> = {
-  话痨: 2,
-  激进: 3,
+  话痨: 1,
+  激进: 2,
   稳健: 4,
   高冷: 6,
 }

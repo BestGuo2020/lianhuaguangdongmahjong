@@ -37,17 +37,18 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(reasoningStatusSpeech('稳健', 3)).toBe('让我想想怎么打。')
   })
 
-  it('保留牌桌烟雾弹和模型“稳稳”措辞，仅幕后内容回退程序台词', () => {
+  it('保留模糊牌桌烟雾弹和模型“稳稳”措辞，但明确说弃牌要留会回退', () => {
     const action = { kind: 'discard', handIndex: 0 } as const
-    expect(resolveDecisionSpeech('这张留着。', action, '稳健')).toBe('这张留着。')
+    expect(resolveDecisionSpeech('这张留着。', action, '稳健')).toBe('这张先走。')
+    expect(resolveDecisionSpeech('今天手气不错。', action, '稳健')).toBe('今天手气不错。')
     expect(resolveDecisionSpeech('稳稳出牌。', action, '稳健')).toBe('稳稳出牌。')
     expect(resolveDecisionSpeech('按候选A1来。', action, '话痨')).toBe('先把这张放出去。')
   })
 
   it('允许牌路烟雾弹，但非庄家不能冒充庄家', () => {
     const action = { kind: 'discard', handIndex: 0 } as const
-    expect(resolveDecisionSpeech('这张留着。', action, '激进', 0, { isDealer: false }))
-      .toBe('这张留着。')
+    expect(resolveDecisionSpeech('今天手气不错。', action, '激进', 0, { isDealer: false }))
+      .toBe('今天手气不错。')
     expect(resolveDecisionSpeech('我就是庄家！', action, '激进', 0, { isDealer: false }))
       .toBe('这张不要了。')
     expect(resolveDecisionSpeech('庄家就是我！', action, '激进', 0, { isDealer: true }))
@@ -74,6 +75,15 @@ describe('动作一致的 LLM 决策台词', () => {
       .toBe('暗杠!')
   })
 
+  it('点名已选弃牌并说留着、保留或当宝时回退', () => {
+    const discard = { kind: 'discard', handIndex: 0 } as const
+    const facts = { discardedTile: '发财' }
+    expect(resolveDecisionSpeech('发财留着当宝，先走它！', discard, '稳健', 0, facts))
+      .toBe('这张先走。')
+    expect(resolveDecisionSpeech('保留发财。', discard, '稳健', 0, facts)).toBe('这张先走。')
+    expect(resolveDecisionSpeech('发财有点意思。', discard, '稳健', 0, facts)).toBe('发财有点意思。')
+  })
+
   it('他家公开吃碰杠与当前弃牌来源说错时回退，但牌路烟雾弹仍保留', () => {
     const discard = { kind: 'discard', handIndex: 0 } as const
     const facts = {
@@ -87,6 +97,6 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(resolveDecisionSpeech('下家打出7万。', discard, '稳健', 0, facts))
       .toBe('这张先走。')
     expect(resolveDecisionSpeech('上家打出7万，这张留着。', discard, '稳健', 0, facts))
-      .toBe('上家打出7万,这张留着。')
+      .toBe('这张先走。')
   })
 })
