@@ -463,7 +463,7 @@ function claimCandidates(input: DecisionInput): Candidate[] {
   const canPeng = input.canPeng ?? false
   candidates.push({ id: 'Z', label: '过', action: { kind: 'pass' }, features: featuresOf(input, { kind: 'pass' }, 'unknown'), legalityKey: 'pass' })
   if (canGang) {
-    candidates.push({ id: 'G', label: `杠${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'gang' }, features: featuresOf(input, { kind: 'gang' }, '中'), legalityKey: 'gang' })
+    candidates.push({ id: 'G', label: `大明杠${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'gang' }, features: featuresOf(input, { kind: 'gang' }, '中'), legalityKey: 'gang' })
   }
   // 若碰后最佳动作是把手中第 3 张同牌原样打回，大明杠在本规则下严格占优：
   // 最终结构不差，并额外获得杠分与尾牌补摸。不要把这个劣质碰候选交给 LLM。

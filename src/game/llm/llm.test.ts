@@ -169,6 +169,7 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     })
     const built = buildDecisionRequest(input)
     expect(built.request?.candidates.map((c) => c.id)).toEqual(['Z', 'G', 'P'])
+    expect(built.request?.candidates.find((c) => c.id === 'G')?.label).toBe('大明杠3万')
     expect(built.request?.candidates.find((c) => c.id === 'G')?.features.scoreDeltaBand).toBeDefined()
   })
 
@@ -311,6 +312,7 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('message 必须非空')
     expect(prompt.user).toContain('【你的暗手（不含副露/杠组）】')
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
+    expect(prompt.system).toContain('响应别人弃牌只能是大明杠')
     expect(prompt.system).toContain('决策优先级')
     expect(prompt.user).toContain('默认优先')
   })

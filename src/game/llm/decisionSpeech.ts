@@ -120,14 +120,21 @@ export function resolveDecisionSpeech(
     : false
   // 先移除“下家杠了”等他家公开事实，再判断剩余文本是否承诺了自己的动作。
   const selfSpeech = compact.replace(PUBLIC_ACTION_PATTERN, '')
+  const claimedKongKind: CanonicalAction['kind'] | null = /暗杠/.test(selfSpeech) ? 'concealed-kong'
+    : /补杠/.test(selfSpeech) ? 'added-kong'
+      : /乱风杠|风杠/.test(selfSpeech) ? 'wind-kong'
+        : /大明杠|明杠/.test(selfSpeech) ? 'gang' : null
+  const claimsGenericKong = /我要杠|我杠了|开杠|直接杠/.test(selfSpeech)
   const claimedAction = /吃定了|我要吃|我吃了|这牌我吃|直接吃/.test(selfSpeech) ? 'chi'
     : /我要碰|我碰了|碰一个|直接碰|这牌我碰/.test(selfSpeech) ? 'peng'
-      : /我要杠|我杠了|开杠|大明杠|暗杠|补杠|风杠|直接杠/.test(selfSpeech) ? 'gang'
+      : claimedKongKind || claimsGenericKong ? 'gang'
         : /我过了|这次我过|我要过/.test(selfSpeech) ? 'pass' : null
   const actionMatchesClaim = !claimedAction
     || claimedAction === action.kind
     || (claimedAction === 'gang' && ['gang', 'added-kong', 'concealed-kong', 'wind-kong'].includes(action.kind))
-  if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard && actionMatchesClaim) return compact
+  const kongSubtypeMatches = !claimedKongKind || action.kind === claimedKongKind
+  if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard
+    && actionMatchesClaim && kongSubtypeMatches) return compact
   return decisionSpeech(action, style, sequence)
 }
 
