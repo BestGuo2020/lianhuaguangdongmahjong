@@ -63,6 +63,17 @@ describe('动作一致的 LLM 决策台词', () => {
       .toBe('这牌我吃定了!')
   })
 
+  it('具体杠型必须与真实动作一致，笼统说杠仍可接受', () => {
+    const directGang = { kind: 'gang' } as const
+    expect(resolveDecisionSpeech('这张暗杠！', directGang, '稳健')).toBe('大明杠。')
+    expect(resolveDecisionSpeech('大明杠，开！', directGang, '激进')).toBe('大明杠,开!')
+    expect(resolveDecisionSpeech('直接杠！', directGang, '激进')).toBe('直接杠!')
+    expect(resolveDecisionSpeech('补杠！', { kind: 'concealed-kong', tile: 'm1' }, '稳健'))
+      .toBe('暗杠。')
+    expect(resolveDecisionSpeech('暗杠！', { kind: 'concealed-kong', tile: 'm1' }, '稳健'))
+      .toBe('暗杠!')
+  })
+
   it('他家公开吃碰杠与当前弃牌来源说错时回退，但牌路烟雾弹仍保留', () => {
     const discard = { kind: 'discard', handIndex: 0 } as const
     const facts = {
