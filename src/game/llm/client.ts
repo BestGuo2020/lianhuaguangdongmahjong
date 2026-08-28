@@ -3,7 +3,7 @@
 // 仅「JSON 解析失败 / choice 不在白名单」允许一次语义重试；网络/超时/HTTP 直接抛错（不回退语义重试）。
 import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
-import { normalizeBaseUrl, QWEN_DECISION_TIMEOUT_MS } from './config'
+import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
 import { reasoningPolicyUsable, resolveReasoningPolicy } from './reasoningPolicy'
 
@@ -116,9 +116,7 @@ export function isQwenThinkingModel(config: Pick<LlmProviderConfig, 'baseUrl' | 
 }
 
 export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
-  return isQwenThinkingModel(config)
-    ? Math.min(config.timeoutMs, QWEN_DECISION_TIMEOUT_MS)
-    : config.timeoutMs
+  return config.timeoutMs
 }
 
 function providerExtraBody(
@@ -248,7 +246,10 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
  * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅）。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
-    const effectiveConfig = { ...config, timeoutMs: effectiveDecisionTimeoutMs(config) }
+    const effectiveConfig = {
+      ...config,
+      timeoutMs: Math.min(config.timeoutMs, LLM_CONNECTION_TEST_TIMEOUT_MS),
+    }
     await callOnce(
       effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
