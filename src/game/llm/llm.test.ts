@@ -309,7 +309,7 @@ describe('prompt 构建', () => {
     expect(prompt.system).not.toContain('不要使用“稳稳”一词')
     expect(prompt.user).toContain('"message": "有点意思。"')
     expect(prompt.user).toContain('message 必须非空')
-    expect(prompt.user).toContain('【你的牌】')
+    expect(prompt.user).toContain('【你的暗手（不含副露/杠组）】')
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
     expect(prompt.system).toContain('决策优先级')
     expect(prompt.user).toContain('默认优先')
@@ -337,6 +337,22 @@ describe('prompt 构建', () => {
     }))
     expect(buildPrompt('稳健', claim.request!).user)
       .toContain('【当前弃牌】「上家」打出「3万」')
+  })
+
+  it('明确标注碰与杠，第四张弃牌不会自动并入已有碰组', () => {
+    const peers = baseInput().peers!
+    peers[1] = {
+      discards: [],
+      melds: [{ type: 'peng', tile: 'm7', tiles: ['m7', 'm7', 'm7'] }],
+    }
+    const withRequest = buildDecisionRequest(baseInput({
+      decision: 'claim', playerIndex: 0, tile: 'm7', from: 3, canPeng: true, peers,
+    }))
+    const prompt = buildPrompt('稳健', withRequest.request!).user
+    expect(prompt).toContain('下家：「碰：7万×3」')
+    expect(prompt).toContain('【当前弃牌】「上家」打出「7万」')
+    expect(prompt).toContain('不会自动并入任何玩家已有的碰组')
+    expect(prompt).not.toContain('下家：「明杠：7万×4」')
   })
 
   it('莲花广麻明确只支持标准牌型，禁止追逐七对等其他玩法牌型', () => {

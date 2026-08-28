@@ -35,9 +35,9 @@ import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from 
 import { buildPrompt } from './prompt'
 import { requestLlmDecision } from './client'
 import type { LlmProviderConfig } from './config'
-import type { CanonicalAction } from './schema'
+import type { CanonicalAction, StateSnapshotV1 } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
-import { resolveDecisionSpeech } from './decisionSpeech'
+import { resolveDecisionSpeech, type DecisionSpeechFacts } from './decisionSpeech'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
 import { resolveReasoningPolicy } from './reasoningPolicy'
 
@@ -74,6 +74,19 @@ export interface LlmMessageMeta {
 const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
+
+function speechFacts(state: StateSnapshotV1): DecisionSpeechFacts {
+  const meldTypes = (name: 'upper' | 'opposite' | 'lower') => state.snapshots[name].melds.map((meld) => meld.type)
+  return {
+    isDealer: state.isDealer,
+    publicMeldTypes: {
+      上家: meldTypes('upper'), 对家: meldTypes('opposite'), 下家: meldTypes('lower'),
+    },
+    currentDiscard: state.claimTile && state.claimFrom
+      ? { from: state.claimFrom, tile: state.claimTile }
+      : null,
+  }
+}
 
 /** 内部：LLM 决定 → 候选动作；失败/非法 → null（回退）。 */
 async function decideCanonical(
@@ -119,7 +132,7 @@ async function decideCanonical(
       candidate.action,
       config.style,
       stats.messages,
-      { isDealer: built.request.state.isDealer },
+      speechFacts(built.request.state),
     )
     stats.messages += 1
     try {

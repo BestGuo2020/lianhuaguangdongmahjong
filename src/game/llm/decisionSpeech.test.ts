@@ -51,4 +51,20 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(resolveDecisionSpeech('这牌我吃定了！', { kind: 'chi', optionIndex: 0 }, '激进'))
       .toBe('这牌我吃定了!')
   })
+
+  it('他家公开吃碰杠与当前弃牌来源说错时回退，但牌路烟雾弹仍保留', () => {
+    const discard = { kind: 'discard', handIndex: 0 } as const
+    const facts = {
+      publicMeldTypes: { 上家: [], 对家: [], 下家: ['peng'] },
+      currentDiscard: { from: '上家' as const, tile: '7万' },
+    }
+    expect(resolveDecisionSpeech('下家杠了，我稳一手。', discard, '稳健', 0, facts))
+      .toBe('这张先走。')
+    expect(resolveDecisionSpeech('下家碰了，我稳一手。', discard, '稳健', 0, facts))
+      .toBe('下家碰了,我稳一手。')
+    expect(resolveDecisionSpeech('下家打出7万。', discard, '稳健', 0, facts))
+      .toBe('这张先走。')
+    expect(resolveDecisionSpeech('上家打出7万，这张留着。', discard, '稳健', 0, facts))
+      .toBe('上家打出7万,这张留着。')
+  })
 })
