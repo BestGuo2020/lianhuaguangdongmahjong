@@ -60,6 +60,7 @@ describe('LLM 非思考能力矩阵', () => {
     (model) => {
       expect(resolveReasoningPolicy(config('kimi', model))).toMatchObject({
         providerType: 'kimi', mode: 'explicit-off',
+        acceptReasoningResponse: true,
         requestBody: {
           thinking: { type: 'disabled' }, temperature: 0.6, top_p: 0.95,
         },
