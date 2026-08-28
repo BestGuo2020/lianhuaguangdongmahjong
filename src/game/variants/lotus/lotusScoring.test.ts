@@ -45,24 +45,41 @@ describe('杠分（复用 applyKongScore）', () => {
 })
 
 describe('胡牌收付（applyWinScore）', () => {
-  it('闲家点炮：庄 2H + 两闲各 1H', () => {
+  it('庄家自摸：三闲各 4H，共12H', () => {
     const players = makePlayers()
-    const settlement = winPayments(1, { winnerIsDealer: false, selfDrawStyle: false })
-    const totalWon = applyWinScore(players, 1, settlement, 0)
-    expect(totalWon).toBe(400)
-    expect(players[1].score).toBe(2400)
-    expect(players[0].score).toBe(1800)
-    expect(players[2].score).toBe(1900)
-    expect(players[3].score).toBe(1900)
-  })
-  it('庄家自摸：三闲各 4H', () => {
-    const players = makePlayers()
-    const settlement = winPayments(1, { winnerIsDealer: true, selfDrawStyle: true })
-    const totalWon = applyWinScore(players, 0, settlement, 0)
+    const totalWon = applyWinScore(players, 0, winPayments(1, { winnerIsDealer: true, selfDrawStyle: true }), 0)
     expect(totalWon).toBe(1200)
-    expect(players[0].score).toBe(3200)
-    expect(players[1].score).toBe(1600)
+    expect(players.map(({ score }) => score)).toEqual([3200, 1600, 1600, 1600])
   })
+
+  it('庄家点炮给闲家：庄 4H + 两闲各 1H，共6H', () => {
+    const players = makePlayers()
+    const totalWon = applyWinScore(players, 1, winPayments(1, { winnerIsDealer: false, selfDrawStyle: false }), 0, 0)
+    expect(totalWon).toBe(600)
+    expect(players.map(({ score }) => score)).toEqual([1600, 2600, 1900, 1900])
+  })
+
+  it('闲家自摸：庄 4H + 两闲各 2H，共8H', () => {
+    const players = makePlayers()
+    const totalWon = applyWinScore(players, 1, winPayments(1, { winnerIsDealer: false, selfDrawStyle: true }), 0)
+    expect(totalWon).toBe(800)
+    expect(players.map(({ score }) => score)).toEqual([1600, 2800, 1800, 1800])
+  })
+
+  it('闲家点庄家：点炮者 4H + 两闲各 2H，共8H', () => {
+    const players = makePlayers()
+    const totalWon = applyWinScore(players, 0, winPayments(1, { winnerIsDealer: true, selfDrawStyle: false }), 0, 1)
+    expect(totalWon).toBe(800)
+    expect(players.map(({ score }) => score)).toEqual([2800, 1600, 1800, 1800])
+  })
+
+  it('闲家点闲家：庄 2H + 点炮者 2H + 另一闲 1H，共5H', () => {
+    const players = makePlayers()
+    const totalWon = applyWinScore(players, 2, winPayments(1, { winnerIsDealer: false, selfDrawStyle: false }), 0, 1)
+    expect(totalWon).toBe(500)
+    expect(players.map(({ score }) => score)).toEqual([1800, 1800, 2500, 1900])
+  })
+
   it('天胡（庄家）：三闲各 4H，总分守恒', () => {
     const players = makePlayers()
     applyWinScore(players, 0, winPayments(8, { winnerIsDealer: true, selfDrawStyle: true }), 0)

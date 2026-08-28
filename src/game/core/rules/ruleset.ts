@@ -48,6 +48,8 @@ export interface WinSettlement {
 
 export interface WinScoreFlags {
   dealer: boolean
+  /** 普通点炮时，出铳者是否为庄家；用于计算结算总额。 */
+  discarderIsDealer?: boolean
   selfDraw: boolean
   robbedKong: boolean
   kongBloom: boolean
@@ -132,6 +134,7 @@ export interface RuleSet {
       winnerIndex: number,
       settlement: WinSettlement,
       dealerIndex: number,
+      sourceIndex?: number | null,
     ): number
   }
   readonly extension?: {

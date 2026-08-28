@@ -233,17 +233,18 @@ describe('番数与收付', () => {
     expect(score.settlement.total).toBe(6400)
   })
   it('收付表四行', () => {
-    expect(winPayments(1, { winnerIsDealer: false, selfDrawStyle: false })).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 })
-    expect(winPayments(1, { winnerIsDealer: true, selfDrawStyle: false })).toEqual({ H: 100, dealerPays: 0, nonDealerPays: 200, total: 400 })
+    expect(winPayments(1, { winnerIsDealer: false, selfDrawStyle: false })).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 500 })
+    expect(winPayments(1, { winnerIsDealer: false, selfDrawStyle: false, discarderIsDealer: true })).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 600 })
+    expect(winPayments(1, { winnerIsDealer: true, selfDrawStyle: false })).toEqual({ H: 100, dealerPays: 0, nonDealerPays: 200, total: 800 })
     expect(winPayments(1, { winnerIsDealer: false, selfDrawStyle: true })).toEqual({ H: 100, dealerPays: 400, nonDealerPays: 200, total: 800 })
     expect(winPayments(1, { winnerIsDealer: true, selfDrawStyle: true })).toEqual({ H: 100, dealerPays: 0, nonDealerPays: 400, total: 1200 })
   })
-  it('闲家点炮平胡：庄 2H + 闲 1H + 闲 1H', () => {
+  it('闲家点闲家平胡：庄 2H + 点炮闲家 2H + 另一闲家 1H', () => {
     const score = scoreFan(pingHu, 0, JOKERS, {
       dealer: false, selfDraw: false, robbedKong: false, kongBloom: false, tianhu: false, dihu: false,
     })!
     expect(score.fan).toBe(1)
-    expect(score.settlement).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 })
+    expect(score.settlement).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 500 })
   })
   it('庄家自摸七对子：×2(自摸)×2(庄) 且收 12H', () => {
     const score = scoreFan(sevenPairs, 0, JOKERS, {
