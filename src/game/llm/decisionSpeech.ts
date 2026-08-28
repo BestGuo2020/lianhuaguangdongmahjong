@@ -64,7 +64,7 @@ export function decisionSpeech(action: CanonicalAction, style: LlmStyle, sequenc
   return variants[Math.abs(sequence) % variants.length]
 }
 
-/** 自由 message 合规则保留；缺失/幕后内容及稳健“稳稳”措辞回退程序台词。 */
+/** 自由 message 合规则保留；仅缺失或幕后内容回退程序台词。 */
 export function resolveDecisionSpeech(
   message: string,
   action: CanonicalAction,
@@ -72,7 +72,7 @@ export function resolveDecisionSpeech(
   sequence = 0,
 ): string {
   const compact = compactLlmSpeechText(message)
-  if (compact && !(style === '稳健' && compact.includes('稳稳'))) return compact
+  if (compact) return compact
   return decisionSpeech(action, style, sequence)
 }
 
