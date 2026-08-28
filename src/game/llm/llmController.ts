@@ -37,7 +37,7 @@ import { requestLlmDecision } from './client'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
-import { decisionSpeech } from './decisionSpeech'
+import { resolveDecisionSpeech } from './decisionSpeech'
 
 export interface LlmControllerStats {
   requests: number
@@ -94,8 +94,9 @@ async function decideCanonical(
       stats.invalidActions += 1
       return built.fallbackAction
     }
-    // 模型只决定 choice；台词在动作合法性确认后由程序生成，杜绝“说留着却打出”等矛盾。
-    const speech = decisionSpeech(candidate.action, config.style, stats.messages)
+    // choice 决定真实动作；message 是牌桌闲聊/烟雾弹，不要求“言而有信”。
+    // 仅在缺失、含幕后词或稳健风格用了“稳稳”时回退动作一致的程序台词。
+    const speech = resolveDecisionSpeech(output.message, candidate.action, config.style, stats.messages)
     stats.messages += 1
     try {
       await hooks.onLlmMessage?.(input.playerIndex, speech, {

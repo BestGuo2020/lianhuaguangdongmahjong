@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DECISION_SPEECH_LINES, decisionSpeech } from './decisionSpeech'
+import { DECISION_SPEECH_LINES, decisionSpeech, resolveDecisionSpeech } from './decisionSpeech'
 
 describe('动作一致的 LLM 决策台词', () => {
   it('所有动作与性格都有不超过 16 字的程序台词', () => {
@@ -24,5 +24,12 @@ describe('动作一致的 LLM 决策台词', () => {
     for (const styles of Object.values(DECISION_SPEECH_LINES)) {
       expect(styles.稳健.every((line) => !line.includes('稳稳'))).toBe(true)
     }
+  })
+
+  it('保留牌桌烟雾弹，但稳健“稳稳”与幕后内容回退程序台词', () => {
+    const action = { kind: 'discard', handIndex: 0 } as const
+    expect(resolveDecisionSpeech('这张留着。', action, '稳健')).toBe('这张留着。')
+    expect(resolveDecisionSpeech('稳稳出牌。', action, '稳健')).toBe('这张先走。')
+    expect(resolveDecisionSpeech('按候选A1来。', action, '话痨')).toBe('先把这张放出去。')
   })
 })
