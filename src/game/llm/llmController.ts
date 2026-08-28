@@ -96,7 +96,13 @@ async function decideCanonical(
     }
     // choice 决定真实动作；message 是牌桌闲聊/烟雾弹，不要求“言而有信”。
     // 仅在缺失或含幕后词时回退动作一致的程序台词。
-    const speech = resolveDecisionSpeech(output.message, candidate.action, config.style, stats.messages)
+    const speech = resolveDecisionSpeech(
+      output.message,
+      candidate.action,
+      config.style,
+      stats.messages,
+      { isDealer: built.request.state.isDealer },
+    )
     stats.messages += 1
     try {
       await hooks.onLlmMessage?.(input.playerIndex, speech, {
