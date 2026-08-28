@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DECISION_SPEECH_LINES, decisionSpeech, resolveDecisionSpeech } from './decisionSpeech'
+import {
+  DECISION_SPEECH_LINES, REASONING_STATUS_LINES, decisionSpeech, reasoningStatusSpeech, resolveDecisionSpeech,
+} from './decisionSpeech'
 
 describe('动作一致的 LLM 决策台词', () => {
   it('所有动作与性格都有不超过 16 字的程序台词', () => {
@@ -24,6 +26,15 @@ describe('动作一致的 LLM 决策台词', () => {
     for (const styles of Object.values(DECISION_SPEECH_LINES)) {
       expect(styles.稳健.every((line) => !line.includes('稳稳'))).toBe(true)
     }
+  })
+
+  it('每种性格有多句可轮换的短思考状态台词', () => {
+    for (const lines of Object.values(REASONING_STATUS_LINES)) {
+      expect(lines.length).toBeGreaterThanOrEqual(3)
+      expect(lines.every((line) => [...line].length <= 16 && !line.includes('稳稳'))).toBe(true)
+    }
+    expect(reasoningStatusSpeech('稳健', 0)).toBe('让我想想怎么打。')
+    expect(reasoningStatusSpeech('稳健', 3)).toBe('让我想想怎么打。')
   })
 
   it('保留牌桌烟雾弹和模型“稳稳”措辞，仅幕后内容回退程序台词', () => {

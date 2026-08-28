@@ -174,6 +174,13 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     expect(onLlmMessage).toHaveBeenCalledWith(3, '这一手稳住。')
   })
 
+  it('把持久深思状态台词按本地座位转交给牌桌', async () => {
+    const onLlmStatus = vi.fn()
+    await connectGame({ onLlmStatus })
+    mockSocket!.receive({ kind: 'llm_status', seat: 1, active: true, text: '让我想想怎么打。' })
+    expect(onLlmStatus).toHaveBeenCalledWith(3, true, '让我想想怎么打。')
+  })
+
   it('把缓存音频地址交给 LLM 播放队列', async () => {
     const playLlmAudio = vi.fn()
     await connectGame({ playLlmAudio })

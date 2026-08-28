@@ -85,10 +85,16 @@ describe('单机 LLM runtime TTS', () => {
       playerIndex: 1, scores: [1000, 2000, 3000, 4000], peers: [], wallCount: 12,
     })
 
-    expect(status.mock.calls).toEqual([[1, true], [1, false]])
+    expect(status.mock.calls).toEqual([
+      [1, true, '让我想想怎么打。'],
+      [1, false],
+    ])
     expect(mocks.requestLlmDecision).toHaveBeenCalledWith(expect.objectContaining({
-      reasoning: true, deadlineMs: 4000,
+      reasoning: true, deadlineMs: 40_000,
     }))
+    expect(mocks.speak).toHaveBeenCalledWith(
+      1, '让我想想怎么打。', 'deepseek', '稳健', 'normal',
+    )
     expect(runtime.stats.reasoningRequests).toBe(1)
   })
 

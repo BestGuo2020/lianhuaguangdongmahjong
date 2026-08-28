@@ -19,8 +19,8 @@ export const DEFAULT_CONDITIONAL_REASONING: Readonly<ConditionalReasoningConfig>
   enabled: true,
   maxPerRound: 2,
   maxPerMatch: 8,
-  deadlineMs: 4_000,
-  minRemainingBudgetMs: 5_000,
+  deadlineMs: 40_000,
+  minRemainingBudgetMs: 45_000,
   trigger: {
     candidateScoreGap: 8,
     lateWallCount: 12,
@@ -114,7 +114,7 @@ export function evaluateReasoningTriggers(
   return { enabled: reasons.length > 0, reasons, candidateScoreGap: gap, opponentThreat: threat, scoreSwing: swing }
 }
 
-/** 一场牌共用一个协调器；roundIndex 变化即自然切换小局限额。 */
+/** 一场牌共用一个协调器；roundIndex 变化即自然切换小局限额。深思请求最多等待 40 秒。 */
 export class ConditionalReasoningCoordinator {
   private matchUses = 0
   private readonly roundUses = new Map<number, number>()

@@ -38,7 +38,7 @@ const VALID_MESSAGES: ServerMessage[] = [
   { kind: 'score_flow', deltas: [{ playerIndex: 0, amount: 10 }] },
   { kind: 'announcement', text: '碰', tone: 'gold', id: 1 },
   { kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 1 },
-  { kind: 'llm_status', seat: 2, active: true },
+  { kind: 'llm_status', seat: 2, active: true, text: '让我想想怎么打。' },
   { kind: 'llm_audio', messageId: 1, seat: 2, audioUrl: `/api/tts/audio/${'a'.repeat(64)}.mp3`, cached: true },
   { kind: 'hand_result', result: { winnerIndex: 0 } },
   { kind: 'continue_prompt', total: 4 },

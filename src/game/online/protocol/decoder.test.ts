@@ -22,10 +22,11 @@ describe('decodeServerMessage', () => {
   })
 
   it('accepts LLM reasoning status without carrying thought content', () => {
-    expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: true }))
-      .toEqual({ kind: 'llm_status', seat: 2, active: true })
+    expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: true, text: '让我想想怎么打。' }))
+      .toEqual({ kind: 'llm_status', seat: 2, active: true, text: '让我想想怎么打。' })
     expect(decodeServerMessage({ kind: 'llm_status', seat: 4, active: true })).toBeNull()
     expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: 'yes' })).toBeNull()
+    expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: true, text: '' })).toBeNull()
   })
 
   it('accepts hashed TTS audio URLs and rejects arbitrary remote URLs', () => {

@@ -38,7 +38,7 @@ export type ServerMessage =
   | { kind: 'score_flow'; deltas: ScoreDelta[] }
   | { kind: 'announcement'; text: string; tone: string; id?: number }
   | { kind: 'llm_message'; seat: number; text: string; id: number; priority?: LlmSpeechPriority }
-  | { kind: 'llm_status'; seat: number; active: boolean }
+  | { kind: 'llm_status'; seat: number; active: boolean; text?: string }
   | { kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean; priority?: LlmSpeechPriority }
   | { kind: 'hand_result'; result: RoundResult }
   | { kind: 'continue_prompt'; total: number }

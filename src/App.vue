@@ -71,8 +71,8 @@ const gameMode = ref<GameMode>('local')
 // AI 大模型（单机人机座位 1-3）：仅大厅可配置；保存后立即装配到下一次开局。
 const llmOpen = ref(false)
 const llmMessages = ref<string[]>([])
-/** 牌桌气泡：key=座位绝对索引，value=最近一条吐槽（4 秒后自动消失） */
-const llmBubbles = ref<Record<number, { text: string; id: number }>>({})
+/** 普通吐槽 4 秒消失；深思状态 persistent=true，直到结果返回/超时才清除或被结果台词替换。 */
+const llmBubbles = ref<Record<number, { text: string; id: number; persistent?: boolean }>>({})
 let llmBubbleSeq = 0
 const llmHook = {
   onLlmMessage: (seat: number, text: string) => {
@@ -88,13 +88,13 @@ const llmHook = {
       }
     }, 4000)
   },
-  onLlmStatus: (seat: number, active: boolean) => {
+  onLlmStatus: (seat: number, active: boolean, text = '让我想想怎么打。') => {
     if (active) {
       const id = (llmBubbleSeq += 1)
-      llmBubbles.value = { ...llmBubbles.value, [seat]: { text: '正在深度思考…', id } }
+      llmBubbles.value = { ...llmBubbles.value, [seat]: { text, id, persistent: true } }
       return
     }
-    if (llmBubbles.value[seat]?.text === '正在深度思考…') {
+    if (llmBubbles.value[seat]?.persistent) {
       const next = { ...llmBubbles.value }
       delete next[seat]
       llmBubbles.value = next

@@ -212,11 +212,11 @@ async function callOnce(
 
 /**
  * 决策请求：一次语义重试（解析/白名单失败）；网络/超时/HTTP 直接抛错。
- * 总预算 = config.timeoutMs（含重试，重试时剩余预算按已用时长折算）。
+ * 快速路径总预算 = config.timeoutMs；条件深思使用独立 deadlineMs（含语义重试）。
  */
 export async function requestLlmDecision(options: LlmDecisionOptions): Promise<LlmOutput> {
   const budgetMs = options.reasoning
-    ? Math.min(effectiveDecisionTimeoutMs(options.config), options.deadlineMs ?? Number.POSITIVE_INFINITY)
+    ? (options.deadlineMs ?? options.config.timeoutMs)
     : effectiveDecisionTimeoutMs(options.config)
   const startedAt = Date.now()
   const attempt = async (messages: PromptPair, errorForRetry?: string): Promise<LlmOutput> => {
