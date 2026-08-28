@@ -1,6 +1,6 @@
 import { inferLlmProviderType, type LlmProviderConfig, type LlmProviderType } from './config'
 
-export type ReasoningPolicyMode = 'explicit-off' | 'naturally-off' | 'reasoning-only' | 'unknown'
+export type ReasoningPolicyMode = 'explicit-off' | 'explicit-on' | 'naturally-off' | 'reasoning-only' | 'unknown'
 
 export interface ReasoningPolicy {
   providerType: LlmProviderType
@@ -24,6 +24,7 @@ function policy(
  */
 export function resolveReasoningPolicy(
   config: Pick<LlmProviderConfig, 'baseUrl' | 'model' | 'providerType'>,
+  reasoning = false,
 ): ReasoningPolicy {
   const providerType = config.providerType ?? inferLlmProviderType(config.baseUrl, config.model)
   const model = config.model.trim().toLowerCase()
@@ -33,17 +34,23 @@ export function resolveReasoningPolicy(
       if (/(?:reasoner|(^|[-_.])r1(?:[-_.]|$))/.test(model)) {
         return policy(providerType, 'reasoning-only', 'DeepSeek Reasoner/R1 属于推理专用模型，无法保证关闭思考')
       }
-      return policy(providerType, 'explicit-off', '已强制关闭 DeepSeek 思考模式', {
-        thinking: { type: 'disabled' },
-      })
+      return reasoning
+        ? policy(providerType, 'explicit-on', '已开启 DeepSeek 条件思考', {
+          thinking: { type: 'enabled' }, reasoning_effort: 'medium',
+        })
+        : policy(providerType, 'explicit-off', '已强制关闭 DeepSeek 思考模式', {
+          thinking: { type: 'disabled' },
+        })
     case 'qwen':
       if (/^(?:qwq|.*thinking)/.test(model)) {
         return policy(providerType, 'reasoning-only', '该千问型号属于推理专用模型，无法关闭思考')
       }
-      if (/^qwen3\.(?:5|6|7|8)(?:[.-]|$)/.test(model)) {
-        return policy(providerType, 'explicit-off', '已强制关闭千问思考模式', {
-          enable_thinking: false,
-        })
+      if (/^qwen-?3\.(?:5|6|7|8)(?:[.-]|$)/.test(model)) {
+        return reasoning
+          ? policy(providerType, 'explicit-on', '已开启千问条件思考', { enable_thinking: true })
+          : policy(providerType, 'explicit-off', '已强制关闭千问思考模式', {
+            enable_thinking: false,
+          })
       }
       return policy(providerType, 'unknown', '无法确认该千问型号是否支持非思考模式')
     case 'kimi':
@@ -82,9 +89,11 @@ export function resolveReasoningPolicy(
         return policy(providerType, 'reasoning-only', 'OpenAI o 系列属于推理模型，不适合实时麻将决策')
       }
       if (/^gpt-5(?:[.-]|$)/.test(model)) {
-        return policy(providerType, 'explicit-off', '已将 GPT 推理强度设为 none', {
-          reasoning_effort: 'none',
-        })
+        return reasoning
+          ? policy(providerType, 'explicit-on', '已开启 GPT 条件思考', { reasoning_effort: 'medium' })
+          : policy(providerType, 'explicit-off', '已将 GPT 推理强度设为 none', {
+            reasoning_effort: 'none',
+          })
       }
       if (/^(?:gpt-4|gpt-3\.5)/.test(model)) {
         return policy(providerType, 'naturally-off', '该 GPT 型号本身不是推理模型')
@@ -111,5 +120,5 @@ export function resolveReasoningPolicy(
 }
 
 export function reasoningPolicyUsable(value: ReasoningPolicy): boolean {
-  return value.mode === 'explicit-off' || value.mode === 'naturally-off'
+  return value.mode === 'explicit-off' || value.mode === 'explicit-on' || value.mode === 'naturally-off'
 }

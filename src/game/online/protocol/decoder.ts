@@ -215,6 +215,8 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
         return isIntegerBetween(raw.seat, 0, 3) && isString(raw.text)
           && raw.text.length > 0 && raw.text.length <= 60 && isNumber(raw.id)
           && isOptional(raw.priority, (value) => value === 'normal' || value === 'important')
+      case 'llm_status':
+        return isIntegerBetween(raw.seat, 0, 3) && isBoolean(raw.active)
       case 'llm_audio':
         return isNumber(raw.messageId) && isIntegerBetween(raw.seat, 0, 3)
           && isString(raw.audioUrl)

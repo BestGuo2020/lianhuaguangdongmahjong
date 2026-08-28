@@ -21,6 +21,13 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ ...message, priority: 'urgent' })).toBeNull()
   })
 
+  it('accepts LLM reasoning status without carrying thought content', () => {
+    expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: true }))
+      .toEqual({ kind: 'llm_status', seat: 2, active: true })
+    expect(decodeServerMessage({ kind: 'llm_status', seat: 4, active: true })).toBeNull()
+    expect(decodeServerMessage({ kind: 'llm_status', seat: 2, active: 'yes' })).toBeNull()
+  })
+
   it('accepts hashed TTS audio URLs and rejects arbitrary remote URLs', () => {
     const message = {
       kind: 'llm_audio', messageId: 7, seat: 2,

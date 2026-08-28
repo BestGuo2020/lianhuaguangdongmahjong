@@ -194,7 +194,7 @@ function featuresOf(
     base.ready = 'unknown'
     base.safety = input.tile ? safetyBand(input, input.tile) : 'unknown'
     base.risks = isTenpai(input, input.hand) ? ['碰/杠可能破坏听牌'] : []
-    if (input.tile) base.scoreDeltaBand = scoreDeltaBand(input, action)
+    if (input.tile) applyScoreDelta(input, action, base)
     return base
   }
   if (action.kind === 'peng' || action.kind === 'chi') {
@@ -231,7 +231,7 @@ function featuresOf(
       if (tile && matchingCount(input.publicTiles ?? [], tile) === 0) risks.push('被抢杠概率较高')
     }
     base.risks = risks
-    base.scoreDeltaBand = scoreDeltaBand(input, action)
+    applyScoreDelta(input, action, base)
     return base
   }
   // pass
@@ -285,10 +285,10 @@ function pengWouldDiscardClaimedTile(input: DecisionInput): boolean {
 }
 
 /** 杠分（即时收益）档位：在克隆分数上应用规则集杠分，delta>0 按档位。 */
-function scoreDeltaBand(input: DecisionInput, action: CanonicalAction): '高' | '中' | 'n/a' {
+function scoreDeltaValue(input: DecisionInput, action: CanonicalAction): number | null {
   const playerIndex = input.playerIndex
   const scores = input.scores
-  if (!scores || !scores[playerIndex]) return 'n/a'
+  if (!scores || scores[playerIndex] == null) return null
   const before = scores[playerIndex]
   const players = scores.map((score) => ({ score })) as unknown as Array<{ score: number }>
   if (action.kind === 'added-kong') {
@@ -300,11 +300,20 @@ function scoreDeltaBand(input: DecisionInput, action: CanonicalAction): '高' | 
   } else if (action.kind === 'gang') {
     applyKongScore(players as never, playerIndex, 'discard', input.from ?? null)
   } else {
-    return 'n/a'
+    return null
   }
   const delta = (players[playerIndex] as { score: number }).score - before
-  if (delta <= 0) return 'n/a'
-  return delta >= 400 ? '高' : '中'
+  return delta > 0 ? delta : null
+}
+
+function applyScoreDelta(input: DecisionInput, action: CanonicalAction, features: Candidate['features']): void {
+  const delta = scoreDeltaValue(input, action)
+  if (delta == null) {
+    features.scoreDeltaBand = 'n/a'
+    return
+  }
+  features.scoreDelta = delta
+  features.scoreDeltaBand = delta >= 400 ? '高' : '中'
 }
 
 /** 排序 & 档位化：候选内确定性排序（§5 tie-break：牌面固定顺序由候选枚举顺序保证）。 */

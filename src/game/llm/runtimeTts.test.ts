@@ -39,6 +39,32 @@ afterEach(() => {
 })
 
 describe('单机 LLM runtime TTS', () => {
+  it('深思时只发送状态气泡，并把推理内容留在供应商响应内', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    }, storage)
+    const status = vi.fn()
+    const runtime = createLocalLlmControllers({ onLlmStatus: status })
+    await runtime.controllers![0].requestTurn({
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'],
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 2000, 3000, 4000], peers: [], wallCount: 12,
+    })
+
+    expect(status.mock.calls).toEqual([[1, true], [1, false]])
+    expect(mocks.requestLlmDecision).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning: true, deadlineMs: 4000,
+    }))
+    expect(runtime.stats.reasoningRequests).toBe(1)
+  })
+
   it('模型自由台词进入气泡/TTS，真实动作仍由 choice 决定', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)

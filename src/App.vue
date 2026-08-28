@@ -88,6 +88,18 @@ const llmHook = {
       }
     }, 4000)
   },
+  onLlmStatus: (seat: number, active: boolean) => {
+    if (active) {
+      const id = (llmBubbleSeq += 1)
+      llmBubbles.value = { ...llmBubbles.value, [seat]: { text: '正在深度思考…', id } }
+      return
+    }
+    if (llmBubbles.value[seat]?.text === '正在深度思考…') {
+      const next = { ...llmBubbles.value }
+      delete next[seat]
+      llmBubbles.value = next
+    }
+  },
 }
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
@@ -109,6 +121,7 @@ const llmStats = computed<LlmControllerStats>(() => ({
   fallbacks: localLlm.value.stats.fallbacks + lotusLlm.value.stats.fallbacks,
   messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
   invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
+  reasoningRequests: localLlm.value.stats.reasoningRequests + lotusLlm.value.stats.reasoningRequests,
 }))
 const localGame = useGame({
   playSound: playEffect,
@@ -130,6 +143,7 @@ const remoteGame = useRemoteGame({
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
+  onLlmStatus: llmHook.onLlmStatus,
   playLlmAudio,
 })
 
