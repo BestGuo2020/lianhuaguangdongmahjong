@@ -209,6 +209,7 @@ button { font: inherit; }
 .mahjong-tile {
   --tile-width: clamp(36px, 3.7vw, 57px);
   position: relative;
+  box-sizing: border-box;
   flex: 0 0 auto;
   width: var(--tile-width);
   aspect-ratio: 3 / 4;
@@ -272,20 +273,28 @@ button { font: inherit; }
 .mahjong-tile.laizi { box-shadow: 0 0 0 2px #e04f45, 0 0 11px rgba(224,79,69,.5); }
 .joker-mark {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 1px;
+  right: 1px;
+  box-sizing: border-box;
   display: grid;
-  width: 54%;
-  height: 42%;
-  padding: 1px 2px 0 12px;
+  width: 50%;
+  height: 40%;
+  padding: 1px 1px 0 0;
   color: #fff;
   background: #08a9dc;
-  clip-path: polygon(38% 0, 100% 0, 100% 100%);
-  font-size: max(9px, calc(var(--tile-width) * .2));
+  clip-path: polygon(24% 0, 100% 0, 100% 100%);
+  font-size: clamp(8px, calc(var(--tile-width) * .22), 13px);
   font-weight: 900;
   line-height: 1;
   place-items: start end;
   text-shadow: 0 1px 1px rgba(0,40,70,.85);
+}
+.mahjong-tile.small .joker-mark {
+  width: 60%;
+  height: 46%;
+  padding: 1px 1px 0 0;
+  clip-path: polygon(18% 0, 100% 0, 100% 100%);
+  font-size: clamp(7px, calc(var(--tile-width) * .3), 9px);
 }
 .mahjong-tile.wildcard .joker-mark { background: #b88220; }
 .mahjong-tile.laizi .joker-mark { background: #c0342e; }
@@ -1119,7 +1128,7 @@ button { font: inherit; }
   .discard-top { top: 25%; }.discard-bottom { bottom: 28%; }
   .user-area { right: 1%; left: 1%; }.user-identity { left: 1%; bottom: 96px; width: 68px; min-width: 0; padding: 4px; }.user-identity > div:last-child { display: flex; }
   .mahjong-tile { --tile-width: min(6.6vw, 38px); }.mahjong-tile.small { --tile-width: min(4.7vw, 25px); }
-  .hand-rack { gap: 0; padding-right: 2px; padding-left: 2px; }
+  .hand-rack { box-sizing: border-box; max-width: 100%; gap: 0; padding-right: 2px; padding-left: 2px; overflow: visible; }
   .turn-action-row { right: 3%; bottom: 113px; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }.action { min-width: 46px; height: 42px; padding: 4px 8px; }.action b { font-size: 14px; }
   .waiting-action { width: 46px; height: 48px; padding: 0; }
   .turn-timer { min-width: 58px; padding: 5px 8px 4px; border-radius: 14px; }.turn-timer span { font-size: 26px; }
