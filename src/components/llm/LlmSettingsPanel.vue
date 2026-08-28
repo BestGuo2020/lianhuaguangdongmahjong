@@ -260,8 +260,8 @@ function presetName(id: string | null): string {
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
         <p
-          v-if="reasoningPolicy" class="llm-provider-hint"
-          :class="{ invalid: !reasoningPolicyUsable(reasoningPolicy) }" data-testid="llm-reasoning-policy-hint"
+          v-if="reasoningPolicy && !reasoningPolicyUsable(reasoningPolicy)"
+          class="llm-provider-hint invalid" data-testid="llm-reasoning-policy-hint"
         >
           {{ reasoningPolicy.message }}
         </p>
@@ -334,8 +334,7 @@ function presetName(id: string | null): string {
 .llm-hint b { color: #e5d5ad; }
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
 .llm-row > span { color: #a6b5ad; }
-.llm-provider-hint { margin: -2px 0 9px 94px; color: #d8bd75; font-size: 11px; line-height: 1.5; }
-.llm-provider-hint.invalid { color: #f08f82; }
+.llm-provider-hint { margin: -2px 0 9px 94px; color: #f08f82; font-size: 11px; line-height: 1.5; }
 .llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;
