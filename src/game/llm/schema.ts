@@ -70,6 +70,10 @@ export interface StateSnapshotV1 {
   ruleCode: RuleCode
   decision: DecisionKind
   hand: TileName[]
+  turnOrigin: 'draw' | 'peng' | 'chi' | 'kong-draw' | 'opening' | 'claim-response'
+  drawnTile: TileName | null
+  claimTile: TileName | null
+  claimFrom: '上家' | '对家' | '下家' | null
   melds: MeldView[]
   snapshots: {
     self: DiscardView

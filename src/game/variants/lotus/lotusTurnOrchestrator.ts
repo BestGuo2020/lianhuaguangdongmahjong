@@ -241,12 +241,12 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       if (decided.kind === 'peng' && claimant.canPeng) {
         interruptFollow()
         performPeng(options.tableContext, claimant.playerIndex, tile, from)
-        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.skipDrawPengDelay)
+        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true, afterClaim: 'peng' }) }, PACE_MS.skipDrawPengDelay)
         return
       }
       if (decided.kind === 'chi' && claimant.chiOptions.some((option) => option.tiles.join(',') === decided.meld.tiles.join(','))) {
         performChi(claimant.playerIndex, decided.meld, tile, from)
-        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
+        options.later(() => { void beginTurn(claimant.playerIndex, { skipDraw: true, afterClaim: 'chi' }) }, PACE_MS.afterClaimPeng)
         return
       }
       return offerNextClaim(remainingClaims, tile, from, decisions)
@@ -293,7 +293,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
           )
         } else {
           options.later(
-            () => { void beginTurn(claimant.playerIndex, { skipDraw: true }) },
+            () => { void beginTurn(claimant.playerIndex, { skipDraw: true, afterClaim: 'peng' }) },
             PACE_MS.skipDrawPengDelay,
           )
         }
@@ -304,7 +304,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         }
         performChi(claimant.playerIndex, action.meld, tile, from)
         options.later(
-          () => { void beginTurn(claimant.playerIndex, { skipDraw: true }) },
+          () => { void beginTurn(claimant.playerIndex, { skipDraw: true, afterClaim: 'chi' }) },
           PACE_MS.afterClaimPeng,
         )
         return
@@ -320,7 +320,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     if (decided) {
       if (decided.kind === 'chi' && chiOptions.some((option) => option.tiles.join(',') === decided.meld.tiles.join(','))) {
         performChi(nextPlayer, decided.meld, tile, from)
-        options.later(() => { void beginTurn(nextPlayer, { skipDraw: true }) }, PACE_MS.afterClaimPeng)
+        options.later(() => { void beginTurn(nextPlayer, { skipDraw: true, afterClaim: 'chi' }) }, PACE_MS.afterClaimPeng)
         return
       }
       options.later(() => { void beginTurn(nextPlayer) }, PACE_MS.afterDiscardToNextTurn)
@@ -355,7 +355,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     }
     performChi(playerIndex, action.meld, tile, from)
     options.later(
-      () => { void beginTurn(playerIndex, { skipDraw: true }) },
+      () => { void beginTurn(playerIndex, { skipDraw: true, afterClaim: 'chi' }) },
       PACE_MS.afterClaimPeng,
     )
   }
@@ -470,6 +470,10 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       earlyRound: earlyRoundFor(playerIndex),
       wallCount: state.wall.value.length,
       afterKong: Boolean(turnOptions.fromTail),
+      turnOrigin: turnOptions.fromTail ? 'kong-draw'
+        : turnOptions.afterClaim ?? (turnOptions.preDrawn ? 'opening' : 'draw'),
+      drawnTile: !turnOptions.skipDraw && player.drawnTileIndex >= 0
+        ? player.hand[player.drawnTileIndex] ?? null : null,
       ruleset,
     }),
     requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),

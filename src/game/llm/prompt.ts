@@ -33,6 +33,7 @@ function systemPrompt(style: string): string {
     STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     'message 可以是情绪、闲聊、吹嘘或烟雾弹，不要求解释 choice，也不要求公开真实意图。',
     '烟雾弹只能针对牌路和意图；是否庄家、门风、场风等公开事实必须如实。',
+    '吃、碰、杠、过等公开动作承诺必须与 choice 一致；不能说要吃却选择不吃。',
     'message 严禁提及或复述决策机制、内部标识及幕后说明。',
     '候选动作均已按当前玩法校验合法；当前玩法的规则摘要和候选特征是唯一权威事实。',
     '决策优先级：硬规则与风险警告 > 保持听牌 > 特殊牌型听牌与有效剩余 > 默认参考 > 安全度与简化牌效。',
@@ -92,10 +93,17 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
 
   const items: string[] = []
   const ruleSummary = RULE_SUMMARIES[request.ruleCode]
-  const decisionName = request.decision === 'turn' ? '摸牌后出牌' : '他家弃牌响应'
+  const decisionName = state.turnOrigin === 'peng' ? '碰后直接出牌（本回合没有摸牌）'
+    : state.turnOrigin === 'chi' ? '吃后直接出牌（本回合没有摸牌）'
+      : state.turnOrigin === 'kong-draw' ? '杠后补摸出牌'
+        : state.turnOrigin === 'opening' ? '开局首回合出牌'
+          : state.turnOrigin === 'claim-response' ? `响应${state.claimFrom ?? '他家'}弃牌`
+            : '摸牌后出牌'
   const dealerStatus = state.isDealer ? '你是庄家' : '你不是庄家'
   items.push(line('局况', `「${ruleSummary}」｜第「${state.roundIndex}」局｜你是「${state.seatWind}」家｜${dealerStatus}｜${decisionName}｜剩牌「${state.wallCount}」张｜分数「${state.scores.join('/')}」`))
   items.push(line('你的牌', `「${handText}」`))
+  if (state.drawnTile) items.push(line('刚摸到', `「${state.drawnTile}」`))
+  if (state.claimTile) items.push(line('当前弃牌', `「${state.claimFrom ?? '他家'}」打出「${state.claimTile}」`))
   items.push(line('你的副露', `「${meldText}」`))
   items.push(line('牌河', `你：「${discardText('self')}」｜上家：「${discardText('upper')}」｜对家：「${discardText('opposite')}」｜下家：「${discardText('lower')}」`))
   items.push(line('各家副露', `上家：「${meldsText('upper')}」｜对家：「${meldsText('opposite')}」｜下家：「${meldsText('lower')}」`))

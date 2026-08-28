@@ -48,6 +48,8 @@ export interface DecisionInput {
   wallCount?: number
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  turnOrigin?: 'draw' | 'peng' | 'chi' | 'kong-draw' | 'opening'
+  drawnTile?: TileType | null
 }
 
 export interface BuiltRequest {
@@ -316,6 +318,12 @@ function bandedEfficiency(scores: Array<{ index?: number; heuristic: number }>, 
   return map
 }
 
+function relativeSource(playerIndex: number, from: number | undefined): '上家' | '对家' | '下家' | null {
+  if (from == null) return null
+  const distance = (from - playerIndex + 4) % 4
+  return distance === 3 ? '上家' : distance === 2 ? '对家' : distance === 1 ? '下家' : null
+}
+
 function snapshotOf(input: DecisionInput): StateSnapshotV1 {
   const peers = input.peers ?? []
   const rel = (offset: number) => {
@@ -333,6 +341,10 @@ function snapshotOf(input: DecisionInput): StateSnapshotV1 {
     ruleCode: input.ruleCode,
     decision: input.decision,
     hand: input.hand.map(tileName),
+    turnOrigin: input.decision === 'claim' ? 'claim-response' : (input.turnOrigin ?? 'draw'),
+    drawnTile: input.drawnTile ? tileName(input.drawnTile) : null,
+    claimTile: input.decision === 'claim' && input.tile ? tileName(input.tile) : null,
+    claimFrom: input.decision === 'claim' ? relativeSource(input.playerIndex, input.from) : null,
     melds: input.melds.map((meld) => ({
       type: meld.type, tile: tileName(meld.tile), tiles: meld.tiles.map(tileName),
     })),

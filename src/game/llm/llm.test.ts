@@ -323,6 +323,22 @@ describe('prompt 构建', () => {
     expect(prompt.user).not.toContain('庄家座位「0」')
   })
 
+  it('明确区分刚摸、碰后未摸和当前牌河弃牌', () => {
+    const drawn = buildDecisionRequest(baseInput({ turnOrigin: 'draw', drawnTile: 'p5' }))
+    expect(buildPrompt('稳健', drawn.request!).user).toContain('【刚摸到】「5筒」')
+
+    const peng = buildDecisionRequest(baseInput({ turnOrigin: 'peng', drawnTile: null }))
+    const pengPrompt = buildPrompt('稳健', peng.request!).user
+    expect(pengPrompt).toContain('碰后直接出牌（本回合没有摸牌）')
+    expect(pengPrompt).not.toContain('【刚摸到】')
+
+    const claim = buildDecisionRequest(baseInput({
+      decision: 'claim', playerIndex: 0, tile: 'm3', from: 3, canPeng: true,
+    }))
+    expect(buildPrompt('稳健', claim.request!).user)
+      .toContain('【当前弃牌】「上家」打出「3万」')
+  })
+
   it('莲花广麻明确只支持标准牌型，禁止追逐七对等其他玩法牌型', () => {
     const built = buildDecisionRequest(baseInput({
       publicTiles: ['m1'], upperLastDiscard: 'm1',

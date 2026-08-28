@@ -44,4 +44,11 @@ describe('动作一致的 LLM 决策台词', () => {
     expect(resolveDecisionSpeech('我不是庄家。', action, '稳健', 0, { isDealer: true }))
       .toBe('这张先走。')
   })
+
+  it('公开动作承诺必须与最终 choice 一致', () => {
+    const discard = { kind: 'discard', handIndex: 0 } as const
+    expect(resolveDecisionSpeech('这牌我吃定了！', discard, '激进')).toBe('这张不要了。')
+    expect(resolveDecisionSpeech('这牌我吃定了！', { kind: 'chi', optionIndex: 0 }, '激进'))
+      .toBe('这牌我吃定了!')
+  })
 })
