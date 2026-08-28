@@ -48,6 +48,31 @@ describe('LLM 非思考能力矩阵', () => {
       .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'low' })
   })
 
+  it('Kimi K3 经带前缀的中转模型 ID 自动使用固定采样参数', () => {
+    expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k3'))).toMatchObject({
+      providerType: 'kimi', mode: 'always-on',
+      requestBody: { temperature: 1, top_p: 0.95 },
+    })
+  })
+
+  it.each(['kimi/kimi-k2.5', 'kimi/kimi-k2.6'])(
+    'Kimi K2.5/K2.6 中转 ID %s 保持可关闭思考模式',
+    (model) => {
+      expect(resolveReasoningPolicy(config('kimi', model))).toMatchObject({
+        providerType: 'kimi', mode: 'explicit-off',
+        requestBody: {
+          thinking: { type: 'disabled' }, temperature: 0.6, top_p: 0.95,
+        },
+      })
+    },
+  )
+
+  it('Kimi K2 基础/预览系列保持普通非思考请求', () => {
+    expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k2'))).toMatchObject({
+      providerType: 'kimi', mode: 'naturally-off', requestBody: {},
+    })
+  })
+
   it('GLM 预设同时提供官方端点和 OrcaRouter 兼容中转', () => {
     expect(PROVIDER_TEMPLATES).toEqual(expect.arrayContaining([
       expect.objectContaining({ providerType: 'glm', model: 'glm-5.3-flash' }),
@@ -56,6 +81,17 @@ describe('LLM 非思考能力矩阵', () => {
         baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
       },
     ]))
+  })
+
+  it('Kimi 预设提供 OrcaRouter K3 完整模型 ID', () => {
+    expect(PROVIDER_TEMPLATES).toContainEqual({
+      name: 'Kimi K2.6 (OrcaRouter)', providerType: 'kimi',
+      baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k2.6',
+    })
+    expect(PROVIDER_TEMPLATES).toContainEqual({
+      name: 'Kimi K3 (OrcaRouter)', providerType: 'kimi',
+      baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k3',
+    })
   })
 
   it.each([

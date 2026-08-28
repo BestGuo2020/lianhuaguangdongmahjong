@@ -59,6 +59,11 @@ export function resolveReasoningPolicy(
       }
       return policy(providerType, 'unknown', '无法确认该千问型号是否支持非思考模式')
     case 'kimi':
+      if (/^kimi-k3(?:[.-]|$)/.test(model)) {
+        return policy(providerType, 'always-on', 'Kimi K3 自动思考，已使用模型固定采样参数', {
+          temperature: 1, top_p: 0.95,
+        })
+      }
       if (model.includes('thinking')) {
         return policy(providerType, 'reasoning-only', 'Kimi Thinking 型号属于推理专用模型，请改用 K2.5/K2.6')
       }
