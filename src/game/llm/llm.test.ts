@@ -641,6 +641,33 @@ describe('testLlmConnection', () => {
     expect(captured.top_p).toBe(0.95)
   })
 
+  it('Kimi K3 不传 thinking，使用固定采样参数并接受推理响应', async () => {
+    let captured: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{
+            message: { content: '{"choice":"A1","message":"稳住。"}', reasoning_content: '先分析候选牌' },
+            finish_reason: 'stop',
+          }],
+          usage: { completion_tokens_details: { reasoning_tokens: 160 } },
+        }),
+      }
+    }) as never)
+    await expect(requestLlmDecision({
+      config: {
+        ...config, providerType: 'kimi', baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k3',
+      },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(captured).toMatchObject({
+      model: 'kimi/kimi-k3', temperature: 1, top_p: 0.95, max_tokens: 512,
+    })
+    expect(captured.thinking).toBeUndefined()
+  })
+
   it('GLM-5.3 Flash 决策接受 reasoning_content，最终只解析 content', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {

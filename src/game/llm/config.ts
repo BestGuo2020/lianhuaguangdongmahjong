@@ -89,6 +89,8 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
 export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProviderType; baseUrl: string; model: string }> = [
   { name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   { name: 'Kimi (Moonshot)', providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
+  { name: 'Kimi K2.6 (OrcaRouter)', providerType: 'kimi', baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k2.6' },
+  { name: 'Kimi K3 (OrcaRouter)', providerType: 'kimi', baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k3' },
   { name: '通义千问 (DashScope)', providerType: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
   { name: '豆包 (Volcano Ark)', providerType: 'doubao', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
   { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
