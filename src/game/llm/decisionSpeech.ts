@@ -68,6 +68,18 @@ const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
   },
 }
 
+export const REASONING_STATUS_LINES: Record<LlmStyle, readonly string[]> = {
+  激进: ['让我算算怎么打。', '这手得想清楚。', '先别急，我算一下。'],
+  稳健: ['让我想想怎么打。', '这手要仔细看看。', '容我想一想。'],
+  话痨: ['等等，让我好好想想。', '这手有点难，我算算。', '我得认真琢磨一下。'],
+  高冷: ['稍等。', '容我想想。', '这手要算。'],
+}
+
+export function reasoningStatusSpeech(style: LlmStyle, sequence = 0): string {
+  const variants = REASONING_STATUS_LINES[style]
+  return variants[Math.abs(sequence) % variants.length]
+}
+
 /** 动作通过合法性校验后生成台词；不消费模型自由文本，因此语义必与动作一致。 */
 export function decisionSpeech(action: CanonicalAction, style: LlmStyle, sequence = 0): string {
   const variants = LINES[action.kind][style]

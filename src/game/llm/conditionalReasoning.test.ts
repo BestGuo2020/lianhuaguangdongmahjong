@@ -30,12 +30,17 @@ function request(overrides: Partial<DecisionRequest['state']> = {}): DecisionReq
 }
 
 describe('条件深度思考', () => {
+  it('所有支持条件深思的供应商共用 40 秒请求与 45 秒总预算', () => {
+    expect(DEFAULT_CONDITIONAL_REASONING.deadlineMs).toBe(40_000)
+    expect(DEFAULT_CONDITIONAL_REASONING.minRemainingBudgetMs).toBe(45_000)
+  })
+
   it('候选接近时触发，并遵守每小局与整场限额', () => {
     const coordinator = new ConditionalReasoningCoordinator(DEFAULT_CONDITIONAL_REASONING, () => 1)
-    expect(coordinator.admit(request(), 5000).enabled).toBe(true)
-    expect(coordinator.admit(request(), 5000).enabled).toBe(true)
-    expect(coordinator.admit(request(), 5000).enabled).toBe(false)
-    expect(coordinator.admit(request({ roundIndex: 1 }), 4999).enabled).toBe(false)
+    expect(coordinator.admit(request(), 45_000).enabled).toBe(true)
+    expect(coordinator.admit(request(), 45_000).enabled).toBe(true)
+    expect(coordinator.admit(request(), 45_000).enabled).toBe(false)
+    expect(coordinator.admit(request({ roundIndex: 1 }), 44_999).enabled).toBe(false)
   })
 
   it('三副露且明显染手达到高威胁，但仅自摸玩法不以防铳触发', () => {

@@ -13,6 +13,7 @@ import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/pres
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
+import { reasoningStatusSpeech } from './decisionSpeech'
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -53,6 +54,7 @@ function hooksForSeat(
   speechPolicy: LlmSpeechPolicy,
 ): LlmControllerHooks {
   const voiceKey = resolveLocalTtsVoiceKey(preset)
+  let reasoningStatusSequence = 0
   const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
     const priority = meta?.priority ?? 'normal'
     if (!speechPolicy.admit({ seat, style, priority })) return
@@ -70,7 +72,19 @@ function hooksForSeat(
   }
   return {
     onLlmMessage: deliver,
-    onLlmStatus: (seat, active) => hooks.onLlmStatus?.(seat, active),
+    onLlmStatus: (seat, active) => {
+      if (!active) {
+        try { void hooks.onLlmStatus?.(seat, false) } catch { /* 状态气泡不影响决策 */ }
+        return
+      }
+      const text = reasoningStatusSpeech(style, reasoningStatusSequence)
+      reasoningStatusSequence += 1
+      try { void hooks.onLlmStatus?.(seat, true, text) } catch { /* 状态气泡不影响决策 */ }
+      // 状态台词与模型请求并行，不让 TTS 合成占用 40 秒推理预算。
+      if (hooks.onLlmStatus) {
+        void getLocalTtsClient().speak(seat, text, voiceKey, style, 'normal').catch(() => false)
+      }
+    },
     onReset: () => {
       getLocalTtsClient().cancel()
       speechPolicy.reset()

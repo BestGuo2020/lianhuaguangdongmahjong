@@ -60,7 +60,7 @@ export interface LlmControllerHooks {
    * seat 为说话者的座位绝对索引。 */
   onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void | Promise<void>
   /** 深度思考仅展示状态，不进入台词、日志或 TTS。 */
-  onLlmStatus?(seat: number, active: boolean): void | Promise<void>
+  onLlmStatus?(seat: number, active: boolean, text?: string): void | Promise<void>
   onReset?(): void
 }
 
@@ -102,7 +102,10 @@ async function decideCanonical(
   const ids = built.request.candidates.map((candidate) => candidate.id)
   const prompt = buildPrompt(config.style, built.request)
   const supportsReasoning = resolveReasoningPolicy(config, true).mode === 'explicit-on'
-  const trigger = supportsReasoning ? reasoning.admit(built.request, config.timeoutMs) : { enabled: false }
+  // 当前游戏循环没有更短的外部倒计时；条件深思拥有独立的 45 秒总预算（40 秒请求 + 余量）。
+  const trigger = supportsReasoning
+    ? reasoning.admit(built.request, reasoning.config.minRemainingBudgetMs)
+    : { enabled: false }
   const useReasoning = trigger.enabled
   stats.requests += 1
   if (useReasoning) {
