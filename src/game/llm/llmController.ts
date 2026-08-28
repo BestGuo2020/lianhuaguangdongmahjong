@@ -95,7 +95,7 @@ async function decideCanonical(
       return built.fallbackAction
     }
     // choice 决定真实动作；message 是牌桌闲聊/烟雾弹，不要求“言而有信”。
-    // 仅在缺失、含幕后词或稳健风格用了“稳稳”时回退动作一致的程序台词。
+    // 仅在缺失或含幕后词时回退动作一致的程序台词。
     const speech = resolveDecisionSpeech(output.message, candidate.action, config.style, stats.messages)
     stats.messages += 1
     try {

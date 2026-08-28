@@ -26,10 +26,10 @@ describe('动作一致的 LLM 决策台词', () => {
     }
   })
 
-  it('保留牌桌烟雾弹，但稳健“稳稳”与幕后内容回退程序台词', () => {
+  it('保留牌桌烟雾弹和模型“稳稳”措辞，仅幕后内容回退程序台词', () => {
     const action = { kind: 'discard', handIndex: 0 } as const
     expect(resolveDecisionSpeech('这张留着。', action, '稳健')).toBe('这张留着。')
-    expect(resolveDecisionSpeech('稳稳出牌。', action, '稳健')).toBe('这张先走。')
+    expect(resolveDecisionSpeech('稳稳出牌。', action, '稳健')).toBe('稳稳出牌。')
     expect(resolveDecisionSpeech('按候选A1来。', action, '话痨')).toBe('先把这张放出去。')
   })
 })

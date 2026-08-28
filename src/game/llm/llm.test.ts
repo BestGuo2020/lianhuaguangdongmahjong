@@ -304,7 +304,7 @@ describe('prompt 构建', () => {
     expect(prompt.system).not.toContain('游戏引擎')
     expect(prompt.system).toContain('烟雾弹')
     expect(prompt.system).toContain('不要求公开真实意图')
-    expect(prompt.system).toContain('不要使用“稳稳”一词')
+    expect(prompt.system).not.toContain('不要使用“稳稳”一词')
     expect(prompt.user).toContain('"message": "有点意思。"')
     expect(prompt.user).toContain('message 必须非空')
     expect(prompt.user).toContain('【你的牌】')
