@@ -228,6 +228,9 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const config = { ...options.config, timeoutMs: left }
     const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
+    const acceptReasoningResponse = options.reasoning === true
+      || alwaysThinking
+      || reasoningPolicy.acceptReasoningResponse
     const extraBody = providerExtraBody(config, true, options.reasoning === true)
     try {
       const response = await callOnce(
@@ -237,7 +240,7 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
         {
           extraBody,
           allowReasoning: options.reasoning === true || alwaysThinking,
-          acceptReasoningResponse: options.reasoning === true || alwaysThinking,
+          acceptReasoningResponse,
           maxTokens: options.reasoning || alwaysThinking ? 512 : undefined,
         },
       )

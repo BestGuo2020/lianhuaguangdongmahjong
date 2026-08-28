@@ -7,6 +7,8 @@ export interface ReasoningPolicy {
   mode: ReasoningPolicyMode
   requestBody: Record<string, unknown>
   message: string
+  /** 已要求关闭思考，但部分中转仍会返回推理字段；有最终 content 时可继续解析。 */
+  acceptReasoningResponse: boolean
 }
 
 function policy(
@@ -14,8 +16,9 @@ function policy(
   mode: ReasoningPolicyMode,
   message: string,
   requestBody: Record<string, unknown> = {},
+  acceptReasoningResponse = false,
 ): ReasoningPolicy {
-  return { providerType, mode, requestBody, message }
+  return { providerType, mode, requestBody, message, acceptReasoningResponse }
 }
 
 /**
@@ -70,7 +73,7 @@ export function resolveReasoningPolicy(
       if (/^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'explicit-off', '已强制关闭 Kimi 思考模式', {
           thinking: { type: 'disabled' }, temperature: 0.6, top_p: 0.95,
-        })
+        }, true)
       }
       if (/^(?:kimi-k2|moonshot-v1)/.test(model)) {
         return policy(providerType, 'naturally-off', '该 Kimi 型号本身不输出思考链')

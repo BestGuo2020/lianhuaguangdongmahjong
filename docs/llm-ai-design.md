@@ -309,7 +309,7 @@ Prompt 中的玩家昵称、规则摘要和牌面都视为不可信数据，必�
 
 ### 7.3 温度与采样（前后端一致默认值）
 
-快速路径默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（Kimi K2.5/K2.6 非思考模式使用 `temperature: 0.6`、`top_p: 0.95`；Kimi K3 不传 `thinking`，使用固定 `temperature: 1.0`、`top_p: 0.95`）。Kimi K3 与 GLM-5.3/5.3-Flash 按始终思考模型使用 `max_tokens: 512`，允许响应带 `reasoning_content`，但最终仍只解析 `content` 的 JSON；GLM 另外固定发送 `thinking: {type:"enabled"}`、`reasoning_effort: "low"`。千问结构化输出启用 `response_format: {type:"json_object"}`。若其他供应商返回 `finish_reason=length`、无文本内容或在强制非思考后仍返回 `reasoning_content/reasoning_tokens`，立即回退启发式，不进入普通语义重试。
+快速路径默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（Kimi K2.5/K2.6 非思考模式使用 `temperature: 0.6`、`top_p: 0.95`；Kimi K3 不传 `thinking`，使用固定 `temperature: 1.0`、`top_p: 0.95`）。Kimi K2.5/K2.6 经中转返回推理字段时，只要最终 `content` 有效就继续解析。Kimi K3 与 GLM-5.3/5.3-Flash 按始终思考模型使用 `max_tokens: 512`，允许响应带 `reasoning_content`，但最终仍只解析 `content` 的 JSON；GLM 另外固定发送 `thinking: {type:"enabled"}`、`reasoning_effort: "low"`。千问结构化输出启用 `response_format: {type:"json_object"}`。若其他供应商返回 `finish_reason=length`、无文本内容或在强制非思考后仍返回 `reasoning_content/reasoning_tokens`，立即回退启发式，不进入普通语义重试。
 
 条件深思默认开启：候选评分差不超过 8、牌墙不超过 12、对手威胁达到 70、预期分差影响达到 800，或命中 2% 审计抽样时，可切换到供应商思考参数。每个AI座位每小局最多 2 次，全桌整场最多 24 次；开局 `turnOrigin=opening` 时不因“候选接近”或审计抽样开启深思，但杠收益、重大分差等强触发仍有效。调用总预算 45000ms，其中模型请求硬截止 40000ms；超时执行引擎建议。仅自摸/抢杠胡玩法不使用“对手防铳威胁”触发器。等待期间按性格轮换“让我想想怎么打”等短句，状态台词可走 TTS，但不进入普通台词历史和发言限流；状态气泡在模型返回或超时前不自动消失。`reasoning_content` 只用于供应商内部响应解析，永不发送到气泡、日志或 TTS。
 

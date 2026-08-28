@@ -623,19 +623,25 @@ describe('testLlmConnection', () => {
     expect(JSON.parse(serializeLlmSettings(settings)).settings.presets[0].providerType).toBe('qwen')
   })
 
-  it('Kimi K2.6 经自定义代理仍关闭思考并覆盖官方采样参数', async () => {
+  it('Kimi K2.6 经自定义代理仍关闭思考，中转泄漏推理字段时仍解析最终 content', async () => {
     let captured: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       captured = JSON.parse(String(init.body)) as Record<string, unknown>
       return {
         ok: true, status: 200,
-        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }] }),
+        json: async () => ({
+          choices: [{
+            message: { content: '{"choice":"A1","message":"稳住。"}', reasoning_content: '中转仍返回思考' },
+            finish_reason: 'stop',
+          }],
+          usage: { completion_tokens_details: { reasoning_tokens: 12 } },
+        }),
       }
     }) as never)
-    await requestLlmDecision({
+    await expect(requestLlmDecision({
       config: { ...config, providerType: 'kimi', baseUrl: 'https://proxy.example.com/v1', model: 'kimi-k2.6' },
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
-    })
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(captured.thinking).toEqual({ type: 'disabled' })
     expect(captured.temperature).toBe(0.6)
     expect(captured.top_p).toBe(0.95)
