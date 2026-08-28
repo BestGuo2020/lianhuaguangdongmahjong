@@ -1,5 +1,6 @@
 import type { LlmStyle } from './config'
 import type { CanonicalAction } from './schema'
+import { compactLlmSpeechText } from './speechPolicy'
 
 type DecisionSpeechKind = CanonicalAction['kind']
 
@@ -61,6 +62,18 @@ const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
 export function decisionSpeech(action: CanonicalAction, style: LlmStyle, sequence = 0): string {
   const variants = LINES[action.kind][style]
   return variants[Math.abs(sequence) % variants.length]
+}
+
+/** 自由 message 合规则保留；缺失/幕后内容及稳健“稳稳”措辞回退程序台词。 */
+export function resolveDecisionSpeech(
+  message: string,
+  action: CanonicalAction,
+  style: LlmStyle,
+  sequence = 0,
+): string {
+  const compact = compactLlmSpeechText(message)
+  if (compact && !(style === '稳健' && compact.includes('稳稳'))) return compact
+  return decisionSpeech(action, style, sequence)
 }
 
 export const DECISION_SPEECH_LINES = LINES
