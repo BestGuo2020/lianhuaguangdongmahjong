@@ -4,7 +4,7 @@ import {
   playLocalLlmAudioUntilMidpoint,
   type LlmAudioPlaybackHooks,
 } from '../core/presentation/llmAudioBus'
-import type { LlmProviderPreset, LlmStyle, LlmTtsVoiceKey } from './config'
+import { inferLlmProviderType, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { avatarFolderOf } from './persona'
 
@@ -41,9 +41,17 @@ export function resolveLocalTtsBaseUrl(): string {
 
 export function resolveLocalTtsVoiceKey(preset: LlmProviderPreset): Exclude<LlmTtsVoiceKey, 'auto'> {
   if (preset.ttsVoiceKey && preset.ttsVoiceKey !== 'auto') return preset.ttsVoiceKey
+  const inferred = inferLlmProviderType(preset.baseUrl, preset.model)
+  const providerType = preset.providerType && preset.providerType !== 'custom'
+    ? preset.providerType
+    : inferred
+  if (providerType === 'openai') return 'gpt'
+  if (providerType !== 'custom') return providerType
   const folder = avatarFolderOf(preset)
-  if (folder === 'deepseek') return 'deepseek'
-  if (folder === 'gpt') return 'relay_gpt'
+  if (folder === 'gpt') return 'gpt'
+  if (['deepseek', 'qwen', 'kimi', 'doubao', 'minimax', 'glm', 'claude'].includes(folder)) {
+    return folder as Exclude<LlmTtsVoiceKey, 'auto' | 'default' | 'gpt' | 'relay_gpt'>
+  }
   return 'default'
 }
 

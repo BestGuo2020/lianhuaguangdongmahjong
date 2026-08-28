@@ -6,7 +6,20 @@
 import type { RuleCode } from './schema'
 
 export type LlmStyle = '激进' | '稳健' | '话痨' | '高冷'
-export type LlmTtsVoiceKey = 'auto' | 'default' | 'deepseek' | 'relay_gpt'
+export const LLM_TTS_VOICE_OPTIONS = [
+  { value: 'auto', label: '自动识别模型' },
+  { value: 'default', label: '策略默认音色' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'qwen', label: '通义千问' },
+  { value: 'kimi', label: 'Kimi' },
+  { value: 'doubao', label: '豆包' },
+  { value: 'minimax', label: 'MiniMax' },
+  { value: 'gpt', label: 'GPT' },
+  { value: 'relay_gpt', label: '中转站 GPT' },
+  { value: 'glm', label: '智谱 GLM' },
+  { value: 'claude', label: 'Claude' },
+] as const
+export type LlmTtsVoiceKey = typeof LLM_TTS_VOICE_OPTIONS[number]['value']
 export type LlmProviderType = 'deepseek' | 'qwen' | 'kimi' | 'doubao' | 'minimax' | 'openai' | 'glm' | 'claude' | 'custom'
 
 export const LLM_PROVIDER_TYPES: Array<{ value: LlmProviderType; label: string }> = [
@@ -122,7 +135,7 @@ function validateStyleOrNull(value: unknown): LlmStyle | null {
 }
 
 function validateTtsVoiceKey(value: unknown): LlmTtsVoiceKey {
-  return (['auto', 'default', 'deepseek', 'relay_gpt'] as const).includes(value as LlmTtsVoiceKey)
+  return LLM_TTS_VOICE_OPTIONS.some((item) => item.value === value)
     ? value as LlmTtsVoiceKey
     : 'auto'
 }

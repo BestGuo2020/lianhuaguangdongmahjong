@@ -178,8 +178,8 @@ npm run test:e2e
 
 单机大模型启用后，吐槽文字会立即显示，同时异步请求独立的
 `POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，讲话期间自动压低
-BGM；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别，也可
-指定 DeepSeek/GPT/策略默认音色。此链路位于共享 `game/llm` 与
+BGM；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别 DeepSeek/千问/Kimi/豆包/MiniMax/GPT/GLM/Claude，也可
+手动指定任一网关白名单音色或策略默认音色。此链路位于共享 `game/llm` 与
 `game/core/presentation`，master 与 vibehub 使用同一实现，不依赖 WebSocket/P2P。
 
 ## 目录结构
