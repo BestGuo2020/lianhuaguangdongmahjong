@@ -483,7 +483,7 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 | 消息 | `[system(人设+约束), user(§7.1 模板)]` |
 | 温度 / max_tokens | 0.4 / 64 |
 | 重试 | 仅 JSON/choice 语义错误反馈重试 1 次；网络/HTTP/超时不重试 |
-| 超时 | 快速路径保持原预算（千问上限 8000ms，其余默认 20000ms）；条件深思独立 40000ms 硬截止（前端 AbortController / 后端 `asyncio.wait_for`） |
+| 超时 | 所有供应商的游戏决策统一 40000ms；设置页连接测试单独为 8000ms（前端 AbortController / 后端 `asyncio.wait_for`） |
 | 解析 | 整体 JSON → 平衡括号扫描 → 编号白名单 → `finish_reason` 检查 |
 | 成本参考 | 只作估算，不写入功能断言；实现需提供每房间/每局请求计数，避免费用失控 |
 

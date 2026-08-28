@@ -54,8 +54,10 @@ export interface LlmSettings {
 }
 
 export const CONFIG_VERSION = 2
-export const LLM_DECISION_TIMEOUT_MS = 20_000
-export const QWEN_DECISION_TIMEOUT_MS = 8_000
+/** 所有供应商的游戏决策统一最长等待 40 秒。 */
+export const LLM_DECISION_TIMEOUT_MS = 40_000
+/** 仅设置页连接探测使用，不能截断真实游戏决策。 */
+export const LLM_CONNECTION_TEST_TIMEOUT_MS = 8_000
 export const LLM_SETTINGS_FILE_KIND = 'lianhua-guangma-llm-settings'
 export const LLM_SETTINGS_FILE_VERSION = 1
 const STORAGE_KEY = 'llm.providers'
@@ -142,7 +144,7 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
     ...(avatarFolder ? { avatarFolder } : {}),
     ttsVoiceKey: validateTtsVoiceKey(raw.ttsVoiceKey),
     style: validateStyle(raw.style),
-    // 决策预算为产品级统一参数；读取旧 localStorage 时同步把历史 8 秒配置升级为 20 秒。
+    // 决策预算为产品级统一参数；读取旧 localStorage 时统一升级为 40 秒。
     timeoutMs: LLM_DECISION_TIMEOUT_MS,
   }
 }
