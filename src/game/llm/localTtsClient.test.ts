@@ -20,9 +20,26 @@ afterEach(() => {
 describe('LocalTtsClient', () => {
   it('按模型自动映射网关白名单音色，也允许预置显式覆盖', () => {
     expect(resolveLocalTtsVoiceKey(preset())).toBe('deepseek')
+    const mappings = [
+      ['qwen', 'qwen3.7-plus'], ['kimi', 'kimi-k2.6'], ['doubao', 'doubao-1.5-pro'],
+      ['minimax', 'MiniMax-Text-01'], ['openai', 'gpt-5.6-luna'],
+      ['glm', 'z-ai/glm-5.3-flash'], ['claude', 'claude-sonnet-4-20250514'],
+    ] as const
+    mappings.forEach(([providerType, model]) => {
+      expect(resolveLocalTtsVoiceKey(preset({
+        providerType, baseUrl: 'https://proxy.example/v1', model,
+      }))).toBe(providerType === 'openai' ? 'gpt' : providerType)
+    })
     expect(resolveLocalTtsVoiceKey(preset({
-      baseUrl: 'https://proxy.example/v1', avatarFolder: 'gpt',
-    }))).toBe('relay_gpt')
+      providerType: 'custom', baseUrl: 'https://proxy.example/v1', model: 'z-ai/glm-5.3-flash',
+    }))).toBe('glm')
+    expect(resolveLocalTtsVoiceKey(preset({
+      providerType: 'custom', baseUrl: 'https://proxy.example/v1', model: 'anthropic/claude-sonnet-4',
+    }))).toBe('claude')
+    expect(resolveLocalTtsVoiceKey(preset({
+      providerType: 'custom', baseUrl: 'https://proxy.example/v1', model: 'mystery', avatarFolder: 'claude',
+    }))).toBe('claude')
+    expect(resolveLocalTtsVoiceKey(preset({ ttsVoiceKey: 'relay_gpt' }))).toBe('relay_gpt')
     expect(resolveLocalTtsVoiceKey(preset({ ttsVoiceKey: 'default' }))).toBe('default')
   })
 

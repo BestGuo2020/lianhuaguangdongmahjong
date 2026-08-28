@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  LLM_DECISION_TIMEOUT_MS, LLM_PROVIDER_TYPES, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
+  LLM_DECISION_TIMEOUT_MS, LLM_PROVIDER_TYPES, LLM_TTS_VOICE_OPTIONS, PROVIDER_TEMPLATES, emptyLlmSettings, normalizeBaseUrl, newPresetId, parseLlmSettingsJson, readLlmSettings, saveLlmSettings, serializeLlmSettings,
   type LlmProviderPreset, type LlmSettings,
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
@@ -269,10 +269,9 @@ function presetName(id: string | null): string {
         <label class="llm-row">
           <span>单机音色</span>
           <select v-model="selected.ttsVoiceKey" data-testid="llm-tts-voice">
-            <option value="auto">自动识别模型</option>
-            <option value="deepseek">DeepSeek · 4196</option>
-            <option value="relay_gpt">GPT · 4194</option>
-            <option value="default">策略默认音色</option>
+            <option v-for="voice in LLM_TTS_VOICE_OPTIONS" :key="voice.value" :value="voice.value">
+              {{ voice.label }}
+            </option>
           </select>
         </label>
 
