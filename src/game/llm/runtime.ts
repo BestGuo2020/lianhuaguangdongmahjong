@@ -12,6 +12,7 @@ import { avatarFor, displayNameOf, effectiveNickname } from './persona'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
+import { ConditionalReasoningCoordinator } from './conditionalReasoning'
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -69,6 +70,7 @@ function hooksForSeat(
   }
   return {
     onLlmMessage: deliver,
+    onLlmStatus: (seat, active) => hooks.onLlmStatus?.(seat, active),
     onReset: () => {
       getLocalTtsClient().cancel()
       speechPolicy.reset()
@@ -83,6 +85,7 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
   clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
   const speechPolicy = new LlmSpeechPolicy()
+  const reasoning = new ConditionalReasoningCoordinator()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
@@ -90,7 +93,7 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))
-    return new CoreLlmController(toProviderConfig(preset, style), seatHooks, stats)
+    return new CoreLlmController(toProviderConfig(preset, style), seatHooks, stats, reasoning)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }
@@ -103,6 +106,7 @@ export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): Local
   clearLocalLlmVoiceSeats()
   if (!usable) return { controllers: null, seeds: [], stats, enabled: false }
   const speechPolicy = new LlmSpeechPolicy()
+  const reasoning = new ConditionalReasoningCoordinator()
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
@@ -110,7 +114,7 @@ export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): Local
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))
-    return new LotusLlmController(toProviderConfig(preset, style), seatHooks, stats)
+    return new LotusLlmController(toProviderConfig(preset, style), seatHooks, stats, reasoning)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }

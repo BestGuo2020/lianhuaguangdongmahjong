@@ -28,6 +28,10 @@ export interface LlmDecisionOptions {
   candidateIds: string[]
   /** 信号：取消/换局时中止（AbortController 透传） */
   signal?: AbortSignal
+  /** 由协调器判定后的深度思考调用；推理字段只用于供应商，不进入展示层。 */
+  reasoning?: boolean
+  /** 深度思考硬截止时间；超时由控制器回退本地引擎。 */
+  deadlineMs?: number
 }
 
 interface ChatResponse {
@@ -102,6 +106,7 @@ interface CallOnceOptions {
   strictLength?: boolean
   /** 追加到请求体的供应商能力矩阵字段。 */
   extraBody?: Record<string, unknown>
+  allowReasoning?: boolean
 }
 
 /** 百炼 Qwen 3.5–3.8 默认开启混合思考；麻将候选选择使用非思考模式。 */
@@ -119,8 +124,9 @@ export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
 function providerExtraBody(
   config: LlmProviderConfig,
   structuredOutput: boolean,
+  reasoning = false,
 ): Record<string, unknown> | undefined {
-  const resolved = resolveReasoningPolicy(config)
+  const resolved = resolveReasoningPolicy(config, reasoning)
   if (!reasoningPolicyUsable(resolved)) throw new LlmClientError('config', resolved.message)
   const body: Record<string, unknown> = { ...resolved.requestBody }
   if (resolved.providerType === 'qwen' && structuredOutput) body.response_format = { type: 'json_object' }
@@ -157,7 +163,9 @@ async function callOnce(
         model: config.model,
         messages,
         temperature: 0.4,
-        max_tokens: options.maxTokens ?? 64,
+        ...(options.allowReasoning && resolveReasoningPolicy(config).providerType === 'openai'
+          ? { max_completion_tokens: options.maxTokens ?? 512 }
+          : { max_tokens: options.maxTokens ?? 64 }),
         top_p: 1,
         stream: false,
         n: 1,
@@ -187,7 +195,7 @@ async function callOnce(
       || (typeof reasoningTokens === 'number' && reasoningTokens > 0)
       || (typeof body.reasoning === 'string' && body.reasoning.trim().length > 0)
       || (Array.isArray(body.reasoning) && body.reasoning.length > 0)
-    if (leakedReasoning) {
+    if (leakedReasoning && !options.allowReasoning) {
       throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
     }
     return { content: choice.message.content, finishReason: choice.finish_reason ?? null }
@@ -207,19 +215,21 @@ async function callOnce(
  * 总预算 = config.timeoutMs（含重试，重试时剩余预算按已用时长折算）。
  */
 export async function requestLlmDecision(options: LlmDecisionOptions): Promise<LlmOutput> {
-  const budgetMs = effectiveDecisionTimeoutMs(options.config)
+  const budgetMs = options.reasoning
+    ? Math.min(effectiveDecisionTimeoutMs(options.config), options.deadlineMs ?? Number.POSITIVE_INFINITY)
+    : effectiveDecisionTimeoutMs(options.config)
   const startedAt = Date.now()
   const attempt = async (messages: PromptPair, errorForRetry?: string): Promise<LlmOutput> => {
     const left = budgetMs - (Date.now() - startedAt)
     if (left <= 0) throw new LlmClientError('timeout', '总预算耗尽')
     const config = { ...options.config, timeoutMs: left }
-    const extraBody = providerExtraBody(config, true)
+    const extraBody = providerExtraBody(config, true, options.reasoning === true)
     try {
       const response = await callOnce(
         config,
         [{ role: 'system', content: messages.system }, { role: 'user', content: messages.user }],
         options.signal,
-        { extraBody },
+        { extraBody, allowReasoning: options.reasoning, maxTokens: options.reasoning ? 512 : undefined },
       )
       return parseLlmOutput(response.content, options.candidateIds)
     } catch (error) {

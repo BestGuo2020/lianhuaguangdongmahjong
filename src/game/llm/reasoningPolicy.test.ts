@@ -39,6 +39,17 @@ describe('LLM 非思考能力矩阵', () => {
     expect(resolveReasoningPolicy(config('qwen', 'qwen-plus')).mode).toBe('unknown')
   })
 
+  it.each([
+    ['deepseek', 'deepseek-v4-flash', { thinking: { type: 'enabled' }, reasoning_effort: 'medium' }],
+    ['qwen', 'qwen3.8-flash', { enable_thinking: true }],
+    ['openai', 'gpt-5.6-sol', { reasoning_effort: 'medium' }],
+  ] as const)('%s 条件命中时显式开启思考且不改变模型', (providerType, model, requestBody) => {
+    const result = resolveReasoningPolicy(config(providerType, model), true)
+    expect(result.mode).toBe('explicit-on')
+    expect(result.requestBody).toEqual(requestBody)
+    expect(reasoningPolicyUsable(result)).toBe(true)
+  })
+
   it('旧配置可从官方地址或模型名迁移供应商类型', () => {
     expect(inferLlmProviderType('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3.7-plus')).toBe('qwen')
     expect(inferLlmProviderType('https://proxy.local/v1', 'kimi-k2.6')).toBe('kimi')

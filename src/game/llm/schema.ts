@@ -25,6 +25,8 @@ export interface CandidateFeatures {
   efficiency: '优' | '中' | '差' | 'unknown' | 'n/a'
   /** 候选带来的即时自身收益档位（规则集在克隆分数上计算）；无即时收益 n/a（§5/§6.4） */
   scoreDeltaBand?: Band | 'n/a'
+  /** 条件深思触发器使用的规则引擎即时收益；Prompt 仍只展示档位。 */
+  scoreDelta?: number
   risks: string[]
 }
 

@@ -38,6 +38,8 @@ import type { LlmProviderConfig } from './config'
 import type { CanonicalAction } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { resolveDecisionSpeech } from './decisionSpeech'
+import { ConditionalReasoningCoordinator } from './conditionalReasoning'
+import { resolveReasoningPolicy } from './reasoningPolicy'
 
 export interface LlmControllerStats {
   requests: number
@@ -45,16 +47,19 @@ export interface LlmControllerStats {
   fallbacks: number
   messages: number
   invalidActions: number
+  reasoningRequests: number
 }
 
 export function createLlmStats(): LlmControllerStats {
-  return { requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 }
+  return { requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0, reasoningRequests: 0 }
 }
 
 export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
   onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void | Promise<void>
+  /** 深度思考仅展示状态，不进入台词、日志或 TTS。 */
+  onLlmStatus?(seat: number, active: boolean): void | Promise<void>
   onReset?(): void
 }
 
@@ -75,15 +80,27 @@ async function decideCanonical(
   input: DecisionInput,
   hooks: LlmControllerHooks,
   stats: LlmControllerStats,
+  reasoning: ConditionalReasoningCoordinator,
 ): Promise<CanonicalAction | null> {
   const built = buildDecisionRequest(input)
   if (!built.request) return built.fallbackAction
   if (built.request.candidates.length <= 1) return built.fallbackAction
   const ids = built.request.candidates.map((candidate) => candidate.id)
   const prompt = buildPrompt(config.style, built.request)
+  const supportsReasoning = resolveReasoningPolicy(config, true).mode === 'explicit-on'
+  const trigger = supportsReasoning ? reasoning.admit(built.request, config.timeoutMs) : { enabled: false }
+  const useReasoning = trigger.enabled
   stats.requests += 1
+  if (useReasoning) {
+    stats.reasoningRequests += 1
+    try { await hooks.onLlmStatus?.(input.playerIndex, true) } catch { /* 状态气泡不影响决策 */ }
+  }
   try {
-    const output = await requestLlmDecision({ config, messages: prompt, candidateIds: ids })
+    const output = await requestLlmDecision({
+      config, messages: prompt, candidateIds: ids,
+      reasoning: useReasoning,
+      deadlineMs: useReasoning ? reasoning.config.deadlineMs : undefined,
+    })
     const candidate = built.request.candidates.find((item) => item.id === output.choice)
     if (!candidate) {
       stats.fallbacks += 1
@@ -119,6 +136,10 @@ async function decideCanonical(
   } catch {
     stats.fallbacks += 1
     return built.fallbackAction
+  } finally {
+    if (useReasoning) {
+      try { await hooks.onLlmStatus?.(input.playerIndex, false) } catch { /* 状态气泡不影响决策 */ }
+    }
   }
 }
 
@@ -230,6 +251,7 @@ export class CoreLlmController implements PlayerController {
     private readonly config: LlmProviderConfig,
     private readonly hooks: LlmControllerHooks = {},
     readonly stats: LlmControllerStats = createLlmStats(),
+    private readonly reasoning = new ConditionalReasoningCoordinator(),
   ) {
     this.fallback = new AiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn())
   }
@@ -248,7 +270,7 @@ export class CoreLlmController implements PlayerController {
       kongBloom: ctx.kongBloom,
       skipDraw: ctx.skipDraw,
       ...metaOf(ctx),
-    }, this.hooks, this.stats)
+    }, this.hooks, this.stats, this.reasoning)
     if (action === null) return this.fallback.requestTurn(ctx)
     return mapTurnAction(action)
   }
@@ -267,7 +289,7 @@ export class CoreLlmController implements PlayerController {
       tile: ctx.tile,
       from: ctx.from,
       ...metaOf(ctx),
-    }, this.hooks, this.stats)
+    }, this.hooks, this.stats, this.reasoning)
     if (action === null) return this.fallback.requestClaim(ctx)
     if (action.kind === 'gang') return { kind: 'gang' }
     if (action.kind === 'peng') return { kind: 'peng' } // §4.3：不带 discardIndex，两步决策
@@ -290,6 +312,7 @@ export class LotusLlmController implements LotusController {
     private readonly config: LlmProviderConfig,
     private readonly hooks: LlmControllerHooks = {},
     readonly stats: LlmControllerStats = createLlmStats(),
+    private readonly reasoning = new ConditionalReasoningCoordinator(),
   ) {
     this.fallback = new LotusAiController({ turn: 0, afterKong: 0, claim: 0 }, (fn) => fn())
   }
@@ -322,7 +345,7 @@ export class LotusLlmController implements LotusController {
       jokerTiles: ctx.jokerTiles ?? ctx.jokers,
       wildcardTiles: ctx.wildcardTiles,
       ...metaOf(ctx),
-    }, this.hooks, this.stats)
+    }, this.hooks, this.stats, this.reasoning)
     if (action === null) return this.fallback.requestTurn(ctx)
     return mapLotusTurnAction(action)
   }
@@ -362,7 +385,7 @@ export class LotusLlmController implements LotusController {
       jokerTiles: ctx.jokerTiles ?? ctx.jokers,
       wildcardTiles: ctx.wildcardTiles,
       ...metaOf(ctx),
-    }, this.hooks, this.stats)
+    }, this.hooks, this.stats, this.reasoning)
     if (action === null) return this.fallback.requestClaim(ctx)
     return mapLotusClaimAction(action, ctx.chiOptions)
   }
@@ -382,7 +405,7 @@ export class LotusLlmController implements LotusController {
       jokerTiles: ctx.jokerTiles ?? ctx.jokers,
       wildcardTiles: ctx.wildcardTiles,
       ...metaOf(ctx),
-    }, this.hooks, this.stats)
+    }, this.hooks, this.stats, this.reasoning)
     if (action === null) return this.fallback.requestChi(ctx)
     if (action.kind === 'chi') return { kind: 'chi', meld: ctx.chiOptions[action.optionIndex] }
     return { kind: 'pass' }

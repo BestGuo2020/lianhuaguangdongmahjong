@@ -304,7 +304,9 @@ Prompt 中的玩家昵称、规则摘要和牌面都视为不可信数据，必�
 
 ### 7.3 温度与采样（前后端一致默认值）
 
-默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（如 Kimi K2.5/K2.6 非思考模式的 `temperature: 0.6`、`top_p: 0.95`）。千问结构化输出启用 `response_format: {type:"json_object"}`。若供应商返回 `finish_reason=length`、无文本内容或在强制非思考后仍返回 `reasoning_content/reasoning_tokens`，立即回退启发式，不进入普通语义重试。
+快速路径默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`stream: false`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（如 Kimi K2.5/K2.6 非思考模式的 `temperature: 0.6`、`top_p: 0.95`）。千问结构化输出启用 `response_format: {type:"json_object"}`。若供应商返回 `finish_reason=length`、无文本内容或在强制非思考后仍返回 `reasoning_content/reasoning_tokens`，立即回退启发式，不进入普通语义重试。
+
+条件深思默认开启：候选评分差不超过 8、牌墙不超过 12、对手威胁达到 70、预期分差影响达到 800，或命中 2% 审计抽样时，可切换到供应商思考参数。每小局最多 2 次、整场最多 8 次，且调用预算至少剩余 5000ms；深思硬截止 4000ms，超时执行引擎建议。仅自摸/抢杠胡玩法不使用“对手防铳威胁”触发器。等待期间只显示“正在深度思考…”状态气泡，不合成语音，不记录为台词；`reasoning_content` 只用于供应商内部响应解析，永不发送到气泡、日志或 TTS。
 
 ### 7.4 吐槽展示事件
 
@@ -377,7 +379,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
 - 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
-- 请求前由统一能力矩阵判定：可切换模型追加供应商专用关闭参数；天然非思考模型直接调用；推理专用或未知模型拒绝并回退。自定义代理必须选择正确 `providerType`。响应仍出现 `reasoning_content/reasoning_tokens` 时视为代理吞掉参数并立即回退。
+- 请求前由统一能力矩阵判定：快速路径追加供应商专用关闭参数；条件深思命中时，仅 DeepSeek、Qwen3.5～3.8 与 GPT-5 系列追加显式开启参数。天然非思考模型继续走快速路径；推理专用或未知模型拒绝并回退。自定义代理必须选择正确 `providerType`。快速路径仍出现 `reasoning_content/reasoning_tokens` 时视为代理吞掉参数并立即回退。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 
@@ -478,7 +480,7 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 | 消息 | `[system(人设+约束), user(§7.1 模板)]` |
 | 温度 / max_tokens | 0.4 / 64 |
 | 重试 | 仅 JSON/choice 语义错误反馈重试 1 次；网络/HTTP/超时不重试 |
-| 超时 | 20000ms 总预算（前端 AbortController / 后端 pool timeout + `asyncio.wait_for`） |
+| 超时 | 快速路径 20000ms 总预算；条件深思 4000ms 硬截止（前端 AbortController / 后端 `asyncio.wait_for`） |
 | 解析 | 整体 JSON → 平衡括号扫描 → 编号白名单 → `finish_reason` 检查 |
 | 成本参考 | 只作估算，不写入功能断言；实现需提供每房间/每局请求计数，避免费用失控 |
 
