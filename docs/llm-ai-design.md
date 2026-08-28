@@ -384,7 +384,7 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
 - 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
-- 请求前由统一能力矩阵判定：快速路径追加供应商专用关闭参数；条件深思命中时，仅 DeepSeek、Qwen3.5～3.8 与 GPT-5 系列追加显式开启参数。天然非思考模型继续走快速路径；推理专用或未知模型拒绝并回退。自定义代理必须选择正确 `providerType`。快速路径仍出现 `reasoning_content/reasoning_tokens` 时视为代理吞掉参数并立即回退。
+- 请求前由统一能力矩阵为已知型号追加最佳努力的供应商专用参数：快速路径关闭思考；条件深思命中时，仅 DeepSeek、Qwen3.5～3.8 与 GPT-5 系列追加显式开启参数。自定义代理、推理专用或未知型号均不在客户端预检，保留用户填写的模型名直接请求，并显示上游返回的 HTTP 错误。快速路径仍出现 `reasoning_content/reasoning_tokens` 时视为代理吞掉参数并立即回退。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 

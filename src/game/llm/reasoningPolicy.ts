@@ -19,8 +19,8 @@ function policy(
 }
 
 /**
- * 将供应商协议和用户手填模型解析成强制非思考策略。
- * 未知或推理专用模型宁可拒绝，也不允许在实时麻将决策中静默开启长思考。
+ * 将供应商协议和用户手填模型解析成最佳努力的非思考策略。
+ * 型号识别只用于附加已知参数；未知、推理专用和自定义模型不在客户端拦截。
  */
 export function resolveReasoningPolicy(
   config: Pick<LlmProviderConfig, 'baseUrl' | 'model' | 'providerType'>,
@@ -115,10 +115,6 @@ export function resolveReasoningPolicy(
     case 'claude':
       return policy(providerType, 'naturally-off', 'Claude 扩展思考为显式开启；当前请求不会开启')
     default:
-      return policy(providerType, 'unknown', '自定义协议无法验证非思考模式，请选择正确的供应商协议')
+      return policy(providerType, 'unknown', '自定义 OpenAI 兼容协议按用户配置直接请求')
   }
-}
-
-export function reasoningPolicyUsable(value: ReasoningPolicy): boolean {
-  return value.mode === 'explicit-off' || value.mode === 'explicit-on' || value.mode === 'naturally-off'
 }

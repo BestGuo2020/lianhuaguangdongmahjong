@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inferLlmProviderType, type LlmProviderConfig, type LlmProviderType } from './config'
-import { reasoningPolicyUsable, resolveReasoningPolicy } from './reasoningPolicy'
+import { resolveReasoningPolicy } from './reasoningPolicy'
 
 function config(providerType: LlmProviderType, model: string): LlmProviderConfig {
   return {
@@ -21,22 +21,21 @@ describe('LLM 非思考能力矩阵', () => {
     const result = resolveReasoningPolicy(config(providerType, model))
     expect(result.mode).toBe('explicit-off')
     expect(result.requestBody).toEqual(requestBody)
-    expect(reasoningPolicyUsable(result)).toBe(true)
   })
 
   it.each([
     ['deepseek', 'deepseek-reasoner'], ['qwen', 'qwq-plus'], ['kimi', 'kimi-k2-thinking'],
     ['minimax', 'MiniMax-M2.7'], ['openai', 'o3-mini'], ['glm', 'glm-4.1v-thinking-flash'],
-  ] as Array<[LlmProviderType, string]>)('%s 推理专用模型 %s 在请求前拒绝', (providerType, model) => {
+  ] as Array<[LlmProviderType, string]>)('%s 推理专用模型 %s 只作识别不预检', (providerType, model) => {
     const result = resolveReasoningPolicy(config(providerType, model))
     expect(result.mode).toBe('reasoning-only')
-    expect(reasoningPolicyUsable(result)).toBe(false)
+    expect(result.requestBody).toEqual({})
   })
 
-  it('未知自定义代理必须显式选择供应商协议', () => {
+  it('未知自定义代理与未知型号不附加供应商参数', () => {
     expect(resolveReasoningPolicy(config('custom', 'mystery-model')).mode).toBe('unknown')
     expect(resolveReasoningPolicy(config('qwen', 'qwen3.7-plus')).mode).toBe('explicit-off')
-    expect(resolveReasoningPolicy(config('qwen', 'qwen-plus')).mode).toBe('unknown')
+    expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
   })
 
   it.each([
@@ -47,7 +46,6 @@ describe('LLM 非思考能力矩阵', () => {
     const result = resolveReasoningPolicy(config(providerType, model), true)
     expect(result.mode).toBe('explicit-on')
     expect(result.requestBody).toEqual(requestBody)
-    expect(reasoningPolicyUsable(result)).toBe(true)
   })
 
   it('旧配置可从官方地址或模型名迁移供应商类型', () => {

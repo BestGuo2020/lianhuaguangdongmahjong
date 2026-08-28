@@ -6,7 +6,6 @@ import {
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
-import { reasoningPolicyUsable, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
 const props = defineProps<{
@@ -29,7 +28,6 @@ const transferStatus = ref<{ ok: boolean; message: string } | null>(null)
 const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
-const reasoningPolicy = computed(() => selected.value ? resolveReasoningPolicy(selected.value) : null)
 const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
 
 function load() {
@@ -259,12 +257,6 @@ function presetName(id: string | null): string {
           <span>模型</span>
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
-        <p
-          v-if="reasoningPolicy && !reasoningPolicyUsable(reasoningPolicy)"
-          class="llm-provider-hint invalid" data-testid="llm-reasoning-policy-hint"
-        >
-          {{ reasoningPolicy.message }}
-        </p>
         <label class="llm-row">
           <span>风格</span>
           <select v-model="selected.style" data-testid="llm-style">
@@ -334,7 +326,6 @@ function presetName(id: string | null): string {
 .llm-hint b { color: #e5d5ad; }
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
 .llm-row > span { color: #a6b5ad; }
-.llm-provider-hint { margin: -2px 0 9px 94px; color: #f08f82; font-size: 11px; line-height: 1.5; }
 .llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;

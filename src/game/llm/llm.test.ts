@@ -634,14 +634,21 @@ describe('testLlmConnection', () => {
     })).rejects.toMatchObject({ kind: 'reasoning' })
   })
 
-  it('未知或推理专用模型在发出网络请求前拒绝', async () => {
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
+  it.each([
+    ['custom', 'z-ai/glm-5.3-flash'],
+    ['minimax', 'MiniMax-M2.7'],
+  ] as const)('%s 协议的 %s 不做型号预检，由上游返回错误', async (providerType, model) => {
+    const fetchSpy = vi.fn(async (_url: string, _init: RequestInit) => ({
+      ok: false, status: 404, text: async () => 'model not found',
+    }))
+    vi.stubGlobal('fetch', fetchSpy as never)
     await expect(requestLlmDecision({
-      config: { ...config, providerType: 'minimax', model: 'MiniMax-M2.7' },
+      config: { ...config, providerType, model },
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
-    })).rejects.toMatchObject({ kind: 'config' })
-    expect(fetchSpy).not.toHaveBeenCalled()
+    })).rejects.toMatchObject({ kind: 'http', message: 'HTTP 404: model not found' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
+    expect(requestBody.model).toBe(model)
   })
 
   it('Anthropic 端点自动携带浏览器直连头；其他厂商不携带', async () => {
