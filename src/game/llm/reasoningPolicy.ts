@@ -1,6 +1,6 @@
 import { inferLlmProviderType, type LlmProviderConfig, type LlmProviderType } from './config'
 
-export type ReasoningPolicyMode = 'explicit-off' | 'explicit-on' | 'naturally-off' | 'reasoning-only' | 'unknown'
+export type ReasoningPolicyMode = 'explicit-off' | 'explicit-on' | 'always-on' | 'naturally-off' | 'reasoning-only' | 'unknown'
 
 export interface ReasoningPolicy {
   providerType: LlmProviderType
@@ -26,8 +26,13 @@ export function resolveReasoningPolicy(
   config: Pick<LlmProviderConfig, 'baseUrl' | 'model' | 'providerType'>,
   reasoning = false,
 ): ReasoningPolicy {
-  const providerType = config.providerType ?? inferLlmProviderType(config.baseUrl, config.model)
-  const model = config.model.trim().toLowerCase()
+  const inferredProviderType = inferLlmProviderType(config.baseUrl, config.model)
+  // 「自定义」只代表 OpenAI 兼容传输；仍可按完整模型 ID 追加已知厂商参数。
+  const providerType = !config.providerType || config.providerType === 'custom'
+    ? inferredProviderType
+    : config.providerType
+  const qualifiedModel = config.model.trim().toLowerCase()
+  const model = qualifiedModel.slice(qualifiedModel.lastIndexOf('/') + 1)
 
   switch (providerType) {
     case 'deepseek':
@@ -102,6 +107,11 @@ export function resolveReasoningPolicy(
     case 'glm':
       if (model.includes('thinking')) {
         return policy(providerType, 'reasoning-only', '显式 Thinking 型号不用于实时麻将决策')
+      }
+      if (/^glm-5\.3(?:[.-]|$)/.test(model)) {
+        return policy(providerType, 'always-on', 'GLM-5.3 始终思考，已使用最低推理强度', {
+          thinking: { type: 'enabled' }, reasoning_effort: 'low',
+        })
       }
       if (/^glm-(?:4\.(?:5|6|7)|5)(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'explicit-off', '已强制关闭 GLM 思考模式', {
