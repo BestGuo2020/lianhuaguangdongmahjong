@@ -9,6 +9,7 @@ export interface DecisionSpeechFacts {
   isDealer?: boolean
   publicMeldTypes?: Partial<Record<RelativeSeat, readonly string[]>>
   currentDiscard?: { from: RelativeSeat; tile: string } | null
+  discardedTile?: string
 }
 
 const PUBLIC_ACTION_PATTERN = /(上家|对家|下家)(?:刚才|刚刚|刚|已经|又|也)?(暗杠|明杠|补杠|杠|碰|吃)(?:了|过|成)?/g
@@ -118,6 +119,13 @@ export function resolveDecisionSpeech(
       return from !== facts.currentDiscard!.from || Boolean(tile && tile !== facts.currentDiscard!.tile)
     })
     : false
+  const keepTerms = '(?:留着|保留|留下|不打|当宝)'
+  const genericKeepPattern = new RegExp(`(?:这张|这牌|此牌).{0,4}${keepTerms}|${keepTerms}.{0,4}(?:这张|这牌|此牌)`)
+  const namedKeepPattern = facts.discardedTile
+    ? new RegExp(`${facts.discardedTile}.{0,4}${keepTerms}|${keepTerms}.{0,4}${facts.discardedTile}`)
+    : null
+  const contradictsDiscardCommitment = action.kind === 'discard'
+    && (genericKeepPattern.test(compact) || Boolean(namedKeepPattern?.test(compact)))
   // 先移除“下家杠了”等他家公开事实，再判断剩余文本是否承诺了自己的动作。
   const selfSpeech = compact.replace(PUBLIC_ACTION_PATTERN, '')
   const claimedKongKind: CanonicalAction['kind'] | null = /暗杠/.test(selfSpeech) ? 'concealed-kong'
@@ -134,7 +142,7 @@ export function resolveDecisionSpeech(
     || (claimedAction === 'gang' && ['gang', 'added-kong', 'concealed-kong', 'wind-kong'].includes(action.kind))
   const kongSubtypeMatches = !claimedKongKind || action.kind === claimedKongKind
   if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard
-    && actionMatchesClaim && kongSubtypeMatches) return compact
+    && !contradictsDiscardCommitment && actionMatchesClaim && kongSubtypeMatches) return compact
   return decisionSpeech(action, style, sequence)
 }
 

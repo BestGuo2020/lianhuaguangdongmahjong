@@ -75,7 +75,7 @@ const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
 
-function speechFacts(state: StateSnapshotV1): DecisionSpeechFacts {
+function speechFacts(state: StateSnapshotV1, action: CanonicalAction): DecisionSpeechFacts {
   const meldTypes = (name: 'upper' | 'opposite' | 'lower') => state.snapshots[name].melds.map((meld) => meld.type)
   return {
     isDealer: state.isDealer,
@@ -85,6 +85,7 @@ function speechFacts(state: StateSnapshotV1): DecisionSpeechFacts {
     currentDiscard: state.claimTile && state.claimFrom
       ? { from: state.claimFrom, tile: state.claimTile }
       : null,
+    discardedTile: action.kind === 'discard' ? state.hand[action.handIndex] : undefined,
   }
 }
 
@@ -135,7 +136,7 @@ async function decideCanonical(
       candidate.action,
       config.style,
       stats.messages,
-      speechFacts(built.request.state),
+      speechFacts(built.request.state, candidate.action),
     )
     stats.messages += 1
     try {
