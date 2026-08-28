@@ -559,13 +559,19 @@ function onAvatarError(entry: GamePlayer) {
     top: 40px;
     right: 12px;
     left: auto;
+    box-sizing: border-box;
+    max-width: calc(100vw - 24px);
     gap: 3px;
     padding: 5px 8px;
     border-radius: 8px;
   }
-  .flip-indicator-head { gap: 4px; }
+  .flip-indicator-head { min-width: 0; flex-wrap: nowrap; gap: 4px; }
   .flip-indicator-head > span { font-size: 12px; letter-spacing: 1px; }
-  .flip-indicator-head > em { font-size: 11px; }
+  .flip-indicator-head > .mahjong-tile.small {
+    --tile-width: clamp(24px, 6.4vw, 28px);
+    top: 0;
+  }
+  .flip-indicator-head > em { flex: 0 0 auto; font-size: 11px; white-space: nowrap; }
   .flip-chevron { display: block; }
   .flip-indicator-body { display: none; }
   .flip-open .flip-indicator-body {
