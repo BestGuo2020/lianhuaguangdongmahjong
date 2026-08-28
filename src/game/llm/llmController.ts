@@ -104,7 +104,7 @@ async function decideCanonical(
   const supportsReasoning = resolveReasoningPolicy(config, true).mode === 'explicit-on'
   // 当前游戏循环没有更短的外部倒计时；条件深思拥有独立的 45 秒总预算（40 秒请求 + 余量）。
   const trigger = supportsReasoning
-    ? reasoning.admit(built.request, reasoning.config.minRemainingBudgetMs)
+    ? reasoning.admit(built.request, input.playerIndex, reasoning.config.minRemainingBudgetMs)
     : { enabled: false }
   const useReasoning = trigger.enabled
   stats.requests += 1

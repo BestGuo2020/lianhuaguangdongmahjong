@@ -2,7 +2,7 @@ import type { Candidate, DecisionRequest, RuleCode } from './schema'
 
 export interface ConditionalReasoningConfig {
   enabled: boolean
-  maxPerRound: number
+  maxPerSeatPerRound: number
   maxPerMatch: number
   deadlineMs: number
   minRemainingBudgetMs: number
@@ -17,8 +17,8 @@ export interface ConditionalReasoningConfig {
 
 export const DEFAULT_CONDITIONAL_REASONING: Readonly<ConditionalReasoningConfig> = {
   enabled: true,
-  maxPerRound: 2,
-  maxPerMatch: 8,
+  maxPerSeatPerRound: 2,
+  maxPerMatch: 24,
   deadlineMs: 40_000,
   minRemainingBudgetMs: 45_000,
   trigger: {
@@ -105,19 +105,20 @@ export function evaluateReasoningTriggers(
   const gap = candidateScoreGap(request)
   const threat = request.ruleCode === 'lotus-classic' ? 0 : estimateOpponentThreat(request)
   const swing = estimateScoreSwing(request)
+  const opening = request.state.turnOrigin === 'opening'
   const reasons: ReasoningTriggerResult['reasons'] = []
-  if (gap <= config.trigger.candidateScoreGap) reasons.push('close-candidates')
+  if (!opening && gap <= config.trigger.candidateScoreGap) reasons.push('close-candidates')
   if (request.state.wallCount <= config.trigger.lateWallCount) reasons.push('late-wall')
   if (threat >= config.trigger.opponentThreat) reasons.push('opponent-threat')
   if (swing >= config.trigger.scoreSwing) reasons.push('score-swing')
-  if (random() < config.auditSampleRate) reasons.push('audit')
+  if (!opening && random() < config.auditSampleRate) reasons.push('audit')
   return { enabled: reasons.length > 0, reasons, candidateScoreGap: gap, opponentThreat: threat, scoreSwing: swing }
 }
 
 /** 一场牌共用一个协调器；roundIndex 变化即自然切换小局限额。深思请求最多等待 40 秒。 */
 export class ConditionalReasoningCoordinator {
   private matchUses = 0
-  private readonly roundUses = new Map<number, number>()
+  private readonly roundSeatUses = new Map<string, number>()
   private lastRoundIndex: number | null = null
 
   constructor(
@@ -125,25 +126,26 @@ export class ConditionalReasoningCoordinator {
     private readonly random: () => number = Math.random,
   ) {}
 
-  admit(request: DecisionRequest, remainingBudgetMs: number): ReasoningTriggerResult {
+  admit(request: DecisionRequest, seat: number, remainingBudgetMs: number): ReasoningTriggerResult {
     if (this.lastRoundIndex !== null && request.state.roundIndex < this.lastRoundIndex) this.reset()
     this.lastRoundIndex = request.state.roundIndex
     const result = evaluateReasoningTriggers(request, this.config, this.random)
     const round = request.state.roundIndex
+    const roundSeatKey = `${round}:${seat}`
     const allowed = this.config.enabled
       && remainingBudgetMs >= this.config.minRemainingBudgetMs
       && this.matchUses < this.config.maxPerMatch
-      && (this.roundUses.get(round) ?? 0) < this.config.maxPerRound
+      && (this.roundSeatUses.get(roundSeatKey) ?? 0) < this.config.maxPerSeatPerRound
       && result.enabled
     if (!allowed) return { ...result, enabled: false }
     this.matchUses += 1
-    this.roundUses.set(round, (this.roundUses.get(round) ?? 0) + 1)
+    this.roundSeatUses.set(roundSeatKey, (this.roundSeatUses.get(roundSeatKey) ?? 0) + 1)
     return result
   }
 
   reset(): void {
     this.matchUses = 0
-    this.roundUses.clear()
+    this.roundSeatUses.clear()
     this.lastRoundIndex = null
   }
 }
