@@ -121,7 +121,7 @@ const llmStats = computed<LlmControllerStats>(() => ({
   fallbacks: localLlm.value.stats.fallbacks + lotusLlm.value.stats.fallbacks,
   messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
   invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
-  reasoningRequests: localLlm.value.stats.reasoningRequests + lotusLlm.value.stats.reasoningRequests,
+  reasoningRequests: (localLlm.value.stats.reasoningRequests ?? 0) + (lotusLlm.value.stats.reasoningRequests ?? 0),
 }))
 const localGame = useGame({
   playSound: playEffect,

@@ -47,7 +47,8 @@ export interface LlmControllerStats {
   fallbacks: number
   messages: number
   invalidActions: number
-  reasoningRequests: number
+  /** 条件深思次数；旧分支统计汇总未提供时按 0 展示。 */
+  reasoningRequests?: number
 }
 
 export function createLlmStats(): LlmControllerStats {
@@ -92,7 +93,7 @@ async function decideCanonical(
   const useReasoning = trigger.enabled
   stats.requests += 1
   if (useReasoning) {
-    stats.reasoningRequests += 1
+    stats.reasoningRequests = (stats.reasoningRequests ?? 0) + 1
     try { await hooks.onLlmStatus?.(input.playerIndex, true) } catch { /* 状态气泡不影响决策 */ }
   }
   try {
