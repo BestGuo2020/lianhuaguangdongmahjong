@@ -88,6 +88,9 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const winHand = endOptions.winHand ?? winner.hand
       const flags = {
         dealer: winnerIndex === state.dealer.value,
+        discarderIsDealer: !endOptions.selfDraw
+          && !endOptions.robbedKong
+          && endOptions.sourceFrom === state.dealer.value,
         selfDraw: Boolean(endOptions.selfDraw),
         robbedKong: Boolean(endOptions.robbedKong),
         kongBloom: Boolean(endOptions.kongBloom),
@@ -105,9 +108,13 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         { jokers: state.jokerTiles.value, ordinaryJokers, jokerSubstitutes: state.wildcardTiles.value },
       )
         ?? { fan: 1, baseFan: 1, patterns: [{ label: '平胡', multiplier: 1 }], settlement: { H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 } }
+      // 抢杠胡按自摸型结算；只有普通点炮才对出铳者的那一笔再翻倍。
+      const sourceIndex = !flags.selfDraw && !flags.robbedKong && !flags.kongBloom
+        ? (endOptions.sourceFrom ?? null)
+        : null
       const totalWon = ruleset.score.applyWinSettlement
-        ? ruleset.score.applyWinSettlement(state.players, winnerIndex, score.settlement, state.dealer.value)
-        : applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value)
+        ? ruleset.score.applyWinSettlement(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex)
+        : applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex)
       const winType = endOptions.tianhu ? 'tianhu'
         : endOptions.dihu ? 'dihu'
         : endOptions.robbedKong ? 'robbed-kong'

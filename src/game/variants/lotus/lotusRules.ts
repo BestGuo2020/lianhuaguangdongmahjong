@@ -430,6 +430,8 @@ export function isWinningHand(hand: TileType[], exposedMeldCount: number, jokers
 
 export interface ScoreFlags {
   dealer: boolean
+  /** 普通点炮时，出铳者是否为庄家；自摸型结算忽略。 */
+  discarderIsDealer?: boolean
   selfDraw: boolean
   robbedKong: boolean
   kongBloom: boolean
@@ -465,14 +467,15 @@ export interface FanResult {
  */
 export function winPayments(
   baseFan: number,
-  opts: { winnerIsDealer: boolean; selfDrawStyle: boolean },
+  opts: { winnerIsDealer: boolean; selfDrawStyle: boolean; discarderIsDealer?: boolean },
 ): WinSettlement {
   const H = 100 * baseFan
   if (!opts.winnerIsDealer && !opts.selfDrawStyle) {
-    return { H, dealerPays: 2 * H, nonDealerPays: H, total: 4 * H }      // 闲点炮胡
+    // 三家基础共 4H；点炮者那一笔再翻倍：庄点炮 +2H，闲点炮 +1H。
+    return { H, dealerPays: 2 * H, nonDealerPays: H, total: (opts.discarderIsDealer ? 6 : 5) * H }
   }
   if (opts.winnerIsDealer && !opts.selfDrawStyle) {
-    return { H, dealerPays: 0, nonDealerPays: 2 * H, total: 4 * H }      // 庄点炮胡
+    return { H, dealerPays: 0, nonDealerPays: 2 * H, total: 8 * H }      // 闲点庄：4H + 2H + 2H
   }
   if (!opts.winnerIsDealer && opts.selfDrawStyle) {
     return { H, dealerPays: 4 * H, nonDealerPays: 2 * H, total: 8 * H }  // 闲自摸/地胡/闲抢杠
@@ -527,7 +530,11 @@ export function scoreFan(
     fan,
     baseFan: base.fan,
     patterns,
-    settlement: winPayments(base.fan, { winnerIsDealer: flags.dealer, selfDrawStyle }),
+    settlement: winPayments(base.fan, {
+      winnerIsDealer: flags.dealer,
+      selfDrawStyle,
+      discarderIsDealer: flags.discarderIsDealer,
+    }),
   }
 }
 
@@ -723,11 +730,12 @@ export const LOTUS_RULESET: RuleSet = {
       players[winnerIndex].score += total
       return total
     },
-    applyWinSettlement: (players, winnerIndex, settlement, dealerIndex) => {
+    applyWinSettlement: (players, winnerIndex, settlement, dealerIndex, sourceIndex = null) => {
       let total = 0
       players.forEach((player, index) => {
         if (index === winnerIndex) return
-        const payment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
+        const basePayment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
+        const payment = index === sourceIndex ? basePayment * 2 : basePayment
         if (payment <= 0) return
         player.score -= payment
         total += payment
