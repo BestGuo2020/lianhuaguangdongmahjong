@@ -515,6 +515,8 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 
 ## 13. 测试规格
 
+高手级疑难局面的数据建设、双盲标注、模型 A/B、超时计分与上线闸门，统一见 [《大模型麻将疑难局面评测集建设规范》](./llm-hard-scenario-evaluation.md)。本节继续约束代码级单元与集成测试。
+
 | 层 | 用例 | 断言 |
 |---|---|---|
 | 前端（vitest，mock fetch） | 规范协议/Prompt golden 快照（两规则、turn/claim 各一） | `schemaVersion`、规则 ID、癞子字段、可见信息、候选顺序与 `scoreDeltaBand` 完全一致 |
