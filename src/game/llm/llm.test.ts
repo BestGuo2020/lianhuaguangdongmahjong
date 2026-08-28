@@ -335,8 +335,10 @@ describe('prompt 构建', () => {
     const claim = buildDecisionRequest(baseInput({
       decision: 'claim', playerIndex: 0, tile: 'm3', from: 3, canPeng: true,
     }))
-    expect(buildPrompt('稳健', claim.request!).user)
-      .toContain('【当前弃牌】「上家」打出「3万」')
+    const claimPrompt = buildPrompt('稳健', claim.request!).user
+    expect(claimPrompt).toContain('【当前弃牌】「上家」打出「3万」')
+    expect(claimPrompt).toContain('{"choice": "Z", "message": "有点意思。"}')
+    expect(claimPrompt).not.toContain('{"choice": "A1"')
   })
 
   it('明确标注碰与杠，第四张弃牌不会自动并入已有碰组', () => {
