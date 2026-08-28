@@ -33,14 +33,40 @@ describe('条件深度思考', () => {
   it('所有支持条件深思的供应商共用 40 秒请求与 45 秒总预算', () => {
     expect(DEFAULT_CONDITIONAL_REASONING.deadlineMs).toBe(40_000)
     expect(DEFAULT_CONDITIONAL_REASONING.minRemainingBudgetMs).toBe(45_000)
+    expect(DEFAULT_CONDITIONAL_REASONING.maxPerSeatPerRound).toBe(2)
+    expect(DEFAULT_CONDITIONAL_REASONING.maxPerMatch).toBe(24)
   })
 
-  it('候选接近时触发，并遵守每小局与整场限额', () => {
+  it('候选接近时触发，每个座位独立拥有每小局两次额度', () => {
     const coordinator = new ConditionalReasoningCoordinator(DEFAULT_CONDITIONAL_REASONING, () => 1)
-    expect(coordinator.admit(request(), 45_000).enabled).toBe(true)
-    expect(coordinator.admit(request(), 45_000).enabled).toBe(true)
-    expect(coordinator.admit(request(), 45_000).enabled).toBe(false)
-    expect(coordinator.admit(request({ roundIndex: 1 }), 44_999).enabled).toBe(false)
+    expect(coordinator.admit(request(), 1, 45_000).enabled).toBe(true)
+    expect(coordinator.admit(request(), 1, 45_000).enabled).toBe(true)
+    expect(coordinator.admit(request(), 1, 45_000).enabled).toBe(false)
+    expect(coordinator.admit(request(), 2, 45_000).enabled).toBe(true)
+    expect(coordinator.admit(request({ roundIndex: 1 }), 1, 44_999).enabled).toBe(false)
+  })
+
+  it('开局不因候选接近或审计抽样深思，但强触发器仍有效', () => {
+    const opening = request({ turnOrigin: 'opening' })
+    const ordinary = evaluateReasoningTriggers(opening, DEFAULT_CONDITIONAL_REASONING, () => 0)
+    expect(ordinary.enabled).toBe(false)
+    expect(ordinary.reasons).not.toContain('close-candidates')
+    expect(ordinary.reasons).not.toContain('audit')
+
+    opening.candidates[0].features.scoreDelta = 800
+    const strong = evaluateReasoningTriggers(opening, DEFAULT_CONDITIONAL_REASONING, () => 0)
+    expect(strong.reasons).toContain('score-swing')
+  })
+
+  it('全桌整场最多使用24次', () => {
+    const coordinator = new ConditionalReasoningCoordinator(DEFAULT_CONDITIONAL_REASONING, () => 1)
+    for (let round = 0; round < 4; round += 1) {
+      for (const seat of [1, 2, 3]) {
+        expect(coordinator.admit(request({ roundIndex: round }), seat, 45_000).enabled).toBe(true)
+        expect(coordinator.admit(request({ roundIndex: round }), seat, 45_000).enabled).toBe(true)
+      }
+    }
+    expect(coordinator.admit(request({ roundIndex: 4 }), 1, 45_000).enabled).toBe(false)
   })
 
   it('三副露且明显染手达到高威胁，但仅自摸玩法不以防铳触发', () => {
