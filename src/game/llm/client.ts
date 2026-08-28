@@ -5,11 +5,11 @@ import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
-import { reasoningPolicyUsable, resolveReasoningPolicy } from './reasoningPolicy'
+import { resolveReasoningPolicy } from './reasoningPolicy'
 
 export class LlmClientError extends Error {
   constructor(
-    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'config' | 'reasoning',
+    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning',
     message: string,
   ) {
     super(message)
@@ -125,7 +125,6 @@ function providerExtraBody(
   reasoning = false,
 ): Record<string, unknown> | undefined {
   const resolved = resolveReasoningPolicy(config, reasoning)
-  if (!reasoningPolicyUsable(resolved)) throw new LlmClientError('config', resolved.message)
   const body: Record<string, unknown> = { ...resolved.requestBody }
   if (resolved.providerType === 'qwen' && structuredOutput) body.response_format = { type: 'json_object' }
   return Object.keys(body).length ? body : undefined
