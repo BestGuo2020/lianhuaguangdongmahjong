@@ -313,7 +313,7 @@ Prompt 中的玩家昵称、规则摘要和牌面都视为不可信数据，必�
 
 快速路径默认使用 `temperature: 0.4`、`max_tokens: 64`、`top_p: 1`、`n: 1`；供应商能力矩阵可覆盖其强制采样参数（Kimi K2.5/K2.6 非思考模式使用 `temperature: 0.6`、思考模式使用 `temperature: 1.0`，两者 `top_p` 均为 `0.95`；Kimi K3 不传 `thinking`、`temperature` 或 `top_p`）。单机浏览器客户端的所有模型调用统一发送 `stream: true` 并读取 OpenAI 兼容 SSE；联机后端当前仍保持一次性响应。解析层识别 `delta.reasoning_content`（并兼容 `delta.reasoning`、`delta.thinking`）后立即丢弃原文，只向控制器发送不带内容的进度脉冲；`delta.content` 只在内存中累积，绝不增量展示，流结束后才把完整文本交给 JSON/候选白名单/动作合法性校验。兼容端点忽略 `stream: true` 并返回 `application/json` 时自动回退原有一次性解析。
 
-预置官方 API 与 OrcaRouter 使用独立参数方言：官方域名严格使用厂商原生枚举，`api.orcarouter.ai` 使用聚合层统一枚举，未知自定义中转只使用保守参数。Kimi K2.5/K2.6 普通局面显式关闭思考，疑难局面显式开启；Kimi K3 普通使用 `low + 128`，疑难升级 `high + 512`。GLM-5.3-Flash 始终思考：官方接口普通与疑难都保持官方允许的 `low`，预算分别为 512/1024；OrcaRouter 普通 `low/512`、疑难 `medium/1024`，两者均启用 JSON Object。完整 GLM-5.3 官方疑难使用 `high`，OrcaRouter 使用 `medium`。Claude Sonnet 5 官方参数继续按 adaptive thinking 规则处理。若供应商返回 `finish_reason=length`，立即回退启发式，不追加“选错”反馈重试。
+预置官方 API 与 OrcaRouter 使用独立参数方言：官方域名严格使用厂商原生枚举，`api.orcarouter.ai` 使用聚合层统一枚举，未知自定义中转只使用保守参数。Kimi K2.5/K2.6 普通局面显式关闭思考，疑难局面显式开启；Kimi K3 普通使用 `low + 128`，疑难升级 `high + 512`。GLM-5.3-Flash 始终思考：官方接口普通与疑难都保持官方允许的 `low`，预算分别为 128/1024；OrcaRouter 因实测行为与官方明显不一致，不再提供新增预设，既有配置仍按普通 `low/512`、疑难 `medium/1024` 兼容并显示警告。完整 GLM-5.3 官方疑难使用 `high`，OrcaRouter 使用 `medium`。若供应商返回 `finish_reason=length`，立即回退启发式，不追加“选错”反馈重试。
 
 条件深思默认开启：候选评分差不超过 8、牌墙不超过 12、对手威胁达到 70、预期分差影响达到 800，或命中 2% 审计抽样时，可切换到供应商思考参数。每个AI座位每小局最多 2 次，全桌整场最多 24 次；开局 `turnOrigin=opening` 时不因“候选接近”或审计抽样升级思考，但杠收益、重大分差等强触发仍有效。可关闭思考的模型在未触发时走快速模式；`always-on` 模型始终调用，额度只限制从低强度升级，不限制普通低强度请求。统计分为“思考请求”（包括 always-on 低强度和实际返回推理流）与“升级请求”（命中触发器并消耗额度）。`always-on` 的普通 low 请求不先展示“让我想想怎么打”等思考台词，也不走该台词的 TTS；收到流式推理块后仍正常展示安全进度气泡。默认模型请求硬截止 40000ms；预置关闭 `timeoutEnabled` 后牌桌请求不设置定时中止。仅自摸/抢杠胡玩法不使用“对手防铳威胁”触发器。已开启、升级或始终思考的模型返回推理块时，按块序号生成“观察公开牌局 / 整理规则约束 / 比较可行动作 / 评估攻守节奏 / 复核选择”等客户端安全进度；生成过程不接触暗手、候选详情或供应商原始推理。每个进度脉冲直接替换气泡中的当前一句，不累积历史、不裁切、不滚动，按普通气泡宽度完整展示。等待期间按性格轮换的状态短句可走 TTS；安全进度与原始推理均不进入普通台词历史、日志、发言限流或 TTS，状态气泡在模型返回或超时前不自动消失。
 
@@ -386,11 +386,11 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 | `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
 | `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
 | `seatStyles` | 全空 | 座位 1-3 → 风格覆盖（激进/稳健/话痨/高冷；null=跟随预置风格）——**支持不同座位不同人设** |
-| 常用模板 | — | DeepSeek / Kimi / Kimi K2.6/K3 (OrcaRouter) / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱 / GLM 5.3 Flash (OrcaRouter) / 自定义（Base URL + 示例模型） |
+| 常用模板 | — | DeepSeek / Kimi / Kimi K2.6/K3 (OrcaRouter) / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱官方 GLM / 自定义（Base URL + 示例模型） |
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
 - 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
-- 请求前由统一能力矩阵为已知型号追加供应商专用参数：快速路径尽量关闭或压低思考；Claude Sonnet 5需显式关闭其默认adaptive thinking；Kimi K2.5/K2.6 普通关闭、疑难开启；GLM-5.3-Flash 在 OrcaRouter 普通使用 `low/64`、疑难使用 `medium/512`；Kimi K3与完整 GLM-5.3标记为始终思考并按“普通低强度、疑难升级”纳入统一触发器和额度。条件深思命中时，DeepSeek、Qwen3.5～3.8、GPT-5与Claude Sonnet 5追加显式开启参数。Kimi K2 基础版、Moonshot v1、GPT-4/3.5、GLM-4 等已知旧型号保持普通非思考调用；未知旧型号不猜测能力。设置页仅对 `always-on` 模型显示“该模型始终思考”警告；普通关闭提示不展示。
+- 请求前先按 Base URL 识别官方、OrcaRouter 或未知兼容方言，再按模型能力追加参数。GLM-5.3-Flash 官方固定使用允许的 low；OrcaRouter 既有配置使用独立兼容参数并显示行为差异警告。设置页仅推荐官方 GLM 预设；未知中转不套用聚合站专用枚举。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 

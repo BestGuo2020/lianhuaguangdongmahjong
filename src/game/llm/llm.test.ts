@@ -818,6 +818,26 @@ describe('testLlmConnection', () => {
     })
   })
 
+  it('GLM-5.3 Flash 官方普通请求使用 low/128', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+        }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: { ...config, providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })
+    expect(capturedBody).toMatchObject({
+      max_tokens: 128, reasoning_effort: 'low', response_format: { type: 'json_object' },
+    })
+  })
+
   it('Claude Sonnet 5 快速路径显式关闭默认思考并移除采样参数', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {

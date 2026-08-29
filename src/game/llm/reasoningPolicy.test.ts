@@ -124,14 +124,13 @@ describe('LLM 非思考能力矩阵', () => {
     })
   })
 
-  it('GLM 预设同时提供官方端点和 OrcaRouter 兼容中转', () => {
-    expect(PROVIDER_TEMPLATES).toEqual(expect.arrayContaining([
-      expect.objectContaining({ providerType: 'glm', model: 'glm-5.3-flash' }),
-      {
-        name: 'GLM 5.3 Flash (OrcaRouter)', providerType: 'glm',
-        baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
-      },
-    ]))
+  it('GLM 新增预设只推荐官方端点，不再推荐行为异常的 OrcaRouter 型号', () => {
+    expect(PROVIDER_TEMPLATES).toContainEqual(expect.objectContaining({
+      providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash',
+    }))
+    expect(PROVIDER_TEMPLATES).not.toContainEqual(expect.objectContaining({
+      providerType: 'glm', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
+    }))
   })
 
   it('Kimi 预设提供 OrcaRouter K3 完整模型 ID', () => {

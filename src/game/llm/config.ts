@@ -99,7 +99,6 @@ export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProvider
   { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
   { name: 'OpenAI (GPT)', providerType: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   { name: '智谱 (GLM)', providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash' },
-  { name: 'GLM 5.3 Flash (OrcaRouter)', providerType: 'glm', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash' },
   { name: 'Claude (Anthropic)', providerType: 'claude', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514' },
   { name: '自定义', providerType: 'custom', baseUrl: '', model: '' },
 ]
