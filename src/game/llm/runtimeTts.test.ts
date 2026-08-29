@@ -243,6 +243,67 @@ describe('单机 LLM runtime TTS', () => {
     expect(bubble).toHaveBeenCalledTimes(3)
   })
 
+  it('引擎回退显示问号气泡、服从普通频率且不走 TTS', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '稳健', timeoutMs: 8000,
+        ttsVoiceKey: 'deepseek',
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    mocks.requestLlmDecision.mockRejectedValueOnce(new Error('boom')).mockRejectedValueOnce(new Error('boom'))
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers({ onLlmMessage: bubble }).controllers![0]
+    const context = {
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    }
+
+    await controller.requestTurn(context as never)
+    await controller.requestTurn(context as never)
+
+    expect(bubble).toHaveBeenCalledTimes(1)
+    expect(bubble).toHaveBeenCalledWith(1, '？', expect.objectContaining({
+      source: 'fallback', decision: 'turn', actionKind: 'discard', priority: 'normal',
+    }))
+    expect(mocks.speak).not.toHaveBeenCalled()
+  })
+
+  it('话痨摸打连续回退时每次显示问号，但仍不走 TTS', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '话痨', timeoutMs: 8000,
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    mocks.requestLlmDecision.mockRejectedValueOnce(new Error('boom')).mockRejectedValueOnce(new Error('boom'))
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers({ onLlmMessage: bubble }).controllers![0]
+    const context = {
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    }
+
+    await controller.requestTurn(context as never)
+    await controller.requestTurn(context as never)
+
+    expect(bubble).toHaveBeenCalledTimes(2)
+    expect(bubble.mock.calls.every((call) => call[1] === '？')).toBe(true)
+    expect(mocks.speak).not.toHaveBeenCalled()
+  })
+
   it('点名已选弃牌并说留着时回退动作一致台词', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)

@@ -56,13 +56,17 @@ function hooksForSeat(
 ): LlmControllerHooks {
   const voiceKey = resolveLocalTtsVoiceKey(preset)
   let reasoningStatusSequence = 0
-  const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
+  const admission = (seat: number, meta: Parameters<NonNullable<LlmControllerHooks['onLlmMessage']>>[2]) => {
     const priority = meta?.priority ?? 'normal'
     const mandatory = style === '话痨'
-      && meta?.source === 'decision'
+      && (meta?.source === 'decision' || meta?.source === 'fallback')
       && meta.decision === 'turn'
       && meta.actionKind === 'discard'
-    if (!speechPolicy.admit({ seat, style, priority, mandatory })) return
+    return { priority, admitted: speechPolicy.admit({ seat, style, priority, mandatory }) }
+  }
+  const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
+    const { priority, admitted } = admission(seat, meta)
+    if (!admitted) return
     const compact = compactLlmSpeechText(text)
     if (!compact) return
     let bubbleShown = false
@@ -77,6 +81,10 @@ function hooksForSeat(
   }
   return {
     onLlmMessage: deliver,
+    onLlmFallback: (seat, meta) => {
+      if (!admission(seat, meta).admitted) return
+      try { void hooks.onLlmMessage?.(seat, '？', meta) } catch { /* 回退气泡不影响引擎动作 */ }
+    },
     onLlmStatus: (seat, active, safeProgressText) => {
       if (!active) {
         try { void hooks.onLlmStatus?.(seat, false) } catch { /* 状态气泡不影响决策 */ }
