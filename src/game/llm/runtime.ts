@@ -58,7 +58,11 @@ function hooksForSeat(
   let reasoningStatusSequence = 0
   const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
     const priority = meta?.priority ?? 'normal'
-    if (!speechPolicy.admit({ seat, style, priority })) return
+    const mandatory = style === '话痨'
+      && meta?.source === 'decision'
+      && meta.decision === 'turn'
+      && meta.actionKind === 'discard'
+    if (!speechPolicy.admit({ seat, style, priority, mandatory })) return
     const compact = compactLlmSpeechText(text)
     if (!compact) return
     let bubbleShown = false

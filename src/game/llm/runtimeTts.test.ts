@@ -213,6 +213,36 @@ describe('单机 LLM runtime TTS', () => {
     expect(bubble).toHaveBeenCalledTimes(1)
   })
 
+  it('话痨连续摸打每次都展示并播放台词', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk', model: 'deepseek-v4-flash', style: '话痨', timeoutMs: 8000,
+        ttsVoiceKey: 'deepseek',
+      }],
+      activeId: 'deepseek', seatIds: [null, null, null, null],
+      seatStyles: [null, null, null, null],
+    }, storage)
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers({ onLlmMessage: bubble }).controllers![0]
+    const context = {
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+    }
+
+    await controller.requestTurn(context as never)
+    await controller.requestTurn(context as never)
+    await controller.requestTurn(context as never)
+
+    expect(mocks.requestLlmDecision).toHaveBeenCalledTimes(3)
+    expect(mocks.speak).toHaveBeenCalledTimes(3)
+    expect(bubble).toHaveBeenCalledTimes(3)
+  })
+
   it('点名已选弃牌并说留着时回退动作一致台词', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
