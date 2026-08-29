@@ -6,7 +6,7 @@ import {
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
-import { resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
+import { inferProviderDialect, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
 const props = defineProps<{
@@ -30,6 +30,12 @@ const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
 const selectedReasoningPolicy = computed(() => selected.value ? resolveReasoningPolicy(selected.value) : null)
+const selectedUsesDivergentGlmRelay = computed(() => {
+  const preset = selected.value
+  if (!preset || inferProviderDialect(preset.baseUrl) !== 'orcarouter') return false
+  const model = preset.model.trim().toLowerCase().split('/').pop() ?? ''
+  return selectedReasoningPolicy.value?.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(model)
+})
 const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
 
 function load() {
@@ -262,7 +268,11 @@ function presetName(id: string | null): string {
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
         <p
-          v-if="selectedReasoningPolicy?.mode === 'always-on'"
+          v-if="selectedUsesDivergentGlmRelay"
+          class="llm-provider-warning" data-testid="llm-divergent-relay-warning"
+        >该中转模型行为与官方不一致，建议改用官方 API</p>
+        <p
+          v-else-if="selectedReasoningPolicy?.mode === 'always-on'"
           class="llm-provider-warning" data-testid="llm-always-thinking-warning"
         >该模型始终思考</p>
         <label class="llm-row">

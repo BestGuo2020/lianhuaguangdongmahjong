@@ -5,7 +5,7 @@ import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
-import { resolveReasoningPolicy } from './reasoningPolicy'
+import { inferProviderDialect, resolveReasoningPolicy } from './reasoningPolicy'
 
 export class LlmClientError extends Error {
   constructor(
@@ -361,8 +361,9 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
     const glmFlash = reasoningPolicy.providerType === 'glm'
       && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)
+    const dialect = inferProviderDialect(config.baseUrl)
     const quickReasoningMaxTokens = options.reasoning !== true
-      ? (glmFlash ? 512
+      ? (glmFlash ? (dialect === 'official' ? 128 : 512)
         : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
       : undefined
     const deepReasoningMaxTokens = glmFlash ? 1024 : 512
