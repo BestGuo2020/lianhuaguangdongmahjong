@@ -270,6 +270,11 @@ async function callOnce(
   if (signal) {
     signal.addEventListener('abort', () => controller.abort(), { once: true })
   }
+  const resolvedProvider = resolveReasoningPolicy(config).providerType
+  const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
+  const omitDefaultSampling = (resolvedProvider === 'claude'
+    && /^claude-sonnet-5(?:[.-]|$)/.test(modelName))
+    || (resolvedProvider === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -281,11 +286,8 @@ async function callOnce(
       body: JSON.stringify({
         model: config.model,
         messages,
-        ...(resolveReasoningPolicy(config).providerType === 'claude'
-          && /^claude-sonnet-5(?:[.-]|$)/.test(config.model.trim().toLowerCase().split('/').pop() ?? '')
-          ? {}
-          : { temperature: 0.4, top_p: 1 }),
-        ...(options.allowReasoning && resolveReasoningPolicy(config).providerType === 'openai'
+        ...(omitDefaultSampling ? {} : { temperature: 0.4, top_p: 1 }),
+        ...(options.allowReasoning && resolvedProvider === 'openai'
           ? { max_completion_tokens: options.maxTokens ?? 512 }
           : { max_tokens: options.maxTokens ?? 64 }),
         stream: true,
@@ -352,6 +354,11 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const config = { ...options.config, timeoutMs: left }
     const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
+    const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
+    const cappedKimiK3Quick = alwaysThinking
+      && reasoningPolicy.providerType === 'kimi'
+      && /^kimi-k3(?:[.-]|$)/.test(modelName)
+      && options.reasoning !== true
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse
@@ -365,7 +372,7 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           extraBody,
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
-          maxTokens: options.reasoning || alwaysThinking ? 512 : undefined,
+          maxTokens: options.reasoning || (alwaysThinking && !cappedKimiK3Quick) ? 512 : undefined,
           onReasoningProgress: options.onReasoningProgress,
         },
       )
@@ -393,12 +400,15 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
     }
     const reasoningPolicy = resolveReasoningPolicy(effectiveConfig)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
+    const modelName = effectiveConfig.model.trim().toLowerCase().split('/').pop() ?? ''
+    const cappedKimiK3Quick = alwaysThinking && reasoningPolicy.providerType === 'kimi'
+      && /^kimi-k3(?:[.-]|$)/.test(modelName)
     await callOnce(
       effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
       {
-        maxTokens: alwaysThinking ? 512 : 8,
+        maxTokens: alwaysThinking && !cappedKimiK3Quick ? 512 : 8,
         strictLength: false,
         allowEmptyContent: true,
         extraBody: providerExtraBody(effectiveConfig, false),

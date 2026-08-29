@@ -64,7 +64,6 @@ export function resolveReasoningPolicy(
     case 'kimi':
       if (/^kimi-k3(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'always-on', 'Kimi K3 始终思考', {
-          temperature: 1, top_p: 0.95,
           reasoning_effort: reasoning ? 'high' : 'low',
         })
       }
