@@ -58,13 +58,13 @@ describe('LLM 非思考能力矩阵', () => {
       .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'medium' })
   })
 
-  it('Kimi K3 经带前缀的中转模型 ID 自动使用普通 low、疑难 high', () => {
+  it('Kimi K3 经带前缀的中转模型 ID 使用普通 low、疑难 high 且不带采样参数', () => {
     expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k3'))).toMatchObject({
       providerType: 'kimi', mode: 'always-on',
-      requestBody: { temperature: 1, top_p: 0.95, reasoning_effort: 'low' },
+      requestBody: { reasoning_effort: 'low' },
     })
     expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k3'), true).requestBody)
-      .toEqual({ temperature: 1, top_p: 0.95, reasoning_effort: 'high' })
+      .toEqual({ reasoning_effort: 'high' })
   })
 
   it('Claude Sonnet 5 默认思考必须显式关闭，条件命中时使用自适应思考', () => {
