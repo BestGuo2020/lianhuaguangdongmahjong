@@ -410,14 +410,16 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
     const reasoningPolicy = resolveReasoningPolicy(effectiveConfig)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
     const modelName = effectiveConfig.model.trim().toLowerCase().split('/').pop() ?? ''
-    const cappedKimiK3Quick = alwaysThinking && reasoningPolicy.providerType === 'kimi'
-      && /^kimi-k3(?:[.-]|$)/.test(modelName)
+    const cappedAlwaysQuick = alwaysThinking && (
+      (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
+      || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
+    )
     await callOnce(
       effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
       {
-        maxTokens: alwaysThinking && !cappedKimiK3Quick ? 512 : 8,
+        maxTokens: alwaysThinking && !cappedAlwaysQuick ? 512 : 8,
         strictLength: false,
         allowEmptyContent: true,
         extraBody: providerExtraBody(effectiveConfig, false),

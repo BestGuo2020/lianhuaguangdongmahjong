@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inferLlmProviderType, PROVIDER_TEMPLATES, type LlmProviderConfig, type LlmProviderType } from './config'
-import { resolveReasoningPolicy } from './reasoningPolicy'
+import { inferProviderDialect, resolveReasoningPolicy } from './reasoningPolicy'
 
 function config(providerType: LlmProviderType, model: string): LlmProviderConfig {
   return {
@@ -38,24 +38,28 @@ describe('LLM 非思考能力矩阵', () => {
     expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
   })
 
-  it('GLM-5.3 Flash 经自定义中转自动识别，普通低强度限长、疑难中强度', () => {
-    const result = resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'))
-    expect(result).toMatchObject({
-      providerType: 'glm', mode: 'explicit-off',
-      acceptReasoningResponse: true,
-      requestBody: { reasoning_effort: 'low' },
-    })
-    expect(resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'), true).requestBody)
-      .toEqual({ reasoning_effort: 'medium' })
+  it('GLM-5.3 Flash 按官方与 OrcaRouter 方言分别选择疑难强度', () => {
+    const official = { ...config('glm', 'glm-5.3-flash'), baseUrl: 'https://open.bigmodel.cn/api/paas/v4' }
+    const orca = { ...config('custom', 'z-ai/glm-5.3-flash'), baseUrl: 'https://api.orcarouter.ai/v1' }
+    const relay = config('custom', 'z-ai/glm-5.3-flash')
+    expect(resolveReasoningPolicy(official)).toMatchObject({ mode: 'always-on', requestBody: { reasoning_effort: 'low' } })
+    expect(resolveReasoningPolicy(official, true).requestBody).toEqual({ reasoning_effort: 'low' })
+    expect(resolveReasoningPolicy(orca, true).requestBody).toEqual({ reasoning_effort: 'medium' })
+    expect(resolveReasoningPolicy(relay, true).requestBody).toEqual({ reasoning_effort: 'low' })
   })
 
-  it('完整 GLM-5.3 仍保持 always-on 的 low 到 medium', () => {
-    expect(resolveReasoningPolicy(config('glm', 'glm-5.3'))).toMatchObject({
-      mode: 'always-on',
-      requestBody: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
-    })
-    expect(resolveReasoningPolicy(config('glm', 'glm-5.3'), true).requestBody)
-      .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'medium' })
+  it('完整 GLM-5.3 官方使用 high，OrcaRouter 使用 medium', () => {
+    const official = { ...config('glm', 'glm-5.3'), baseUrl: 'https://open.bigmodel.cn/api/paas/v4' }
+    const orca = { ...config('glm', 'z-ai/glm-5.3'), baseUrl: 'https://api.orcarouter.ai/v1' }
+    expect(resolveReasoningPolicy(official)).toMatchObject({ mode: 'always-on', requestBody: { reasoning_effort: 'low' } })
+    expect(resolveReasoningPolicy(official, true).requestBody).toEqual({ reasoning_effort: 'high' })
+    expect(resolveReasoningPolicy(orca, true).requestBody).toEqual({ reasoning_effort: 'medium' })
+  })
+
+  it('识别官方、OrcaRouter 与未知兼容端点', () => {
+    expect(inferProviderDialect('https://open.bigmodel.cn/api/paas/v4')).toBe('official')
+    expect(inferProviderDialect('https://api.orcarouter.ai/v1')).toBe('orcarouter')
+    expect(inferProviderDialect('https://proxy.example.com/v1')).toBe('compatible')
   })
 
   it('Kimi K3 经带前缀的中转模型 ID 使用普通 low、疑难 high 且不带采样参数', () => {

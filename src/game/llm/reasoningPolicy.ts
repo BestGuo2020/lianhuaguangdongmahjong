@@ -11,6 +11,19 @@ export interface ReasoningPolicy {
   acceptReasoningResponse: boolean
 }
 
+export type ProviderDialect = 'official' | 'orcarouter' | 'compatible'
+
+/** 预置官方端点与已知聚合端点使用各自参数方言；未知自定义中转保持保守兼容。 */
+export function inferProviderDialect(baseUrl: string): ProviderDialect {
+  let host = ''
+  try { host = new URL(baseUrl).hostname.toLowerCase() } catch { return 'compatible' }
+  if (host === 'api.orcarouter.ai') return 'orcarouter'
+  if (/^(?:api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.moonshot\.(?:cn|ai)|ark\.[^.]+\.volces\.com|api\.minimax\.(?:chat|io)|api\.openai\.com|open\.bigmodel\.cn|api\.z\.ai|api\.anthropic\.com)$/.test(host)) {
+    return 'official'
+  }
+  return 'compatible'
+}
+
 function policy(
   providerType: LlmProviderType,
   mode: ReasoningPolicyMode,
@@ -36,6 +49,7 @@ export function resolveReasoningPolicy(
     : config.providerType
   const qualifiedModel = config.model.trim().toLowerCase()
   const model = qualifiedModel.slice(qualifiedModel.lastIndexOf('/') + 1)
+  const dialect = inferProviderDialect(config.baseUrl)
 
   switch (providerType) {
     case 'deepseek':
@@ -121,17 +135,18 @@ export function resolveReasoningPolicy(
         return policy(providerType, 'reasoning-only', '显式 Thinking 型号不用于实时麻将决策')
       }
       if (/^glm-5\.3-flash(?:[.-]|$)/.test(model)) {
-        return reasoning
-          ? policy(providerType, 'explicit-on', '已开启 GLM-5.3-Flash 条件思考', {
-            reasoning_effort: 'medium',
+        const effort = reasoning && dialect === 'orcarouter' ? 'medium' : 'low'
+        return policy(providerType, 'always-on',
+          dialect === 'official' ? 'GLM-5.3-Flash 官方接口始终思考' : 'GLM-5.3-Flash 始终思考', {
+            reasoning_effort: effort,
           })
-          : policy(providerType, 'explicit-off', 'GLM-5.3-Flash 使用快速低强度', {
-            reasoning_effort: 'low',
-          }, true)
       }
       if (/^glm-5\.3(?:[.-]|$)/.test(model)) {
+        const effort = reasoning
+          ? dialect === 'official' ? 'high' : dialect === 'orcarouter' ? 'medium' : 'low'
+          : 'low'
         return policy(providerType, 'always-on', 'GLM-5.3 始终思考', {
-          thinking: { type: 'enabled' }, reasoning_effort: reasoning ? 'medium' : 'low',
+          reasoning_effort: effort,
         })
       }
       if (/^glm-(?:4\.(?:5|6|7)|5)(?:[.-]|$)/.test(model)) {
