@@ -620,7 +620,7 @@ describe('testLlmConnection', () => {
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
   })
 
-  it('GLM-5.3 Flash 连接测试关闭思考并使用 8 tokens', async () => {
+  it('GLM-5.3 Flash 连接测试使用 OrcaRouter 支持的 low 与 8 tokens', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -635,7 +635,7 @@ describe('testLlmConnection', () => {
       ...config, providerType: 'custom', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash',
     })).resolves.toEqual({ ok: true, message: '连接成功' })
     expect(capturedBody).toMatchObject({
-      model: 'z-ai/glm-5.3-flash', max_tokens: 8, reasoning_effort: 'none',
+      model: 'z-ai/glm-5.3-flash', max_tokens: 8, reasoning_effort: 'low',
     })
     expect(capturedBody.thinking).toBeUndefined()
   })
@@ -752,7 +752,7 @@ describe('testLlmConnection', () => {
     expect(captured.thinking).toBeUndefined()
   })
 
-  it('GLM-5.3 Flash 普通决策关闭思考并使用快速输出上限', async () => {
+  it('GLM-5.3 Flash 普通决策使用 low、接受推理流并限制为 64 tokens', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -760,10 +760,10 @@ describe('testLlmConnection', () => {
         ok: true, status: 200,
         json: async () => ({
           choices: [{
-            message: { content: '{"choice":"A1","message":"稳住。"}' },
+            message: { content: '{"choice":"A1","message":"稳住。"}', reasoning_content: '简短检查' },
             finish_reason: 'stop',
           }],
-          usage: { completion_tokens_details: { reasoning_tokens: 0 } },
+          usage: { completion_tokens_details: { reasoning_tokens: 8 } },
         }),
       }
     }) as never)
@@ -774,7 +774,7 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(capturedBody).toMatchObject({
-      model: 'z-ai/glm-5.3-flash', max_tokens: 64, reasoning_effort: 'none',
+      model: 'z-ai/glm-5.3-flash', max_tokens: 64, reasoning_effort: 'low',
     })
     expect(capturedBody.thinking).toBeUndefined()
   })

@@ -38,11 +38,12 @@ describe('LLM 非思考能力矩阵', () => {
     expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
   })
 
-  it('GLM-5.3 Flash 经自定义中转自动识别，普通关闭、疑难中强度', () => {
+  it('GLM-5.3 Flash 经自定义中转自动识别，普通低强度限长、疑难中强度', () => {
     const result = resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'))
     expect(result).toMatchObject({
       providerType: 'glm', mode: 'explicit-off',
-      requestBody: { reasoning_effort: 'none' },
+      acceptReasoningResponse: true,
+      requestBody: { reasoning_effort: 'low' },
     })
     expect(resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'), true).requestBody)
       .toEqual({ reasoning_effort: 'medium' })

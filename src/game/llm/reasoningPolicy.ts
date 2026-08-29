@@ -126,9 +126,9 @@ export function resolveReasoningPolicy(
           ? policy(providerType, 'explicit-on', '已开启 GLM-5.3-Flash 条件思考', {
             reasoning_effort: 'medium',
           })
-          : policy(providerType, 'explicit-off', '已关闭 GLM-5.3-Flash 思考', {
-            reasoning_effort: 'none',
-          })
+          : policy(providerType, 'explicit-off', 'GLM-5.3-Flash 使用快速低强度', {
+            reasoning_effort: 'low',
+          }, true)
       }
       if (/^glm-5\.3(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'always-on', 'GLM-5.3 始终思考', {
