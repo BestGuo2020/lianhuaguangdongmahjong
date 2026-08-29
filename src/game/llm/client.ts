@@ -135,8 +135,13 @@ function providerExtraBody(
   const resolved = resolveReasoningPolicy(config, reasoning)
   const body: Record<string, unknown> = { ...resolved.requestBody }
   const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
+  const relayKimiThinking = reasoning
+    && resolved.providerType === 'kimi'
+    && /^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(modelName)
+    && inferProviderDialect(config.baseUrl) !== 'official'
   if (structuredOutput && (resolved.providerType === 'qwen'
-    || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)))) {
+    || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
+    || relayKimiThinking)) {
     body.response_format = { type: 'json_object' }
   }
   return Object.keys(body).length ? body : undefined
@@ -362,11 +367,15 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const glmFlash = reasoningPolicy.providerType === 'glm'
       && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)
     const dialect = inferProviderDialect(config.baseUrl)
+    const relayKimiThinking = options.reasoning === true
+      && reasoningPolicy.providerType === 'kimi'
+      && /^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(modelName)
+      && dialect !== 'official'
     const quickReasoningMaxTokens = options.reasoning !== true
       ? (glmFlash ? (dialect === 'official' ? 128 : 512)
         : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
       : undefined
-    const deepReasoningMaxTokens = glmFlash ? 1024 : 512
+    const deepReasoningMaxTokens = relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse

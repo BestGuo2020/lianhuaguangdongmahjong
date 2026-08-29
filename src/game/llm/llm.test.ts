@@ -721,6 +721,52 @@ describe('testLlmConnection', () => {
     expect(captured.top_p).toBe(0.95)
   })
 
+  it.each(['kimi-k2.5', 'kimi-k2.6'])(
+    '自定义中转 %s 思考路径使用 2048 与 JSON Object',
+    async (model) => {
+      let captured: Record<string, unknown> = {}
+      vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        captured = JSON.parse(String(init.body)) as Record<string, unknown>
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+          }),
+        }
+      }) as never)
+      await requestLlmDecision({
+        config: { ...config, providerType: 'custom', baseUrl: 'https://relay.example.com/v1', model },
+        messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
+      })
+      expect(captured).toMatchObject({
+        max_tokens: 2048,
+        thinking: { type: 'enabled' },
+        temperature: 1,
+        top_p: 0.95,
+        response_format: { type: 'json_object' },
+      })
+    },
+  )
+
+  it('官方 Kimi K2.6 思考路径保持官方 512，不套用中转扩容', async () => {
+    let captured: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+        }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: { ...config, providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
+    })
+    expect(captured.max_tokens).toBe(512)
+    expect(captured.response_format).toBeUndefined()
+  })
+
   it('Kimi K3 普通路径使用 low/128，不传 thinking 与采样参数', async () => {
     let captured: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
