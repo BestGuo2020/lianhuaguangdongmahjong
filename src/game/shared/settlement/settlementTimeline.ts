@@ -89,10 +89,12 @@ export interface SettlementTimelineOptions<E extends SettlementEndOptions, S ext
   getSourceIndex?(context: SettlementWinContext<E>): number
   getTableAction?(context: SettlementWinContext<E>): { type: TableActionType; sourceIndex: number | null }
   getWinSound?(context: SettlementWinContext<E>): string
-  /** 清理旧回合控制器之后、启动胜利表现之前触发；用于开启不会被本次 reset 取消的胜利语音。 */
-  onWinStart?(context: SettlementWinContext<E>): void
   finalizeWin(context: SettlementWinContext<E>): RoundResult
   endDraw(context: SettlementDrawContext): RoundResult
+  /** 亮牌完成后串行播放 AI 胜负感言；Promise 完成前不得弹出结算窗口。 */
+  beforeSettleWin?(context: SettlementWinContext<E>, result: RoundResult): void | Promise<void>
+  /** 荒庄亮牌后串行播放 AI 感言；Promise 完成前不得弹出结算窗口。 */
+  beforeSettleDraw?(context: SettlementDrawContext, result: RoundResult): void | Promise<void>
 }
 
 export function createSettlementTimeline<E extends SettlementEndOptions, S extends SettlementState = SettlementState>(
@@ -107,6 +109,21 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       base,
       scoresBefore,
     )
+  }
+
+  function finishAfter(optionalWork: (() => void | Promise<void>) | undefined, onFinished: () => void) {
+    let pending: void | Promise<void>
+    try {
+      pending = optionalWork?.()
+    } catch {
+      onFinished()
+      return
+    }
+    if (!pending || typeof pending.then !== 'function') {
+      onFinished()
+      return
+    }
+    void pending.catch(() => {}).then(onFinished)
   }
 
   function endGame(winnerIndex: number, endOptions = {} as E) {
@@ -140,7 +157,6 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       winTile,
       scoresBefore: [],
     }
-    options.onWinStart?.(context)
     const sourceIndex = options.getSourceIndex?.(context)
       ?? (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
     const tableAction = options.getTableAction?.(context) ?? {
@@ -202,8 +218,16 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
         options.later(() => {
           if (serial !== currentSerial) return
           const scoresBefore = state.players.map((player) => player.score)
-          state.result.value = makeRoundResult(options.finalizeWin({ ...context, scoresBefore }), scoresBefore)
-          state.phase.value = 'settled'
+          const settledContext = { ...context, scoresBefore }
+          const roundResult = makeRoundResult(options.finalizeWin(settledContext), scoresBefore)
+          finishAfter(
+            options.beforeSettleWin ? () => options.beforeSettleWin?.(settledContext, roundResult) : undefined,
+            () => {
+              if (serial !== currentSerial) return
+              state.result.value = roundResult
+              state.phase.value = 'settled'
+            },
+          )
         }, revealDuration)
       }, effectDuration)
     }
@@ -223,8 +247,9 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
 
   function endDraw() {
     serial += 1
+    const currentSerial = serial
     options.clearTimers()
-    state.phase.value = 'settled'
+    state.phase.value = 'revealing'
     state.openingStage.value = null
     state.currentPlayer.value = -1
     state.userDrewThisTurn.value = false
@@ -234,7 +259,16 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
     state.revealHands.value = true
     state.winningPlayerIndex.value = -1
     const scoresBefore = state.players.map((player) => player.score)
-    state.result.value = makeRoundResult(options.endDraw({ scoresBefore }), scoresBefore)
+    const drawContext = { scoresBefore }
+    const roundResult = makeRoundResult(options.endDraw(drawContext), scoresBefore)
+    finishAfter(
+      options.beforeSettleDraw ? () => options.beforeSettleDraw?.(drawContext, roundResult) : undefined,
+      () => {
+        if (serial !== currentSerial) return
+        state.result.value = roundResult
+        state.phase.value = 'settled'
+      },
+    )
   }
 
   return { endGame, endDraw, makeRoundResult }

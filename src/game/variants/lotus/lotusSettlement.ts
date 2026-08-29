@@ -6,7 +6,11 @@ import { applyWinScore } from './lotusScoring'
 import { removeLastDiscard } from '../../core/rules/actions'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
-import { announceLocalLlmWin, isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
+import {
+  announceLocalLlmRoundReactions,
+  isLocalLlmSeat,
+  type LocalLlmRoundResult,
+} from '../../core/presentation/localLlmVoiceRegistry'
 
 interface LotusSettlementOptions {
   state: LotusGameState
@@ -26,14 +30,14 @@ interface LotusSettlementOptions {
   ruleset?: RuleSet
   /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
   isLlmVoiceSeat?: (seat: number) => boolean
-  announceLlmWin?: (seat: number, type: 'self-draw' | 'discard-win' | 'robbed-kong-win') => boolean
+  announceLlmRoundReactions?: (result: LocalLlmRoundResult) => void | Promise<void>
 }
 
 export function createLotusSettlement(options: LotusSettlementOptions) {
   const { state } = options
   const ruleset = options.ruleset ?? LOTUS_RULESET
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
-  const announceLlmWin = options.announceLlmWin ?? announceLocalLlmWin
+  const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -78,12 +82,13 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         : (endOptions.sourceFrom ?? null),
     }),
     getWinSound: ({ endOptions }) => endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3',
-    onWinStart: ({ winnerIndex, endOptions }) => {
+    beforeSettleWin: ({ winnerIndex, endOptions }) => {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : endOptions.selfDraw ? 'self-draw' : 'discard-win'
-      announceLlmWin(winnerIndex, winType)
+      return announceLlmRoundReactions({ winnerIndex, winType })
     },
+    beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<LotusEndGameOptions>): RoundResult => {
       const winHand = endOptions.winHand ?? winner.hand
       const flags = {

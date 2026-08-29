@@ -6,7 +6,11 @@ import type { LocalGameState } from './localGameState'
 import { resolveWinTile } from './matchProgress'
 import { createSettlementTimeline, type SettlementWinContext } from '../../shared/settlement/settlementTimeline'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
-import { announceLocalLlmWin, isLocalLlmSeat } from '../presentation/localLlmVoiceRegistry'
+import {
+  announceLocalLlmRoundReactions,
+  isLocalLlmSeat,
+  type LocalLlmRoundResult,
+} from '../presentation/localLlmVoiceRegistry'
 
 interface LocalSettlementTimelineOptions {
   state: LocalGameState
@@ -26,14 +30,14 @@ interface LocalSettlementTimelineOptions {
   ruleset?: RuleSet
   /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
   isLlmVoiceSeat?: (seat: number) => boolean
-  announceLlmWin?: (seat: number, type: 'self-draw' | 'discard-win' | 'robbed-kong-win') => boolean
+  announceLlmRoundReactions?: (result: LocalLlmRoundResult) => void | Promise<void>
 }
 
 export function createLocalSettlementTimeline(options: LocalSettlementTimelineOptions) {
   const { state } = options
   const ruleset = options.ruleset ?? DEFAULT_RULESET
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
-  const announceLlmWin = options.announceLlmWin ?? announceLocalLlmWin
+  const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -74,12 +78,13 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       sourceIndex: endOptions.robbedKong ? (endOptions.robbedKongPlayerIndex ?? null) : null,
     }),
     getWinSound: ({ endOptions }) => endOptions.robbedKong ? 'hu.mp3' : 'zimo.mp3',
-    onWinStart: ({ winnerIndex, endOptions }) => {
+    beforeSettleWin: ({ winnerIndex, endOptions }) => {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
-      announceLlmWin(winnerIndex, winType)
+      return announceLlmRoundReactions({ winnerIndex, winType })
     },
+    beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3
       const { horses, hits } = drawHorses(state.wall.value, 8, relativeSeat)

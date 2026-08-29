@@ -1,6 +1,10 @@
 import type { LlmStyle } from './config'
 
 export type LlmWinType = 'self-draw' | 'discard-win' | 'robbed-kong-win'
+export type LlmRoundReaction =
+  | { outcome: 'win'; type: LlmWinType }
+  | { outcome: 'loss' }
+  | { outcome: 'draw' }
 
 export const LLM_WIN_LINES: Record<LlmWinType, Record<LlmStyle, readonly string[]>> = {
   'self-draw': {
@@ -23,7 +27,31 @@ export const LLM_WIN_LINES: Record<LlmWinType, Record<LlmStyle, readonly string[
   },
 }
 
+export const LLM_LOSS_LINES: Record<LlmStyle, readonly string[]> = {
+  激进: ['这局算你们走运，下局再来！', '输一局而已，我马上打回来！', '先让一局，下一把见真章！'],
+  稳健: ['这局承让，我再复盘一下。', '胜负常事，下一局稳住。', '这局判断有偏差，下局调整。'],
+  话痨: ['哎呀这局没接住，下局继续！', '输了输了，容我喝口水再战！', '这把牌有自己的想法，下局来过！'],
+  高冷: ['这局输了，仅此而已。', '结果已定，下一局。', '一局而已，继续。'],
+}
+
+export const LLM_DRAW_LINES: Record<LlmStyle, readonly string[]> = {
+  激进: ['荒庄？下一局别再躲了！', '没人拿下，那就下局决胜！', '这局没分胜负，继续来！'],
+  稳健: ['荒庄收场，下一局再寻机会。', '这局无人和牌，重新来过。', '牌局未定，下一局继续。'],
+  话痨: ['荒庄啦，大家都藏得挺深！', '谁也没胡成，这局真能憋！', '好嘛，全员陪跑，下一局继续！'],
+  高冷: ['荒庄，下一局。', '无人和牌，继续。', '未分胜负，仅此而已。'],
+}
+
 export function llmWinLine(type: LlmWinType, style: LlmStyle, sequence = 0): string {
   const variants = LLM_WIN_LINES[type][style]
+  return variants[Math.abs(sequence) % variants.length]
+}
+
+export function llmRoundReactionLine(
+  reaction: LlmRoundReaction,
+  style: LlmStyle,
+  sequence = 0,
+): string {
+  if (reaction.outcome === 'win') return llmWinLine(reaction.type, style, sequence)
+  const variants = reaction.outcome === 'loss' ? LLM_LOSS_LINES[style] : LLM_DRAW_LINES[style]
   return variants[Math.abs(sequence) % variants.length]
 }
