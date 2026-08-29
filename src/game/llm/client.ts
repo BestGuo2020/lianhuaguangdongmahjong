@@ -28,10 +28,12 @@ export interface LlmDecisionOptions {
   candidateIds: string[]
   /** 信号：取消/换局时中止（AbortController 透传） */
   signal?: AbortSignal
-  /** 由协调器判定后的深度思考调用；推理字段只用于供应商，不进入展示层。 */
+  /** 由协调器判定后的深度思考调用。 */
   reasoning?: boolean
   /** 深度思考硬截止时间；超时由控制器回退本地引擎。 */
   deadlineMs?: number
+  /** OpenAI 兼容 SSE 到达推理块时的安全进度脉冲；绝不向上暴露块内容。 */
+  onReasoningProgress?: () => void
 }
 
 interface ChatResponse {
@@ -111,6 +113,8 @@ interface CallOnceOptions {
   allowReasoning?: boolean
   /** 只放宽响应验证，不改变请求参数。 */
   acceptReasoningResponse?: boolean
+  /** 只通知推理块到达；原始推理与最终 content 都不会通过回调向上暴露。 */
+  onReasoningProgress?: () => void
 }
 
 /** 百炼 Qwen 3.5–3.8 默认开启混合思考；麻将候选选择使用非思考模式。 */
@@ -120,7 +124,7 @@ export function isQwenThinkingModel(config: Pick<LlmProviderConfig, 'baseUrl' | 
 }
 
 export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
-  return config.timeoutMs
+  return config.timeoutEnabled === false ? Number.POSITIVE_INFINITY : config.timeoutMs
 }
 
 function providerExtraBody(
@@ -139,6 +143,118 @@ export function isAnthropicBaseUrl(baseUrl: string): boolean {
   return /^https:\/\/api\.anthropic\.com/i.test(baseUrl.trim())
 }
 
+interface OpenAIResponseBody {
+  choices?: Array<{
+    message?: { content?: unknown; reasoning_content?: unknown }
+    delta?: {
+      content?: unknown
+      reasoning_content?: unknown
+      reasoning?: unknown
+      thinking?: unknown
+    }
+    finish_reason?: string | null
+  }>
+  reasoning?: unknown
+  usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } }
+}
+
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(textValue).join('')
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    if (typeof record.text === 'string') return record.text
+    if (typeof record.content === 'string') return record.content
+  }
+  return ''
+}
+
+function reasoningDeltaOf(body: OpenAIResponseBody): string {
+  const delta = body.choices?.[0]?.delta
+  return textValue(delta?.reasoning_content)
+    || textValue(delta?.reasoning)
+    || textValue(delta?.thinking)
+    || textValue(body.reasoning)
+}
+
+/** 读取 OpenAI 兼容的 SSE；content 与 reasoning 使用独立缓冲，避免半截 JSON 被提前执行。 */
+async function readStreamingResponse(
+  response: Response,
+  options: CallOnceOptions,
+): Promise<ChatResponse> {
+  if (!response.body) throw new LlmClientError('parse', 'API 流式响应缺少响应体')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let lineBuffer = ''
+  let dataLines: string[] = []
+  let content = ''
+  let finishReason: string | null = null
+  let reasoningTokens = 0
+  let sawReasoning = false
+  let sawData = false
+
+  const processEvent = () => {
+    if (!dataLines.length) return
+    const data = dataLines.join('\n').trim()
+    dataLines = []
+    if (!data || data === '[DONE]') return
+    let body: OpenAIResponseBody
+    try {
+      body = JSON.parse(data) as OpenAIResponseBody
+    } catch {
+      throw new LlmClientError('parse', 'API 流式响应包含无效 JSON')
+    }
+    sawData = true
+    const choice = body.choices?.[0]
+    const contentDelta = choice?.delta?.content
+    if (typeof contentDelta === 'string') content += contentDelta
+    const reasoningDelta = reasoningDeltaOf(body)
+    if (reasoningDelta) {
+      sawReasoning = true
+      try { options.onReasoningProgress?.() } catch { /* 展示回调不能中断模型响应 */ }
+    }
+    if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason
+    const tokens = body.usage?.completion_tokens_details?.reasoning_tokens
+    if (typeof tokens === 'number' && Number.isFinite(tokens)) reasoningTokens = Math.max(reasoningTokens, tokens)
+  }
+
+  const processLine = (rawLine: string) => {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+    if (!line) {
+      processEvent()
+      return
+    }
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    lineBuffer += decoder.decode(value, { stream: true })
+    let newline = lineBuffer.indexOf('\n')
+    while (newline >= 0) {
+      processLine(lineBuffer.slice(0, newline))
+      lineBuffer = lineBuffer.slice(newline + 1)
+      newline = lineBuffer.indexOf('\n')
+    }
+  }
+  lineBuffer += decoder.decode()
+  if (lineBuffer) processLine(lineBuffer)
+  processEvent()
+
+  if (!sawData) throw new LlmClientError('parse', 'API 流式响应没有有效数据')
+  if (!content && options.allowEmptyContent !== true) {
+    throw new LlmClientError('parse', 'API 响应格式无效或无内容')
+  }
+  if (finishReason === 'length' && options.strictLength !== false) {
+    throw new LlmClientError('parse', 'finish_reason=length（输出被截断）')
+  }
+  if ((sawReasoning || reasoningTokens > 0) && !options.allowReasoning && !options.acceptReasoningResponse) {
+    throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
+  }
+  return { content, finishReason }
+}
+
 async function callOnce(
   config: LlmProviderConfig,
   messages: ChatMessage[],
@@ -148,7 +264,9 @@ async function callOnce(
   const url = normalizeBaseUrl(config.baseUrl)
   if (!url) throw new LlmClientError('parse', 'baseUrl 非法（可能包含 userinfo 或不支持协议）')
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), config.timeoutMs)
+  const timer = config.timeoutEnabled === false
+    ? null
+    : setTimeout(() => controller.abort(), config.timeoutMs)
   if (signal) {
     signal.addEventListener('abort', () => controller.abort(), { once: true })
   }
@@ -163,12 +281,14 @@ async function callOnce(
       body: JSON.stringify({
         model: config.model,
         messages,
-        temperature: 0.4,
+        ...(resolveReasoningPolicy(config).providerType === 'claude'
+          && /^claude-sonnet-5(?:[.-]|$)/.test(config.model.trim().toLowerCase().split('/').pop() ?? '')
+          ? {}
+          : { temperature: 0.4, top_p: 1 }),
         ...(options.allowReasoning && resolveReasoningPolicy(config).providerType === 'openai'
           ? { max_completion_tokens: options.maxTokens ?? 512 }
           : { max_tokens: options.maxTokens ?? 64 }),
-        top_p: 1,
-        stream: false,
+        stream: true,
         n: 1,
         ...(options.extraBody ?? {}),
       }),
@@ -178,11 +298,13 @@ async function callOnce(
       const detail = (await response.text().catch(() => '')).slice(0, 200)
       throw new LlmClientError('http', `HTTP ${response.status}: ${detail}`)
     }
-    const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown }; finish_reason?: string | null }>
-      reasoning?: unknown
-      usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } }
+    // 标准路径始终读取 SSE；少数兼容端点会忽略 stream=true 并退回普通 JSON，继续兼容。
+    const contentType = response.headers?.get?.('content-type') ?? ''
+    const hasReadableBody = Boolean(response.body && typeof response.body.getReader === 'function')
+    if (hasReadableBody && !/application\/json/i.test(contentType)) {
+      return await readStreamingResponse(response, options)
     }
+    const body = (await response.json()) as OpenAIResponseBody
     const choice = body.choices?.[0]
     if (!choice?.message
       || typeof choice.message.content !== 'string'
@@ -209,7 +331,7 @@ async function callOnce(
     }
     throw new LlmClientError('network', `网络错误: ${String(error)}`)
   } finally {
-    clearTimeout(timer)
+    if (timer !== null) clearTimeout(timer)
   }
 }
 
@@ -218,9 +340,11 @@ async function callOnce(
  * 快速路径总预算 = config.timeoutMs；条件深思使用独立 deadlineMs（含语义重试）。
  */
 export async function requestLlmDecision(options: LlmDecisionOptions): Promise<LlmOutput> {
-  const budgetMs = options.reasoning
-    ? (options.deadlineMs ?? options.config.timeoutMs)
-    : effectiveDecisionTimeoutMs(options.config)
+  const budgetMs = options.config.timeoutEnabled === false
+    ? Number.POSITIVE_INFINITY
+    : options.reasoning
+      ? (options.deadlineMs ?? options.config.timeoutMs)
+      : effectiveDecisionTimeoutMs(options.config)
   const startedAt = Date.now()
   const attempt = async (messages: PromptPair, errorForRetry?: string): Promise<LlmOutput> => {
     const left = budgetMs - (Date.now() - startedAt)
@@ -242,6 +366,7 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
           maxTokens: options.reasoning || alwaysThinking ? 512 : undefined,
+          onReasoningProgress: options.onReasoningProgress,
         },
       )
       return parseLlmOutput(response.content, options.candidateIds)
@@ -264,6 +389,7 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
     const effectiveConfig = {
       ...config,
       timeoutMs: Math.min(config.timeoutMs, LLM_CONNECTION_TEST_TIMEOUT_MS),
+      timeoutEnabled: true,
     }
     const reasoningPolicy = resolveReasoningPolicy(effectiveConfig)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'

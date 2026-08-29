@@ -39,6 +39,8 @@ export interface LlmProviderConfig {
   style: LlmStyle
   /** 一次决策的总预算（含连接/解析/一次语义重试） */
   timeoutMs: number
+  /** 牌桌请求是否启用超时；false 时仅由页面/对局重置等外部取消结束。 */
+  timeoutEnabled?: boolean
 }
 
 export interface LlmProviderPreset extends LlmProviderConfig {
@@ -83,6 +85,7 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
   model: 'deepseek-v4-flash',
   style: '稳健',
   timeoutMs: LLM_DECISION_TIMEOUT_MS,
+  timeoutEnabled: true,
 }
 
 /** 常用供应商模板（Base URL + 示例模型，模型名需按官方文档核对） */
@@ -162,6 +165,7 @@ function normalizePreset(raw: Record<string, unknown>): LlmProviderPreset | null
     style: validateStyle(raw.style),
     // 决策预算为产品级统一参数；读取旧 localStorage 时统一升级为 40 秒。
     timeoutMs: LLM_DECISION_TIMEOUT_MS,
+    timeoutEnabled: raw.timeoutEnabled !== false,
   }
 }
 

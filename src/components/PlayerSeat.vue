@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
   /** AI 大模型吐槽气泡（可选；由上层管理过期） */
-  bubble?: { text: string; id: number } | null
+  bubble?: { text: string; id: number; persistent?: boolean } | null
 }>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined, bubble: null })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像

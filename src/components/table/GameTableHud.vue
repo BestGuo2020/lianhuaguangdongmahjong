@@ -67,7 +67,7 @@ interface Props {
   /** 翻精所在物理墩（0..67），供 3D 在牌山上翻出指示牌 */
   flipStack?: number
   /** AI 大模型吐槽气泡：key=座位绝对索引，value=最近一条（展示层自管理过期） */
-  llmBubbles?: Record<number, { text: string; id: number }>
+  llmBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
 }
 
 const props = defineProps<Props>()

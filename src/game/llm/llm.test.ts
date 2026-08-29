@@ -18,6 +18,7 @@ const config: LlmProviderConfig = {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('extractJsonObject：平衡括号扫描', () => {
@@ -59,6 +60,38 @@ describe('parseLlmOutput', () => {
 })
 
 describe('requestLlmDecision：重试语义', () => {
+  it('所有决策使用 SSE，但原始 reasoning_content 只转换为无内容的进度脉冲', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    const progress = vi.fn()
+    const sse = [
+      'data: {"choices":[{"delta":{"reasoning_content":"我的暗手有两张一万"},"finish_reason":null}]}\n\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"还有两张白板"},"finish_reason":null}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"{\\"choice\\":\\"A"},"finish_reason":null}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"1\\",\\"message\\":\\"稳住。\\"}"},"finish_reason":null}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens_details":{"reasoning_tokens":12}}}\n\n',
+      'data: [DONE]\n\n',
+    ].join('')
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    }) as never)
+
+    await expect(requestLlmDecision({
+      config: {
+        ...config,
+        providerType: 'custom',
+        baseUrl: 'https://api.orcarouter.ai/v1',
+        model: 'z-ai/glm-5.3-flash',
+      },
+      messages: { system: 's', user: 'u' },
+      candidateIds: ['A1'],
+      onReasoningProgress: progress,
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(capturedBody.stream).toBe(true)
+    expect(progress).toHaveBeenCalledTimes(2)
+    expect(progress.mock.calls).toEqual([[], []])
+  })
+
   it('解析失败 → 一次语义重试 → 成功；fetch 调用 2 次', async () => {
     let calls = 0
     vi.stubGlobal('fetch', vi.fn(async () => {
@@ -297,7 +330,8 @@ describe('prompt 构建', () => {
   it('包含候选编号、默认参考与自由牌桌台词约束', () => {
     const built = buildDecisionRequest(baseInput())
     const prompt = buildPrompt('稳健', built.request!)
-    expect(prompt.system).toContain('牌友')
+    expect(prompt.system).toContain('你是莲花广麻牌桌上的牌友')
+    expect(prompt.system).not.toContain('广东麻将桌上的牌友')
     expect(prompt.user).toContain('【候选动作】')
     expect(prompt.user).toContain('A1')
     expect(prompt.user).toContain('{"choice": "A1"')
@@ -364,6 +398,7 @@ describe('prompt 构建', () => {
       publicTiles: ['m1'], upperLastDiscard: 'm1',
     }))
     const prompt = buildPrompt('稳健', built.request!)
+    expect(prompt.system).toContain('你是莲花广麻牌桌上的牌友')
     expect(prompt.user).toContain('唯一支持的胡牌结构是标准 4 面子+1 将')
     expect(prompt.user).toContain('不支持七对、十三幺、十三烂、七星十三烂')
     expect(prompt.user).toContain('弃牌无需考虑点炮风险')
@@ -376,6 +411,7 @@ describe('prompt 构建', () => {
       ruleCode: 'lotus-legacy', hand: ['m3', 'm4', 'm5'], jokerTiles: ['m5'], wildcardTiles: ['white'],
     }))
     const prompt = buildPrompt('稳健', built.request!)
+    expect(prompt.system).toContain('你是莲花麻将牌桌上的牌友')
     expect(prompt.user).toContain('翻出的牌面及其同序下一张均为精牌')
     expect(prompt.user).toContain('白板只能替代上述精牌面或白板本身')
     expect(prompt.user).toContain('支持的特殊牌型：七对、十三幺、十三烂、七星十三烂')
@@ -431,6 +467,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(result.enabled).toBe(true)
     expect(result.presets).toHaveLength(3)
     expect(result.presets.every((preset) => preset.timeoutMs === 40_000)).toBe(true)
+    expect(result.presets.every((preset) => preset.timeoutEnabled === true)).toBe(true)
     expect(result.activeId).toBe('pa')
     expect(result.seatIds[1]).toBe('pb')
     expect(result.seatIds[2]).toBe('pc')
@@ -448,6 +485,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(migrated.presets).toHaveLength(1)
     expect(migrated.presets[0]).toMatchObject({ apiKey: 'sk-legacy', model: 'deepseek-chat', name: '默认' })
     expect(migrated.presets[0].timeoutMs).toBe(40_000)
+    expect(migrated.presets[0].timeoutEnabled).toBe(true)
     expect(migrated.activeId).toBe(migrated.presets[0].id)
     // 迁移后 v2 已写回、v1 清理
     expect(storage.getItem('llm.provider')).toBeNull()
@@ -458,6 +496,18 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     const storage = memoryStorage()
     storage.setItem('llm.providers', '{broken')
     expect(readLlmSettings(storage).presets).toEqual([])
+  })
+
+  it('牌桌超时开关默认开启，并可按预置关闭后持久化', () => {
+    const storage = memoryStorage()
+    saveLlmSettings({
+      enabled: true,
+      presets: [{ ...presetA, timeoutEnabled: false }],
+      activeId: 'pa', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    }, storage)
+    const result = readLlmSettings(storage)
+    expect(result.presets[0].timeoutEnabled).toBe(false)
+    expect(effectiveDecisionTimeoutMs(result.presets[0])).toBe(Number.POSITIVE_INFINITY)
   })
 
   it('presetForSeat：座位指定优先，否则默认预置', () => {
@@ -478,7 +528,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
   it('JSON 导出不含 Key；导入保留同 id 的本机 Key 与座位分配', () => {
     const settings: LlmSettings = {
       enabled: true,
-      presets: [presetA, presetB],
+      presets: [{ ...presetA, timeoutEnabled: false }, presetB],
       activeId: 'pa',
       seatIds: [null, 'pb', 'pa', null],
       seatStyles: [null, '高冷', null, '话痨'],
@@ -492,6 +542,7 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
     expect(imported.enabled).toBe(true)
     expect(imported.presets.map((preset) => preset.apiKey)).toEqual(['sk-a', 'sk-b'])
     expect(imported.presets.every((preset) => preset.timeoutMs === 40_000)).toBe(true)
+    expect(imported.presets.map((preset) => preset.timeoutEnabled)).toEqual([false, true])
     expect(imported.activeId).toBe('pa')
     expect(imported.seatIds).toEqual([null, 'pb', 'pa', null])
     expect(imported.seatStyles).toEqual([null, '高冷', null, '话痨'])
@@ -519,6 +570,32 @@ describe('llm 配置 v2（多预置 + 座位分配）', () => {
 })
 
 describe('testLlmConnection', () => {
+  it('关闭牌桌超时后不会在40秒触发Abort，响应到达后仍正常解析', async () => {
+    vi.useFakeTimers()
+    let finishFetch!: () => void
+    let signal!: AbortSignal
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal
+      return await new Promise((resolve, reject) => {
+        finishFetch = () => resolve({
+          ok: true, status: 200,
+          json: async () => ({
+            choices: [{ message: { content: '{"choice":"A1","message":"完成。"}' }, finish_reason: 'stop' }],
+          }),
+        })
+        signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+      })
+    }) as never)
+    const decision = requestLlmDecision({
+      config: { ...config, timeoutMs: 40_000, timeoutEnabled: false },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(signal.aborted).toBe(false)
+    finishFetch()
+    await expect(decision).resolves.toEqual({ choice: 'A1', message: '完成。' })
+  })
+
   it('2xx → ok；401/429 等非 2xx → 错误信息（只调用一次，不重试）', async () => {
     const okSpy = vi.fn(async () => ({
       ok: true, status: 200,
@@ -575,6 +652,7 @@ describe('testLlmConnection', () => {
     })
     vi.stubGlobal('fetch', spy as never)
     await requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect(capturedBody.stream).toBe(true)
     expect((capturedBody.thinking as { type: string }).type).toBe('disabled')
 
     const qwenConfig = {
@@ -669,7 +747,8 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(captured).toMatchObject({
-      model: 'kimi/kimi-k3', temperature: 1, top_p: 0.95, max_tokens: 512,
+      model: 'kimi/kimi-k3', temperature: 1, top_p: 0.95,
+      reasoning_effort: 'low', max_tokens: 512,
     })
     expect(captured.thinking).toBeUndefined()
   })
@@ -698,6 +777,37 @@ describe('testLlmConnection', () => {
     expect(capturedBody).toMatchObject({
       model: 'z-ai/glm-5.3-flash', max_tokens: 512,
       thinking: { type: 'enabled' }, reasoning_effort: 'low',
+    })
+  })
+
+  it('Claude Sonnet 5 快速路径显式关闭默认思考并移除采样参数', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+        }),
+      }
+    }) as never)
+    const claude = {
+      ...config, providerType: 'custom' as const,
+      baseUrl: 'https://api.orcarouter.ai/v1', model: 'anthropic/claude-sonnet-5',
+    }
+    await expect(requestLlmDecision({
+      config: claude, messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(capturedBody.thinking).toEqual({ type: 'disabled' })
+    expect(capturedBody.temperature).toBeUndefined()
+    expect(capturedBody.top_p).toBeUndefined()
+
+    await requestLlmDecision({
+      config: claude, messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
+    })
+    expect(capturedBody).toMatchObject({
+      thinking: { type: 'adaptive', display: 'summarized' },
+      output_config: { effort: 'medium' },
     })
   })
 

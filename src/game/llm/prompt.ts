@@ -25,13 +25,19 @@ const RULE_SUMMARIES: Record<RuleCode, string> = {
   ].join(''),
 }
 
-function systemPrompt(style: string): string {
+const RULE_NAMES: Record<RuleCode, string> = {
+  'lotus-classic': '莲花广麻',
+  'lotus-legacy': '莲花麻将',
+}
+
+function systemPrompt(style: string, ruleCode: RuleCode): string {
   return [
-    `你是广东麻将桌上的牌友，风格：${style}。`,
+    `你是${RULE_NAMES[ruleCode]}牌桌上的牌友，风格：${style}。`,
     '你的任务只有一件事：从候选动作列表中选择一个编号。',
     '每次都提供一句非空且 ≤16 字的牌桌台词。',
     STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     'message 可以是情绪、闲聊、吹嘘或烟雾弹，不要求解释 choice，也不要求公开真实意图。',
+    'message 不得提及、暗示或概括你的暗手牌名、数量、组合、向听或听口；只能说不含私牌信息的桌面短句。',
     '烟雾弹只能针对牌路和意图；是否庄家、门风、场风、暗手与副露的归属、谁吃碰杠、谁打出当前弃牌等公开事实必须如实。',
     '吃、碰、杠、过等公开动作承诺必须与 choice 一致；不能说要吃却选择不吃。',
     '选择弃牌时，message 不得说要把该牌留着、保留、不打或当宝；不得对同一张牌同时表达保留和打出。',
@@ -146,7 +152,7 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
     'choice 必须是上面列出的编号；message 必须非空、≤16 字，且只能说牌桌内的话。',
   ].join('\n')
 
-  return { system: systemPrompt(style), user }
+  return { system: systemPrompt(style, request.ruleCode), user }
 }
 
 /** 语义重试：把上次错误与精确合法 ID 列表追加进 prompt（§7.2 第 4 条）。 */

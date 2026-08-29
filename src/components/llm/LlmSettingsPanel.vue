@@ -6,6 +6,7 @@ import {
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
+import { resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 
 const props = defineProps<{
@@ -28,6 +29,7 @@ const transferStatus = ref<{ ok: boolean; message: string } | null>(null)
 const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
+const selectedReasoningPolicy = computed(() => selected.value ? resolveReasoningPolicy(selected.value) : null)
 const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
 
 function load() {
@@ -65,6 +67,7 @@ function addFromTemplate() {
     model: template.model,
     style: '稳健',
     timeoutMs: LLM_DECISION_TIMEOUT_MS,
+    timeoutEnabled: true,
     ttsVoiceKey: 'auto',
     ...(isCustomTemplate ? { fromCustomTemplate: true } : {}),
   }
@@ -104,6 +107,7 @@ async function testConnection() {
       model: preset.model,
       style: preset.style,
       timeoutMs: preset.timeoutMs,
+      timeoutEnabled: true,
     })
     testResult.value = result.ok && !url ? { ok: false, message: 'baseUrl 非法（检查协议与地址，不支持带账号信息的链接）' } : result
   } finally {
@@ -257,6 +261,17 @@ function presetName(id: string | null): string {
           <span>模型</span>
           <input v-model="selected.model" type="text" placeholder="deepseek-v4-flash" data-testid="llm-model" spellcheck="false">
         </label>
+        <p
+          v-if="selectedReasoningPolicy?.mode === 'always-on'"
+          class="llm-provider-warning" data-testid="llm-always-thinking-warning"
+        >该模型始终思考</p>
+        <label class="llm-row">
+          <span>牌桌超时</span>
+          <span class="llm-timeout-toggle">
+            <input v-model="selected.timeoutEnabled" type="checkbox" data-testid="llm-timeout-enabled">
+            {{ selected.timeoutEnabled !== false ? '开启（40秒）' : '关闭（永不超时）' }}
+          </span>
+        </label>
         <label class="llm-row">
           <span>风格</span>
           <select v-model="selected.style" data-testid="llm-style">
@@ -300,7 +315,7 @@ function presetName(id: string | null): string {
 
       <div class="llm-stats">
         <h3>本局 AI 统计</h3>
-        <p>请求 {{ stats.requests }} · 深思 {{ stats.reasoningRequests ?? 0 }} · 成功 {{ stats.successes }} · 回退 {{ stats.fallbacks }} · 吐槽 {{ stats.messages }}</p>
+        <p>请求 {{ stats.requests }} · 思考 {{ stats.thinkingRequests ?? 0 }} · 升级 {{ stats.enhancedReasoningRequests ?? stats.reasoningRequests ?? 0 }} · 成功 {{ stats.successes }} · 回退 {{ stats.fallbacks }} · 吐槽 {{ stats.messages }}</p>
         <ul v-if="messages.length" class="llm-messages">
           <li v-for="(message, index) in [...messages].reverse()" :key="index">{{ message }}</li>
         </ul>
@@ -325,6 +340,9 @@ function presetName(id: string | null): string {
 .llm-hint b { color: #e5d5ad; }
 .llm-row { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; margin: 9px 0; }
 .llm-row > span { color: #a6b5ad; }
+.llm-provider-warning { margin: -2px 0 9px 94px; color: #f0b66f; font-size: 11px; line-height: 1.5; }
+.llm-timeout-toggle { display: flex; align-items: center; gap: 8px; color: #d0c39e !important; }
+.llm-timeout-toggle input { min-width: auto; }
 .llm-row input, .llm-row select, .llm-seat-row select {
   min-width: 0; padding: 7px 9px; border: 1px solid rgba(213, 171, 84, .3); border-radius: 6px;
   background: rgba(5, 18, 13, .8); color: #e8dcc0;
