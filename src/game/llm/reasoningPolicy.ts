@@ -121,6 +121,15 @@ export function resolveReasoningPolicy(
       if (model.includes('thinking')) {
         return policy(providerType, 'reasoning-only', '显式 Thinking 型号不用于实时麻将决策')
       }
+      if (/^glm-5\.3-flash(?:[.-]|$)/.test(model)) {
+        return reasoning
+          ? policy(providerType, 'explicit-on', '已开启 GLM-5.3-Flash 条件思考', {
+            reasoning_effort: 'medium',
+          })
+          : policy(providerType, 'explicit-off', '已关闭 GLM-5.3-Flash 思考', {
+            reasoning_effort: 'none',
+          })
+      }
       if (/^glm-5\.3(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'always-on', 'GLM-5.3 始终思考', {
           thinking: { type: 'enabled' }, reasoning_effort: reasoning ? 'medium' : 'low',
