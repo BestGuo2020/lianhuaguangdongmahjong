@@ -114,18 +114,15 @@ describe('requestLlmDecision：重试语义', () => {
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
-  it('finish_reason=length 视为解析失败并重试一次', async () => {
+  it('finish_reason=length 单独回退，不追加选错反馈重试', async () => {
     let calls = 0
     vi.stubGlobal('fetch', vi.fn(async () => {
       calls += 1
-      if (calls === 1) {
-        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"choice":"A1"' }, finish_reason: 'length' }] }) }
-      }
-      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }) }
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '' }, finish_reason: 'length' }] }) }
     }) as never)
-    const output = await requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
-    expect(output.choice).toBe('A1')
-    expect(calls).toBe(2)
+    await expect(requestLlmDecision({ config, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] }))
+      .rejects.toMatchObject({ kind: 'length' })
+    expect(calls).toBe(1)
   })
 })
 
@@ -753,7 +750,7 @@ describe('testLlmConnection', () => {
     expect(captured.top_p).toBeUndefined()
   })
 
-  it('GLM-5.3 Flash 普通决策使用 low、接受推理流并限制为 128 tokens', async () => {
+  it('GLM-5.3 Flash 普通决策使用 low/512、JSON Object 并接受推理流', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -775,9 +772,30 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(capturedBody).toMatchObject({
-      model: 'z-ai/glm-5.3-flash', max_tokens: 128, reasoning_effort: 'low',
+      model: 'z-ai/glm-5.3-flash', max_tokens: 512, reasoning_effort: 'low',
+      response_format: { type: 'json_object' },
     })
     expect(capturedBody.thinking).toBeUndefined()
+  })
+
+  it('GLM-5.3 Flash 疑难决策使用 medium/1024', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+        }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: { ...config, providerType: 'custom', baseUrl: 'https://api.orcarouter.ai/v1', model: 'z-ai/glm-5.3-flash' },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
+    })
+    expect(capturedBody).toMatchObject({
+      max_tokens: 1024, reasoning_effort: 'medium', response_format: { type: 'json_object' },
+    })
   })
 
   it('Claude Sonnet 5 快速路径显式关闭默认思考并移除采样参数', async () => {
