@@ -6,6 +6,11 @@ export type LocalLlmWinType = LlmWinType
 interface LocalLlmSeatVoice {
   style: LocalLlmVoiceStyle
   announce(text: string): void | Promise<void>
+  generateReaction?(
+    reaction: LlmRoundReaction,
+    fallback: string,
+    variationIndex: number,
+  ): Promise<string | null>
   reactionSequence: number
 }
 
@@ -19,8 +24,9 @@ export function registerLocalLlmVoiceSeat(
   seat: number,
   style: LocalLlmVoiceStyle,
   announce: (text: string) => void | Promise<void>,
+  generateReaction?: LocalLlmSeatVoice['generateReaction'],
 ): void {
-  seats.set(seat, { style, announce, reactionSequence: 0 })
+  seats.set(seat, { style, announce, generateReaction, reactionSequence: 0 })
 }
 
 export function isLocalLlmSeat(seat: number): boolean {
@@ -47,9 +53,9 @@ export function announceLocalLlmRoundReactions(result: LocalLlmRoundResult): Pro
     : registered
 
   return (async () => {
-    for (const [queueIndex, seat] of order.entries()) {
+    const plans = order.flatMap((seat, queueIndex) => {
       const voice = seats.get(seat)
-      if (!voice) continue
+      if (!voice) return []
       const reaction: LlmRoundReaction = result.draw
         ? { outcome: 'draw' }
         : seat === winner
@@ -57,9 +63,23 @@ export function announceLocalLlmRoundReactions(result: LocalLlmRoundResult): Pro
           : { outcome: 'loss' }
       // 每个 AI 的 reactionSequence 负责跨局轮换，queueIndex 负责同局错开；
       // 同性格的多个输家不会再因为各自序号同步而说出同一句。
-      const text = llmRoundReactionLine(reaction, voice.style, voice.reactionSequence + queueIndex)
+      const variationIndex = voice.reactionSequence + queueIndex
+      const fallback = llmRoundReactionLine(reaction, voice.style, variationIndex)
       voice.reactionSequence += 1
-      await voice.announce(text)
+      return [{ voice, reaction, fallback, variationIndex }]
+    })
+    // 模型文本并行生成，避免三个座位逐个等待网络；播报仍在下面严格串行。
+    const generated = await Promise.all(plans.map(async (plan) => (
+      plan.voice.generateReaction
+        ? plan.voice.generateReaction(plan.reaction, plan.fallback, plan.variationIndex).catch(() => null)
+        : null
+    )))
+    const used = new Set<string>()
+    for (const [index, plan] of plans.entries()) {
+      let text = generated[index] || plan.fallback
+      if (used.has(text)) text = plan.fallback
+      used.add(text)
+      await plan.voice.announce(text)
     }
   })()
 }
