@@ -111,6 +111,23 @@ describe('useAudio LLM voice ducking', () => {
     second.emit('ended')
   })
 
+  it('赛后感言必须等整句播放结束才放行下一位或结算', async () => {
+    const audio = useAudio()
+    const url = `/api/local-tts/audio/${'e'.repeat(64)}.mp3`
+    let settled = false
+    const completed = audio.playLocalLlmAudioUntilMidpoint(url, 1, 1, 'important', {
+      waitForCompletion: true,
+    }).then((value) => { settled = true; return value })
+    const voice = MockAudio.instances.find((item) => item.src === url)!
+
+    voice.emit('playing')
+    voice.currentTime = 2
+    voice.emit('timeupdate')
+    expect(settled).toBe(false)
+    voice.emit('ended')
+    await expect(completed).resolves.toBe(true)
+  })
+
   it('普通吐槽播放期间丢弃后来普通语音，不再积压到下一圈', () => {
     const audio = useAudio()
     const bgm = MockAudio.instances[0]

@@ -95,6 +95,7 @@ interface LlmAudioItem {
   priority: LlmSpeechPriority
   enqueuedAt: number
   waitForMidpoint?: boolean
+  waitForCompletion?: boolean
   onStarted?: () => void
   fallbackMidpointMs?: number
   resolveMidpoint?: (played: boolean) => void
@@ -226,7 +227,7 @@ export function useAudio() {
       const candidate = llmAudioQueue.shift()!
       const ttl = candidate.priority === 'important' ? IMPORTANT_LLM_AUDIO_TTL_MS : NORMAL_LLM_AUDIO_TTL_MS
       // 单机等待中的动作不会过期：动作尚未执行，台词仍属于当前决策。
-      if (candidate.waitForMidpoint || Date.now() - candidate.enqueuedAt <= ttl) {
+      if (candidate.waitForMidpoint || candidate.waitForCompletion || Date.now() - candidate.enqueuedAt <= ttl) {
         item = candidate
         break
       }
@@ -265,6 +266,7 @@ export function useAudio() {
       if (!activeLlmAudio) setBgmDucked(false)
     }
     const maybeResolveMidpoint = () => {
+      if (item.waitForCompletion) return
       if (!started || !item.resolveMidpoint) return
       const duration = audio.duration
       if (Number.isFinite(duration) && duration > 0 && audio.currentTime >= duration / 2) {
@@ -272,6 +274,7 @@ export function useAudio() {
       }
     }
     const refreshMidpointFallback = () => {
+      if (item.waitForCompletion) return
       if (!started || !item.resolveMidpoint) return
       const duration = audio.duration
       if (Number.isFinite(duration) && duration > 0) {
@@ -328,7 +331,7 @@ export function useAudio() {
     pumpLlmAudio()
   }
 
-  /** 单机 LLM：不丢弃台词；实际播放开始时显示气泡，播放到中点时放行动作。 */
+  /** 单机 LLM：不丢弃台词；普通动作在中点放行，赛后感言可等待整句播放结束。 */
   function playLocalLlmAudioUntilMidpoint(
     url: string,
     seat: number,
@@ -341,6 +344,7 @@ export function useAudio() {
       llmAudioQueue.push({
         url, seat, messageId, priority, enqueuedAt: Date.now(),
         waitForMidpoint: true,
+        waitForCompletion: hooks.waitForCompletion,
         onStarted: hooks.onStarted,
         fallbackMidpointMs: hooks.fallbackMidpointMs,
         resolveMidpoint: resolve,

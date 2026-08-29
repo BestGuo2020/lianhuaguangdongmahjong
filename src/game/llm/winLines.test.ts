@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LLM_WIN_LINES, llmWinLine } from './winLines'
+import { LLM_DRAW_LINES, LLM_LOSS_LINES, LLM_WIN_LINES, llmRoundReactionLine, llmWinLine } from './winLines'
 
 describe('LLM win lines', () => {
   it('为每种胡法和性格提供三条不超过 16 字的唯一短句', () => {
@@ -22,5 +22,17 @@ describe('LLM win lines', () => {
     for (const styles of Object.values(LLM_WIN_LINES)) {
       expect(styles.稳健.every((line) => !line.includes('稳稳'))).toBe(true)
     }
+  })
+
+  it('输家和荒庄感言同样按性格提供三条短句', () => {
+    for (const styles of [LLM_LOSS_LINES, LLM_DRAW_LINES]) {
+      for (const variants of Object.values(styles)) {
+        expect(variants).toHaveLength(3)
+        expect(new Set(variants).size).toBe(3)
+        expect(variants.every((line) => [...line].length <= 18)).toBe(true)
+      }
+    }
+    expect(llmRoundReactionLine({ outcome: 'loss' }, '高冷', 0)).toBe('这局输了，仅此而已。')
+    expect(llmRoundReactionLine({ outcome: 'draw' }, '稳健', 0)).toBe('荒庄收场，下一局再寻机会。')
   })
 })

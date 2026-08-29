@@ -9,6 +9,8 @@ export interface LlmAudioPlaybackHooks {
   onStarted?: () => void
   /** duration 暂不可用时的动作放行兜底（从 playing 开始计时）。 */
   fallbackMidpointMs?: number
+  /** 赛后感言必须整句播放结束才轮到下一位，并在全部结束后放行结算。 */
+  waitForCompletion?: boolean
 }
 
 export type LlmAudioPlayer = (
@@ -60,7 +62,7 @@ export function cancelLocalLlmAudioPlayback(): void {
 }
 
 /**
- * 单机动作时间线专用：等待播放器真正开始，并在播放中点返回。
+ * 单机动作时间线专用：等待播放器真正开始，默认在播放中点返回；赛后感言可等待整句结束。
  * 返回 false 表示静音、未注册、播放失败或被取消，调用方应显示气泡并立即放行动作。
  */
 export async function playLocalLlmAudioUntilMidpoint(

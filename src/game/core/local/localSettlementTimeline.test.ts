@@ -4,7 +4,11 @@ import { WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from
 import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 import { createLocalGameState } from './localGameState'
 import { createLocalSettlementTimeline } from './localSettlementTimeline'
-import { registerLocalLlmVoiceSeat, resetLocalLlmVoiceRegistryForTests } from '../presentation/localLlmVoiceRegistry'
+import {
+  announceLocalLlmRoundReactions,
+  registerLocalLlmVoiceSeat,
+  resetLocalLlmVoiceRegistryForTests,
+} from '../presentation/localLlmVoiceRegistry'
 
 function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
   return {
@@ -14,6 +18,10 @@ function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
 }
 
 afterEach(() => resetLocalLlmVoiceRegistryForTests())
+
+async function flushPromises() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve()
+}
 
 describe('localSettlementTimeline', () => {
   it('rejects a non-winning settlement request even when a caller bypasses the turn orchestrator', () => {
@@ -111,7 +119,7 @@ describe('localSettlementTimeline', () => {
     expect(playSound).toHaveBeenCalledWith('hu.mp3')
   })
 
-  it('LLM 赢家用策略台词替代胡牌人声，但保留胡牌特效音', () => {
+  it('LLM 赢家在亮牌后发表策略感言，替代胡牌人声并保留特效音', async () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -135,17 +143,22 @@ describe('localSettlementTimeline', () => {
 
     timeline.endGame(1)
 
-    expect(announce).toHaveBeenCalledWith('自摸，意料之中。')
+    expect(announce).not.toHaveBeenCalled()
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(announce).toHaveBeenCalledWith('自摸，意料之中。')
+    expect(state.phase.value).toBe('settled')
   })
 
   it.each([
     ['self-draw', {} as EndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east'] as GamePlayer['hand']],
     ['discard-win', { sourceFrom: 2, winTile: 'east' } as EndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east'] as GamePlayer['hand']],
     ['robbed-kong-win', { robbedKong: true, robbedKongPlayerIndex: 2, winTile: 'east' } as EndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east'] as GamePlayer['hand']],
-  ] as const)('在 clearTimers 之后启动 %s 胜利 TTS', (expectedType, endOptions, hand) => {
+  ] as const)('亮牌后才启动 %s 赛后感言并放行结算', async (expectedType, endOptions, hand) => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -153,24 +166,92 @@ describe('localSettlementTimeline', () => {
       { ...player(2), discards: ['east'] }, player(3),
     )
     const order: string[] = []
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
     const timeline = createLocalSettlementTimeline({
       state,
       clearTimers: () => { order.push('clear') },
-      later: vi.fn(() => 1),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound: vi.fn(),
       showTableAction: vi.fn(),
       structuralMeldCount: () => 0,
       getRoundLabel: () => '东一局',
       isLlmVoiceSeat: () => true,
-      announceLlmWin: (_seat, type) => { order.push(`announce:${type}`); return true },
+      announceLlmRoundReactions: ({ winnerIndex, winType }) => {
+        order.push(`announce:${winnerIndex}:${winType}`)
+      },
     })
 
     timeline.endGame(1, endOptions)
 
-    expect(order.slice(0, 2)).toEqual(['clear', `announce:${expectedType}`])
+    expect(order).toEqual(['clear'])
+    await flushPromises()
+    scheduled.find((item) => item.delay === DISCARD_WIN_EFFECT_DELAY)?.callback()
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(order).toEqual(['clear', `announce:1:${expectedType}`])
+    expect(state.phase.value).toBe('settled')
   })
 
-  it('allows a headless online engine to bypass the single-player LLM voice registry', () => {
+  it('赢家先说、其余 AI 顺时针轮流说，真人不说且全部结束前不弹结算', async () => {
+    const state = createLocalGameState()
+    state.phase.value = 'thinking'
+    state.players.push(
+      player(0), player(1),
+      player(2, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east']),
+      player(3),
+    )
+    const spoken: number[] = []
+    const releases = new Map<number, () => void>()
+    for (const seat of [1, 2, 3]) {
+      registerLocalLlmVoiceSeat(seat, '高冷', async () => {
+        spoken.push(seat)
+        await new Promise<void>((resolve) => releases.set(seat, resolve))
+      })
+    }
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
+    const timeline = createLocalSettlementTimeline({
+      state,
+      clearTimers: vi.fn(),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
+      playSound: vi.fn(),
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '东一局',
+    })
+
+    timeline.endGame(2)
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+
+    expect(spoken).toEqual([2])
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
+    releases.get(2)!()
+    await flushPromises()
+    expect(spoken).toEqual([2, 3])
+    releases.get(3)!()
+    await flushPromises()
+    expect(spoken).toEqual([2, 3, 1])
+    releases.get(1)!()
+    await flushPromises()
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.winnerIndex).toBe(2)
+  })
+
+  it('真人获胜时真人不发言，只有三个 AI 依次发表失败感言', async () => {
+    const spoken: Array<{ seat: number; text: string }> = []
+    for (const seat of [1, 2, 3]) {
+      registerLocalLlmVoiceSeat(seat, '高冷', (text) => { spoken.push({ seat, text }) })
+    }
+
+    await announceLocalLlmRoundReactions({ winnerIndex: 0, winType: 'self-draw' })
+
+    expect(spoken.map((item) => item.seat)).toEqual([1, 2, 3])
+    expect(spoken.every((item) => !item.text.includes('自摸'))).toBe(true)
+  })
+
+  it('allows a headless online engine to bypass the single-player LLM voice registry', async () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -180,22 +261,26 @@ describe('localSettlementTimeline', () => {
     )
     const leakedSinglePlayerAnnouncement = vi.fn()
     registerLocalLlmVoiceSeat(1, '高冷', leakedSinglePlayerAnnouncement)
-    const onlineAnnouncement = vi.fn(() => false)
+    const onlineAnnouncement = vi.fn()
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
     const timeline = createLocalSettlementTimeline({
       state,
       clearTimers: vi.fn(),
-      later: vi.fn(() => 1),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound: vi.fn(),
       showTableAction: vi.fn(),
       structuralMeldCount: () => 0,
       getRoundLabel: () => '东一局',
       isLlmVoiceSeat: () => false,
-      announceLlmWin: onlineAnnouncement,
+      announceLlmRoundReactions: onlineAnnouncement,
     })
 
     timeline.endGame(1)
 
-    expect(onlineAnnouncement).toHaveBeenCalledWith(1, 'self-draw')
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(onlineAnnouncement).toHaveBeenCalledWith({ winnerIndex: 1, winType: 'self-draw' })
     expect(leakedSinglePlayerAnnouncement).not.toHaveBeenCalled()
   })
 })

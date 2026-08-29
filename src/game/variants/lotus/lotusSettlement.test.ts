@@ -4,7 +4,8 @@ import { registerLocalLlmVoiceSeat, resetLocalLlmVoiceRegistryForTests } from '.
 import { createLotusGameState } from './lotusState'
 import type { LotusEndGameOptions } from './lotusState'
 import { createLotusSettlement } from './lotusSettlement'
-import { WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
+import { WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
+import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 
 function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
   return {
@@ -15,8 +16,12 @@ function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
 
 afterEach(() => resetLocalLlmVoiceRegistryForTests())
 
+async function flushPromises() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve()
+}
+
 describe('lotusSettlement LLM voice isolation', () => {
-  it('LLM 赢家用策略台词替代胡牌人声，但保留胡牌特效音', () => {
+  it('LLM 赢家在亮牌后发表策略感言，替代胡牌人声并保留特效音', async () => {
     const state = createLotusGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -40,17 +45,22 @@ describe('lotusSettlement LLM voice isolation', () => {
 
     settlement.endGame(1, { selfDraw: true })
 
-    expect(announce).toHaveBeenCalledTimes(1)
+    expect(announce).not.toHaveBeenCalled()
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(announce).toHaveBeenCalledTimes(1)
+    expect(state.phase.value).toBe('settled')
   })
 
   it.each([
     ['self-draw', { selfDraw: true } as LotusEndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east'] as GamePlayer['hand']],
     ['discard-win', { sourceFrom: 2, winTile: 'east' } as LotusEndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east'] as GamePlayer['hand']],
     ['robbed-kong-win', { robbedKong: true, robbedKongPlayerIndex: 2, winTile: 'east' } as LotusEndGameOptions, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east'] as GamePlayer['hand']],
-  ] as const)('在 clearTimers 之后启动 %s 胜利 TTS', (expectedType, endOptions, hand) => {
+  ] as const)('亮牌后才启动 %s 赛后感言并放行结算', async (expectedType, endOptions, hand) => {
     const state = createLotusGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -58,24 +68,34 @@ describe('lotusSettlement LLM voice isolation', () => {
       { ...player(2), discards: ['east'] }, player(3),
     )
     const order: string[] = []
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
     const settlement = createLotusSettlement({
       state,
       clearTimers: () => { order.push('clear') },
-      later: vi.fn(() => 1),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound: vi.fn(),
       showTableAction: vi.fn(),
       structuralMeldCount: () => 0,
       getRoundLabel: () => '东一局',
       isLlmVoiceSeat: () => true,
-      announceLlmWin: (_seat, type) => { order.push(`announce:${type}`); return true },
+      announceLlmRoundReactions: ({ winnerIndex, winType }) => {
+        order.push(`announce:${winnerIndex}:${winType}`)
+      },
     })
 
     settlement.endGame(1, endOptions)
 
-    expect(order.slice(0, 2)).toEqual(['clear', `announce:${expectedType}`])
+    expect(order).toEqual(['clear'])
+    await flushPromises()
+    scheduled.find((item) => item.delay === DISCARD_WIN_EFFECT_DELAY)?.callback()
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(order).toEqual(['clear', `announce:1:${expectedType}`])
+    expect(state.phase.value).toBe('settled')
   })
 
-  it('does not let the single-player registry announce a human win in a headless online game', () => {
+  it('does not let the single-player registry announce a human win in a headless online game', async () => {
     const state = createLotusGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -85,22 +105,26 @@ describe('lotusSettlement LLM voice isolation', () => {
     )
     const leakedSinglePlayerAnnouncement = vi.fn()
     registerLocalLlmVoiceSeat(1, '高冷', leakedSinglePlayerAnnouncement)
-    const onlineAnnouncement = vi.fn(() => false)
+    const onlineAnnouncement = vi.fn()
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
     const settlement = createLotusSettlement({
       state,
       clearTimers: vi.fn(),
-      later: vi.fn(() => 1),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound: vi.fn(),
       showTableAction: vi.fn(),
       structuralMeldCount: () => 0,
       getRoundLabel: () => '东一局',
       isLlmVoiceSeat: () => false,
-      announceLlmWin: onlineAnnouncement,
+      announceLlmRoundReactions: onlineAnnouncement,
     })
 
     settlement.endGame(1, { selfDraw: true })
 
-    expect(onlineAnnouncement).toHaveBeenCalledWith(1, 'self-draw')
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+    expect(onlineAnnouncement).toHaveBeenCalledWith({ winnerIndex: 1, winType: 'self-draw' })
     expect(leakedSinglePlayerAnnouncement).not.toHaveBeenCalled()
   })
 })

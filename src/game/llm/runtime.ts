@@ -15,6 +15,8 @@ import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
 import { reasoningStatusSpeech } from './decisionSpeech'
 
+const MIN_ROUND_REACTION_MS = 1_200
+
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
   /** 座位 1-3 的玩家形象（昵称（策略）/策略头像）；未启用时为空数组 */
@@ -58,6 +60,7 @@ function hooksForSeat(
   let reasoningStatusSequence = 0
   const admission = (seat: number, meta: Parameters<NonNullable<LlmControllerHooks['onLlmMessage']>>[2]) => {
     const priority = meta?.priority ?? 'normal'
+    if (meta?.source === 'win') return { priority, admitted: true }
     const mandatory = style === '话痨'
       && (meta?.source === 'decision' || meta?.source === 'fallback')
       && meta.decision === 'turn'
@@ -69,6 +72,8 @@ function hooksForSeat(
     if (!admitted) return
     const compact = compactLlmSpeechText(text)
     if (!compact) return
+    const roundReaction = meta?.source === 'win'
+    const startedAt = Date.now()
     let bubbleShown = false
     const showBubble = () => {
       if (bubbleShown) return
@@ -76,8 +81,15 @@ function hooksForSeat(
       try { void hooks.onLlmMessage?.(seat, compact, meta) } catch { /* 展示失败不阻塞动作 */ }
     }
     // 有声时：playing 事件显示气泡，中点 Promise 放行动作；静音/失败时不走音频并立即显示气泡。
-    await getLocalTtsClient().speak(seat, compact, voiceKey, style, priority, { onStarted: showBubble })
+    await getLocalTtsClient().speak(seat, compact, voiceKey, style, priority, {
+      onStarted: showBubble,
+      waitForCompletion: roundReaction,
+    })
     if (!bubbleShown) showBubble()
+    if (roundReaction) {
+      const remaining = MIN_ROUND_REACTION_MS - (Date.now() - startedAt)
+      if (remaining > 0) await new Promise<void>((resolve) => globalThis.setTimeout(resolve, remaining))
+    }
   }
   return {
     onLlmMessage: deliver,
