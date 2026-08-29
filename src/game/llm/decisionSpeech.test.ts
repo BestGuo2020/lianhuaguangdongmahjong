@@ -77,11 +77,20 @@ describe('动作一致的 LLM 决策台词', () => {
 
   it('点名已选弃牌并说留着、保留或当宝时回退', () => {
     const discard = { kind: 'discard', handIndex: 0 } as const
-    const facts = { discardedTile: '发财' }
+    const facts = { discardedTile: '发财', concealedTiles: ['发财', '1万', '1万', '白板'] }
     expect(resolveDecisionSpeech('发财留着当宝，先走它！', discard, '稳健', 0, facts))
       .toBe('这张先走。')
     expect(resolveDecisionSpeech('保留发财。', discard, '稳健', 0, facts)).toBe('这张先走。')
     expect(resolveDecisionSpeech('发财有点意思。', discard, '稳健', 0, facts)).toBe('发财有点意思。')
+  })
+
+  it('自由 message 点名或概括未公开暗手时回退程序台词', () => {
+    const discard = { kind: 'discard', handIndex: 0 } as const
+    const facts = { discardedTile: '发财', concealedTiles: ['发财', '1万', '1万', '白板'] }
+    expect(resolveDecisionSpeech('手里有两张1万。', discard, '稳健', 0, facts)).toBe('这张先走。')
+    expect(resolveDecisionSpeech('白板还能做对子。', discard, '稳健', 0, facts)).toBe('这张先走。')
+    expect(resolveDecisionSpeech('我现在一向听。', discard, '稳健', 0, facts)).toBe('这张先走。')
+    expect(resolveDecisionSpeech('今天手气不错。', discard, '稳健', 0, facts)).toBe('今天手气不错。')
   })
 
   it('他家公开吃碰杠与当前弃牌来源说错时回退，但牌路烟雾弹仍保留', () => {

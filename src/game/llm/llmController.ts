@@ -59,7 +59,7 @@ export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
   onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void | Promise<void>
-  /** 深度思考仅展示状态，不进入台词、日志或 TTS。 */
+  /** 深度思考仅展示客户端生成的安全进度，不接收原始推理文本。 */
   onLlmStatus?(seat: number, active: boolean, text?: string): void | Promise<void>
   onReset?(): void
 }
@@ -75,6 +75,19 @@ const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
 
+const SAFE_REASONING_STAGES = [
+  '正在观察公开牌局',
+  '正在整理规则约束',
+  '正在比较可行动作',
+  '正在评估攻守节奏',
+  '正在复核最终选择',
+] as const
+/** 只由推理块序号生成，不接触暗手、候选或供应商原始推理内容。 */
+export function safeReasoningStatus(sequence: number): string {
+  const count = Math.max(1, Math.floor(sequence))
+  return `思考中 · ${SAFE_REASONING_STAGES[(count - 1) % SAFE_REASONING_STAGES.length]}`
+}
+
 function speechFacts(state: StateSnapshotV1, action: CanonicalAction): DecisionSpeechFacts {
   const meldTypes = (name: 'upper' | 'opposite' | 'lower') => state.snapshots[name].melds.map((meld) => meld.type)
   return {
@@ -86,6 +99,7 @@ function speechFacts(state: StateSnapshotV1, action: CanonicalAction): DecisionS
       ? { from: state.claimFrom, tile: state.claimTile }
       : null,
     discardedTile: action.kind === 'discard' ? state.hand[action.handIndex] : undefined,
+    concealedTiles: state.hand,
   }
 }
 
@@ -102,12 +116,29 @@ async function decideCanonical(
   if (built.request.candidates.length <= 1) return built.fallbackAction
   const ids = built.request.candidates.map((candidate) => candidate.id)
   const prompt = buildPrompt(config.style, built.request)
-  const supportsReasoning = resolveReasoningPolicy(config, true).mode === 'explicit-on'
+  const requestedReasoningPolicy = resolveReasoningPolicy(config, true)
+  const alwaysThinking = requestedReasoningPolicy.mode === 'always-on'
+  const supportsReasoning = requestedReasoningPolicy.mode === 'explicit-on' || alwaysThinking
   // 当前游戏循环没有更短的外部倒计时；条件深思拥有独立的 45 秒总预算（40 秒请求 + 余量）。
   const trigger = supportsReasoning
     ? reasoning.admit(built.request, input.playerIndex, reasoning.config.minRemainingBudgetMs)
     : { enabled: false }
   const useReasoning = trigger.enabled
+  // 始终思考模型没有快速模式：未命中触发器或额度耗尽时不调用模型，直接执行引擎建议。
+  if (alwaysThinking && !useReasoning) return built.fallbackAction
+  let reasoningProgressSequence = 0
+  let reasoningStatusActive = useReasoning
+  const onReasoningProgress = () => {
+    reasoningProgressSequence += 1
+    reasoningStatusActive = true
+    try {
+      void hooks.onLlmStatus?.(
+        input.playerIndex,
+        true,
+        safeReasoningStatus(reasoningProgressSequence),
+      )
+    } catch { /* 展示失败不影响决策 */ }
+  }
   stats.requests += 1
   if (useReasoning) {
     stats.reasoningRequests = (stats.reasoningRequests ?? 0) + 1
@@ -118,6 +149,7 @@ async function decideCanonical(
       config, messages: prompt, candidateIds: ids,
       reasoning: useReasoning,
       deadlineMs: useReasoning ? reasoning.config.deadlineMs : undefined,
+      onReasoningProgress,
     })
     const candidate = built.request.candidates.find((item) => item.id === output.choice)
     if (!candidate) {
@@ -155,7 +187,7 @@ async function decideCanonical(
     stats.fallbacks += 1
     return built.fallbackAction
   } finally {
-    if (useReasoning) {
+    if (reasoningStatusActive) {
       try { await hooks.onLlmStatus?.(input.playerIndex, false) } catch { /* 状态气泡不影响决策 */ }
     }
   }

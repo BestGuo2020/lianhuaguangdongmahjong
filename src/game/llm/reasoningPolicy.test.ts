@@ -55,6 +55,21 @@ describe('LLM 非思考能力矩阵', () => {
     })
   })
 
+  it('Claude Sonnet 5 默认思考必须显式关闭，条件命中时使用自适应思考', () => {
+    const preset = config('custom', 'anthropic/claude-sonnet-5')
+    expect(resolveReasoningPolicy(preset)).toMatchObject({
+      providerType: 'claude', mode: 'explicit-off',
+      requestBody: { thinking: { type: 'disabled' } },
+    })
+    expect(resolveReasoningPolicy(preset, true)).toMatchObject({
+      providerType: 'claude', mode: 'explicit-on',
+      requestBody: {
+        thinking: { type: 'adaptive', display: 'summarized' },
+        output_config: { effort: 'medium' },
+      },
+    })
+  })
+
   it.each(['kimi/kimi-k2.5', 'kimi/kimi-k2.6'])(
     'Kimi K2.5/K2.6 中转 ID %s 保持可关闭思考模式',
     (model) => {

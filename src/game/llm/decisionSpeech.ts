@@ -10,10 +10,13 @@ export interface DecisionSpeechFacts {
   publicMeldTypes?: Partial<Record<RelativeSeat, readonly string[]>>
   currentDiscard?: { from: RelativeSeat; tile: string } | null
   discardedTile?: string
+  concealedTiles?: readonly string[]
 }
 
 const PUBLIC_ACTION_PATTERN = /(上家|对家|下家)(?:刚才|刚刚|刚|已经|又|也)?(暗杠|明杠|补杠|杠|碰|吃)(?:了|过|成)?/g
 const PUBLIC_DISCARD_PATTERN = /(上家|对家|下家)(?:刚才|刚刚|刚)?(?:打出|打了|打的|出了)(?:一张)?([1-9][万筒条]|东风|南风|西风|北风|红中|发财|白板)?/g
+const TILE_NAME_PATTERN = /[1-9][万筒条]|东风|南风|西风|北风|红中|发财|白板/g
+const PRIVATE_HAND_STRUCTURE_PATTERN = /暗手|手牌|手里|手上|我有|我拿着|我摸到|对子|刻子|顺子|单张|两张|三张|四张|一向听|二向听|听口|清一色|混一色|七对|十三幺|十三烂/
 
 const LINES: Record<DecisionSpeechKind, Record<LlmStyle, readonly string[]>> = {
   discard: {
@@ -126,6 +129,12 @@ export function resolveDecisionSpeech(
     : null
   const contradictsDiscardCommitment = action.kind === 'discard'
     && (genericKeepPattern.test(compact) || Boolean(namedKeepPattern?.test(compact)))
+  const leaksPrivateStructure = PRIVATE_HAND_STRUCTURE_PATTERN.test(compact)
+  const namedTiles = [...compact.matchAll(TILE_NAME_PATTERN)].map((match) => match[0])
+  // 本次即将打出的牌会立刻成为公开动作，可允许点名；其余暗手牌名一律回退。
+  const leaksConcealedTile = namedTiles.some((tile) => (
+    facts.concealedTiles?.includes(tile) && tile !== facts.discardedTile
+  ))
   // 先移除“下家杠了”等他家公开事实，再判断剩余文本是否承诺了自己的动作。
   const selfSpeech = compact.replace(PUBLIC_ACTION_PATTERN, '')
   const claimedKongKind: CanonicalAction['kind'] | null = /暗杠/.test(selfSpeech) ? 'concealed-kong'
@@ -142,7 +151,8 @@ export function resolveDecisionSpeech(
     || (claimedAction === 'gang' && ['gang', 'added-kong', 'concealed-kong', 'wind-kong'].includes(action.kind))
   const kongSubtypeMatches = !claimedKongKind || action.kind === claimedKongKind
   if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard
-    && !contradictsDiscardCommitment && actionMatchesClaim && kongSubtypeMatches) return compact
+    && !contradictsDiscardCommitment && !leaksPrivateStructure && !leaksConcealedTile
+    && actionMatchesClaim && kongSubtypeMatches) return compact
   return decisionSpeech(action, style, sequence)
 }
 

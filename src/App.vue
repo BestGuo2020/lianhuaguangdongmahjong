@@ -90,7 +90,10 @@ const llmHook = {
   },
   onLlmStatus: (seat: number, active: boolean, text = '让我想想怎么打。') => {
     if (active) {
-      const id = (llmBubbleSeq += 1)
+      // 同一次流式思考复用节点，只直接替换当前安全进度内容。
+      const id = llmBubbles.value[seat]?.persistent
+        ? llmBubbles.value[seat].id
+        : (llmBubbleSeq += 1)
       llmBubbles.value = { ...llmBubbles.value, [seat]: { text, id, persistent: true } }
       return
     }

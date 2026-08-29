@@ -31,6 +31,7 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
     model: preset.model,
     style,
     timeoutMs: LLM_DECISION_TIMEOUT_MS,
+    timeoutEnabled: preset.timeoutEnabled !== false,
   }
 }
 
@@ -72,9 +73,14 @@ function hooksForSeat(
   }
   return {
     onLlmMessage: deliver,
-    onLlmStatus: (seat, active) => {
+    onLlmStatus: (seat, active, safeProgressText) => {
       if (!active) {
         try { void hooks.onLlmStatus?.(seat, false) } catch { /* 状态气泡不影响决策 */ }
+        return
+      }
+      // 安全进度只更新文字气泡；原始推理不出客户端层，也不进入 TTS/历史/限流。
+      if (safeProgressText) {
+        try { void hooks.onLlmStatus?.(seat, true, safeProgressText) } catch { /* 状态气泡不影响决策 */ }
         return
       }
       const text = reasoningStatusSpeech(style, reasoningStatusSequence)

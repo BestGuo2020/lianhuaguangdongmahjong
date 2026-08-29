@@ -39,6 +39,38 @@ afterEach(() => {
 })
 
 describe('单机 LLM runtime TTS', () => {
+  it('始终思考模型仅在统一触发器与额度允许时调用并计入深思', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    saveLlmSettings({
+      enabled: true,
+      presets: [{
+        id: 'kimi-k3', name: 'Kimi K3', providerType: 'kimi', baseUrl: 'https://api.orcarouter.ai/v1',
+        apiKey: 'sk', model: 'kimi/kimi-k3', style: '稳健', timeoutMs: 40_000, timeoutEnabled: true,
+      }],
+      activeId: 'kimi-k3', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    }, storage)
+    const status = vi.fn()
+    const runtime = createLocalLlmControllers({ onLlmStatus: status })
+    const controller = runtime.controllers![0]
+    const context = {
+      hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+      melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+      playerIndex: 1, scores: [1000, 2000, 3000, 4000], peers: [], wallCount: 50,
+    }
+
+    await controller.requestTurn({ ...context, turnOrigin: 'opening' } as never)
+    expect(mocks.requestLlmDecision).not.toHaveBeenCalled()
+    expect(runtime.stats.reasoningRequests).toBe(0)
+
+    await controller.requestTurn({ ...context, turnOrigin: 'draw', wallCount: 12 } as never)
+    expect(mocks.requestLlmDecision).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning: true, deadlineMs: 40_000,
+    }))
+    expect(runtime.stats.reasoningRequests).toBe(1)
+    expect(status).toHaveBeenCalledWith(1, true, '让我想想怎么打。')
+  })
+
   it('模型把下家的碰误说成杠时，经公开副露事实校验回退', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
@@ -66,7 +98,7 @@ describe('单机 LLM runtime TTS', () => {
     expect(bubble).toHaveBeenCalledWith(1, '这张先走。', expect.any(Object))
   })
 
-  it('深思时只发送状态气泡，并把推理内容留在供应商响应内', async () => {
+  it('深思时只流式展示安全进度，原始推理不会进入气泡或 TTS', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
     saveLlmSettings({
@@ -77,6 +109,12 @@ describe('单机 LLM runtime TTS', () => {
       }],
       activeId: 'deepseek', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
     }, storage)
+    mocks.requestLlmDecision.mockImplementationOnce(async (...args: any[]) => {
+      const options = args[0] as { onReasoningProgress?: () => void }
+      options.onReasoningProgress?.()
+      options.onReasoningProgress?.()
+      return { choice: 'A1', message: '这手先稳住。' }
+    })
     const status = vi.fn()
     const runtime = createLocalLlmControllers({ onLlmStatus: status })
     await runtime.controllers![0].requestTurn({
@@ -87,8 +125,11 @@ describe('单机 LLM runtime TTS', () => {
 
     expect(status.mock.calls).toEqual([
       [1, true, '让我想想怎么打。'],
+      [1, true, '思考中 · 正在观察公开牌局'],
+      [1, true, '思考中 · 正在整理规则约束'],
       [1, false],
     ])
+    expect(JSON.stringify(status.mock.calls)).not.toMatch(/一万|白板|m1|候选编号/)
     expect(mocks.requestLlmDecision).toHaveBeenCalledWith(expect.objectContaining({
       reasoning: true, deadlineMs: 40_000,
     }))

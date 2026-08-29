@@ -131,6 +131,16 @@ export function resolveReasoningPolicy(
       }
       return policy(providerType, 'unknown', '无法确认该 GLM 型号是否支持非思考模式')
     case 'claude':
+      if (/^claude-sonnet-5(?:[.-]|$)/.test(model)) {
+        return reasoning
+          ? policy(providerType, 'explicit-on', '已开启 Claude Sonnet 5 自适应思考', {
+            thinking: { type: 'adaptive', display: 'summarized' },
+            output_config: { effort: 'medium' },
+          })
+          : policy(providerType, 'explicit-off', '已关闭 Claude Sonnet 5 自适应思考', {
+            thinking: { type: 'disabled' },
+          })
+      }
       return policy(providerType, 'naturally-off', 'Claude 扩展思考为显式开启；当前请求不会开启')
     default:
       return policy(providerType, 'unknown', '自定义 OpenAI 兼容协议按用户配置直接请求')
