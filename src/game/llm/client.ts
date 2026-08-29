@@ -355,10 +355,10 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
     const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
-    const cappedKimiK3Quick = alwaysThinking
-      && reasoningPolicy.providerType === 'kimi'
-      && /^kimi-k3(?:[.-]|$)/.test(modelName)
-      && options.reasoning !== true
+    const quickReasoningMaxTokens = options.reasoning !== true && (
+      (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
+      || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
+    ) ? 128 : undefined
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse
@@ -372,7 +372,9 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           extraBody,
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
-          maxTokens: options.reasoning || (alwaysThinking && !cappedKimiK3Quick) ? 512 : undefined,
+          maxTokens: options.reasoning
+            ? 512
+            : (quickReasoningMaxTokens ?? (alwaysThinking ? 512 : undefined)),
           onReasoningProgress: options.onReasoningProgress,
         },
       )

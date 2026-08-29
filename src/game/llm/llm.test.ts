@@ -724,7 +724,7 @@ describe('testLlmConnection', () => {
     expect(captured.top_p).toBe(0.95)
   })
 
-  it('Kimi K3 普通路径使用 low/64，不传 thinking 与采样参数', async () => {
+  it('Kimi K3 普通路径使用 low/128，不传 thinking 与采样参数', async () => {
     let captured: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       captured = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -746,14 +746,14 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(captured).toMatchObject({
-      model: 'kimi/kimi-k3', reasoning_effort: 'low', max_tokens: 64,
+      model: 'kimi/kimi-k3', reasoning_effort: 'low', max_tokens: 128,
     })
     expect(captured.thinking).toBeUndefined()
     expect(captured.temperature).toBeUndefined()
     expect(captured.top_p).toBeUndefined()
   })
 
-  it('GLM-5.3 Flash 普通决策使用 low、接受推理流并限制为 64 tokens', async () => {
+  it('GLM-5.3 Flash 普通决策使用 low、接受推理流并限制为 128 tokens', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -775,7 +775,7 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(capturedBody).toMatchObject({
-      model: 'z-ai/glm-5.3-flash', max_tokens: 64, reasoning_effort: 'low',
+      model: 'z-ai/glm-5.3-flash', max_tokens: 128, reasoning_effort: 'low',
     })
     expect(capturedBody.thinking).toBeUndefined()
   })
