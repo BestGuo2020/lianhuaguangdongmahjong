@@ -9,7 +9,7 @@ import { resolveReasoningPolicy } from './reasoningPolicy'
 
 export class LlmClientError extends Error {
   constructor(
-    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning',
+    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning' | 'length',
     message: string,
   ) {
     super(message)
@@ -134,7 +134,11 @@ function providerExtraBody(
 ): Record<string, unknown> | undefined {
   const resolved = resolveReasoningPolicy(config, reasoning)
   const body: Record<string, unknown> = { ...resolved.requestBody }
-  if (resolved.providerType === 'qwen' && structuredOutput) body.response_format = { type: 'json_object' }
+  const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
+  if (structuredOutput && (resolved.providerType === 'qwen'
+    || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)))) {
+    body.response_format = { type: 'json_object' }
+  }
   return Object.keys(body).length ? body : undefined
 }
 
@@ -243,11 +247,11 @@ async function readStreamingResponse(
   processEvent()
 
   if (!sawData) throw new LlmClientError('parse', 'API 流式响应没有有效数据')
+  if (finishReason === 'length' && options.strictLength !== false) {
+    throw new LlmClientError('length', 'finish_reason=length（输出被截断）')
+  }
   if (!content && options.allowEmptyContent !== true) {
     throw new LlmClientError('parse', 'API 响应格式无效或无内容')
-  }
-  if (finishReason === 'length' && options.strictLength !== false) {
-    throw new LlmClientError('parse', 'finish_reason=length（输出被截断）')
   }
   if ((sawReasoning || reasoningTokens > 0) && !options.allowReasoning && !options.acceptReasoningResponse) {
     throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
@@ -308,13 +312,13 @@ async function callOnce(
     }
     const body = (await response.json()) as OpenAIResponseBody
     const choice = body.choices?.[0]
+    if (choice?.finish_reason === 'length' && options.strictLength !== false) {
+      throw new LlmClientError('length', 'finish_reason=length（输出被截断）')
+    }
     if (!choice?.message
       || typeof choice.message.content !== 'string'
       || (!choice.message.content && options.allowEmptyContent !== true)) {
       throw new LlmClientError('parse', 'API 响应格式无效或无内容')
-    }
-    if (choice.finish_reason === 'length' && options.strictLength !== false) {
-      throw new LlmClientError('parse', 'finish_reason=length（输出被截断）')
     }
     const reasoningContent = choice.message.reasoning_content
     const reasoningTokens = body.usage?.completion_tokens_details?.reasoning_tokens
@@ -355,10 +359,13 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
     const alwaysThinking = reasoningPolicy.mode === 'always-on'
     const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
-    const quickReasoningMaxTokens = options.reasoning !== true && (
-      (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
-      || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
-    ) ? 128 : undefined
+    const glmFlash = reasoningPolicy.providerType === 'glm'
+      && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)
+    const quickReasoningMaxTokens = options.reasoning !== true
+      ? (glmFlash ? 512
+        : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
+      : undefined
+    const deepReasoningMaxTokens = glmFlash ? 1024 : 512
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse
@@ -373,7 +380,7 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
           maxTokens: options.reasoning
-            ? 512
+            ? deepReasoningMaxTokens
             : (quickReasoningMaxTokens ?? (alwaysThinking ? 512 : undefined)),
           onReasoningProgress: options.onReasoningProgress,
         },
