@@ -133,15 +133,13 @@ describe('LLM 非思考能力矩阵', () => {
     }))
   })
 
-  it('Kimi 预设提供 OrcaRouter K3 完整模型 ID', () => {
-    expect(PROVIDER_TEMPLATES).toContainEqual({
-      name: 'Kimi K2.6 (OrcaRouter)', providerType: 'kimi',
-      baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k2.6',
-    })
-    expect(PROVIDER_TEMPLATES).toContainEqual({
-      name: 'Kimi K3 (OrcaRouter)', providerType: 'kimi',
-      baseUrl: 'https://api.orcarouter.ai/v1', model: 'kimi/kimi-k3',
-    })
+  it('Kimi 新增预设只提供官方 Moonshot，不推荐 OrcaRouter', () => {
+    expect(PROVIDER_TEMPLATES).toContainEqual(expect.objectContaining({
+      providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6',
+    }))
+    expect(PROVIDER_TEMPLATES).not.toContainEqual(expect.objectContaining({
+      providerType: 'kimi', baseUrl: 'https://api.orcarouter.ai/v1',
+    }))
   })
 
   it.each([

@@ -386,11 +386,11 @@ v2 结构（`llm.providers`，`configVersion: 2`）：多预置 + 按座位分�
 | `activeId` | 空 | 默认预置 id；未单独指定座位的 AI 使用 |
 | `seatIds` | 全空 | 座位 1-3 → 预置 id（null=跟随默认）——**支持不同座位使用不同大模型** |
 | `seatStyles` | 全空 | 座位 1-3 → 风格覆盖（激进/稳健/话痨/高冷；null=跟随预置风格）——**支持不同座位不同人设** |
-| 常用模板 | — | DeepSeek / Kimi / Kimi K2.6/K3 (OrcaRouter) / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱官方 GLM / 自定义（Base URL + 示例模型） |
+| 常用模板 | — | DeepSeek / Kimi 官方 Moonshot / 通义千问 / 豆包 / MiniMax / OpenAI(GPT) / 智谱官方 GLM / Claude / 自定义（中转站需手动填写） |
 
 - `baseUrl`：OpenAI 兼容端点；规范化后只能追加一次 `/chat/completions`，拒绝包含 userinfo 的 URL；**Key 只发送给用户选择的供应商**；
 - 前端必须要求 HTTPS（localhost 开发环境除外），提供"测试连接"和"清除 Key"操作；不能把 Key 拼入 URL、异常文本、埋点或 Prompt。供应商不支持 CORS 时，明确提示用户并保持启发式 AI，不尝试静默代理；
-- 请求前先按 Base URL 识别官方、OrcaRouter 或未知兼容方言，再按模型能力追加参数。GLM-5.3-Flash 官方固定使用允许的 low；OrcaRouter 既有配置使用独立兼容参数并显示行为差异警告。设置页仅推荐官方 GLM 预设；未知中转不套用聚合站专用枚举。
+- 请求前先按 Base URL 识别官方、OrcaRouter 或未知兼容方言，再按模型能力追加参数。新增预设只提供官方 API；OrcaRouter 等中转站必须通过“自定义”手动填写。既有中转配置不会自动删除，GLM 异常中转还会显示行为差异警告。
 
 ### 9.2 后端（环境变量，与 ROOM_MAX 同款惯例）
 
