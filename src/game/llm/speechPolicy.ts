@@ -27,6 +27,8 @@ export interface LlmSpeechCandidate {
   seat: number
   style: LlmStyle
   priority?: LlmSpeechPriority
+  /** 话痨摸打等明确要求逐次发言的事件，不参与普通冷却和抽稀。 */
+  mandatory?: boolean
 }
 
 /** 单机与联机共用：关键动作直通，普通弃牌/过牌按全桌冷却、座位冷却和性格频率抽稀。 */
@@ -40,6 +42,7 @@ export class LlmSpeechPolicy {
   admit(candidate: LlmSpeechCandidate): boolean {
     const at = this.now()
     const priority = candidate.priority ?? 'normal'
+    if (candidate.mandatory) return true
     if (priority === 'important') {
       this.lastGlobalAt = at
       this.lastSeatAt.set(candidate.seat, at)
