@@ -66,6 +66,8 @@ export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
   onLlmMessage?(seat: number, text: string, meta?: LlmMessageMeta): void | Promise<void>
+  /** LLM 失败转交引擎时的纯气泡事件；表现层需走发言频率但不得合成 TTS。 */
+  onLlmFallback?(seat: number, meta: LlmMessageMeta): void | Promise<void>
   /** 深度思考仅展示客户端生成的安全进度，不接收原始推理文本。 */
   onLlmStatus?(seat: number, active: boolean, text?: string): void | Promise<void>
   onReset?(): void
@@ -75,7 +77,7 @@ export interface LlmMessageMeta {
   priority: LlmSpeechPriority
   decision?: DecisionInput['decision']
   actionKind?: CanonicalAction['kind']
-  source?: 'decision' | 'win'
+  source?: 'decision' | 'win' | 'fallback'
 }
 
 const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
@@ -121,6 +123,18 @@ async function decideCanonical(
   const built = buildDecisionRequest(input)
   if (!built.request) return built.fallbackAction
   if (built.request.candidates.length <= 1) return built.fallbackAction
+  const notifyFallback = async () => {
+    const action = built.fallbackAction
+    if (!action) return
+    try {
+      await hooks.onLlmFallback?.(input.playerIndex, {
+        priority: IMPORTANT_SPEECH_ACTIONS.has(action.kind) ? 'important' : 'normal',
+        decision: input.decision,
+        actionKind: action.kind,
+        source: 'fallback',
+      })
+    } catch { /* 回退提示不影响引擎动作 */ }
+  }
   const ids = built.request.candidates.map((candidate) => candidate.id)
   const prompt = buildPrompt(config.style, built.request)
   const requestedReasoningPolicy = resolveReasoningPolicy(config, true)
@@ -172,11 +186,14 @@ async function decideCanonical(
     const candidate = built.request.candidates.find((item) => item.id === output.choice)
     if (!candidate) {
       stats.fallbacks += 1
+      await notifyFallback()
       return built.fallbackAction
     }
     // 自校验（§8）：对照当前 ctx 复核合法性；任何越界/不满足 → 回退（引擎执行层还会再复核一次）
     if (!isActionLegal(input, candidate.action)) {
       stats.invalidActions += 1
+      stats.fallbacks += 1
+      await notifyFallback()
       return built.fallbackAction
     }
     // choice 决定真实动作；message 是牌桌闲聊/烟雾弹，不要求“言而有信”。
@@ -203,6 +220,7 @@ async function decideCanonical(
     return candidate.action
   } catch {
     stats.fallbacks += 1
+    await notifyFallback()
     return built.fallbackAction
   } finally {
     if (reasoningStatusActive) {
