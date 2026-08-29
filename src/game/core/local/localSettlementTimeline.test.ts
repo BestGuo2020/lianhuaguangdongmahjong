@@ -249,6 +249,16 @@ describe('localSettlementTimeline', () => {
 
     expect(spoken.map((item) => item.seat)).toEqual([1, 2, 3])
     expect(spoken.every((item) => !item.text.includes('自摸'))).toBe(true)
+    expect(new Set(spoken.map((item) => item.text)).size).toBe(3)
+
+    spoken.splice(0)
+    await announceLocalLlmRoundReactions({ winnerIndex: 0, winType: 'self-draw' })
+    expect(new Set(spoken.map((item) => item.text)).size).toBe(3)
+    expect(spoken.map((item) => item.text)).toEqual([
+      '结果已定，下一局。',
+      '一局而已，继续。',
+      '这局输了，仅此而已。',
+    ])
   })
 
   it('allows a headless online engine to bypass the single-player LLM voice registry', async () => {

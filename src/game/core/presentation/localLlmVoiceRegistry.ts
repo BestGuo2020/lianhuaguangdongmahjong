@@ -47,7 +47,7 @@ export function announceLocalLlmRoundReactions(result: LocalLlmRoundResult): Pro
     : registered
 
   return (async () => {
-    for (const seat of order) {
+    for (const [queueIndex, seat] of order.entries()) {
       const voice = seats.get(seat)
       if (!voice) continue
       const reaction: LlmRoundReaction = result.draw
@@ -55,7 +55,9 @@ export function announceLocalLlmRoundReactions(result: LocalLlmRoundResult): Pro
         : seat === winner
           ? { outcome: 'win', type: result.winType ?? 'self-draw' }
           : { outcome: 'loss' }
-      const text = llmRoundReactionLine(reaction, voice.style, voice.reactionSequence)
+      // 每个 AI 的 reactionSequence 负责跨局轮换，queueIndex 负责同局错开；
+      // 同性格的多个输家不会再因为各自序号同步而说出同一句。
+      const text = llmRoundReactionLine(reaction, voice.style, voice.reactionSequence + queueIndex)
       voice.reactionSequence += 1
       await voice.announce(text)
     }
