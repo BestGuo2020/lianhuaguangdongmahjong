@@ -159,7 +159,7 @@ export function useGame({
     ruleset,
     // 房主权威无头引擎的 AI 身份由在线 runtime 管理；不得读取单机全局语音注册表。
     isLlmVoiceSeat: headless ? () => false : undefined,
-    announceLlmWin: headless ? () => false : undefined,
+    announceLlmRoundReactions: headless ? () => undefined : undefined,
   })
 
   countdown = createLocalCountdownController({
