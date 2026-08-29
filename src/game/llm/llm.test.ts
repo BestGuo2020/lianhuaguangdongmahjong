@@ -747,7 +747,8 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(captured).toMatchObject({
-      model: 'kimi/kimi-k3', temperature: 1, top_p: 0.95, max_tokens: 512,
+      model: 'kimi/kimi-k3', temperature: 1, top_p: 0.95,
+      reasoning_effort: 'low', max_tokens: 512,
     })
     expect(captured.thinking).toBeUndefined()
   })

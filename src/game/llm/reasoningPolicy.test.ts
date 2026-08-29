@@ -38,21 +38,23 @@ describe('LLM 非思考能力矩阵', () => {
     expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
   })
 
-  it('GLM-5.3 Flash 经自定义中转自动识别，固定使用最低思考强度', () => {
+  it('GLM-5.3 Flash 经自定义中转自动识别，普通低强度、疑难中强度', () => {
     const result = resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'))
     expect(result).toMatchObject({
       providerType: 'glm', mode: 'always-on',
       requestBody: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
     })
     expect(resolveReasoningPolicy(config('custom', 'z-ai/glm-5.3-flash'), true).requestBody)
-      .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'low' })
+      .toEqual({ thinking: { type: 'enabled' }, reasoning_effort: 'medium' })
   })
 
-  it('Kimi K3 经带前缀的中转模型 ID 自动使用固定采样参数', () => {
+  it('Kimi K3 经带前缀的中转模型 ID 自动使用普通 low、疑难 high', () => {
     expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k3'))).toMatchObject({
       providerType: 'kimi', mode: 'always-on',
-      requestBody: { temperature: 1, top_p: 0.95 },
+      requestBody: { temperature: 1, top_p: 0.95, reasoning_effort: 'low' },
     })
+    expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k3'), true).requestBody)
+      .toEqual({ temperature: 1, top_p: 0.95, reasoning_effort: 'high' })
   })
 
   it('Claude Sonnet 5 默认思考必须显式关闭，条件命中时使用自适应思考', () => {
@@ -71,21 +73,40 @@ describe('LLM 非思考能力矩阵', () => {
   })
 
   it.each(['kimi/kimi-k2.5', 'kimi/kimi-k2.6'])(
-    'Kimi K2.5/K2.6 中转 ID %s 保持可关闭思考模式',
+    'Kimi K2.5/K2.6 中转 ID %s 普通关闭、条件触发后开启',
     (model) => {
-      expect(resolveReasoningPolicy(config('kimi', model))).toMatchObject({
+      const preset = config('kimi', model)
+      expect(resolveReasoningPolicy(preset)).toMatchObject({
         providerType: 'kimi', mode: 'explicit-off',
         acceptReasoningResponse: true,
         requestBody: {
           thinking: { type: 'disabled' }, temperature: 0.6, top_p: 0.95,
         },
       })
+      expect(resolveReasoningPolicy(preset, true)).toMatchObject({
+        providerType: 'kimi', mode: 'explicit-on',
+        requestBody: {
+          thinking: { type: 'enabled' }, temperature: 1, top_p: 0.95,
+        },
+      })
     },
   )
 
-  it('Kimi K2 基础/预览系列保持普通非思考请求', () => {
-    expect(resolveReasoningPolicy(config('kimi', 'kimi/kimi-k2'))).toMatchObject({
-      providerType: 'kimi', mode: 'naturally-off', requestBody: {},
+  it.each(['kimi/kimi-k2', 'moonshot-v1-128k'])(
+    'Kimi K2 基础版与 Moonshot v1 旧型号 %s 保持普通非思考请求',
+    (model) => {
+      expect(resolveReasoningPolicy(config('kimi', model))).toMatchObject({
+        providerType: 'kimi', mode: 'naturally-off', requestBody: {},
+      })
+      expect(resolveReasoningPolicy(config('kimi', model), true)).toMatchObject({
+        providerType: 'kimi', mode: 'naturally-off', requestBody: {},
+      })
+    },
+  )
+
+  it('未列入能力矩阵的 Kimi 旧型号保守保持未知，不乱传思考参数', () => {
+    expect(resolveReasoningPolicy(config('kimi', 'kimi-legacy-custom'))).toMatchObject({
+      providerType: 'kimi', mode: 'unknown', requestBody: {},
     })
   })
 

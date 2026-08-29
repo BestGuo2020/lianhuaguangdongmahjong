@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
     args[5]?.onStarted?.()
     return true
   }),
-  requestLlmDecision: vi.fn(async () => ({ choice: 'A1', message: '这手先稳住。' })),
+  requestLlmDecision: vi.fn(async (_options?: any) => ({ choice: 'A1', message: '这手先稳住。' })),
 }))
 
 vi.mock('./localTtsClient', () => ({
@@ -39,7 +39,7 @@ afterEach(() => {
 })
 
 describe('单机 LLM runtime TTS', () => {
-  it('始终思考模型仅在统一触发器与额度允许时调用并计入深思', async () => {
+  it('始终思考模型普通局面低强度调用，统一触发后升级并分别统计', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
     saveLlmSettings({
@@ -59,15 +59,27 @@ describe('单机 LLM runtime TTS', () => {
       playerIndex: 1, scores: [1000, 2000, 3000, 4000], peers: [], wallCount: 50,
     }
 
+    mocks.requestLlmDecision.mockImplementationOnce(async (options: any) => {
+      options.onReasoningProgress?.()
+      return { choice: 'A1', message: '这手先稳住。' }
+    })
     await controller.requestTurn({ ...context, turnOrigin: 'opening' } as never)
-    expect(mocks.requestLlmDecision).not.toHaveBeenCalled()
+    expect(mocks.requestLlmDecision).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      reasoning: false, deadlineMs: undefined,
+    }))
+    expect(runtime.stats.thinkingRequests).toBe(1)
     expect(runtime.stats.reasoningRequests).toBe(0)
+    expect(runtime.stats.enhancedReasoningRequests).toBe(0)
+    expect(status).not.toHaveBeenCalledWith(1, true, '让我想想怎么打。')
+    expect(status).toHaveBeenCalledWith(1, true, '思考中 · 正在观察公开牌局')
 
     await controller.requestTurn({ ...context, turnOrigin: 'draw', wallCount: 12 } as never)
-    expect(mocks.requestLlmDecision).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.requestLlmDecision).toHaveBeenNthCalledWith(2, expect.objectContaining({
       reasoning: true, deadlineMs: 40_000,
     }))
+    expect(runtime.stats.thinkingRequests).toBe(2)
     expect(runtime.stats.reasoningRequests).toBe(1)
+    expect(runtime.stats.enhancedReasoningRequests).toBe(1)
     expect(status).toHaveBeenCalledWith(1, true, '让我想想怎么打。')
   })
 

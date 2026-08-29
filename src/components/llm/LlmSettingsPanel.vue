@@ -315,7 +315,7 @@ function presetName(id: string | null): string {
 
       <div class="llm-stats">
         <h3>本局 AI 统计</h3>
-        <p>请求 {{ stats.requests }} · 深思 {{ stats.reasoningRequests ?? 0 }} · 成功 {{ stats.successes }} · 回退 {{ stats.fallbacks }} · 吐槽 {{ stats.messages }}</p>
+        <p>请求 {{ stats.requests }} · 思考 {{ stats.thinkingRequests ?? 0 }} · 升级 {{ stats.enhancedReasoningRequests ?? stats.reasoningRequests ?? 0 }} · 成功 {{ stats.successes }} · 回退 {{ stats.fallbacks }} · 吐槽 {{ stats.messages }}</p>
         <ul v-if="messages.length" class="llm-messages">
           <li v-for="(message, index) in [...messages].reverse()" :key="index">{{ message }}</li>
         </ul>

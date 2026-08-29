@@ -125,6 +125,8 @@ const llmStats = computed<LlmControllerStats>(() => ({
   messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
   invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
   reasoningRequests: (localLlm.value.stats.reasoningRequests ?? 0) + (lotusLlm.value.stats.reasoningRequests ?? 0),
+  thinkingRequests: (localLlm.value.stats.thinkingRequests ?? 0) + (lotusLlm.value.stats.thinkingRequests ?? 0),
+  enhancedReasoningRequests: (localLlm.value.stats.enhancedReasoningRequests ?? 0) + (lotusLlm.value.stats.enhancedReasoningRequests ?? 0),
 }))
 const localGame = useGame({
   playSound: playEffect,

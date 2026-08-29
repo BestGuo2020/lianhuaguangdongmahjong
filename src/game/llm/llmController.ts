@@ -49,10 +49,17 @@ export interface LlmControllerStats {
   invalidActions: number
   /** 条件深思次数；旧分支统计汇总未提供时按 0 展示。 */
   reasoningRequests?: number
+  /** 实际发生思考的请求数（含 always-on 低强度与代理返回的推理流）。 */
+  thinkingRequests?: number
+  /** 命中统一触发器后从关闭/低强度升级的请求数。 */
+  enhancedReasoningRequests?: number
 }
 
 export function createLlmStats(): LlmControllerStats {
-  return { requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0, reasoningRequests: 0 }
+  return {
+    requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0,
+    reasoningRequests: 0, thinkingRequests: 0, enhancedReasoningRequests: 0,
+  }
 }
 
 export interface LlmControllerHooks {
@@ -124,11 +131,17 @@ async function decideCanonical(
     ? reasoning.admit(built.request, input.playerIndex, reasoning.config.minRemainingBudgetMs)
     : { enabled: false }
   const useReasoning = trigger.enabled
-  // 始终思考模型没有快速模式：未命中触发器或额度耗尽时不调用模型，直接执行引擎建议。
-  if (alwaysThinking && !useReasoning) return built.fallbackAction
   let reasoningProgressSequence = 0
+  // always-on 的普通 low 请求不先播思考台词；收到流式推理块后仍展示安全进度气泡。
   let reasoningStatusActive = useReasoning
+  let thinkingCounted = false
+  const countThinking = () => {
+    if (thinkingCounted) return
+    thinkingCounted = true
+    stats.thinkingRequests = (stats.thinkingRequests ?? 0) + 1
+  }
   const onReasoningProgress = () => {
+    countThinking()
     reasoningProgressSequence += 1
     reasoningStatusActive = true
     try {
@@ -140,8 +153,13 @@ async function decideCanonical(
     } catch { /* 展示失败不影响决策 */ }
   }
   stats.requests += 1
+  if (alwaysThinking) countThinking()
   if (useReasoning) {
     stats.reasoningRequests = (stats.reasoningRequests ?? 0) + 1
+    stats.enhancedReasoningRequests = (stats.enhancedReasoningRequests ?? 0) + 1
+    countThinking()
+  }
+  if (reasoningStatusActive) {
     try { await hooks.onLlmStatus?.(input.playerIndex, true) } catch { /* 状态气泡不影响决策 */ }
   }
   try {
