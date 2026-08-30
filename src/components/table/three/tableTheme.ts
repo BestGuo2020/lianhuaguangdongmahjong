@@ -710,6 +710,131 @@ export const llmTheme: TableTheme = {
   highlight: defaultTableTheme.highlight,
 }
 
+/** 大模型二次元主题：蓝紫粉霓虹牌桌 + 奶油白牌身 + 紫粉渐变牌背。 */
+export const llmAnimeTheme: TableTheme = {
+  ...defaultTableTheme,
+  table: {
+    ...defaultTableTheme.table,
+    jade: {
+      ...defaultTableTheme.table.jade,
+      color: 0x4d58b8,
+      emissive: 0x171442,
+      emissiveIntensity: .18,
+      roughness: .62,
+      metalness: .02,
+      clearcoat: .2,
+      clearcoatRoughness: .38,
+      sheen: .5,
+      sheenColor: 0xff9fda,
+      sheenRoughness: .65,
+    },
+    darkJade: {
+      ...defaultTableTheme.table.darkJade,
+      color: 0x211b55,
+      emissive: 0x100b31,
+      emissiveIntensity: .2,
+      roughness: .52,
+      metalness: .08,
+      clearcoat: .3,
+      clearcoatRoughness: .3,
+    },
+    gold: {
+      ...defaultTableTheme.table.gold,
+      color: 0xd895ca,
+      emissive: 0x4d1f4a,
+      emissiveIntensity: .28,
+      roughness: .3,
+      metalness: .62,
+    },
+    goldHighlight: {
+      ...defaultTableTheme.table.goldHighlight,
+      color: 0xffc1ec,
+      emissive: 0x61215a,
+      emissiveIntensity: .4,
+      roughness: .24,
+      metalness: .68,
+    },
+    machine: {
+      ...defaultTableTheme.table.machine,
+      color: 0x28215f,
+      roughness: .38,
+      metalness: .12,
+      clearcoat: .46,
+    },
+    machineTop: {
+      ...defaultTableTheme.table.machineTop,
+      roughness: .38,
+      metalness: .08,
+      clearcoat: .46,
+    },
+    machineBottom: {
+      ...defaultTableTheme.table.machineBottom,
+      color: 0x100b2c,
+      roughness: .5,
+      metalness: .14,
+    },
+  },
+  tableFelt: true,
+  tableVignette: .32,
+  plainSurface: true,
+  edgeTrim: {
+    color: 0x342b79,
+    emissive: 0x160f43,
+    emissiveIntensity: .2,
+    roughness: .46,
+    metalness: .1,
+    clearcoat: .3,
+    clearcoatRoughness: .34,
+  },
+  edgeTrimWidth: .65,
+  edgeAccent: true,
+  rimLight: {
+    color: 0xff8fd6,
+    intensity: 1.18,
+  },
+  tileBackGradient: ['#8ca9ff', '#aa78e8', '#ef87c5'],
+  tile: {
+    ...defaultTableTheme.tile,
+    side: {
+      ...defaultTableTheme.tile.side,
+      color: 0xf2eaf1,
+      roughness: .36,
+      clearcoat: .46,
+    },
+    faceSide: {
+      ...defaultTableTheme.tile.faceSide,
+      color: 0x9b70dc,
+      roughness: .34,
+      clearcoat: .58,
+      specularIntensity: .5,
+    },
+    bottom: {
+      ...defaultTableTheme.tile.bottom,
+      color: 0xe6dbe8,
+      roughness: .4,
+    },
+    back: {
+      ...defaultTableTheme.tile.back,
+      color: 0xf3e8f2,
+      roughness: .36,
+      clearcoat: .42,
+    },
+    face: {
+      ...defaultTableTheme.tile.face,
+      color: 0xfff7fc,
+      roughness: .36,
+      clearcoat: .44,
+      specularColor: 0xffe3f4,
+    },
+  },
+  highlight: {
+    color: 0xff9bd8,
+    emissive: 0x8a2769,
+    emissiveIntensity: .86,
+    roughness: .34,
+  },
+}
+
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
 export const TABLE_THEMES: Record<string, TableTheme> = {
   jade: defaultTableTheme,
@@ -717,6 +842,7 @@ export const TABLE_THEMES: Record<string, TableTheme> = {
   majsoul: majsoulTheme,
   happyMahjong: happyMahjongTheme,
   llm: llmTheme,
+  llmAnime: llmAnimeTheme,
 }
 
 export const TABLE_THEME_OPTIONS = [
@@ -725,6 +851,7 @@ export const TABLE_THEME_OPTIONS = [
   { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
   { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
   { value: 'llm', label: '大模型专属', description: '双模型娘化对决与深蓝星轨' },
+  { value: 'llmAnime', label: '大模型二次元', description: '蓝紫粉霓虹与二次元牌面' },
 ] as const
 
 export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']

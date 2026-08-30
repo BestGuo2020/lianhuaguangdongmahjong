@@ -1,6 +1,14 @@
 # 独立大模型二次元主题实施计划
 
-> 状态：方案草案，基于 2026-08-30 的前端、后端与素材只读审计。本文只规划实施，不代表功能已经完成。
+> 状态：实施中，基于 2026-08-30 的前端、后端与素材审计。
+
+当前进度：
+
+- 已注册独立 `llmAnime` 主题，现有 `llm` 深蓝星轨主题保持不变。
+- 已落地前后端 12 角色/固定文案/voice/fallback 合同与 DeepSeek 回退。
+- 已接入单机本家选角、角色偏好持久化、WebSocket join 角色参数和角色动作 cue 骨架。
+- 已撤销第三方字体方案，首版使用系统字体栈加 CSS/SVG 字效。
+- 首批只发布通过真 alpha 验证的 DeepSeek 立绘；Qwen 的两次 ImageGen 透明背景尝试都产出了烘焙棋盘格 RGB，未进入项目。其余角色仍需合格透明素材。
 
 ## 1. 目标
 
@@ -8,7 +16,7 @@
 
 本期目标包括：
 
-- 新 `llmAnime` 主题专属字体、牌面、牌背、广播提示、气泡框、局结算和最终结算视觉。
+- 新 `llmAnime` 主题专属字效、牌面、牌背、广播提示、气泡框、局结算和最终结算视觉。
 - 吃、碰、杠、胡、自摸、抢杠胡使用“角色立绘 + 动作大字 + 特效”的卡通演出。
 - 角色形象与 LLM 供应商、决策风格解耦。
 - `llmAnime` 主题下，非 LLM 座位未指定角色时统一回退 DeepSeek 形象。
@@ -90,7 +98,7 @@
 | 现有深蓝主题 | `App.vue` 设置 `data-table-theme="llm"`，3D 牌桌读取 `llmTheme` | 必须原样保留，并补视觉/声音回归测试 |
 | 新二次元主题 | 当前不存在 `llmAnime` 主题 ID 或 registry 项 | 需新增独立主题、manifest、选择项和 URL 解析 |
 | 桌面 | 现有 `public/img/llm-table.webp` 是深蓝星轨主题桌布 | 原图继续只服务 `llm`；`llmAnime` 使用独立 `table/surface.webp` |
-| 字体 | 系统微软雅黑/苹方，部分位置声明未打包的 `Noto Serif SC` | 无仓库内字体和许可证 |
+| 字效 | 系统微软雅黑/苹方，部分位置声明未打包的 `Noto Serif SC` | 不再引入第三方字体文件；用系统字体、描边、渐变和阴影完成二次元字效 |
 | 2D 牌面 | `tileAssets.ts` 固定读取 `public/tiles/` | 缓存没有主题维度，无法切换牌面 |
 | 3D 牌面 | 与 2D 共用同一套牌图并生成 atlas | `llmTheme` 明确继承默认牌面 |
 | 牌背 | 2D CSS 绿色渐变；3D Canvas 三色渐变 | 无图片牌背，2D/3D 需统一 |
@@ -126,7 +134,7 @@
 - 现有牌面只有 `public/tiles/` 的 34 张 75×100 RGBA PNG，总计约 0.43 MiB。
 - 现有桌布 `public/img/llm-table.webp` 为 1024×1024 VP8L lossless，约 1.05 MiB。
 - 代码目前只一等识别 DeepSeek、Kimi、Qwen、Doubao、MiniMax、GPT、GLM、Claude 八家；Gemini、Grok、Muse 只能手填 `avatarFolder`，Mistral 没有线上头像、provider 或 TTS 映射，`custom` 目录也不存在。
-- 当前不存在专属字体、主题牌面、图片牌背或六动作图片。
+- 当前不存在主题牌面、图片牌背或六动作图片；首版不再要求专属字体文件。
 - 已有通用吃、碰、杠、胡、自摸语音，但它们不是 12 角色固定语音；没有独立抢杠胡语音。
 
 `tmp/` 被忽略，不能成为可重复构建的唯一真源。Wave 0 必须把批准使用的原图和可用 DeepSeek cutout 移到受版本管理的 `assets-src/llm-anime/`；若版权或仓库体积不允许提交原图，则必须使用外部只读归档并在源 manifest 中记录 URL、SHA256、字节数和恢复步骤。`cutout-v2` 写入拒绝清单，不能被流水线误选。
@@ -140,10 +148,6 @@ assets-src/llm-anime/
   characters/<id>/source.jpg
   characters/<id>/portrait-master.png
   rejected/deepseek-cutout-v2.png
-
-src/assets/fonts/llm-anime/
-  zihun-mengchong-tiandi.woff2
-  AUTHORIZATION.md
 
 public/themes/llm-anime/<assetVersion>/
   characters/
@@ -176,7 +180,7 @@ public/themes/llm-anime/<assetVersion>/
     settlement-frame.svg
 ```
 
-字体放入 `src/assets`，由 Vite 重写为子路径安全的构建 URL；`@font-face` 全局声明，但只在 `llmAnime` 主题 selector 中应用。图片保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
+图片保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。首版不包含字体资产；动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
 
 ### 4.3 主题 manifest
 
@@ -214,11 +218,7 @@ export interface LlmAnimeThemeManifest {
   schemaVersion: 1
   assetVersion: string
   defaultCharacter: 'deepseek'
-  font: {
-    family: 'ZiHun MengChong TianDi'
-    url: string
-    systemFallback: readonly string[]
-  }
+  fontStack: readonly ['Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'sans-serif']
   table: { surface: string }
   actions: Record<AnimeActionKey, string>
   tiles: {
@@ -255,9 +255,7 @@ export interface LlmAnimeThemeManifest {
 | 结果固定文案 | 不超过 24 个 Unicode code point，覆盖三类胜利、失败、流局 |
 | TTS 参数 | style 固定“稳健”；voiceKey/speaker 来自角色合同，失败使用已审核 fallbackVoiceKey |
 
-主题唯一指定字体为“字魂萌宠天地体”，正文和标题共用该字体，系统回退为 `Microsoft YaHei`、`PingFang SC`、sans-serif。必须使用 `font-display: swap`，并覆盖动作字、广播、结算、按钮、数字、标点、12 个角色展示名及实际固定文案所需 glyph；动态玩家昵称缺字时允许逐字回退系统字体。
-
-该字体不是开源字体。提交 TTF/WOFF2、制作子集或用 `@font-face` 嵌入网站前，必须取得覆盖本项目/发布主体的“嵌入式用途（WEB font-face/CSS 网页调用、游戏/软件）”书面授权，并确认允许格式转换、glyph 子集化和随应用托管字体文件。普通网站设计、图片设计或个人学习授权不能替代嵌入式授权。授权证书、协议适用范围、期限和字体文件 SHA256 写入 `AUTHORIZATION.md`；未取得前只启用系统回退，不把字体文件提交进仓库。
+首版不提交任何第三方字体文件。正文和标题统一使用系统字体栈，通过 `font-weight`、`-webkit-text-stroke`、渐变文字、叠层 text-shadow、轻微倾斜和动作字 SVG 外框形成二次元字效。字体加载失败不再是资源风险，动态玩家昵称自然使用系统字形。
 
 Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编码参数、SSIM/视觉阈值和 alpha 质量。若 300 KiB 在三张基准上无法稳定达标，则以“四座立绘总计不超过 2 MiB”为硬闸门并按实测上调单图预算，不得同时强制无损、300 KiB 和高细节三项互相冲突的目标。
 
@@ -273,7 +271,7 @@ Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编�
 - 当前四座位只懒加载其角色图片；TTS 音频按事件请求并复用缓存，不在前端首屏预载。
 - 缺图时先回退 DeepSeek，再失败则回退旧文字动作提示。
 - voice 不可用时使用角色合同中的替代音色；TTS 失败时动作回退通用人声、赛后仅显示固定文字，绝不改用 LLM 自由文案。
-- `SOURCES.json` / `ATTRIBUTION.md` 覆盖原图、cutout、派生图、动作/UI SVG、牌面、字体、TTS 音色使用与缓存权限，并记录来源、工具/模型、音色、生成日期、许可证或授权证据。
+- `SOURCES.json` / `ATTRIBUTION.md` 覆盖原图、cutout、派生图、动作/UI SVG、牌面、TTS 音色使用与缓存权限，并记录来源、工具/模型、音色、生成日期、许可证或授权证据。
 
 建议预算：
 
@@ -383,9 +381,9 @@ flowchart TD
 - 首版动作严格在现有 1050ms 事件窗口内完成；如果未来需要更长演出，组件必须按事件 ID 快照并维护独立离场队列，不能依赖已经被清空的 `tableActionEvent`，也不能阻塞规则层。
 - `prefers-reduced-motion` 下禁用位移、旋转和粒子，只做短淡入淡出。
 
-### 6.3 字体、广播、气泡与结算
+### 6.3 字效、广播、气泡与结算
 
-- 通过 `@font-face` 打包可再分发的中文 UI 字体和标题字体，并提供系统字体回退；字体定义可全局存在，但字体族只在 `llmAnime` DOM selector 下应用。
+- 不使用 `@font-face` 或仓库内字体文件；在 `llmAnime` DOM selector 下对系统字体应用独立的渐变、描边、阴影和字距 token。
 - 把 `llmAnime` 主题颜色、描边、阴影和字体做成独立 CSS 变量，不能覆盖现有 `llm` token。
 - 广播使用主题边框、渐变遮罩和标题字体；保持 `aria-live` 文本。
 - 气泡使用可伸缩九宫格/纯 CSS 框体和独立尾巴，四座位统一渲染；为本家新增气泡锚点。
@@ -536,7 +534,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 
 | Agent | 文件所有权 | 任务 |
 |---|---|---|
-| 资产 Agent | `assets-src/llm-anime/**`、`public/themes/llm-anime/**`、`src/assets/fonts/llm-anime/**`、资产脚本 | 抠图、裁切、牌面/牌背、UI 装饰、字体、来源与资产报告；不生产正式 MP3 |
+| 资产 Agent | `assets-src/llm-anime/**`、`public/themes/llm-anime/**`、资产脚本 | 抠图、裁切、牌面/牌背、UI 装饰、来源与资产报告；不生产字体或正式 MP3 |
 | 角色契约 Agent | 新的 character catalog/manifest loader 与测试 | 角色白名单、provider alias、DeepSeek 回退、路径安全 |
 | 主题底座 Agent | `tableTheme.ts`、`tileAssets.ts`、`MahjongTile.vue`、新主题上下文、3D 牌材质相关文件 | tileSet 分桶、2D/3D 资源集、主题加载失败回退 |
 
@@ -547,7 +545,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 | Agent | 文件所有权 | 任务 |
 |---|---|---|
 | 动作演出 Agent | 新动作组件、`GameTableHud.vue` 的 cue 接入及测试 | 六动作、四方位、失败回退、reduced motion |
-| UI 主题 Agent | 广播、气泡、共享结算内容组件、主题 CSS | 字体、框体、本家气泡、响应式和无障碍；不直接假设 keep `SettlementOverlay.vue` 会同步 |
+| UI 主题 Agent | 广播、气泡、共享结算内容组件、主题 CSS | 系统字体字效、框体、本家气泡、响应式和无障碍；不直接假设 keep `SettlementOverlay.vue` 会同步 |
 | 牌面验证 Agent | 牌资源/Three.js/Playwright 测试 | 2D、3D、结算小牌一致性和主题切换 |
 
 三个 Agent 不交叉修改 `style.css`：UI 主题 Agent拥有主样式文件；动作 Agent 将组件样式先做 scoped，最后由主 Agent 统一 CSS token。
@@ -659,7 +657,7 @@ git switch master
 
 ## 12. 完成定义
 
-- 新 `llmAnime` 主题的字体、牌面、牌背、广播、气泡、动作 cue、局结算和最终结算均有独立二次元视觉。
+- 新 `llmAnime` 主题的系统字体字效、牌面、牌背、广播、气泡、动作 cue、局结算和最终结算均有独立二次元视觉。
 - 现有 `llm` 深蓝星轨主题仍使用原主题 ID、桌布、牌材质、CSS 和动态声音路径，视觉/声音回归通过。
 - 12 个角色均可选择，素材缺失和未知角色可靠回退 DeepSeek。
 - 单机本家可选角色并持久化；master 多人真人选择通过后端同步。
@@ -687,12 +685,9 @@ git switch master
 1. 普通 bot 在 `llmAnime` 主题下继续报牌；真人关闭牌名播报。
 2. 赛后固定四家全员发言，赢家先说、其余顺时针；流局按座位顺序。
 3. vibehub P2P 真人选角作为下一里程碑，不阻塞本期 master WebSocket 版本。
-4. 主题字体使用“字魂萌宠天地体”一款，正文/标题共用，缺字回退系统字体。
+4. 不引入第三方字体文件；首版使用系统字体栈加 CSS/SVG 字效。
 5. 12 个角色中文展示名使用 §2.2 已冻结表；其中 DeepSeek 为“大肥鱼”，Qwen 为“千问大小姐”。
 
-Wave 1 开始前必须形成并评审通过的具体交付物：
+Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 `characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及 TTS 音色使用/缓存授权记录；中文展示名已完成，不再作为待定项。
 
-1. “字魂萌宠天地体”的 WEB/游戏嵌入式授权证书、可转换/子集化确认、授权字体文件、SHA256 和 glyph 覆盖清单；未授权前只用系统回退。
-2. 12 个角色的 `characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及 TTS 音色使用/缓存授权记录；中文展示名已完成，不再作为待定项。
-
-在上述两个合同完成前，可以搭建 schema、校验器和占位资源，但不得批量生成最终字体子集，也不得把 132 个“角色 × 语音槽位”投入正式 TTS 缓存预热。
+在该合同完成前可以搭建 schema、校验器和占位资源，但不得把 132 个“角色 × 语音槽位”投入正式 TTS 缓存预热。

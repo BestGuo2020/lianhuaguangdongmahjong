@@ -21,6 +21,10 @@ export interface GamePlayer {
   avatar: string
   /** 联机服务端大模型座位；用于屏蔽重复的原始动作音效。 */
   isLlm?: boolean
+  /** llmAnime 表现角色；协议/存储中的未知值必须经角色白名单解析。 */
+  characterId?: string
+  /** 玩家身份只用于表现与声音策略，不参与规则判定。 */
+  playerKind?: 'human' | 'llm' | 'bot'
   score: number
   seat: number
   hand: TileType[]
@@ -39,6 +43,7 @@ export type TableActionType =
   | 'concealed-gang'
   | 'added-gang'
   | 'flower-gang'
+  | 'wind-kong'
   | 'self-draw'
   | 'discard-win'
   | 'robbed-kong-win'
