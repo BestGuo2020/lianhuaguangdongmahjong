@@ -14,7 +14,6 @@ import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
 import { reasoningStatusSpeech } from './decisionSpeech'
-import { generateRoundReaction } from './roundReaction'
 
 const MIN_ROUND_REACTION_MS = 1_200
 
@@ -134,14 +133,11 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const config = toProviderConfig(preset, style)
     const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
-    }), (reaction, fallback, variationIndex) => (
-      generateRoundReaction(config, reaction, fallback, variationIndex)
-    ))
-    return new CoreLlmController(config, seatHooks, stats, reasoning)
+    }))
+    return new CoreLlmController(toProviderConfig(preset, style), seatHooks, stats, reasoning)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }
@@ -158,14 +154,11 @@ export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): Local
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const config = toProviderConfig(preset, style)
     const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
-    }), (reaction, fallback, variationIndex) => (
-      generateRoundReaction(config, reaction, fallback, variationIndex)
-    ))
-    return new LotusLlmController(config, seatHooks, stats, reasoning)
+    }))
+    return new LotusLlmController(toProviderConfig(preset, style), seatHooks, stats, reasoning)
   })
   const seeds = ([1, 2, 3] as const).map((seat) => seedFor(settings, seat))
   return { controllers, seeds, stats, enabled: true }
