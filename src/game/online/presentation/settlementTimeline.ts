@@ -75,15 +75,28 @@ export function createSettlementTimeline({
       'remote-round', snapshot.roomId, snapshot.round, snapshot.honba,
       draw ? 'draw' : winnerIndex, rawWinType ?? '',
     ].join(':')
-    queueMicrotask(() => {
-      void animeFixedTts.executeRound({
-        eventId,
-        characterIds: getCharacterIds(),
-        winnerIndex,
-        winType,
-        draw,
-      })
-    })
+    return animeFixedTts.executeRound({
+      eventId,
+      characterIds: getCharacterIds(),
+      winnerIndex,
+      winType,
+      draw,
+    }).then(() => undefined, () => undefined)
+  }
+
+  function finishSettlementAfterSpeech(
+    snapshot: ServerSnapshot,
+    mappedResult: RoundResult | null,
+    currentSerial: number,
+  ) {
+    const speech = queueFixedRound(snapshot, mappedResult)
+    const finish = () => {
+      if (serial !== currentSerial) return
+      state.phase.value = 'settled'
+      state.result.value = mappedResult
+    }
+    if (speech) void speech.then(finish, finish)
+    else finish()
   }
 
   function start(snapshot: ServerSnapshot) {
@@ -97,13 +110,13 @@ export function createSettlementTimeline({
     const isDraw = Boolean(snapshot.result?.draw) || !presentation
 
     if (isDraw) {
-      // 流局直接结算并亮牌（对齐单机 endDraw），不加 600ms revealing 停顿。
-      state.phase.value = 'settled'
+      // 流局立即亮牌；二次元主题等待四家固定发言后再打开结算窗口。
+      state.phase.value = 'revealing'
       state.revealHands.value = true
       state.winPresentation.value = null
       state.winEffect.value = null
-      state.result.value = mappedResult
-      queueFixedRound(snapshot, mappedResult)
+      state.result.value = null
+      finishSettlementAfterSpeech(snapshot, mappedResult, currentSerial)
       return
     }
 
@@ -147,9 +160,7 @@ export function createSettlementTimeline({
       state.revealHands.value = true
       later(() => {
         if (serial !== currentSerial) return
-        state.phase.value = 'settled'
-        state.result.value = mappedResult
-        queueFixedRound(snapshot, mappedResult)
+        finishSettlementAfterSpeech(snapshot, mappedResult, currentSerial)
       }, revealDuration)
     }, effectDuration)
   }

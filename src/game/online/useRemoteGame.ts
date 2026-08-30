@@ -85,6 +85,7 @@ export function useRemoteGame({
   } = state
   const presentedWinActions = new Set<string>()
   let fallbackActionSequence = 0
+  let fallbackSettlementSequence = 0
   const isWinAction = (type: TableActionEvent['type']) => (
     type === 'self-draw' || type === 'discard-win' || type === 'robbed-kong-win'
   )
@@ -315,6 +316,7 @@ export function useRemoteGame({
   }
 
   function clearTimers() {
+    fallbackSettlementSequence += 1
     timers.forEach((id) => window.clearTimeout(id))
     timers.clear()
     requestCoordinator.clearCountdown()
@@ -366,6 +368,7 @@ export function useRemoteGame({
 
   const serverMessageRouter = createServerMessageRouter({
     rejoin_ok: (msg) => {
+      fallbackSettlementSequence += 1
       roomId.value = msg.roomId
       mySeat.value = msg.seat
       nickname.value = msg.nickname
@@ -399,6 +402,7 @@ export function useRemoteGame({
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
     round_start: (msg) => {
+      fallbackSettlementSequence += 1
       animeFixedTts?.reset()
       presentedWinActions.clear()
       matchLifecycle.handleRoundStart(msg)
@@ -422,6 +426,7 @@ export function useRemoteGame({
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
       phase.value = 'revealing'
+      const fallbackSettlementId = fallbackSettlementSequence += 1
       revealHands.value = true
       const mapped = mapResult(msg.result)
       // 点炮/抢杠/地胡播 hu，自摸/天胡播 zimo（对齐结算时间线的音效逻辑）。
@@ -457,28 +462,33 @@ export function useRemoteGame({
         playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
       }
       later(() => {
-        phase.value = 'settled'
-        result.value = mapped
+        const finish = () => {
+          if (fallbackSettlementId !== fallbackSettlementSequence) return
+          phase.value = 'settled'
+          result.value = mapped
+        }
         if (policy.resultVoice === 'fixed-line' && animeFixedTts) {
           const draw = Boolean(mapped?.draw)
           const roundWinType = isDiscardStyle
             ? (winType === 'robbed-kong' ? 'robbed-kong' : 'discard')
             : 'self-draw'
-          queueMicrotask(() => {
-            void animeFixedTts.executeRound({
-              eventId: mapped?.presentationKey
-                ?? `remote-hand-result:${roomId.value}:${round.value}:${honba.value}:${draw ? 'draw' : winner}`,
-              characterIds: players.map((player) => player.characterId),
-              winnerIndex: draw ? null : winner,
-              winType: roundWinType,
-              draw,
-            })
+          const speech = animeFixedTts.executeRound({
+            eventId: mapped?.presentationKey
+              ?? `remote-hand-result:${roomId.value}:${round.value}:${honba.value}:${draw ? 'draw' : winner}`,
+            characterIds: players.map((player) => player.characterId),
+            winnerIndex: draw ? null : winner,
+            winType: roundWinType,
+            draw,
           })
-        }
+          void speech.then(finish, finish)
+        } else finish()
       }, 600)
     },
     continue_prompt: () => {},
-    match_finished: (msg) => matchLifecycle.finishMatch(msg.finalScores),
+    match_finished: (msg) => {
+      fallbackSettlementSequence += 1
+      matchLifecycle.finishMatch(msg.finalScores)
+    },
     room_closed: () => { void roomLifecycle.leaveRoom() },
     pong: () => {},
     error: (msg) => handleError(msg.code),
@@ -496,6 +506,7 @@ export function useRemoteGame({
   // ── 重置 ───────────────────────────────────────────────
 
   function resetAll() {
+    fallbackSettlementSequence += 1
     presentedWinActions.clear()
     matchLifecycle.resetAll()
   }

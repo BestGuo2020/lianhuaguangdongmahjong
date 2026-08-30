@@ -57,10 +57,8 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
     const eventId = pendingFixedRoundId ?? `local-round:${fixedRoundSequence += 1}`
     pendingFixedRoundId = null
     const characterIds = state.players.map((player) => player.characterId)
-    // beforeSettle* 返回后结算状态同步落地；微任务中的语音队列因此不会阻塞结算。
-    queueMicrotask(() => {
-      void executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
-    })
+    return executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
+      .then(() => undefined, () => undefined)
   }
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
@@ -120,13 +118,13 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const winType: AnimeRoundWinType = result.winType === 'discard' || result.winType === 'dihu'
         ? 'discard'
         : result.winType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
-      queueFixedRound(winnerIndex, winType)
+      return queueFixedRound(winnerIndex, winType)
     },
     beforeSettleDraw: () => {
       fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
       if (!fixedResultVoiceForCurrentSettlement) return announceLlmRoundReactions({ winnerIndex: null, draw: true })
       pendingFixedRoundId = `local-round:${fixedRoundSequence += 1}`
-      queueFixedRound(null, undefined, true)
+      return queueFixedRound(null, undefined, true)
     },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3

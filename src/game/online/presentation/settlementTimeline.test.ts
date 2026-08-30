@@ -75,7 +75,7 @@ describe('settlementTimeline', () => {
     expect(state.result.value?.draw).toBe(true)
   })
 
-  it('llmAnime 先落地结算，再非阻塞启动四家固定发言', async () => {
+  it('llmAnime 等四家固定发言结束后才打开流局结算', async () => {
     const executor = new AnimeFixedTtsExecutor({
       speak: vi.fn(async () => true),
       cancel: vi.fn(),
@@ -90,14 +90,43 @@ describe('settlementTimeline', () => {
     })
 
     timeline.start(snapshot({ result: { draw: true }, winPresentation: null, winningPlayerIndex: -1 }))
-    expect(state.phase.value).toBe('settled')
-    expect(executeRound).not.toHaveBeenCalled()
-    await Promise.resolve()
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
     expect(executeRound).toHaveBeenCalledWith(expect.objectContaining({
       characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
       winnerIndex: null,
       draw: true,
     }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.draw).toBe(true)
+  })
+
+  it('llmAnime 自摸时四家发言未结束不进入 settled', async () => {
+    let finishRound!: (value: any) => void
+    const pending = new Promise<any>((resolve) => { finishRound = resolve })
+    const executor = new AnimeFixedTtsExecutor({
+      speak: vi.fn(async () => true),
+      cancel: vi.fn(),
+    })
+    vi.spyOn(executor, 'executeRound').mockReturnValue(pending)
+    const { state, timeline } = harness(true, {
+      themeName: 'llmAnime',
+      executor,
+      characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
+    })
+
+    timeline.start(snapshot())
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
+
+    finishRound({ status: 'completed', order: [0, 1, 2, 3], items: [] })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.winnerIndex).toBe(0)
   })
 
   it('settled 快照重置视觉计时器时不取消刚触发的胡牌动作语音', () => {

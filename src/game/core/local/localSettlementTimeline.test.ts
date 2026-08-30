@@ -77,7 +77,7 @@ describe('localSettlementTimeline', () => {
     expect(state.result.value?.scoreChanges).toHaveLength(4)
   })
 
-  it('llmAnime 结算先落地，再非阻塞启动四家固定发言', async () => {
+  it('llmAnime 等四家固定发言结束后才打开结算', async () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -87,7 +87,8 @@ describe('localSettlementTimeline', () => {
       { ...player(3), characterId: 'claude', playerKind: 'bot' },
     )
     state.wall.value = ['m1', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 'p4']
-    const pending = new Promise<any>(() => {})
+    let finishRound!: (value: any) => void
+    const pending = new Promise<any>((resolve) => { finishRound = resolve })
     const executor = new AnimeFixedTtsExecutor({ speak: vi.fn(async () => true), cancel: vi.fn() })
     const executeRound = vi.spyOn(executor, 'executeRound').mockReturnValue(pending)
     const scheduled: Array<{ callback: () => void; delay: number }> = []
@@ -106,15 +107,17 @@ describe('localSettlementTimeline', () => {
     timeline.endGame(0)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
-    expect(state.phase.value).toBe('settled')
-    expect(executeRound).not.toHaveBeenCalled()
-    await Promise.resolve()
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
     expect(executeRound).toHaveBeenCalledWith(expect.objectContaining({
       characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
       winnerIndex: 0,
       winType: 'self-draw',
     }))
+    finishRound({ status: 'completed', order: [0, 1, 2, 3], items: [] })
+    await flushPromises()
     expect(state.phase.value).toBe('settled')
+    expect(state.result.value?.winnerIndex).toBe(0)
   })
 
   it('waits for the discarded tile voice, then starts point-ron audio and win effect together', async () => {
