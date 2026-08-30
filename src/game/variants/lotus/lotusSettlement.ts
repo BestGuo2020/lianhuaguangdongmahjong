@@ -57,9 +57,8 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     const eventId = pendingFixedRoundId ?? `lotus-round:${fixedRoundSequence += 1}`
     pendingFixedRoundId = null
     const characterIds = state.players.map((player) => player.characterId)
-    queueMicrotask(() => {
-      void executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
-    })
+    return executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
+      .then(() => undefined, () => undefined)
   }
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
@@ -123,13 +122,13 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const winType: AnimeRoundWinType = result.winType === 'discard' || result.winType === 'dihu'
         ? 'discard'
         : result.winType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
-      queueFixedRound(winnerIndex, winType)
+      return queueFixedRound(winnerIndex, winType)
     },
     beforeSettleDraw: () => {
       fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
       if (!fixedResultVoiceForCurrentSettlement) return announceLlmRoundReactions({ winnerIndex: null, draw: true })
       pendingFixedRoundId = `lotus-round:${fixedRoundSequence += 1}`
-      queueFixedRound(null, undefined, true)
+      return queueFixedRound(null, undefined, true)
     },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<LotusEndGameOptions>): RoundResult => {
       const winHand = endOptions.winHand ?? winner.hand

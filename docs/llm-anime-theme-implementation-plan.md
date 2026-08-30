@@ -13,7 +13,7 @@
 - 已生成并接入 DeepSeek 的通用鸣牌卡与通用胡牌卡两张；其余 22 张动作卡待逐批生成与审核。
 - 已把六类动作和五类赛后固定文案接入现有 TTS 缓存：主音色失败尝试替代音色，开始播放前动作最多等待 900ms、赛后单句最多等待 2s；一旦开始播放不再截断。
 - 已落实 `llmAnime` 声音矩阵：真人只保留落牌声、普通 bot 继续报牌、LLM 保留普通出牌吐槽，动作和赛后不再使用模型自由文案。
-- 已落地单机与 WebSocket 的四家赛后非阻塞队列；赢家先说、其余顺时针，流局按座位顺序，切主题/下一局/返回大厅可取消。
+- 已落地单机与 WebSocket 的四家赛后队列；赢家先说、其余顺时针，流局按座位顺序，队列结束后才开放结算窗口，取消/失败会立即放行。
 - WebSocket 已增加连接级 `presentationAudioMode` 协商和 `purpose/speechSource` 元数据；二次元连接可提前收到结算，深蓝星轨继续走 legacy 动态语音。
 - vibehub 共享声音策略可随 master 同步，但 P2P 真人选角和 P2P 连接级音频能力仍属于下一里程碑。
 
@@ -487,9 +487,9 @@ interface TableTheme {
 2. 结果发言只由归一化后的 `presentationKey` 触发一次，重连快照和页面 resume 不得复播。
 3. legacy 通用人声、模型自由文案 TTS、固定文案缓存 TTS 三者只能有一个人声出口。
 4. 落牌、摸牌、牌组落位和胡牌特效等非人声音效不受影响。
-5. 音效关闭、静音、缓存未命中、TTS 失败不得阻塞规则推进或结算。
+5. 音效关闭、静音、缓存未命中、TTS 失败不得阻塞规则推进，并须立即放行结算窗口。
 6. 赛后固定四家全员发言：赢家先说，其余从赢家起顺时针；流局按座位顺序。总时长控制在 8 秒内，单条建议 0.8–1.6 秒。
-7. 赛后队列是可取消、非阻塞的表现队列：结果和结算先落地，再开始本地播放；next round、return lobby、theme change 或卸载立即取消，绝不延迟服务端 settled、规则结算或继续确认屏障。
+7. 权威分数与服务端 `settled` 仍先完成，但客户端保持亮牌态并等待四家本地发言；队列结束后才写入可见 `result/settled` 并打开结算窗口。theme change、卸载、终局或异常会取消队列并立即放行。
 
 阶段 A 线协议字段保持 optional 以接收旧服务端；阶段 B/最低客户端覆盖后升为必填：
 
@@ -516,7 +516,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 - 单机使用现有 `/api/local-tts` 与 local cache bucket；联机由 RoomSession 使用 room cache bucket 统一合成，避免四个客户端重复请求。
 - 房间存在 `legacy-dynamic` 连接时，服务端仍按现有逻辑为 legacy audience 合成模型文案；混合主题房间可能同时需要一份 legacy dynamic 音频和一份 anime fixed-line 音频，二者按 audience 定向投递。
 - 全部连接都是 anime fixed TTS 时跳过动作/赛后模型自由文案的 TTS，但仍允许固定文案在缓存未命中时调用 `ensure_audio`。
-- 混合主题房间中，legacy 连接保留现有赛后语音和结算等待；anime fixed TTS 连接可先收到 settled 并运行自己的非阻塞固定文案队列。此处只做每连接表现屏障，不改变权威牌局 phase。
+- 混合主题房间中，legacy 连接保留现有赛后语音和结算等待；anime fixed TTS 连接可先收到权威 settled 快照，但在本地四家固定文案队列结束前保持亮牌画面，不打开结算窗口。此处只做每连接表现屏障，不改变权威牌局 phase。
 - 现有 `llm` 深蓝星轨主题始终上报 `legacy-dynamic`，因此视觉和声音行为保持不变。
 - 普通 commentary 不受新动作/结果路由影响，仍按现有策略动态合成和播放。
 
@@ -606,7 +606,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 - `llmAnime` 主题真人出牌没有 `tileAudioFile` 和 TTS；其他主题（含现有 `llm`）保留当前牌名播报；LLM/普通 AI 按矩阵执行。
 - `llmAnime` 每个动作只有一个固定文案缓存 TTS 出口，不调用模型自由文案 TTS；现有 `llm` 仍走 legacy dynamic 出口。
 - 132 个角色/语音组合都有确定 cache identity；重复请求命中缓存、并发 miss 单飞合并，文案/voice/cache version 变化会正确失效旧键。
-- 静音、取消、资源失败不阻塞动作和结算。
+- 静音、取消、资源失败不阻塞规则推进，并立即放行结算窗口。
 
 ### 11.2 后端与协议测试
 
@@ -628,7 +628,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 - 同一固定动作第二次发生时命中缓存；测试记录上游 TTS provider 调用次数不再增加。
 - TTS 网关离线或合成超时时，动作回退通用人声、赛后保留文字并跳过人声，牌局与结算不受阻塞。
 - 断线重连和重复 snapshot 不复播动作/赛后语音。
-- anime fixed TTS 连接的赛后队列不会延迟结算，点击继续、返回大厅和切主题会立即取消；legacy 连接保持现状。
+- anime fixed TTS 连接在四家发言完成前不显示结算窗口；静音、失败、切主题、终局或取消会立即放行，legacy 连接保持现状。
 - 截图覆盖：桌面 16:9、4:3、移动横屏、窄高屏、reduced motion。
 - 视觉页面覆盖：牌桌、广播、三家气泡、本家气泡、六动作、局结算、最终结算。
 - 现有 `llm` 深蓝星轨主题做独立截图和声音回归，确保桌布、牌面、气泡、动作和动态 TTS 不变。
@@ -674,7 +674,7 @@ git switch master
 - 六动作均显示正确角色对应的 `call` 或 `win` Q 版动作卡、正确方位、正确大字且不显示昵称，并只播放一次固定稳健语音。
 - `llmAnime` 主题下真人普通出牌无牌名和 TTS；吃碰杠胡等动作、胜负和流局使用固定文案缓存 TTS。
 - `llmAnime` 连接的模型自由文案 TTS 不再承担动作和赛后人声；普通吐槽与固定文案缓存 TTS 没有双播，现有 `llm` 连接仍保留原动态路径。
-- 赛后本地发言是非阻塞、可取消的表现队列，不延迟规则结算和继续屏障。
+- 赛后本地发言不延迟权威规则结算，但会在客户端阻止结算窗口提前出现；队列完成或被取消后才放行继续操作。
 - TTS 服务离线、缓存未命中/合成失败、图片缺失、静音或 reduced motion 都不影响牌局推进。
 - 2D、3D、结算页的牌面和牌背一致，切换主题不会串缓存。
 - 前端、后端、E2E 与资产校验全部通过；本期明确记录 vibehub P2P 真人选角未接线，并进入下一里程碑。
