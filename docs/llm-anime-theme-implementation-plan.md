@@ -9,7 +9,7 @@
 - 已接入单机本家选角、角色偏好持久化、WebSocket join 角色参数和角色动作 cue 骨架。
 - 已撤销第三方字体方案，首版使用系统字体栈加 CSS/SVG 字效。
 - 平时座位、选角、气泡与结算改为复用现有 Q 版头像；完整比例立绘不再作为主题运行时主资源。
-- 已生成并接入 DeepSeek 的六张专用 Q 版动作卡；其余 66 张专用动作图待逐批生成与审核。
+- 已生成并接入 DeepSeek 的通用鸣牌卡与通用胡牌卡两张；其余 22 张动作卡待逐批生成与审核。
 
 ## 1. 目标
 
@@ -18,7 +18,7 @@
 本期目标包括：
 
 - 新 `llmAnime` 主题专属字效、牌面、牌背、广播提示、气泡框、局结算和最终结算视觉。
-- 吃、碰、杠、胡、自摸、抢杠胡使用每角色专用 Q 版动作图 + DOM 动作大字 + 特效的卡通演出。
+- 吃/碰/杠共用每角色的 `call` Q 版动作卡，胡/自摸/抢杠胡共用 `win` Q 版动作卡，再叠加 DOM 动作大字与特效。
 - 角色形象与 LLM 供应商、决策风格解耦。
 - `llmAnime` 主题下，非 LLM 座位未指定角色时统一回退 DeepSeek 形象。
 - 单机本家可选择角色；WebSocket 多人联机真人可选择角色，并让房内其他客户端看到一致结果。
@@ -33,7 +33,7 @@
 角色资源分两层：
 
 1. 平时展示直接复用现有 Q 版头像：座位、本家、真人选角、气泡旁角色和结算页保持同一 Q 版世界观；真人默认使用对应角色的“稳健”头像。
-2. 鸣牌/胡牌演出制作 12×6=72 张专用 Q 版动作图，每张具有对应动作姿势、表情和构图。
+2. 每个角色只制作两张动作卡：`call` 覆盖吃/碰/杠，`win` 覆盖胡/自摸/抢杠胡；全套共 12×2=24 张。
 3. “吃/碰/杠/胡/自摸/抢杠胡”文字仍由 DOM/CSS 绘制，确保文字准确、可响应式缩放；生成图片本身不烘焙动作字。
 4. 鸣牌画面不显示角色昵称；昵称只出现在座位、选角和结算等身份区域。
 5. 专用动作图缺失时回退本角色基础 Q 版头像，再回退 DeepSeek 基础 Q 版，最后回退纯文字 cue。
@@ -134,7 +134,7 @@
 - 现有牌面只有 `public/tiles/` 的 34 张 75×100 RGBA PNG，总计约 0.43 MiB。
 - 现有桌布 `public/img/llm-table.webp` 为 1024×1024 VP8L lossless，约 1.05 MiB。
 - 代码目前只一等识别 DeepSeek、Kimi、Qwen、Doubao、MiniMax、GPT、GLM、Claude 八家；Gemini、Grok、Muse 只能手填 `avatarFolder`，Mistral 没有线上头像、provider 或 TTS 映射，`custom` 目录也不存在。
-- 当前已存在 44 张基础 Q 版头像和 DeepSeek 六张专用动作卡；主题牌面、图片牌背及其余 66 张专用动作图尚未完成。
+- 当前已存在 44 张基础 Q 版头像和 DeepSeek 两张动作卡；主题牌面、图片牌背及其余 22 张动作卡尚未完成。
 - 已有通用吃、碰、杠、胡、自摸语音，但它们不是 12 角色固定语音；没有独立抢杠胡语音。
 
 `tmp/` 被忽略，不能成为可重复构建的唯一真源。Wave 0 必须把批准使用的原图和可用 DeepSeek cutout 移到受版本管理的 `assets-src/llm-anime/`；若版权或仓库体积不允许提交原图，则必须使用外部只读归档并在源 manifest 中记录 URL、SHA256、字节数和恢复步骤。`cutout-v2` 写入拒绝清单，不能被流水线误选。
@@ -155,12 +155,8 @@ public/themes/llm-anime/<assetVersion>/
       avatar.webp
       thumb.webp
       actions/
-        chi.jpg
-        peng.jpg
-        gang.jpg
-        hu.jpg
-        zimo.jpg
-        qiangganghu.jpg
+        call.jpg
+        win.jpg
     ...
   actions/
     chi.svg
@@ -209,7 +205,7 @@ export interface CharacterProfile {
   providerAliases: string[]
   avatarUrl: string
   thumbUrl: string
-  actions: Partial<Record<AnimeActionKey, string>>
+  actions: Partial<Record<'call' | 'win', string>>
   voiceKey: string
   speaker?: string
   fallbackVoiceKey: string
@@ -252,7 +248,7 @@ export interface LlmAnimeThemeManifest {
 |---|---|
 | 基础 Q 版头像 | 现有 512×512 头像作为座位/选角/结算主资源；逐步转为 WebP，单张目标不超过 60 KiB |
 | 选择器缩略图 | 192×256 WebP，单张不超过 35 KiB，打开选择器后懒加载 |
-| 专用 Q 版动作图 | 1024×1024 方形卡图，人物主视觉偏左、右侧保留动作字空间；源 PNG 无损保留，运行时 JPEG/WebP 单张不超过 350 KiB |
+| Q 版动作卡 | 每角色 `call`/`win` 各一张，1024×1024 方形、人物主视觉偏左、右侧保留动作字空间；源 PNG 无损保留，运行时 JPEG/WebP 单张不超过 350 KiB |
 | 牌面 master | 384×512 RGBA；运行时至少 192×256 WebP，34 张逐键映射 |
 | 牌背 | 512×704 WebP，2D/3D 共用设计 |
 | SVG 字效/UI | 固定 viewBox，文字转路径；禁止脚本、外链、外部字体和远程图片 |
@@ -268,7 +264,7 @@ Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编�
 
 资产 Agent 必须提供可重复运行的校验脚本，至少检查：
 
-- 根 manifest 中恰有 12 条角色记录，每条都有基础 Q 版头像、缩略图、6 个动作槽位、voice/fallback voice 和 11 条固定文案。
+- 根 manifest 中恰有 12 条角色记录，每条都有基础 Q 版头像、缩略图、`call`/`win` 两个动作卡槽位、voice/fallback voice 和 11 条固定文案。
 - 34 张牌面与 1 张牌背齐全。
 - 专用动作图检查角色身份、Q 版比例、动作可读性、四肢/麻将牌正确性、右侧文字安全区和整体风格一致性；无需强制透明背景，可使用主题动作卡背景。
 - 图片尺寸、体积和文件名满足规范。
@@ -282,7 +278,7 @@ Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编�
 
 - “未打开角色选择器”的大厅初始新增传输不超过 500 KiB。
 - 打开选择器后懒加载 12 张缩略图，总新增传输不超过 500 KiB，并启用长期缓存。
-- 单角色基础头像不超过 60 KiB，专用 Q 版动作图目标不超过 350 KiB。
+- 单角色基础头像不超过 60 KiB，每张 Q 版动作卡不超过 350 KiB。
 - 当前四座位动作资源总加载不超过 2 MiB。
 - 固定文案 TTS 按事件懒合成；缓存命中后直接复用音频 URL/文件。
 
@@ -351,7 +347,7 @@ flowchart TD
   E[规则/服务端产生语义事件] --> N[动作与结果事件归一化]
   N --> P[按 actor 获取 playerKind + characterId]
   P --> R[Character Resolver]
-  R -->|llmAnime 主题| V[专用 Q 版动作图 + 动作字 + 主题动画]
+  R -->|llmAnime 主题| V[call/win Q 版动作卡 + 动作字 + 主题动画]
   R -->|其他主题| L[现有文字动作提示]
   N --> A[固定动作/结果文案路由]
   A --> D[事件 ID 去重与 TTS cache identity]
@@ -619,7 +615,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 
 - 单机本家选择角色后刷新仍保留，两套规则均生效。
 - 四个真人选择不同角色，所有客户端看到同一行动者形象。
-- 12 角色 × 6 专用 Q 版动作资源完整；6 动作 × 4 方位至少各覆盖一次，连续事件不会残留前一角色或昵称。
+- 12 角色 × 2 张 Q 版动作卡资源完整；6 个动作语义 × 4 方位至少各覆盖一次，连续事件不会残留前一角色或昵称。
 - `llmAnime` 真人出牌只有实体落牌声；该连接没有动作/赛后动态 TTS 请求或投递。
 - 同一固定动作第二次发生时命中缓存；测试记录上游 TTS provider 调用次数不再增加。
 - TTS 网关离线或合成超时时，动作回退通用人声、赛后保留文字并跳过人声，牌局与结算不受阻塞。
@@ -667,7 +663,7 @@ git switch master
 - 12 个角色均可选择，素材缺失和未知角色可靠回退 DeepSeek。
 - 单机本家可选角色并持久化；master 多人真人选择通过后端同步。
 - 普通 AI 和没有角色字段的旧玩家在 `llmAnime` 主题下显示 DeepSeek。
-- 六动作均显示正确角色的专用 Q 版动作图、正确方位、正确大字且不显示昵称，并只播放一次固定稳健语音。
+- 六动作均显示正确角色对应的 `call` 或 `win` Q 版动作卡、正确方位、正确大字且不显示昵称，并只播放一次固定稳健语音。
 - `llmAnime` 主题下真人普通出牌无牌名和 TTS；吃碰杠胡等动作、胜负和流局使用固定文案缓存 TTS。
 - `llmAnime` 连接的模型自由文案 TTS 不再承担动作和赛后人声；普通吐槽与固定文案缓存 TTS 没有双播，现有 `llm` 连接仍保留原动态路径。
 - 赛后本地发言是非阻塞、可取消的表现队列，不延迟规则结算和继续屏障。
@@ -677,7 +673,7 @@ git switch master
 
 ## 13. 明确不在首版范围
 
-- 口型动画、骨骼动画及同一动作的多表情差分；首版只要求每角色每动作一张专用 Q 版卡图。
+- 口型动画、骨骼动画及同一动作的多表情差分；首版每角色只要求 `call`/`win` 两张 Q 版动作卡。
 - 用户上传自定义角色图片、音频或任意 URL。
 - 跨设备/Waku 账户同步角色偏好。
 - 修改或重做现有 `llm` 深蓝星轨主题及其他旧主题。
