@@ -8,6 +8,7 @@ import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
 import { inferProviderDialect, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
+import { LOCAL_LLM_SEAT_OPTIONS } from './seatAssignment'
 
 const props = defineProps<{
   open: boolean
@@ -36,8 +37,6 @@ const selectedUsesDivergentGlmRelay = computed(() => {
   const model = preset.model.trim().toLowerCase().split('/').pop() ?? ''
   return selectedReasoningPolicy.value?.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(model)
 })
-const seatLabels = ['上家（左）', '对家（上）', '下家（右）']
-
 function load() {
   settings.value = readLlmSettings()
   selectedId.value = settings.value.activeId ?? settings.value.presets[0]?.id ?? null
@@ -213,14 +212,14 @@ function presetName(id: string | null): string {
           >
             <span>默认预置：</span><b>{{ settings.activeId === selected.id ? '✓ ' + selected.name : presetName(settings.activeId) }}</b>
           </button>
-          <label v-for="(label, index) in seatLabels" :key="label" class="llm-seat-row">
-            <span>{{ label }}：</span>
+          <label v-for="option in LOCAL_LLM_SEAT_OPTIONS" :key="option.seat" class="llm-seat-row">
+            <span>{{ option.label }}：</span>
             <div class="llm-seat-picks">
-              <select v-model="settings.seatIds[index + 1]" data-testid="llm-seat" @click.stop>
+              <select v-model="settings.seatIds[option.seat]" :data-seat="option.seat" data-testid="llm-seat" @click.stop>
                 <option :value="null">跟随默认（{{ presetName(settings.activeId) }}）</option>
                 <option v-for="preset in settings.presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option>
               </select>
-              <select v-model="settings.seatStyles[index + 1]" data-testid="llm-seat-style" @click.stop>
+              <select v-model="settings.seatStyles[option.seat]" :data-seat="option.seat" data-testid="llm-seat-style" @click.stop>
                 <option :value="null">风格：跟随</option>
                 <option value="激进">激进</option>
                 <option value="稳健">稳健</option>
