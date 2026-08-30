@@ -767,6 +767,28 @@ describe('testLlmConnection', () => {
     expect(captured.response_format).toBeUndefined()
   })
 
+  it.each([
+    ['deepseek', 'deepseek/deepseek-v4-flash'],
+    ['qwen', 'qwen/qwen3.8-flash'],
+    ['kimi', 'kimi/kimi-k2.5'],
+  ] as const)('OrcaRouter %s 深度思考使用 65536 上限', async (providerType, model) => {
+    let captured: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+        }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: { ...config, providerType, baseUrl: 'https://api.orcarouter.ai/v1', model },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
+    })
+    expect(captured.max_tokens).toBe(65_536)
+  })
+
   it('Kimi K3 普通路径使用 low/128，不传 thinking 与采样参数', async () => {
     let captured: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {

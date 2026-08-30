@@ -371,11 +371,16 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
       && reasoningPolicy.providerType === 'kimi'
       && /^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(modelName)
       && dialect !== 'official'
+    const orcaLongReasoning = options.reasoning === true
+      && dialect === 'orcarouter'
+      && ['deepseek', 'qwen', 'kimi'].includes(reasoningPolicy.providerType)
     const quickReasoningMaxTokens = options.reasoning !== true
       ? (glmFlash ? (dialect === 'official' ? 128 : 512)
         : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
       : undefined
-    const deepReasoningMaxTokens = relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
+    const deepReasoningMaxTokens = orcaLongReasoning
+      ? 65_536
+      : relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse
