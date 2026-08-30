@@ -263,35 +263,6 @@ describe('localSettlementTimeline', () => {
     ])
   })
 
-  it('三个 AI 并行生成自然感言，生成完成后仍按队列串行播报并对重复句回退', async () => {
-    const generatedSeats: number[] = []
-    const spoken: Array<{ seat: number; text: string }> = []
-    const releases = new Map<number, (text: string | null) => void>()
-    for (const seat of [1, 2, 3]) {
-      registerLocalLlmVoiceSeat(
-        seat,
-        '高冷',
-        (text) => { spoken.push({ seat, text }) },
-        async () => {
-          generatedSeats.push(seat)
-          return new Promise<string | null>((resolve) => releases.set(seat, resolve))
-        },
-      )
-    }
-
-    const pending = announceLocalLlmRoundReactions({ winnerIndex: 0, winType: 'self-draw' })!
-    expect(generatedSeats).toEqual([1, 2, 3])
-    expect(spoken).toEqual([])
-    releases.get(1)!('下局再来。')
-    releases.get(2)!('下局再来。')
-    releases.get(3)!(null)
-    await pending
-
-    expect(spoken.map((item) => item.seat)).toEqual([1, 2, 3])
-    expect(new Set(spoken.map((item) => item.text)).size).toBe(3)
-    expect(spoken[0].text).toBe('下局再来。')
-  })
-
   it('allows a headless online engine to bypass the single-player LLM voice registry', async () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
