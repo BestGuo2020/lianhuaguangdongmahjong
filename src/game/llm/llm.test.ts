@@ -11,6 +11,7 @@ import { createLocalLlmControllers, createLotusLlmControllers } from './runtime'
 import { tileFromName, tileName } from './schema'
 import type { DecisionInput } from './candidates'
 import type { LlmProviderConfig } from './config'
+import { resetReasoningBudgetForTests } from './reasoningBudget'
 
 const config: LlmProviderConfig = {
   baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-test', model: 'deepseek-chat', style: '稳健', timeoutMs: 8000,
@@ -19,6 +20,7 @@ const config: LlmProviderConfig = {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  resetReasoningBudgetForTests()
 })
 
 describe('extractJsonObject：平衡括号扫描', () => {
