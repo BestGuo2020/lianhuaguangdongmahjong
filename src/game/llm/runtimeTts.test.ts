@@ -17,9 +17,13 @@ vi.mock('./client', async (importOriginal) => ({
   requestLlmDecision: mocks.requestLlmDecision,
 }))
 
-import { resetLocalLlmVoiceRegistryForTests } from '../core/presentation/localLlmVoiceRegistry'
+import { announceLocalLlmRoundReactions, resetLocalLlmVoiceRegistryForTests } from '../core/presentation/localLlmVoiceRegistry'
 import { saveLlmSettings } from './config'
-import { createLocalLlmControllers } from './runtime'
+import {
+  createLocalLlmControllers,
+  createLotusLlmControllers,
+  shouldSuppressLlmAnimeDynamicSpeech,
+} from './runtime'
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>()
@@ -32,6 +36,30 @@ function memoryStorage(): Storage {
   }
 }
 
+function configureDeepseekRuntime(storage: Storage, style: '稳健' | '话痨' = '稳健') {
+  vi.stubGlobal('localStorage', storage)
+  saveLlmSettings({
+    enabled: true,
+    presets: [{
+      id: 'deepseek', name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'sk', model: 'deepseek-v4-flash', style, timeoutMs: 8000, ttsVoiceKey: 'deepseek',
+    }],
+    activeId: 'deepseek', seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+  }, storage)
+}
+
+const DISCARD_CONTEXT = {
+  hand: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p1', 'p3', 'p5', 's2', 's4', 'east', 'white'] as const,
+  melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, afterKong: false,
+  playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+}
+
+const PENG_CONTEXT = {
+  hand: ['m1', 'm1', 'm2', 'm3', 'p4', 'p5', 's2', 's4', 'east', 'south', 'west', 'green', 'white'] as const,
+  canPeng: true, canGang: false, tile: 'm1' as const, from: 0, exposedMelds: 0,
+  playerIndex: 1, scores: [1000, 1000, 1000, 1000], peers: [], wallCount: 50,
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.clearAllMocks()
@@ -39,6 +67,105 @@ afterEach(() => {
 })
 
 describe('单机 LLM runtime TTS', () => {
+  it.each([
+    'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong', 'win',
+  ] as const)('llmAnime 按 actionKind=%s 屏蔽模型动作台词', (actionKind) => {
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llmAnime', {
+      priority: 'important', source: 'decision', actionKind,
+    })).toBe(true)
+  })
+
+  it('llmAnime 精确保留普通 commentary 与思考之外的非固定动作', () => {
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llmAnime', {
+      priority: 'normal', source: 'decision', actionKind: 'discard',
+    })).toBe(false)
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llmAnime', {
+      priority: 'normal', source: 'decision', actionKind: 'pass',
+    })).toBe(false)
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llmAnime', undefined)).toBe(false)
+  })
+
+  it('llmAnime 对 source=win 的赛后语音一律拦截，其他主题保持原行为', () => {
+    const meta = { priority: 'important', source: 'win' } as const
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llmAnime', meta)).toBe(true)
+    expect(shouldSuppressLlmAnimeDynamicSpeech('llm', meta)).toBe(false)
+    expect(shouldSuppressLlmAnimeDynamicSpeech('jade', meta)).toBe(false)
+    expect(shouldSuppressLlmAnimeDynamicSpeech(undefined, meta)).toBe(false)
+  })
+
+  it('动态主题 getter 在同一控制器生命周期内即时切换动作台词路由', async () => {
+    configureDeepseekRuntime(memoryStorage())
+    mocks.requestLlmDecision.mockResolvedValue({ choice: 'P', message: '这张我碰了。' })
+    let themeName = 'llmAnime'
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers(
+      { onLlmMessage: bubble },
+      { getThemeName: () => themeName },
+    ).controllers![0]
+
+    await expect(controller.requestClaim(PENG_CONTEXT as never)).resolves.toEqual({ kind: 'peng' })
+    expect(mocks.speak).not.toHaveBeenCalled()
+    expect(bubble).not.toHaveBeenCalled()
+
+    themeName = 'jade'
+    await expect(controller.requestClaim(PENG_CONTEXT as never)).resolves.toEqual({ kind: 'peng' })
+    expect(mocks.speak).toHaveBeenCalledOnce()
+    expect(bubble).toHaveBeenCalledWith(1, '这张我碰了。', expect.objectContaining({
+      source: 'decision', decision: 'claim', actionKind: 'peng',
+    }))
+  })
+
+  it('llmAnime 保留普通出牌 commentary', async () => {
+    configureDeepseekRuntime(memoryStorage())
+    mocks.requestLlmDecision.mockResolvedValue({ choice: 'A1', message: '这手先稳住。' })
+    const bubble = vi.fn()
+    const controller = createLocalLlmControllers(
+      { onLlmMessage: bubble },
+      { getThemeName: () => 'llmAnime' },
+    ).controllers![0]
+
+    await expect(controller.requestTurn(DISCARD_CONTEXT as never)).resolves.toEqual(expect.objectContaining({ kind: 'discard' }))
+    expect(mocks.speak).toHaveBeenCalledWith(
+      1, '这手先稳住。', 'deepseek', '稳健', 'normal',
+      expect.objectContaining({ onStarted: expect.any(Function) }),
+    )
+    expect(bubble).toHaveBeenCalledWith(1, '这手先稳住。', expect.objectContaining({ actionKind: 'discard' }))
+  })
+
+  it('llmAnime 保留思考安全状态及其开场 TTS', async () => {
+    configureDeepseekRuntime(memoryStorage())
+    mocks.requestLlmDecision.mockImplementationOnce(async (options: any) => {
+      options.onReasoningProgress?.()
+      return { choice: 'A1', message: '这手先稳住。' }
+    })
+    const status = vi.fn()
+    const controller = createLocalLlmControllers(
+      { onLlmStatus: status },
+      { getThemeName: () => 'llmAnime' },
+    ).controllers![0]
+
+    await controller.requestTurn({ ...DISCARD_CONTEXT, turnOrigin: 'draw', wallCount: 12 } as never)
+    expect(status).toHaveBeenCalledWith(1, true, '让我想想怎么打。')
+    expect(status).toHaveBeenCalledWith(1, true, '思考中 · 正在观察公开牌局')
+    expect(mocks.speak).toHaveBeenCalledWith(
+      1, '让我想想怎么打。', 'deepseek', '稳健', 'normal',
+    )
+  })
+
+  it.each(['core', 'lotus'] as const)('llmAnime 屏蔽 %s runtime 注册的 source=win 赛后语音', async (variant) => {
+    configureDeepseekRuntime(memoryStorage())
+    const bubble = vi.fn()
+    const create = variant === 'core' ? createLocalLlmControllers : createLotusLlmControllers
+    create(
+      { onLlmMessage: bubble },
+      { getThemeName: () => 'llmAnime' },
+    )
+
+    await announceLocalLlmRoundReactions({ winnerIndex: 1, winType: 'self-draw' })
+    expect(mocks.speak).not.toHaveBeenCalled()
+    expect(bubble).not.toHaveBeenCalled()
+  })
+
   it('始终思考模型普通局面低强度调用，统一触发后升级并分别统计', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)

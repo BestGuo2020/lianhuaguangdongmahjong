@@ -48,4 +48,34 @@ describe('杠后尾墙补摸', () => {
     expect(state.lastDiscardSound.value).toBeInstanceOf(Promise)
     expect(routeDiscard).toHaveBeenCalledWith(0, 'm1')
   })
+
+  it('主题声音策略可以让真人只保留落牌声', () => {
+    const playSound = vi.fn()
+    const playSoundAndWait = vi.fn(async () => {})
+    const routeDiscard = vi.fn()
+    const state = {
+      players: [{
+        name: '真人', avatar: '', playerKind: 'human' as const, score: 1000, seat: 0,
+        hand: ['m1'] as TileType[], discards: [], melds: [], redCount: 0, drawnTileIndex: 0,
+      }],
+      wall: { value: [] as TileType[] }, wallHeadDrawn: { value: 0 },
+      phase: { value: 'thinking' as const }, lastDiscard: { value: null },
+      lastDiscardSound: { value: null },
+    }
+    const executor = createTileFlowExecutor({
+      state,
+      controllers: [{}],
+      getTurnFlow: () => ({ markDrawSource: vi.fn(), clearDrawSource: vi.fn(), routeDiscard }),
+      endDraw: vi.fn(), playSound, playSoundAndWait,
+      shouldAnnounceDiscard: () => false,
+      later: vi.fn(() => 1), stopCountdown: vi.fn(),
+    })
+
+    executor.discardTile(0, 0)
+
+    expect(playSound).toHaveBeenCalledTimes(1)
+    expect(playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
+    expect(playSoundAndWait).not.toHaveBeenCalled()
+    expect(routeDiscard).toHaveBeenCalledWith(0, 'm1')
+  })
 })

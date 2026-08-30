@@ -70,7 +70,7 @@ describe('LocalTtsClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const requestInit = fetchMock.mock.calls[0]?.[1]
     expect(JSON.parse(String(requestInit?.body))).toEqual({
-      text: '稳住,先打这张。', voiceKey: 'deepseek', style: '稳健',
+      text: '稳住,先打这张。', voiceKey: 'deepseek', style: '稳健', cacheIdentity: '',
     })
     expect(played).toEqual([
       { url: `https://tts.example.com/api/local-tts/audio/${key}.mp3`, seat: 1, messageId: 1 },
@@ -112,5 +112,28 @@ describe('LocalTtsClient', () => {
     registerLlmAudioPlayer(() => {})
     expect(await client.speak(1, '测试', 'deepseek', '稳健')).toBe(false)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('业务 cache identity 进入真实请求，过期事件在合成后不进入播放队列', async () => {
+    const key = 'b'.repeat(64)
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      cacheKey: key,
+      audioUrl: `/api/local-tts/audio/${key}.mp3`,
+      cached: false,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const player = vi.fn()
+    registerLlmAudioPlayer(player)
+    const client = new LocalTtsClient('', fetchMock as typeof fetch)
+
+    await expect(client.speak(0, '固定文案', 'deepseek', '稳健', 'important', {
+      cacheIdentity: 'llm-anime-cache-v2',
+      isCurrent: () => false,
+    })).resolves.toBe(false)
+
+    const request = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(JSON.parse(String(request[1].body))).toMatchObject({
+      cacheIdentity: 'llm-anime-cache-v2',
+    })
+    expect(player).not.toHaveBeenCalled()
   })
 })

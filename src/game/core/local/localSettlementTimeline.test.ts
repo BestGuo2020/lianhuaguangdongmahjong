@@ -9,6 +9,7 @@ import {
   registerLocalLlmVoiceSeat,
   resetLocalLlmVoiceRegistryForTests,
 } from '../presentation/localLlmVoiceRegistry'
+import { AnimeFixedTtsExecutor } from '../../llm/animeFixedTtsExecutor'
 
 function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
   return {
@@ -74,6 +75,46 @@ describe('localSettlementTimeline', () => {
     expect(state.phase.value).toBe('settled')
     expect(state.result.value).toMatchObject({ winnerIndex: 0, roundLabel: '东1局' })
     expect(state.result.value?.scoreChanges).toHaveLength(4)
+  })
+
+  it('llmAnime 结算先落地，再非阻塞启动四家固定发言', async () => {
+    const state = createLocalGameState()
+    state.phase.value = 'thinking'
+    state.players.push(
+      { ...player(0, ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p2', 'p3', 'p4', 's2', 's3', 's4', 'east', 'east']), characterId: 'deepseek', playerKind: 'human' },
+      { ...player(1), characterId: 'qwen', playerKind: 'bot' },
+      { ...player(2), characterId: 'gpt', playerKind: 'llm' },
+      { ...player(3), characterId: 'claude', playerKind: 'bot' },
+    )
+    state.wall.value = ['m1', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 'p4']
+    const pending = new Promise<any>(() => {})
+    const executor = new AnimeFixedTtsExecutor({ speak: vi.fn(async () => true), cancel: vi.fn() })
+    const executeRound = vi.spyOn(executor, 'executeRound').mockReturnValue(pending)
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
+    const timeline = createLocalSettlementTimeline({
+      state,
+      clearTimers: vi.fn(),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
+      playSound: vi.fn(),
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '东1局',
+      getThemeName: () => 'llmAnime',
+      animeFixedTts: executor,
+    })
+
+    timeline.endGame(0)
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    expect(state.phase.value).toBe('settled')
+    expect(executeRound).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(executeRound).toHaveBeenCalledWith(expect.objectContaining({
+      characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
+      winnerIndex: 0,
+      winType: 'self-draw',
+    }))
+    expect(state.phase.value).toBe('settled')
   })
 
   it('waits for the discarded tile voice, then starts point-ron audio and win effect together', async () => {

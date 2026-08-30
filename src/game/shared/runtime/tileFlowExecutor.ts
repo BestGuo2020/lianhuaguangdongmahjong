@@ -24,6 +24,8 @@ interface TileFlowOptions {
   endDraw(): unknown
   playSound(name: string, volume?: number): unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  /** 表现层决定当前座位是否需要报出牌名；省略时保持原有行为。 */
+  shouldAnnounceDiscard?: (playerIndex: number, player: GamePlayer) => boolean
   sortHand?: (hand: TileType[]) => TileType[]
   later(callback: () => void, delay: number): number
   stopCountdown(): void
@@ -91,8 +93,8 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
     options.controllers[playerIndex].onDiscarded?.()
     state.lastDiscard.value = { tile, from: playerIndex, id: Date.now() }
     options.playSound('dapai.mp3', 0.8)
-    if (isLocalLlmSeat(playerIndex)) {
-      // 大模型仍有实体落牌声；牌名由动态吐槽 TTS 取代。
+    if (isLocalLlmSeat(playerIndex) || options.shouldAnnounceDiscard?.(playerIndex, player) === false) {
+      // 大模型或主题策略关闭报牌的座位仍保留实体落牌声。
       state.lastDiscardSound.value = Promise.resolve()
       state.phase.value = 'checking'
       options.stopCountdown()

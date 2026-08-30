@@ -11,6 +11,8 @@ import {
   isLocalLlmSeat,
   type LocalLlmRoundResult,
 } from '../../core/presentation/localLlmVoiceRegistry'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
+import type { AnimeFixedTtsExecutor, AnimeRoundWinType } from '../../llm/animeFixedTtsExecutor'
 
 interface LotusSettlementOptions {
   state: LotusGameState
@@ -31,6 +33,8 @@ interface LotusSettlementOptions {
   /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
   isLlmVoiceSeat?: (seat: number) => boolean
   announceLlmRoundReactions?: (result: LocalLlmRoundResult) => void | Promise<void>
+  getThemeName?: () => string
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function createLotusSettlement(options: LotusSettlementOptions) {
@@ -39,6 +43,24 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
   const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
   let pendingWinReactions: void | Promise<void>
+  let fixedRoundSequence = 0
+  let pendingFixedRoundId: string | null = null
+  let fixedResultVoiceForCurrentSettlement = false
+
+  const usesAnimeFixedResultVoice = () => resolveAnimeAudioPolicy({
+    themeName: options.getThemeName?.(),
+    playerKind: 'unknown',
+  }).resultVoice === 'fixed-line'
+  const queueFixedRound = (winnerIndex: number | null, winType?: AnimeRoundWinType, draw = false) => {
+    const executor = options.animeFixedTts
+    if (!executor) return
+    const eventId = pendingFixedRoundId ?? `lotus-round:${fixedRoundSequence += 1}`
+    pendingFixedRoundId = null
+    const characterIds = state.players.map((player) => player.characterId)
+    queueMicrotask(() => {
+      void executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
+    })
+  }
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -87,10 +109,28 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : endOptions.selfDraw ? 'self-draw' : 'discard-win'
-      pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
+      fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
+      if (fixedResultVoiceForCurrentSettlement) {
+        pendingWinReactions = undefined
+        pendingFixedRoundId = `lotus-round:${fixedRoundSequence += 1}`
+      } else {
+        pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
+      }
     },
-    beforeSettleWin: () => pendingWinReactions,
-    beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
+    beforeSettleWin: ({ winnerIndex }, result) => {
+      if (!fixedResultVoiceForCurrentSettlement) return pendingWinReactions
+      if (!usesAnimeFixedResultVoice()) return
+      const winType: AnimeRoundWinType = result.winType === 'discard' || result.winType === 'dihu'
+        ? 'discard'
+        : result.winType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
+      queueFixedRound(winnerIndex, winType)
+    },
+    beforeSettleDraw: () => {
+      fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
+      if (!fixedResultVoiceForCurrentSettlement) return announceLlmRoundReactions({ winnerIndex: null, draw: true })
+      pendingFixedRoundId = `lotus-round:${fixedRoundSequence += 1}`
+      queueFixedRound(null, undefined, true)
+    },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<LotusEndGameOptions>): RoundResult => {
       const winHand = endOptions.winHand ?? winner.hand
       const flags = {
