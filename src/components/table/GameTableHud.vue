@@ -10,6 +10,7 @@ import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard,
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
 import { createTableLoadRetryController } from './tableLoadRetry'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -146,6 +147,9 @@ const tableActionLabel = computed(() => ({
   'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '胡', 'robbed-kong-win': '抢杠胡',
 }[props.tableActionEvent?.type ?? 'peng']))
 const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
+const userAvatar = computed(() => props.themeName === 'llmAnime'
+  ? animeCharacterAvatarUrl(props.user.characterId)
+  : props.user.avatar)
 const scoreDeltaFor = (playerIndex: number) => props.scoreFlowEvent?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
 const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
@@ -391,6 +395,7 @@ function onAvatarError(entry: GamePlayer) {
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
+      :avatar-override="themeName === 'llmAnime' ? animeCharacterAvatarUrl(player.characterId) : undefined"
       :bubble="llmBubbles?.[index + 1]"
     />
 
@@ -414,7 +419,7 @@ function onAvatarError(entry: GamePlayer) {
     <section class="user-area">
       <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }">
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
-        <img class="avatar" :src="user.avatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
+        <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
         <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
       </div>
       <Transition name="score-flow">

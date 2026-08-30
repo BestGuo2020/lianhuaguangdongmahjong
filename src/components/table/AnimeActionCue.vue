@@ -2,8 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import type { GamePlayer, TableActionEvent } from '../../game/core/contracts/types'
 import { animeActionPresentation } from '../../game/core/presentation/animeActionPresentation'
-import { animePortraitUrl, resolveShippedAnimePortraitId } from '../../game/core/presentation/llmAnimeAssets'
+import { animeActionArtUrl } from '../../game/core/presentation/llmAnimeAssets'
 import { resolveAnimeCharacter } from '../../game/llm/animeCharacters'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 
 const props = defineProps<{
   event: TableActionEvent
@@ -11,17 +12,30 @@ const props = defineProps<{
   position: string
 }>()
 
-const portraitFailed = ref(false)
+const dedicatedArtFailed = ref(false)
+const baseAvatarFailed = ref(false)
 const action = computed(() => animeActionPresentation(props.event.type))
-const character = computed(() => resolveAnimeCharacter(resolveShippedAnimePortraitId(props.player?.characterId)))
-const portrait = computed(() => animePortraitUrl(portraitFailed.value ? 'deepseek' : character.value.id))
+const character = computed(() => resolveAnimeCharacter(props.player?.characterId))
+const dedicatedArt = computed(() => animeActionArtUrl(character.value.id, action.value.key))
+const artwork = computed(() => !dedicatedArtFailed.value && dedicatedArt.value
+  ? dedicatedArt.value
+  : animeCharacterAvatarUrl(character.value.id))
+const usesDedicatedArt = computed(() => Boolean(dedicatedArt.value && !dedicatedArtFailed.value))
 
-watch(() => [props.event.id, character.value.id], () => { portraitFailed.value = false })
+watch(() => [props.event.id, character.value.id], () => {
+  dedicatedArtFailed.value = false
+  baseAvatarFailed.value = false
+})
 
 function onPortraitError(event: Event) {
   const image = event.currentTarget as HTMLImageElement
-  if (!portraitFailed.value && image.src !== new URL(animePortraitUrl('deepseek'), window.location.href).href) {
-    portraitFailed.value = true
+  if (usesDedicatedArt.value) {
+    dedicatedArtFailed.value = true
+    return
+  }
+  if (!baseAvatarFailed.value) {
+    baseAvatarFailed.value = true
+    image.src = animeCharacterAvatarUrl('deepseek')
     return
   }
   image.hidden = true
@@ -34,13 +48,18 @@ function onPortraitError(event: Event) {
     :class="[`action-from-${position}`, `anime-action-${action.key}`]"
     role="status"
     aria-live="polite"
-    :aria-label="`${character.label}${action.label}`"
+    :aria-label="action.label"
   >
     <div class="anime-action-burst" aria-hidden="true"></div>
-    <img :src="portrait" alt="" aria-hidden="true" @error="onPortraitError">
+    <img
+      :src="artwork"
+      :class="{ 'dedicated-action-art': usesDedicatedArt, 'base-q-avatar': !usesDedicatedArt }"
+      alt=""
+      aria-hidden="true"
+      @error="onPortraitError"
+    >
     <div class="anime-action-copy" aria-hidden="true">
       <strong :data-text="action.label">{{ action.label }}</strong>
-      <small>{{ character.label }}</small>
     </div>
   </div>
 </template>
@@ -78,7 +97,7 @@ function onPortraitError(event: Event) {
     repeating-conic-gradient(from 18deg at 66% 64%, rgba(255,255,255,.36) 0 2deg, transparent 3deg 15deg);
   mask-image: radial-gradient(circle at 66% 64%, #000 0 7%, transparent 58%);
 }
-.anime-action-cue img {
+.anime-action-cue img.base-q-avatar {
   position: absolute;
   left: 0;
   bottom: -21%;
@@ -87,6 +106,17 @@ function onPortraitError(event: Event) {
   object-fit: contain;
   object-position: center bottom;
   filter: drop-shadow(7px 9px 5px rgba(18, 6, 47, .5));
+}
+.anime-action-cue img.dedicated-action-art {
+  position: absolute;
+  inset: 4% 1% 1%;
+  width: 98%;
+  height: 95%;
+  border: 2px solid rgba(211, 228, 255, .82);
+  border-radius: 24px 44px 20px 34px;
+  object-fit: cover;
+  object-position: center;
+  box-shadow: inset 0 0 20px rgba(255,255,255,.12);
 }
 .anime-action-copy {
   position: absolute;
@@ -116,24 +146,13 @@ function onPortraitError(event: Event) {
   color: transparent;
   -webkit-text-stroke: clamp(7px, .85vw, 13px) rgba(241, 248, 255, .96);
 }
-.anime-action-copy small {
-  margin-top: 7px;
-  padding: 3px 10px;
-  border: 1px solid rgba(223, 229, 255, .64);
-  border-radius: 999px;
-  background: rgba(26, 20, 75, .82);
-  color: #fff4ff;
-  font-size: clamp(10px, 1.2vw, 15px);
-  font-weight: 800;
-  letter-spacing: .08em;
-}
 .anime-action-zimo .anime-action-copy strong,
 .anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(37px, 5vw, 76px); letter-spacing: -.12em; }
 .action-from-top { top: 15%; left: 50%; transform: translate(-50%, -50%); }
 .action-from-right { top: 42%; right: 11%; transform: translate(50%, -50%); }
 .action-from-bottom { bottom: 13%; left: 50%; transform: translate(-50%, 50%); }
 .action-from-left { top: 42%; left: 11%; transform: translate(-50%, -50%); }
-.action-from-left img { left: auto; right: 0; transform: scaleX(-1); }
+.action-from-left img.base-q-avatar { left: auto; right: 0; transform: scaleX(-1); }
 .action-from-left .anime-action-copy { right: auto; left: 4%; align-items: start; }
 @keyframes anime-action-enter {
   from { opacity: 0; scale: .75; filter: blur(5px) drop-shadow(0 13px 20px rgba(12,5,42,.62)); }

@@ -16,15 +16,21 @@ const props = withDefaults(defineProps<{
   renderMelds?: boolean
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  /** 主题表现头像覆盖，不修改权威玩家 avatar。 */
+  avatarOverride?: string
   /** AI 大模型吐槽气泡（可选；由上层管理过期） */
   bubble?: { text: string; id: number; persistent?: boolean } | null
-}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined, bubble: null })
+}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined, avatarOverride: undefined, bubble: null })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
-const avatarSrc = ref(props.player.avatar)
-watch(() => props.player.avatar, (value) => { avatarSrc.value = value })
+const avatarSrc = ref(props.avatarOverride || props.player.avatar)
+watch(() => [props.avatarOverride, props.player.avatar], () => {
+  avatarSrc.value = props.avatarOverride || props.player.avatar
+})
 function onAvatarError() {
-  avatarSrc.value = defaultAvatarForSeat(props.player.seat)
+  avatarSrc.value = props.avatarOverride && avatarSrc.value !== props.player.avatar
+    ? props.player.avatar
+    : defaultAvatarForSeat(props.player.seat)
 }
 </script>
 
