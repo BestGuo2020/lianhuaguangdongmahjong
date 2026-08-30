@@ -1,17 +1,17 @@
-# 大模型二次元主题实施计划
+# 独立大模型二次元主题实施计划
 
 > 状态：方案草案，基于 2026-08-30 的前端、后端与素材只读审计。本文只规划实施，不代表功能已经完成。
 
 ## 1. 目标
 
-把现有 `llm` 大模型主题升级为完整的二次元视觉与角色表现系统，同时保持默认、雀魂、欢乐麻将、红木等其他主题的视觉、布局和游戏逻辑不变。动作/赛后人声会按本计划的分阶段发布策略做一次全局语义收口。
+保留现有 `llm` 深蓝星轨主题及其行为，新增独立的 `llmAnime` 大模型二次元主题。默认、雀魂、欢乐麻将、红木和现有深蓝星轨主题的视觉、布局、游戏逻辑与声音行为均不被新主题替换。
 
 本期目标包括：
 
-- 大模型主题专属字体、牌面、牌背、广播提示、气泡框、局结算和最终结算视觉。
+- 新 `llmAnime` 主题专属字体、牌面、牌背、广播提示、气泡框、局结算和最终结算视觉。
 - 吃、碰、杠、胡、自摸、抢杠胡使用“角色立绘 + 动作大字 + 特效”的卡通演出。
 - 角色形象与 LLM 供应商、决策风格解耦。
-- 大模型主题下，非 LLM 座位未指定角色时统一回退 DeepSeek 形象。
+- `llmAnime` 主题下，非 LLM 座位未指定角色时统一回退 DeepSeek 形象。
 - 单机本家可选择角色；WebSocket 多人联机真人可选择角色，并让房内其他客户端看到一致结果。
 - 吃、碰、杠、胡、自摸、抢杠胡使用预生成的本地固定语音，音色配置按“稳健”生成，运行时不请求 LLM 或在线 TTS。
 - 真人出牌只保留实体落牌声，不报牌名、不进入 TTS。
@@ -47,24 +47,27 @@
 - 结果语音：`win-self-draw`、`win-discard`、`win-robbed-kong`、`loss`、`draw`。
 - 每个角色首版共 11 个固定语音，12 个角色共 132 个音频文件。
 - 角色普通出牌吐槽仍可保留现有 LLM 动态气泡/TTS，但动作和赛后发言不得再进入动态 TTS。
-- 在 `llm` 主题下，真人不进入普通 LLM 吐槽或牌名播报链路；非 `llm` 主题保持当前牌名播报行为。
+- 在 `llmAnime` 主题下，真人不进入普通 LLM 吐槽或牌名播报链路；其他主题（包括现有 `llm`）保持当前牌名播报与动态 TTS 行为。
 - 所有实体音效，例如落牌、牌面落位、胡牌特效，继续保留，但必须防止与固定人声重复播放。
 - `<角色>/<事件>` 静态语音缺失时回退 DeepSeek 同事件；DeepSeek 仍缺失时静音并只保留非人声音效，绝不回退动态 TTS。
 
 ### 2.4 主题边界
 
-- 二次元视觉、真人禁报牌、真人赛后角色发言只在 `themeName === 'llm'` 时生效。
-- 角色 ID 始终随玩家身份保存和同步，即使当前客户端没有使用 `llm` 主题；这样其他使用该主题的客户端仍能正确显示角色。
-- 动作/赛后动态 TTS 必须携带明确的 `purpose/actionKind`；目标态服务端不再为这两类事件合成音频。
-- 目标态下，非 `llm` 主题继续使用现有简化文字演出和通用 `chi/peng/gang/hu/zimo` 人声，不播放角色赛后发言；普通 LLM commentary 仍可动态合成。
-- 旧客户端兼容采用“两阶段发布”，不能在新前端覆盖前直接关闭服务端动作/赛后合成，具体见 §8。
+- 新主题 ID 固定为 `llmAnime`，主题选项文案为“大模型二次元”；内部资源目录仍使用 `llm-anime`，二者不要混用。
+- 现有 `llm` 主题继续使用 `llmTheme`、`llm-table.webp` 和“大模型专属/深蓝星轨”选项，不修改或重命名。
+- 当前“启用 LLM 且未明确选主题”的自动推荐继续选择现有 `llm` 深蓝星轨主题；`llmAnime` 首版只由用户明确选择，URL 为 `?theme=llmAnime`。
+- 二次元视觉、真人禁报牌、真人赛后角色发言只在 `themeName === 'llmAnime'` 时生效。
+- 角色 ID 始终随玩家身份保存和同步，即使当前客户端没有使用 `llmAnime` 主题；这样其他使用该主题的客户端仍能正确显示角色。
+- 动作/赛后动态 TTS 必须携带明确的 `purpose/actionKind`；目标态服务端不为声明 `anime-static-v1` 的连接合成或投递这两类音频，但继续为现有主题/旧客户端的 legacy 连接保留原行为。
+- `llmAnime` 客户端的动作/赛后人声走本地静态包；其他主题和旧客户端继续走现有动态/legacy 路径，具体通过连接级能力协商实现，见 §8。
 
 ## 3. 当前状态与主要缺口
 
 | 范围 | 当前实现 | 缺口 |
 |---|---|---|
-| 主题入口 | `App.vue` 设置 `data-table-theme="llm"`，3D 牌桌读取 `llmTheme` | 视觉配置分散，缺少统一 manifest |
-| 桌面 | `public/img/llm-table.webp` 深蓝星轨桌布 | 可继续使用，后续可升级到 2048×2048 |
+| 现有深蓝主题 | `App.vue` 设置 `data-table-theme="llm"`，3D 牌桌读取 `llmTheme` | 必须原样保留，并补视觉/声音回归测试 |
+| 新二次元主题 | 当前不存在 `llmAnime` 主题 ID 或 registry 项 | 需新增独立主题、manifest、选择项和 URL 解析 |
+| 桌面 | 现有 `public/img/llm-table.webp` 是深蓝星轨主题桌布 | 原图继续只服务 `llm`；`llmAnime` 使用独立 `table/surface.webp` |
 | 字体 | 系统微软雅黑/苹方，部分位置声明未打包的 `Noto Serif SC` | 无仓库内字体和许可证 |
 | 2D 牌面 | `tileAssets.ts` 固定读取 `public/tiles/` | 缓存没有主题维度，无法切换牌面 |
 | 3D 牌面 | 与 2D 共用同一套牌图并生成 atlas | `llmTheme` 明确继承默认牌面 |
@@ -164,7 +167,7 @@ public/themes/llm-anime/<assetVersion>/
     settlement-frame.svg
 ```
 
-字体放入 `src/assets`，由 Vite 重写为子路径安全的构建 URL；`@font-face` 全局声明，但只在 `llm` 主题 selector 中应用。图片和音频保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。
+字体放入 `src/assets`，由 Vite 重写为子路径安全的构建 URL；`@font-face` 全局声明，但只在 `llmAnime` 主题 selector 中应用。图片和音频保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。
 
 ### 4.3 主题 manifest
 
@@ -352,8 +355,8 @@ flowchart TD
 新增独立组件，例如 `AnimeActionCue.vue`：
 
 - 输入：主题、动作事件、行动玩家、座位方位、reduced motion。
-- 非 `llm` 主题继续渲染现有文字 cue。
-- `llm` 主题渲染人物层、动作字层、光效层和隐藏的无障碍文本。
+- 非 `llmAnime` 主题（包括现有 `llm`）继续渲染现有文字 cue。
+- `llmAnime` 主题渲染人物层、动作字层、光效层和隐藏的无障碍文本。
 - 人物素材加载失败时回退 DeepSeek；DeepSeek 失败时回退纯文字。
 - 继续复用同一 `TableActionEvent`，不修改规则判定和副露牌落位动画。
 - 首版动作严格在现有 1050ms 事件窗口内完成；如果未来需要更长演出，组件必须按事件 ID 快照并维护独立离场队列，不能依赖已经被清空的 `tableActionEvent`，也不能阻塞规则层。
@@ -361,12 +364,12 @@ flowchart TD
 
 ### 6.3 字体、广播、气泡与结算
 
-- 通过 `@font-face` 打包可再分发的中文 UI 字体和标题字体，并提供系统字体回退；字体定义可全局存在，但字体族只在 `llm` DOM selector 下应用。
-- 把 `llm` 主题颜色、描边、阴影和字体做成 CSS 变量，避免继续散落硬编码。
+- 通过 `@font-face` 打包可再分发的中文 UI 字体和标题字体，并提供系统字体回退；字体定义可全局存在，但字体族只在 `llmAnime` DOM selector 下应用。
+- 把 `llmAnime` 主题颜色、描边、阴影和字体做成独立 CSS 变量，不能覆盖现有 `llm` token。
 - 广播使用主题边框、渐变遮罩和标题字体；保持 `aria-live` 文本。
 - 气泡使用可伸缩九宫格/纯 CSS 框体和独立尾巴，四座位统一渲染；为本家新增气泡锚点。
 - 结算页保留现有数据与按钮结构，只替换主题布局和装饰层，避免影响举报、继续、倒计时等行为。
-- DOM 样式和字体应用仅在 `.game-app[data-table-theme="llm"]` 范围生效；Three.js、牌面和牌背由显式 `themeName/tileSetId` 控制，不依赖 CSS selector。
+- DOM 样式和字体应用仅在 `.game-app[data-table-theme="llmAnime"]` 范围生效；Three.js、牌面和牌背由显式 `themeName/tileSetId` 控制，不依赖 CSS selector。现有 `.game-app[data-table-theme="llm"]` 规则保持不动。
 
 ### 6.4 牌面和牌背
 
@@ -382,6 +385,8 @@ interface TableTheme {
 
 实现要求：
 
+- 在 `TABLE_THEMES/TABLE_THEME_OPTIONS` 新增 `llmAnime`/“大模型二次元”，定义独立 `llmAnimeTheme`；现有 `llmTheme` 对象、选项值和资源引用保持原样。
+- `TableThemeName`、URL 解析和主题选择器接受 `llmAnime`；`shouldAutoUseLlmTheme` 仍自动返回现有 `llm`，不得悄悄改默认推荐。
 - `tileAssets.ts` 缓存按 `tileSetId` 分桶，切换主题不能复用错误图片。
 - 2D `MahjongTile` 从统一主题上下文解析牌面，而不是每层手工传 34 个 URL；两条分支各自的 keep `App.vue` 都必须 provide 该上下文，结算、选牌弹窗和小牌组件通过 inject 自动取得 `tileSetId`。
 - 3D 继续复用现有 atlas 管线，但使用对应资源集生成 atlas。
@@ -395,7 +400,7 @@ interface TableTheme {
 
 - 使用独立的版本化本地偏好，例如 `llm-anime.character.v1`，默认 `deepseek`。
 - 不把真人角色选择写入包含 API Key 的 `LlmSettings`。
-- 大厅在 `llm` 主题下展示本家角色选择器。
+- 大厅在 `llmAnime` 主题下展示本家角色选择器。
 - 把本地开局 seed 从“仅 AI 座位 1..3”扩展为明确的 `humanSeed + aiSeeds`，两套规则引擎共用。
 - seat 0 使用本家选择并写 `playerKind: 'human'`；`runtime.ts::seedFor()` 为 LLM AI 写入 provider 角色和 `playerKind: 'llm'`；普通 AI seed 写 `playerKind: 'bot'` 并使用 DeepSeek 回退。
 
@@ -417,7 +422,7 @@ interface TableTheme {
 
 - `JoinRequest`、`SeatState`、room response、`_seeds()`、GamePlayer snapshot 增加角色和玩家类型。
 - `app/models/game.py::GamePlayer` 显式接收新字段；`app/game/manager.py::_reset_players()` 每次开局/下一局从 seed 复制并保留新字段，不能只改 `_seeds()` 后在 reset 时丢失。
-- 不复用当前外部随机头像 URL 作为动作角色来源；原头像在非 `llm` 主题继续保留。
+- 不复用当前外部随机头像 URL 作为动作角色来源；原头像在非 `llmAnime` 主题（包括现有 `llm`）继续保留。
 - MVP 偏好由浏览器保存并随 join 发送，不需要数据库迁移。
 - 若未来需要跨设备同步，再单独增加玩家 profile 字段。
 - 协议字段先保持 optional，前后端可以滚动升级。
@@ -438,7 +443,7 @@ interface TableTheme {
 
 ## 8. 语音策略矩阵
 
-以下矩阵描述 `llm` 主题下的目标行为：
+以下矩阵描述新 `llmAnime` 主题下的目标行为：
 
 | 玩家类型 | 出牌 | 吃碰杠胡等动作 | 赛后 |
 |---|---|---|---|
@@ -446,7 +451,7 @@ interface TableTheme {
 | llm | `dapai` + 允许的普通吐槽；动作语音不走动态 TTS | provider 角色固定动作语音 | provider 角色固定结果发言 |
 | bot | 保留现有牌名播报，产品复核后可统一关闭 | DeepSeek 固定动作语音 | DeepSeek 固定结果发言 |
 
-非 `llm` 主题保持当前真人/普通 AI 牌名播报；阶段 B 后动作使用 legacy 通用人声，且不播放角色赛后发言。真人禁报牌不是全局规则，只由表现层在 `llm` 主题下启用。
+其他主题（包括现有 `llm` 深蓝星轨）完整保留当前真人/普通 AI 牌名播报、LLM 动作 TTS 与赛后发言。真人禁报牌不是全局规则，只由表现层在 `llmAnime` 主题下启用。
 
 防双播规则：
 
@@ -463,6 +468,7 @@ interface TableTheme {
 ```ts
 purpose?: 'commentary' | 'action' | 'round-reaction'
 actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
+presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 ```
 
 ### 8.1 两阶段发布策略
@@ -470,15 +476,18 @@ actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
 阶段 A（协议铺设）：
 
 - 后端先给 message/audio 增加 `purpose/actionKind`，暂时保留旧动作和赛后合成。
-- 新客户端仅在 `llm` 主题过滤 `action/round-reaction` 动态音频并播放静态包；其他主题仍按旧行为播放。
+- 新客户端仅在 `llmAnime` 主题过滤 `action/round-reaction` 动态音频并播放静态包；其他主题仍按旧行为播放。
+- 客户端连接、重连和主题切换时上报 `presentationAudioMode`；旧客户端或缺字段连接一律视为 `legacy-dynamic`。
 - 无 purpose 的旧事件按旧客户端兼容路径处理，不能仅凭 priority 猜测。
 
-阶段 B（停止运行时合成）：
+阶段 B（连接级能力路由）：
 
-- 在最低支持客户端已覆盖后，后端对 `action/round-reaction` 全局停止 `ensure_audio`，也不再等待赛后 TTS 才放行 settled。
-- `llm` 主题播放本地角色动作/结果音频。
-- 非 `llm` 主题回到 legacy 通用 `chi/peng/gang/hu/zimo` 人声，不播放角色赛后发言；普通 commentary 仍按现有策略动态合成。
-- 若必须长期支持混合旧客户端，则需要 WS capability/版本协商并按连接定向投递；否则采用协调发布，并在关闭后端合成前完成客户端覆盖审计。
+- 后端按连接记录 `presentationAudioMode`，而不是把主题设为房间级状态。
+- `anime-static-v1` 连接的动作/赛后音频由客户端本地播放；服务端不向这些连接投递生成音频。
+- 房间存在 `legacy-dynamic` 连接时，服务端仍按现有逻辑合成一次并只投递给 legacy audience；全部连接都是 anime static 时完全跳过 `ensure_audio`。
+- 混合主题房间中，legacy 连接保留现有赛后语音和结算等待；anime static 连接可先收到 settled 并运行自己的非阻塞本地队列。此处只做每连接表现屏障，不改变权威牌局 phase。
+- 现有 `llm` 深蓝星轨主题始终上报 `legacy-dynamic`，因此视觉和声音行为保持不变。
+- 普通 commentary 不受新动作/结果路由影响，仍按现有策略动态合成和播放。
 
 主题音频策略由表现层依赖注入到 `tileFlowExecutor`、本地结算适配器、remote transient presenter 和 snapshot reconciler；禁止在规则判定函数中读取 DOM、URL 或全局主题状态。
 
@@ -488,6 +497,7 @@ actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
 
 ### Wave 0：契约冻结（主 Agent）
 
+- 冻结新主题 ID `llmAnime`、显示名、URL 与“自动推荐仍为现有 `llm`”的兼容规则。
 - 冻结 `CharacterId`、`PlayerKind`、动作键、目录结构和语音矩阵。
 - 冻结 `purpose/actionKind`、`presentationId` 和旧协议 kind 推断规则，并先提交共享 contract。
 - 在资产生成前冻结 12 个 `characterId -> voiceKey/speaker/11 条固定文案` 映射，以及没有专属 voice 时的替代音色；Gemini、Grok、Mistral、Muse 不能留到 Wave 2 再决定。
@@ -537,15 +547,16 @@ actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
 
 ## 10. 推荐提交顺序
 
-1. `feat(theme): add anime character catalog and asset manifest`
-2. `feat(theme): add llm anime tile set and back texture`
-3. `feat(theme): add anime action cue presentation`
-4. `feat(theme): skin llm announcements bubbles and settlement`
-5. `feat(profile): add local anime character preference`
-6. 后端独立提交：`feat(room): sync player anime character identity`
-7. `feat(online): send and render remote character identity`
-8. `feat(audio): use preset anime action and result voices`
-9. `test(theme): add llm anime visual and protocol coverage`
+1. `feat(theme): register standalone llmAnime theme`
+2. `feat(theme): add anime character catalog and asset manifest`
+3. `feat(theme): add llm anime tile set and back texture`
+4. `feat(theme): add anime action cue presentation`
+5. `feat(theme): skin llmAnime announcements bubbles and settlement`
+6. `feat(profile): add local anime character preference`
+7. 后端独立提交：`feat(room): sync player anime character identity`
+8. `feat(online): send and render remote character identity`
+9. `feat(audio): use preset anime action and result voices`
+10. `test(theme): cover llmAnime and preserve llm regressions`
 
 每个前端提交都先在 master 验证，再同步 vibehub；不得积累未提交改动后运行同步脚本。
 
@@ -553,13 +564,14 @@ actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
 
 ### 11.1 单元测试
 
+- `TABLE_THEME_OPTIONS` 同时包含 `llm` 和 `llmAnime`；二者解析到不同主题对象和资源，启用 LLM 的自动推荐仍返回 `llm`。
 - 12 个角色、provider alias、非法值、未知 provider、缺素材的 DeepSeek 回退。
 - `playerKind` 兼容：显式值优先；旧 WebSocket 结合 `roomSeats`，单机结合 seat/controller；无上下文返回 unknown，不把真人误判为 bot。
 - 6 类动作和所有 gang subtype 的 exhaustive 映射。
 - 本地/远端 action ID 在各自 session 生命周期单调且无同毫秒碰撞；wire `presentationId` 在重复快照中稳定，归一化 `presentationKey` 可跨 socket 重连和页面 resume 去重。
 - 主题 tile cache 分桶、失败重试、切换后不串图。
-- `llm` 主题真人出牌没有 `tileAudioFile` 和 TTS；非 `llm` 主题真人保留当前牌名播报；LLM/普通 AI 按矩阵执行。
-- 每个动作只有一个固定人声出口；动作/赛后不调用动态 TTS。
+- `llmAnime` 主题真人出牌没有 `tileAudioFile` 和 TTS；其他主题（含现有 `llm`）保留当前牌名播报；LLM/普通 AI 按矩阵执行。
+- `llmAnime` 每个动作只有一个固定人声出口，动作/赛后不调用动态 TTS；现有 `llm` 仍走 legacy dynamic 出口。
 - 静音、取消、资源失败不阻塞动作和结算。
 
 ### 11.2 后端与协议测试
@@ -570,20 +582,21 @@ actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
 - LLM provider 到角色映射，普通 bot/未知 provider 回退 DeepSeek。
 - optional 字段兼容旧客户端和旧服务端。
 - 旧服务端首次 settled 快照不触发赛后语音；当前连接 legacy hand result 只做连接内去重。
-- 动作/赛后音频 purpose 元数据准确；阶段 A 保持兼容，阶段 B 服务端不为固定动作/赛后重复请求 TTS，也不等待音频才放行 settled。
+- 动作/赛后音频 purpose 与 connection capability 准确；阶段 A 保持兼容，阶段 B 在“全员 anime static”时不请求 TTS，在混合房间只向 legacy audience 合成/投递一次，并按连接应用结算表现屏障。
 
 ### 11.3 E2E 与视觉回归
 
 - 单机本家选择角色后刷新仍保留，两套规则均生效。
 - 四个真人选择不同角色，所有客户端看到同一行动者形象。
 - 6 动作 × 4 方位至少各覆盖一次；连续事件不会残留前一角色。
-- 真人出牌只有实体落牌声；网络中没有真人 TTS 请求。
+- `llmAnime` 真人出牌只有实体落牌声；该连接没有动作/赛后动态 TTS 请求或投递。
 - 动作音频和结果音频在 TTS 网关离线时仍可播放。
 - 断线重连和重复 snapshot 不复播动作/赛后语音。
-- 赛后队列不会延迟结算，点击继续、返回大厅和切主题会立即取消。
+- anime static 连接的赛后队列不会延迟结算，点击继续、返回大厅和切主题会立即取消；legacy 连接保持现状。
 - 截图覆盖：桌面 16:9、4:3、移动横屏、窄高屏、reduced motion。
 - 视觉页面覆盖：牌桌、广播、三家气泡、本家气泡、六动作、局结算、最终结算。
-- 非 `llm` 主题截图无视觉和语音行为回归。
+- 现有 `llm` 深蓝星轨主题做独立截图和声音回归，确保桌布、牌面、气泡、动作和动态 TTS 不变。
+- 其他非 `llmAnime` 主题截图无视觉和语音行为回归。
 
 ### 11.4 完整命令
 
@@ -617,13 +630,14 @@ git switch master
 
 ## 12. 完成定义
 
-- `llm` 主题的字体、牌面、牌背、广播、气泡、动作 cue、局结算和最终结算均有独立二次元视觉。
+- 新 `llmAnime` 主题的字体、牌面、牌背、广播、气泡、动作 cue、局结算和最终结算均有独立二次元视觉。
+- 现有 `llm` 深蓝星轨主题仍使用原主题 ID、桌布、牌材质、CSS 和动态声音路径，视觉/声音回归通过。
 - 12 个角色均可选择，素材缺失和未知角色可靠回退 DeepSeek。
 - 单机本家可选角色并持久化；master 多人真人选择通过后端同步。
-- 普通 AI 和没有角色字段的旧玩家在大模型主题下显示 DeepSeek。
+- 普通 AI 和没有角色字段的旧玩家在 `llmAnime` 主题下显示 DeepSeek。
 - 六动作均显示正确行动者、正确方位、正确大字，并只播放一次固定稳健语音。
-- `llm` 主题下真人出牌无牌名和 TTS；动作、胜负和流局使用本地静态语音。
-- 动态 LLM TTS 不再承担动作和赛后人声；普通吐槽与动作语音没有双播。
+- `llmAnime` 主题下真人出牌无牌名和 TTS；动作、胜负和流局使用本地静态语音。
+- `llmAnime` 连接的动态 LLM TTS 不再承担动作和赛后人声；普通吐槽与静态动作语音没有双播，现有 `llm` 连接仍保留原动态路径。
 - 赛后本地发言是非阻塞、可取消的表现队列，不延迟规则结算和继续屏障。
 - TTS 服务离线、图片/音频缺失、静音或 reduced motion 都不影响牌局推进。
 - 2D、3D、结算页的牌面和牌背一致，切换主题不会串缓存。
@@ -634,7 +648,7 @@ git switch master
 - 12 个角色各 6 套独立动作姿势或口型动画。
 - 用户上传自定义角色图片、音频或任意 URL。
 - 跨设备/Waku 账户同步角色偏好。
-- 重做非 `llm` 主题。
+- 修改或重做现有 `llm` 深蓝星轨主题及其他旧主题。
 - 把角色选择与 LLM 决策风格绑定。
 
 ## 14. 实施前最后确认项
@@ -642,7 +656,7 @@ git switch master
 以下事项是对应波次的进入闸门；Wave 0 可以搭 contract，但相关资产生成或业务接线前必须确认：
 
 1. Wave 1 前确认最终使用的两款可再分发中文字体、glyph 范围及许可证。
-2. 普通 bot 在 `llm` 主题下是否继续报牌；本计划默认保留，真人一定关闭。
+2. 普通 bot 在 `llmAnime` 主题下是否继续报牌；本计划默认保留，真人一定关闭。
 3. 赛后是否固定四家全员发言；本计划默认全员发言并把总时长控制在 8 秒内。
 4. Wave 1 音频生成前确认 12 个角色的中文展示名、voice key/speaker、11 条固定文案和替代音色。
 5. vibehub P2P 真人选角是否紧跟 WebSocket 版本，还是作为下一里程碑。
