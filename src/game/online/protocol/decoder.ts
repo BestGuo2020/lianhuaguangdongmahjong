@@ -69,6 +69,10 @@ function isPlayer(value: unknown): value is ServerPlayerDto {
   if (!isObject(value)) return false
   return isString(value.name) && isString(value.avatar)
     && isOptional(value.isLlm, isBoolean)
+    && isOptional(value.characterId, isString)
+    && isOptional(value.playerKind, (candidate): candidate is 'human' | 'llm' | 'bot' => (
+      candidate === 'human' || candidate === 'llm' || candidate === 'bot'
+    ))
     && isNumber(value.score) && isNumber(value.seat)
     // 服务端会用 null 遮蔽其他玩家的暗牌；mapper 在进入核心状态时继续按牌背处理。
     && Array.isArray(value.hand) && value.hand.every((tile) => tile === null || isTile(tile))

@@ -65,6 +65,7 @@ export interface RemoteRoomLifecycleOptions {
   socket: { open(): void }
   closeConnection(): void
   resetGame(): void
+  getCharacterId?(): string
   api?: RemoteRoomApi
   pollInterval?: number
 }
@@ -90,6 +91,7 @@ export function createRemoteRoomLifecycle({
   socket,
   closeConnection,
   resetGame,
+  getCharacterId = () => 'deepseek',
   api = DEFAULT_API,
   pollInterval = 1500,
 }: RemoteRoomLifecycleOptions) {
@@ -208,7 +210,7 @@ export function createRemoteRoomLifecycle({
       state.effectiveLlmEnabled.value = info.effectiveLlmEnabled === true
       state.llmAvailable.value = info.llmAvailable === true
       ensurePlayerId()
-      const joined = await api.joinRoom(info.roomId, state.nickname.value, state.playerId.value)
+      const joined = await api.joinRoom(info.roomId, state.nickname.value, state.playerId.value, getCharacterId())
       await enterRoom(joined.roomId, joined.nickname, info.mode, joined.rejoinCode)
     } catch (error) {
       state.sessionError.value = readableError(error, '创建房间失败')
@@ -222,7 +224,7 @@ export function createRemoteRoomLifecycle({
     state.sessionStatus.value = 'joining'
     try {
       ensurePlayerId()
-      const joined = await api.joinRoom(code.trim().toUpperCase(), state.nickname.value, state.playerId.value)
+      const joined = await api.joinRoom(code.trim().toUpperCase(), state.nickname.value, state.playerId.value, getCharacterId())
       const info = await api.getRoom(joined.roomId)
       state.isCreator.value = false
       await enterRoom(

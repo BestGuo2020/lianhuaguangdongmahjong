@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
+import AnimeActionCue from './AnimeActionCue.vue'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { tileName } from '../../game/core/rules/tiles'
@@ -394,7 +395,14 @@ function onAvatarError(entry: GamePlayer) {
     />
 
     <Transition name="table-action" mode="out-in">
-      <div v-if="tableActionEvent" :key="tableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
+      <AnimeActionCue
+        v-if="tableActionEvent && themeName === 'llmAnime'"
+        :key="`anime-${tableActionEvent.id}`"
+        :event="tableActionEvent"
+        :player="players[tableActionEvent.actorIndex]"
+        :position="tableActionPosition"
+      />
+      <div v-else-if="tableActionEvent" :key="tableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
     </Transition>
     <Transition name="announce">
       <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone"><span>{{ announcement.text }}</span></div>

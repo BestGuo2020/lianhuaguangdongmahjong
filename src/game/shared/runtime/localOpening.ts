@@ -16,22 +16,27 @@ export interface PlayerSeed {
   avatar: string
   score?: number
   isLlm?: boolean
+  characterId?: string
+  playerKind?: 'human' | 'llm' | 'bot'
 }
 
 export function resetLocalPlayers(
   state: Pick<OpeningState, 'players'>,
   defaultScore?: number,
   aiSeeds?: Array<PlayerSeed>,
+  humanSeed?: PlayerSeed,
 ) {
   const previousScores = state.players.map((player) => player.score)
   state.players.splice(0, state.players.length, ...PLAYER_SEED.map((player, index) => {
-    const aiSeed = index > 0 ? aiSeeds?.[index - 1] : undefined
+    const aiSeed = index > 0 ? aiSeeds?.[index - 1] : humanSeed
     return {
       ...player,
       name: aiSeed?.name ?? player.name,
       avatar: aiSeed?.avatar ?? player.avatar,
       score: aiSeed?.score ?? previousScores[index] ?? defaultScore ?? player.score,
       isLlm: aiSeed?.isLlm ?? false,
+      characterId: aiSeed?.characterId ?? 'deepseek',
+      playerKind: aiSeed?.playerKind ?? (index === 0 ? 'human' : aiSeed?.isLlm ? 'llm' : 'bot'),
       seat: index,
       hand: [],
       discards: [],

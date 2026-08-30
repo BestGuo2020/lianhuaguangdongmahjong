@@ -75,6 +75,7 @@ describe('remoteRoomLifecycle', () => {
 
     expect(harness.state.playerId.value).not.toBe('')
     expect(harness.api.createRoom).toHaveBeenCalledWith('east', 4, harness.state.playerId.value, 'lotus-classic', undefined)
+    expect(harness.api.joinRoom).toHaveBeenCalledWith('ABC123', '莲花', harness.state.playerId.value, 'deepseek')
     expect(harness.state.roomId.value).toBe('ABC123')
     expect(harness.state.effectiveLlmEnabled.value).toBe(true)
     expect(harness.state.rejoinCode.value).toBe('AAAA-BBBB')

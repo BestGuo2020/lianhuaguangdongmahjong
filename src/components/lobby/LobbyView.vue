@@ -10,6 +10,9 @@ import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
 import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
+import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
+import type { CharacterId } from '../../game/llm/animeCharacters'
+import type { TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
   gameMode: GameMode
@@ -20,6 +23,8 @@ interface Props {
   roomId: string
   nicknameInput: string
   joinCode: string
+  animeCharacterId: CharacterId
+  tableThemeName: TableThemeName
   roomMeta: RoomMeta | null
   sessionStatus: string
   sessionError: string
@@ -55,6 +60,7 @@ const emit = defineEmits<{
   'update:selectedRule': [value: RuleVariant]
   'update:nicknameInput': [value: string]
   'update:joinCode': [value: string]
+  'update:animeCharacterId': [value: CharacterId]
   startLocal: []
   createRoom: [payload: { llmEnabled: boolean }]
   joinRoom: []
@@ -176,6 +182,11 @@ function toggleWakuDemoAuth() {
         :rule-description="ruleOption.highlights.slice(0, 2).join(' · ')"
         @select-match="openPicker('match')"
         @select-rule="openPicker('rule')"
+      />
+      <AnimeCharacterPicker
+        v-if="tableThemeName === 'llmAnime'"
+        :model-value="animeCharacterId"
+        @update:model-value="$emit('update:animeCharacterId', $event)"
       />
       <button class="start-button" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
     </template>

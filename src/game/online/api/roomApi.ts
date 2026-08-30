@@ -7,6 +7,7 @@ export interface RoomSeatState {
   nickname: string
   ready: boolean
   connected: boolean
+  characterId?: string
 }
 
 export interface RoomInfo {
@@ -33,6 +34,7 @@ export interface JoinResult {
   rejoinCode: string
   playerId: string | null
   rejoin: boolean
+  characterId?: string
 }
 
 export interface ReadyResult {
@@ -108,10 +110,10 @@ export function getRoomMeta(): Promise<RoomMeta> {
   return request<RoomMeta>('/api/rooms/meta')
 }
 
-export function joinRoom(roomId: string, nickname: string, playerId?: string): Promise<JoinResult> {
+export function joinRoom(roomId: string, nickname: string, playerId?: string, characterId?: string): Promise<JoinResult> {
   return request<JoinResult>(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
     method: 'POST',
-    body: JSON.stringify({ nickname, playerId }),
+    body: JSON.stringify({ nickname, playerId, characterId }),
   })
 }
 

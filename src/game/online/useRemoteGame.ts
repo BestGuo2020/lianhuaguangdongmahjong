@@ -48,6 +48,7 @@ interface UseRemoteGameOptions {
   onLlmMessage?: (seat: number, text: string) => void
   onLlmStatus?: (seat: number, active: boolean, text?: string) => void
   playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
+  getCharacterId?: () => string
 }
 
 export function useRemoteGame({
@@ -57,6 +58,7 @@ export function useRemoteGame({
   onLlmMessage = () => {},
   onLlmStatus = () => {},
   playLlmAudio = () => {},
+  getCharacterId = () => 'deepseek',
 }: UseRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
   const state = createRemoteGameState({
@@ -98,6 +100,7 @@ export function useRemoteGame({
     socket: roomSocket,
     closeConnection,
     resetGame: resetAll,
+    getCharacterId,
   })
 
   // ── 座位映射（服务端座位 → 本地索引）────────────────────

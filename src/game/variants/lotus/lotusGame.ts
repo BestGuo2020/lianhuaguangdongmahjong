@@ -33,6 +33,8 @@ interface UseLotusGameOptions {
   aiControllers?: LotusController[]
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed | undefined>
+  /** 单机本家座位 0 的展示形象。 */
+  humanPlayerSeed?: PlayerSeed
   countdownEnabled?: boolean
   ruleset?: RuleSet
 }
@@ -43,6 +45,7 @@ export function useLotusGame({
   controllers: suppliedControllers,
   aiControllers,
   aiPlayerSeeds,
+  humanPlayerSeed,
   countdownEnabled = true,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
@@ -183,6 +186,7 @@ export function useLotusGame({
     ruleset,
     endGame,
     playerSeeds: aiPlayerSeeds,
+    humanPlayerSeed,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {

@@ -19,6 +19,8 @@ interface LocalOpeningTimelineOptions {
   endGame(winnerIndex: number, options: { fourRed: true }): unknown
   /** AI 座位（1-3）人设种子：昵称/头像（LLM 玩家形象） */
   playerSeeds?: Array<PlayerSeed>
+  /** 本家座位 0 的展示形象。 */
+  humanPlayerSeed?: PlayerSeed
 }
 
 export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions) {
@@ -31,7 +33,7 @@ export function createLocalOpeningTimeline(options: LocalOpeningTimelineOptions)
   }
 
   function resetPlayers() {
-    resetLocalPlayers(state, undefined, options.playerSeeds)
+    resetLocalPlayers(state, undefined, options.playerSeeds, options.humanPlayerSeed)
   }
 
   function resolveDealtReds() {

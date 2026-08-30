@@ -8,7 +8,8 @@ import type { LotusController } from '../variants/lotus/lotusControllers'
 import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats } from './llmController'
 import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
-import { avatarFor, displayNameOf, effectiveNickname } from './persona'
+import { avatarFolderOf, avatarFor, displayNameOf, effectiveNickname } from './persona'
+import { resolveAnimeCharacterId } from './animeCharacters'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 import { compactLlmSpeechText, LlmSpeechPolicy } from './speechPolicy'
@@ -41,7 +42,13 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
 function seedFor(settings: LlmSettings, seat: 1 | 2 | 3): PlayerSeed {
   const preset = presetForSeat(settings, seat) ?? settings.presets[0]
   const style = styleForSeat(settings, seat) ?? preset.style
-  return { name: displayNameOf(effectiveNickname(preset), style), avatar: avatarFor(preset, style) }
+  return {
+    name: displayNameOf(effectiveNickname(preset), style),
+    avatar: avatarFor(preset, style),
+    isLlm: true,
+    characterId: resolveAnimeCharacterId(avatarFolderOf(preset)),
+    playerKind: 'llm',
+  }
 }
 
 function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {

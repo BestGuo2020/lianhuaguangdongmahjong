@@ -25,6 +25,13 @@ import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 import type { TableThemeName } from './components/table/three/tableTheme'
 import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
+import {
+  animeCharacterAvatarUrl,
+  readAnimeCharacterPreference,
+  saveAnimeCharacterPreference,
+} from './game/llm/animeCharacterPreference'
+import type { CharacterId } from './game/llm/animeCharacters'
+import type { PlayerSeed } from './game/shared/runtime/localOpening'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -118,6 +125,18 @@ preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
+const animeCharacterId = ref<CharacterId>(readAnimeCharacterPreference())
+const localHumanSeed: PlayerSeed = {
+  name: '巅峰雀神',
+  avatar: animeCharacterAvatarUrl(animeCharacterId.value),
+  characterId: animeCharacterId.value,
+  playerKind: 'human',
+}
+watch(animeCharacterId, (value) => {
+  const saved = saveAnimeCharacterPreference(value)
+  localHumanSeed.characterId = saved
+  localHumanSeed.avatar = animeCharacterAvatarUrl(saved)
+})
 const llmStats = computed<LlmControllerStats>(() => ({
   requests: localLlm.value.stats.requests + lotusLlm.value.stats.requests,
   successes: localLlm.value.stats.successes + lotusLlm.value.stats.successes,
@@ -135,6 +154,7 @@ const localGame = useGame({
   countdownEnabled: false,
   aiControllers: localLlm.value.controllers ?? undefined,
   aiPlayerSeeds: localLlmSeeds,
+  humanPlayerSeed: localHumanSeed,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -142,6 +162,7 @@ const lotusGame = useLotusGame({
   countdownEnabled: false,
   aiControllers: lotusLlm.value.controllers ?? undefined,
   aiPlayerSeeds: lotusLlmSeeds,
+  humanPlayerSeed: localHumanSeed,
 })
 const remoteGame = useRemoteGame({
   playSound: playEffect,
@@ -149,6 +170,7 @@ const remoteGame = useRemoteGame({
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
   onLlmStatus: llmHook.onLlmStatus,
+  getCharacterId: () => animeCharacterId.value,
   playLlmAudio,
 })
 
@@ -423,6 +445,8 @@ function changeTableTheme(theme: TableThemeName) {
           v-model:selected-rule="selectedRule"
           v-model:nickname-input="nicknameInput"
           v-model:join-code="joinCode"
+          v-model:anime-character-id="animeCharacterId"
+          :table-theme-name="tableThemeName"
           :stored-session="storedSession"
           :room-id="roomId"
           :match-name="matchName"
