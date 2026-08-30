@@ -11,6 +11,7 @@ import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresent
 import type { TableThemeName } from './three/tableTheme'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
+import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -73,6 +74,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const userAnimeStyle = computed(() => props.themeName === 'llmAnime'
+  ? { '--anime-accent': animeCharacterAccent(props.user.characterId) }
+  : undefined)
 const emit = defineEmits<{
   ready: []
   selectTile: [index: number]
@@ -418,7 +422,7 @@ function onAvatarError(entry: GamePlayer) {
     </Transition>
 
     <section class="user-area">
-      <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }">
+      <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }" :style="userAnimeStyle">
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
         <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
         <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>

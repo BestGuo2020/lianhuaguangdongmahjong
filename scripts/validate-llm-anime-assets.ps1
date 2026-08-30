@@ -57,7 +57,26 @@ $tileDir = Join-Path $ProjectRoot 'public/themes/llm-anime/v1/tiles'
 $tiles = @(Get-ChildItem -LiteralPath $tileDir -Filter '*.png' -File)
 if ($tiles.Count -ne 34) { $errors.Add("expected 34 themed tile faces, found $($tiles.Count): $tileDir") }
 foreach ($tile in $tiles) { Test-ImageSize $tile.FullName 75 100 'themed tile face' }
-Test-ImageSize (Join-Path $ProjectRoot 'public/themes/llm-anime/v1/tile-back.png') 256 352 'themed tile back'
+foreach ($tile in $tiles) {
+  $standard = Join-Path $ProjectRoot "public/tiles/$($tile.Name)"
+  if (-not (Test-Path -LiteralPath $standard -PathType Leaf)) {
+    $errors.Add("missing standard tile face: $standard")
+    continue
+  }
+  if ((Get-FileHash -LiteralPath $tile.FullName).Hash -ne (Get-FileHash -LiteralPath $standard).Hash) {
+    $errors.Add("themed tile face must exactly match standard artwork: $($tile.FullName)")
+  }
+}
+$tileBack = Join-Path $ProjectRoot 'public/themes/llm-anime/v1/tile-back.png'
+Test-ImageSize $tileBack 256 352 'themed tile back'
+if (Test-Path -LiteralPath $tileBack -PathType Leaf) {
+  $backImage = [System.Drawing.Bitmap]::FromFile($tileBack)
+  try {
+    if ($backImage.GetPixel(0, 0).A -ne 255) {
+      $errors.Add("themed tile back must be fully opaque: $tileBack")
+    }
+  } finally { $backImage.Dispose() }
+}
 
 if ($errors.Count) {
   $errors | ForEach-Object { Write-Error $_ }

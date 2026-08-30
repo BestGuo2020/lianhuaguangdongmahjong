@@ -8,6 +8,7 @@ import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { TableThemeName } from '../table/three/tableTheme'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
+import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 
@@ -60,6 +61,12 @@ function displayedAvatar(entry?: {
     : entry?.avatar
 }
 
+function animeEntryStyle(entry?: { characterId?: string }) {
+  return props.themeName === 'llmAnime'
+    ? { '--anime-accent': animeCharacterAccent(entry?.characterId) }
+    : undefined
+}
+
 /** 结算标题：莲花麻将按 winType 展示（天胡/地胡/点炮），否则按旧逻辑。 */
 const winLabel = computed(() => {
   const result = props.result
@@ -100,7 +107,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
           </div>
         </div>
         <div class="round-rankings">
-          <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }">
+          <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }" :style="animeEntryStyle(entry)">
             <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
             <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <span class="player-line">
@@ -130,7 +137,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         <p>{{ matchName }} · 对局结束</p>
         <h2>最终排名</h2>
         <div class="final-rankings">
-          <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]">
+          <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]" :style="animeEntryStyle(entry)">
             <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
             <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <div class="final-name">

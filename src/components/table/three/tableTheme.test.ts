@@ -41,14 +41,16 @@ describe('大模型二次元牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llmAnime',
       label: '大模型二次元',
-      description: '蓝紫粉霓虹与二次元牌面',
+      description: '灰绿绒面、胡桃木与角色演出',
     })
   })
 
-  it('使用独立的蓝紫粉桌体、牌材质与牌背渐变', () => {
+  it('使用独立的灰绿绒面、象牙白牌材质与纯色朱砂牌背', () => {
     expect(llmAnimeTheme.table.jade).not.toEqual(llmTheme.table.jade)
     expect(llmAnimeTheme.tile).not.toBe(defaultTableTheme.tile)
-    expect(llmAnimeTheme.tileBackGradient).toEqual(['#8ca9ff', '#aa78e8', '#ef87c5'])
+    expect(llmAnimeTheme.tableFelt).toBe(true)
+    expect(llmAnimeTheme.woodTrim).toBe(true)
+    expect(llmAnimeTheme.tileBackGradient).toEqual(['#a65f52', '#a65f52', '#a65f52'])
     expect(llmAnimeTheme.tableSurfaceTexture).toBeUndefined()
   })
 })

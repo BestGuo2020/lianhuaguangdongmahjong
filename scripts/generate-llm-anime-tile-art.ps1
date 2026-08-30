@@ -10,117 +10,36 @@ $outputRoot = Join-Path $ProjectRoot 'public/themes/llm-anime/v1'
 $faceDir = Join-Path $outputRoot 'tiles'
 New-Item -ItemType Directory -Force -Path $faceDir | Out-Null
 
-function Add-FourPointStar {
-  param(
-    [System.Drawing.Graphics]$Graphics,
-    [single]$CenterX,
-    [single]$CenterY,
-    [single]$OuterRadius,
-    [System.Drawing.Color]$Color
-  )
-  $inner = $OuterRadius * 0.24
-  $points = [System.Drawing.PointF[]]@(
-    [System.Drawing.PointF]::new($CenterX, $CenterY - $OuterRadius),
-    [System.Drawing.PointF]::new($CenterX + $inner, $CenterY - $inner),
-    [System.Drawing.PointF]::new($CenterX + $OuterRadius, $CenterY),
-    [System.Drawing.PointF]::new($CenterX + $inner, $CenterY + $inner),
-    [System.Drawing.PointF]::new($CenterX, $CenterY + $OuterRadius),
-    [System.Drawing.PointF]::new($CenterX - $inner, $CenterY + $inner),
-    [System.Drawing.PointF]::new($CenterX - $OuterRadius, $CenterY),
-    [System.Drawing.PointF]::new($CenterX - $inner, $CenterY - $inner)
-  )
-  $brush = [System.Drawing.SolidBrush]::new($Color)
-  try { $Graphics.FillPolygon($brush, $points) } finally { $brush.Dispose() }
-}
-
-Get-ChildItem -LiteralPath $sourceDir -Filter '*.png' | ForEach-Object {
-  if ($_.Name -eq 'tile-back.png') { return }
-  $source = [System.Drawing.Bitmap]::FromFile($_.FullName)
-  try {
-    $canvas = [System.Drawing.Bitmap]::new($source.Width, $source.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    try {
-      $graphics = [System.Drawing.Graphics]::FromImage($canvas)
-      try {
-        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $rect = [System.Drawing.Rectangle]::new(0, 0, $canvas.Width, $canvas.Height)
-        $wash = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
-          $rect,
-          [System.Drawing.Color]::FromArgb(42, 136, 174, 255),
-          [System.Drawing.Color]::FromArgb(34, 245, 138, 205),
-          42
-        )
-        try { $graphics.FillRectangle($wash, $rect) } finally { $wash.Dispose() }
-
-        $border = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(132, 157, 128, 232), 1.2)
-        try { $graphics.DrawRectangle($border, 2, 2, $canvas.Width - 5, $canvas.Height - 5) } finally { $border.Dispose() }
-        Add-FourPointStar $graphics 8 10 4 ([System.Drawing.Color]::FromArgb(155, 106, 197, 255))
-        Add-FourPointStar $graphics ($canvas.Width - 8) ($canvas.Height - 10) 4 ([System.Drawing.Color]::FromArgb(145, 255, 129, 205))
-        $graphics.DrawImage($source, 0, 0, $source.Width, $source.Height)
-      } finally { $graphics.Dispose() }
-      $canvas.Save((Join-Path $faceDir $_.Name), [System.Drawing.Imaging.ImageFormat]::Png)
-    } finally { $canvas.Dispose() }
-  } finally { $source.Dispose() }
-}
+# 牌面必须保持项目标准清晰样式：直接复用标准牌面，不叠加渐变、星星、边框或装饰图案。
+Copy-Item -Path (Join-Path $sourceDir '*.png') -Destination $faceDir -Force
 
 $backWidth = 256
 $backHeight = 352
-$back = [System.Drawing.Bitmap]::new($backWidth, $backHeight, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$back = [System.Drawing.Bitmap]::new($backWidth, $backHeight, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
 try {
+  $backColor = [System.Drawing.Color]::FromArgb(166, 95, 82)
+  for ($y = 0; $y -lt $backHeight; $y += 1) {
+    for ($x = 0; $x -lt $backWidth; $x += 1) { $back.SetPixel($x, $y, $backColor) }
+  }
   $graphics = [System.Drawing.Graphics]::FromImage($back)
   try {
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $bounds = [System.Drawing.Rectangle]::new(0, 0, $backWidth, $backHeight)
-    $base = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
-      $bounds,
-      [System.Drawing.Color]::FromArgb(255, 73, 91, 196),
-      [System.Drawing.Color]::FromArgb(255, 228, 102, 176),
-      55
-    )
-    try { $graphics.FillRectangle($base, $bounds) } finally { $base.Dispose() }
+    # 纯色牌背，仅保留简洁的米白/金色纹章线条，避免蓝紫粉渐变与星芒。
 
-    $shade = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $ring = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(205, 201, 169, 101), 3)
+    try { $graphics.DrawEllipse($ring, 52, 100, 152, 152) } finally { $ring.Dispose() }
+
+    $seal = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(235, 244, 237, 223), 6)
     try {
-      $shade.AddEllipse(-60, -35, 255, 255)
-      $glow = [System.Drawing.Drawing2D.PathGradientBrush]::new($shade)
-      try {
-        $glow.CenterColor = [System.Drawing.Color]::FromArgb(150, 210, 235, 255)
-        $glow.SurroundColors = [System.Drawing.Color[]]@([System.Drawing.Color]::FromArgb(0, 95, 75, 198))
-        $graphics.FillPath($glow, $shade)
-      } finally { $glow.Dispose() }
-    } finally { $shade.Dispose() }
-
-    for ($i = -$backHeight; $i -lt $backWidth + $backHeight; $i += 34) {
-      $stripe = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(20, 255, 255, 255), 10)
-      try { $graphics.DrawLine($stripe, $i, 0, $i + $backHeight, $backHeight) } finally { $stripe.Dispose() }
-    }
-
-    $outer = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(220, 242, 224, 255), 5)
-    $inner = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(180, 125, 231, 255), 2)
-    try {
-      $graphics.DrawRectangle($outer, 10, 10, $backWidth - 21, $backHeight - 21)
-      $graphics.DrawRectangle($inner, 20, 20, $backWidth - 41, $backHeight - 41)
-    } finally {
-      $outer.Dispose()
-      $inner.Dispose()
-    }
-
-    $ring1 = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(150, 255, 236, 181), 4)
-    $ring2 = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(170, 205, 224, 255), 2)
-    try {
-      $graphics.DrawEllipse($ring1, 57, 105, 142, 142)
-      $graphics.DrawEllipse($ring2, 70, 118, 116, 116)
-    } finally {
-      $ring1.Dispose()
-      $ring2.Dispose()
-    }
-
-    Add-FourPointStar $graphics 128 176 48 ([System.Drawing.Color]::FromArgb(235, 255, 239, 170))
-    Add-FourPointStar $graphics 128 176 29 ([System.Drawing.Color]::FromArgb(245, 179, 223, 255))
-    Add-FourPointStar $graphics 38 50 10 ([System.Drawing.Color]::FromArgb(210, 255, 238, 179))
-    Add-FourPointStar $graphics 218 302 9 ([System.Drawing.Color]::FromArgb(200, 194, 232, 255))
-    Add-FourPointStar $graphics 218 54 6 ([System.Drawing.Color]::FromArgb(180, 255, 170, 221))
-    Add-FourPointStar $graphics 40 300 6 ([System.Drawing.Color]::FromArgb(180, 167, 231, 255))
+      for ($petal = 0; $petal -lt 5; $petal += 1) {
+        $angle = -[Math]::PI / 2 + $petal * ([Math]::PI * 2 / 5)
+        $petalX = 128 + [Math]::Cos($angle) * 32 - 23
+        $petalY = 176 + [Math]::Sin($angle) * 32 - 23
+        $graphics.DrawEllipse($seal, [single]$petalX, [single]$petalY, 46, 46)
+      }
+      $graphics.DrawEllipse($seal, 117, 165, 22, 22)
+    } finally { $seal.Dispose() }
   } finally { $graphics.Dispose() }
   $back.Save((Join-Path $outputRoot 'tile-back.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 } finally { $back.Dispose() }

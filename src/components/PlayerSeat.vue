@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import MahjongTile from './MahjongTile.vue'
 import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
 import type { GamePlayer, TileType } from '../game/core/contracts/types'
 import type { TableThemeName } from './table/three/tableTheme'
+import { animeCharacterAccent } from '../game/core/presentation/animeCharacterPalette'
 
 const props = withDefaults(defineProps<{
   player: GamePlayer
@@ -34,10 +35,13 @@ function onAvatarError() {
     ? props.player.avatar
     : defaultAvatarForSeat(props.player.seat)
 }
+const animeStyle = computed(() => props.themeName === 'llmAnime'
+  ? { '--anime-accent': animeCharacterAccent(props.player.characterId) }
+  : undefined)
 </script>
 
 <template>
-  <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive }]">
+  <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive }]" :style="animeStyle">
     <div class="avatar-wrap">
       <span v-if="dealer" class="dealer-badge">庄</span>
       <img class="avatar" :src="avatarSrc" :alt="`${player.name}头像`" @error="onAvatarError" />
