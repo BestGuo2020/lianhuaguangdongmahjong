@@ -4,18 +4,54 @@ import type { TileType } from '../contracts/types'
 // 牌面资产预加载：把全部牌面拉进内存（blob URL + 已解码图片各存一份），
 // 2D（CSS background）与 3D（图集）共用同一份，避免各路径重复请求 / 重复解码。
 
-const TILE_IMAGES = new Map<TileType, HTMLImageElement>()  // 3D 图集绘制用（已解码）
-const TILE_URLS = new Map<TileType, string>()              // 2D CSS background 用（内存 blob URL）
+export type TileAssetTheme = 'jade' | 'llmAnime' | (string & {})
+
+export interface TileAssetManifest {
+  /** 34 张牌面候选地址，第一项为主题资源，第二项为稳定的默认资源。 */
+  faces: Readonly<Record<TileType, readonly [string, string]>>
+  /** 牌背图片候选地址；3D 尚未使用位图时仍可由调用方读取此合同。 */
+  back: readonly [string, string]
+}
+
+const TILE_CACHE = new Map<TileAssetTheme, Map<TileType, HTMLImageElement>>()
+const TILE_URL_CACHE = new Map<TileAssetTheme, Map<TileType, string>>()
+const READY_CACHE = new Map<TileAssetTheme, Promise<void>>()
 const objectUrls = new Set<string>()                       // 存活到页面结束，不 revoke
-let ready: Promise<void> | null = null
+let activeTheme: TileAssetTheme = 'jade'
 const MAX_LOAD_ATTEMPTS = 3
 const FETCH_TIMEOUT_MS = 12_000
 const DECODE_TIMEOUT_MS = 12_000
 const RETRY_DELAY_MS = 150
 
-function tileNetworkUrl(tile: TileType): string | null {
+function legacyTileUrl(tile: TileType): string | null {
   const file = tileFaceFile(tile)
   return file ? `${import.meta.env.BASE_URL}tiles/${file}` : null
+}
+
+function themeTileUrl(theme: TileAssetTheme, tile: TileType): string | null {
+  const file = tileFaceFile(tile)
+  if (!file) return null
+  return theme === 'llmAnime'
+    ? `${import.meta.env.BASE_URL}themes/llm-anime/v1/tiles/${file}`
+    : legacyTileUrl(tile)
+}
+
+/** 明确列出主题资源和回退资源，避免 2D/3D 各自拼接路径导致缓存串图。 */
+export function tileAssetManifest(theme: TileAssetTheme = activeTheme): TileAssetManifest {
+  const faces = Object.fromEntries(TILE_TYPES.map((tile) => [
+    tile,
+    [themeTileUrl(theme, tile) ?? '', legacyTileUrl(tile) ?? ''] as const,
+  ])) as Record<TileType, readonly [string, string]>
+  const themedBack = theme === 'llmAnime'
+    ? `${import.meta.env.BASE_URL}themes/llm-anime/v1/tile-back.png`
+    : `${import.meta.env.BASE_URL}tiles/tile-back.png`
+  return { faces, back: [themedBack, `${import.meta.env.BASE_URL}tiles/tile-back.png`] }
+}
+
+function cachesFor(theme: TileAssetTheme) {
+  if (!TILE_CACHE.has(theme)) TILE_CACHE.set(theme, new Map())
+  if (!TILE_URL_CACHE.has(theme)) TILE_URL_CACHE.set(theme, new Map())
+  return { images: TILE_CACHE.get(theme)!, urls: TILE_URL_CACHE.get(theme)! }
 }
 
 function decodeImage(src: string): Promise<HTMLImageElement> {
@@ -60,21 +96,22 @@ async function fetchTile(url: string): Promise<Blob> {
   }
 }
 
-async function loadTile(tile: TileType): Promise<void> {
-  if (TILE_URLS.has(tile) && TILE_IMAGES.has(tile)) return
-  const url = tileNetworkUrl(tile)
-  if (!url) throw new Error(`missing tile asset path: ${tile}`)
+async function loadTile(theme: TileAssetTheme, tile: TileType): Promise<void> {
+  const { images, urls } = cachesFor(theme)
+  if (urls.has(tile) && images.has(tile)) return
+  const candidates = tileAssetManifest(theme).faces[tile].filter(Boolean)
+  if (!candidates.length) throw new Error(`missing tile asset path: ${tile}`)
 
   let lastError: unknown
   for (let attempt = 1; attempt <= MAX_LOAD_ATTEMPTS; attempt += 1) {
     let objectUrl: string | null = null
     try {
-      const blob = await fetchTile(url)
+      const blob = await fetchTile(candidates[attempt === 1 ? 0 : 1] ?? candidates[0])
       objectUrl = URL.createObjectURL(blob)
       const image = await decodeImage(objectUrl)
       objectUrls.add(objectUrl)
-      TILE_URLS.set(tile, objectUrl)
-      TILE_IMAGES.set(tile, image)
+      urls.set(tile, objectUrl)
+      images.set(tile, image)
       return
     } catch (error) {
       lastError = error
@@ -82,34 +119,42 @@ async function loadTile(tile: TileType): Promise<void> {
       if (attempt < MAX_LOAD_ATTEMPTS) await wait(RETRY_DELAY_MS * attempt)
     }
   }
-  throw new Error(`tile asset failed after ${MAX_LOAD_ATTEMPTS} attempts: ${url}`, { cause: lastError })
+  throw new Error(`tile asset failed after ${MAX_LOAD_ATTEMPTS} attempts: ${candidates[0]}`, { cause: lastError })
 }
 
 /**
  * 预加载并解码全部牌面。并发调用复用同一 Promise；任何一张失败都会拒绝，
  * 且清除共享 Promise，让下一次调用只重试尚未成功的牌面。
  */
-export function preloadTileImages(): Promise<void> {
-  if (ready) return ready
-  const loading = Promise.allSettled(TILE_TYPES.map(loadTile)).then((results) => {
+export function preloadTileImages(theme: TileAssetTheme = activeTheme): Promise<void> {
+  activeTheme = theme
+  const existing = READY_CACHE.get(theme)
+  if (existing) return existing
+  const loading = Promise.allSettled(TILE_TYPES.map((tile) => loadTile(theme, tile))).then((results) => {
     const failed = results
       .map((result, index) => result.status === 'rejected' ? TILE_TYPES[index] : null)
       .filter((tile): tile is TileType => tile !== null)
     if (failed.length) throw new Error(`牌面资源加载失败：${failed.join('、')}`)
   })
-  ready = loading.catch((error) => {
-    ready = null
+  const ready = loading.catch((error) => {
+    READY_CACHE.delete(theme)
     throw error
   })
+  READY_CACHE.set(theme, ready)
   return ready
 }
 
 /** 已成功解码的牌面表。3D 牌桌只会在完整预加载成功后读取。 */
-export function preloadedTileImages(): Map<TileType, HTMLImageElement> {
-  return TILE_IMAGES
+export function preloadedTileImages(theme: TileAssetTheme = activeTheme): Map<TileType, HTMLImageElement> {
+  return cachesFor(theme).images
 }
 
 /** 2D 牌面 background 用：优先返回内存 blob URL，未就绪时回退网络地址。 */
-export function tileFaceUrl(tile: TileType): string {
-  return TILE_URLS.get(tile) ?? tileNetworkUrl(tile) ?? ''
+export function tileFaceUrl(tile: TileType, theme: TileAssetTheme = activeTheme): string {
+  return cachesFor(theme).urls.get(tile) ?? tileAssetManifest(theme).faces[tile]?.[0] ?? ''
+}
+
+/** 牌背候选地址（图片缺失时由 3D 主题渐变或 CSS 回退兜底）。 */
+export function tileBackUrl(theme: TileAssetTheme = activeTheme): string {
+  return tileAssetManifest(theme).back[0]
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { TILE_META } from '../game/core/rules/tiles'
-import { tileFaceUrl } from '../game/core/presentation/tileAssets'
+import { tileBackUrl, tileFaceUrl, type TileAssetTheme } from '../game/core/presentation/tileAssets'
 import type { TileType } from '../game/core/contracts/types'
 
 const props = withDefaults(defineProps<{
@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{
   drawn?: boolean
   disabled?: boolean
   small?: boolean
+  themeName?: TileAssetTheme
   /** 本局癞子集合；未传时按现行玩法「白板」高亮 */
   jokerTiles?: TileType[]
   /** 可替代精牌的实体牌；不参与精牌排序。 */
@@ -59,9 +60,11 @@ const tileLabel = computed(() => {
   return `${meta.value.name}，${role}${isWildcard.value ? '，可代本局精牌' : ''}`
 })
 const tileStyle = computed(() => {
-  if (shownTile.value === 'back') return {}
+  if (shownTile.value === 'back') {
+    return { '--tile-back-image': `url("${tileBackUrl(props.themeName)}")` }
+  }
   // 优先用预加载的内存 blob URL；预加载未完成时回退网络地址（浏览器缓存兜底）
-  return { backgroundImage: `url("${tileFaceUrl(shownTile.value as TileType)}")` }
+  return { backgroundImage: `url("${tileFaceUrl(shownTile.value as TileType, props.themeName)}")` }
 })
 </script>
 

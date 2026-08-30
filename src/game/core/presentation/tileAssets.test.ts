@@ -78,4 +78,28 @@ describe('tile asset preload', () => {
     expect(fetchMock).toHaveBeenCalledTimes(TILE_TYPES.length + 3)
     expect(preloadedTileImages().size).toBe(TILE_TYPES.length)
   })
+
+  it('publishes an explicit llmAnime manifest with a per-tile default fallback', async () => {
+    const { tileAssetManifest, tileBackUrl } = await import('./tileAssets')
+    const manifest = tileAssetManifest('llmAnime')
+    expect(Object.keys(manifest.faces)).toHaveLength(TILE_TYPES.length)
+    expect(manifest.faces.m1).toEqual(['/themes/llm-anime/v1/tiles/1m.png', '/tiles/1m.png'])
+    expect(manifest.faces.white).toEqual(['/themes/llm-anime/v1/tiles/7z.png', '/tiles/7z.png'])
+    expect(manifest.back).toEqual(['/themes/llm-anime/v1/tile-back.png', '/tiles/tile-back.png'])
+    expect(tileBackUrl('llmAnime')).toBe('/themes/llm-anime/v1/tile-back.png')
+  })
+
+  it('keeps llmAnime and legacy decoded image caches isolated', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.includes('/themes/llm-anime/')) return new Response('', { status: 404 })
+      return new Response(new Blob(['tile']), { status: 200 })
+    }))
+    const { preloadTileImages, preloadedTileImages } = await import('./tileAssets')
+    await preloadTileImages('llmAnime')
+    await preloadTileImages('jade')
+    expect(preloadedTileImages('llmAnime')).not.toBe(preloadedTileImages('jade'))
+    expect(preloadedTileImages('llmAnime').size).toBe(TILE_TYPES.length)
+    expect(preloadedTileImages('jade').size).toBe(TILE_TYPES.length)
+  })
 })

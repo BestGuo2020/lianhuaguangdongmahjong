@@ -1,4 +1,5 @@
 import {
+  ANIME_CHARACTER_IDS,
   resolveAnimeCharacterId,
   type CharacterId,
 } from '../../llm/animeCharacters'
@@ -13,7 +14,7 @@ export function animeActionCardKind(action: AnimeActionKey): AnimeActionCardKind
 }
 
 /** 每个角色只发布通用鸣牌卡与通用胡牌卡两张。 */
-export const SHIPPED_ANIME_ACTION_CARD_CHARACTERS = ['deepseek'] as const satisfies readonly CharacterId[]
+export const SHIPPED_ANIME_ACTION_CARD_CHARACTERS = ANIME_CHARACTER_IDS satisfies readonly CharacterId[]
 const SHIPPED_ACTION_CARD_SET: ReadonlySet<string> = new Set(SHIPPED_ANIME_ACTION_CARD_CHARACTERS)
 
 export function animeActionArtUrl(characterId: unknown, action: AnimeActionKey): string | null {

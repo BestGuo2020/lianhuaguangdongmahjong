@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { preloadTileImages, preloadedTileImages } from '../game/core/presentation/tileAssets'
+import { preloadTileImages, preloadedTileImages, tileBackUrl, type TileAssetTheme } from '../game/core/presentation/tileAssets'
 import type { TileType } from '../game/core/contracts/types'
 import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
 import { createDicePresenter } from './table/three/dicePresenter'
@@ -103,6 +103,20 @@ async function loadTableSurfaceTexture(theme: TableTheme | undefined) {
   } catch (error) {
     // 主题图片是纯视觉增强；加载失败时保留深蓝材质，不能阻塞开局 ready 门闸。
     console.warn('牌桌主题纹理加载失败，已回退纯色桌面', error)
+    return undefined
+  }
+}
+
+async function loadTileBackTexture(themeName: TileAssetTheme) {
+  if (themeName !== 'llmAnime') return undefined
+  try {
+    const texture = await new THREE.TextureLoader().loadAsync(tileBackUrl(themeName))
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+    texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
+    return own(texture)
+  } catch (error) {
+    console.warn('[table] llmAnime 牌背图片加载失败，使用主题渐变回退', error)
     return undefined
   }
 }
@@ -281,8 +295,10 @@ onMounted(async () => {
   keyLight.shadow.camera.bottom = -18
   scene.add(keyLight)
   shadowLight = keyLight
-  const activeTheme = tableThemeByName(props.themeName ?? new URLSearchParams(window.location.search).get('theme'))
+  const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
+  const activeTheme = tableThemeByName(activeThemeName)
   const surfaceTexture = await loadTableSurfaceTexture(activeTheme)
+  const tileBackTexture = await loadTileBackTexture(activeThemeName)
   if (destroyed) return
   const rimLight = new THREE.DirectionalLight(activeTheme?.rimLight?.color ?? 0x3acb8b, activeTheme?.rimLight?.intensity ?? 1.6)
   rimLight.position.set(8, 5, -8)
@@ -296,6 +312,7 @@ onMounted(async () => {
     playAreaOffsetZ: PLAY_AREA_OFFSET_Z,
     theme: activeTheme,
     surfaceTexture,
+    tileBackTexture,
     own,
     ownDynamic,
     trackTileMaterial,
@@ -357,9 +374,9 @@ onMounted(async () => {
   })
 
   // 所有牌面必须下载并完成图片解码，之后才能创建 3D 图集。
-  await preloadTileImages()
+  await preloadTileImages(activeThemeName)
   if (destroyed) return
-  scene.userData.tileImages = preloadedTileImages()
+  scene.userData.tileImages = preloadedTileImages(activeThemeName)
   tableScene.addTable()
   tableTiles.rebuild()
   if (adaptiveQuality.overridden) adaptiveQuality.apply()
