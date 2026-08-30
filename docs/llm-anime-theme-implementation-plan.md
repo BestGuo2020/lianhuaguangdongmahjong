@@ -39,6 +39,25 @@
 - 普通 AI、旧协议玩家、非法或缺失角色统一回退 `deepseek`。
 - 禁止客户端提交任意图片 URL 或文件路径，只接受角色白名单 ID。
 
+首版中文展示名冻结如下：
+
+| characterId | 中文展示名 |
+|---|---|
+| `claude` | 克劳德书姬 |
+| `deepseek` | 大肥鱼 |
+| `doubao` | 豆包学妹 |
+| `gemini` | 双子星姬 |
+| `glm` | 智谱狐姬 |
+| `gpt` | GPT龙姬 |
+| `grok` | Grok小恶魔 |
+| `kimi` | Kimi月姬 |
+| `minimax` | MiniMax导演 |
+| `mistral` | 米斯特拉风狐 |
+| `muse` | 缪斯梦姬 |
+| `qwen` | 千问大小姐 |
+
+展示名只用于角色 catalog/UI，不改变 provider ID、模型名或 API 配置。
+
 ### 2.3 声音方案
 
 “预设语音”按“固定文案 + 固定角色 voice key/speaker + 固定稳健风格”的缓存 TTS 解释。运行时允许调用 TTS 合成，但不把 LLM 自由回复作为动作或赛后文案；同一组合由现有 cache key 去重并复用。
@@ -123,9 +142,8 @@ assets-src/llm-anime/
   rejected/deepseek-cutout-v2.png
 
 src/assets/fonts/llm-anime/
-  ui.woff2
-  display.woff2
-  LICENSES.md
+  zihun-mengchong-tiandi.woff2
+  AUTHORIZATION.md
 
 public/themes/llm-anime/<assetVersion>/
   characters/
@@ -196,7 +214,11 @@ export interface LlmAnimeThemeManifest {
   schemaVersion: 1
   assetVersion: string
   defaultCharacter: 'deepseek'
-  fonts: { ui: string; display: string }
+  font: {
+    family: 'ZiHun MengChong TianDi'
+    url: string
+    systemFallback: readonly string[]
+  }
   table: { surface: string }
   actions: Record<AnimeActionKey, string>
   tiles: {
@@ -233,7 +255,9 @@ export interface LlmAnimeThemeManifest {
 | 结果固定文案 | 不超过 24 个 Unicode code point，覆盖三类胜利、失败、流局 |
 | TTS 参数 | style 固定“稳健”；voiceKey/speaker 来自角色合同，失败使用已审核 fallbackVoiceKey |
 
-两款 WOFF2 必须带可再分发许可证，使用 `font-display: swap`，并覆盖动作字、广播、结算、按钮、数字、标点及实际文案所需的中文 glyph；字体 404 或加载慢不得阻塞首屏，必须保留系统字体回退。
+主题唯一指定字体为“字魂萌宠天地体”，正文和标题共用该字体，系统回退为 `Microsoft YaHei`、`PingFang SC`、sans-serif。必须使用 `font-display: swap`，并覆盖动作字、广播、结算、按钮、数字、标点、12 个角色展示名及实际固定文案所需 glyph；动态玩家昵称缺字时允许逐字回退系统字体。
+
+该字体不是开源字体。提交 TTF/WOFF2、制作子集或用 `@font-face` 嵌入网站前，必须取得覆盖本项目/发布主体的“嵌入式用途（WEB font-face/CSS 网页调用、游戏/软件）”书面授权，并确认允许格式转换、glyph 子集化和随应用托管字体文件。普通网站设计、图片设计或个人学习授权不能替代嵌入式授权。授权证书、协议适用范围、期限和字体文件 SHA256 写入 `AUTHORIZATION.md`；未取得前只启用系统回退，不把字体文件提交进仓库。
 
 Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编码参数、SSIM/视觉阈值和 alpha 质量。若 300 KiB 在三张基准上无法稳定达标，则以“四座立绘总计不超过 2 MiB”为硬闸门并按实测上调单图预算，不得同时强制无损、300 KiB 和高细节三项互相冲突的目标。
 
@@ -663,10 +687,12 @@ git switch master
 1. 普通 bot 在 `llmAnime` 主题下继续报牌；真人关闭牌名播报。
 2. 赛后固定四家全员发言，赢家先说、其余顺时针；流局按座位顺序。
 3. vibehub P2P 真人选角作为下一里程碑，不阻塞本期 master WebSocket 版本。
+4. 主题字体使用“字魂萌宠天地体”一款，正文/标题共用，缺字回退系统字体。
+5. 12 个角色中文展示名使用 §2.2 已冻结表；其中 DeepSeek 为“大肥鱼”，Qwen 为“千问大小姐”。
 
 Wave 1 开始前必须形成并评审通过的具体交付物：
 
-1. 两款最终中文字体、glyph 覆盖清单、字体文件、许可证与归属记录。
-2. 12 个角色的中文展示名、`characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及生成/再分发授权记录。
+1. “字魂萌宠天地体”的 WEB/游戏嵌入式授权证书、可转换/子集化确认、授权字体文件、SHA256 和 glyph 覆盖清单；未授权前只用系统回退。
+2. 12 个角色的 `characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及 TTS 音色使用/缓存授权记录；中文展示名已完成，不再作为待定项。
 
 在上述两个合同完成前，可以搭建 schema、校验器和占位资源，但不得批量生成最终字体子集，也不得把 132 个“角色 × 语音槽位”投入正式 TTS 缓存预热。
