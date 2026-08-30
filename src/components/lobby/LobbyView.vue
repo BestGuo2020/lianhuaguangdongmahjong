@@ -192,6 +192,11 @@ function toggleWakuDemoAuth() {
     </template>
 
     <div v-else class="remote-lobby">
+      <AnimeCharacterPicker
+        v-if="tableThemeName === 'llmAnime'"
+        :model-value="animeCharacterId"
+        @update:model-value="$emit('update:animeCharacterId', $event)"
+      />
       <label class="remote-field">
         <span>昵称</span>
         <input
