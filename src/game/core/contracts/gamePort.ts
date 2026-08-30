@@ -66,6 +66,8 @@ export interface RoundScoreChange {
   name: string
   avatar: string
   characterId?: string
+  playerKind?: 'human' | 'llm' | 'bot'
+  isLlm?: boolean
   fallbackAvatar?: string
   score: number
   delta: number

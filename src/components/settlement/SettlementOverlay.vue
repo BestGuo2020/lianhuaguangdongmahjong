@@ -7,7 +7,7 @@ import type { RoundResult } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { TableThemeName } from '../table/three/tableTheme'
-import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
+import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 
@@ -43,9 +43,20 @@ function onAvatarError(entry?: { avatar?: string; seat?: number; fallbackAvatar?
   if (target && entry.avatar !== target) entry.avatar = target
 }
 
-function displayedAvatar(entry?: { avatar?: string; characterId?: string }) {
+function displayedAvatar(entry?: {
+  avatar?: string
+  characterId?: string
+  playerKind?: 'human' | 'llm' | 'bot'
+  isLlm?: boolean
+}) {
+  if (!entry?.avatar) return ''
   return props.themeName === 'llmAnime'
-    ? animeCharacterAvatarUrl(entry?.characterId)
+    ? animeAvatarForPlayer({
+      avatar: entry.avatar,
+      characterId: entry.characterId,
+      playerKind: entry.playerKind,
+      isLlm: entry.isLlm,
+    })
     : entry?.avatar
 }
 
