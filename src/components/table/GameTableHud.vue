@@ -112,6 +112,22 @@ function retryTableLoad() {
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
+const actionCueLabParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
+const actionCueLabType = actionCueLabParams?.get('actionCueLab') as TableActionEvent['type'] | null
+const actionCueLabActor = Math.min(3, Math.max(0, Number(actionCueLabParams?.get('actionCueSeat') ?? 0) || 0))
+const actionCueLabTypes: ReadonlySet<TableActionEvent['type']> = new Set([
+  'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang', 'wind-kong',
+  'self-draw', 'discard-win', 'robbed-kong-win',
+])
+const actionCueLabEvent = computed<TableActionEvent | null>(() => (
+  actionCueLabType && actionCueLabTypes.has(actionCueLabType) && props.players[actionCueLabActor]
+    ? { id: -1, type: actionCueLabType, actorIndex: actionCueLabActor, sourceIndex: null, tile: 'p5', meldIndex: -1 }
+    : null
+))
+const presentedAnimeActionEvent = computed(() => props.tableActionEvent ?? actionCueLabEvent.value)
+const presentedAnimeActionPosition = computed(() => presentedAnimeActionEvent.value
+  ? seatPosition[presentedAnimeActionEvent.value.actorIndex]
+  : 'bottom')
 const waitsOpen = ref(false)
 const tableReady = ref(false)
 const tableLoadError = ref('')
@@ -406,11 +422,11 @@ function onAvatarError(entry: GamePlayer) {
 
     <Transition name="table-action" mode="out-in">
       <AnimeActionCue
-        v-if="tableActionEvent && themeName === 'llmAnime'"
-        :key="`anime-${tableActionEvent.id}`"
-        :event="tableActionEvent"
-        :player="players[tableActionEvent.actorIndex]"
-        :position="tableActionPosition"
+        v-if="presentedAnimeActionEvent && themeName === 'llmAnime'"
+        :key="`anime-${presentedAnimeActionEvent.id}`"
+        :event="presentedAnimeActionEvent"
+        :player="players[presentedAnimeActionEvent.actorIndex]"
+        :position="presentedAnimeActionPosition"
       />
       <div v-else-if="tableActionEvent" :key="tableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
     </Transition>

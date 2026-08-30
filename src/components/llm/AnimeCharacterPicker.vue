@@ -27,17 +27,42 @@ defineEmits<{ 'update:modelValue': [value: CharacterId] }>()
 </template>
 
 <style scoped>
-.anime-character-picker { display: grid; gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid #b99b69; border-radius: 10px; background: #e9deca; box-shadow: inset 0 1px rgba(255,255,255,.72); }
-.anime-character-picker header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.anime-character-picker header b { color: #3f332a; font-size: 14px; }
-.anime-character-picker header span { color: #796b5b; font-size: 10px; }
-.anime-character-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; max-height: 174px; overflow-y: auto; }
-.anime-character-grid button { display: grid; justify-items: center; gap: 3px; min-width: 0; padding: 5px 3px; border: 1px solid #cbb896; border-radius: 8px; background: #f7f0e4; color: #44382f; cursor: pointer; }
-.anime-character-grid button.active { border-color: #a95345; background: #ead3b8; box-shadow: inset 0 -3px #a95345; }
-.anime-character-grid img { width: 40px; height: 40px; border: 2px solid #c2a36d; border-radius: 50%; object-fit: cover; background: #f3eadb; }
-.anime-character-grid span { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.anime-character-picker {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 2px solid #2d2923;
+  border-radius: 3px;
+  background: #fbf1df;
+  box-shadow: 4px 4px 0 rgba(45, 41, 35, .2);
+  clip-path: polygon(0 5px, 7px 0, calc(100% - 8px) 0, 100% 7px, 100% calc(100% - 5px), calc(100% - 6px) 100%, 8px 100%, 0 calc(100% - 7px));
+}
+.anime-character-picker header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 7px; border-bottom: 2px solid #2d2923; }
+.anime-character-picker header b { color: #2d2923; font-size: 14px; letter-spacing: .08em; }
+.anime-character-picker header span { color: #776a58; font-size: 10px; }
+.anime-character-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; max-height: 184px; overflow-y: auto; }
+.anime-character-grid button {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 3px 5px;
+  border: 2px solid #6c6256;
+  border-radius: 3px;
+  background: #fffaf0;
+  color: #302a24;
+  cursor: pointer;
+  clip-path: polygon(0 3px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%);
+  transition: transform .14s ease, background-color .14s ease, border-color .14s ease;
+}
+.anime-character-grid button:hover { transform: translateY(-2px) rotate(-1deg); border-color: #bd5b48; }
+.anime-character-grid button.active { border-color: #bd5b48; background: #f6d9c4; box-shadow: inset 0 -4px #bd5b48; transform: translateY(-1px) rotate(-1deg); }
+.anime-character-grid img { width: 44px; height: 44px; border: 2px solid #2d2923; border-radius: 12px 12px 5px 5px; object-fit: cover; background: #e8dcc7; }
+.anime-character-grid span { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px), (max-height: 520px) {
   .anime-character-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 126px; }
-  .anime-character-grid img { width: 32px; height: 32px; }
+  .anime-character-grid img { width: 36px; height: 36px; }
 }
 </style>

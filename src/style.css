@@ -84,54 +84,6 @@ button { font: inherit; }
     #07110d;
 }
 
-.wood-frame {
-  position: absolute;
-  inset: 0;
-  padding: clamp(8px, 1.25vw, 22px);
-  background:
-    linear-gradient(115deg, transparent 25%, rgba(238,181,90,.08) 27%, transparent 30%),
-    repeating-linear-gradient(4deg, #17110c 0 7px, #27170d 8px 12px, #130d09 13px 20px);
-  box-shadow: inset 0 0 55px #000;
-}
-
-.felt-table {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  perspective: 1200px;
-  transform-style: preserve-3d;
-  border: 2px solid rgba(222, 190, 117, .36);
-  border-radius: 10px;
-  background:
-    radial-gradient(ellipse at 50% 46%, rgba(48, 121, 78, .46), transparent 55%),
-    repeating-radial-gradient(circle at 35% 31%, rgba(255,255,255,.018) 0 1px, transparent 1px 4px),
-    linear-gradient(135deg, #123e2e, #0c3327 46%, #0a291f);
-  box-shadow: inset 0 0 90px rgba(0,0,0,.68), 0 0 0 7px #0b0a07, 0 0 0 9px #684725;
-}
-
-.felt-table::before,
-.felt-table::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.felt-table::before {
-  inset: 0;
-  background:
-    linear-gradient(120deg, transparent 43%, rgba(255,255,255,.024) 49%, transparent 55%),
-    radial-gradient(ellipse at 50% 43%, transparent 0 34%, rgba(0,0,0,.12) 72%, rgba(0,0,0,.3) 100%);
-}
-
-.felt-table::after {
-  inset: 8px;
-  border: 1px solid rgba(225, 195, 119, .18);
-  border-radius: 7px;
-  box-shadow: inset 0 0 34px rgba(0,0,0,.45);
-}
-
 .table-depth { position: absolute; z-index: 2; inset: 7.5% 6.5% 12%; pointer-events: none; transform: perspective(1100px) rotateX(1.5deg); transform-style: preserve-3d; }
 .table-depth::before { content: ""; position: absolute; inset: 2.5% 3.2%; border: 1px solid rgba(207,176,103,.08); clip-path: polygon(8% 0, 92% 0, 100% 11%, 100% 89%, 92% 100%, 8% 100%, 0 89%, 0 11%); box-shadow: inset 0 0 40px rgba(0,0,0,.14); }
 .table-edge { position: absolute; display: block; border: 1px solid rgba(183,138,63,.22); background: linear-gradient(180deg, rgba(123,80,36,.32), rgba(19,15,10,.32)); box-shadow: 0 5px 15px rgba(0,0,0,.22), inset 0 1px rgba(255,220,154,.12); }
@@ -762,44 +714,6 @@ button { font: inherit; }
 @keyframes final-in { from { opacity: 0; transform: translateY(28px) scale(.92); filter: blur(5px); } }
 
 /* 强透视桌面：按参考视频的上窄下宽镜头重构整张牌桌 */
-.wood-frame {
-  padding: 0;
-  background:
-    linear-gradient(102deg, #070907 0 7.5%, #28241e 7.7% 9.2%, transparent 9.4%),
-    linear-gradient(258deg, #070907 0 7.5%, #28241e 7.7% 9.2%, transparent 9.4%),
-    linear-gradient(180deg, #060806, #15130f 58%, #080908);
-}
-
-.felt-table {
-  isolation: isolate;
-  border: 0;
-  border-radius: 0;
-  background: #090b09;
-  box-shadow: inset 0 0 0 5px #070807, inset 0 0 0 8px #3a3428, inset 0 0 60px #000;
-}
-
-.felt-table::before {
-  z-index: 0;
-  inset: -3% 7.5% -7%;
-  border: 0;
-  border-radius: 0;
-  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
-  background:
-    radial-gradient(ellipse at 50% 43%, rgba(104,139,98,.18), transparent 45%),
-    repeating-radial-gradient(circle at 48% 42%, rgba(255,255,255,.018) 0 1px, transparent 1px 5px),
-    linear-gradient(180deg, #304f2e, #254223 48%, #1b351a);
-  filter: drop-shadow(0 18px 0 #090b09) drop-shadow(0 28px 18px rgba(0,0,0,.78));
-}
-
-.felt-table::after {
-  z-index: 1;
-  inset: 0 6.8% -1%;
-  border: 0;
-  border-radius: 0;
-  clip-path: polygon(13.5% 0, 86.5% 0, 100% 100%, 0 100%, .9% 98.7%, 99.1% 98.7%, 85.7% 1.6%, 14.3% 1.6%);
-  background: linear-gradient(180deg, #514839, #171714 38%, #0b0c0a);
-  box-shadow: none;
-}
 
 .table-depth { z-index: 2; inset: 10% 13% 12%; transform: none; }
 .table-depth::before {
@@ -954,26 +868,7 @@ button { font: inherit; }
   background: transparent;
 }
 .table-loading-in-game .table-loading-card { display: none; }
-/* 对局时不使用外层黑色木框，让所有主题的牌桌铺满游戏区域。 */
-.wood-frame:has(.felt-table.has-three-scene) {
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.felt-table.has-three-scene {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-.felt-table.has-three-scene::before,
-.felt-table.has-three-scene::after { opacity: 0; }
-.felt-table.has-three-scene .table-depth { opacity: 0; }
-.has-three-scene .seat-top {
-  top: 7.5%;
-  right: auto;
-  left: calc(50% + clamp(220px, 22vw, 420px));
-  transform: translateX(-50%);
-}
+
 .has-three-scene .seat-left { top: 35%; left: 2.7%; }
 .has-three-scene .seat-right { top: 35%; right: 2.7%; }
 .has-three-scene .seat-top .avatar-wrap { width: clamp(180px, 16vw, 245px); }
@@ -1116,8 +1011,6 @@ button { font: inherit; }
 }
 
 @media (max-width: 760px) and (orientation: portrait) {
-  .wood-frame { padding: 6px; }
-  .felt-table { border-radius: 4px; }
   .top-bar { height: 41px; }.brand-mini span { display: none; }
   .seat-left { left: 7px; }.seat-right { right: 7px; }
   .has-three-scene .seat-top { right: 2%; left: auto; transform: none; }
@@ -1365,22 +1258,6 @@ button { font: inherit; }
   background:
     radial-gradient(circle at 50% 42%, rgba(68, 103, 220, .26), transparent 48%),
     linear-gradient(145deg, #071331, var(--llm-bg) 72%);
-}
-
-.game-app[data-table-theme="llm"] .wood-frame:not(:has(.felt-table.has-three-scene)) {
-  background:
-    linear-gradient(115deg, transparent 24%, rgba(118, 217, 255, .08) 28%, transparent 32%),
-    repeating-linear-gradient(4deg, #07112c 0 8px, #101d43 9px 13px, #04091b 14px 21px);
-  box-shadow: inset 0 0 55px #020614;
-}
-
-.game-app[data-table-theme="llm"] .felt-table {
-  border-color: rgba(214, 176, 138, .42);
-  background:
-    radial-gradient(ellipse at 50% 46%, rgba(80, 130, 235, .38), transparent 57%),
-    repeating-radial-gradient(circle at 35% 31%, rgba(255,255,255,.018) 0 1px, transparent 1px 5px),
-    linear-gradient(135deg, #10265c, #091a48 48%, #050e2a);
-  box-shadow: inset 0 0 90px rgba(1,4,18,.72), 0 0 0 7px #05091a, 0 0 0 9px #8f715d;
 }
 
 .game-app[data-table-theme="llm"] .top-bar {
@@ -1635,15 +1512,6 @@ button { font: inherit; }
   font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
   background: #282a25;
 }
-.game-app[data-table-theme="llmAnime"] .wood-frame:not(:has(.felt-table.has-three-scene)) {
-  background: #352724;
-  box-shadow: inset 0 0 36px #24150d, 0 0 0 2px rgba(201,169,101,.55);
-}
-.game-app[data-table-theme="llmAnime"] .felt-table {
-  border-color: var(--anime-accent, #b56a52);
-  background: #68796d;
-  box-shadow: inset 0 0 90px rgba(19,28,22,.34), 0 0 0 7px #2d241c, 0 0 0 9px #c9a965;
-}
 .game-app[data-table-theme="llmAnime"] .top-bar {
   color: #f4eddf;
   background: linear-gradient(180deg, rgba(45,36,28,.96), rgba(45,36,28,.48), transparent);
@@ -1840,6 +1708,173 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .game-app[data-table-theme="llmAnime"] .settlement-card,
   .game-app[data-table-theme="llmAnime"] .final-board { animation: none; }
+}
+
+/* ── llmAnime · 日漫轻质感修订 ──
+   视觉原则：暖白纸张、墨线、平涂色块和少量珊瑚/香槟金强调。
+   这里刻意不使用蓝紫渐变、玻璃拟态或持续霓虹；桌面留给牌局，角色只在事件时抢焦点。 */
+.game-app[data-table-theme="llmAnime"] {
+  --anime-ink: #2d2923;
+  --anime-paper: #fbf1df;
+  --anime-paper-deep: #eadcc5;
+  --anime-green: #617365;
+  --anime-green-dark: #3f5145;
+  --anime-walnut: #4a2d20;
+  --anime-gold: #c59a4a;
+  --anime-coral: #bd5b48;
+  --anime-muted: #756a5d;
+}
+.game-app[data-table-theme="llmAnime"] .top-bar {
+  color: #fbf1df;
+}
+.game-app[data-table-theme="llmAnime"] .top-bar button,
+.game-app[data-table-theme="llmAnime"] .avatar-wrap,
+.game-app[data-table-theme="llmAnime"] .user-identity {
+  border: 2px solid #2d2923;
+  border-radius: 3px;
+  background: rgba(251, 241, 223, .92);
+  box-shadow: 2px 3px 0 rgba(45, 41, 35, .24);
+}
+.game-app[data-table-theme="llmAnime"] .avatar-wrap,
+.game-app[data-table-theme="llmAnime"] .user-identity { width: clamp(68px, 5.9vw, 82px); min-width: 0; padding: 5px; }
+.game-app[data-table-theme="llmAnime"] .seat-top .avatar-wrap { transform: none; }
+.game-app[data-table-theme="llmAnime"] .avatar,
+.game-app[data-table-theme="llmAnime"] .user-identity .avatar {
+  width: clamp(42px, 3.7vw, 50px);
+  height: clamp(42px, 3.7vw, 50px);
+  border: 2px solid var(--anime-accent, #bd5b48);
+  border-radius: 12px 12px 5px 5px;
+  background: #eadcc5;
+}
+.game-app[data-table-theme="llmAnime"] .player-info strong { color: #2d2923; font-size: clamp(10px, .82vw, 12px); text-shadow: none; }
+.game-app[data-table-theme="llmAnime"] .player-info span { color: #756a5d; font-size: clamp(10px, .78vw, 12px); }
+.game-app[data-table-theme="llmAnime"] .has-three-scene .seat-top {
+  top: 7.5%;
+  right: clamp(72px, 7.5vw, 118px);
+  left: auto;
+  transform: none;
+}
+.game-app[data-table-theme="llmAnime"] .has-three-scene .seat-left { top: 36%; left: clamp(8px, .9vw, 16px); }
+.game-app[data-table-theme="llmAnime"] .has-three-scene .seat-right { top: 36%; right: clamp(8px, .9vw, 16px); }
+.game-app[data-table-theme="llmAnime"] .user-identity { left: -3.8%; bottom: 31px; }
+.game-app[data-table-theme="llmAnime"] .player-seat.active .avatar-wrap,
+.game-app[data-table-theme="llmAnime"] .player-seat.action-active .avatar-wrap { border-color: #bd5b48; box-shadow: 4px 4px 0 rgba(189, 91, 72, .28); }
+.game-app[data-table-theme="llmAnime"] .action {
+  border: 2px solid #2d2923;
+  border-radius: 3px;
+  background: #fbf1df;
+  color: #2d2923;
+  box-shadow: 3px 3px 0 rgba(45, 41, 35, .24);
+}
+.game-app[data-table-theme="llmAnime"] .action.hu { border-color: #2d2923; background: #bd5b48; color: #fff8e8; }
+.game-app[data-table-theme="llmAnime"] .turn-timer {
+  border: 2px solid #2d2923;
+  border-radius: 3px;
+  background: #fbf1df;
+  color: #2d2923;
+  box-shadow: 3px 3px 0 rgba(45, 41, 35, .2);
+}
+.game-app[data-table-theme="llmAnime"] .start-cue {
+  min-width: 300px;
+  padding: 15px 38px 17px;
+  border: 3px solid #2d2923;
+  background: #fbf1df;
+  box-shadow: 6px 6px 0 rgba(45, 41, 35, .22);
+  clip-path: polygon(0 7px, 9px 0, calc(100% - 10px) 0, 100% 8px, 100% calc(100% - 7px), calc(100% - 9px) 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.game-app[data-table-theme="llmAnime"] .start-cue span { color: #756a5d; font-family: "Yu Gothic", "Microsoft YaHei", sans-serif; letter-spacing: .28em; }
+.game-app[data-table-theme="llmAnime"] .start-cue strong { color: #2d2923; font-family: "Yu Gothic", "Microsoft YaHei", sans-serif; font-size: clamp(34px, 4.4vw, 62px); text-shadow: 3px 3px 0 #e9c7b6; }
+.game-app[data-table-theme="llmAnime"] .start-cue i { width: 160px; height: 4px; background: #bd5b48; box-shadow: none; }
+
+/* 漫画气泡：白纸 + 墨线 + 朝向座位的白色尾巴。 */
+.game-app[data-table-theme="llmAnime"] .llm-bubble {
+  min-width: 76px;
+  padding: 9px 13px;
+  border: 2px solid #2d2923;
+  border-radius: 18px 18px 18px 6px;
+  background: #fffaf0;
+  color: #2d2923;
+  box-shadow: 3px 4px 0 color-mix(in srgb, var(--anime-accent, #bd5b48) 38%, transparent);
+  font-weight: 700;
+  text-shadow: none;
+}
+.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble { border-radius: 18px 18px 6px 18px; }
+.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble { border-radius: 6px 18px 18px 18px; }
+.game-app[data-table-theme="llmAnime"] .user-llm-bubble { border-radius: 18px 18px 18px 6px; }
+.game-app[data-table-theme="llmAnime"] .seat-left .llm-bubble::after,
+.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble::after,
+.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble::after,
+.game-app[data-table-theme="llmAnime"] .user-llm-bubble::after { border-color: transparent; }
+.game-app[data-table-theme="llmAnime"] .seat-left .llm-bubble::after { border-right-color: #2d2923; }
+.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble::after { border-left-color: #2d2923; }
+.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble::after { border-bottom-color: #2d2923; }
+.game-app[data-table-theme="llmAnime"] .user-llm-bubble::after { border-right-color: #2d2923; }
+
+/* 广播题签：短、平、像漫画分镜里的旁白条。 */
+.game-app[data-table-theme="llmAnime"] .announcement {
+  width: min(62vw, 620px);
+  padding: 7px 38px;
+  border: 2px solid #2d2923;
+  border-radius: 2px;
+  background: #fbf1df;
+  box-shadow: 4px 4px 0 rgba(45, 41, 35, .22);
+  clip-path: polygon(0 4px, 7px 0, calc(100% - 7px) 0, 100% 5px, 100% calc(100% - 4px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 5px));
+}
+.game-app[data-table-theme="llmAnime"] .announcement::before,
+.game-app[data-table-theme="llmAnime"] .announcement::after {
+  color: #bd5b48;
+  text-shadow: none;
+}
+.game-app[data-table-theme="llmAnime"] .announcement span {
+  color: #2d2923;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+/* 结算页：纸张分镜感，减少玻璃卡片与霓虹光。 */
+.game-app[data-table-theme="llmAnime"] .result-backdrop,
+.game-app[data-table-theme="llmAnime"] .final-backdrop { background: rgba(31, 24, 17, .74); }
+.game-app[data-table-theme="llmAnime"] .settlement-card,
+.game-app[data-table-theme="llmAnime"] .final-board {
+  border: 2px solid #2d2923;
+  border-radius: 3px;
+  background: #fbf1df;
+  box-shadow: 8px 8px 0 rgba(45, 41, 35, .24);
+  clip-path: polygon(0 7px, 8px 0, calc(100% - 9px) 0, 100% 8px, 100% calc(100% - 7px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.game-app[data-table-theme="llmAnime"] .settlement-card::after,
+.game-app[data-table-theme="llmAnime"] .final-board::after { border-color: rgba(45, 41, 35, .28); border-radius: 0; }
+.game-app[data-table-theme="llmAnime"] .settlement-card h2,
+.game-app[data-table-theme="llmAnime"] .final-board > h2 { color: #2d2923; }
+.game-app[data-table-theme="llmAnime"] .result-card > p,
+.game-app[data-table-theme="llmAnime"] .final-board > p,
+.game-app[data-table-theme="llmAnime"] .score-total span,
+.game-app[data-table-theme="llmAnime"] .score-total em,
+.game-app[data-table-theme="llmAnime"] .result-disclaimer-note { color: #756a5d; }
+.game-app[data-table-theme="llmAnime"] .score-total strong { color: #bd5b48; text-shadow: none; }
+.game-app[data-table-theme="llmAnime"] .score-details span,
+.game-app[data-table-theme="llmAnime"] .horse-area { border-color: #b8a78c; background: #eadcc5; }
+.game-app[data-table-theme="llmAnime"] .score-details span,
+.game-app[data-table-theme="llmAnime"] .round-rankings span,
+.game-app[data-table-theme="llmAnime"] .rank-number,
+.game-app[data-table-theme="llmAnime"] .round-rankings article > b,
+.game-app[data-table-theme="llmAnime"] .final-rank,
+.game-app[data-table-theme="llmAnime"] .final-name strong,
+.game-app[data-table-theme="llmAnime"] .final-rankings em { color: #2d2923; }
+.game-app[data-table-theme="llmAnime"] .round-rankings article,
+.game-app[data-table-theme="llmAnime"] .final-rankings article { border-color: color-mix(in srgb, var(--anime-accent, #bd5b48) 55%, #8d8172); border-radius: 2px; background: #f2e6d3; }
+.game-app[data-table-theme="llmAnime"] .round-rankings article.winner,
+.game-app[data-table-theme="llmAnime"] .final-rankings article.rank-1 { border-color: #bd5b48; background: #f4d1bd; }
+.game-app[data-table-theme="llmAnime"] .result-actions button,
+.game-app[data-table-theme="llmAnime"] .final-board > button { border: 2px solid #2d2923; border-radius: 3px; background: #c59a4a; color: #2d2923; box-shadow: 3px 3px 0 rgba(45, 41, 35, .24); }
+.game-app[data-table-theme="llmAnime"] .result-actions button.secondary { background: #4a2d20; color: #fbf1df; }
+
+@media (max-width: 760px), (max-height: 520px) {
+  .game-app[data-table-theme="llmAnime"] .announcement { width: min(72vw, 520px); padding: 6px 27px; }
+  .game-app[data-table-theme="llmAnime"] .llm-bubble { max-width: min(180px, 38vw); min-width: 58px; padding: 6px 9px; font-size: 11px; }
 }
 
 

@@ -2,12 +2,21 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js'
 import { preloadTileImages, preloadedTileImages, tileBackUrl, type TileAssetTheme } from '../game/core/presentation/tileAssets'
 import type { TileType } from '../game/core/contracts/types'
 import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
 import { createDicePresenter } from './table/three/dicePresenter'
 import { createPerfHud } from './table/three/perfHud'
 import { createStaticTableScene } from './table/three/staticTableScene'
+import {
+  DEFAULT_TABLE_SCENE_PROFILE,
+  applyDirectionalShadowProfile,
+  applyRendererProfile,
+  shadowMapSizeForQuality,
+  tableSceneRenderProfile,
+  type TableSceneRenderProfile,
+} from './table/three/sceneRenderProfile'
 import { tableThemeByName, type TableTheme } from './table/three/tableTheme'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
@@ -31,6 +40,7 @@ const emit = defineEmits<{
 
 const canvas = ref(null)
 let renderer
+let outlineEffect: OutlineEffect | null = null
 let scene
 let camera
 let resizeObserver
@@ -48,7 +58,6 @@ let tableTiles: ReturnType<typeof createTableTilePresenter>
 const PLAY_AREA_OFFSET_Z = -1.65
 // 牌层（牌墙/牌河/手牌/副露/骰子）的 Z 中心：单独向本家（+z）偏移，靠近玩家侧
 const TILE_LAYER_Z = -1.0
-const BASE_EXPOSURE = .92
 const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
 const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
 // 副露带逼近手牌时，手牌让位后的「副露-暗手」间距：原 .62 ≈ 半个麻将，改为 1.24 ≈ 一个麻将牌。
@@ -176,6 +185,7 @@ function finishTableInstances() {
 
 let shadowLight: THREE.DirectionalLight | null = null
 let glossyMaterials = true
+let renderProfile: TableSceneRenderProfile = DEFAULT_TABLE_SCENE_PROFILE
 
 // 共享牌体材质：创建时把满配参数存入 userData，高负载时清零 clearcoat/specular/ior 以砍掉片元开销。
 const tileMaterials: THREE.MeshPhysicalMaterial[] = []
@@ -208,6 +218,8 @@ function resize() {
   const height = canvas.value.clientHeight
   const pixelRatio = Math.min(window.devicePixelRatio, pixelRatioCap)
   renderer.setPixelRatio(pixelRatio)
+  // OutlineEffect 直接复用 renderer，没有独立 render target。保持原先
+  // updateStyle=false，避免 resize 时改写 canvas 的 CSS 尺寸。
   renderer.setSize(width, height, false)
   camera.aspect = width / Math.max(height, 1)
   camera.updateProjectionMatrix()
@@ -216,8 +228,9 @@ function resize() {
 function applyQuality(levelIndex = adaptiveQuality.level) {
   const level = QUALITY_LEVELS[levelIndex]
   applyGlossy(level.glossy)
-  if (shadowLight && shadowLight.shadow.mapSize.x !== level.shadowSize) {
-    shadowLight.shadow.mapSize.set(level.shadowSize, level.shadowSize)
+  const shadowSize = shadowMapSizeForQuality(renderProfile, level.shadowSize)
+  if (shadowLight && shadowLight.shadow.mapSize.x !== shadowSize) {
+    shadowLight.shadow.mapSize.set(shadowSize, shadowSize)
     shadowLight.shadow.map?.dispose()
     shadowLight.shadow.map = null
     shadowLight.shadow.needsUpdate = true
@@ -232,20 +245,23 @@ function render(time = 0) {
   adaptiveQuality.frame(frameMs)
   let cameraShakeX = 0
   let cameraShakeZ = 0
-  let exposure = BASE_EXPOSURE
+  let exposure = renderProfile.exposure
   dicePresenter?.animate(time)
   tableTiles.animate(time, scratchVector)
   const winFrame = winEffectPresenter?.animate(time)
   if (winFrame) {
-    exposure = winFrame.exposure
+    // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
+    // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
+    exposure = renderProfile.exposure + (winFrame.exposure - DEFAULT_TABLE_SCENE_PROFILE.exposure)
     cameraShakeX = winFrame.shakeX
     cameraShakeZ = winFrame.shakeZ
   }
   renderer.toneMappingExposure = exposure
-  camera.position.x = Math.sin(time * .00035) * .035 + cameraShakeX
-  camera.position.z = 11.8 + cameraShakeZ
-  camera.lookAt(0, 0, -.25)
-  renderer.render(scene, camera)
+  camera.position.x = Math.sin(time * .00035) * renderProfile.camera.driftX + cameraShakeX
+  camera.position.z = renderProfile.camera.positionZ + cameraShakeZ
+  camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+  if (outlineEffect) outlineEffect.render(scene, camera)
+  else renderer.render(scene, camera)
   animationFrame = requestAnimationFrame(render)
 }
 
@@ -256,47 +272,38 @@ onMounted(async () => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   if (destroyed) return
 
+  const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
+  const activeTheme = tableThemeByName(activeThemeName)
+  renderProfile = tableSceneRenderProfile(activeThemeName)
+
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: aaEnabled, alpha: true, powerPreference: 'high-performance' })
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = BASE_EXPOSURE
-  renderer.shadowMap.enabled = true
-  // 牌墙投影到木框/台面时，硬 PCF 会把斜边采样成明显的“楼梯”；软 PCF 保留阴影层次但抹平锯齿。
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  applyRendererProfile(renderer, renderProfile)
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
   // 雾推到桌身之外（桌角最远约 30）：让整张桌（含对家远侧）都在雾区外，只让背景淡出。
-  scene.fog = new THREE.Fog(0x03100b, 32, 60)
+  scene.fog = renderProfile.fog ? new THREE.Fog(0x03100b, 32, 60) : null
   const pmremGenerator = new THREE.PMREMGenerator(renderer)
   const roomEnvironment = new RoomEnvironment()
   const environmentTarget = own(pmremGenerator.fromScene(roomEnvironment, .04))
-  // 环境反射只服务于麻将牌，避免墨玉桌面和金色桌边被整体提亮。
+  // 环境反射只服务于麻将牌，提供树脂/亚克力边缘高光，不整体提亮桌面。
   scene.userData.tileEnvironment = environmentTarget.texture
   roomEnvironment.dispose()
   pmremGenerator.dispose()
-  camera = new THREE.PerspectiveCamera(39, 1, .1, 60)
-  // 斜俯视 55°（更接近俯拍，参考雀魂牌桌视角）：y = 水平距离 12.05 × tan(55°) ≈ 17.2
-  camera.position.set(0, 17.2, 11.8)
-  // 均匀亮（参考雀魂）：环境光（半球光）为主要基底，主光只做轻微方向感。
-  // 半球光地面色提亮 + 强度拉高，让所有朝向的面都有基础亮度，避免右侧/远端掉进暗区。
-  scene.add(new THREE.HemisphereLight(0xf3e4ba, 0x020b08, 1.65))
-  const keyLight = new THREE.DirectionalLight(0xffdfa0, 3.8)
-  keyLight.position.set(-7, 13, 9)
-  keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(1024, 1024)
-  keyLight.shadow.bias = -0.0004
-  keyLight.shadow.normalBias = .02
-  // 阴影相机必须覆盖木框外沿（半径约 12.4，斜向投影后会超过 ±12）；
-  // 范围过小会在木框上形成一条突兀的阴影裁切线。
-  keyLight.shadow.camera.left = -18
-  keyLight.shadow.camera.right = 18
-  keyLight.shadow.camera.top = 18
-  keyLight.shadow.camera.bottom = -18
+  camera = new THREE.PerspectiveCamera(renderProfile.camera.fov, 1, .1, 60)
+  camera.position.set(0, renderProfile.camera.positionY, renderProfile.camera.positionZ)
+  scene.add(new THREE.HemisphereLight(
+    renderProfile.hemisphere.skyColor,
+    renderProfile.hemisphere.groundColor,
+    renderProfile.hemisphere.intensity,
+  ))
+  const keyLight = new THREE.DirectionalLight(renderProfile.keyLight.color, renderProfile.keyLight.intensity)
+  keyLight.position.set(...renderProfile.keyLight.position)
+  keyLight.target.position.set(0, 0, renderProfile.keyLight.targetZ)
+  applyDirectionalShadowProfile(keyLight, renderProfile)
   scene.add(keyLight)
+  scene.add(keyLight.target)
   shadowLight = keyLight
-  const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
-  const activeTheme = tableThemeByName(activeThemeName)
   const surfaceTexture = await loadTableSurfaceTexture(activeTheme)
   const tileBackTexture = await loadTileBackTexture(activeThemeName)
   if (destroyed) return
@@ -318,6 +325,15 @@ onMounted(async () => {
     trackTileMaterial,
     isGlossy: () => glossyMaterials,
   })
+  if (renderProfile.outline) {
+    // 描边只保留轻薄的轮廓，树脂材质的倒角高光仍是牌体主要边界。
+    outlineEffect = new OutlineEffect(renderer, {
+      defaultThickness: renderProfile.outline.thickness,
+      defaultColor: [...renderProfile.outline.color],
+      defaultAlpha: renderProfile.outline.alpha,
+      defaultKeepAlive: true,
+    })
+  }
   tileInstances = createTileInstanceRenderer({
     scene,
     ownDynamic,
@@ -459,6 +475,7 @@ onBeforeUnmount(() => {
   if (scene) clearDynamicScene()
   staticResources.forEach((resource) => resource.dispose?.())
   renderer?.dispose()
+  outlineEffect = null
   renderer = null
 })
 </script>
