@@ -11,6 +11,10 @@ export interface LlmAudioPlaybackHooks {
   fallbackMidpointMs?: number
   /** 赛后感言必须整句播放结束才轮到下一位，并在全部结束后放行结算。 */
   waitForCompletion?: boolean
+  /** 事件级取消：false 时丢弃尚未播放的项目，播放中项目在下一次媒体事件终止。 */
+  isCurrent?: () => boolean
+  /** 可选业务缓存命名空间；只影响合成缓存，不改变朗读文本。 */
+  cacheIdentity?: string
 }
 
 export type LlmAudioPlayer = (

@@ -31,6 +31,7 @@ import {
   saveAnimeCharacterPreference,
 } from './game/llm/animeCharacterPreference'
 import type { CharacterId } from './game/llm/animeCharacters'
+import { createAnimeFixedTtsExecutor } from './game/llm/animeFixedTtsExecutor'
 import type { PlayerSeed } from './game/shared/runtime/localOpening'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -111,8 +112,26 @@ const llmHook = {
     }
   },
 }
-const localLlm = shallowRef(createLocalLlmControllers(llmHook))
-const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
+const createFixedTtsExecutor = () => createAnimeFixedTtsExecutor(undefined, {
+  onLine: (event, request) => {
+    if (request.kind === 'result') llmHook.onLlmMessage(event.seat, request.normalizedText)
+  },
+})
+const localAnimeFixedTts = createFixedTtsExecutor()
+const lotusAnimeFixedTts = createFixedTtsExecutor()
+const remoteAnimeFixedTts = createFixedTtsExecutor()
+watch(tableThemeName, (theme) => {
+  if (theme === 'llmAnime') return
+  localAnimeFixedTts.cancel()
+  lotusAnimeFixedTts.cancel()
+  remoteAnimeFixedTts.cancel()
+})
+const localLlm = shallowRef(createLocalLlmControllers(llmHook, {
+  getThemeName: () => tableThemeName.value,
+}))
+const lotusLlm = shallowRef(createLotusLlmControllers(llmHook, {
+  getThemeName: () => tableThemeName.value,
+}))
 
 function preferLlmTableTheme(llmEnabled: boolean) {
   if (shouldAutoUseLlmTheme(llmEnabled, explicitTableThemeSelected.value)) {
@@ -155,6 +174,8 @@ const localGame = useGame({
   aiControllers: localLlm.value.controllers ?? undefined,
   aiPlayerSeeds: localLlmSeeds,
   humanPlayerSeed: localHumanSeed,
+  getThemeName: () => tableThemeName.value,
+  animeFixedTts: localAnimeFixedTts,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -163,6 +184,8 @@ const lotusGame = useLotusGame({
   aiControllers: lotusLlm.value.controllers ?? undefined,
   aiPlayerSeeds: lotusLlmSeeds,
   humanPlayerSeed: localHumanSeed,
+  getThemeName: () => tableThemeName.value,
+  animeFixedTts: lotusAnimeFixedTts,
 })
 const remoteGame = useRemoteGame({
   playSound: playEffect,
@@ -171,6 +194,8 @@ const remoteGame = useRemoteGame({
   onLlmMessage: llmHook.onLlmMessage,
   onLlmStatus: llmHook.onLlmStatus,
   getCharacterId: () => animeCharacterId.value,
+  getThemeName: () => tableThemeName.value,
+  animeFixedTts: remoteAnimeFixedTts,
   playLlmAudio,
 })
 
@@ -301,13 +326,17 @@ function applyLlmSettings() {
   // 保存事件只会在大厅触发；运行中的对局不会被切换模型打断。
   if (!showLobby.value || gameMode.value !== 'local') return
 
-  const nextLocalLlm = createLocalLlmControllers(llmHook)
+  const nextLocalLlm = createLocalLlmControllers(llmHook, {
+    getThemeName: () => tableThemeName.value,
+  })
   localGame.replaceAiControllers(nextLocalLlm.controllers)
   localLlmSeeds.splice(0, localLlmSeeds.length, ...nextLocalLlm.seeds)
   nextLocalLlm.seeds = localLlmSeeds
   localLlm.value = nextLocalLlm
 
-  const nextLotusLlm = createLotusLlmControllers(llmHook)
+  const nextLotusLlm = createLotusLlmControllers(llmHook, {
+    getThemeName: () => tableThemeName.value,
+  })
   lotusGame.replaceAiControllers(nextLotusLlm.controllers)
   lotusLlmSeeds.splice(0, lotusLlmSeeds.length, ...nextLotusLlm.seeds)
   nextLotusLlm.seeds = lotusLlmSeeds
@@ -338,6 +367,7 @@ const continueCountdown = useRemoteContinueCountdown({
 
 function changeTableTheme(theme: TableThemeName) {
   tableThemeName.value = theme
+  remoteGame.updatePresentationAudioMode()
   explicitTableThemeSelected.value = true
   const url = new URL(window.location.href)
   // 手动选择（包括墨玉）始终写入 URL，确保 LLM 开启时刷新后仍尊重用户覆盖。

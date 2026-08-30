@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteGame } from './useRemoteGame'
 import type { GamePlayer, TileType } from '../core/contracts/types'
 import type { ServerPlayerDto } from './protocol/dto'
+import { AnimeFixedTtsExecutor } from '../llm/animeFixedTtsExecutor'
 
 // ─── Mock WebSocket / fetch / window ──────────────────────
 
@@ -166,12 +167,120 @@ async function connectGame(options: Parameters<typeof useRemoteGame>[0] = {}) {
 // ─── 测试用例 ─────────────────────────────────────────────
 
 describe('useRemoteGame 座位旋转与快照应用', () => {
+  it('重连后上报连接级表现音频模式，主题切换可更新', async () => {
+    let themeName = 'llmAnime'
+    const game = await connectGame({ getThemeName: () => themeName })
+    expect(mockSocket!.sent.map((item) => JSON.parse(item))).toContainEqual({
+      type: 'presentation_audio_mode', mode: 'anime-fixed-tts-v1',
+    })
+
+    themeName = 'llm'
+    game.updatePresentationAudioMode()
+    expect(mockSocket!.sent.map((item) => JSON.parse(item))).toContainEqual({
+      type: 'presentation_audio_mode', mode: 'legacy-dynamic',
+    })
+  })
+
   it('把服务端 LLM 吐槽转交给牌桌气泡回调', async () => {
     const onLlmMessage = vi.fn()
     await connectGame({ onLlmMessage })
     mockSocket!.receive({ kind: 'llm_message', seat: 1, text: '这一手稳住。', id: 3 })
     // 服务端绝对座位 1；本家在座位 2 时旋转到牌桌本地座位 3。
     expect(onLlmMessage).toHaveBeenCalledWith(3, '这一手稳住。')
+  })
+
+  it('llmAnime 过滤明确标记的模型动作/赛后语音，但保留普通吐槽', async () => {
+    const onLlmMessage = vi.fn()
+    const playLlmAudio = vi.fn()
+    await connectGame({
+      getThemeName: () => 'llmAnime',
+      onLlmMessage,
+      playLlmAudio,
+    })
+    const audioUrl = `/api/tts/audio/${'b'.repeat(64)}.mp3`
+    mockSocket!.receive({
+      kind: 'llm_message', seat: 1, text: '这张我碰。', id: 4,
+      purpose: 'action', actionKind: 'peng', speechSource: 'model-message',
+    })
+    mockSocket!.receive({
+      kind: 'llm_audio', messageId: 4, seat: 1, audioUrl, cached: true,
+      purpose: 'action', actionKind: 'peng', speechSource: 'model-message',
+    })
+    expect(onLlmMessage).not.toHaveBeenCalled()
+    expect(playLlmAudio).not.toHaveBeenCalled()
+
+    mockSocket!.receive({
+      kind: 'llm_message', seat: 1, text: '先打这一张。', id: 5,
+      purpose: 'commentary', actionKind: 'discard', speechSource: 'model-message',
+    })
+    expect(onLlmMessage).toHaveBeenCalledWith(3, '先打这一张。')
+  })
+
+  it('hand_result 兜底路径仍使用固定胡牌语音与四家结果队列', async () => {
+    const executor = new AnimeFixedTtsExecutor({ speak: vi.fn(async () => true), cancel: vi.fn() })
+    const cancel = vi.spyOn(executor, 'cancel')
+    const executeAction = vi.spyOn(executor, 'executeAction').mockResolvedValue({
+      status: 'played', eventKey: 'action', request: {} as any, fallbackAudioFile: null,
+    })
+    const executeRound = vi.spyOn(executor, 'executeRound').mockResolvedValue({
+      status: 'completed', order: [3, 0, 1, 2], items: [],
+    })
+    const playSound = vi.fn()
+    const game = await connectGame({
+      getThemeName: () => 'llmAnime',
+      animeFixedTts: executor,
+      playSound,
+    })
+    const cancelCallsAfterConnect = cancel.mock.calls.length
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'hand_result',
+      result: { winnerIndex: 1, winType: 'discard', presentationKey: 'ABC123:1:0:winner:1' },
+    })
+
+    expect(executeAction).toHaveBeenCalledWith(expect.objectContaining({
+      seat: 3,
+      action: 'discard-win',
+    }))
+    expect(game.tableActionEvent.value).toMatchObject({
+      type: 'discard-win', actorIndex: 3,
+    })
+    expect(playSound).not.toHaveBeenCalledWith('hu.mp3')
+    await vi.advanceTimersByTimeAsync(600)
+    await Promise.resolve()
+    expect(game.phase.value).toBe('settled')
+    expect(executeRound).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: 'ABC123:1:0:winner:1',
+      winnerIndex: 3,
+      winType: 'discard',
+    }))
+    game.nextRound()
+    expect(cancel.mock.calls.length).toBeGreaterThan(cancelCallsAfterConnect)
+  })
+
+  it('hand_result 使用本局持久账本去重，不依赖已清除的动作 cue', async () => {
+    const executor = new AnimeFixedTtsExecutor({ speak: vi.fn(async () => true), cancel: vi.fn() })
+    const executeAction = vi.spyOn(executor, 'executeAction').mockResolvedValue({
+      status: 'played', eventKey: 'action', request: {} as any, fallbackAudioFile: null,
+    })
+    const game = await connectGame({
+      getThemeName: () => 'llmAnime',
+      animeFixedTts: executor,
+    })
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'table_action',
+      event: { id: 77, type: 'discard-win', actorIndex: 1, sourceIndex: 0, tile: 'm1', meldIndex: -1 },
+    })
+    expect(executeAction).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1_100)
+    expect(game.tableActionEvent.value).toBeNull()
+
+    mockSocket!.receive({
+      kind: 'hand_result',
+      result: { winnerIndex: 1, winType: 'discard', presentationKey: 'ABC123:1:0:winner:1' },
+    })
+    expect(executeAction).toHaveBeenCalledTimes(1)
   })
 
   it('把持久深思状态台词按本地座位转交给牌桌', async () => {
@@ -443,7 +552,7 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     const game = await connectGame()
     mockSocket!.receive(makeSnapshot({
       phase: 'settled',
-      result: { winnerIndex: 2, winner: '本家', roundLabel: '东1局', honba: 0, horses: [], hits: 0, multiplier: 1, totalMultiplier: 1, points: 100, totalWon: 300, details: [], scoreChanges: [] },
+      result: { presentationKey: 'ABC123:1:0:winner:2', winnerIndex: 2, winner: '本家', roundLabel: '东1局', honba: 0, horses: [], hits: 0, multiplier: 1, totalMultiplier: 1, points: 100, totalWon: 300, details: [], scoreChanges: [] },
       winPresentation: { winnerIndex: 2, tile: 'm1', sourceIndex: -1, robbedKong: false, robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1 },
       winningPlayerIndex: 2,
     }))
@@ -459,7 +568,9 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
 
     // 点继续：确认发送，但对话框保留（结算态不清），等待其他玩家
     game.nextRound()
-    expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'continue' }))
+    expect(mockSocket!.sent).toContain(JSON.stringify({
+      type: 'continue', presentationKey: 'ABC123:1:0:winner:2',
+    }))
     expect(game.waitingNextRound.value).toBe(true)
     expect(game.phase.value).toBe('settled')
     expect(game.result.value).not.toBeNull()

@@ -1,4 +1,5 @@
 import { tileAudioFile } from '../../core/rules/tiles'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
 import type { Announcement } from '../../core/contracts/gamePort'
 import type { RemoteGameState } from '../state/remoteGameState'
 import type { ServerSnapshot } from '../protocol/dto'
@@ -33,6 +34,7 @@ export interface SnapshotReconcilerOptions {
   onFinishedSnapshot(): void
   playSound(name: string, volume?: number): unknown
   later(callback: () => void, delay: number): void
+  getThemeName?: () => string
 }
 
 export type ServerAnnouncement = Pick<Announcement, 'text' | 'tone'> & { id?: number }
@@ -47,6 +49,7 @@ export function createSnapshotReconciler({
   onFinishedSnapshot,
   playSound,
   later,
+  getThemeName = () => 'jade',
 }: SnapshotReconcilerOptions) {
   let pendingSnapshot: ServerSnapshot | null = null
   let lastAnnouncementId = -1
@@ -94,8 +97,14 @@ export function createSnapshotReconciler({
     lastDiscardIdApplied = discard.id
     if (opening.isRunning()) return
     playSound('dapai.mp3', 0.8)
-    // 所有座位都保留实体落牌声；大模型只跳过牌名人声，改由吐槽 TTS 表现。
-    if (snapshot.players.find((player) => player.seat === discard.from)?.isLlm) return
+    // 所有座位都保留实体落牌声；是否报牌由主题与明确玩家身份共同决定。
+    const actor = snapshot.players.find((player) => player.seat === discard.from)
+    const policy = resolveAnimeAudioPolicy({
+      themeName: getThemeName(),
+      playerKind: actor?.playerKind,
+      isLlm: actor?.isLlm,
+    })
+    if (policy.discard.tileName === 'suppress' || actor?.isLlm) return
     const audio = tileAudioFile(discard.tile)
     if (audio) later(() => playSound(audio), 80)
   }

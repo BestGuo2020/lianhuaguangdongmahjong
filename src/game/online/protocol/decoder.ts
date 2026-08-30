@@ -84,6 +84,7 @@ function isPlayer(value: unknown): value is ServerPlayerDto {
 function isRoundResult(value: unknown): value is RoundResult {
   if (!isObject(value)) return false
   return isOptional(value.draw, isBoolean)
+    && isOptional(value.presentationKey, isString)
     && isOptional(value.winnerIndex, isNumber)
     && isOptional(value.winner, isString)
     && isOptional(value.roundLabel, isString)
@@ -219,6 +220,9 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
         return isIntegerBetween(raw.seat, 0, 3) && isString(raw.text)
           && raw.text.length > 0 && raw.text.length <= 60 && isNumber(raw.id)
           && isOptional(raw.priority, (value) => value === 'normal' || value === 'important')
+          && isOptional(raw.purpose, (value) => value === 'commentary' || value === 'action' || value === 'round-reaction')
+          && isOptional(raw.actionKind, (value): value is string => isString(value) && ['discard', 'pass', 'chi', 'peng', 'gang', 'win', 'added-kong', 'concealed-kong', 'wind-kong'].includes(value))
+          && isOptional(raw.speechSource, (value) => value === 'model-message' || value === 'fixed-line')
       case 'llm_status':
         return isIntegerBetween(raw.seat, 0, 3) && isBoolean(raw.active)
           && isOptional(raw.text, (value): value is string => (
@@ -230,6 +234,9 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && /^\/api\/tts\/audio\/[0-9a-f]{64}\.mp3$/.test(raw.audioUrl)
           && isBoolean(raw.cached)
           && isOptional(raw.priority, (value) => value === 'normal' || value === 'important')
+          && isOptional(raw.purpose, (value) => value === 'commentary' || value === 'action' || value === 'round-reaction')
+          && isOptional(raw.actionKind, (value): value is string => isString(value) && ['discard', 'pass', 'chi', 'peng', 'gang', 'win', 'added-kong', 'concealed-kong', 'wind-kong'].includes(value))
+          && isOptional(raw.speechSource, (value) => value === 'model-message' || value === 'fixed-line')
       case 'hand_result': return isRoundResult(raw.result)
       case 'continue_prompt': return isNumber(raw.total)
       case 'match_finished':

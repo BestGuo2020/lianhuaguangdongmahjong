@@ -1332,6 +1332,8 @@ button { font: inherit; }
 /* 对家（上）：头像正下侧，尾巴朝上指向头像 */
 .seat-top .llm-bubble { top: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
 .seat-top .llm-bubble::after { top: -12px; left: 50%; margin-left: -6px; border-bottom-color: rgba(225, 189, 85, .55); }
+.user-llm-bubble { left: calc(100% + 10px); bottom: 18px; }
+.user-llm-bubble::after { top: 50%; right: 100%; margin-top: -6px; border-right-color: rgba(225, 189, 85, .55); }
 .llm-bubble-enter-active, .llm-bubble-leave-active { transition: opacity .22s ease; }
 .llm-bubble-enter-from, .llm-bubble-leave-to { opacity: 0; }
 
@@ -1347,6 +1349,7 @@ button { font: inherit; }
   .seat-left .llm-bubble { left: calc(100% + 6px); top: 62%; }
   .seat-right .llm-bubble { right: calc(100% + 6px); top: 62%; }
   .seat-top .llm-bubble { top: calc(100% + 6px); }
+  .user-llm-bubble { left: calc(100% + 6px); bottom: 14px; }
 }
 
 /* ── 大模型专属主题：与 llm-table.webp 的深蓝、星轨、香槟金统一 ── */
@@ -1537,6 +1540,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llm"] .seat-left .llm-bubble::after { border-right-color: rgba(118, 217, 255, .7); }
 .game-app[data-table-theme="llm"] .seat-right .llm-bubble::after { border-left-color: rgba(118, 217, 255, .7); }
 .game-app[data-table-theme="llm"] .seat-top .llm-bubble::after { border-bottom-color: rgba(118, 217, 255, .7); }
+.game-app[data-table-theme="llm"] .user-llm-bubble::after { border-right-color: rgba(118, 217, 255, .7); }
 
 .game-app[data-table-theme="llm"] .table-loading {
   background: radial-gradient(ellipse at 50% 45%, rgba(29, 62, 139, .8), rgba(3, 7, 25, .96) 74%);
@@ -1686,6 +1690,7 @@ button { font: inherit; }
   color: #fff8ff;
   box-shadow: 0 8px 22px rgba(19,9,59,.55), inset 0 1px rgba(255,255,255,.12);
 }
+.game-app[data-table-theme="llmAnime"] .user-llm-bubble::after { border-right-color: rgba(204,185,255,.82); }
 .game-app[data-table-theme="llmAnime"] .announcement {
   padding: 7px 48px;
   border-top: 1px solid rgba(255,213,242,.5);

@@ -11,6 +11,8 @@ import {
   isLocalLlmSeat,
   type LocalLlmRoundResult,
 } from '../presentation/localLlmVoiceRegistry'
+import { resolveAnimeAudioPolicy } from '../presentation/animeAudioPolicy'
+import type { AnimeFixedTtsExecutor, AnimeRoundWinType } from '../../llm/animeFixedTtsExecutor'
 
 interface LocalSettlementTimelineOptions {
   state: LocalGameState
@@ -31,6 +33,8 @@ interface LocalSettlementTimelineOptions {
   /** 单机默认读取全局 LLM 语音注册表；无头联机引擎必须显式覆盖为 false，避免真人座位误播。 */
   isLlmVoiceSeat?: (seat: number) => boolean
   announceLlmRoundReactions?: (result: LocalLlmRoundResult) => void | Promise<void>
+  getThemeName?: () => string
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function createLocalSettlementTimeline(options: LocalSettlementTimelineOptions) {
@@ -39,6 +43,25 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
   const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
   let pendingWinReactions: void | Promise<void>
+  let fixedRoundSequence = 0
+  let pendingFixedRoundId: string | null = null
+  let fixedResultVoiceForCurrentSettlement = false
+
+  const usesAnimeFixedResultVoice = () => resolveAnimeAudioPolicy({
+    themeName: options.getThemeName?.(),
+    playerKind: 'unknown',
+  }).resultVoice === 'fixed-line'
+  const queueFixedRound = (winnerIndex: number | null, winType?: AnimeRoundWinType, draw = false) => {
+    const executor = options.animeFixedTts
+    if (!executor) return
+    const eventId = pendingFixedRoundId ?? `local-round:${fixedRoundSequence += 1}`
+    pendingFixedRoundId = null
+    const characterIds = state.players.map((player) => player.characterId)
+    // beforeSettle* 返回后结算状态同步落地；微任务中的语音队列因此不会阻塞结算。
+    queueMicrotask(() => {
+      void executor.executeRound({ eventId, characterIds, winnerIndex, winType, draw })
+    })
+  }
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -83,10 +106,28 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
-      pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
+      fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
+      if (fixedResultVoiceForCurrentSettlement) {
+        pendingWinReactions = undefined
+        pendingFixedRoundId = `local-round:${fixedRoundSequence += 1}`
+      } else {
+        pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
+      }
     },
-    beforeSettleWin: () => pendingWinReactions,
-    beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
+    beforeSettleWin: ({ winnerIndex }, result) => {
+      if (!fixedResultVoiceForCurrentSettlement) return pendingWinReactions
+      if (!usesAnimeFixedResultVoice()) return
+      const winType: AnimeRoundWinType = result.winType === 'discard' || result.winType === 'dihu'
+        ? 'discard'
+        : result.winType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
+      queueFixedRound(winnerIndex, winType)
+    },
+    beforeSettleDraw: () => {
+      fixedResultVoiceForCurrentSettlement = usesAnimeFixedResultVoice()
+      if (!fixedResultVoiceForCurrentSettlement) return announceLlmRoundReactions({ winnerIndex: null, draw: true })
+      pendingFixedRoundId = `local-round:${fixedRoundSequence += 1}`
+      queueFixedRound(null, undefined, true)
+    },
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3
       const { horses, hits } = drawHorses(state.wall.value, 8, relativeSeat)

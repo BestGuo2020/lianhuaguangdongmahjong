@@ -4,9 +4,9 @@ import type { ServerSnapshot } from '../protocol/dto'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createSnapshotReconciler } from './snapshotReconciler'
 
-function player(seat: number, isLlm = false): GamePlayer {
+function player(seat: number, isLlm = false, playerKind?: GamePlayer['playerKind']): GamePlayer {
   return {
-    name: `P${seat}`, avatar: '', isLlm, score: 1000, seat, hand: [], discards: [],
+    name: `P${seat}`, avatar: '', isLlm, playerKind, score: 1000, seat, hand: [], discards: [],
     melds: [], redCount: 0, drawnTileIndex: -1,
   }
 }
@@ -22,7 +22,7 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   }
 }
 
-function setup() {
+function setup(themeName = 'jade') {
   const state = createRemoteGameState({ autoPlay: false })
   let opening = false
   let showingResult = false
@@ -41,11 +41,13 @@ function setup() {
     onFinishedSnapshot,
     playSound,
     later: (callback) => { scheduled.push(callback) },
+    getThemeName: () => themeName,
   })
   return {
     state, reconciler, captureSnapshot, settlement, playSound, onFinishedSnapshot,
     setOpening: (value: boolean) => { opening = value },
     setShowingResult: (value: boolean) => { showingResult = value },
+    flushScheduled: () => scheduled.splice(0).forEach((callback) => callback()),
   }
 }
 
@@ -106,6 +108,26 @@ describe('snapshotReconciler', () => {
     expect(state.lastDiscard.value).toMatchObject({ tile: 'm5', from: 2 })
     expect(playSound).toHaveBeenCalledTimes(1)
     expect(playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
+  })
+
+  it('llmAnime 真人不报牌，普通 bot 继续报牌', () => {
+    const human = setup('llmAnime')
+    human.reconciler.apply(snapshot({
+      players: [player(0, false, 'human'), player(1, false, 'bot'), player(2), player(3)],
+      lastDiscard: { tile: 'm5', from: 0, id: 10 },
+    }))
+    human.flushScheduled()
+    expect(human.playSound).toHaveBeenCalledTimes(1)
+    expect(human.playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
+
+    const bot = setup('llmAnime')
+    bot.reconciler.apply(snapshot({
+      players: [player(0, false, 'human'), player(1, false, 'bot'), player(2), player(3)],
+      lastDiscard: { tile: 'm5', from: 1, id: 11 },
+    }))
+    bot.flushScheduled()
+    expect(bot.playSound).toHaveBeenCalledWith('dapai.mp3', 0.8)
+    expect(bot.playSound).toHaveBeenCalledWith('5m.mp3')
   })
 
   it('分别把结算与场次结束快照交给对应时间线和收尾回调', () => {

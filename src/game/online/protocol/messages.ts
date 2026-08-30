@@ -10,6 +10,18 @@ import type { ServerMeldDto } from './dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
+export type LlmSpeechPurpose = 'commentary' | 'action' | 'round-reaction'
+export type LlmSpeechSource = 'model-message' | 'fixed-line'
+export type LlmSpeechActionKind =
+  | 'discard' | 'pass' | 'chi' | 'peng' | 'gang' | 'win'
+  | 'added-kong' | 'concealed-kong' | 'wind-kong'
+
+interface LlmSpeechMetadata {
+  purpose?: LlmSpeechPurpose
+  actionKind?: LlmSpeechActionKind
+  speechSource?: LlmSpeechSource
+}
+
 export interface RoundStartMessage {
   kind: 'round_start'
   matchStarted: boolean
@@ -37,9 +49,9 @@ export type ServerMessage =
   | { kind: 'table_action'; event: TableActionEvent }
   | { kind: 'score_flow'; deltas: ScoreDelta[] }
   | { kind: 'announcement'; text: string; tone: string; id?: number }
-  | { kind: 'llm_message'; seat: number; text: string; id: number; priority?: LlmSpeechPriority }
+  | ({ kind: 'llm_message'; seat: number; text: string; id: number; priority?: LlmSpeechPriority } & LlmSpeechMetadata)
   | { kind: 'llm_status'; seat: number; active: boolean; text?: string }
-  | { kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean; priority?: LlmSpeechPriority }
+  | ({ kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean; priority?: LlmSpeechPriority } & LlmSpeechMetadata)
   | { kind: 'hand_result'; result: RoundResult }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }> }

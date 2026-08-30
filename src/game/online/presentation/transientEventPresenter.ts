@@ -4,6 +4,8 @@ import {
   mapScoreDeltasToLocal,
   mapTableActionToLocal,
 } from '../protocol/mapper'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
+import type { TableActionEvent } from '../../core/contracts/types'
 
 type TransientState = Pick<RemoteGameState,
   'players' | 'announcement' | 'tableActionEvent' | 'scoreFlowEvent'
@@ -19,6 +21,8 @@ export interface TransientEventPresenterOptions {
   showServerAnnouncement(message: AnnouncementMessage): void
   playSound(name: string, volume?: number): unknown
   later(callback: () => void, delay: number): void
+  getThemeName?: () => string
+  onFixedAnimeAction?: (event: TableActionEvent) => void
 }
 
 const ACTION_SOUNDS: Partial<Record<TableActionMessage['event']['type'], string>> = {
@@ -37,6 +41,8 @@ export function createTransientEventPresenter({
   showServerAnnouncement,
   playSound,
   later,
+  getThemeName = () => 'jade',
+  onFixedAnimeAction,
 }: TransientEventPresenterOptions) {
   function announce(text: string, tone = 'gold') {
     const current = { text, tone, id: Date.now() }
@@ -61,6 +67,16 @@ export function createTransientEventPresenter({
     }, 1050)
 
     // 胡牌声音由结算时间线统一播放，避免 table_action 与 settled 快照双响。
+    const actor = state.players[event.actorIndex]
+    const policy = resolveAnimeAudioPolicy({
+      themeName: getThemeName(),
+      playerKind: actor?.playerKind,
+      isLlm: actor?.isLlm,
+    })
+    if (policy.actionVoice === 'fixed-line') {
+      try { onFixedAnimeAction?.(event) } catch { /* 表现失败不影响联机状态 */ }
+      return
+    }
     if (event.type === 'self-draw' || event.type === 'robbed-kong-win') return
     // 大模型座位只播放后端吐槽 TTS，不与吃碰杠原始人声叠加。
     if (state.players[event.actorIndex]?.isLlm) return

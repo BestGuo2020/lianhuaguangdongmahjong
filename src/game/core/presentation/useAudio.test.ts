@@ -111,6 +111,42 @@ describe('useAudio LLM voice ducking', () => {
     second.emit('ended')
   })
 
+  it('固定动作 important 语音会打断正在播放的普通吐槽', async () => {
+    const audio = useAudio()
+    const normalUrl = `/api/local-tts/audio/${'1'.repeat(64)}.mp3`
+    const actionUrl = `/api/local-tts/audio/${'2'.repeat(64)}.mp3`
+    const normal = audio.playLocalLlmAudioUntilMidpoint(normalUrl, 1, 1, 'normal')
+    const normalAudio = MockAudio.instances.find((item) => item.src === normalUrl)!
+    normalAudio.emit('playing')
+
+    const action = audio.playLocalLlmAudioUntilMidpoint(actionUrl, 2, 2, 'important')
+    await expect(normal).resolves.toBe(false)
+    expect(normalAudio.pause).toHaveBeenCalledOnce()
+    const actionAudio = MockAudio.instances.find((item) => item.src === actionUrl)!
+    expect(actionAudio.play).toHaveBeenCalledOnce()
+    actionAudio.emit('playing')
+    actionAudio.currentTime = 2
+    actionAudio.emit('timeupdate')
+    await expect(action).resolves.toBe(true)
+    actionAudio.emit('ended')
+  })
+
+  it('事件级 isCurrent 失效只终止自己的播放', async () => {
+    const audio = useAudio()
+    const url = `/api/local-tts/audio/${'3'.repeat(64)}.mp3`
+    let current = true
+    const playback = audio.playLocalLlmAudioUntilMidpoint(url, 1, 3, 'important', {
+      isCurrent: () => current,
+    })
+    const voice = MockAudio.instances.find((item) => item.src === url)!
+    voice.emit('playing')
+    current = false
+    voice.emit('timeupdate')
+
+    await expect(playback).resolves.toBe(false)
+    expect(voice.pause).toHaveBeenCalledOnce()
+  })
+
   it('赛后感言必须等整句播放结束才放行下一位或结算', async () => {
     const audio = useAudio()
     const url = `/api/local-tts/audio/${'e'.repeat(64)}.mp3`

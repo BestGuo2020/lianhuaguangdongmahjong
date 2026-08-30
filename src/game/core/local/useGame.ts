@@ -1,6 +1,6 @@
 import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 import { defineGamePort, type GameStartOptions } from '../contracts/gamePort'
-import type { EndGameOptions, TileType } from '../contracts/types'
+import type { EndGameOptions, TableActionEvent, TileType } from '../contracts/types'
 import { AiController, HumanController, type HumanBridge, type PlayerController } from '../controllers/playerController'
 import type { ActionContext } from '../rules/actions'
 import { tileName } from '../rules/tiles'
@@ -20,6 +20,16 @@ import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 import type { PlayerSeed } from '../../shared/runtime/localOpening'
+import { resolveAnimeAudioPolicy } from '../presentation/animeAudioPolicy'
+import {
+  ANIME_ACTION_FALLBACK_AUDIO,
+  type AnimeFixedTtsExecutor,
+  type AnimeSeat,
+} from '../../llm/animeFixedTtsExecutor'
+
+const ANIME_FIXED_ACTION_AUDIO_FILES: ReadonlySet<string> = new Set(
+  Object.values(ANIME_ACTION_FALLBACK_AUDIO),
+)
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -31,6 +41,9 @@ interface UseGameOptions {
   aiPlayerSeeds?: Array<PlayerSeed | undefined>
   /** 单机本家座位 0 的展示形象。 */
   humanPlayerSeed?: PlayerSeed
+  /** 由表现层动态读取；规则引擎不得直接访问 DOM 或 URL。 */
+  getThemeName?: () => string
+  animeFixedTts?: AnimeFixedTtsExecutor
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   ruleset?: RuleSet
@@ -43,6 +56,8 @@ export function useGame({
   aiControllers,
   aiPlayerSeeds,
   humanPlayerSeed,
+  getThemeName = () => 'jade',
+  animeFixedTts,
   countdownEnabled = true,
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
@@ -56,6 +71,35 @@ export function useGame({
   let playerActions!: ReturnType<typeof createLocalPlayerActionController>
   let countdown!: ReturnType<typeof createLocalCountdownController>
   let transientEvents!: ReturnType<typeof createLocalTransientEventPresenter>
+
+  const usesAnimeFixedActionVoice = () => resolveAnimeAudioPolicy({
+    themeName: getThemeName(),
+    playerKind: 'unknown',
+  }).actionVoice === 'fixed-line'
+  const playPresentationSound = (name: string, volume?: number, onFinish?: () => void) => {
+    if (usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)) return
+    if (onFinish !== undefined) return playSound(name, volume, onFinish)
+    if (volume !== undefined) return playSound(name, volume)
+    return playSound(name)
+  }
+  const playPresentationSoundAndWait = (name: string, volume?: number) => (
+    usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)
+      ? Promise.resolve()
+      : playSoundAndWait(name, volume)
+  )
+  const playAnimeAction = (event: TableActionEvent) => {
+    if (!animeFixedTts || !usesAnimeFixedActionVoice()) return
+    const actor = state.players[event.actorIndex]
+    if (!actor || event.actorIndex < 0 || event.actorIndex > 3) return
+    void animeFixedTts.executeAction({
+      eventId: event.id,
+      seat: event.actorIndex as AnimeSeat,
+      characterId: actor.characterId,
+      action: event.type,
+    }).then((result) => {
+      if (result.fallbackAudioFile) playSound(result.fallbackAudioFile)
+    }).catch(() => {})
+  }
 
   const humanBridge: HumanBridge = {
     isTurn: ref(false),
@@ -102,7 +146,15 @@ export function useGame({
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
   })
-  transientEvents = createLocalTransientEventPresenter({ state, later: scheduler.later })
+  const clearPresentation = () => {
+    scheduler.clear()
+    animeFixedTts?.cancel()
+  }
+  transientEvents = createLocalTransientEventPresenter({
+    state,
+    later: scheduler.later,
+    onTableAction: playAnimeAction,
+  })
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
   const followDealer = createFollowDealerTracker({
@@ -129,19 +181,21 @@ export function useGame({
 
   settlementTimeline = createLocalSettlementTimeline({
     state,
-    clearTimers: scheduler.clear,
+    clearTimers: clearPresentation,
     later: scheduler.later,
-    playSound,
-    playSoundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: playPresentationSoundAndWait,
     showTableAction: transientEvents.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
     ruleset,
+    getThemeName,
+    animeFixedTts,
   })
 
   countdown = createLocalCountdownController({
     state,
-    playSound,
+    playSound: playPresentationSound,
     enabled: countdownEnabled,
     onDiscard: () => playerActions.userDiscard(),
     onPass: () => playerActions.userPass(),
@@ -154,8 +208,15 @@ export function useGame({
     endDraw,
     endGame,
     showTableAction: transientEvents.showTableAction,
-    playSound,
-    playSoundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: playPresentationSoundAndWait,
+    shouldAnnounceDiscard: (_playerIndex, player) => (
+      resolveAnimeAudioPolicy({
+        themeName: getThemeName(),
+        playerKind: player.playerKind,
+        isLlm: player.isLlm,
+      }).discard.tileName !== 'suppress'
+    ),
     later: scheduler.later,
     wait: scheduler.wait,
     stopCountdown: countdown.stop,
@@ -164,12 +225,12 @@ export function useGame({
 
   openingTimeline = createLocalOpeningTimeline({
     state,
-    clearTimers: scheduler.clear,
+    clearTimers: clearPresentation,
     takeTile: tileFlowExecutor.takeTile,
     wait: scheduler.wait,
     later: scheduler.later,
-    playSound,
-    playSoundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: playPresentationSoundAndWait,
     announce: transientEvents.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -179,6 +240,7 @@ export function useGame({
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions) => {
+    animeFixedTts?.reset()
     followDealer.reset()
     return openingTimeline.start(mode, options)
   }
@@ -188,13 +250,13 @@ export function useGame({
     currentPlayer: state.currentPlayer,
     showTableAction: transientEvents.showTableAction,
     showScoreFlow: transientEvents.showScoreFlow,
-    playSound,
+    playSound: playPresentationSound,
   }
   kongActionExecutor = createLocalKongActionExecutor({
     state,
     showTableAction: transientEvents.showTableAction,
     showScoreFlow: transientEvents.showScoreFlow,
-    playSound,
+    playSound: playPresentationSound,
     later: scheduler.later,
     beginTurn,
     ruleset,
@@ -233,14 +295,14 @@ export function useGame({
     beginTurn: (playerIndex, options) => beginTurn(playerIndex, options),
     endGame,
     announce: transientEvents.announce,
-    playSound,
+    playSound: playPresentationSound,
     later: scheduler.later,
   })
 
-  const matchLifecycle = createLocalMatchLifecycle({ state, clearTimers: scheduler.clear, startGame })
+  const matchLifecycle = createLocalMatchLifecycle({ state, clearTimers: clearPresentation, startGame })
   const debugScenarios = createLocalDebugScenarios({
     state,
-    clearTimers: scheduler.clear,
+    clearTimers: clearPresentation,
     resetPlayers: openingTimeline.resetPlayers,
     announce: transientEvents.announce,
     endGame,
@@ -248,7 +310,7 @@ export function useGame({
   })
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
-  if (getCurrentInstance()) onBeforeUnmount(scheduler.clear)
+  if (getCurrentInstance()) onBeforeUnmount(clearPresentation)
 
   return defineGamePort({
     phase: state.phase,

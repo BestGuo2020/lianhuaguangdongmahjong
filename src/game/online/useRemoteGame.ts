@@ -15,7 +15,7 @@ import { API_BASE } from './api/httpClient'
 import { defineGamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
-import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
+import type { MatchType, TableActionEvent, TileType, WinPresentation } from '../core/contracts/types'
 import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
 import { createPlayerSelectors } from '../core/selectors/playerSelectors'
 import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
@@ -37,6 +37,8 @@ import {
   mapWinPresentationToLocal,
   toLocalSeat,
 } from './protocol/mapper'
+import type { AnimeFixedTtsExecutor, AnimeSeat } from '../llm/animeFixedTtsExecutor'
+import { resolveAnimeAudioPolicy, shouldSuppressLegacyAnimeSpeech } from '../core/presentation/animeAudioPolicy'
 
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
@@ -49,6 +51,8 @@ interface UseRemoteGameOptions {
   onLlmStatus?: (seat: number, active: boolean, text?: string) => void
   playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
   getCharacterId?: () => string
+  getThemeName?: () => string
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function useRemoteGame({
@@ -59,6 +63,8 @@ export function useRemoteGame({
   onLlmStatus = () => {},
   playLlmAudio = () => {},
   getCharacterId = () => 'deepseek',
+  getThemeName = () => 'jade',
+  animeFixedTts,
 }: UseRemoteGameOptions = {}) {
   const sessionStore = createRemoteSessionStore()
   const state = createRemoteGameState({
@@ -77,6 +83,32 @@ export function useRemoteGame({
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     turnCanHu, turnCanWindKong,
   } = state
+  const presentedWinActions = new Set<string>()
+  let fallbackActionSequence = 0
+  const isWinAction = (type: TableActionEvent['type']) => (
+    type === 'self-draw' || type === 'discard-win' || type === 'robbed-kong-win'
+  )
+  const winActionKey = (winner: number, type: TableActionEvent['type']) => (
+    `${roomId.value}:${round.value}:${honba.value}:${winner}:${type}`
+  )
+  const playAnimeAction = (event: TableActionEvent) => {
+    if (!animeFixedTts || getThemeName() !== 'llmAnime') return
+    const actor = players[event.actorIndex]
+    if (event.actorIndex < 0 || event.actorIndex > 3) return
+    if (isWinAction(event.type)) {
+      const key = winActionKey(event.actorIndex, event.type)
+      if (presentedWinActions.has(key)) return
+      presentedWinActions.add(key)
+    }
+    void animeFixedTts.executeAction({
+      eventId: event.id,
+      seat: event.actorIndex as AnimeSeat,
+      characterId: actor?.characterId,
+      action: event.type,
+    }).then((execution) => {
+      if (execution.fallbackAudioFile) playSound(execution.fallbackAudioFile)
+    }).catch(() => {})
+  }
   const roomSocket = createRoomSocketTransport({
     getUrl: () => roomId.value && rejoinCode.value
       ? `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
@@ -113,6 +145,9 @@ export function useRemoteGame({
     mapPresentation: (value) => mapWinPresentation(value),
     toLocalSeat: toLocal,
     playSound,
+    getThemeName,
+    getCharacterIds: () => players.map((player) => player.characterId),
+    animeFixedTts,
   })
   const openingTimeline = createOpeningTimeline({
     state: {
@@ -138,9 +173,13 @@ export function useRemoteGame({
     opening: openingTimeline,
     settlement: settlementTimeline,
     clearCountdown,
-    onFinishedSnapshot: clearPendingRequest,
+    onFinishedSnapshot: () => {
+      clearPendingRequest()
+      animeFixedTts?.cancel()
+    },
     playSound,
     later,
+    getThemeName,
   })
   const transientEventPresenter = createTransientEventPresenter({
     state,
@@ -149,6 +188,8 @@ export function useRemoteGame({
     showServerAnnouncement: snapshotReconciler.showAnnouncement,
     playSound,
     later,
+    getThemeName,
+    onFixedAnimeAction: playAnimeAction,
   })
 
   const user = computed(() => players[0])
@@ -232,17 +273,34 @@ export function useRemoteGame({
     isShowingRoundResult,
     clearTimers,
     opening: openingTimeline,
-    settlement: settlementTimeline,
+    settlement: {
+      ...settlementTimeline,
+      cancel: () => {
+        settlementTimeline.cancel()
+        animeFixedTts?.cancel()
+      },
+    },
     snapshots: snapshotReconciler,
     requests: requestCoordinator,
     transientEvents: transientEventPresenter,
-    sendContinue: () => roomSocket.send({ type: 'continue' }),
+    sendContinue: () => roomSocket.send({
+      type: 'continue',
+      ...(result.value?.presentationKey ? { presentationKey: result.value.presentationKey } : {}),
+    }),
     refreshRoom: roomLifecycle.refreshRoom,
   })
   const { nextRound, returnToLobby } = matchLifecycle
 
   function clearPendingRequest() {
     requestCoordinator.clearPending()
+  }
+
+  function updatePresentationAudioMode() {
+    if (!roomId.value || wsStatus.value !== 'connected') return
+    roomSocket.send({
+      type: 'presentation_audio_mode',
+      mode: getThemeName() === 'llmAnime' ? 'anime-fixed-tts-v1' : 'legacy-dynamic',
+    })
   }
 
   // ── 定时器工具 ─────────────────────────────────────────
@@ -262,6 +320,7 @@ export function useRemoteGame({
     requestCoordinator.clearCountdown()
     openingTimeline.cancel()
     settlementTimeline.cancel()
+    animeFixedTts?.cancel()
   }
 
   function clearCountdown() {
@@ -317,7 +376,10 @@ export function useRemoteGame({
       sessionStatus.value = 'connected'
       sessionError.value = ''
       roomSocket.confirmSession()
+      updatePresentationAudioMode()
       settlementTimeline.cancel()
+      animeFixedTts?.cancel()
+      presentedWinActions.clear()
       snapshotReconciler.clearPending()
       snapshotReconciler.resetDiscardDedup()
       requestCoordinator.clearPending()
@@ -336,16 +398,26 @@ export function useRemoteGame({
       roomLifecycle.clearSession()
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
-    round_start: matchLifecycle.handleRoundStart,
+    round_start: (msg) => {
+      animeFixedTts?.reset()
+      presentedWinActions.clear()
+      matchLifecycle.handleRoundStart(msg)
+    },
     turn_request: requestCoordinator.apply,
     claim_request: requestCoordinator.apply,
     rob_kong_request: requestCoordinator.apply,
     table_action: transientEventPresenter.handleTableAction,
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
-    llm_message: (msg) => onLlmMessage(toLocal(msg.seat), msg.text),
+    llm_message: (msg) => {
+      if (!shouldSuppressLegacyAnimeSpeech(getThemeName(), msg)) onLlmMessage(toLocal(msg.seat), msg.text)
+    },
     llm_status: (msg) => onLlmStatus(toLocal(msg.seat), msg.active, msg.text),
-    llm_audio: (msg) => playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId, msg.priority ?? 'normal'),
+    llm_audio: (msg) => {
+      if (!shouldSuppressLegacyAnimeSpeech(getThemeName(), msg)) {
+        playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId, msg.priority ?? 'normal')
+      }
+    },
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
@@ -356,10 +428,53 @@ export function useRemoteGame({
       const winType = mapped?.winType
       const isDiscardStyle = winType === 'discard' || winType === 'robbed-kong' || winType === 'dihu'
       const winner = mapped?.winnerIndex ?? -1
-      if (!players[winner]?.isLlm) playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
+      const policy = resolveAnimeAudioPolicy({
+        themeName: getThemeName(),
+        playerKind: players[winner]?.playerKind,
+        isLlm: players[winner]?.isLlm,
+      })
+      if (winner >= 0 && policy.actionVoice === 'fixed-line' && animeFixedTts) {
+        const action = winType === 'robbed-kong' ? 'robbed-kong-win'
+          : isDiscardStyle ? 'discard-win' : 'self-draw'
+        const actionKey = winActionKey(winner, action)
+        const alreadyPresented = presentedWinActions.has(actionKey)
+        if (!alreadyPresented) {
+          const fallbackEvent: TableActionEvent = {
+            id: 1_000_000_000 + (fallbackActionSequence += 1),
+            type: action,
+            actorIndex: winner,
+            sourceIndex: null,
+            tile: mapped?.winTile ?? winPresentation.value?.tile ?? 'white',
+            meldIndex: -1,
+          }
+          tableActionEvent.value = fallbackEvent
+          later(() => {
+            if (tableActionEvent.value?.id === fallbackEvent.id) tableActionEvent.value = null
+          }, 1050)
+          playAnimeAction(fallbackEvent)
+        }
+      } else if (winner >= 0 && !players[winner]?.isLlm) {
+        playSound(isDiscardStyle ? 'hu.mp3' : 'zimo.mp3')
+      }
       later(() => {
         phase.value = 'settled'
         result.value = mapped
+        if (policy.resultVoice === 'fixed-line' && animeFixedTts) {
+          const draw = Boolean(mapped?.draw)
+          const roundWinType = isDiscardStyle
+            ? (winType === 'robbed-kong' ? 'robbed-kong' : 'discard')
+            : 'self-draw'
+          queueMicrotask(() => {
+            void animeFixedTts.executeRound({
+              eventId: mapped?.presentationKey
+                ?? `remote-hand-result:${roomId.value}:${round.value}:${honba.value}:${draw ? 'draw' : winner}`,
+              characterIds: players.map((player) => player.characterId),
+              winnerIndex: draw ? null : winner,
+              winType: roundWinType,
+              draw,
+            })
+          })
+        }
       }, 600)
     },
     continue_prompt: () => {},
@@ -381,6 +496,7 @@ export function useRemoteGame({
   // ── 重置 ───────────────────────────────────────────────
 
   function resetAll() {
+    presentedWinActions.clear()
     matchLifecycle.resetAll()
   }
 
@@ -435,5 +551,6 @@ export function useRemoteGame({
     })), startGame, selectTile, clearUserSelection, userDiscard, userPass, userPeng,
     userGangFromDiscard, userGang, userChi, userWindKong, userHu,
     nextRound, returnToLobby, tileName, debugPreviewWin,
+    updatePresentationAudioMode,
   })
 }

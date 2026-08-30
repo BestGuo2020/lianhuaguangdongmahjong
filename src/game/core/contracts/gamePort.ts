@@ -75,6 +75,8 @@ export interface RoundScoreChange {
 }
 
 export interface RoundResult {
+  /** 结算表现去重与早到 continue 绑定键；旧服务端可省略。 */
+  presentationKey?: string
   draw?: boolean
   winnerIndex?: number
   winner?: string

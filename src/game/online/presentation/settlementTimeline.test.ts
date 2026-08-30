@@ -4,6 +4,7 @@ import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_EFFECT_SO
 import type { ServerSnapshot } from '../protocol/dto'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import { createSettlementTimeline } from './settlementTimeline'
+import { AnimeFixedTtsExecutor } from '../../llm/animeFixedTtsExecutor'
 
 function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   return {
@@ -19,7 +20,11 @@ function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
   }
 }
 
-function harness(reduced = true) {
+function harness(reduced = true, options: {
+  themeName?: string
+  executor?: AnimeFixedTtsExecutor
+  characterIds?: unknown[]
+} = {}) {
   const state = {
     phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
@@ -32,6 +37,9 @@ function harness(reduced = true) {
     toLocalSeat: (seat) => (seat - 2 + 4) % 4,
     playSound: (name) => sounds.push(name),
     reducedMotion: () => reduced,
+    getThemeName: () => options.themeName ?? 'jade',
+    getCharacterIds: () => options.characterIds ?? [],
+    animeFixedTts: options.executor,
   })
   return { state, sounds, timeline }
 }
@@ -65,6 +73,47 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('settled')
     expect(state.revealHands.value).toBe(true)
     expect(state.result.value?.draw).toBe(true)
+  })
+
+  it('llmAnime 先落地结算，再非阻塞启动四家固定发言', async () => {
+    const executor = new AnimeFixedTtsExecutor({
+      speak: vi.fn(async () => true),
+      cancel: vi.fn(),
+    })
+    const executeRound = vi.spyOn(executor, 'executeRound').mockResolvedValue({
+      status: 'completed', order: [0, 1, 2, 3], items: [],
+    })
+    const { state, timeline } = harness(true, {
+      themeName: 'llmAnime',
+      executor,
+      characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
+    })
+
+    timeline.start(snapshot({ result: { draw: true }, winPresentation: null, winningPlayerIndex: -1 }))
+    expect(state.phase.value).toBe('settled')
+    expect(executeRound).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(executeRound).toHaveBeenCalledWith(expect.objectContaining({
+      characterIds: ['deepseek', 'qwen', 'gpt', 'claude'],
+      winnerIndex: null,
+      draw: true,
+    }))
+  })
+
+  it('settled 快照重置视觉计时器时不取消刚触发的胡牌动作语音', () => {
+    const executor = new AnimeFixedTtsExecutor({
+      speak: vi.fn(() => new Promise<boolean>(() => {})),
+      cancel: vi.fn(),
+    })
+    const cancel = vi.spyOn(executor, 'cancel')
+    void executor.executeAction({
+      eventId: 'win-action', seat: 0, characterId: 'deepseek', action: 'self-draw',
+    })
+    const { timeline } = harness(true, { themeName: 'llmAnime', executor })
+
+    timeline.start(snapshot())
+
+    expect(cancel).not.toHaveBeenCalled()
   })
 
   it('大模型赢家由 TTS 替代自摸/胡牌人声，但仍播放胡牌特效音', async () => {

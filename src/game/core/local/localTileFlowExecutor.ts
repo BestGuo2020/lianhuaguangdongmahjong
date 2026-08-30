@@ -1,4 +1,4 @@
-import type { EndGameOptions } from '../contracts/types'
+import type { EndGameOptions, GamePlayer } from '../contracts/types'
 import type { PlayerController } from '../controllers/playerController'
 import { createTileFlowExecutor } from '../../shared/runtime/tileFlowExecutor'
 import { PACE_MS } from './localGameConfig'
@@ -16,6 +16,7 @@ interface LocalTileFlowExecutorOptions {
   showTableAction(type: 'flower-gang', actorIndex: number, sourceIndex: null, tile: 'red', meldIndex: number): void
   playSound(name: string, volume?: number): unknown
   playSoundAndWait(name: string, volume?: number): Promise<void>
+  shouldAnnounceDiscard?: (playerIndex: number, player: GamePlayer) => boolean
   later(callback: () => void, delay: number): number
   wait(delay: number): Promise<void>
   stopCountdown(): void

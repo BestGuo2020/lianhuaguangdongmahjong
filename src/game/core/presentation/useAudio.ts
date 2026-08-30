@@ -98,6 +98,7 @@ interface LlmAudioItem {
   waitForCompletion?: boolean
   onStarted?: () => void
   fallbackMidpointMs?: number
+  isCurrent?: () => boolean
   resolveMidpoint?: (played: boolean) => void
   cancel?: () => void
 }
@@ -225,6 +226,10 @@ export function useAudio() {
     let item: LlmAudioItem | undefined
     while (llmAudioQueue.length) {
       const candidate = llmAudioQueue.shift()!
+      if (candidate.isCurrent?.() === false) {
+        settleLlmMidpoint(candidate, false)
+        continue
+      }
       const ttl = candidate.priority === 'important' ? IMPORTANT_LLM_AUDIO_TTL_MS : NORMAL_LLM_AUDIO_TTL_MS
       // 单机等待中的动作不会过期：动作尚未执行，台词仍属于当前决策。
       if (candidate.waitForMidpoint || candidate.waitForCompletion || Date.now() - candidate.enqueuedAt <= ttl) {
@@ -294,6 +299,10 @@ export function useAudio() {
     }
     const handleStarted = () => {
       if (started) return
+      if (item.isCurrent?.() === false) {
+        item.cancel?.()
+        return
+      }
       started = true
       try { item.onStarted?.() } catch { /* 展示失败不能阻塞语音和动作 */ }
       refreshMidpointFallback()
@@ -304,7 +313,10 @@ export function useAudio() {
       finish(false)
     }
     audio.addEventListener('playing', handleStarted, { once: true })
-    audio.addEventListener('timeupdate', maybeResolveMidpoint)
+    audio.addEventListener('timeupdate', () => {
+      if (item.isCurrent?.() === false) item.cancel?.()
+      else maybeResolveMidpoint()
+    })
     audio.addEventListener('durationchange', refreshMidpointFallback)
     audio.addEventListener('ended', () => finish(started), { once: true })
     audio.addEventListener('error', () => finish(false), { once: true })
@@ -341,12 +353,21 @@ export function useAudio() {
   ): Promise<boolean> {
     if (!soundOn.value || !effectsOn.value || !url) return Promise.resolve(false)
     return new Promise<boolean>((resolve) => {
+      if (priority === 'important') {
+        for (let index = llmAudioQueue.length - 1; index >= 0; index -= 1) {
+          if (llmAudioQueue[index].priority !== 'normal') continue
+          const [removed] = llmAudioQueue.splice(index, 1)
+          settleLlmMidpoint(removed, false)
+        }
+        if (activeLlmAudio && activeLlmItem?.priority === 'normal') activeLlmItem.cancel?.()
+      }
       llmAudioQueue.push({
         url, seat, messageId, priority, enqueuedAt: Date.now(),
         waitForMidpoint: true,
         waitForCompletion: hooks.waitForCompletion,
         onStarted: hooks.onStarted,
         fallbackMidpointMs: hooks.fallbackMidpointMs,
+        isCurrent: hooks.isCurrent,
         resolveMidpoint: resolve,
       })
       pumpLlmAudio()

@@ -92,11 +92,11 @@ export class LocalTtsClient {
     if (!normalized) return false
     // 静音时不请求 TTS 网关；runtime 会立即显示气泡并继续动作。
     if (!canPlayLocalLlmAudio()) return false
-    const key = JSON.stringify([normalized, voiceKey, style])
+    const key = JSON.stringify([normalized, voiceKey, style, hooks.cacheIdentity ?? ''])
     if ((this.negativeUntil.get(key) ?? 0) > Date.now()) return false
     let request = this.inflight.get(key)
     if (!request) {
-      request = this.synthesize(normalized, voiceKey, style)
+      request = this.synthesize(normalized, voiceKey, style, hooks.cacheIdentity)
       this.inflight.set(key, request)
     }
     let url: string | null
@@ -109,6 +109,7 @@ export class LocalTtsClient {
       this.negativeUntil.set(key, Date.now() + 30_000)
       return false
     }
+    if (hooks.isCurrent?.() === false) return false
     this.messageId += 1
     return playLocalLlmAudioUntilMidpoint(url, seat, this.messageId, priority, {
       ...hooks,
@@ -122,7 +123,12 @@ export class LocalTtsClient {
     cancelLocalLlmAudioPlayback()
   }
 
-  private async synthesize(text: string, voiceKey: string, style: LlmStyle): Promise<string | null> {
+  private async synthesize(
+    text: string,
+    voiceKey: string,
+    style: LlmStyle,
+    cacheIdentity = '',
+  ): Promise<string | null> {
     const controller = new AbortController()
     this.activeControllers.add(controller)
     const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -130,7 +136,7 @@ export class LocalTtsClient {
       const response = await this.fetchImpl(`${this.baseUrl}/api/local-tts/synthesize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voiceKey, style }),
+        body: JSON.stringify({ text, voiceKey, style, cacheIdentity }),
         signal: controller.signal,
       })
       if (!response.ok) {

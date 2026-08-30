@@ -6,7 +6,7 @@ import { reactive } from 'vue'
 import type { PlayerController } from '../core/controllers/playerController'
 import type { LotusController } from '../variants/lotus/lotusControllers'
 import type { PlayerSeed } from '../shared/runtime/localOpening'
-import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats } from './llmController'
+import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats, type LlmMessageMeta } from './llmController'
 import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
 import { avatarFolderOf, avatarFor, displayNameOf, effectiveNickname } from './persona'
 import { resolveAnimeCharacterId } from './animeCharacters'
@@ -17,6 +17,14 @@ import { ConditionalReasoningCoordinator } from './conditionalReasoning'
 import { reasoningStatusSpeech } from './decisionSpeech'
 
 const MIN_ROUND_REACTION_MS = 1_200
+const LLM_ANIME_FIXED_SPEECH_ACTIONS = new Set<NonNullable<LlmMessageMeta['actionKind']>>([
+  'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong', 'win',
+])
+
+export interface LocalLlmRuntimeOptions {
+  /** 每次发言时动态读取；未提供或读取失败时保持 legacy 语音行为。 */
+  getThemeName?: () => string | null | undefined
+}
 
 export interface LocalLlmRuntime<C> {
   controllers: C[] | null
@@ -57,11 +65,31 @@ function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {
   return { settings, stats }
 }
 
+/** llmAnime 的动作与赛后人声由固定台词模块承担，模型自由文案不得重复播报。 */
+export function shouldSuppressLlmAnimeDynamicSpeech(
+  themeName: string | null | undefined,
+  meta: LlmMessageMeta | undefined,
+): boolean {
+  if (themeName !== 'llmAnime' || !meta) return false
+  return meta.source === 'win'
+    || Boolean(meta.actionKind && LLM_ANIME_FIXED_SPEECH_ACTIONS.has(meta.actionKind))
+}
+
+function themeNameOf(options: LocalLlmRuntimeOptions): string | null | undefined {
+  try {
+    return options.getThemeName?.()
+  } catch {
+    // 主题是表现依赖；getter 异常不能影响模型动作和 legacy 语音回退。
+    return undefined
+  }
+}
+
 function hooksForSeat(
   preset: LlmProviderPreset,
   style: LlmProviderPreset['style'],
   hooks: LlmControllerHooks,
   speechPolicy: LlmSpeechPolicy,
+  options: LocalLlmRuntimeOptions,
 ): LlmControllerHooks {
   const voiceKey = resolveLocalTtsVoiceKey(preset)
   let reasoningStatusSequence = 0
@@ -75,6 +103,7 @@ function hooksForSeat(
     return { priority, admitted: speechPolicy.admit({ seat, style, priority, mandatory }) }
   }
   const deliver: NonNullable<LlmControllerHooks['onLlmMessage']> = async (seat, text, meta) => {
+    if (shouldSuppressLlmAnimeDynamicSpeech(themeNameOf(options), meta)) return
     const { priority, admitted } = admission(seat, meta)
     if (!admitted) return
     const compact = compactLlmSpeechText(text)
@@ -130,7 +159,10 @@ function hooksForSeat(
 }
 
 /** 莲花广麻（lotus-classic）本地人机座位 1-3 的 LLM 控制器（按座位预置+风格装配）。 */
-export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): LocalLlmRuntime<PlayerController> {
+export function createLocalLlmControllers(
+  hooks: LlmControllerHooks = {},
+  options: LocalLlmRuntimeOptions = {},
+): LocalLlmRuntime<PlayerController> {
   const { settings, stats } = baseRuntime()
   const usable = settings.enabled && settings.presets.length > 0
   clearLocalLlmVoiceSeats()
@@ -140,7 +172,7 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
+    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy, options)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))
@@ -151,7 +183,10 @@ export function createLocalLlmControllers(hooks: LlmControllerHooks = {}): Local
 }
 
 /** 莲花麻将（lotus-legacy）本地人机座位 1-3 的 LLM 控制器（按座位预置+风格装配）。 */
-export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): LocalLlmRuntime<LotusController> {
+export function createLotusLlmControllers(
+  hooks: LlmControllerHooks = {},
+  options: LocalLlmRuntimeOptions = {},
+): LocalLlmRuntime<LotusController> {
   const { settings, stats } = baseRuntime()
   const usable = settings.enabled && settings.presets.length > 0
   clearLocalLlmVoiceSeats()
@@ -161,7 +196,7 @@ export function createLotusLlmControllers(hooks: LlmControllerHooks = {}): Local
   const controllers = ([1, 2, 3] as const).map((seat) => {
     const preset = presetForSeat(settings, seat) ?? settings.presets[0]
     const style = styleForSeat(settings, seat) ?? preset.style
-    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy)
+    const seatHooks = hooksForSeat(preset, style, hooks, speechPolicy, options)
     registerLocalLlmVoiceSeat(seat, style, (text) => seatHooks.onLlmMessage?.(seat, text, {
       priority: 'important', source: 'win',
     }))

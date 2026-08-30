@@ -9,6 +9,8 @@ import {
   WIN_REVEAL_DURATION,
 } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
+import type { AnimeFixedTtsExecutor, AnimeRoundWinType } from '../../llm/animeFixedTtsExecutor'
 
 export interface SettlementTimelineState {
   phase: RefLike<GamePhase>
@@ -26,6 +28,9 @@ export interface SettlementTimelineOptions {
   toLocalSeat: (seat: number) => number
   playSound: (name: string, volume?: number) => unknown
   reducedMotion?: () => boolean
+  getThemeName?: () => string
+  getCharacterIds?: () => readonly unknown[]
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function createSettlementTimeline({
@@ -35,6 +40,9 @@ export function createSettlementTimeline({
   toLocalSeat,
   playSound,
   reducedMotion = prefersReducedMotion,
+  getThemeName = () => 'jade',
+  getCharacterIds = () => [],
+  animeFixedTts,
 }: SettlementTimelineOptions) {
   let serial = 0
   const timers = new Set<number>()
@@ -51,6 +59,31 @@ export function createSettlementTimeline({
     serial += 1
     timers.forEach((timer) => globalThis.clearTimeout(timer))
     timers.clear()
+  }
+
+  function queueFixedRound(snapshot: ServerSnapshot, mappedResult: RoundResult | null) {
+    if (!animeFixedTts) return
+    const policy = resolveAnimeAudioPolicy({ themeName: getThemeName(), playerKind: 'unknown' })
+    if (policy.resultVoice !== 'fixed-line') return
+    const rawWinType = mappedResult?.winType
+    const winType: AnimeRoundWinType = rawWinType === 'discard' || rawWinType === 'dihu'
+      ? 'discard'
+      : rawWinType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
+    const draw = Boolean(mappedResult?.draw)
+    const winnerIndex = draw ? null : (mappedResult?.winnerIndex ?? null)
+    const eventId = mappedResult?.presentationKey ?? [
+      'remote-round', snapshot.roomId, snapshot.round, snapshot.honba,
+      draw ? 'draw' : winnerIndex, rawWinType ?? '',
+    ].join(':')
+    queueMicrotask(() => {
+      void animeFixedTts.executeRound({
+        eventId,
+        characterIds: getCharacterIds(),
+        winnerIndex,
+        winType,
+        draw,
+      })
+    })
   }
 
   function start(snapshot: ServerSnapshot) {
@@ -70,6 +103,7 @@ export function createSettlementTimeline({
       state.winPresentation.value = null
       state.winEffect.value = null
       state.result.value = mappedResult
+      queueFixedRound(snapshot, mappedResult)
       return
     }
 
@@ -92,7 +126,13 @@ export function createSettlementTimeline({
     const llmWinner = snapshot.players.find(
       (player) => player.seat === snapshot.winningPlayerIndex,
     )?.isLlm === true
-    if (!llmWinner) {
+    const winner = snapshot.players.find((player) => player.seat === snapshot.winningPlayerIndex)
+    const actionPolicy = resolveAnimeAudioPolicy({
+      themeName: getThemeName(),
+      playerKind: winner?.playerKind,
+      isLlm: winner?.isLlm,
+    })
+    if (!llmWinner && actionPolicy.actionVoice === 'legacy') {
       playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     }
     if (!reduceMotion) {
@@ -109,6 +149,7 @@ export function createSettlementTimeline({
         if (serial !== currentSerial) return
         state.phase.value = 'settled'
         state.result.value = mappedResult
+        queueFixedRound(snapshot, mappedResult)
       }, revealDuration)
     }, effectDuration)
   }

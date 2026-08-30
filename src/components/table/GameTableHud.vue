@@ -421,6 +421,15 @@ function onAvatarError(entry: GamePlayer) {
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
         <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
         <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
+        <Transition name="llm-bubble">
+          <div
+            v-if="llmBubbles?.[0]"
+            :key="llmBubbles[0].id"
+            class="llm-bubble user-llm-bubble"
+            role="status"
+            aria-live="polite"
+          >{{ llmBubbles[0].text }}</div>
+        </Transition>
       </div>
       <Transition name="score-flow">
         <strong v-if="scoreDeltaFor(0)" :key="`${scoreFlowEvent?.id}-0`" class="score-delta user-score-delta" :class="scoreDeltaFor(0) > 0 ? 'positive' : 'negative'">{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>

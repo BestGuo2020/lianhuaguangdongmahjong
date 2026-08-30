@@ -14,11 +14,17 @@ describe('decodeServerMessage', () => {
   })
 
   it('accepts bounded LLM bubble messages and rejects malformed seats/text', () => {
-    const message = { kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 7, priority: 'important' }
+    const message = {
+      kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 7, priority: 'important',
+      purpose: 'action', actionKind: 'peng', speechSource: 'model-message',
+    }
     expect(decodeServerMessage(message)).toEqual(message)
     expect(decodeServerMessage({ ...message, seat: 4 })).toBeNull()
     expect(decodeServerMessage({ ...message, text: '' })).toBeNull()
     expect(decodeServerMessage({ ...message, priority: 'urgent' })).toBeNull()
+    expect(decodeServerMessage({ ...message, purpose: 'unknown' })).toBeNull()
+    expect(decodeServerMessage({ ...message, actionKind: '../peng' })).toBeNull()
+    expect(decodeServerMessage({ ...message, speechSource: 'free-form' })).toBeNull()
   })
 
   it('accepts LLM reasoning status without carrying thought content', () => {
@@ -33,10 +39,12 @@ describe('decodeServerMessage', () => {
     const message = {
       kind: 'llm_audio', messageId: 7, seat: 2,
       audioUrl: `/api/tts/audio/${'a'.repeat(64)}.mp3`, cached: true, priority: 'important',
+      purpose: 'round-reaction', speechSource: 'model-message',
     }
     expect(decodeServerMessage(message)).toEqual(message)
     expect(decodeServerMessage({ ...message, audioUrl: 'https://evil.example/a.mp3' })).toBeNull()
     expect(decodeServerMessage({ ...message, priority: 'urgent' })).toBeNull()
+    expect(decodeServerMessage({ ...message, purpose: 'unknown' })).toBeNull()
   })
 
   it('accepts an optional second dice pair on round_start', () => {
