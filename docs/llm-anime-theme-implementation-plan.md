@@ -13,9 +13,9 @@
 - 角色形象与 LLM 供应商、决策风格解耦。
 - `llmAnime` 主题下，非 LLM 座位未指定角色时统一回退 DeepSeek 形象。
 - 单机本家可选择角色；WebSocket 多人联机真人可选择角色，并让房内其他客户端看到一致结果。
-- 吃、碰、杠、胡、自摸、抢杠胡使用预生成的本地固定语音，音色配置按“稳健”生成，运行时不请求 LLM 或在线 TTS。
+- 吃、碰、杠、胡、自摸、抢杠胡使用固定文案和“稳健”风格走 TTS；首次合成后写入现有音频缓存，后续直接命中缓存。文案不由 LLM 临场生成。
 - 真人出牌只保留实体落牌声，不报牌名、不进入 TTS。
-- 胜、负、流局发言改为角色对应的本地固定发言；赢家先说，其余座位顺时针依次说。
+- 胜、负、流局使用角色对应的固定文案走缓存 TTS；赢家先说，其余座位顺时针依次说。
 
 ## 2. 本期冻结的产品决策
 
@@ -41,15 +41,18 @@
 
 ### 2.3 声音方案
 
-“预设语音”按静态音频解释：离线使用角色 voice key 和“稳健”风格生成、审核后提交 MP3，运行时只播放本地文件。
+“预设语音”按“固定文案 + 固定角色 voice key/speaker + 固定稳健风格”的缓存 TTS 解释。运行时允许调用 TTS 合成，但不把 LLM 自由回复作为动作或赛后文案；同一组合由现有 cache key 去重并复用。
 
 - 动作语音：`chi`、`peng`、`gang`、`hu`、`zimo`、`qiangganghu`。
 - 结果语音：`win-self-draw`、`win-discard`、`win-robbed-kong`、`loss`、`draw`。
-- 每个角色首版共 11 个固定语音，12 个角色共 132 个音频文件。
-- 角色普通出牌吐槽仍可保留现有 LLM 动态气泡/TTS，但动作和赛后发言不得再进入动态 TTS。
+- 每个角色首版共 11 个固定语音槽位，12 个角色共 132 个“文案 × 音色”可缓存组合，不再对应 132 个随前端发布的 MP3 文件。
+- 角色普通出牌吐槽仍可保留现有 LLM 动态气泡/TTS，但动作和赛后发言不得使用模型自由文案 TTS，只能使用固定文案缓存 TTS。
 - 在 `llmAnime` 主题下，真人不进入普通 LLM 吐槽或牌名播报链路；其他主题（包括现有 `llm`）保持当前牌名播报与动态 TTS 行为。
 - 所有实体音效，例如落牌、牌面落位、胡牌特效，继续保留，但必须防止与固定人声重复播放。
-- `<角色>/<事件>` 静态语音缺失时回退 DeepSeek 同事件；DeepSeek 仍缺失时静音并只保留非人声音效，绝不回退动态 TTS。
+- 角色 voice 不可用时使用 manifest 中已审核的替代 voice；TTS 请求失败或超时后，动作回退现有通用 `chi/peng/gang/hu/zimo` 人声（抢杠胡暂回退 `hu`），赛后只显示固定文字气泡并跳过人声。绝不回退 LLM 自由文案。
+- 缓存键继续由标准化文本、固定“稳健”风格、TTS provider/voice profile 和 cache version 组成；角色文案、speaker 或音色配置变化时必须改变 cache identity。
+- 并发的相同固定文案请求需要单飞合并，避免同一 cache miss 重复调用上游 TTS。
+- 132 个组合可以在角色/文案合同验收后通过独立脚本预热缓存，但预热产物不进入前端 Git 资产。
 
 ### 2.4 主题边界
 
@@ -58,8 +61,8 @@
 - 当前“启用 LLM 且未明确选主题”的自动推荐继续选择现有 `llm` 深蓝星轨主题；`llmAnime` 首版只由用户明确选择，URL 为 `?theme=llmAnime`。
 - 二次元视觉、真人禁报牌、真人赛后角色发言只在 `themeName === 'llmAnime'` 时生效。
 - 角色 ID 始终随玩家身份保存和同步，即使当前客户端没有使用 `llmAnime` 主题；这样其他使用该主题的客户端仍能正确显示角色。
-- 动作/赛后动态 TTS 必须携带明确的 `purpose/actionKind`；目标态服务端不为声明 `anime-static-v1` 的连接合成或投递这两类音频，但继续为现有主题/旧客户端的 legacy 连接保留原行为。
-- `llmAnime` 客户端的动作/赛后人声走本地静态包；其他主题和旧客户端继续走现有动态/legacy 路径，具体通过连接级能力协商实现，见 §8。
+- 动作/赛后 TTS 必须携带明确的 `purpose/actionKind/speechSource`，区分“固定文案 TTS”和“模型自由文案 TTS”。
+- `llmAnime` 客户端的动作/赛后人声走固定文案缓存 TTS；其他主题和旧客户端继续走现有动态/legacy 路径，具体通过连接级能力协商实现，见 §8。
 
 ## 3. 当前状态与主要缺口
 
@@ -130,18 +133,6 @@ public/themes/llm-anime/<assetVersion>/
       portrait.webp
       avatar.webp
       thumb.webp
-      audio/
-        chi.mp3
-        peng.mp3
-        gang.mp3
-        hu.mp3
-        zimo.mp3
-        qiangganghu.mp3
-        win-self-draw.mp3
-        win-discard.mp3
-        win-robbed-kong.mp3
-        loss.mp3
-        draw.mp3
     ...
   actions/
     chi.svg
@@ -167,7 +158,7 @@ public/themes/llm-anime/<assetVersion>/
     settlement-frame.svg
 ```
 
-字体放入 `src/assets`，由 Vite 重写为子路径安全的构建 URL；`@font-face` 全局声明，但只在 `llmAnime` 主题 selector 中应用。图片和音频保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。
+字体放入 `src/assets`，由 Vite 重写为子路径安全的构建 URL；`@font-face` 全局声明，但只在 `llmAnime` 主题 selector 中应用。图片保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
 
 ### 4.3 主题 manifest
 
@@ -191,8 +182,11 @@ export interface CharacterProfile {
   portraitUrl: string
   avatarUrl: string
   thumbUrl: string
-  audio: Record<AnimeVoiceKey, string>
   voiceKey: string
+  speaker?: string
+  fallbackVoiceKey: string
+  lines: Record<AnimeVoiceKey, string>
+  ttsStyle: '稳健'
   accentColor: string
   objectPosition?: string
   actionScale?: number
@@ -220,7 +214,7 @@ export interface LlmAnimeThemeManifest {
 }
 ```
 
-生成器必须保证根 manifest 中恰有 12 条唯一角色记录、DeepSeek fallback 自身完整、provider alias 不冲突、34 个 TileType 显式列全、11 个 `AnimeVoiceKey` 显式列全、所有被引用文件存在，并拒绝未引用的派生文件。禁止依赖目录扫描或字典序推断牌面。后端维护相同版本的安全 ID/alias catalog，并用 contract 测试校验集合一致，不拼接客户端传入的任意路径。
+生成器必须保证根 manifest 中恰有 12 条唯一角色记录、DeepSeek fallback 自身完整、provider alias 不冲突、34 个 TileType 显式列全、每角色 11 个 `AnimeVoiceKey` 固定文案显式列全、所有被引用文件存在，并拒绝未引用的派生文件。禁止依赖目录扫描或字典序推断牌面。后端维护相同版本的安全 ID/alias/voice catalog，并用 contract 测试校验集合一致，不拼接客户端传入的任意路径。
 
 `assetVersion` 与 schema 版本分离。所有 public 资源位于带版本的目录，或由生成器使用内容哈希文件名；部署可以对这些 URL 使用 immutable 长缓存。校验器必须验证 manifest 引用的版本/哈希与实际文件一致，资源变化必须改变 URL，不能用固定 `portrait.webp` URL 配长期缓存。
 
@@ -235,9 +229,9 @@ export interface LlmAnimeThemeManifest {
 | 牌面 master | 384×512 RGBA；运行时至少 192×256 WebP，34 张逐键映射 |
 | 牌背 | 512×704 WebP，2D/3D 共用设计 |
 | SVG 字效/UI | 固定 viewBox，文字转路径；禁止脚本、外链、外部字体和远程图片 |
-| 动作音频 | MP3，24 kHz、mono、CBR 64 kbps；0.35–1.2 秒 |
-| 结果音频 | MP3，24 kHz、mono、CBR 64 kbps；0.8–1.8 秒 |
-| 音频响度 | integrated -16 LUFS ±1，峰值不高于 -1 dBFS；头部静音≤80 ms、尾部≤120 ms |
+| 动作固定文案 | 1–8 个 Unicode code point，必须直接表达吃/碰/杠/胡/自摸/抢杠胡 |
+| 结果固定文案 | 不超过 24 个 Unicode code point，覆盖三类胜利、失败、流局 |
+| TTS 参数 | style 固定“稳健”；voiceKey/speaker 来自角色合同，失败使用已审核 fallbackVoiceKey |
 
 两款 WOFF2 必须带可再分发许可证，使用 `font-display: swap`，并覆盖动作字、广播、结算、按钮、数字、标点及实际文案所需的中文 glyph；字体 404 或加载慢不得阻塞首屏，必须保留系统字体回退。
 
@@ -247,15 +241,15 @@ Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编�
 
 资产 Agent 必须提供可重复运行的校验脚本，至少检查：
 
-- 根 manifest 中恰有 12 条角色记录，每条都有透明立绘、头像、缩略图和 11 个音频。
+- 根 manifest 中恰有 12 条角色记录，每条都有透明立绘、头像、缩略图、voice/fallback voice 和 11 条固定文案。
 - 34 张牌面与 1 张牌背齐全。
 - 机器检查 alpha 像素比例、主要连通域、异常内部透明洞和边缘白边；最终仍需在深色、浅色、棋盘格三底截图上人工签字，防止 `cutout-v2` 一类主体误删漏检。
-- 图片尺寸、体积、音频时长和文件名满足规范。
-- 132 段音频可解码、非全静音、无削波，固定文案与角色 voice key 对应。
-- 当前四座位只懒加载其角色资源，不在首屏预载全部 132 个音频。
+- 图片尺寸、体积和文件名满足规范。
+- 132 个“角色 × 语音槽位”都能生成稳定的 TTS cache identity；重复请求命中同一缓存键，不重复调用上游 provider。
+- 当前四座位只懒加载其角色图片；TTS 音频按事件请求并复用缓存，不在前端首屏预载。
 - 缺图时先回退 DeepSeek，再失败则回退旧文字动作提示。
-- 缺音频时先回退 DeepSeek 同事件，再失败则静音；绝不回退动态 TTS。
-- `SOURCES.json` / `ATTRIBUTION.md` 覆盖原图、cutout、派生图、动作/UI SVG、牌面、字体、固定 TTS 音频和音色使用/再分发权限，并记录来源、工具/模型、音色、生成日期、许可证或授权证据。
+- voice 不可用时使用角色合同中的替代音色；TTS 失败时动作回退通用人声、赛后仅显示固定文字，绝不改用 LLM 自由文案。
+- `SOURCES.json` / `ATTRIBUTION.md` 覆盖原图、cutout、派生图、动作/UI SVG、牌面、字体、TTS 音色使用与缓存权限，并记录来源、工具/模型、音色、生成日期、许可证或授权证据。
 
 建议预算：
 
@@ -263,7 +257,7 @@ Wave 0 先用 DeepSeek、Claude、Kimi 三张做编码基准，冻结 WebP 编�
 - 打开选择器后懒加载 12 张缩略图，总新增传输不超过 500 KiB，并启用长期缓存。
 - 单角色头像不超过 60 KiB，动作立绘不超过 300 KiB。
 - 当前四座位动作资源总加载不超过 2 MiB。
-- 固定语音按事件懒加载，不全量预载。
+- 固定文案 TTS 按事件懒合成；缓存命中后直接复用音频 URL/文件。
 
 ## 5. 目标数据模型
 
@@ -330,11 +324,14 @@ flowchart TD
   E[规则/服务端产生语义事件] --> N[动作与结果事件归一化]
   N --> P[按 actor 获取 playerKind + characterId]
   P --> R[Character Resolver]
-  R -->|llm 主题| V[角色立绘 + 动作字 + 主题动画]
+  R -->|llmAnime 主题| V[角色立绘 + 动作字 + 主题动画]
   R -->|其他主题| L[现有文字动作提示]
-  N --> A[静态动作/结果语音路由]
-  A --> D[事件 ID 去重与本地音频队列]
-  D --> S[按角色播放预生成稳健语音]
+  N --> A[固定动作/结果文案路由]
+  A --> D[事件 ID 去重与 TTS cache identity]
+  D --> C{缓存命中?}
+  C -->|是| S[播放缓存音频]
+  C -->|否| T[稳健风格 TTS 合成]
+  T --> K[写缓存并在事件仍有效时播放]
 ```
 
 ### 6.1 动作归一化
@@ -447,9 +444,9 @@ interface TableTheme {
 
 | 玩家类型 | 出牌 | 吃碰杠胡等动作 | 赛后 |
 |---|---|---|---|
-| human | 只播 `dapai`，无牌名、无 TTS | 自选角色固定动作语音 | 自选角色固定胜负/流局发言 |
-| llm | `dapai` + 允许的普通吐槽；动作语音不走动态 TTS | provider 角色固定动作语音 | provider 角色固定结果发言 |
-| bot | 继续保留现有牌名播报（已确认） | DeepSeek 固定动作语音 | DeepSeek 固定结果发言 |
+| human | 只播 `dapai`，无牌名、无自由文案 TTS | 自选角色固定文案缓存 TTS | 自选角色固定胜负/流局文案缓存 TTS |
+| llm | `dapai` + 允许的普通吐槽；动作不使用模型自由文案 | provider 角色固定文案缓存 TTS | provider 角色固定结果文案缓存 TTS |
+| bot | 继续保留现有牌名播报（已确认） | DeepSeek 固定文案缓存 TTS | DeepSeek 固定结果文案缓存 TTS |
 
 其他主题（包括现有 `llm` 深蓝星轨）完整保留当前真人/普通 AI 牌名播报、LLM 动作 TTS 与赛后发言。真人禁报牌不是全局规则，只由表现层在 `llmAnime` 主题下启用。
 
@@ -457,9 +454,9 @@ interface TableTheme {
 
 1. 动作固定语音只由 GamePort/RoomSession 生命周期内单调的 `TableActionEvent.id` 触发一次；销毁实例时清空去重集合，不按小局重置 ID。
 2. 结果发言只由归一化后的 `presentationKey` 触发一次，重连快照和页面 resume 不得复播。
-3. legacy `chi/peng/gang/hu/zimo` 人声、动态 LLM 动作 TTS、固定动作语音三者只能有一个人声出口。
+3. legacy 通用人声、模型自由文案 TTS、固定文案缓存 TTS 三者只能有一个人声出口。
 4. 落牌、摸牌、牌组落位和胡牌特效等非人声音效不受影响。
-5. 音效关闭、静音、资源失败不得阻塞规则推进或结算。
+5. 音效关闭、静音、缓存未命中、TTS 失败不得阻塞规则推进或结算。
 6. 赛后固定四家全员发言：赢家先说，其余从赢家起顺时针；流局按座位顺序。总时长控制在 8 秒内，单条建议 0.8–1.6 秒。
 7. 赛后队列是可取消、非阻塞的表现队列：结果和结算先落地，再开始本地播放；next round、return lobby、theme change 或卸载立即取消，绝不延迟服务端 settled、规则结算或继续确认屏障。
 
@@ -468,26 +465,31 @@ interface TableTheme {
 ```ts
 purpose?: 'commentary' | 'action' | 'round-reaction'
 actionKind?: 'discard' | 'chi' | 'peng' | 'gang' | 'win'
-presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
+speechSource?: 'model-message' | 'fixed-line'
+presentationAudioMode?: 'legacy-dynamic' | 'anime-fixed-tts-v1'
 ```
 
 ### 8.1 两阶段发布策略
 
 阶段 A（协议铺设）：
 
-- 后端先给 message/audio 增加 `purpose/actionKind`，暂时保留旧动作和赛后合成。
-- 新客户端仅在 `llmAnime` 主题过滤 `action/round-reaction` 动态音频并播放静态包；其他主题仍按旧行为播放。
+- 后端先给 message/audio 增加 `purpose/actionKind/speechSource`，暂时保留旧动作和赛后模型文案合成。
+- 新客户端在 `llmAnime` 主题过滤 `speechSource: 'model-message'` 的动作/赛后音频，改为按角色固定文案请求缓存 TTS；其他主题仍按旧行为播放。
 - 客户端连接、重连和主题切换时上报 `presentationAudioMode`；旧客户端或缺字段连接一律视为 `legacy-dynamic`。
 - 无 purpose 的旧事件按旧客户端兼容路径处理，不能仅凭 priority 猜测。
 
 阶段 B（连接级能力路由）：
 
 - 后端按连接记录 `presentationAudioMode`，而不是把主题设为房间级状态。
-- `anime-static-v1` 连接的动作/赛后音频由客户端本地播放；服务端不向这些连接投递生成音频。
-- 房间存在 `legacy-dynamic` 连接时，服务端仍按现有逻辑合成一次并只投递给 legacy audience；全部连接都是 anime static 时完全跳过 `ensure_audio`。
-- 混合主题房间中，legacy 连接保留现有赛后语音和结算等待；anime static 连接可先收到 settled 并运行自己的非阻塞本地队列。此处只做每连接表现屏障，不改变权威牌局 phase。
+- `anime-fixed-tts-v1` 连接按 actor 的 character、固定文案和“稳健”风格调用现有 TTS service；缓存命中直接复用，未命中只合成一次并写 room cache，然后只投递给 anime audience。
+- 单机使用现有 `/api/local-tts` 与 local cache bucket；联机由 RoomSession 使用 room cache bucket 统一合成，避免四个客户端重复请求。
+- 房间存在 `legacy-dynamic` 连接时，服务端仍按现有逻辑为 legacy audience 合成模型文案；混合主题房间可能同时需要一份 legacy dynamic 音频和一份 anime fixed-line 音频，二者按 audience 定向投递。
+- 全部连接都是 anime fixed TTS 时跳过动作/赛后模型自由文案的 TTS，但仍允许固定文案在缓存未命中时调用 `ensure_audio`。
+- 混合主题房间中，legacy 连接保留现有赛后语音和结算等待；anime fixed TTS 连接可先收到 settled 并运行自己的非阻塞固定文案队列。此处只做每连接表现屏障，不改变权威牌局 phase。
 - 现有 `llm` 深蓝星轨主题始终上报 `legacy-dynamic`，因此视觉和声音行为保持不变。
 - 普通 commentary 不受新动作/结果路由影响，仍按现有策略动态合成和播放。
+
+动作 cache miss 的表现等待上限为 900ms：上限内合成完成且事件仍有效则播放；超时立即回退通用动作人声，后台合成结果只写缓存、不补播过期事件。赛后每句等待上限为 2 秒，超时显示固定文字后进入下一位。两个等待都只属于表现队列，不阻塞规则推进。
 
 主题音频策略由表现层依赖注入到 `tileFlowExecutor`、本地结算适配器、remote transient presenter 和 snapshot reconciler；禁止在规则判定函数中读取 DOM、URL 或全局主题状态。
 
@@ -510,7 +512,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 
 | Agent | 文件所有权 | 任务 |
 |---|---|---|
-| 资产 Agent | `assets-src/llm-anime/**`、`public/themes/llm-anime/**`、`src/assets/fonts/llm-anime/**`、资产脚本 | 抠图、裁切、牌面/牌背、UI 装饰、字体、静态语音、来源与资产报告 |
+| 资产 Agent | `assets-src/llm-anime/**`、`public/themes/llm-anime/**`、`src/assets/fonts/llm-anime/**`、资产脚本 | 抠图、裁切、牌面/牌背、UI 装饰、字体、来源与资产报告；不生产正式 MP3 |
 | 角色契约 Agent | 新的 character catalog/manifest loader 与测试 | 角色白名单、provider alias、DeepSeek 回退、路径安全 |
 | 主题底座 Agent | `tableTheme.ts`、`tileAssets.ts`、`MahjongTile.vue`、新主题上下文、3D 牌材质相关文件 | tileSet 分桶、2D/3D 资源集、主题加载失败回退 |
 
@@ -532,7 +534,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 |---|---|---|
 | 单机身份 Agent | 仅本地偏好、local opening/runtime/seed 文件 | seat 0 自选、AI 映射、两规则一致；不改 App/Lobby/共享 contract |
 | WebSocket/后端 Agent | master room API/protocol/lifecycle/lobby + `backend/` | characterId/playerKind/purpose/presentationId 同步、白名单、重连兼容；前后端分别提交 |
-| 声音 Agent | 仅共享 audio router、静态 action/result consumer、本地 audio policy 与测试 | 真人禁报牌、固定动作/结果语音、防双播、懒加载；不改 online protocol |
+| 声音 Agent | 仅共享 audio router、fixed-line TTS consumer、本地 audio policy 与测试 | 真人禁报牌、缓存键/单飞、固定动作/结果 TTS、防双播与超时回退；不改 online protocol |
 
 共享 types、purpose、presentationId contract 已由 Wave 0 主 Agent提交。声音 Agent 不改规则判定，只消费语义事件；WebSocket/后端 Agent 不改共享视觉组件；两边 `App.vue`、keep `SettlementOverlay.vue` 和最终 Lobby 状态接线由主 Agent串行完成。
 
@@ -555,7 +557,7 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 6. `feat(profile): add local anime character preference`
 7. 后端独立提交：`feat(room): sync player anime character identity`
 8. `feat(online): send and render remote character identity`
-9. `feat(audio): use preset anime action and result voices`
+9. `feat(audio): use cached fixed-line anime TTS`
 10. `test(theme): cover llmAnime and preserve llm regressions`
 
 每个前端提交都先在 master 验证，再同步 vibehub；不得积累未提交改动后运行同步脚本。
@@ -571,7 +573,8 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 - 本地/远端 action ID 在各自 session 生命周期单调且无同毫秒碰撞；wire `presentationId` 在重复快照中稳定，归一化 `presentationKey` 可跨 socket 重连和页面 resume 去重。
 - 主题 tile cache 分桶、失败重试、切换后不串图。
 - `llmAnime` 主题真人出牌没有 `tileAudioFile` 和 TTS；其他主题（含现有 `llm`）保留当前牌名播报；LLM/普通 AI 按矩阵执行。
-- `llmAnime` 每个动作只有一个固定人声出口，动作/赛后不调用动态 TTS；现有 `llm` 仍走 legacy dynamic 出口。
+- `llmAnime` 每个动作只有一个固定文案缓存 TTS 出口，不调用模型自由文案 TTS；现有 `llm` 仍走 legacy dynamic 出口。
+- 132 个角色/语音组合都有确定 cache identity；重复请求命中缓存、并发 miss 单飞合并，文案/voice/cache version 变化会正确失效旧键。
 - 静音、取消、资源失败不阻塞动作和结算。
 
 ### 11.2 后端与协议测试
@@ -582,7 +585,8 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 - LLM provider 到角色映射，普通 bot/未知 provider 回退 DeepSeek。
 - optional 字段兼容旧客户端和旧服务端。
 - 旧服务端首次 settled 快照不触发赛后语音；当前连接 legacy hand result 只做连接内去重。
-- 动作/赛后音频 purpose 与 connection capability 准确；阶段 A 保持兼容，阶段 B 在“全员 anime static”时不请求 TTS，在混合房间只向 legacy audience 合成/投递一次，并按连接应用结算表现屏障。
+- 动作/赛后音频 purpose、speechSource 与 connection capability 准确；全员 anime fixed 时只请求固定文案缓存 TTS，混合房间分别向 anime/legacy audience 定向投递 fixed-line/model-message 音频。
+- room/local 两个 cache bucket 路由正确；缓存命中不调用上游 provider，miss 只合成一次并返回 immutable 音频 URL。
 
 ### 11.3 E2E 与视觉回归
 
@@ -590,9 +594,10 @@ presentationAudioMode?: 'legacy-dynamic' | 'anime-static-v1'
 - 四个真人选择不同角色，所有客户端看到同一行动者形象。
 - 6 动作 × 4 方位至少各覆盖一次；连续事件不会残留前一角色。
 - `llmAnime` 真人出牌只有实体落牌声；该连接没有动作/赛后动态 TTS 请求或投递。
-- 动作音频和结果音频在 TTS 网关离线时仍可播放。
+- 同一固定动作第二次发生时命中缓存；测试记录上游 TTS provider 调用次数不再增加。
+- TTS 网关离线或合成超时时，动作回退通用人声、赛后保留文字并跳过人声，牌局与结算不受阻塞。
 - 断线重连和重复 snapshot 不复播动作/赛后语音。
-- anime static 连接的赛后队列不会延迟结算，点击继续、返回大厅和切主题会立即取消；legacy 连接保持现状。
+- anime fixed TTS 连接的赛后队列不会延迟结算，点击继续、返回大厅和切主题会立即取消；legacy 连接保持现状。
 - 截图覆盖：桌面 16:9、4:3、移动横屏、窄高屏、reduced motion。
 - 视觉页面覆盖：牌桌、广播、三家气泡、本家气泡、六动作、局结算、最终结算。
 - 现有 `llm` 深蓝星轨主题做独立截图和声音回归，确保桌布、牌面、气泡、动作和动态 TTS 不变。
@@ -636,10 +641,10 @@ git switch master
 - 单机本家可选角色并持久化；master 多人真人选择通过后端同步。
 - 普通 AI 和没有角色字段的旧玩家在 `llmAnime` 主题下显示 DeepSeek。
 - 六动作均显示正确行动者、正确方位、正确大字，并只播放一次固定稳健语音。
-- `llmAnime` 主题下真人出牌无牌名和 TTS；动作、胜负和流局使用本地静态语音。
-- `llmAnime` 连接的动态 LLM TTS 不再承担动作和赛后人声；普通吐槽与静态动作语音没有双播，现有 `llm` 连接仍保留原动态路径。
+- `llmAnime` 主题下真人普通出牌无牌名和 TTS；吃碰杠胡等动作、胜负和流局使用固定文案缓存 TTS。
+- `llmAnime` 连接的模型自由文案 TTS 不再承担动作和赛后人声；普通吐槽与固定文案缓存 TTS 没有双播，现有 `llm` 连接仍保留原动态路径。
 - 赛后本地发言是非阻塞、可取消的表现队列，不延迟规则结算和继续屏障。
-- TTS 服务离线、图片/音频缺失、静音或 reduced motion 都不影响牌局推进。
+- TTS 服务离线、缓存未命中/合成失败、图片缺失、静音或 reduced motion 都不影响牌局推进。
 - 2D、3D、结算页的牌面和牌背一致，切换主题不会串缓存。
 - 前端、后端、E2E 与资产校验全部通过；本期明确记录 vibehub P2P 真人选角未接线，并进入下一里程碑。
 
@@ -664,4 +669,4 @@ Wave 1 开始前必须形成并评审通过的具体交付物：
 1. 两款最终中文字体、glyph 覆盖清单、字体文件、许可证与归属记录。
 2. 12 个角色的中文展示名、`characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及生成/再分发授权记录。
 
-在上述两个合同完成前，可以搭建 schema、校验器和占位资源，但不得批量生成最终字体子集或 132 段正式音频。
+在上述两个合同完成前，可以搭建 schema、校验器和占位资源，但不得批量生成最终字体子集，也不得把 132 个“角色 × 语音槽位”投入正式 TTS 缓存预热。
