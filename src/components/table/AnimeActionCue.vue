@@ -68,8 +68,8 @@ function onPortraitError(event: Event) {
 .anime-action-cue {
   position: absolute;
   z-index: 45;
-  width: clamp(210px, 25vw, 390px);
-  height: clamp(150px, 22vw, 330px);
+  width: clamp(150px, 17vw, 280px);
+  height: clamp(108px, 15vw, 205px);
   overflow: hidden;
   pointer-events: none;
   filter: drop-shadow(0 13px 20px rgba(12, 5, 42, .62));
@@ -113,7 +113,7 @@ function onPortraitError(event: Event) {
   width: 98%;
   height: 95%;
   border: 2px solid rgba(211, 228, 255, .82);
-  border-radius: 24px 44px 20px 34px;
+  border-radius: 16px 28px 14px 22px;
   object-fit: cover;
   object-position: center;
   box-shadow: inset 0 0 20px rgba(255,255,255,.12);
@@ -130,12 +130,12 @@ function onPortraitError(event: Event) {
   position: relative;
   color: #eaff8b;
   font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  font-size: clamp(47px, 7vw, 104px);
+  font-size: clamp(34px, 4.4vw, 68px);
   font-weight: 1000;
   line-height: .92;
   letter-spacing: -.08em;
   paint-order: stroke fill;
-  -webkit-text-stroke: clamp(4px, .55vw, 9px) #1771c8;
+  -webkit-text-stroke: clamp(3px, .38vw, 6px) #1771c8;
   text-shadow: 0 5px 0 #0a2b70, 0 0 8px #fff, 0 0 18px #84e9ff;
 }
 .anime-action-copy strong::after {
@@ -144,14 +144,14 @@ function onPortraitError(event: Event) {
   inset: 0;
   z-index: -1;
   color: transparent;
-  -webkit-text-stroke: clamp(7px, .85vw, 13px) rgba(241, 248, 255, .96);
+  -webkit-text-stroke: clamp(5px, .58vw, 9px) rgba(241, 248, 255, .96);
 }
 .anime-action-zimo .anime-action-copy strong,
-.anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(37px, 5vw, 76px); letter-spacing: -.12em; }
-.action-from-top { top: 15%; left: 50%; transform: translate(-50%, -50%); }
-.action-from-right { top: 42%; right: 11%; transform: translate(50%, -50%); }
-.action-from-bottom { bottom: 13%; left: 50%; transform: translate(-50%, 50%); }
-.action-from-left { top: 42%; left: 11%; transform: translate(-50%, -50%); }
+.anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(26px, 3.2vw, 50px); letter-spacing: -.12em; }
+.action-from-top { top: 20%; left: 50%; transform: translate(-50%, -50%); }
+.action-from-right { top: 36%; right: 19%; transform: translate(50%, -50%); }
+.action-from-bottom { bottom: 28%; left: 50%; transform: translate(-50%, 50%); }
+.action-from-left { top: 36%; left: 21%; transform: translate(-50%, -50%); }
 .action-from-left img.base-q-avatar { left: auto; right: 0; transform: scaleX(-1); }
 .action-from-left .anime-action-copy { right: auto; left: 4%; align-items: start; }
 @keyframes anime-action-enter {
@@ -159,8 +159,11 @@ function onPortraitError(event: Event) {
   to { opacity: 1; scale: 1; filter: blur(0) drop-shadow(0 13px 20px rgba(12,5,42,.62)); }
 }
 @media (max-width: 760px), (max-height: 520px) {
-  .anime-action-cue { width: clamp(170px, 28vw, 260px); height: clamp(120px, 23vw, 190px); }
-  .action-from-right { right: 8%; }.action-from-left { left: 8%; }
+  .anime-action-cue { width: clamp(130px, 20vw, 190px); height: clamp(94px, 16vw, 138px); }
+  .action-from-top { top: 21%; }
+  .action-from-right { top: 36%; right: 17%; }
+  .action-from-bottom { bottom: 27%; }
+  .action-from-left { top: 36%; left: 19%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .anime-action-cue { animation: anime-action-fade .16s ease-out both; }
