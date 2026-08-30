@@ -19,6 +19,8 @@ interface TableSceneOptions {
   theme?: TableTheme
   /** 已解码的外部桌布纹理；存在时优先于程序化桌面纹理。 */
   surfaceTexture?: THREE.Texture
+  /** 主题牌背位图；缺失时回退到程序化渐变。 */
+  tileBackTexture?: THREE.Texture
   own<T>(resource: T): T
   ownDynamic<T>(resource: T): T
   trackTileMaterial(material: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial
@@ -186,6 +188,7 @@ function makeWoodDetailTexture() {
 }
 
 function makeBackTexture() {
+  if (options.tileBackTexture) return options.tileBackTexture
   const surface = document.createElement('canvas')
   surface.width = 256
   surface.height = 352

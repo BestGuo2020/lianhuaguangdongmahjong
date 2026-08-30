@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import MahjongTile from './MahjongTile.vue'
 import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
 import type { GamePlayer, TileType } from '../game/core/contracts/types'
+import type { TableThemeName } from './table/three/tableTheme'
 
 const props = withDefaults(defineProps<{
   player: GamePlayer
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<{
   renderMelds?: boolean
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  themeName?: TableThemeName
   /** 主题表现头像覆盖，不修改权威玩家 avatar。 */
   avatarOverride?: string
   /** AI 大模型吐槽气泡（可选；由上层管理过期） */
@@ -61,6 +63,7 @@ function onAvatarError() {
         v-for="index in Math.min(player.concealedTileCount ?? player.hand.length, 14)"
         :key="index"
         tile="back"
+        :theme-name="themeName"
         hidden
         small
         disabled
@@ -68,7 +71,7 @@ function onAvatarError() {
     </div>
     <div v-if="renderMelds && player.melds.length" class="seat-melds">
       <div v-for="(meld, index) in player.melds" :key="`${meld.type}-${index}`" class="mini-meld">
-        <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
+        <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
       </div>
     </div>
   </section>

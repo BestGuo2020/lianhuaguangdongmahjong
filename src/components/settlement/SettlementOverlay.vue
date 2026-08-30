@@ -96,7 +96,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         </div>
         <div v-if="result.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
+            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">

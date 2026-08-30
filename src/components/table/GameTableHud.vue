@@ -374,7 +374,7 @@ function onAvatarError(entry: GamePlayer) {
       >
         <div class="flip-indicator-head">
           <span>翻精</span>
-          <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
+          <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
           <em>{{ tileName(flipTile) }}</em>
           <i class="flip-chevron" aria-hidden="true"></i>
         </div>
@@ -396,6 +396,7 @@ function onAvatarError(entry: GamePlayer) {
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
+      :theme-name="themeName"
       :bubble="llmBubbles?.[index + 1]"
     />
 
@@ -442,7 +443,7 @@ function onAvatarError(entry: GamePlayer) {
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
@@ -488,12 +489,12 @@ function onAvatarError(entry: GamePlayer) {
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
-      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
+      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
 
     <Transition name="modal">
       <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
-        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
+        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
       </div>
     </Transition>
     <Transition name="modal">
@@ -502,7 +503,7 @@ function onAvatarError(entry: GamePlayer) {
           <h2 id="chi-picker-title">请选择吃牌组合</h2>
           <div class="kong-picker-tiles chi-picker-options">
             <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="chi-picker-option" @click="chooseChi(chiIndex)">
-              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" small disabled />
+              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
             </button>
           </div>
         </section>
