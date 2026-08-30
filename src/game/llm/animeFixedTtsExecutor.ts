@@ -17,7 +17,8 @@ import type { LlmSpeechPriority } from './speechPolicy'
 
 export type AnimeSeat = 0 | 1 | 2 | 3
 export type AnimeFixedTtsEventId = string | number
-export const ANIME_ACTION_TTS_WAIT_MS = 900
+/** 首次冷合成通常超过 900ms；覆盖火山主音色的正常请求窗口，缓存命中仍立即播放。 */
+export const ANIME_ACTION_TTS_WAIT_MS = 4_500
 export const ANIME_ROUND_TTS_WAIT_MS = 2_000
 
 export const ANIME_TABLE_ACTION_VOICE_KEYS: Readonly<Record<TableActionType, AnimeActionVoiceKey>> = {

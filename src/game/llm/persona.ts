@@ -2,7 +2,12 @@
 // 对局显示：`昵称（策略）`，如「大肥鱼（激进）」。
 // 素材结构：img/llm/<provider>/deepseek-strategy.png（四宫格：左上激进/右上稳健/左下话痨/右下高冷），
 //           img/llm/<provider>/llm-avatar-<策略>.png（裁切产物）。
-import type { LlmProviderPreset, LlmStyle } from './config'
+import {
+  inferLlmProviderType,
+  type LlmProviderPreset,
+  type LlmProviderType,
+  type LlmStyle,
+} from './config'
 
 /** 策略 → 裁切文件名 */
 const STYLE_AVATARS: Record<LlmStyle, string> = {
@@ -41,16 +46,32 @@ export function defaultNicknameFor(baseUrl: string, presetName: string): string 
 }
 
 /** 头像 URL：供应商文件夹（预置指定 > Base URL 自动识别）+ 策略裁切文件。 */
-export function avatarFor(preset: { baseUrl: string; avatarFolder?: string }, style: LlmStyle): string {
+interface PersonaPreset {
+  baseUrl: string
+  avatarFolder?: string
+  model?: string
+  providerType?: LlmProviderType
+}
+
+function folderForProviderType(providerType: LlmProviderType): string {
+  return providerType === 'openai' ? 'gpt' : providerType
+}
+
+export function avatarFor(preset: PersonaPreset, style: LlmStyle): string {
   const folder = avatarFolderOf(preset)
   return `${import.meta.env.BASE_URL}img/llm/${folder}/${STYLE_AVATARS[style]}`
 }
 
 /** 有效头像文件夹：预置指定优先（仅允许字母/数字/下划线/连字符），否则按 Base URL 识别。 */
-export function avatarFolderOf(preset: { baseUrl: string; avatarFolder?: string }): string {
+export function avatarFolderOf(preset: PersonaPreset): string {
   const override = preset.avatarFolder?.trim()
   if (override && /^[a-z0-9_-]+$/i.test(override)) return override
-  return avatarFolderFor(preset.baseUrl)
+  const baseUrlFolder = avatarFolderFor(preset.baseUrl)
+  if (baseUrlFolder !== 'custom') return baseUrlFolder
+  const providerType = preset.providerType && preset.providerType !== 'custom'
+    ? preset.providerType
+    : inferLlmProviderType(preset.baseUrl, preset.model ?? '')
+  return folderForProviderType(providerType)
 }
 
 /** 预置的生效昵称：自定义昵称优先，否则供应商默认。 */
