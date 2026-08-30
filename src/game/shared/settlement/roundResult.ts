@@ -24,6 +24,7 @@ export function makeRoundResult(
       playerIndex,
       name: player.name,
       avatar: player.avatar,
+      characterId: player.characterId,
       score: player.score,
       delta: player.score - scoresBefore[playerIndex],
       rank: ranks.get(playerIndex),

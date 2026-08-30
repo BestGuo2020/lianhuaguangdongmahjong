@@ -6,6 +6,8 @@ import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import type { RoundResult } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
+import type { TableThemeName } from '../table/three/tableTheme'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 
@@ -24,6 +26,7 @@ interface Props {
   humanSeats?: number[]
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  themeName?: TableThemeName
 }
 
 const props = defineProps<Props>()
@@ -38,6 +41,12 @@ function onAvatarError(entry?: { avatar?: string; seat?: number; fallbackAvatar?
   if (!entry) return
   const target = entry.fallbackAvatar ?? (entry.seat != null ? defaultAvatarForSeat(entry.seat) : '')
   if (target && entry.avatar !== target) entry.avatar = target
+}
+
+function displayedAvatar(entry?: { avatar?: string; characterId?: string }) {
+  return props.themeName === 'llmAnime'
+    ? animeCharacterAvatarUrl(entry?.characterId)
+    : entry?.avatar
 }
 
 /** 结算标题：莲花麻将按 winType 展示（天胡/地胡/点炮），否则按旧逻辑。 */
@@ -82,7 +91,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         <div class="round-rankings">
           <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }">
             <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
-            <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
+            <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <span class="player-line">
               {{ entry.name }}
               <i v-if="entry.playerIndex === dealer" class="mark dealer">庄</i>
@@ -112,7 +121,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         <div class="final-rankings">
           <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]">
             <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
-            <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
+            <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <div class="final-name">
               <strong>{{ entry.name }}</strong>
               <small v-if="entry.playerIndex === 0">你</small>
