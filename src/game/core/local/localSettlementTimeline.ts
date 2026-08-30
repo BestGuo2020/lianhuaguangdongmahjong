@@ -38,6 +38,7 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
   const ruleset = options.ruleset ?? DEFAULT_RULESET
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
   const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
+  let pendingWinReactions: void | Promise<void>
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -78,12 +79,13 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       sourceIndex: endOptions.robbedKong ? (endOptions.robbedKongPlayerIndex ?? null) : null,
     }),
     getWinSound: ({ endOptions }) => endOptions.robbedKong ? 'hu.mp3' : 'zimo.mp3',
-    beforeSettleWin: ({ winnerIndex, endOptions }) => {
+    onWinStart: ({ winnerIndex, endOptions }) => {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : Number.isInteger(endOptions.sourceFrom) ? 'discard-win' : 'self-draw'
-      return announceLlmRoundReactions({ winnerIndex, winType })
+      pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
     },
+    beforeSettleWin: () => pendingWinReactions,
     beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<EndGameOptions>): RoundResult => {
       const relativeSeat = (((winnerIndex - state.dealer.value) + 4) % 4) as 0 | 1 | 2 | 3

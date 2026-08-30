@@ -38,6 +38,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
   const ruleset = options.ruleset ?? LOTUS_RULESET
   const isLlmVoiceSeat = options.isLlmVoiceSeat ?? isLocalLlmSeat
   const announceLlmRoundReactions = options.announceLlmRoundReactions ?? announceLocalLlmRoundReactions
+  let pendingWinReactions: void | Promise<void>
 
   function takeRobbedKongTile(playerIndex: number | undefined, tile: TileType, winnerIndex: number) {
     const player = playerIndex == null ? undefined : state.players[playerIndex]
@@ -82,12 +83,13 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         : (endOptions.sourceFrom ?? null),
     }),
     getWinSound: ({ endOptions }) => endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3',
-    beforeSettleWin: ({ winnerIndex, endOptions }) => {
+    onWinStart: ({ winnerIndex, endOptions }) => {
       const winType = endOptions.robbedKong
         ? 'robbed-kong-win'
         : endOptions.selfDraw ? 'self-draw' : 'discard-win'
-      return announceLlmRoundReactions({ winnerIndex, winType })
+      pendingWinReactions = announceLlmRoundReactions({ winnerIndex, winType })
     },
+    beforeSettleWin: () => pendingWinReactions,
     beforeSettleDraw: () => announceLlmRoundReactions({ winnerIndex: null, draw: true }),
     finalizeWin: ({ winnerIndex, winner, endOptions }: SettlementWinContext<LotusEndGameOptions>): RoundResult => {
       const winHand = endOptions.winHand ?? winner.hand
