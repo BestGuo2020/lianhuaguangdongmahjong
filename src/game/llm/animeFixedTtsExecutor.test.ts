@@ -3,6 +3,7 @@ import type { TableActionType } from '../core/contracts/types'
 import type { LlmAudioPlaybackHooks } from '../core/presentation/llmAudioBus'
 import {
   ANIME_ACTION_FALLBACK_AUDIO,
+  ANIME_ACTION_TTS_WAIT_MS,
   AnimeFixedTtsExecutor,
   animeFallbackAudioForAction,
   animeResultVoiceKeyForSeat,
@@ -127,7 +128,7 @@ describe('AnimeFixedTtsExecutor', () => {
       const execution = new AnimeFixedTtsExecutor(client).executeAction({
         eventId: 'action-timeout', seat: 0, characterId: 'deepseek', action: 'chi',
       })
-      await vi.advanceTimersByTimeAsync(901)
+      await vi.advanceTimersByTimeAsync(ANIME_ACTION_TTS_WAIT_MS + 1)
 
       await expect(execution).resolves.toMatchObject({
         status: 'failed', fallbackAudioFile: 'chi.mp3',
@@ -160,6 +161,29 @@ describe('AnimeFixedTtsExecutor', () => {
 
       pending.resolve(true)
       await expect(execution).resolves.toMatchObject({ status: 'played' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('未缓存音色超过旧 900ms 冷启动时仍等待 TTS，不提前走通用人声', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = speaker((...args) => new Promise<boolean>((resolve) => {
+        globalThis.setTimeout(() => {
+          args[5]?.onStarted?.()
+          resolve(true)
+        }, 1_200)
+      }))
+      const execution = new AnimeFixedTtsExecutor(client).executeAction({
+        eventId: 'cold-claude', seat: 1, characterId: 'claude', action: 'peng',
+      })
+      await vi.advanceTimersByTimeAsync(1_200)
+
+      await expect(execution).resolves.toMatchObject({
+        status: 'played', fallbackAudioFile: null,
+        request: { characterId: 'claude', voiceKey: 'claude' },
+      })
     } finally {
       vi.useRealTimers()
     }

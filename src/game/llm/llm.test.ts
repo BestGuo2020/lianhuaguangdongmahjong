@@ -1062,6 +1062,25 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     expect(runtime.seeds[1].name).toBe('大肥鱼（稳健）')
     expect(runtime.seeds[1].avatar).toContain('llm-avatar-wenjian')
   })
+
+  it('自定义 OrcaRouter 预置按完整模型名映射 Claude 角色和音色身份', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const orcaClaude = {
+      id: 'orca-claude', name: 'Orca Claude', providerType: 'custom' as const,
+      baseUrl: 'https://api.orcarouter.ai/v1', apiKey: 'sk-test',
+      model: 'anthropic/claude-sonnet-5', style: '稳健' as const, timeoutMs: 8000,
+    }
+    saveLlmSettings({
+      enabled: true, presets: [orcaClaude], activeId: orcaClaude.id,
+      seatIds: [null, orcaClaude.id, orcaClaude.id, orcaClaude.id],
+      seatStyles: [null, null, null, null],
+    }, storage)
+
+    const runtime = createLocalLlmControllers()
+    expect(runtime.seeds[0]).toMatchObject({ characterId: 'claude', playerKind: 'llm' })
+    expect(runtime.seeds[0].avatar).toContain('img/llm/claude/llm-avatar-wenjian.png')
+  })
 })
 
 describe('LLM 人设（persona）', () => {
@@ -1095,5 +1114,16 @@ describe('LLM 人设（persona）', () => {
     // 非法字符忽略 → 回退自动识别
     expect(avatarFolderOf({ baseUrl: 'https://cdxai.cn/v1', avatarFolder: '../x' })).toBe('custom')
     expect(avatarFor({ baseUrl: 'https://cdxai.cn/v1', avatarFolder: 'kimi' }, '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
+  })
+
+  it('聚合中转站按完整模型 ID 识别角色，显式头像覆盖仍优先', () => {
+    const preset = {
+      baseUrl: 'https://api.orcarouter.ai/v1',
+      model: 'anthropic/claude-sonnet-5',
+      providerType: 'custom' as const,
+    }
+    expect(avatarFolderOf(preset)).toBe('claude')
+    expect(avatarFor(preset, '稳健')).toContain('img/llm/claude/llm-avatar-wenjian.png')
+    expect(avatarFolderOf({ ...preset, avatarFolder: 'gpt' })).toBe('gpt')
   })
 })

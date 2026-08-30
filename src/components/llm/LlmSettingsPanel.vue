@@ -245,7 +245,7 @@ function presetName(id: string | null): string {
           <span>头像文件夹</span>
           <input
             v-model="selected.avatarFolder" type="text" data-testid="llm-avatar-folder"
-            placeholder="如 gpt；留空=自动（custom）"
+            placeholder="如 gpt；留空=按 URL/模型自动识别"
           >
         </label>
         <label class="llm-row">
