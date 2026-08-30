@@ -10,7 +10,7 @@ import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard,
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
 import { createTableLoadRetryController } from './tableLoadRetry'
-import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
+import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -148,7 +148,7 @@ const tableActionLabel = computed(() => ({
 }[props.tableActionEvent?.type ?? 'peng']))
 const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
 const userAvatar = computed(() => props.themeName === 'llmAnime'
-  ? animeCharacterAvatarUrl(props.user.characterId)
+  ? animeAvatarForPlayer(props.user)
   : props.user.avatar)
 const scoreDeltaFor = (playerIndex: number) => props.scoreFlowEvent?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
 const hoveredWaits = computed(() => hoveredDiscard.value
@@ -395,7 +395,7 @@ function onAvatarError(entry: GamePlayer) {
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
-      :avatar-override="themeName === 'llmAnime' ? animeCharacterAvatarUrl(player.characterId) : undefined"
+      :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :bubble="llmBubbles?.[index + 1]"
     />
 
