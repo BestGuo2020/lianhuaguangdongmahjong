@@ -27,14 +27,14 @@ defineEmits<{ 'update:modelValue': [value: CharacterId] }>()
 </template>
 
 <style scoped>
-.anime-character-picker { display: grid; gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid rgba(211, 174, 255, .3); border-radius: 10px; background: linear-gradient(145deg, rgba(45, 50, 120, .44), rgba(103, 46, 119, .3)); }
+.anime-character-picker { display: grid; gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid #b99b69; border-radius: 10px; background: #e9deca; box-shadow: inset 0 1px rgba(255,255,255,.72); }
 .anime-character-picker header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.anime-character-picker header b { color: #fff1ff; font-size: 14px; }
-.anime-character-picker header span { color: #b9c9ef; font-size: 10px; }
+.anime-character-picker header b { color: #3f332a; font-size: 14px; }
+.anime-character-picker header span { color: #796b5b; font-size: 10px; }
 .anime-character-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; max-height: 174px; overflow-y: auto; }
-.anime-character-grid button { display: grid; justify-items: center; gap: 3px; min-width: 0; padding: 5px 3px; border: 1px solid rgba(151, 174, 236, .28); border-radius: 8px; background: rgba(12, 20, 62, .72); color: #dce7ff; cursor: pointer; }
-.anime-character-grid button.active { border-color: #ff9dde; background: rgba(116, 58, 151, .66); box-shadow: 0 0 12px rgba(255, 135, 211, .28); }
-.anime-character-grid img { width: 40px; height: 40px; border: 2px solid rgba(236, 218, 255, .75); border-radius: 50%; object-fit: cover; background: #273575; }
+.anime-character-grid button { display: grid; justify-items: center; gap: 3px; min-width: 0; padding: 5px 3px; border: 1px solid #cbb896; border-radius: 8px; background: #f7f0e4; color: #44382f; cursor: pointer; }
+.anime-character-grid button.active { border-color: #a95345; background: #ead3b8; box-shadow: inset 0 -3px #a95345; }
+.anime-character-grid img { width: 40px; height: 40px; border: 2px solid #c2a36d; border-radius: 50%; object-fit: cover; background: #f3eadb; }
 .anime-character-grid span { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px), (max-height: 520px) {
   .anime-character-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 126px; }
