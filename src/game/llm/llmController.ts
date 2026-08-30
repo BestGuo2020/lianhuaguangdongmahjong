@@ -33,7 +33,7 @@ import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import type { TileType } from '../core/contracts/types'
 import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
-import { requestLlmDecision } from './client'
+import { isConditionalReasoningSuppressed, requestLlmDecision } from './client'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction, StateSnapshotV1 } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
@@ -139,7 +139,8 @@ async function decideCanonical(
   const prompt = buildPrompt(config.style, built.request)
   const requestedReasoningPolicy = resolveReasoningPolicy(config, true)
   const alwaysThinking = requestedReasoningPolicy.mode === 'always-on'
-  const supportsReasoning = requestedReasoningPolicy.mode === 'explicit-on' || alwaysThinking
+  const supportsReasoning = (requestedReasoningPolicy.mode === 'explicit-on' || alwaysThinking)
+    && !isConditionalReasoningSuppressed(config)
   // 当前游戏循环没有更短的外部倒计时；条件深思拥有独立的 45 秒总预算（40 秒请求 + 余量）。
   const trigger = supportsReasoning
     ? reasoning.admit(built.request, input.playerIndex, reasoning.config.minRemainingBudgetMs)

@@ -6,11 +6,16 @@ import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
 import { inferProviderDialect, resolveReasoningPolicy } from './reasoningPolicy'
+import {
+  adaptiveReasoningBudget, isReasoningTemporarilySuppressed,
+  recordReasoningLength, recordReasoningSuccess,
+} from './reasoningBudget'
 
 export class LlmClientError extends Error {
   constructor(
     readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning' | 'length',
     message: string,
+    readonly reasoningTokens = 0,
   ) {
     super(message)
     this.name = 'LlmClientError'
@@ -39,6 +44,7 @@ export interface LlmDecisionOptions {
 interface ChatResponse {
   content: string
   finishReason: string | null
+  reasoningTokens: number
 }
 
 /**
@@ -125,6 +131,10 @@ export function isQwenThinkingModel(config: Pick<LlmProviderConfig, 'baseUrl' | 
 
 export function effectiveDecisionTimeoutMs(config: LlmProviderConfig): number {
   return config.timeoutEnabled === false ? Number.POSITIVE_INFINITY : config.timeoutMs
+}
+
+export function isConditionalReasoningSuppressed(config: LlmProviderConfig): boolean {
+  return isReasoningTemporarilySuppressed(config, resolveReasoningPolicy(config, true))
 }
 
 function providerExtraBody(
@@ -253,7 +263,7 @@ async function readStreamingResponse(
 
   if (!sawData) throw new LlmClientError('parse', 'API 流式响应没有有效数据')
   if (finishReason === 'length' && options.strictLength !== false) {
-    throw new LlmClientError('length', 'finish_reason=length（输出被截断）')
+    throw new LlmClientError('length', 'finish_reason=length（输出被截断）', reasoningTokens)
   }
   if (!content && options.allowEmptyContent !== true) {
     throw new LlmClientError('parse', 'API 响应格式无效或无内容')
@@ -261,7 +271,7 @@ async function readStreamingResponse(
   if ((sawReasoning || reasoningTokens > 0) && !options.allowReasoning && !options.acceptReasoningResponse) {
     throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
   }
-  return { content, finishReason }
+  return { content, finishReason, reasoningTokens }
 }
 
 async function callOnce(
@@ -317,8 +327,11 @@ async function callOnce(
     }
     const body = (await response.json()) as OpenAIResponseBody
     const choice = body.choices?.[0]
+    const reasoningTokens = typeof body.usage?.completion_tokens_details?.reasoning_tokens === 'number'
+      ? body.usage.completion_tokens_details.reasoning_tokens
+      : 0
     if (choice?.finish_reason === 'length' && options.strictLength !== false) {
-      throw new LlmClientError('length', 'finish_reason=length（输出被截断）')
+      throw new LlmClientError('length', 'finish_reason=length（输出被截断）', reasoningTokens)
     }
     if (!choice?.message
       || typeof choice.message.content !== 'string'
@@ -326,7 +339,6 @@ async function callOnce(
       throw new LlmClientError('parse', 'API 响应格式无效或无内容')
     }
     const reasoningContent = choice.message.reasoning_content
-    const reasoningTokens = body.usage?.completion_tokens_details?.reasoning_tokens
     const leakedReasoning = (typeof reasoningContent === 'string' && reasoningContent.trim().length > 0)
       || (typeof reasoningTokens === 'number' && reasoningTokens > 0)
       || (typeof body.reasoning === 'string' && body.reasoning.trim().length > 0)
@@ -334,7 +346,7 @@ async function callOnce(
     if (leakedReasoning && !options.allowReasoning && !options.acceptReasoningResponse) {
       throw new LlmClientError('reasoning', '供应商仍返回思考内容，非思考模式验证失败')
     }
-    return { content: choice.message.content, finishReason: choice.finish_reason ?? null }
+    return { content: choice.message.content, finishReason: choice.finish_reason ?? null, reasoningTokens }
   } catch (error) {
     if (error instanceof LlmClientError) throw error
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -378,9 +390,12 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
       ? (glmFlash ? (dialect === 'official' ? 128 : 512)
         : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
       : undefined
-    const deepReasoningMaxTokens = orcaLongReasoning
+    const initialDeepReasoningMaxTokens = orcaLongReasoning
       ? 65_536
       : relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
+    const deepReasoningMaxTokens = options.reasoning
+      ? adaptiveReasoningBudget(config, reasoningPolicy, initialDeepReasoningMaxTokens)
+      : initialDeepReasoningMaxTokens
     const acceptReasoningResponse = options.reasoning === true
       || alwaysThinking
       || reasoningPolicy.acceptReasoningResponse
@@ -400,8 +415,17 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           onReasoningProgress: options.onReasoningProgress,
         },
       )
-      return parseLlmOutput(response.content, options.candidateIds)
+      const parsed = parseLlmOutput(response.content, options.candidateIds)
+      if (options.reasoning) {
+        recordReasoningSuccess(config, reasoningPolicy, response.reasoningTokens)
+      }
+      return parsed
     } catch (error) {
+      if (options.reasoning && error instanceof LlmClientError && error.kind === 'length') {
+        recordReasoningLength(
+          config, reasoningPolicy, deepReasoningMaxTokens, error.reasoningTokens,
+        )
+      }
       if (error instanceof LlmClientError && error.kind === 'parse' && !errorForRetry) {
         const retry = withFeedbackRetry(messages.system, messages.user, error.message, options.candidateIds)
         return attempt(retry, error.message)
