@@ -89,6 +89,8 @@ export interface SettlementTimelineOptions<E extends SettlementEndOptions, S ext
   getSourceIndex?(context: SettlementWinContext<E>): number
   getTableAction?(context: SettlementWinContext<E>): { type: TableActionType; sourceIndex: number | null }
   getWinSound?(context: SettlementWinContext<E>): string
+  /** 清理旧回合控制器后立即启动赢家优先的 AI 感言队列；结算阶段可等待同一 Promise。 */
+  onWinStart?(context: SettlementWinContext<E>): void
   finalizeWin(context: SettlementWinContext<E>): RoundResult
   endDraw(context: SettlementDrawContext): RoundResult
   /** 亮牌完成后串行播放 AI 胜负感言；Promise 完成前不得弹出结算窗口。 */
@@ -157,6 +159,7 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       winTile,
       scoresBefore: [],
     }
+    options.onWinStart?.(context)
     const sourceIndex = options.getSourceIndex?.(context)
       ?? (winner.drawnTileIndex >= 0 ? winner.drawnTileIndex : winner.hand.lastIndexOf(winTile))
     const tableAction = options.getTableAction?.(context) ?? {
