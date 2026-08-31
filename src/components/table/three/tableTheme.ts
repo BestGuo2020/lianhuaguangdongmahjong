@@ -57,6 +57,8 @@ export interface TableTheme {
     dark: string
     light: string
     opacity: number
+    slotDark?: string
+    slotOpacity?: number
   }
   /** 中控台视觉缩放与厚度倍率；不改变牌河/牌墙坐标。 */
   machineScale?: number
@@ -82,6 +84,8 @@ export interface TableTheme {
   edgeTrimWidth?: number
   /** 非木质包边上的细金线与装饰纹样。 */
   edgeAccent?: boolean
+  /** 包边金线的主题专属材质；未配置时沿用现有金属高光。 */
+  edgeAccentMaterial?: PhysicalParams
   /** 包边顶面复用桌面材质，只保留深色立面，避免形成宽色带。 */
   edgeTrimTopMatchesSurface?: boolean
   /** 牌桌侧向补光；不同主题可换成相配的色温。 */
@@ -91,6 +95,10 @@ export interface TableTheme {
   }
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
+  /** 牌面底色的顶部/中部/底部烘焙明暗；不传保留默认牌面。 */
+  tileFaceGradient?: [string, string, string]
+  /** 牌体边缘低成本 AO 强度；0/不传时禁用。 */
+  tileAoIntensity?: number
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
   tile: {
     /** 牌体白色侧面。 */
@@ -770,51 +778,59 @@ export const llmAnimeTheme: TableTheme = {
       color: 0xd3ad68,
       emissive: 0x211507,
       emissiveIntensity: .1,
-      roughness: .34,
-      metalness: .68,
-      clearcoat: .42,
-      clearcoatRoughness: .2,
+      roughness: .62,
+      metalness: .22,
+      clearcoat: .1,
+      clearcoatRoughness: .58,
     },
     goldHighlight: {
       ...defaultTableTheme.table.goldHighlight,
       color: 0xf0cc82,
       emissive: 0x2a1d0b,
       emissiveIntensity: .12,
-      roughness: .26,
-      metalness: .78,
-      clearcoat: .48,
-      clearcoatRoughness: .16,
+      roughness: .56,
+      metalness: .26,
+      clearcoat: .12,
+      clearcoatRoughness: .52,
     },
     machine: {
       ...defaultTableTheme.table.machine,
       color: 0x252c28,
-      roughness: .44,
-      metalness: .08,
-      clearcoat: .35,
-      clearcoatRoughness: .3,
+      roughness: .68,
+      metalness: .02,
+      clearcoat: .06,
+      clearcoatRoughness: .62,
     },
     machineTop: {
       ...defaultTableTheme.table.machineTop,
       emissive: 0x101d16,
       emissiveIntensity: .14,
-      roughness: .4,
-      metalness: .06,
-      clearcoat: .4,
-      clearcoatRoughness: .26,
+      roughness: .7,
+      metalness: 0,
+      clearcoat: .04,
+      clearcoatRoughness: .68,
     },
     machineBottom: {
       ...defaultTableTheme.table.machineBottom,
       color: 0x171c19,
-      roughness: .56,
-      metalness: .08,
-      clearcoat: .18,
+      roughness: .75,
+      metalness: 0,
+      clearcoat: .03,
+      clearcoatRoughness: .7,
     },
   },
   tableFelt: true,
   tableVignette: .14,
   tableFeltVariation: 8,
-  tableGuide: { dark: '#30443a', light: '#b5c2aa', opacity: .14 },
-  machineScale: 1.13,
+  tableGuide: {
+    dark: '#30443a',
+    light: '#b5c2aa',
+    opacity: .14,
+    slotDark: '#102018',
+    slotOpacity: .42,
+  },
+  // 原 3.85×1.13 的中控台总宽高缩小 0.2 个牌长（0.94×0.2）。
+  machineScale: 1.081,
   machineRelief: 1.22,
   staticTableCastShadow: false,
   plainSurface: true,
@@ -823,19 +839,30 @@ export const llmAnimeTheme: TableTheme = {
     color: 0x27332c,
     emissive: 0x0c130e,
     emissiveIntensity: .025,
-    roughness: .42,
-    metalness: .06,
-    clearcoat: .34,
-    clearcoatRoughness: .28,
+    roughness: .76,
+    metalness: 0,
+    clearcoat: .04,
+    clearcoatRoughness: .72,
   },
   edgeTrimWidth: .65,
   edgeAccent: true,
+  edgeAccentMaterial: {
+    color: 0xc7a45b,
+    emissive: 0x2c210d,
+    emissiveIntensity: .08,
+    roughness: .62,
+    metalness: .18,
+    clearcoat: .08,
+    clearcoatRoughness: .6,
+  },
   edgeTrimTopMatchesSurface: true,
   rimLight: {
     color: 0xffe2ae,
-    intensity: .72,
+    intensity: .12,
   },
   tileBackGradient: ['#bd5b48', '#bd5b48', '#bd5b48'],
+  tileFaceGradient: ['#f8f5ed', '#e8e5dc', '#cfd2ca'],
+  tileAoIntensity: .32,
   tile: {
     ...defaultTableTheme.tile,
     side: {

@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js'
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { preloadTileImages, preloadedTileImages, tileBackUrl, type TileAssetTheme } from '../game/core/presentation/tileAssets'
 import type { TileType } from '../game/core/contracts/types'
 import { createAdaptiveQualityController, parseQualityOverride, QUALITY_LEVELS } from './table/three/adaptiveQuality'
@@ -297,6 +298,15 @@ onMounted(async () => {
     renderProfile.hemisphere.groundColor,
     renderProfile.hemisphere.intensity,
   ))
+  if (renderProfile.areaLights?.length) {
+    RectAreaLightUniformsLib.init()
+    renderProfile.areaLights.forEach((profile) => {
+      const areaLight = new THREE.RectAreaLight(profile.color, profile.intensity, profile.width, profile.height)
+      areaLight.position.set(...profile.position)
+      areaLight.lookAt(...profile.target)
+      scene.add(areaLight)
+    })
+  }
   const keyLight = new THREE.DirectionalLight(renderProfile.keyLight.color, renderProfile.keyLight.intensity)
   keyLight.position.set(...renderProfile.keyLight.position)
   keyLight.target.position.set(0, 0, renderProfile.keyLight.targetZ)

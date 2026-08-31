@@ -121,7 +121,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
           title="声音设置"
           @click.stop="toggleAudioMenu"
         >
-          <img :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
+          <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9h4l5-4v14l-5-4H4z" />
+            <path v-if="hasAudibleAudio" d="M16 8.5c1.5 1.8 1.5 5.2 0 7M19 6c3 3.2 3 8.8 0 12" />
+            <path v-else d="m16 9 5 6m0-6-5 6" />
+          </svg>
+          <img v-else :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
         </button>
         <div v-if="audioMenuOpen" class="audio-menu" role="group" aria-label="声音设置">
           <p>声音设置</p>
@@ -140,7 +145,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
         </div>
       </div>
       <button class="icon-button" aria-label="查看规则" @click="emit('openRules')">
-        <img :src="`${imageBase}manual.png`" alt="" />
+        <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5.5c2.7-.8 5.3-.3 8 1.5v12c-2.7-1.8-5.3-2.3-8-1.5zM20 5.5c-2.7-.8-5.3-.3-8 1.5v12c2.7-1.8 5.3-2.3 8-1.5z" />
+          <path d="M12 7v12" />
+        </svg>
+        <img v-else :src="`${imageBase}manual.png`" alt="" />
       </button>
     </nav>
   </header>

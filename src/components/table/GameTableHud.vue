@@ -470,7 +470,10 @@ function onAvatarError(entry: GamePlayer) {
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
-        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen"><img class="action-icon" :src="`${imageBase}tips.png`" alt="" /></button>
+        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
+          <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
+          <img v-else class="action-icon" :src="`${imageBase}tips.png`" alt="" />
+        </button>
         <template v-if="actionPrompt?.type === 'claim'">
           <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
           <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>

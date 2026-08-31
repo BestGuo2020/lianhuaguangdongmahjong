@@ -83,25 +83,25 @@ function onPortraitError(event: Event) {
   content: '';
   position: absolute;
   z-index: -2;
-  right: 1%;
-  bottom: 7%;
-  width: 57%;
-  height: 31%;
-  border: 2px solid #2d241c;
-  background: #fff8e8;
-  box-shadow: 3px 3px 0 rgba(45, 36, 28, .18);
-  clip-path: polygon(5% 0, 100% 7%, 95% 100%, 0 88%);
-  transform: rotate(-4deg);
+  right: -8%;
+  bottom: -4%;
+  width: 74%;
+  height: 58%;
+  border: 0;
+  background: radial-gradient(ellipse at 58% 58%, rgba(10, 27, 22, .72) 0 34%, rgba(34, 75, 63, .38) 54%, transparent 78%);
+  box-shadow: none;
 }
 .anime-action-burst {
   position: absolute;
   z-index: -1;
-  inset: 4% 9% 12% 0;
-  opacity: .56;
-  border-top: 2px solid var(--anime-accent, #9e5148);
-  border-left: 2px solid transparent;
-  border-radius: 50%;
-  transform: rotate(-10deg) skewX(-8deg);
+  inset: -18% -24%;
+  opacity: .66;
+  border: 0;
+  background:
+    radial-gradient(circle at 42% 54%, color-mix(in srgb, var(--anime-accent, #9e5148) 46%, transparent) 0 3%, transparent 32%),
+    conic-gradient(from 12deg at 42% 54%, transparent 0 9%, rgba(133, 224, 241, .42) 10% 11%, transparent 12% 29%, rgba(235, 142, 167, .38) 30% 31%, transparent 32% 100%);
+  -webkit-mask-image: radial-gradient(circle at 42% 54%, #000 0 18%, rgba(0,0,0,.72) 35%, transparent 70%);
+  mask-image: radial-gradient(circle at 42% 54%, #000 0 18%, rgba(0,0,0,.72) 35%, transparent 70%);
 }
 .anime-action-cue img.base-q-avatar {
   position: absolute;
@@ -115,16 +115,17 @@ function onPortraitError(event: Event) {
 }
 .anime-action-cue img.dedicated-action-art {
   position: absolute;
-  inset: 1% 3% 1% 0;
-  width: 88%;
-  height: 99%;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
   border: 0;
   border-radius: 0;
   object-fit: contain;
   object-position: center;
   -webkit-mask-image: radial-gradient(ellipse at 44% 50%, #000 0 32%, rgba(0,0,0,.92) 46%, rgba(0,0,0,.48) 61%, transparent 79%);
   mask-image: radial-gradient(ellipse at 44% 50%, #000 0 32%, rgba(0,0,0,.92) 46%, rgba(0,0,0,.48) 61%, transparent 79%);
-  filter: grayscale(.68) sepia(.18) saturate(.75) contrast(.98) drop-shadow(3px 4px 0 rgba(45, 36, 28, .26));
+  filter: saturate(1.08) contrast(1.02) drop-shadow(3px 4px 0 rgba(45, 36, 28, .26));
 }
 .anime-action-copy {
   position: absolute;

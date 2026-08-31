@@ -8,6 +8,7 @@ export interface TableSceneRenderProfile {
     readonly lookAtZ: number
     readonly driftX: number
   }
+  readonly toneMapping: THREE.ToneMapping
   readonly exposure: number
   readonly fog: boolean
   readonly hemisphere: {
@@ -21,6 +22,14 @@ export interface TableSceneRenderProfile {
     readonly position: readonly [number, number, number]
     readonly targetZ: number
   }
+  readonly areaLights?: readonly {
+    readonly color: number
+    readonly intensity: number
+    readonly width: number
+    readonly height: number
+    readonly position: readonly [number, number, number]
+    readonly target: readonly [number, number, number]
+  }[]
   readonly shadows: {
     readonly mapType: THREE.ShadowMapType
     readonly mapSize: number
@@ -42,6 +51,7 @@ export interface TableSceneRenderProfile {
 /** 原牌桌渲染参数；非 llmAnime 主题继续使用，避免主题改造影响旧画面。 */
 export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
   camera: { fov: 39, positionY: 17.2, positionZ: 11.8, lookAtZ: -.25, driftX: .035 },
+  toneMapping: THREE.ACESFilmicToneMapping,
   exposure: .92,
   fog: true,
   hemisphere: { skyColor: 0xf3e4ba, groundColor: 0x020b08, intensity: 1.65 },
@@ -68,10 +78,29 @@ export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
  */
 export const LLM_ANIME_SCENE_PROFILE: TableSceneRenderProfile = {
   camera: { fov: 34, positionY: 20.8, positionZ: 14, lookAtZ: -.65, driftX: .025 },
-  exposure: 1.1,
+  toneMapping: THREE.NeutralToneMapping,
+  exposure: 1,
   fog: false,
-  hemisphere: { skyColor: 0xfff4e8, groundColor: 0x2b3b32, intensity: 1.05 },
-  keyLight: { color: 0xfff0dc, intensity: 2.2, position: [-4, 22, 6], targetZ: -1.65 },
+  hemisphere: { skyColor: 0xfff4e8, groundColor: 0x2b3b32, intensity: .65 },
+  keyLight: { color: 0xfff0dc, intensity: .75, position: [-4, 22, 6], targetZ: -1.65 },
+  areaLights: [
+    {
+      color: 0xfff0dc,
+      intensity: 4,
+      width: 16,
+      height: 10,
+      position: [-2, 14, 6],
+      target: [0, 0, -1.65],
+    },
+    {
+      color: 0xdde8ff,
+      intensity: 1.2,
+      width: 10,
+      height: 8,
+      position: [8, 9, -7],
+      target: [0, 0, -1.65],
+    },
+  ],
   shadows: {
     mapType: THREE.VSMShadowMap,
     mapSize: 2048,
@@ -99,7 +128,7 @@ export function applyRendererProfile(
   profile: TableSceneRenderProfile,
 ): void {
   renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMapping = profile.toneMapping
   renderer.toneMappingExposure = profile.exposure
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = profile.shadows.mapType

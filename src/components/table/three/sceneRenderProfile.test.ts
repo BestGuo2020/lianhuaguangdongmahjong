@@ -10,15 +10,16 @@ import {
 } from './sceneRenderProfile'
 
 describe('llmAnime Three.js 渲染配置', () => {
-  it('只为 llmAnime 使用长焦机位、ACES 曝光和 2048 VSM 软阴影', () => {
+  it('只为 llmAnime 使用长焦机位、Neutral 色调、双面积光和 2048 VSM 软阴影', () => {
     expect(tableSceneRenderProfile('llmAnime')).toBe(LLM_ANIME_SCENE_PROFILE)
     expect(tableSceneRenderProfile('llm')).toBe(DEFAULT_TABLE_SCENE_PROFILE)
     expect(LLM_ANIME_SCENE_PROFILE.camera.fov).toBeGreaterThanOrEqual(28)
     expect(LLM_ANIME_SCENE_PROFILE.camera.fov).toBeLessThanOrEqual(34)
     expect(LLM_ANIME_SCENE_PROFILE.camera.positionY).toBeGreaterThan(DEFAULT_TABLE_SCENE_PROFILE.camera.positionY)
     expect(LLM_ANIME_SCENE_PROFILE.camera.positionZ).toBeGreaterThan(DEFAULT_TABLE_SCENE_PROFILE.camera.positionZ)
-    expect(LLM_ANIME_SCENE_PROFILE.exposure).toBeGreaterThanOrEqual(1.1)
-    expect(LLM_ANIME_SCENE_PROFILE.exposure).toBeLessThanOrEqual(1.2)
+    expect(LLM_ANIME_SCENE_PROFILE.toneMapping).toBe(THREE.NeutralToneMapping)
+    expect(LLM_ANIME_SCENE_PROFILE.exposure).toBe(1)
+    expect(LLM_ANIME_SCENE_PROFILE.areaLights).toHaveLength(2)
     expect(LLM_ANIME_SCENE_PROFILE.shadows.mapSize).toBe(2048)
     expect(LLM_ANIME_SCENE_PROFILE.shadows.mapType).toBe(THREE.VSMShadowMap)
   })
@@ -32,8 +33,8 @@ describe('llmAnime Three.js 渲染配置', () => {
     }
     applyRendererProfile(renderer as never, LLM_ANIME_SCENE_PROFILE)
     expect(renderer.outputColorSpace).toBe(THREE.SRGBColorSpace)
-    expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping)
-    expect(renderer.toneMappingExposure).toBe(1.1)
+    expect(renderer.toneMapping).toBe(THREE.NeutralToneMapping)
+    expect(renderer.toneMappingExposure).toBe(1)
     expect(renderer.shadowMap).toEqual({ enabled: true, type: THREE.VSMShadowMap })
   })
 
