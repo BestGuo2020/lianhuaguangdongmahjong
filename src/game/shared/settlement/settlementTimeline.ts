@@ -4,8 +4,12 @@ import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
   REDUCED_WIN_REVEAL_DURATION,
+  REDUCED_WIN_CUE_EXIT_DURATION,
+  REDUCED_WIN_CUE_LEAD_DURATION,
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
+  WIN_CUE_EXIT_DURATION,
+  WIN_CUE_LEAD_DURATION,
   WIN_REVEAL_DURATION,
 } from '../../core/presentation/winEffect'
 import { makeRoundResult as buildRoundResult } from './roundResult'
@@ -169,6 +173,8 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
     const reducedMotion = prefersReducedMotion()
     const effectDuration = reducedMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
     const revealDuration = reducedMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
+    const cueLeadDuration = reducedMotion ? REDUCED_WIN_CUE_LEAD_DURATION : WIN_CUE_LEAD_DURATION
+    const cueExitDuration = reducedMotion ? REDUCED_WIN_CUE_EXIT_DURATION : WIN_CUE_EXIT_DURATION
     const robbedKongPlayerIndex = endOptions.robbedKongPlayerIndex ?? -1
     const isDiscardWin = !endOptions.selfDraw
       && !endOptions.robbedKong
@@ -186,7 +192,8 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       // 点炮牌先从牌河消失，避免它在等待胡牌音效期间继续显示为最后一张弃牌。
     }
 
-    state.winPresentation.value = null
+    // 暂存赢牌来源供 DOM 立绘/测试读取；Three.js 光效仍由 winEffect 是否存在控制。
+    state.winPresentation.value = presentation
     state.winEffect.value = null
 
     const activateWinEffect = () => {
@@ -202,11 +209,6 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
         reducedMotion,
         id: Date.now(),
       }
-      options.showTableAction(tableAction.type, winnerIndex, tableAction.sourceIndex, winTile, -1)
-      const winSound = isDiscardWin
-        ? 'hu.mp3'
-        : (options.getWinSound?.(context) ?? (endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3'))
-      options.playSound(winSound)
       if (!reducedMotion) {
         options.later(() => {
           if (serial === currentSerial) options.playSound('hu_effect_sound.mp3', 0.72)
@@ -235,17 +237,27 @@ export function createSettlementTimeline<E extends SettlementEndOptions, S exten
       }, effectDuration)
     }
 
+    const startWinCue = () => {
+      if (serial !== currentSerial) return
+      options.showTableAction(tableAction.type, winnerIndex, tableAction.sourceIndex, winTile, -1)
+      const winSound = isDiscardWin
+        ? 'hu.mp3'
+        : (options.getWinSound?.(context) ?? (endOptions.selfDraw ? 'zimo.mp3' : 'hu.mp3'))
+      options.playSound(winSound)
+      options.later(activateWinEffect, cueLeadDuration + cueExitDuration)
+    }
+
     if (isDiscardWin) {
       // 等具体牌名音效播放结束，再留出约 1 秒过渡；到点时同一个回调内启动
       // 胡音效与视觉特效。牌名音效由出牌流程提前创建，避免在这里重复播放。
       void (state.lastDiscardSound?.value ?? Promise.resolve()).then(() => {
         if (serial !== currentSerial) return
-        options.later(activateWinEffect, DISCARD_WIN_EFFECT_DELAY)
+        options.later(startWinCue, DISCARD_WIN_EFFECT_DELAY)
       })
       return
     }
 
-    activateWinEffect()
+    startWinCue()
   }
 
   function endDraw() {

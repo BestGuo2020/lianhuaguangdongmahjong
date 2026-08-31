@@ -14,7 +14,9 @@ import {
   DEFAULT_TABLE_SCENE_PROFILE,
   applyDirectionalShadowProfile,
   applyRendererProfile,
+  responsiveCameraFov,
   shadowMapSizeForQuality,
+  tableCameraPosition,
   tableSceneRenderProfile,
   type TableSceneRenderProfile,
 } from './table/three/sceneRenderProfile'
@@ -75,6 +77,7 @@ let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('
 // 抗锯齿开关：默认开；URL 带 ?aa=off 关闭 MSAA（省一大截 fill，但牌边缘会出现锯齿）。
 // 牌桌主题：URL 带 ?theme=<name> 可切换（见 tableTheme.ts TABLE_THEMES），不传用默认墨玉翡翠。
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
+const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
   onChange: applyQuality,
@@ -223,6 +226,7 @@ function resize() {
   // updateStyle=false，避免 resize 时改写 canvas 的 CSS 尺寸。
   renderer.setSize(width, height, false)
   camera.aspect = width / Math.max(height, 1)
+  camera.fov = responsiveCameraFov(renderProfile.camera.fov, camera.aspect)
   camera.updateProjectionMatrix()
 }
 
@@ -258,9 +262,16 @@ function render(time = 0) {
     cameraShakeZ = winFrame.shakeZ
   }
   renderer.toneMappingExposure = exposure
-  camera.position.x = Math.sin(time * .00035) * renderProfile.camera.driftX + cameraShakeX
-  camera.position.z = renderProfile.camera.positionZ + cameraShakeZ
+  const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
+  camera.position.set(...cameraPosition)
   camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+  if (cameraLabEnabled && canvas.value) {
+    const canvasElement = canvas.value as HTMLCanvasElement
+    canvasElement.dataset.cameraPosition = cameraPosition
+      .map((value) => value.toFixed(6))
+      .join(',')
+    canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
+  }
   if (outlineEffect) outlineEffect.render(scene, camera)
   else renderer.render(scene, camera)
   animationFrame = requestAnimationFrame(render)

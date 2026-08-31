@@ -5,7 +5,9 @@ import {
   LLM_ANIME_SCENE_PROFILE,
   applyDirectionalShadowProfile,
   applyRendererProfile,
+  responsiveCameraFov,
   shadowMapSizeForQuality,
+  tableCameraPosition,
   tableSceneRenderProfile,
 } from './sceneRenderProfile'
 
@@ -51,5 +53,29 @@ describe('llmAnime Three.js 渲染配置', () => {
     expect(light.shadow.blurSamples).toBe(16)
     expect(shadowMapSizeForQuality(LLM_ANIME_SCENE_PROFILE, 1024)).toBe(2048)
     expect(shadowMapSizeForQuality(LLM_ANIME_SCENE_PROFILE, 512)).toBe(1024)
+  })
+
+  it.each([DEFAULT_TABLE_SCENE_PROFILE, LLM_ANIME_SCENE_PROFILE])('普通摸打保持固定机位，胡牌 shake 结束后精确复原', (profile) => {
+    const idle = tableCameraPosition(profile)
+    expect(idle).toEqual([0, profile.camera.positionY, profile.camera.positionZ])
+
+    const shaken = tableCameraPosition(profile, .075, -.055)
+    expect(shaken).toEqual([.075, profile.camera.positionY, profile.camera.positionZ - .055])
+
+    const restored = tableCameraPosition(profile)
+    expect(restored).toEqual(idle)
+  })
+
+  it.each([DEFAULT_TABLE_SCENE_PROFILE, LLM_ANIME_SCENE_PROFILE])('平板窄宽比保持 16:9 的水平视野', (profile) => {
+    const referenceAspect = 16 / 9
+    const tabletAspect = 4 / 3
+    const fittedFov = responsiveCameraFov(profile.camera.fov, tabletAspect)
+    expect(fittedFov).toBeGreaterThan(profile.camera.fov)
+    expect(responsiveCameraFov(profile.camera.fov, referenceAspect)).toBe(profile.camera.fov)
+    expect(responsiveCameraFov(profile.camera.fov, 21 / 9)).toBe(profile.camera.fov)
+
+    const baseHorizontalTangent = Math.tan(THREE.MathUtils.degToRad(profile.camera.fov) / 2) * referenceAspect
+    const tabletHorizontalTangent = Math.tan(THREE.MathUtils.degToRad(fittedFov) / 2) * tabletAspect
+    expect(tabletHorizontalTangent).toBeCloseTo(baseHorizontalTangent, 10)
   })
 })

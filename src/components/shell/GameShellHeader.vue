@@ -83,7 +83,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
     <nav>
       <div ref="themePicker" class="theme-picker">
         <button
-          class="theme-toggle"
+          class="theme-toggle topbar-control"
           aria-label="切换牌桌主题"
           :aria-expanded="themeMenuOpen"
           title="切换牌桌主题"
@@ -108,14 +108,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
       </div>
       <button
         v-if="gameMode === 'remote' && phase !== 'lobby'"
-        class="quit-match"
+        class="quit-match topbar-control"
         aria-label="退出对局"
         title="退出对局"
         @click="emit('quit')"
       ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
       <div ref="audioPicker" class="audio-picker">
         <button
-          class="icon-button"
+          class="icon-button topbar-control"
           aria-label="声音设置"
           :aria-expanded="audioMenuOpen"
           title="声音设置"
@@ -144,7 +144,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
           </button>
         </div>
       </div>
-      <button class="icon-button" aria-label="查看规则" @click="emit('openRules')">
+      <button class="icon-button topbar-control" aria-label="查看规则" @click="emit('openRules')">
         <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5.5c2.7-.8 5.3-.3 8 1.5v12c-2.7-1.8-5.3-2.3-8-1.5zM20 5.5c-2.7-.8-5.3-.3-8 1.5v12c2.7-1.8 5.3-2.3 8-1.5z" />
           <path d="M12 7v12" />

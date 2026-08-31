@@ -62,7 +62,7 @@
 | `claude` | 克劳德书姬 |
 | `deepseek` | 大肥鱼 |
 | `doubao` | 豆包学妹 |
-| `gemini` | 双子星姬 |
+| `gemini` | 美国豆包 |
 | `glm` | 智谱狐姬 |
 | `gpt` | GPT龙姬 |
 | `grok` | Grok小恶魔 |
@@ -705,7 +705,7 @@ Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 
 
 ## 15. PC / 移动端响应式重构里程碑（2026-08-31 新增）
 
-> 状态：计划已冻结，尚未开始正式实施。
+> 状态：Phase R1～R6 及响应式补丁 R6.1～R6.6 实施与浏览器验收完成；按本次用户要求未提交、未同步 `vibehub`，仓库流程关闭项待后续执行。
 >
 > 本节是后续响应式改造的唯一实施与验收入口。正式实施时必须持续更新 §15.6 的记录表，并为每个批次保存“修改前 / 修改后”截图与测试结果；只修改代码但不补记录和验收证据，不视为完成。
 
@@ -727,18 +727,18 @@ Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 
 
 | ID | 严重度 | 问题 | 影响范围 | 基线证据 | 状态 |
 |---|---|---|---|---|---|
-| RWD-01 | P0 | DOM 动作 cue 位于 Canvas 上方；胡牌时角色立绘与 Three.js 胡牌光效同时启动，立绘遮挡光束与爆发中心 | 所有主题有层级风险，`llmAnime` 最严重 | Canvas `z-index: 1`，动作 cue `z-index: 45`；实际复拍确认遮挡 | 待实施 |
-| RWD-02 | P0 | `llmAnime` 移动端只缩小 cue 容器，专用立绘仍为 200%；胡牌变体的高优先级尺寸还会压过移动端通用规则 | `llmAnime` | 844×390 自摸立绘约 240×184；667×375 普通动作立绘约 184×136 | 待实施 |
-| RWD-03 | P1 | `.game-app` 强制 16:9，超宽 PC 与 19.5:9/20:9 手机横屏产生左右黑边并缩小牌桌 | 所有主题 | 1440×720 游戏区 1280×720；844×390 游戏区约 693×390 | 待实施 |
-| RWD-04 | P1 | Three.js 按游戏容器缩放，DOM HUD 大量使用全视口 `vw/vh`，出现两套缩放基准 | 所有主题 | 有黑边时 DOM 相对牌桌变大，移动端立绘/头像/按钮更易侵入桌面 | 待实施 |
-| RWD-05 | P1 | 移动横屏对家头像进入顶栏；翻精面板与对家头像直接相交 | 所有主题的 3D 牌桌/莲花麻将 | 667×375：顶栏 y=0–34、对家卡 y=19–98；翻精面板 x=550–655、对家卡 x=520–588 | 待实施 |
-| RWD-06 | P1 | 移动端关键触控目标过小 | 所有主题 | 667×375：顶栏按钮 28×28、手牌约 32×43、结算按钮高约 31px | 待实施 |
-| RWD-07 | P1 | 缺少刘海屏/手势区安全边距，且牌桌高度只依赖 `vh` | 所有主题 | 全局无 `safe-area-inset-*`；主体无 `100dvh/100svh` | 待实施 |
-| RWD-08 | P1 | 操作按钮区与手牌缺少稳定安全间距；按钮满载、计时器和吃/杠选择器可能进入手牌区 | 所有主题 | 667×375 基线中操作区底部与手牌顶部仅约 3px | 待实施 |
-| RWD-09 | P2 | LLM 气泡只按头像绝对定位，没有避让牌墙、中控台、翻精面板和动作 cue | 所有主题的 LLM 座位 | PC 参考图右家气泡已覆盖右侧牌墙；移动端最大宽度仍可达 160–180px | 待实施 |
-| RWD-10 | P2 | 移动端结算页靠过度压缩换取不溢出，可读性和可操作性不足 | 所有主题 | 667×375：排名约 11–12px、马牌约 29px、按钮高约 31px | 待实施 |
-| RWD-11 | P2 | 断点只按宽/高判断，PC 矮窗口误入移动压缩；后置主题规则又会覆盖前面的移动端规则 | 所有主题，`llmAnime` 有额外覆盖 | `max-height: 620px` 不区分指针；`llmAnime` 高优先级位置/尺寸规则位于媒体查询之后 | 待实施 |
-| RWD-12 | P2 | 缺少响应式视觉回归，现有构建/单测不能发现遮挡、黑边和触控尺寸退化 | 所有主题 | 无视口矩阵、重叠断言和动作立绘/胡牌光效组合截图 | 待实施 |
+| RWD-01 | P0 | DOM 动作 cue 位于 Canvas 上方；胡牌时角色立绘与 Three.js 胡牌光效同时启动，立绘遮挡光束与爆发中心 | 所有主题有层级风险，`llmAnime` 最严重 | Canvas `z-index: 1`，动作 cue `z-index: 45`；实际复拍确认遮挡 | 已验收（R3/R6） |
+| RWD-02 | P0 | `llmAnime` 移动端只缩小 cue 容器，专用立绘仍为 200%；胡牌变体的高优先级尺寸还会压过移动端通用规则 | `llmAnime` | 844×390 自摸立绘约 240×184；667×375 普通动作立绘约 184×136 | 已验收（R3/R6） |
+| RWD-03 | P1 | `.game-app` 强制 16:9，超宽 PC 与 19.5:9/20:9 手机横屏产生左右黑边并缩小牌桌 | 所有主题 | 1440×720 游戏区 1280×720；844×390 游戏区约 693×390 | 已验收（R1/R6） |
+| RWD-04 | P1 | Three.js 按游戏容器缩放，DOM HUD 大量使用全视口 `vw/vh`，出现两套缩放基准 | 所有主题 | 有黑边时 DOM 相对牌桌变大，移动端立绘/头像/按钮更易侵入桌面 | 已验收（R1/R4/R6） |
+| RWD-05 | P1 | 移动横屏对家头像进入顶栏；翻精面板与对家头像直接相交 | 所有主题的 3D 牌桌/莲花麻将 | 667×375：顶栏 y=0–34、对家卡 y=19–98；翻精面板 x=550–655、对家卡 x=520–588 | 已验收（R2/R6） |
+| RWD-06 | P1 | 移动端关键触控目标过小 | 所有主题 | 667×375：顶栏按钮 28×28、手牌约 32×43、结算按钮高约 31px | 已验收（R2/R5/R6） |
+| RWD-07 | P1 | 缺少刘海屏/手势区安全边距，且牌桌高度只依赖 `vh` | 所有主题 | 全局无 `safe-area-inset-*`；主体无 `100dvh/100svh` | 已验收（R1/R6） |
+| RWD-08 | P1 | 操作按钮区与手牌缺少稳定安全间距；按钮满载、计时器和吃/杠选择器可能进入手牌区 | 所有主题 | 667×375 基线中操作区底部与手牌顶部仅约 3px | 已验收（R2/R6） |
+| RWD-09 | P2 | LLM 气泡只按头像绝对定位，没有避让牌墙、中控台、翻精面板和动作 cue | 所有主题的 LLM 座位 | PC 参考图右家气泡已覆盖右侧牌墙；移动端最大宽度仍可达 160–180px | 已验收（R2/R4/R6） |
+| RWD-10 | P2 | 移动端结算页靠过度压缩换取不溢出，可读性和可操作性不足 | 所有主题 | 667×375：排名约 11–12px、马牌约 29px、按钮高约 31px | 已验收（R5/R6） |
+| RWD-11 | P2 | 断点只按宽/高判断，PC 矮窗口误入移动压缩；后置主题规则又会覆盖前面的移动端规则 | 所有主题，`llmAnime` 有额外覆盖 | `max-height: 620px` 不区分指针；`llmAnime` 高优先级位置/尺寸规则位于媒体查询之后 | 已验收（R4/R6） |
+| RWD-12 | P2 | 缺少响应式视觉回归，现有构建/单测不能发现遮挡、黑边和触控尺寸退化 | 所有主题 | 无视口矩阵、重叠断言和动作立绘/胡牌光效组合截图 | 已验收（R6） |
 
 ### 15.3 分阶段实施计划
 
@@ -856,12 +856,18 @@ Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 
 | 日期 | 批次 | 关联问题 | 实施内容 | 影响文件 | 修改前证据 | 修改后证据 | 测试/命令 | 结果 | 剩余问题 |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-08-31 | 响应式基线审计 | RWD-01～RWD-12 | 完成源码审计及 1440×720、844×390、667×375 实际渲染检查；本批未修改代码 | `src/style.css`、`GameTableHud.vue`、`AnimeActionCue.vue`、`OrientationGate.vue` | 用户 PC 截图及浏览器实测 | 不适用 | 只读审计 | 完成 | 等待 Phase R1 正式实施 |
-| 待填写 | Phase R1 |  |  |  |  |  |  | 未开始 |  |
-| 待填写 | Phase R2 |  |  |  |  |  |  | 未开始 |  |
-| 待填写 | Phase R3 |  |  |  |  |  |  | 未开始 |  |
-| 待填写 | Phase R4 |  |  |  |  |  |  | 未开始 |  |
-| 待填写 | Phase R5 |  |  |  |  |  |  | 未开始 |  |
-| 待填写 | Phase R6 |  |  |  |  |  |  | 未开始 |  |
+| 2026-08-31 | Phase R1 | RWD-03、RWD-04、RWD-07 | 移除强制 16:9 外框，游戏根节点改用 `100vh`→`100svh`→`100dvh` 回退链；建立四向 safe-area、命名尺寸容器及共享响应式 token；Canvas 严格填满同一容器，现有 `ResizeObserver`/camera aspect 链路保持不变 | `src/style.css` | `test-results/responsive-r1/before/jade-1920x900-game.png`、`jade-844x390-game.png`、`jade-667x375-game.png` | `test-results/responsive-r1/after/jade-1920x900-game.png`、`jade-844x390-game.png`、`jade-667x375-game.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "starts a local match" --project=chromium`；浏览器边界测量 | 通过：1920×900 容器 1600→1920px、844×390 容器 693→844px；Canvas/容器同尺寸且三视口 overflow=0；typecheck 通过，E2E 1 passed。首次 4173 旧服务 `page.goto` 超时，改用本轮 5175 服务复测通过 | 本批仅验收 R1 范围；HUD 互斥区、44px 热区、动作演出和结算由 R2～R5 继续处理 |
+| 2026-08-31 | Phase R2 | RWD-05、RWD-06、RWD-08、RWD-09 | 建立顶栏、对家、左右座位、中央桌面、底部手牌、操作区共享锚点；移动横屏对家移到顶栏下方中央，翻精面板独立靠右；顶栏/手牌 slot/动作/结算按钮统一至少 44px；操作区由手牌区高度推导；四家气泡限制宽度并在移动端改为头像外侧安全方向 | `src/style.css`、`src/components/table/GameTableHud.vue` | `test-results/responsive-r1/before/jade-667x375-game.png` | `test-results/responsive-r2/after/jade-844x390-game.png`、`jade-667x375-game.png`、`llmAnime-667x375-game.png`、`jade-667x375-flip-collapsed.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "starts a local match" --project=chromium`；浏览器矩形重叠/热区测量 | 通过：844×390 与 667×375 顶栏 44px、实测最小主要目标 44×44；对家/顶栏、翻精/对家、翻精/顶栏重叠面积均为 0；页面 overflow=0；typecheck 通过，E2E 1 passed | 满载动作按钮将在 R6 专用场景持续回归；气泡连续队列需要调试数据入口覆盖 |
+| 2026-08-31 | Phase R3 | RWD-01、RWD-02 | 胡牌流程新增共享串行合同：DOM 立绘引导 520ms、退出 180ms 后才创建 Three.js winEffect；reduced-motion 使用 450ms 无位移前导；本地、远程、调试入口统一；winEffect 激活后 HUD 强制隐藏胡牌 cue；桌面动作卡保持 `width/height: 200%`，移动端改用 `--action-art-scale: 1.15` 与座位安全锚点 | `src/game/core/presentation/winEffect.ts`、`src/game/shared/settlement/settlementTimeline.ts`、`src/game/online/presentation/settlementTimeline.ts`、`src/components/table/GameTableHud.vue`、`src/components/table/AnimeActionCue.vue`、`src/style.css`、相关 5 个测试文件 | `test-results/responsive-r3/before/llmAnime-844x390-win-concurrent.png`、`llmAnime-1920x1080-action-peng.png`、`llmAnime-667x375-action-peng.png` | `test-results/responsive-r3/after/llmAnime-844x390-win-cue.png`、`llmAnime-844x390-win-effect.png`、`llmAnime-1920x1080-action-peng.png`、`llmAnime-667x375-action-peng.png` | `pnpm run typecheck`；`npm exec vitest -- run`（5 个受影响测试入口）；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "win presentation" --project=chromium`；浏览器按阶段采样 | 通过：修改前 cueOpacity=1 且 winEffectId>0；修改后 cue 阶段 winEffectId=-1，光效阶段 cueOpacity=0；桌面 art/cue=2.00，移动端从 2.00 降为 1.15；受影响测试 271 passed，E2E 1 passed | WebSocket 实机房间的跨客户端录像由 R6 完整矩阵继续覆盖；浏览器截图调用本身会消耗墙钟时间，精确 520/180ms 由 fake timer 单测锁定 |
+| 2026-08-31 | Phase R4 | RWD-11 | 移除 `llmAnime` 座位、头像、动作按钮等主题专属几何坐标；两个根主题 token 块合并为一处；公告/气泡/开局 cue 的必要尺寸差异改由共享变量承载；`llm` 听牌按钮不再清空 44px 热区；移动横屏断点改为窄宽、粗指针横屏或小尺寸高宽比组合，1366×500 桌面矮窗不再进入移动压缩；桌面对家锚点也强制位于顶栏下方 | `src/style.css` | `test-results/responsive-r4/before/llmAnime-844x390-game.png`、`jade-1366x500-short-desktop.png` | `test-results/responsive-r4/after/llmAnime-844x390-game.png`、`jade-844x390-game.png`、`jade-1366x500-short-desktop.png`、六主题 `*-1366x768-game.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/llm-theme.smoke.spec.ts --project=chromium`；六主题浏览器截图/边界测量 | 通过：六主题 Canvas 均 1366×768、overflow=0；844×390 jade/llmAnime 使用同一锚点；1366×500 保留桌面 112px 手牌/44px 顶栏按钮且对家 y=54.8>顶栏底部；typecheck 通过，E2E 3 passed | 主题块仍保留图标内部尺寸、装饰伪元素坐标和按压位移，这些属于视觉 token，不参与 HUD 锚点 |
+| 2026-08-31 | Phase R5 | RWD-10 | 结算与最终排名加入 sticky 安全操作 footer；极矮横屏卡片保留可读字号并启用纵向滚动；查看牌桌/继续/返回按钮保持 44px；主题/声音菜单、规则面板、听牌面板统一使用 safe-area、dvh 最大高度与 overscroll 钳制；规则面板关闭按钮扩大到 44px | `src/components/settlement/SettlementOverlay.vue`、`src/style.css` | `test-results/responsive-r5/before/jade-568x320-settlement.png`、`llmAnime-568x320-settlement.png` | `test-results/responsive-r5/after/jade-568x320-settlement.png`、`llmAnime-568x320-settlement.png`、`jade-568x320-rules.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "win presentation" --project=chromium`；568×320 浏览器滚动/边界测量 | 通过：结算卡 312px 可视高、scrollHeight 368、`overflow-y:auto`；footer 为 sticky 且 y=225～315、按钮高 44px；规则面板 390×320 完全位于视口并可滚动至 1643px；typecheck 通过，E2E 1 passed | 主题菜单在本轮 in-app 浏览器的极矮大厅点击未展开（同一按钮在既有 E2E 正常）；R6 新增 Playwright 断言直接覆盖菜单边界，若失败则继续修复 |
+| 2026-08-31 | Phase R6 | RWD-12 | 新增响应式 Playwright 视觉矩阵：`jade`/`llmAnime` × 7 视口正常牌桌与结算；六主题 1366×768 正常/结算；极矮主题菜单、规则面板、翻精；reduced-motion 胡牌串行；断言容器/Canvas、滚动溢出、矩形重叠、44px 热区、立绘 2.00/1.15 比例和 sticky footer。测试发现并修复大厅遮挡顶栏、菜单底部越界 1px；Playwright 输出目录改为子目录，避免清除阶段证据 | `tests/e2e/responsive-layout.visual.spec.ts`、`playwright.config.ts`、`src/App.vue`、`src/style.css`、`test-results/responsive-r6/README.md` | 前五阶段 `test-results/responsive-r*/before/` | `test-results/responsive-r6/viewport-table/`、`viewport-settlement/`、`themes/`、`extreme/`、`reduced-motion/`（45 张，索引见 `README.md`） | 响应式 E2E：5 passed（6.5m）；`pnpm run typecheck`；`pnpm test`；smoke E2E；`pnpm run build`；`git diff --check` | 通过：typecheck；275 files/2283 tests passed（另 1 file/2 tests skipped）；smoke E2E 5 passed；响应式 E2E 5 passed；生产构建通过；diff check=0 | 按用户要求未 commit、未运行 `pnpm sync:vibehub`；WebSocket/P2P 真机多人联调与分支同步在提交后按仓库流程执行 |
+| 2026-08-31 | Phase R6.1 小横屏补丁 | RWD-05、RWD-06 | 修复 896×414/iPhone XR 横屏：对家卡不再居中压住 Three.js 牌河，761～1000px 粗指针/超宽矮屏改锚到 84% 右侧牌墙外，≤760px 保持 72% 并继续避让翻精；本家手牌把 44px 触控 slot 与视觉牌分离，视觉牌按容器高度缩放为 36～40px 宽、固定 4:5，避免细长“扑克牌”观感 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户截图；`test-results/responsive-hotfix-20260831/before/llm-896x414-game.png` | `test-results/responsive-hotfix-20260831/after/llm-896x414-game.png`、`test-results/responsive-r6/extreme/llm-896x414-game.png` | 响应式定向 E2E（896×414 + 568/667 极限场景）；`pnpm run build`；`git diff --check` | 通过：2 passed；对家卡 left=714.6、右家卡 left=812.8、重叠 0；牌面 38.08×47.60、比例 0.80；slot ≥44px；构建与 diff check 通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.2 气泡方向补丁 | RWD-09 | 修复左右家气泡移动到头像下方后仍沿用侧向尾巴的问题：小横屏左/右气泡尾巴分别旋转 +90°/-90°，统一朝上并以 38px 偏移对准头像中心；增加 `bubbleLab=1` 开发场景，直接使用真实 `PlayerSeat` 气泡节点验证左右边界、头像间距和伪元素方向 | `src/components/table/GameTableHud.vue`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户左右家气泡截图 | `test-results/responsive-hotfix-20260831/after/llm-896x414-bubbles.png`、`test-results/responsive-r6/extreme/llm-896x414-bubbles.png` | `pnpm run typecheck`；定向响应式 E2E；`pnpm run build` | 通过：气泡 E2E 1 passed；左右气泡完全位于 896×414 视口内，距头像底部 ≥4px，尾巴 top=-12px 且方向矩阵分别为 +90°/-90°；构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.3 手牌间距补丁 | RWD-06、RWD-08 | 修复移动端本家手牌视觉交叠：44px 触控 slot 的水平负边距由 -5px 收敛到 -2px，使布局推进距离约 40px，始终不小于 36～40px 视觉牌宽；回归测试读取全部手牌矩形并断言任意相邻牌间距不小于 0 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户 896×414/iPhone XR 手牌交叠截图 | `test-results/responsive-r6/extreme/llm-896x414-game.png` | 896×414 定向响应式 E2E；`pnpm run build`；`git diff --check` | 通过：E2E 1 passed；896×414 牌宽约 38.08px、推进约 40px、可见间距约 1.92px，slot 仍为 44px；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.4 二次元菜单/顶栏补丁 | RWD-06、RWD-11 | 修复 `llmAnime` 的 `.top-bar button` 误伤菜单内部按钮：为四类顶栏触发器增加 `topbar-control`，硬件视觉仅作用于主题/声音/规则/退出触发器，主题菜单与声音菜单恢复共享行式版式；移动端触发器保留 44×44 热区，使用 `::before` 内缩 4px 绘制 36×36 可见外框，并把硬件图标收敛至 18px | `src/components/shell/GameShellHeader.vue`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户二次元声音菜单、主题菜单和顶栏按钮截图 | `test-results/responsive-r6/extreme/llmAnime-896x414-theme-menu.png`、`llmAnime-896x414-audio-menu.png` | `pnpm run typecheck`；896×414 菜单/按钮定向 E2E；`pnpm run build`；`git diff --check` | 通过：E2E 1 passed；触发器热区 44×44、可见面 36×36；菜单项不再带硬件渐变/背景，主题行高 ≤50px、声音行高 ≤56px，两个菜单均位于视口内；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.5 长名字/相机稳定补丁 | RWD-01、RWD-05、RWD-11 | 所有主题共用玩家名完整换行规则，删除 `:not([data-table-theme="llmAnime"])` 分支；移除所有主题相机的常驻正弦漂移，新增 `tableCameraPosition` 每帧从主题基准机位计算完整 XYZ，普通摸打固定零偏移，胡牌 shake 只在效果帧叠加，下一帧无条件复原；增加 `cameraLab` 坐标采样 | `src/style.css`、`src/components/MahjongTable3D.vue`、`src/components/table/three/sceneRenderProfile.ts`、`sceneRenderProfile.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户玩家名省略截图；摸打阶段牌桌晃动复现 | `test-results/responsive-r6/extreme/rosewood-896x414-long-player-names.png`、`llmAnime-896x414-long-player-names.png`、`test-results/responsive-r6/camera/jade-1366x768-restored.png` | `pnpm run typecheck`；`sceneRenderProfile.test.ts`；全主题长名字/相机定向 E2E；`pnpm run build`；`git diff --check` | 通过：共享单测覆盖默认与二次元两套相机 profile；浏览器验证 rosewood/llmAnime 名字均完整显示且无 scroll 裁切；摸打连续 6 次坐标均为 `0,17.2,11.8`，胡牌 winEffect 结束后连续 5 次精确恢复同一基准；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.6 平板兼容补丁 | RWD-03、RWD-04、RWD-05、RWD-11 | 对实际 Canvas aspect 小于 16:9 的平板动态扩大纵向 FOV，以保持原 16:9 水平视野；只更新投影矩阵，不移动任何玩法世界坐标；新增 1001～1400px、4:3～8:5 平板锚点，把对家移到 86% 远侧牌墙外；使用粗指针移动上下文覆盖五类平板 | `src/components/MahjongTable3D.vue`、`src/components/table/three/sceneRenderProfile.ts`、`sceneRenderProfile.test.ts`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户 iPad Mini/Air/Pro、Surface Pro 7、Zenbook Fold 六张截图 | `test-results/responsive-r6/tablet/rosewood-ipad-mini-1024x768.png`、`rosewood-ipad-air-1180x820.png`、`rosewood-ipad-pro-1366x1024.png`、`rosewood-surface-pro-7-1368x912.png`、`rosewood-zenbook-fold-1280x853.png` | `pnpm run typecheck`；`sceneRenderProfile.test.ts`；平板矩阵 E2E；`pnpm run build`；`git diff --check` | 通过：单测 7 passed；平板 E2E 1 passed；五个视口 Canvas/容器同尺寸、FOV 39°→约 44～51°、对家/右家重叠 0、所有长名字完整显示、截图保留完整桌面水平视野 | 无；继续保留未提交/未同步状态 |
 
 每个正式实施批次必须执行：
 
@@ -874,20 +880,22 @@ Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 
 
 ### 15.7 单批验收清单
 
-- [ ] 当前批次对应的 RWD 问题已有修改前证据。
-- [ ] PC、移动端没有新增裁切、黑边、遮挡或滚动条。
-- [ ] Three.js 麻将、牌山、中控台和牌河没有发生非预期拉伸或坐标漂移。
-- [ ] DOM HUD 与 Canvas 使用同一游戏容器基准。
-- [ ] 移动端主要触控热区至少 44×44 CSS px。
-- [ ] 顶栏、头像、翻精、气泡、动作区和手牌之间无矩形重叠。
-- [ ] 胡牌立绘不遮挡胡牌光束、星芒、胡牌张和关键牌河。
-- [ ] 刘海屏/手势区安全变量生效，浏览器栏变化不裁切底部内容。
-- [ ] 六个主题的共享布局没有回归。
-- [ ] `llmAnime` 桌面动作立绘仍为 200%，移动端使用独立缩放。
-- [ ] reduced motion 下仍满足不遮挡要求。
-- [ ] 类型检查、单测、E2E 和截图回归结果已写入 §15.6。
+- [x] 当前批次对应的 RWD 问题已有修改前证据。
+- [x] PC、移动端没有新增裁切、黑边、遮挡或滚动条。
+- [x] Three.js 麻将、牌山、中控台和牌河没有发生非预期拉伸或坐标漂移。
+- [x] DOM HUD 与 Canvas 使用同一游戏容器基准。
+- [x] 移动端主要触控热区至少 44×44 CSS px。
+- [x] 顶栏、头像、翻精、气泡、动作区和手牌之间无矩形重叠。
+- [x] 胡牌立绘不遮挡胡牌光束、星芒、胡牌张和关键牌河。
+- [x] 刘海屏/手势区安全变量生效，浏览器栏变化不裁切底部内容。
+- [x] 六个主题的共享布局没有回归。
+- [x] `llmAnime` 桌面动作立绘仍为 200%，移动端使用独立缩放。
+- [x] reduced motion 下仍满足不遮挡要求。
+- [x] 类型检查、单测、E2E 和截图回归结果已写入 §15.6。
 
 ### 15.8 响应式里程碑完成定义
+
+> 2026-08-31 验收结论：代码、浏览器矩阵与质量闸门已满足本节技术条件；本轮因用户明确要求“不自行提交或同步 vibehub”，最后一项仓库流程尚未执行，因此当前状态为“可提交/可同步”，不虚报为已完成双分支关闭。
 
 只有同时满足以下条件，PC / 移动端响应式里程碑才允许标记为完成：
 

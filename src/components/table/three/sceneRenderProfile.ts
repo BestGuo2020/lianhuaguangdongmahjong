@@ -6,7 +6,6 @@ export interface TableSceneRenderProfile {
     readonly positionY: number
     readonly positionZ: number
     readonly lookAtZ: number
-    readonly driftX: number
   }
   readonly toneMapping: THREE.ToneMapping
   readonly exposure: number
@@ -50,7 +49,7 @@ export interface TableSceneRenderProfile {
 
 /** 原牌桌渲染参数；非 llmAnime 主题继续使用，避免主题改造影响旧画面。 */
 export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
-  camera: { fov: 39, positionY: 17.2, positionZ: 11.8, lookAtZ: -.25, driftX: .035 },
+  camera: { fov: 39, positionY: 17.2, positionZ: 11.8, lookAtZ: -.25 },
   toneMapping: THREE.ACESFilmicToneMapping,
   exposure: .92,
   fog: true,
@@ -77,7 +76,7 @@ export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
  * 覆盖树脂牌边缘的清漆高光。
  */
 export const LLM_ANIME_SCENE_PROFILE: TableSceneRenderProfile = {
-  camera: { fov: 34, positionY: 20.8, positionZ: 14, lookAtZ: -.65, driftX: .025 },
+  camera: { fov: 34, positionY: 20.8, positionZ: 14, lookAtZ: -.65 },
   toneMapping: THREE.NeutralToneMapping,
   exposure: 1,
   fog: false,
@@ -121,6 +120,29 @@ export const LLM_ANIME_SCENE_PROFILE: TableSceneRenderProfile = {
 
 export function tableSceneRenderProfile(themeName: string | null | undefined): TableSceneRenderProfile {
   return themeName === 'llmAnime' ? LLM_ANIME_SCENE_PROFILE : DEFAULT_TABLE_SCENE_PROFILE
+}
+
+/**
+ * 每帧从主题基准机位重新计算相机坐标，禁止把摸打或胡牌偏移累加到上一帧。
+ * 普通对局传入零偏移；胡牌 shake 结束后的下一帧会精确回到 [0, positionY, positionZ]。
+ */
+export function tableCameraPosition(
+  profile: TableSceneRenderProfile,
+  shakeX = 0,
+  shakeZ = 0,
+): readonly [number, number, number] {
+  return [shakeX, profile.camera.positionY, profile.camera.positionZ + shakeZ]
+}
+
+/**
+ * 16:9 及更宽视口保持主题原始纵向 FOV；更窄的平板按实际 aspect 扩大纵向 FOV，
+ * 从而保持相同的水平视野。只改变投影矩阵，不改牌山、牌河、中控台或麻将坐标。
+ */
+export function responsiveCameraFov(baseVerticalFov: number, aspect: number, referenceAspect = 16 / 9): number {
+  if (!Number.isFinite(aspect) || aspect <= 0 || aspect >= referenceAspect) return baseVerticalFov
+  const baseRadians = THREE.MathUtils.degToRad(baseVerticalFov)
+  const fittedRadians = 2 * Math.atan(Math.tan(baseRadians / 2) * referenceAspect / aspect)
+  return THREE.MathUtils.radToDeg(fittedRadians)
 }
 
 export function applyRendererProfile(

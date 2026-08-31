@@ -119,14 +119,16 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
             <b>{{ entry.score }}</b>
           </article>
         </div>
-        <div class="result-actions">
-          <button class="secondary" @click="$emit('update:resultVisible', false)">查看牌桌</button>
-          <button :disabled="waitingNextRound" @click="$emit('nextRound')">
-            <template v-if="waitingNextRound">等待其他玩家确定...</template>
-            <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
-          </button>
+        <div class="settlement-footer">
+          <div class="result-actions">
+            <button class="secondary" @click="$emit('update:resultVisible', false)">查看牌桌</button>
+            <button :disabled="waitingNextRound" @click="$emit('nextRound')">
+              <template v-if="waitingNextRound">等待其他玩家确定...</template>
+              <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
+            </button>
+          </div>
+          <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
         </div>
-        <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
       </section>
     </div>
   </Transition>
@@ -151,8 +153,10 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
             <em>{{ entry.score }}</em>
           </article>
         </div>
-        <button @click="$emit('returnToLobby')">返回大厅</button>
-        <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
+        <div class="settlement-footer final-footer">
+          <button @click="$emit('returnToLobby')">返回大厅</button>
+          <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
+        </div>
       </section>
     </div>
   </Transition>

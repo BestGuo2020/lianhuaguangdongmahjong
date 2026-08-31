@@ -4,7 +4,7 @@ import { registerLocalLlmVoiceSeat, resetLocalLlmVoiceRegistryForTests } from '.
 import { createLotusGameState } from './lotusState'
 import type { LotusEndGameOptions } from './lotusState'
 import { createLotusSettlement } from './lotusSettlement'
-import { WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
+import { WIN_CUE_EXIT_DURATION, WIN_CUE_LEAD_DURATION, WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../../core/presentation/winEffect'
 import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 
 function player(seat: number, hand: GamePlayer['hand'] = []): GamePlayer {
@@ -18,6 +18,10 @@ afterEach(() => resetLocalLlmVoiceRegistryForTests())
 
 async function flushPromises() {
   for (let index = 0; index < 5; index += 1) await Promise.resolve()
+}
+
+function startWinEffect(scheduled: Array<{ callback: () => void; delay: number }>) {
+  scheduled.find((item) => item.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION)!.callback()
 }
 
 describe('lotusSettlement LLM voice isolation', () => {
@@ -48,6 +52,7 @@ describe('lotusSettlement LLM voice isolation', () => {
     await flushPromises()
     expect(announce).toHaveBeenCalledTimes(1)
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
@@ -88,6 +93,7 @@ describe('lotusSettlement LLM voice isolation', () => {
     expect(order).toEqual(['clear', `announce:1:${expectedType}`])
     await flushPromises()
     scheduled.find((item) => item.delay === DISCARD_WIN_EFFECT_DELAY)?.callback()
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
     await flushPromises()
@@ -122,6 +128,7 @@ describe('lotusSettlement LLM voice isolation', () => {
     settlement.endGame(1, { selfDraw: true })
 
     expect(onlineAnnouncement).toHaveBeenCalledWith({ winnerIndex: 1, winType: 'self-draw' })
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
     await flushPromises()

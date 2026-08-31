@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
+import { REDUCED_WIN_CUE_EXIT_DURATION, REDUCED_WIN_CUE_LEAD_DURATION, REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_CUE_EXIT_DURATION, WIN_CUE_LEAD_DURATION, WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import { createSettlementTimeline } from './settlementTimeline'
@@ -55,7 +55,10 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('win-effect')
     expect(state.winningPlayerIndex.value).toBe(0)
     expect(sounds).toEqual(['zimo.mp3'])
+    expect(state.winEffect.value).toBeNull()
 
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_CUE_LEAD_DURATION + REDUCED_WIN_CUE_EXIT_DURATION)
+    expect(state.winEffect.value).toMatchObject({ winnerIndex: 0, tile: 'm1' })
     await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION)
     expect(state.phase.value).toBe('revealing')
     expect(state.winEffect.value).toBeNull()
@@ -118,7 +121,7 @@ describe('settlementTimeline', () => {
     })
 
     timeline.start(snapshot())
-    await vi.advanceTimersByTimeAsync(REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_CUE_LEAD_DURATION + REDUCED_WIN_CUE_EXIT_DURATION + REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
     expect(state.phase.value).toBe('revealing')
     expect(state.result.value).toBeNull()
 
@@ -155,7 +158,7 @@ describe('settlementTimeline', () => {
     }))
 
     expect(sounds).toEqual([])
-    await vi.advanceTimersByTimeAsync(WIN_EFFECT_SOUND_DELAY)
+    await vi.advanceTimersByTimeAsync(WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION + WIN_EFFECT_SOUND_DELAY)
     expect(sounds).toEqual(['hu_effect_sound.mp3'])
   })
 

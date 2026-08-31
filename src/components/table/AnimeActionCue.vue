@@ -159,7 +159,11 @@ function onPortraitError(event: Event) {
 .anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(22px, 2.35vw, 36px); letter-spacing: -.12em; }
 .anime-action-cue.anime-action-hu,
 .anime-action-cue.anime-action-zimo,
-.anime-action-cue.anime-action-qiangganghu { width: clamp(120px, 10.6vw, 166px); height: clamp(92px, 8.4vw, 126px); }
+.anime-action-cue.anime-action-qiangganghu {
+  width: clamp(120px, 10.6vw, 166px);
+  height: clamp(92px, 8.4vw, 126px);
+  animation: anime-win-cue-serial calc(520ms + 180ms) ease-out both;
+}
 .action-from-top { top: 18%; left: 50%; transform: translate(-50%, 0); }
 .action-from-right { top: 34%; right: 28%; transform: translate(0, -50%); }
 .action-from-bottom { bottom: 29%; left: 50%; transform: translate(-50%, 0); }
@@ -170,12 +174,32 @@ function onPortraitError(event: Event) {
   from { opacity: 0; scale: .88; filter: blur(2px) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
   to { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
 }
+@keyframes anime-win-cue-serial {
+  0% { opacity: 0; scale: .82; filter: blur(2px) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
+  16%, 74% { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
+  100% { opacity: 0; scale: .96; filter: blur(1px) drop-shadow(3px 5px 0 rgba(45,36,28,.18)); }
+}
 @media (max-width: 760px), (max-height: 520px) {
-  .anime-action-cue { width: clamp(92px, 13vw, 124px); height: clamp(68px, 10vw, 94px); }
-  .action-from-top { top: 18%; }
-  .action-from-right { top: 34%; right: 26%; }
-  .action-from-bottom { bottom: 27%; }
-  .action-from-left { top: 34%; left: 26%; }
+  .anime-action-cue {
+    --action-art-scale: 1.15;
+    width: clamp(84px, 13cqw, 112px);
+    max-width: var(--action-art-max-width);
+    height: clamp(64px, 10cqw, 86px);
+    max-height: var(--action-art-max-height);
+  }
+  .anime-action-cue.anime-action-hu,
+  .anime-action-cue.anime-action-zimo,
+  .anime-action-cue.anime-action-qiangganghu { width: clamp(96px, 15cqw, 124px); height: clamp(72px, 11cqw, 92px); }
+  .anime-action-cue img.dedicated-action-art {
+    top: calc((1 - var(--action-art-scale)) * 50%);
+    left: calc((1 - var(--action-art-scale)) * 50%);
+    width: calc(100% * var(--action-art-scale));
+    height: calc(100% * var(--action-art-scale));
+  }
+  .action-from-top { top: calc(var(--top-seat-anchor) + var(--seat-card-width) + var(--hud-gap)); }
+  .action-from-right { top: 38%; right: max(20%, calc(var(--safe-right) + var(--seat-card-width) + var(--hud-gap))); }
+  .action-from-bottom { bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap)); }
+  .action-from-left { top: 38%; left: max(20%, calc(var(--safe-left) + var(--seat-card-width) + var(--hud-gap))); }
 }
 @media (prefers-reduced-motion: reduce) {
   .anime-action-cue { animation: anime-action-fade .16s ease-out both; }

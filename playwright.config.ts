@@ -5,9 +5,12 @@ const baseURL = `http://127.0.0.1:${port}`
 const backendPort = Number(process.env.E2E_BACKEND_PORT || 8000)
 const backendURL = `http://127.0.0.1:${backendPort}`
 const backendPython = process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : '.venv/bin/python'
+const reuseExistingOnly = process.env.E2E_REUSE_ONLY === '1'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // 响应式验收截图保存在 test-results/responsive-*；运行 E2E 时只清理自己的子目录。
+  outputDir: 'test-results/playwright',
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
@@ -25,7 +28,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: [
+  webServer: reuseExistingOnly ? undefined : [
     {
       command: `${backendPython} -m uvicorn app.main:app --host 127.0.0.1 --port ${backendPort}`,
       cwd: 'backend',

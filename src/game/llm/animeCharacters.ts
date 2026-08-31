@@ -162,7 +162,7 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     loss: '差一点点，下局继续加油！',
     draw: '荒庄啦，大家下一局再见！',
   }),
-  profile('gemini', '双子星姬', ['gemini', 'google-ai'], 'qwen', 'default', {
+  profile('gemini', '美国豆包', ['gemini', 'google-ai'], 'qwen', 'default', {
     chi: '双星来吃！',
     peng: '双星相碰！',
     gang: '星轨开杠！',

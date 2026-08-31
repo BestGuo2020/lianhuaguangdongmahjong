@@ -113,10 +113,14 @@ function retryTableLoad() {
 const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const actionCueLabParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
+const bubbleLabEnabled = actionCueLabParams?.get('bubbleLab') === '1'
 const actionCueLabType = actionCueLabParams?.get('actionCueLab') as TableActionEvent['type'] | null
 const actionCueLabActor = Math.min(3, Math.max(0, Number(actionCueLabParams?.get('actionCueSeat') ?? 0) || 0))
 const actionCueLabTypes: ReadonlySet<TableActionEvent['type']> = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang', 'wind-kong',
+  'self-draw', 'discard-win', 'robbed-kong-win',
+])
+const winActionTypes: ReadonlySet<TableActionEvent['type']> = new Set([
   'self-draw', 'discard-win', 'robbed-kong-win',
 ])
 const actionCueLabEvent = computed<TableActionEvent | null>(() => (
@@ -124,10 +128,21 @@ const actionCueLabEvent = computed<TableActionEvent | null>(() => (
     ? { id: -1, type: actionCueLabType, actorIndex: actionCueLabActor, sourceIndex: null, tile: 'p5', meldIndex: -1 }
     : null
 ))
-const presentedAnimeActionEvent = computed(() => props.tableActionEvent ?? actionCueLabEvent.value)
+const presentedTableActionEvent = computed(() => {
+  const event = props.tableActionEvent ?? actionCueLabEvent.value
+  return event && props.winEffect && winActionTypes.has(event.type) ? null : event
+})
+const presentedAnimeActionEvent = computed(() => presentedTableActionEvent.value)
 const presentedAnimeActionPosition = computed(() => presentedAnimeActionEvent.value
   ? seatPosition[presentedAnimeActionEvent.value.actorIndex]
   : 'bottom')
+const presentedLlmBubbles = computed(() => bubbleLabEnabled
+  ? {
+      ...props.llmBubbles,
+      1: { id: -101, text: '这牌打得真有意思。', persistent: true },
+      3: { id: -103, text: '这一张先打掉。', persistent: true },
+    }
+  : props.llmBubbles)
 const waitsOpen = ref(false)
 const tableReady = ref(false)
 const tableLoadError = ref('')
@@ -161,12 +176,12 @@ const touchStarts = new Map<number, { index: number; x: number; y: number; start
 let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
 
-const tableActionPosition = computed(() => props.tableActionEvent ? seatPosition[props.tableActionEvent.actorIndex] : 'bottom')
+const tableActionPosition = computed(() => presentedTableActionEvent.value ? seatPosition[presentedTableActionEvent.value.actorIndex] : 'bottom')
 const tableActionLabel = computed(() => ({
   peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠', 'wind-kong': '风杠',
   'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '胡', 'robbed-kong-win': '抢杠胡',
-}[props.tableActionEvent?.type ?? 'peng']))
-const tableActionIsWin = computed(() => ['self-draw', 'discard-win', 'robbed-kong-win'].includes(props.tableActionEvent?.type ?? ''))
+}[presentedTableActionEvent.value?.type ?? 'peng']))
+const tableActionIsWin = computed(() => winActionTypes.has(presentedTableActionEvent.value?.type ?? 'peng'))
 const userAvatar = computed(() => props.themeName === 'llmAnime'
   ? animeAvatarForPlayer(props.user)
   : props.user.avatar)
@@ -417,7 +432,7 @@ function onAvatarError(entry: GamePlayer) {
       :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :theme-name="themeName"
-      :bubble="llmBubbles?.[index + 1]"
+      :bubble="presentedLlmBubbles?.[index + 1]"
     />
 
     <Transition name="table-action" mode="out-in">
@@ -428,7 +443,7 @@ function onAvatarError(entry: GamePlayer) {
         :player="players[presentedAnimeActionEvent.actorIndex]"
         :position="presentedAnimeActionPosition"
       />
-      <div v-else-if="tableActionEvent" :key="tableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
+      <div v-else-if="presentedTableActionEvent" :key="presentedTableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
     </Transition>
     <Transition name="announce">
       <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone"><span>{{ announcement.text }}</span></div>
@@ -444,12 +459,12 @@ function onAvatarError(entry: GamePlayer) {
         <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
         <Transition name="llm-bubble">
           <div
-            v-if="llmBubbles?.[0]"
-            :key="llmBubbles[0].id"
+            v-if="presentedLlmBubbles?.[0]"
+            :key="presentedLlmBubbles[0].id"
             class="llm-bubble user-llm-bubble"
             role="status"
             aria-live="polite"
-          >{{ llmBubbles[0].text }}</div>
+          >{{ presentedLlmBubbles[0].text }}</div>
         </Transition>
       </div>
       <Transition name="score-flow">
@@ -602,11 +617,13 @@ function onAvatarError(entry: GamePlayer) {
    点击徽章展开二骰/精牌说明（.flip-open），再点收起。 */
 @media (max-width: 700px), (max-height: 460px) {
   .flip-indicator {
-    top: 40px;
-    right: 12px;
+    top: calc(var(--safe-top) + var(--topbar-height) + var(--hud-gap));
+    right: calc(var(--safe-right) + 8px);
     left: auto;
     box-sizing: border-box;
-    max-width: calc(100vw - 24px);
+    min-width: 44px;
+    min-height: 44px;
+    max-width: calc(100cqw - var(--safe-left) - var(--safe-right) - 16px);
     gap: 3px;
     padding: 5px 8px;
     border-radius: 8px;

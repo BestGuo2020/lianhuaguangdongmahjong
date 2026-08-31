@@ -4,8 +4,12 @@ import {
   prefersReducedMotion,
   REDUCED_WIN_EFFECT_DURATION,
   REDUCED_WIN_REVEAL_DURATION,
+  REDUCED_WIN_CUE_EXIT_DURATION,
+  REDUCED_WIN_CUE_LEAD_DURATION,
   WIN_EFFECT_DURATION,
   WIN_EFFECT_SOUND_DELAY,
+  WIN_CUE_EXIT_DURATION,
+  WIN_CUE_LEAD_DURATION,
   WIN_REVEAL_DURATION,
 } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
@@ -123,19 +127,12 @@ export function createSettlementTimeline({
     const reduceMotion = reducedMotion()
     const effectDuration = reduceMotion ? REDUCED_WIN_EFFECT_DURATION : WIN_EFFECT_DURATION
     const revealDuration = reduceMotion ? REDUCED_WIN_REVEAL_DURATION : WIN_REVEAL_DURATION
+    const cueLeadDuration = reduceMotion ? REDUCED_WIN_CUE_LEAD_DURATION : WIN_CUE_LEAD_DURATION
+    const cueExitDuration = reduceMotion ? REDUCED_WIN_CUE_EXIT_DURATION : WIN_CUE_EXIT_DURATION
     state.phase.value = 'win-effect'
     state.revealHands.value = false
     state.winPresentation.value = presentation
-    state.winEffect.value = {
-      winnerIndex: state.winningPlayerIndex.value,
-      tile: presentation.tile,
-      robbedKong: presentation.robbedKong,
-      robbedKongPlayerIndex: presentation.robbedKongPlayerIndex,
-      robbedKongMeldIndex: presentation.robbedKongMeldIndex,
-      duration: effectDuration,
-      reducedMotion: reduceMotion,
-      id: Date.now(),
-    }
+    state.winEffect.value = null
     const llmWinner = snapshot.players.find(
       (player) => player.seat === snapshot.winningPlayerIndex,
     )?.isLlm === true
@@ -148,21 +145,34 @@ export function createSettlementTimeline({
     if (!llmWinner && actionPolicy.actionVoice === 'legacy') {
       playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
     }
-    if (!reduceMotion) {
-      later(() => {
-        if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)
-      }, WIN_EFFECT_SOUND_DELAY)
-    }
     later(() => {
       if (serial !== currentSerial) return
-      state.phase.value = 'revealing'
-      state.winEffect.value = null
-      state.revealHands.value = true
+      state.winEffect.value = {
+        winnerIndex: state.winningPlayerIndex.value,
+        tile: presentation.tile,
+        robbedKong: presentation.robbedKong,
+        robbedKongPlayerIndex: presentation.robbedKongPlayerIndex,
+        robbedKongMeldIndex: presentation.robbedKongMeldIndex,
+        duration: effectDuration,
+        reducedMotion: reduceMotion,
+        id: Date.now(),
+      }
+      if (!reduceMotion) {
+        later(() => {
+          if (serial === currentSerial) playSound('hu_effect_sound.mp3', 0.72)
+        }, WIN_EFFECT_SOUND_DELAY)
+      }
       later(() => {
         if (serial !== currentSerial) return
-        finishSettlementAfterSpeech(snapshot, mappedResult, currentSerial)
-      }, revealDuration)
-    }, effectDuration)
+        state.phase.value = 'revealing'
+        state.winEffect.value = null
+        state.revealHands.value = true
+        later(() => {
+          if (serial !== currentSerial) return
+          finishSettlementAfterSpeech(snapshot, mappedResult, currentSerial)
+        }, revealDuration)
+      }, effectDuration)
+    }, cueLeadDuration + cueExitDuration)
   }
 
   return { start, cancel }
