@@ -425,6 +425,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
     }))
   })
   await startMatch(page, 'rosewood', false, true)
+  await page.waitForSelector('.hand-rack .mahjong-tile', { timeout: 30_000 })
 
   const tablets = [
     { name: 'ipad-mini', width: 1024, height: 768 },
@@ -460,6 +461,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
         coarsePointer: matchMedia('(hover: none) and (pointer: coarse)').matches,
         topSeatLeftRatio: topSeat.left / innerWidth,
         topRightOverlap: overlap,
+        handTileWidth: (document.querySelector('.hand-rack .mahjong-tile') as HTMLElement | null)?.getBoundingClientRect().width ?? 0,
         names,
       }
     })
@@ -472,6 +474,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
     expect(metrics.coarsePointer).toBe(true)
     expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.8)
     expect(metrics.topRightOverlap).toBe(0)
+    expect(metrics.handTileWidth).toBeGreaterThanOrEqual(55) // 平板手牌接近 PC 尺寸，不再 40px
     for (const name of metrics.names) {
       expect(name.text).toContain('（话痨）')
       expect(name.whiteSpace).toBe('nowrap')
@@ -622,8 +625,8 @@ test('手机横屏清单使用同一触控布局连续适配', async ({ browser 
     const cardHeight = Number.parseFloat(cardSizeMatch![2]!)
     expect(cardWidth).toBeGreaterThanOrEqual(87.5)
     expect(cardWidth).toBeLessThanOrEqual(112.5)
-    expect(cardHeight).toBeGreaterThanOrEqual(107.5)
-    expect(cardHeight).toBeLessThanOrEqual(140.5)
+    expect(cardHeight).toBeGreaterThanOrEqual(83.5)
+    expect(cardHeight).toBeLessThanOrEqual(112.5)
     expect(metrics.seatCardSpread.width).toBeLessThanOrEqual(1)
     expect(metrics.seatCardSpread.height).toBeLessThanOrEqual(1)
     expect(Math.max(...metrics.scoreBottomInsets)).toBeLessThanOrEqual(16)

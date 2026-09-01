@@ -982,7 +982,7 @@ button { font: inherit; }
   .user-area { bottom: 0; min-height: 82px; }
   .hand-rack { min-height: 72px; padding: 5px 8px 4px; }
   .hand-rack .mahjong-tile { --tile-width: clamp(32px, 4.25vw, 38px); }
-  .hand-rack .hand-tile-slot.drawn { margin-left: 8px; }
+  .hand-rack .hand-tile-slot.drawn { margin-left: clamp(8px, 1.5cqh, 14px); }
   .user-melds { bottom: 75px; }
   .user-identity { left: -2%; bottom: 14px; width: 72px; min-width: 0; padding: 4px; transform: scale(.76); transform-origin: left bottom; }
   .user-identity .avatar { width: 42px; height: 42px; font-size: 18px; }
@@ -2159,10 +2159,10 @@ button { font: inherit; }
     --safe-top: 0px;
     --topbar-height: 44px;
     --seat-card-width: clamp(88px, 10cqw, 96px);
-    --seat-card-height: clamp(108px, 34cqh, 140px);
-    --seat-avatar-size: clamp(58px, 8.5cqw, 76px);
+    --seat-card-height: clamp(88px, 20cqh, 112px);
+    --seat-avatar-size: clamp(36px, 5cqh, 56px);
     --top-seat-inline-anchor: 72%;
-    --hand-zone-height: calc(72px + var(--safe-bottom));
+    --hand-zone-height: calc(clamp(72px, 13cqh, 112px) + var(--safe-bottom));
     --hud-gap: 6px;
   }
 
@@ -2298,13 +2298,13 @@ button { font: inherit; }
     right: 0;
     bottom: 5px;
     left: 0;
-    min-height: 72px;
+    min-height: clamp(72px, 13cqh, 112px);
     gap: 0;
     padding: 4px 2px max(4px, var(--safe-bottom));
   }
   .hand-rack .hand-tile-slot {
-    width: 40px;
-    min-width: 40px;
+    width: clamp(40px, 8cqh, 68px);
+    min-width: clamp(40px, 8cqh, 68px);
     margin-inline: 0;
   }
   .hand-rack .hand-hit-area {
@@ -2321,13 +2321,13 @@ button { font: inherit; }
   .hand-rack .mahjong-tile {
     position: relative;
     z-index: 1;
-    --tile-width: 40px;
+    --tile-width: clamp(40px, 8cqh, 68px);
     width: var(--tile-width);
     height: auto;
     aspect-ratio: 4 / 5;
   }
   /* 普通牌保持 0 gap；语义上的摸牌位（第 2/5/8/11/14 张）与前牌留 8px。 */
-  .hand-rack .hand-tile-slot.drawn { margin-left: 8px; }
+  .hand-rack .hand-tile-slot.drawn { margin-left: clamp(8px, 1.5cqh, 14px); }
   .user-identity {
     bottom: calc(var(--safe-bottom) + 8px);
     left: calc(var(--safe-left) + 2px);
