@@ -625,8 +625,10 @@ test('手机横屏清单使用同一触控布局连续适配', async ({ browser 
     expect(cardSizeMatch).not.toBeNull()
     const cardWidth = Number.parseFloat(cardSizeMatch![1]!)
     const cardHeight = Number.parseFloat(cardSizeMatch![2]!)
-    expect(cardWidth).toBeGreaterThanOrEqual(87.5)
-    expect(cardWidth).toBeLessThanOrEqual(112.5)
+    // R6.19：348dde3 注释掉 width: var(--seat-card-width) 后，手机卡宽统一回落为
+    // clamp(76px, 7vw, 104px) 的 76px（四家一致）；本家 72px 遗留泄漏已移除。
+    expect(cardWidth).toBeGreaterThanOrEqual(72.5)
+    expect(cardWidth).toBeLessThanOrEqual(80)
     expect(cardHeight).toBeGreaterThanOrEqual(83.5)
     expect(cardHeight).toBeLessThanOrEqual(112.5)
     expect(metrics.seatCardSpread.width).toBeLessThanOrEqual(1)
@@ -649,6 +651,70 @@ test('手机横屏清单使用同一触控布局连续适配', async ({ browser 
     await page.screenshot({ path: `${evidenceRoot}/phone-matrix/llmAnime-${viewport.name}-${viewport.width}x${viewport.height}.png` })
   }
   await context.close()
+})
+
+test('移动端动作 cue 锚定到行动座位并远离牌桌中央（R6.19）', async ({ browser }) => {
+  test.setTimeout(240_000)
+  await mkdir(`${evidenceRoot}/action-cue`, { recursive: true })
+  const cases = [
+    { name: 'iphone-x', width: 812, height: 375 },
+    { name: 'android-mainstream', width: 800, height: 360 },
+    { name: 'iphone-se', width: 667, height: 375 },
+  ]
+  for (const viewport of cases) {
+    const { context, page } = await createTouchPage(browser, viewport.width, viewport.height)
+    for (const [seat, side] of [[3, 'left'], [2, 'top'], [1, 'right']] as const) {
+      await page.goto(`/?theme=llmAnime&actionCueLab=peng&actionCueSeat=${seat}`, { waitUntil: 'domcontentloaded' })
+      await page.getByRole('button', { name: /开始东风场/ }).click()
+      await expect(page.locator('.game-table-hud')).toBeVisible()
+      await expect(page.locator('canvas.mahjong-scene')).toBeVisible({ timeout: 30_000 })
+      await expect(page.locator('.table-loading')).toBeHidden({ timeout: 30_000 })
+      const metrics = await page.evaluate(() => {
+        const rect = (selector: string) => {
+          const value = document.querySelector(selector)?.getBoundingClientRect()
+          return value ? {
+            x: value.x, y: value.y, width: value.width, height: value.height,
+            right: value.right, bottom: value.bottom,
+            cx: value.x + value.width / 2, cy: value.y + value.height / 2,
+          } : null
+        }
+        const overlap = (a: NonNullable<ReturnType<typeof rect>>, b: NonNullable<ReturnType<typeof rect>>) =>
+          Math.max(0, Math.min(a.right, b.right) - Math.max(a.x, b.x))
+          * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y))
+        const cue = rect('.anime-action-cue')
+        const topbar = rect('.top-bar')
+        const hand = rect('.hand-rack')
+        return {
+          cue,
+          topSeat: rect('.seat-top .avatar-wrap'),
+          leftSeat: rect('.seat-left .avatar-wrap'),
+          rightSeat: rect('.seat-right .avatar-wrap'),
+          handOverlap: cue && hand ? overlap(cue, hand) : 0,
+          topbarOverlap: cue && topbar ? overlap(cue, topbar) : 0,
+          width: innerWidth,
+        }
+      })
+      expect(metrics.cue).not.toBeNull()
+      expect(metrics.handOverlap).toBe(0)
+      expect(metrics.topbarOverlap).toBe(0)
+      if (side === 'top') {
+        // 对家：与对家卡同列（--top-seat-resolved-left，66%），位于卡下方，远离屏幕中央。
+        expect(Math.abs(metrics.cue!.cx - metrics.topSeat!.cx)).toBeLessThanOrEqual(2)
+        expect(metrics.cue!.y).toBeGreaterThanOrEqual(metrics.topSeat!.bottom - 10)
+        expect(metrics.cue!.cx).toBeGreaterThanOrEqual(metrics.width * 0.6 - 2)
+      } else if (side === 'left') {
+        // 上家：贴左卡内缘（不再被 max(20%) 推进牌桌），垂直对齐卡中心。
+        expect(metrics.cue!.x).toBeGreaterThanOrEqual(metrics.leftSeat!.right - 2)
+        expect(Math.abs(metrics.cue!.cy - metrics.leftSeat!.cy)).toBeLessThanOrEqual(6)
+      } else {
+        // 下家：贴右卡内缘，垂直对齐卡中心。
+        expect(metrics.cue!.right).toBeLessThanOrEqual(metrics.rightSeat!.x + 2)
+        expect(Math.abs(metrics.cue!.cy - metrics.rightSeat!.cy)).toBeLessThanOrEqual(6)
+      }
+      await page.screenshot({ path: `${evidenceRoot}/action-cue/llmAnime-${viewport.name}-seat-${side}.png` })
+    }
+    await context.close()
+  }
 })
 
 test('桌面命名分辨率与任意拖拽尺寸连续适配', async ({ page }) => {

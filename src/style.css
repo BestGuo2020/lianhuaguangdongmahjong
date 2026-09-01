@@ -414,6 +414,13 @@ button { font: inherit; }
 .action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
 .action-from-left { top: 43%; left: 17%; transform: translate(-50%, -50%); }
 
+/* llmAnime 立绘 cue 的桌面几何与文字 cue 同层维护：动画与视觉留在组件内，
+   四个方向的锚点统一放在共享样式表（R6.19）。 */
+.anime-action-cue.action-from-top { top: 18%; left: 50%; transform: translate(-50%, 0); }
+.anime-action-cue.action-from-right { top: 34%; right: 28%; transform: translate(0, -50%); }
+.anime-action-cue.action-from-bottom { bottom: 29%; left: 50%; transform: translate(-50%, 0); }
+.anime-action-cue.action-from-left { top: 34%; left: 28%; transform: translate(0, -50%); }
+
 .player-seat.action-active .avatar-wrap,
 .user-identity.action-active {
   border-color: #ffe09a;
@@ -984,7 +991,8 @@ button { font: inherit; }
   .hand-rack .mahjong-tile { --tile-width: clamp(32px, 4.25vw, 38px); }
   .hand-rack .hand-tile-slot.drawn { margin-left: clamp(8px, 1.5cqh, 14px); }
   .user-melds { bottom: 75px; }
-  .user-identity { left: -2%; bottom: 14px; width: 72px; min-width: 0; padding: 4px; transform: scale(.76); transform-origin: left bottom; }
+  /* 本家卡的 width/padding/scale 由新版共享块覆盖；此处 72px 遗留规则会把本家卡
+     压得比三家座位卡窄，造成四家尺寸不一致（R6.19 移除）。 */
   .user-identity .avatar { width: 42px; height: 42px; font-size: 18px; }
   .user-identity strong { font-size: 14px; }
   .user-identity span { font-size: 13px; }
@@ -2164,6 +2172,14 @@ button { font: inherit; }
     --top-seat-inline-anchor: 66%;
     --hand-zone-height: calc(clamp(72px, 13cqh, 112px) + var(--safe-bottom));
     --hud-gap: 6px;
+    /* 移动端立绘缩放 1.15（桌面 200% 见 .game-app 根 token）。 */
+    --action-art-scale: 1.15;
+    /* 对家卡水平位置三档共享解析值：座位卡与动作 cue 共同引用，防止两者再次漂移。 */
+    --top-seat-resolved-left: clamp(
+      calc(var(--safe-left) + 46px),
+      var(--top-seat-inline-anchor),
+      calc(100% - var(--safe-right) - var(--seat-card-width) - 64px)
+    );
   }
 
   .top-bar {
@@ -2228,12 +2244,9 @@ button { font: inherit; }
   .has-three-scene .seat-top {
     top: var(--top-seat-anchor);
     right: auto;
-    /* 对家卡移出中央牌河：小横屏固定在右上 HUD 侧栏，仍给最右侧翻精徽章留出间距。 */
-    left: clamp(
-      calc(var(--safe-left) + 46px),
-      var(--top-seat-inline-anchor),
-      calc(100% - var(--safe-right) - var(--seat-card-width) - 64px)
-    );
+    /* 对家卡移出中央牌河：小横屏固定在右上 HUD 侧栏，仍给最右侧翻精徽章留出间距。
+       水平位置由 --top-seat-resolved-left 承载，座位卡与动作 cue 共用同一解析值。 */
+    left: var(--top-seat-resolved-left);
     transform: translateX(-50%);
   }
   .has-three-scene .seat-left {
@@ -2245,6 +2258,32 @@ button { font: inherit; }
     top: var(--side-seat-anchor);
     right: calc(var(--safe-right) + 8px);
     transform: translateY(-50%);
+  }
+  /* 动作 cue 座位锚定（两种 cue 共用，R6.19）：贴各座位卡、远离牌桌中央。
+     对家对齐对家卡列并位于卡下方；左右家贴卡内缘并垂直对齐卡中心；本家保持手牌区上方。 */
+  .game-app .anime-action-cue.action-from-top,
+  .game-app .table-action-cue.action-from-top {
+    top: calc(var(--top-seat-anchor) + var(--seat-card-height) + var(--hud-gap));
+    left: var(--top-seat-resolved-left);
+    transform: translate(-50%, 0);
+  }
+  .game-app .anime-action-cue.action-from-left,
+  .game-app .table-action-cue.action-from-left {
+    top: var(--side-seat-anchor);
+    left: calc(var(--safe-left) + var(--seat-card-width) + var(--hud-gap));
+    transform: translate(0, -50%);
+  }
+  .game-app .anime-action-cue.action-from-right,
+  .game-app .table-action-cue.action-from-right {
+    top: var(--side-seat-anchor);
+    right: calc(var(--safe-right) + var(--seat-card-width) + var(--hud-gap));
+    transform: translate(0, -50%);
+  }
+  .game-app .anime-action-cue.action-from-bottom,
+  .game-app .table-action-cue.action-from-bottom {
+    bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap));
+    left: 50%;
+    transform: translate(-50%, 0);
   }
   .has-three-scene .seat-top .avatar-wrap,
   .seat-left .avatar-wrap,
@@ -2378,24 +2417,37 @@ button { font: inherit; }
 /* 三档宽高比（仅触控设备生效）：偏方 <1.6、基准 1.6～2.0、偏长 >2.0。
    桌面鼠标设备不右移对家——对家继续用 50%+偏移锚在牌桌顶部中央。 */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5) {
-  .game-app { --top-seat-inline-anchor: 86%; --side-seat-anchor: 39%; }
+  .game-app {
+    --top-seat-inline-anchor: 86%;
+    --side-seat-anchor: 39%;
+    --top-seat-resolved-left: var(--top-seat-inline-anchor);
+  }
   /* 偏方档（4:3 平板）对家与右家纵向错开，无需用右家卡宽钳制横向前进；
      直接落到远侧锚点，避免 R6.11 加宽信息卡后 clamp 上限把对家压回中央牌河。 */
   .has-three-scene .seat-top {
     right: auto;
-    left: var(--top-seat-inline-anchor);
+    left: var(--top-seat-resolved-left);
     transform: translateX(-50%);
   }
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
-  .game-app { --top-seat-inline-anchor: 66%; --side-seat-anchor: 40%; }
+  .game-app {
+    --top-seat-inline-anchor: 66%;
+    --side-seat-anchor: 40%;
+    --top-seat-resolved-left: clamp(
+      46px,
+      var(--top-seat-inline-anchor),
+      calc(100% - var(--safe-right) - var(--seat-card-width) - 54px)
+    );
+  }
   /* 偏长档手机屏幕矮，对家与右家纵向有重叠，仍需用右家卡宽钳制横向；
-     但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。 */
+     但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。
+     上移量由 348dde3 的 -20px 收敛为 -4px：保留上移意图且卡顶不低于 44px 顶栏（RWD-05）。 */
   .has-three-scene .seat-top {
     right: auto;
-    left: clamp(46px, var(--top-seat-inline-anchor), calc(100% - var(--safe-right) - var(--seat-card-width) - 54px));
-    transform: translateX(-50%) translateY(-20px);
+    left: var(--top-seat-resolved-left);
+    transform: translateX(-50%) translateY(-4px);
   }
 }
 
@@ -2408,6 +2460,9 @@ button { font: inherit; }
     --seat-avatar-size: clamp(52px, 5.1vw, 76px);
     --hand-zone-height: clamp(82px, 21cqh, 205px);
     --hud-gap: clamp(6px, calc(1.1 * var(--game-unit)), 16px);
+    /* 平板切回桌面：对家回 50%+偏移 桌面锚点，立绘恢复 200%。 */
+    --top-seat-resolved-left: calc(50% + clamp(220px, 18.5vw, 365px));
+    --action-art-scale: 2;
   }
   .has-three-scene .seat-left {
     top: 35%;
@@ -2418,8 +2473,17 @@ button { font: inherit; }
     right: calc(var(--table-box-left) + 2.7cqw);
   }
   .has-three-scene .seat-top {
-    left: calc(50% + clamp(220px, 18.5vw, 365px));
+    left: var(--top-seat-resolved-left);
   }
+  /* 动作 cue 随座位一起切回桌面几何（两种 cue 的桌面锚点与基础层一致）。 */
+  .game-app .anime-action-cue.action-from-top { top: 18%; left: 50%; transform: translate(-50%, 0); }
+  .game-app .anime-action-cue.action-from-right { top: 34%; right: 28%; transform: translate(0, -50%); }
+  .game-app .anime-action-cue.action-from-bottom { bottom: 29%; left: 50%; transform: translate(-50%, 0); }
+  .game-app .anime-action-cue.action-from-left { top: 34%; left: 28%; transform: translate(0, -50%); }
+  .game-app .table-action-cue.action-from-top { top: 20%; left: 50%; transform: translate(-50%, -50%); }
+  .game-app .table-action-cue.action-from-right { top: 43%; right: 17%; transform: translate(50%, -50%); }
+  .game-app .table-action-cue.action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
+  .game-app .table-action-cue.action-from-left { top: 43%; left: 17%; transform: translate(-50%, -50%); }
   .has-three-scene .hand-rack .mahjong-tile {
     --tile-width: clamp(48px, min(calc(7.97 * var(--game-cqh)), calc(5.5 * var(--game-cqw))), 104px);
     aspect-ratio: 3 / 4;

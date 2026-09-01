@@ -115,10 +115,10 @@ function onPortraitError(event: Event) {
 }
 .anime-action-cue img.dedicated-action-art {
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
+  top: calc((1 - var(--action-art-scale)) * 50%);
+  left: calc((1 - var(--action-art-scale)) * 50%);
+  width: calc(100% * var(--action-art-scale));
+  height: calc(100% * var(--action-art-scale));
   border: 0;
   border-radius: 0;
   object-fit: contain;
@@ -164,10 +164,8 @@ function onPortraitError(event: Event) {
   height: clamp(92px, 8.4vw, 126px);
   animation: anime-win-cue-serial calc(520ms + 180ms) ease-out both;
 }
-.action-from-top { top: 18%; left: 50%; transform: translate(-50%, 0); }
-.action-from-right { top: 34%; right: 28%; transform: translate(0, -50%); }
-.action-from-bottom { bottom: 29%; left: 50%; transform: translate(-50%, 0); }
-.action-from-left { top: 34%; left: 28%; transform: translate(0, -50%); }
+/* 四个方向的座位锚点统一由共享样式表（src/style.css）维护；
+   组件内只保留镜像、文字等纯视觉规则。 */
 .action-from-left img.base-q-avatar { left: auto; right: 0; transform: scaleX(-1); }
 .action-from-left .anime-action-copy { right: auto; left: 4%; align-items: start; }
 @keyframes anime-action-enter {
@@ -180,8 +178,8 @@ function onPortraitError(event: Event) {
   100% { opacity: 0; scale: .96; filter: blur(1px) drop-shadow(3px 5px 0 rgba(45,36,28,.18)); }
 }
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  /* 移动端只收敛视觉尺寸；座位锚点与 --action-art-scale 均由共享样式表提供（R6.19）。 */
   .anime-action-cue {
-    --action-art-scale: 1.15;
     width: clamp(84px, 13cqw, 112px);
     max-width: var(--action-art-max-width);
     height: clamp(64px, 10cqw, 86px);
@@ -190,16 +188,6 @@ function onPortraitError(event: Event) {
   .anime-action-cue.anime-action-hu,
   .anime-action-cue.anime-action-zimo,
   .anime-action-cue.anime-action-qiangganghu { width: clamp(96px, 15cqw, 124px); height: clamp(72px, 11cqw, 92px); }
-  .anime-action-cue img.dedicated-action-art {
-    top: calc((1 - var(--action-art-scale)) * 50%);
-    left: calc((1 - var(--action-art-scale)) * 50%);
-    width: calc(100% * var(--action-art-scale));
-    height: calc(100% * var(--action-art-scale));
-  }
-  .action-from-top { top: calc(var(--top-seat-anchor) + var(--seat-card-width) + var(--hud-gap)); }
-  .action-from-right { top: 38%; right: max(20%, calc(var(--safe-right) + var(--seat-card-width) + var(--hud-gap))); }
-  .action-from-bottom { bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap)); }
-  .action-from-left { top: 38%; left: max(20%, calc(var(--safe-left) + var(--seat-card-width) + var(--hud-gap))); }
 }
 @media (prefers-reduced-motion: reduce) {
   .anime-action-cue { animation: anime-action-fade .16s ease-out both; }
