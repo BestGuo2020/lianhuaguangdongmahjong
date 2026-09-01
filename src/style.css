@@ -2254,7 +2254,7 @@ button { font: inherit; }
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    width: var(--seat-card-width);
+    /* width: var(--seat-card-width); */
     min-width: 0;
     padding: 6px 7px 7px;
     transform: none;
@@ -2395,7 +2395,7 @@ button { font: inherit; }
   .has-three-scene .seat-top {
     right: auto;
     left: clamp(46px, var(--top-seat-inline-anchor), calc(100% - var(--safe-right) - var(--seat-card-width) - 54px));
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(-20px);
   }
 }
 
