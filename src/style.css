@@ -2250,39 +2250,35 @@ button { font: inherit; }
   .seat-left .avatar-wrap,
   .seat-right .avatar-wrap,
   .user-identity {
-    display: grid;
-    grid-template-rows: var(--seat-avatar-size) 36px;
-    align-content: center;
-    justify-items: center;
-    gap: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
     width: var(--seat-card-width);
-    height: var(--seat-card-height);
     min-width: 0;
-    padding: 5px;
+    padding: 6px 7px 7px;
     transform: none;
   }
   .avatar-wrap .avatar,
-  .user-identity .avatar { width: var(--seat-avatar-size); height: var(--seat-avatar-size); }
+  .user-identity .avatar { width: clamp(52px, 5.1vw, 76px); height: clamp(52px, 5.1vw, 76px); }
   .game-app .avatar-wrap > .player-info,
   .game-app .user-identity > .player-info {
-    display: grid;
-    grid-template-rows: 16px 15px;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-items: stretch;
-    gap: 2px;
+    gap: 0;
     width: 100%;
-    height: 33px;
+    height: auto;
+    line-height: 1.25;
   }
   .game-app .avatar-wrap .player-info strong,
   .game-app .user-identity .player-info strong {
     max-width: 100%;
     display: block;
-    height: 16px;
-    min-height: 0;
     overflow: hidden;
     overflow-wrap: normal;
-    font-size: clamp(11px, 1.3cqw, 12px);
-    line-height: 16px;
+    font-size: clamp(12px, 1vw, 16px);
+    line-height: 1.25;
     width: 100%;
     text-align: center;
     text-overflow: ellipsis;
@@ -2335,14 +2331,16 @@ button { font: inherit; }
   }
   .game-app .avatar-wrap > .player-info > span,
   .game-app .user-identity > .player-info > span {
-    align-self: end;
-    justify-self: stretch;
     width: 100%;
     margin: 0;
-    font-size: clamp(11px, 1.3cqw, 13px);
-    line-height: 15px;
+    font-size: clamp(12px, .95vw, 15px);
+    line-height: 1.25;
     text-align: center;
   }
+  .game-app[data-table-theme="llmAnime"] .avatar-wrap .player-info strong,
+  .game-app[data-table-theme="llmAnime"] .user-identity .player-info strong { font-size: clamp(10px, .82vw, 12px); }
+  .game-app[data-table-theme="llmAnime"] .avatar-wrap > .player-info > span,
+  .game-app[data-table-theme="llmAnime"] .user-identity > .player-info > span { font-size: clamp(10px, .78vw, 12px); }
 
   .turn-action-row {
     right: calc(var(--safe-right) + 8px);
@@ -2391,7 +2389,7 @@ button { font: inherit; }
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
-  .game-app { --top-seat-inline-anchor: 84%; --side-seat-anchor: 40%; }
+  .game-app { --top-seat-inline-anchor: 60%; --side-seat-anchor: 40%; }
   /* 偏长档手机屏幕矮，对家与右家纵向有重叠，仍需用右家卡宽钳制横向；
      但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。 */
   .has-three-scene .seat-top {

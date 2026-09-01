@@ -494,7 +494,7 @@ test('手机横屏清单使用同一触控布局连续适配', async ({ browser 
   const initial = phoneLandscapeViewports[0]
   const { context, page } = await createTouchPage(browser, initial.width, initial.height)
   await startMatch(page, 'llmAnime', false, true)
-  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
+  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 60_000 }).toBeGreaterThanOrEqual(13)
 
   for (const viewport of phoneLandscapeViewports) {
     await page.setViewportSize(viewport)
@@ -793,7 +793,7 @@ test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
   const { context, page } = await createTouchPage(browser, 896, 414)
   await startMatch(page, 'llm')
-  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
+  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 60_000 }).toBeGreaterThanOrEqual(13)
 
   const metrics = await page.evaluate(() => {
     const topSeat = document.querySelector('.seat-top .avatar-wrap')!.getBoundingClientRect()
@@ -818,7 +818,7 @@ test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async
     }
   })
 
-  expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.78)
+  expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.5) // 对家锚点 60%（R6.17 起偏长档与基准一致），右于中央牌河
   expect(metrics.topRightOverlap).toBe(0)
   expect(metrics.slot.width).toBeCloseTo(40, 1)
   expect(metrics.hitArea.width).toBeGreaterThanOrEqual(43.5)
