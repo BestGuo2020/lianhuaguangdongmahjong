@@ -12,7 +12,7 @@
 - 已撤销第三方字体方案，首版使用系统字体栈加 CSS/SVG 字效。
 - 平时座位、选角、气泡与结算改为复用现有 Q 版头像；完整比例立绘不再作为主题运行时主资源。
 - LLM 座位继续显示其激进/稳健/话痨/高冷策略头像；只有真人和普通 bot 使用基础稳健头像。
-- 已生成并接入 DeepSeek 的通用鸣牌卡与通用胡牌卡两张；其余 22 张动作卡待逐批生成与审核。
+- 已生成并接入全部 12 角色共 24 张动作卡（每角色通用鸣牌卡 `call` + 通用胡牌卡 `win` 各一张，单张 228~343 KiB，成品审核通过）；动作卡资产缺口已关闭。
 - 已把六类动作和五类赛后固定文案接入现有 TTS 缓存：主音色失败尝试替代音色，开始播放前动作最多等待 4.5s、赛后单句最多等待 2s；一旦开始播放不再截断。自定义聚合中转按完整模型 ID 识别角色（如 OrcaRouter 的 Claude）。
 - 已落实 `llmAnime` 声音矩阵：真人只保留落牌声、普通 bot 继续报牌、LLM 保留普通出牌吐槽，动作和赛后不再使用模型自由文案。
 - 已落地单机与 WebSocket 的四家赛后队列；赢家先说、其余顺时针，流局按座位顺序，队列结束后才开放结算窗口，取消/失败会立即放行。
@@ -144,7 +144,7 @@
 - 现有牌面只有 `public/tiles/` 的 34 张 75×100 RGBA PNG，总计约 0.43 MiB。
 - 现有桌布 `public/img/llm-table.webp` 为 1024×1024 VP8L lossless，约 1.05 MiB。
 - 代码目前只一等识别 DeepSeek、Kimi、Qwen、Doubao、MiniMax、GPT、GLM、Claude 八家；Gemini、Grok、Muse 只能手填 `avatarFolder`，Mistral 没有线上头像、provider 或 TTS 映射，`custom` 目录也不存在。
-- 当前已存在 44 张基础 Q 版头像和 DeepSeek 两张动作卡；主题牌面、图片牌背及其余 22 张动作卡尚未完成。
+- 当前已存在 44 张基础 Q 版头像和 24 张动作卡（12 角色 × `call`/`win`），主题牌面与图片牌背亦已完成（`public/themes/llm-anime/v1/`）；本行原“DeepSeek 两张、其余 22 张动作卡未完成”的审计结论已于 2026-09-02 修正。
 - 已有通用吃、碰、杠、胡、自摸语音，但它们不是 12 角色固定语音；没有独立抢杠胡语音。
 
 `tmp/` 被忽略，不能成为可重复构建的唯一真源。Wave 0 必须把批准使用的原图和可用 DeepSeek cutout 移到受版本管理的 `assets-src/llm-anime/`；若版权或仓库体积不允许提交原图，则必须使用外部只读归档并在源 manifest 中记录 URL、SHA256、字节数和恢复步骤。`cutout-v2` 写入拒绝清单，不能被流水线误选。
@@ -153,48 +153,22 @@
 
 ```text
 assets-src/llm-anime/
-  manifest.json
-  SOURCES.json
-  characters/<id>/source.jpg
-  characters/<id>/portrait-master.png
-  rejected/deepseek-cutout-v2.png
+  README.md
+  characters/<id>/                 （源文件归档；目前仅 deepseek 有 source.jpg、portrait-master.png）
 
-public/themes/llm-anime/<assetVersion>/
-  characters/
-    deepseek/
-      avatar.webp
-      thumb.webp
-      actions/
-        call.jpg
-        win.jpg
-    ...
-  actions/
-    chi.svg
-    peng.svg
-    gang.svg
-    hu.svg
-    zimo.svg
-    qiangganghu.svg
-  tiles/
-    faces/
-      1m.webp ... 9m.webp
-      1p.webp ... 9p.webp
-      1s.webp ... 9s.webp
-      1z.webp ... 7z.webp
-    back.webp
-  table/
-    surface.webp
-  ui/
-    broadcast-frame.svg
-    bubble-frame.svg
-    bubble-tail.svg
-    settlement-bg.webp
-    settlement-frame.svg
+public/themes/llm-anime/v1/
+  characters/<id>/actions/
+    call.jpg                       （12 角色 × 通用鸣牌卡）
+    win.jpg                        （12 角色 × 通用胡牌卡）
+  tiles/faces/1m.png ... 7z.png    （34 张主题牌面 PNG）
+  tile-back.png                    （图片牌背）
 ```
 
-图片保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。首版不包含字体资产；动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
+> 2026-09-02 修正（实际布局）：本节蓝图中的 `manifest.json`、`SOURCES.json`、`ui/` 与 `actions/` SVG 资产并未落地。座位/选角/结算头像复用 `public/img/llm/<id>/`（经 `animeCharacterAvatarUrl` 解析，缺目录角色回退 deepseek——当前 mistral 即如此）；广播框、气泡、动作字、结算框均为 CSS + 系统字体实现，无 SVG 资产；所有 URL 由 `llmAnimeAssets.ts` / `tileAssets.ts` 硬编码 `v1` 版本路径 + `import.meta.env.BASE_URL` 解析。首版不包含字体资产；动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
 
 ### 4.3 主题 manifest
+
+> 2026-09-02 同步修正：本节描述的 manifest 生成器蓝图未落地。实际实现为 `src/game/core/presentation/llmAnimeAssets.ts`（`LLM_ANIME_ASSET_VERSION='v1'` + `SHIPPED_ANIME_ACTION_CARD_CHARACTERS = ANIME_CHARACTER_IDS` 硬编码 URL 构建，见 `animeActionArtUrl`），角色/alias/voice/固定文案分散在 `animeCharacters.ts`、`animeCharacterPreference.ts` 与 TTS 文案模块中；仓库不存在 `manifest.json`、`SOURCES.json` 与 `llmAnimeThemeManifest.generated.ts`。若未来引入多版本/内容哈希长缓存，再按本节蓝图回补生成器。
 
 `assets-src/llm-anime/manifest.json` 是可编辑的唯一真源；构建脚本生成 `src/game/core/presentation/llmAnimeThemeManifest.generated.ts`，业务代码不得手写第二份路径表。
 
