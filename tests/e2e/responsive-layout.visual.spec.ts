@@ -818,7 +818,7 @@ test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async
     }
   })
 
-  expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.5) // 对家锚点 60%（R6.17 起偏长档与基准一致），右于中央牌河
+  expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.6) // 对家锚点 66%（R6.17 偏长档与基准一致），右于中央牌河
   expect(metrics.topRightOverlap).toBe(0)
   expect(metrics.slot.width).toBeCloseTo(40, 1)
   expect(metrics.hitArea.width).toBeGreaterThanOrEqual(43.5)

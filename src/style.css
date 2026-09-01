@@ -2161,7 +2161,7 @@ button { font: inherit; }
     --seat-card-width: clamp(88px, 10cqw, 96px);
     --seat-card-height: clamp(94px, 21cqh, 110px);
     --seat-avatar-size: clamp(44px, 6cqh, 56px);
-    --top-seat-inline-anchor: 60%;
+    --top-seat-inline-anchor: 66%;
     --hand-zone-height: calc(clamp(72px, 13cqh, 112px) + var(--safe-bottom));
     --hud-gap: 6px;
   }
@@ -2389,7 +2389,7 @@ button { font: inherit; }
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
-  .game-app { --top-seat-inline-anchor: 60%; --side-seat-anchor: 40%; }
+  .game-app { --top-seat-inline-anchor: 66%; --side-seat-anchor: 40%; }
   /* 偏长档手机屏幕矮，对家与右家纵向有重叠，仍需用右家卡宽钳制横向；
      但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。 */
   .has-three-scene .seat-top {
