@@ -30,5 +30,7 @@ describe('响应式 CSS 合同', () => {
     // 主指针粗指针才进入移动端几何；any-pointer 会把带触摸屏的笔记本/台式整机误判为手机。
     expect(styleSource).not.toContain('@media (any-pointer: coarse)')
     expect(styleSource).toContain('@media (orientation: portrait) and (hover: none) and (pointer: coarse)')
+    // 平板（≥1024×768）用容器查询切回 PC 样式，容器查询不属于设备宽度媒体查询。
+    expect(styleSource).toContain('@container (min-width: 1024px) and (min-height: 768px)')
   })
 })

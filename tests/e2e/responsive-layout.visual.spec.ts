@@ -472,7 +472,9 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
     expect(metrics.cameraFov).toBeGreaterThan(39)
     expect(metrics.cameraFov).toBeLessThan(52)
     expect(metrics.coarsePointer).toBe(true)
-    expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.8)
+    // 平板（≥1024×768）切回 PC 样式：对家回到 50%+偏移 的桌面锚点（约 0.65~0.68），不再右移到 86%
+    expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.6)
+    expect(metrics.topSeatLeftRatio).toBeLessThanOrEqual(.75)
     expect(metrics.topRightOverlap).toBe(0)
     expect(metrics.handTileWidth).toBeGreaterThanOrEqual(55) // 平板手牌接近 PC 尺寸，不再 40px
     for (const name of metrics.names) {

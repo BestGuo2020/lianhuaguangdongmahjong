@@ -2159,9 +2159,9 @@ button { font: inherit; }
     --safe-top: 0px;
     --topbar-height: 44px;
     --seat-card-width: clamp(88px, 10cqw, 96px);
-    --seat-card-height: clamp(88px, 20cqh, 112px);
+    --seat-card-height: clamp(88px, 20cqh, 100px);
     --seat-avatar-size: clamp(36px, 5cqh, 56px);
-    --top-seat-inline-anchor: 72%;
+    --top-seat-inline-anchor: 60%;
     --hand-zone-height: calc(clamp(72px, 13cqh, 112px) + var(--safe-bottom));
     --hud-gap: 6px;
   }
@@ -2399,6 +2399,63 @@ button { font: inherit; }
     left: clamp(46px, var(--top-seat-inline-anchor), calc(100% - var(--safe-right) - var(--seat-card-width) - 54px));
     transform: translateX(-50%);
   }
+}
+
+/* 平板（触控且 ≥1024×768）：切回 PC/桌面样式（卡片、座位、手牌、顶栏）。 */
+@container (min-width: 1024px) and (min-height: 768px) {
+  .has-three-scene {
+    --topbar-height: 45px;
+    --seat-card-width: clamp(76px, 7cqw, 104px);
+    --seat-card-height: auto;
+    --seat-avatar-size: clamp(52px, 5.1vw, 76px);
+    --hand-zone-height: clamp(82px, 21cqh, 205px);
+    --hud-gap: clamp(6px, calc(1.1 * var(--game-unit)), 16px);
+  }
+  .has-three-scene .seat-left {
+    top: 35%;
+    left: calc(var(--table-box-left) + 2.7cqw);
+  }
+  .has-three-scene .seat-right {
+    top: 35%;
+    right: calc(var(--table-box-left) + 2.7cqw);
+  }
+  .has-three-scene .seat-top {
+    left: calc(50% + clamp(220px, 18.5vw, 365px));
+  }
+  .has-three-scene .hand-rack .mahjong-tile {
+    --tile-width: clamp(48px, calc(7.97 * var(--game-cqh)), 104px);
+    aspect-ratio: 3 / 4;
+  }
+  .hand-rack .hand-tile-slot { width: auto; min-width: var(--hand-hit-target); }
+  .hand-rack { gap: clamp(1px, .2vw, 4px); }
+  .hand-rack .hand-tile-slot.drawn { margin-left: clamp(10px, 1vw, 18px); }
+  .user-area {
+    right: calc(var(--table-box-left) + max(5%, calc(var(--safe-right) + 4px)));
+    left: calc(var(--table-box-left) + max(5%, calc(var(--safe-left) + 4px)));
+  }
+  .user-identity { left: -3.3%; bottom: 40px; }
+  /* 大厅回到 PC 版式 */
+  .lobby { justify-content: center; padding: 0; }
+  .lobby .eyebrow { display: block; margin: 0 0 7px; font-size: 11px; letter-spacing: .5em; }
+  .lobby h1 { font-size: clamp(43px, 6vw, 80px); line-height: normal; }
+  .subtitle { margin: 8px 0 20px; font-size: 15px; letter-spacing: .28em; }
+  .mode-selector { margin-bottom: 22px; gap: 10px; }
+  .mode-selector button { padding: 13px 12px 11px; }
+  .mode-selector button b { margin-bottom: 4px; font-size: 16px; }
+  .mode-selector button span { font-size: 11px; }
+  .match-selector { margin-bottom: 15px; gap: 10px; }
+  .match-selector button { padding: 13px 12px 11px; }
+  .match-selector button b { font-size: 18px; }
+  .game-settings { margin-bottom: 14px; }
+  .game-settings-title { padding: 6px 14px 5px; font-size: 10px; }
+  .game-settings > button { min-height: 46px; padding: 7px 13px; gap: 8px; }
+  .game-settings > button > small { white-space: nowrap; text-overflow: ellipsis; }
+  .start-button { min-width: 228px; padding: 12px 33px 10px; }
+  .start-button b { font-size: 20px; }
+  .start-button span { margin-top: 3px; font-size: 11px; }
+  .remote-lobby { gap: 12px; }
+  .room-panel { gap: 12px; padding: 14px; }
+  .lobby-links { margin-top: 14px; }
 }
 
 /* ── Scroll-safe overlays and extreme landscape sizing (R5) ───────────── */
