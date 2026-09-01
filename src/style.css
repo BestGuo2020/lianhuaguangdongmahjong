@@ -2089,7 +2089,7 @@ button { font: inherit; }
   --hud-top-edge: calc(var(--safe-top) + var(--topbar-height));
   --hud-bottom-edge: var(--safe-bottom);
   --top-seat-anchor: calc(var(--hud-top-edge) + var(--hud-gap));
-  --side-seat-anchor: 36%;
+  --side-seat-anchor: 40%;
   /* 牌桌盒基准：相机纵向 FOV 固定 → 牌桌居中、屏幕宽 ≈ 高×16/9（等价重构前的 16:9 信箱）。
      窗口宽于 16:9 时，座位/手牌必须锚到该盒而非窗口边缘，否则头像会漂到屏幕两侧。 */
   --table-box-w: min(100cqw, calc(100cqh * 16 / 9));
@@ -2149,7 +2149,7 @@ button { font: inherit; }
    避免高窗/大屏下 86px 封顶导致手牌相对牌桌偏小。触控设备继续走移动端 40px 规则。 */
 @media (hover: hover) and (pointer: fine) {
   .has-three-scene .hand-rack .mahjong-tile {
-    --tile-width: clamp(48px, calc(7.97 * var(--game-cqh)), 104px);
+    --tile-width: clamp(48px, min(calc(7.97 * var(--game-cqh)), calc(5.5 * var(--game-cqw))), 104px);
   }
 }
 
@@ -2159,8 +2159,8 @@ button { font: inherit; }
     --safe-top: 0px;
     --topbar-height: 44px;
     --seat-card-width: clamp(88px, 10cqw, 96px);
-    --seat-card-height: clamp(88px, 20cqh, 100px);
-    --seat-avatar-size: clamp(36px, 5cqh, 56px);
+    --seat-card-height: clamp(94px, 21cqh, 110px);
+    --seat-avatar-size: clamp(44px, 6cqh, 56px);
     --top-seat-inline-anchor: 60%;
     --hand-zone-height: calc(clamp(72px, 13cqh, 112px) + var(--safe-bottom));
     --hud-gap: 6px;
@@ -2266,23 +2266,23 @@ button { font: inherit; }
   .game-app .avatar-wrap > .player-info,
   .game-app .user-identity > .player-info {
     display: grid;
-    grid-template-rows: 18px 16px;
+    grid-template-rows: 16px 15px;
     align-items: center;
     justify-items: stretch;
     gap: 2px;
     width: 100%;
-    height: 36px;
+    height: 33px;
   }
   .game-app .avatar-wrap .player-info strong,
   .game-app .user-identity .player-info strong {
     max-width: 100%;
     display: block;
-    height: 18px;
+    height: 16px;
     min-height: 0;
     overflow: hidden;
     overflow-wrap: normal;
-    font-size: clamp(11px, 1.55cqw, 14px);
-    line-height: 18px;
+    font-size: clamp(11px, 1.3cqw, 12px);
+    line-height: 16px;
     width: 100%;
     text-align: center;
     text-overflow: ellipsis;
@@ -2339,8 +2339,8 @@ button { font: inherit; }
     justify-self: stretch;
     width: 100%;
     margin: 0;
-    font-size: clamp(11px, 1.45cqw, 14px);
-    line-height: 16px;
+    font-size: clamp(11px, 1.3cqw, 13px);
+    line-height: 15px;
     text-align: center;
   }
 
@@ -2391,7 +2391,7 @@ button { font: inherit; }
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
-  .game-app { --top-seat-inline-anchor: 84%; --side-seat-anchor: 36%; }
+  .game-app { --top-seat-inline-anchor: 84%; --side-seat-anchor: 40%; }
   /* 偏长档手机屏幕矮，对家与右家纵向有重叠，仍需用右家卡宽钳制横向；
      但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。 */
   .has-three-scene .seat-top {
@@ -2423,7 +2423,7 @@ button { font: inherit; }
     left: calc(50% + clamp(220px, 18.5vw, 365px));
   }
   .has-three-scene .hand-rack .mahjong-tile {
-    --tile-width: clamp(48px, calc(7.97 * var(--game-cqh)), 104px);
+    --tile-width: clamp(48px, min(calc(7.97 * var(--game-cqh)), calc(5.5 * var(--game-cqw))), 104px);
     aspect-ratio: 3 / 4;
   }
   .hand-rack .hand-tile-slot { width: auto; min-width: var(--hand-hit-target); }
@@ -2434,6 +2434,19 @@ button { font: inherit; }
     left: calc(var(--table-box-left) + max(5%, calc(var(--safe-left) + 4px)));
   }
   .user-identity { left: -3.3%; bottom: 40px; }
+  /* 卡片字号/内边距对齐桌面 */
+  .has-three-scene .seat-top .avatar-wrap,
+  .seat-left .avatar-wrap,
+  .seat-right .avatar-wrap,
+  .user-identity { padding: 6px 7px 7px; }
+  .game-app .avatar-wrap .player-info strong,
+  .game-app .user-identity .player-info strong { font-size: clamp(12px, 1vw, 16px); }
+  .game-app[data-table-theme="llmAnime"] .avatar-wrap .player-info strong,
+  .game-app[data-table-theme="llmAnime"] .user-identity .player-info strong { font-size: clamp(10px, .82vw, 12px); }
+  .game-app .avatar-wrap > .player-info > span,
+  .game-app .user-identity > .player-info > span { font-size: clamp(12px, .95vw, 15px); }
+  .game-app[data-table-theme="llmAnime"] .avatar-wrap > .player-info > span,
+  .game-app[data-table-theme="llmAnime"] .user-identity > .player-info > span { font-size: clamp(10px, .78vw, 12px); }
   /* 大厅回到 PC 版式 */
   .lobby { justify-content: center; padding: 0; }
   .lobby .eyebrow { display: block; margin: 0 0 7px; font-size: 11px; letter-spacing: .5em; }

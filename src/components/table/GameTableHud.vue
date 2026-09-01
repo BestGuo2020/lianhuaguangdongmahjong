@@ -619,20 +619,20 @@ function onAvatarError(entry: GamePlayer) {
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .flip-indicator {
     top: calc(var(--safe-top) + var(--topbar-height) + var(--hud-gap));
-    right: calc(var(--safe-right) + 8px);
-    left: auto;
+    right: auto;
+    left: calc(var(--safe-left) + 8px);
     box-sizing: border-box;
     min-width: 44px;
     min-height: 44px;
     max-width: calc(100cqw - var(--safe-left) - var(--safe-right) - 16px);
-    gap: 3px;
-    padding: 5px 8px;
+    gap: 2px;
+    padding: 3px 6px;
     border-radius: 8px;
   }
-  .flip-indicator-head { min-width: 0; flex-wrap: nowrap; gap: 4px; }
+  .flip-indicator-head { min-width: 0; flex-wrap: nowrap; gap: 3px; }
   .flip-indicator-head > span { font-size: 12px; letter-spacing: 1px; }
   .flip-indicator-head > .mahjong-tile.small {
-    --tile-width: clamp(24px, 6.4vw, 28px);
+    --tile-width: clamp(18px, 4.8vw, 22px);
     top: 0;
   }
   .flip-indicator-head > em { flex: 0 0 auto; font-size: 11px; white-space: nowrap; }
@@ -644,6 +644,28 @@ function onAvatarError(entry: GamePlayer) {
   }
   .joker-guide { font-size: 10px; }
   .joker-guide div { max-width: 150px; white-space: normal; }
+}
+
+/* 平板（≥1024×768）：翻精指示牌回到桌面「常显完整卡片、不折叠」 */
+@container (min-width: 1024px) and (min-height: 768px) {
+  .flip-indicator {
+    top: 50px;
+    right: 18px;
+    left: auto;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .flip-indicator-head > span { font-size: 14px; letter-spacing: 2px; }
+  .flip-indicator-head > .mahjong-tile.small { --tile-width: clamp(20px, 2.15vw, 33px); }
+  .flip-indicator-head > em { font-size: 13px; }
+  .flip-chevron { display: none; }
+  .flip-indicator-body { display: grid; }
+  .joker-guide { font-size: 11px; }
+  .joker-guide div { max-width: none; white-space: nowrap; }
 }
 
 .chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
