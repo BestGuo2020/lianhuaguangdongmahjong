@@ -179,7 +179,7 @@ function onPortraitError(event: Event) {
   16%, 74% { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
   100% { opacity: 0; scale: .96; filter: blur(1px) drop-shadow(3px 5px 0 rgba(45,36,28,.18)); }
 }
-@media (max-width: 760px), (max-height: 520px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .anime-action-cue {
     --action-art-scale: 1.15;
     width: clamp(84px, 13cqw, 112px);

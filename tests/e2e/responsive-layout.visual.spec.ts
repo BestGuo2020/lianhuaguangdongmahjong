@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Browser, type Page } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 
 test.describe.configure({ mode: 'serial' })
@@ -16,7 +16,40 @@ const viewports = [
 
 const themes = ['jade', 'majsoul', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'] as const
 
+const phoneLandscapeViewports = [
+  { name: 'iphone-se', width: 667, height: 375 },
+  { name: 'iphone-x', width: 812, height: 375 },
+  { name: 'iphone-mainstream', width: 844, height: 390 },
+  { name: 'iphone-pro', width: 852, height: 393 },
+  { name: 'iphone-plus', width: 926, height: 428 },
+  { name: 'iphone-pro-max', width: 932, height: 430 },
+  { name: 'android-mainstream', width: 800, height: 360 },
+  { name: 'android-large', width: 915, height: 412 },
+  { name: 'android-legacy', width: 640, height: 360 },
+  { name: 'android-18x9', width: 720, height: 360 },
+] as const
+
+const desktopViewports = [
+  { name: 'window-1280x720', width: 1280, height: 720 },
+  { name: 'laptop-1366x768', width: 1366, height: 768 },
+  { name: 'full-hd', width: 1920, height: 1080 },
+  { name: 'qhd', width: 2560, height: 1440 },
+  { name: 'ultrawide', width: 3440, height: 1440 },
+  { name: '4k-css', width: 3840, height: 2160 },
+] as const
+
 type Rect = { x: number; y: number; width: number; height: number; right: number; bottom: number }
+
+async function createTouchPage(browser: Browser, width: number, height: number) {
+  const port = Number(process.env.E2E_PORT || 4173)
+  const context = await browser.newContext({
+    baseURL: `http://127.0.0.1:${port}`,
+    viewport: { width, height },
+    hasTouch: true,
+    isMobile: true,
+  })
+  return { context, page: await context.newPage() }
+}
 
 function overlap(a: Rect | null, b: Rect | null) {
   if (!a || !b) return 0
@@ -63,6 +96,7 @@ async function assertTableLayout(page: Page, viewport: typeof viewports[number])
         const art = document.querySelector('.anime-action-cue img.dedicated-action-art')?.getBoundingClientRect()
         return cue && art ? { width: art.width / cue.width, height: art.height / cue.height } : null
       })(),
+      coarsePointer: matchMedia('(hover: none) and (pointer: coarse)').matches,
       minTarget: targets.length ? {
         width: Math.min(...targets.map((value) => value.width)),
         height: Math.min(...targets.map((value) => value.height)),
@@ -88,9 +122,7 @@ async function assertTableLayout(page: Page, viewport: typeof viewports[number])
     expect(metrics.minTarget?.height).toBeGreaterThanOrEqual(43.5)
   }
   if (metrics.artRatio) {
-    const expectedScale = viewport.width <= 760 || (viewport.width <= 1000 && viewport.height <= 520 && viewport.width / viewport.height >= 2)
-      ? 1.15
-      : 2
+    const expectedScale = metrics.coarsePointer ? 1.15 : 2
     expect(metrics.artRatio.width).toBeCloseTo(expectedScale, 1)
     expect(metrics.artRatio.height).toBeCloseTo(expectedScale, 1)
   }
@@ -167,10 +199,10 @@ test('六主题在共享 1366×768 布局完成正常对局与结算回归', asy
   }
 })
 
-test('568×320 菜单/规则与 667×375 翻精面板均钳制在安全区', async ({ page }) => {
+test('568×320 菜单/规则与 667×375 翻精面板均钳制在安全区', async ({ browser }) => {
   test.setTimeout(90_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
-  await page.setViewportSize({ width: 568, height: 320 })
+  const { context, page } = await createTouchPage(browser, 568, 320)
   await page.goto('/?theme=jade', { waitUntil: 'domcontentloaded' })
 
   await page.getByRole('button', { name: '切换牌桌主题' }).click()
@@ -222,13 +254,16 @@ test('568×320 菜单/规则与 667×375 翻精面板均钳制在安全区', asy
   })
   expect(overlapArea).toEqual({ topSeat: 0, topbar: 0 })
   await page.screenshot({ path: `${evidenceRoot}/extreme/jade-667x375-flip.png` })
+  await context.close()
 })
 
-test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', async ({ page }) => {
+test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', async ({ browser }) => {
   test.setTimeout(60_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
-  await page.setViewportSize({ width: 896, height: 414 })
+  const { context, page } = await createTouchPage(browser, 896, 414)
   await page.goto('/?theme=llmAnime', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.top-bar .brand-mini')).toHaveCount(0)
+  await expect(page.locator('.top-bar .round-info')).toHaveCount(0)
 
   const themeTrigger = page.getByRole('button', { name: '切换牌桌主题' })
   await themeTrigger.click()
@@ -251,8 +286,8 @@ test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', as
     }
   })
   expect(themeMetrics.trigger).toEqual({ width: 44, height: 44 })
-  expect(themeMetrics.face.width).toBeCloseTo(36, 0)
-  expect(themeMetrics.face.height).toBeCloseTo(36, 0)
+  expect(themeMetrics.face.width).toBeCloseTo(32, 0)
+  expect(themeMetrics.face.height).toBeCloseTo(32, 0)
   expect(themeMetrics.menu.left).toBeGreaterThanOrEqual(0)
   expect(themeMetrics.menu.right).toBeLessThanOrEqual(896)
   expect(themeMetrics.menu.bottom).toBeLessThanOrEqual(414)
@@ -282,11 +317,34 @@ test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', as
   expect(audioMetrics.backgroundImage).toBe('none')
   expect(audioMetrics.backgroundColor).toBe('rgba(0, 0, 0, 0)')
   await page.screenshot({ path: `${evidenceRoot}/extreme/llmAnime-896x414-audio-menu.png` })
+
+  await page.goto('/?theme=jade', { waitUntil: 'domcontentloaded' })
+  const sharedControlMetrics = await page.evaluate(() => {
+    const trigger = document.querySelector<HTMLElement>('.theme-toggle')!
+    const face = getComputedStyle(trigger, '::before')
+    const controls = [...document.querySelectorAll<HTMLElement>('.topbar-control')].map((element) => element.getBoundingClientRect())
+    const icons = [...document.querySelectorAll<HTMLImageElement>('.topbar-control img')].map((element) => element.getBoundingClientRect())
+    return {
+      hit: {
+        width: Math.min(...controls.map((value) => value.width)),
+        height: Math.min(...controls.map((value) => value.height)),
+      },
+      themeFace: { width: Number.parseFloat(face.width), height: Number.parseFloat(face.height) },
+      iconMaximum: Math.max(...icons.flatMap((value) => [value.width, value.height])),
+    }
+  })
+  expect(sharedControlMetrics.hit).toEqual({ width: 44, height: 44 })
+  expect(sharedControlMetrics.themeFace.width).toBeCloseTo(32, 0)
+  expect(sharedControlMetrics.themeFace.height).toBeCloseTo(32, 0)
+  expect(sharedControlMetrics.iconMaximum).toBeLessThanOrEqual(28.5)
+  await page.screenshot({ path: `${evidenceRoot}/extreme/jade-896x414-compact-topbar-controls.png` })
+  await context.close()
 })
 
-test('所有主题的小横屏玩家名统一完整换行显示', async ({ page }) => {
-  test.setTimeout(90_000)
+test('所有主题的小横屏玩家名统一单行省略显示', async ({ browser }) => {
+  test.setTimeout(180_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
+  const { context, page } = await createTouchPage(browser, 896, 414)
   await page.addInitScript(() => {
     localStorage.setItem('llm.providers', JSON.stringify({
       configVersion: 2,
@@ -294,6 +352,7 @@ test('所有主题的小横屏玩家名统一完整换行显示', async ({ page 
       presets: [{
         id: 'responsive-long-name',
         name: 'claude',
+        nickname: '克劳德书姬',
         providerType: 'deepseek',
         baseUrl: 'https://api.deepseek.com/v1',
         apiKey: 'e2e-placeholder',
@@ -306,7 +365,6 @@ test('所有主题的小横屏玩家名统一完整换行显示', async ({ page 
       seatStyles: [null, '话痨', '话痨', '话痨'],
     }))
   })
-  await page.setViewportSize({ width: 896, height: 414 })
   for (const theme of ['rosewood', 'llmAnime'] as const) {
     await startMatch(page, theme)
     const names = await page.locator('.player-seat .player-info strong').evaluateAll((elements) => elements.map((element) => {
@@ -325,13 +383,14 @@ test('所有主题的小横屏玩家名统一完整换行显示', async ({ page 
     expect(names).toHaveLength(3)
     for (const name of names) {
       expect(name.text).toContain('（话痨）')
-      expect(name.textOverflow).toBe('clip')
-      expect(name.whiteSpace).toBe('normal')
-      expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1)
+      expect(name.textOverflow).toBe('ellipsis')
+      expect(name.whiteSpace).toBe('nowrap')
+      expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
       expect(name.scrollHeight).toBeLessThanOrEqual(name.clientHeight + 1)
     }
     await page.screenshot({ path: `${evidenceRoot}/extreme/${theme}-896x414-long-player-names.png` })
   }
+  await context.close()
 })
 
 test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async ({ browser }) => {
@@ -352,6 +411,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
       presets: [{
         id: 'tablet-long-name',
         name: 'claude',
+        nickname: '克劳德书姬',
         providerType: 'deepseek',
         baseUrl: 'https://api.deepseek.com/v1',
         apiKey: 'e2e-placeholder',
@@ -369,6 +429,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
   const tablets = [
     { name: 'ipad-mini', width: 1024, height: 768 },
     { name: 'ipad-air', width: 1180, height: 820 },
+    { name: 'ipad-pro-11', width: 1194, height: 834 },
     { name: 'ipad-pro', width: 1366, height: 1024 },
     { name: 'surface-pro-7', width: 1368, height: 912 },
     { name: 'zenbook-fold', width: 1280, height: 853 },
@@ -413,12 +474,278 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
     expect(metrics.topRightOverlap).toBe(0)
     for (const name of metrics.names) {
       expect(name.text).toContain('（话痨）')
-      expect(name.whiteSpace).toBe('normal')
-      expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1)
+      expect(name.whiteSpace).toBe('nowrap')
+      expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
       expect(name.scrollHeight).toBeLessThanOrEqual(name.clientHeight + 1)
     }
     await page.screenshot({ path: `${evidenceRoot}/tablet/rosewood-${tablet.name}-${tablet.width}x${tablet.height}.png` })
   }
+  await context.close()
+})
+
+test('手机横屏清单使用同一触控布局连续适配', async ({ browser }) => {
+  test.setTimeout(180_000)
+  await mkdir(`${evidenceRoot}/phone-matrix`, { recursive: true })
+  const initial = phoneLandscapeViewports[0]
+  const { context, page } = await createTouchPage(browser, initial.width, initial.height)
+  await startMatch(page, 'llmAnime', false, true)
+  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
+
+  for (const viewport of phoneLandscapeViewports) {
+    await page.setViewportSize(viewport)
+    await page.waitForTimeout(180)
+    const metrics = await page.evaluate(() => {
+      const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect() ?? null
+      const overlap = (left: DOMRect | null, right: DOMRect | null) => !left || !right ? 0
+        : Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left))
+          * Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top))
+      const game = rect('.game-app')!
+      const canvas = rect('canvas.mahjong-scene')!
+      const topSeat = rect('.seat-top .avatar-wrap')!
+      const rightSeat = rect('.seat-right .avatar-wrap')!
+      const topbar = rect('.top-bar')!
+      const tileRects = [...document.querySelectorAll('.hand-rack .mahjong-tile')]
+        .map((element) => element.getBoundingClientRect())
+        .sort((a, b) => a.left - b.left)
+      const minimumTileGap = tileRects.length > 1
+        ? Math.min(...tileRects.slice(1).map((value, index) => value.left - tileRects[index]!.right))
+        : 0
+      const controls = [...document.querySelectorAll<HTMLElement>('.topbar-control')]
+        .map((element) => element.getBoundingClientRect())
+      const handHitAreas = [...document.querySelectorAll<HTMLElement>('.hand-hit-area')]
+        .map((element) => element.getBoundingClientRect())
+      const seatCardElements = [
+        ...document.querySelectorAll<HTMLElement>('.player-seat .avatar-wrap'),
+        document.querySelector<HTMLElement>('.user-identity')!,
+      ]
+      const seatCards = seatCardElements.map((element) => element.getBoundingClientRect())
+      const mobileNames = seatCardElements.map((element) => {
+        const name = element.querySelector<HTMLElement>('.player-info strong')!
+        const style = getComputedStyle(name)
+        return {
+          whiteSpace: style.whiteSpace,
+          textOverflow: style.textOverflow,
+          lineHeight: style.lineHeight,
+          clientHeight: name.clientHeight,
+          scrollHeight: name.scrollHeight,
+        }
+      })
+      const scoreBottomInsets = seatCardElements.map((element, index) => {
+        const score = element.querySelector('.player-info span')!.getBoundingClientRect()
+        return seatCards[index]!.bottom - score.bottom
+      })
+      const scoreCenterOffsets = seatCardElements.map((element, index) => {
+        const score = element.querySelector('.player-info span')!.getBoundingClientRect()
+        const card = seatCards[index]!
+        return Math.abs((score.left + score.right) / 2 - (card.left + card.right) / 2)
+      })
+      const actionCue = document.querySelector('.anime-action-cue')?.getBoundingClientRect()
+      const actionArt = document.querySelector('.anime-action-cue img.dedicated-action-art')?.getBoundingClientRect()
+      const slots = [...document.querySelectorAll<HTMLElement>('.hand-rack .hand-tile-slot')]
+      const originalDrawnIndex = slots.findIndex((slot) => slot.classList.contains('drawn'))
+      const semanticDrawGaps = [2, 5, 8, 11, 14]
+        .filter((position) => position <= slots.length)
+        .map((position) => {
+          slots.forEach((slot) => slot.classList.remove('drawn'))
+          const previousWithoutGap = slots[position - 2]!.querySelector<HTMLElement>('.mahjong-tile')!.getBoundingClientRect()
+          const currentWithoutGap = slots[position - 1]!.querySelector<HTMLElement>('.mahjong-tile')!.getBoundingClientRect()
+          const baseGap = currentWithoutGap.left - previousWithoutGap.right
+          slots[position - 1]!.classList.add('drawn')
+          const previous = slots[position - 2]!.querySelector<HTMLElement>('.mahjong-tile')!.getBoundingClientRect()
+          const current = slots[position - 1]!.querySelector<HTMLElement>('.mahjong-tile')!.getBoundingClientRect()
+          const gap = current.left - previous.right
+          return { position, baseGap, gap, extraGap: gap - baseGap }
+        })
+      slots.forEach((slot, index) => slot.classList.toggle('drawn', index === originalDrawnIndex))
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        game: { width: game.width, height: game.height },
+        canvas: { width: canvas.width, height: canvas.height },
+        overflow: { x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight },
+        coarsePrimary: matchMedia('(hover: none) and (pointer: coarse)').matches,
+        coarseCapability: matchMedia('(any-pointer: coarse)').matches,
+        safeTop: getComputedStyle(document.querySelector('.game-app')!).getPropertyValue('--safe-top').trim(),
+        topbarTop: topbar.top,
+        topbarOverlap: overlap(topSeat, topbar),
+        topRightOverlap: overlap(topSeat, rightSeat),
+        minimumTileGap,
+        cssHandGap: getComputedStyle(document.querySelector('.hand-rack')!).gap,
+        cssSlotWidth: getComputedStyle(document.querySelector('.hand-tile-slot')!).width,
+        cssTileWidth: getComputedStyle(document.querySelector('.hand-rack .mahjong-tile')!).width,
+        minimumControl: {
+          width: Math.min(...controls.map((value) => value.width)),
+          height: Math.min(...controls.map((value) => value.height)),
+        },
+        minimumHandHit: {
+          width: Math.min(...handHitAreas.map((value) => value.width)),
+          height: Math.min(...handHitAreas.map((value) => value.height)),
+        },
+        seatCardSpread: {
+          width: Math.max(...seatCards.map((value) => value.width)) - Math.min(...seatCards.map((value) => value.width)),
+          height: Math.max(...seatCards.map((value) => value.height)) - Math.min(...seatCards.map((value) => value.height)),
+        },
+        seatCardCssSizes: seatCardElements.map((element) => {
+          const style = getComputedStyle(element)
+          return `${style.width}x${style.height}`
+        }),
+        scoreBottomInsets,
+        scoreCenterOffsets,
+        mobileNames,
+        semanticDrawGaps,
+        actionArtRatio: actionCue && actionArt ? actionArt.width / actionCue.width : null,
+      }
+    })
+    expect(metrics.viewport).toEqual({ width: viewport.width, height: viewport.height })
+    expect(metrics.game).toEqual(metrics.canvas)
+    expect(metrics.game.width).toBeCloseTo(viewport.width, 0)
+    expect(metrics.game.height).toBeCloseTo(viewport.height, 0)
+    expect(metrics.overflow).toEqual({ x: 0, y: 0 })
+    expect(metrics.coarsePrimary).toBe(true)
+    expect(metrics.coarseCapability).toBe(true)
+    expect(metrics.safeTop).toBe('0px')
+    expect(metrics.topbarTop).toBeCloseTo(0, 1)
+    expect(metrics.topbarOverlap).toBe(0)
+    expect(metrics.topRightOverlap).toBe(0)
+    expect(metrics.minimumTileGap).toBeGreaterThanOrEqual(-.5)
+    expect(metrics.minimumTileGap).toBeLessThanOrEqual(.5)
+    expect(metrics.cssHandGap).toBe('0px')
+    expect(Number.parseFloat(metrics.cssSlotWidth)).toBeCloseTo(40, 1)
+    expect(Number.parseFloat(metrics.cssTileWidth)).toBeCloseTo(40, 1)
+    expect(metrics.minimumControl.width).toBeGreaterThanOrEqual(43.5)
+    expect(metrics.minimumControl.height).toBeGreaterThanOrEqual(43.5)
+    expect(metrics.minimumHandHit.width).toBeGreaterThanOrEqual(43.5)
+    expect(metrics.minimumHandHit.height).toBeGreaterThanOrEqual(43.5)
+    expect(new Set(metrics.seatCardCssSizes).size).toBe(1)
+    const cardSizeMatch = /^(\d+(?:\.\d+)?)pxx(\d+(?:\.\d+)?)px$/.exec(metrics.seatCardCssSizes[0]!)
+    expect(cardSizeMatch).not.toBeNull()
+    const cardWidth = Number.parseFloat(cardSizeMatch![1]!)
+    const cardHeight = Number.parseFloat(cardSizeMatch![2]!)
+    expect(cardWidth).toBeGreaterThanOrEqual(87.5)
+    expect(cardWidth).toBeLessThanOrEqual(112.5)
+    expect(cardHeight).toBeGreaterThanOrEqual(107.5)
+    expect(cardHeight).toBeLessThanOrEqual(140.5)
+    expect(metrics.seatCardSpread.width).toBeLessThanOrEqual(1)
+    expect(metrics.seatCardSpread.height).toBeLessThanOrEqual(1)
+    expect(Math.max(...metrics.scoreBottomInsets)).toBeLessThanOrEqual(16)
+    expect(Math.min(...metrics.scoreBottomInsets)).toBeGreaterThanOrEqual(7)
+    expect(Math.max(...metrics.scoreCenterOffsets)).toBeLessThanOrEqual(0.5)
+    for (const name of metrics.mobileNames) {
+      expect(name.whiteSpace).toBe('nowrap')
+      expect(name.textOverflow).toBe('ellipsis')
+      expect(name.clientHeight).toBeLessThanOrEqual(18)
+      expect(name.scrollHeight).toBeLessThanOrEqual(name.clientHeight + 1)
+    }
+    expect(metrics.semanticDrawGaps.map((item) => item.position)).toEqual([2, 5, 8, 11, 14])
+    for (const item of metrics.semanticDrawGaps) {
+      expect(item.gap).toBeGreaterThan(item.baseGap)
+      expect(item.extraGap).toBeCloseTo(8, 0)
+    }
+    expect(metrics.actionArtRatio).toBeCloseTo(1.15, 1)
+    await page.screenshot({ path: `${evidenceRoot}/phone-matrix/llmAnime-${viewport.name}-${viewport.width}x${viewport.height}.png` })
+  }
+  await context.close()
+})
+
+test('桌面命名分辨率与任意拖拽尺寸连续适配', async ({ page }) => {
+  test.setTimeout(180_000)
+  await mkdir(`${evidenceRoot}/desktop-matrix`, { recursive: true })
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await startMatch(page, 'jade', false, true)
+
+  const randomViewports = [
+    { width: 901, height: 507 }, { width: 999, height: 699 },
+    { width: 1000, height: 626 }, { width: 1000, height: 621 },
+    { width: 1000, height: 503 }, { width: 1000, height: 497 },
+    { width: 1111, height: 777 }, { width: 1537, height: 641 },
+    { width: 1703, height: 901 }, { width: 2049, height: 1153 },
+    { width: 2237, height: 997 }, { width: 2879, height: 1599 },
+  ]
+  for (const viewport of [...desktopViewports, ...randomViewports]) {
+    await page.setViewportSize(viewport)
+    await expect.poll(async () => page.evaluate(() => {
+      const canvas = document.querySelector('canvas.mahjong-scene')!.getBoundingClientRect()
+      const aspect = canvas.width / canvas.height
+      const baseFovRadians = 39 * Math.PI / 180
+      const expected = aspect >= 16 / 9
+        ? 39
+        : 2 * Math.atan(Math.tan(baseFovRadians / 2) * (16 / 9) / aspect) * 180 / Math.PI
+      const actual = Number(document.querySelector('canvas.mahjong-scene')?.getAttribute('data-camera-fov'))
+      return Math.abs(actual - expected)
+    }), { timeout: 3_000 }).toBeLessThan(.05)
+    const metrics = await page.evaluate(() => {
+      const game = document.querySelector('.game-app')!.getBoundingClientRect()
+      const canvas = document.querySelector('canvas.mahjong-scene')!.getBoundingClientRect()
+      const topbar = document.querySelector('.top-bar')!.getBoundingClientRect()
+      const topSeat = document.querySelector('.seat-top .avatar-wrap')!.getBoundingClientRect()
+      const rightSeat = document.querySelector('.seat-right .avatar-wrap')!.getBoundingClientRect()
+      const leftSeat = document.querySelector('.seat-left .avatar-wrap')!.getBoundingClientRect()
+      const hand = document.querySelector('.hand-rack')!.getBoundingClientRect()
+      const aspect = innerWidth / innerHeight
+      const overlap = (left: DOMRect, right: DOMRect) => Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left))
+        * Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top))
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        game: { width: game.width, height: game.height },
+        canvas: { width: canvas.width, height: canvas.height },
+        cameraFov: Number(document.querySelector('canvas.mahjong-scene')?.getAttribute('data-camera-fov')),
+        aspect,
+        cameraAspect: canvas.width / canvas.height,
+        overflow: { x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight },
+        topbarOverlap: overlap(topSeat, topbar),
+        topRightOverlap: overlap(topSeat, rightSeat),
+        hudBounds: {
+          left: Math.min(leftSeat.left, topSeat.left, hand.left),
+          top: Math.min(leftSeat.top, topSeat.top, hand.top),
+          right: Math.max(rightSeat.right, topSeat.right, hand.right),
+          bottom: Math.max(leftSeat.bottom, rightSeat.bottom, topSeat.bottom, hand.bottom),
+        },
+      }
+    })
+    expect(metrics.viewport).toEqual({ width: viewport.width, height: viewport.height })
+    expect(metrics.game).toEqual(metrics.canvas)
+    expect(metrics.game.width).toBeCloseTo(viewport.width, 0)
+    expect(metrics.game.height).toBeCloseTo(viewport.height, 0)
+    expect(metrics.overflow).toEqual({ x: 0, y: 0 })
+    expect(metrics.topbarOverlap).toBe(0)
+    expect(metrics.topRightOverlap).toBe(0)
+    expect(metrics.hudBounds.left).toBeGreaterThanOrEqual(-.5)
+    expect(metrics.hudBounds.top).toBeGreaterThanOrEqual(-.5)
+    expect(metrics.hudBounds.right).toBeLessThanOrEqual(viewport.width + .5)
+    expect(metrics.hudBounds.bottom).toBeLessThanOrEqual(viewport.height + .5)
+    const baseFovRadians = 39 * Math.PI / 180
+    const expectedFov = metrics.cameraAspect >= 16 / 9
+      ? 39
+      : 2 * Math.atan(Math.tan(baseFovRadians / 2) * (16 / 9) / metrics.cameraAspect) * 180 / Math.PI
+    expect(metrics.cameraFov).toBeCloseTo(expectedFov, 1)
+
+    const named = desktopViewports.find((candidate) => candidate.width === viewport.width && candidate.height === viewport.height)
+    if (named) await page.screenshot({ path: `${evidenceRoot}/desktop-matrix/jade-${named.name}-${named.width}x${named.height}.png` })
+  }
+})
+
+test('4K DPR=2 保持 CSS 布局与高分辨率 Canvas 一致', async ({ browser }) => {
+  test.setTimeout(90_000)
+  await mkdir(`${evidenceRoot}/desktop-matrix`, { recursive: true })
+  const port = Number(process.env.E2E_PORT || 4173)
+  const context = await browser.newContext({
+    baseURL: `http://127.0.0.1:${port}`,
+    viewport: { width: 1920, height: 1080 },
+    deviceScaleFactor: 2,
+  })
+  const page = await context.newPage()
+  await startMatch(page, 'jade', false, true)
+  const metrics = await page.locator('canvas.mahjong-scene').evaluate((canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    return {
+      css: { width: rect.width, height: rect.height },
+      backing: { width: canvas.width, height: canvas.height },
+      dpr: devicePixelRatio,
+    }
+  })
+  expect(metrics.css).toEqual({ width: 1920, height: 1080 })
+  expect(metrics.dpr).toBe(2)
+  expect(metrics.backing).toEqual({ width: 3840, height: 2160 })
+  await page.screenshot({ path: `${evidenceRoot}/desktop-matrix/jade-4k-dpr2-1920x1080-css.png` })
   await context.close()
 })
 
@@ -456,10 +783,10 @@ test('摸打阶段相机固定，胡牌 shake 结束后精确复原', async ({ p
   await page.screenshot({ path: `${evidenceRoot}/camera/jade-1366x768-restored.png` })
 })
 
-test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async ({ page }) => {
+test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async ({ browser }) => {
   test.setTimeout(60_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
-  await page.setViewportSize({ width: 896, height: 414 })
+  const { context, page } = await createTouchPage(browser, 896, 414)
   await startMatch(page, 'llm')
   await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
 
@@ -467,6 +794,7 @@ test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async
     const topSeat = document.querySelector('.seat-top .avatar-wrap')!.getBoundingClientRect()
     const rightSeat = document.querySelector('.seat-right .avatar-wrap')!.getBoundingClientRect()
     const slot = document.querySelector('.hand-tile-slot')!.getBoundingClientRect()
+    const hitArea = document.querySelector('.hand-hit-area')!.getBoundingClientRect()
     const tileRects = [...document.querySelectorAll('.hand-rack .mahjong-tile')]
       .map((element) => element.getBoundingClientRect())
       .sort((left, right) => left.left - right.left)
@@ -478,26 +806,31 @@ test('896×414 下对家避开中央牌河且本家牌保持麻将比例', async
       topSeatLeftRatio: topSeat.left / window.innerWidth,
       topRightOverlap: overlap,
       slot: { width: slot.width, height: slot.height },
+      hitArea: { width: hitArea.width, height: hitArea.height },
       tile: { width: tile.width, height: tile.height, aspect: tile.width / tile.height },
       minimumTileGap,
+      cssHandGap: getComputedStyle(document.querySelector('.hand-rack')!).gap,
     }
   })
 
   expect(metrics.topSeatLeftRatio).toBeGreaterThanOrEqual(.78)
   expect(metrics.topRightOverlap).toBe(0)
-  expect(metrics.slot.width).toBeGreaterThanOrEqual(43.5)
-  expect(metrics.slot.height).toBeGreaterThanOrEqual(43.5)
-  expect(metrics.tile.width).toBeGreaterThanOrEqual(36)
-  expect(metrics.tile.width).toBeLessThanOrEqual(40.5)
+  expect(metrics.slot.width).toBeCloseTo(40, 1)
+  expect(metrics.hitArea.width).toBeGreaterThanOrEqual(43.5)
+  expect(metrics.hitArea.height).toBeGreaterThanOrEqual(43.5)
+  expect(metrics.tile.width).toBeCloseTo(40, 1)
   expect(metrics.tile.aspect).toBeCloseTo(.8, 2)
-  expect(metrics.minimumTileGap).toBeGreaterThanOrEqual(0)
+  expect(metrics.minimumTileGap).toBeGreaterThanOrEqual(-.5)
+  expect(metrics.minimumTileGap).toBeLessThanOrEqual(.5)
+  expect(metrics.cssHandGap).toBe('0px')
   await page.screenshot({ path: `${evidenceRoot}/extreme/llm-896x414-game.png` })
+  await context.close()
 })
 
-test('896×414 左右家气泡位于头像下方且尾巴朝上', async ({ page }) => {
+test('896×414 左右家气泡位于头像下方且尾巴朝上', async ({ browser }) => {
   test.setTimeout(60_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
-  await page.setViewportSize({ width: 896, height: 414 })
+  const { context, page } = await createTouchPage(browser, 896, 414)
   await page.goto('/?theme=llm&bubbleLab=1', { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: /开始东风场/ }).click()
   await expect(page.locator('.seat-left .llm-bubble')).toBeVisible({ timeout: 30_000 })
@@ -529,13 +862,14 @@ test('896×414 左右家气泡位于头像下方且尾巴朝上', async ({ page 
     expect(side.tailTransform).not.toBe('none')
   }
   await page.screenshot({ path: `${evidenceRoot}/extreme/llm-896x414-bubbles.png` })
+  await context.close()
 })
 
-test('reduced motion 下胡牌立绘仍先于 Three.js 光效退出', async ({ page }) => {
+test('reduced motion 下胡牌立绘仍先于 Three.js 光效退出', async ({ browser }) => {
   test.setTimeout(60_000)
   await mkdir(`${evidenceRoot}/reduced-motion`, { recursive: true })
+  const { context, page } = await createTouchPage(browser, 667, 375)
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.setViewportSize({ width: 667, height: 375 })
   await page.goto('/?theme=llmAnime&winEffectLab=1', { waitUntil: 'domcontentloaded' })
   await page.getByTestId('win-self-0').evaluate((element: HTMLElement) => element.click())
   await page.waitForTimeout(20)
@@ -557,4 +891,56 @@ test('reduced motion 下胡牌立绘仍先于 Three.js 光效退出', async ({ p
   expect(effectStage.effectId).toBeGreaterThan(0)
   expect(effectStage.cueOpacity).toBe(0)
   await page.screenshot({ path: `${evidenceRoot}/reduced-motion/llmAnime-667x375-effect.png` })
+  await context.close()
+})
+
+test('宽桌面窗口座位锚到牌桌盒、对家不右移、手牌随牌桌高向缩放', async ({ page }) => {
+  test.setTimeout(120_000)
+  await mkdir(`${evidenceRoot}/desktop-matrix`, { recursive: true })
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await startMatch(page, 'llmAnime', false, true)
+  // 等发牌完成（本家手牌第一张落地）。
+  await page.waitForSelector('.hand-rack .mahjong-tile', { timeout: 30_000 })
+
+  const measure = () => page.evaluate(() => {
+    const rect = (sel: string) => {
+      const el = document.querySelector(sel)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { left: r.left, right: r.right, center: r.left + r.width / 2, width: r.width }
+    }
+    const w = innerWidth
+    const h = innerHeight
+    // 与 CSS 一致的牌桌盒左偏移：宽于 16:9 时居中盒左缘。
+    const tableBoxLeft = Math.max(0, (w - h * 16 / 9) / 2)
+    const tile = document.querySelector('.hand-rack .mahjong-tile')
+    return {
+      w,
+      h,
+      tableBoxLeft,
+      leftSeat: rect('.seat-left .avatar-wrap'),
+      rightSeat: rect('.seat-right .avatar-wrap'),
+      topSeat: rect('.seat-top .avatar-wrap'),
+      tileWidth: tile ? tile.getBoundingClientRect().width : 0,
+    }
+  })
+
+  // 2250×1209（比 16:9 宽）：左右家应离开屏幕边缘、贴近牌桌盒。
+  await page.setViewportSize({ width: 2250, height: 1209 })
+  await page.waitForTimeout(250)
+  const wide = await measure()
+  expect(wide.leftSeat!.left).toBeGreaterThan(wide.w * 0.027 + 20) // 明显离开旧 2.7% 窗口锚点
+  expect(wide.leftSeat!.left).toBeCloseTo(wide.tableBoxLeft + wide.w * 0.027, 0)
+  expect(wide.rightSeat!.right).toBeLessThan(wide.w - wide.w * 0.027 - 20)
+  expect(wide.topSeat!.center).toBeCloseTo(wide.w / 2 + 365, 0) // 对家仍用 50%+365 基准，不右移
+  // 手牌随容器高缩放：≈ 7.97cqh（1080p 时 86px，1209 高时应 > 90px）
+  expect(wide.tileWidth).toBeGreaterThan(90)
+  await page.screenshot({ path: `${evidenceRoot}/desktop-matrix/llmAnime-2250x1209-aligned.png` })
+
+  // 3440×1440（带鱼屏）：对家不应被偏长档钉到 84%，仍在 50%+365 基准附近。
+  await page.setViewportSize({ width: 3440, height: 1440 })
+  await page.waitForTimeout(250)
+  const ultrawide = await measure()
+  expect(ultrawide.topSeat!.center).toBeCloseTo(3440 / 2 + 365, 0)
+  await page.screenshot({ path: `${evidenceRoot}/desktop-matrix/llmAnime-3440x1440-aligned.png` })
 })

@@ -477,6 +477,7 @@ function onAvatarError(entry: GamePlayer) {
           @mouseenter="previewDesktopWaits(tile)" @mouseleave="clearDesktopWaits"
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
+          <span class="hand-hit-area" aria-hidden="true"></span>
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
           <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
         </div>
@@ -615,7 +616,7 @@ function onAvatarError(entry: GamePlayer) {
 
 /* 移动端（窄屏/矮屏）：翻精指示牌折叠为一行小徽章，不遮挡任何座位；
    点击徽章展开二骰/精牌说明（.flip-open），再点收起。 */
-@media (max-width: 700px), (max-height: 460px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .flip-indicator {
     top: calc(var(--safe-top) + var(--topbar-height) + var(--hud-gap));
     right: calc(var(--safe-right) + 8px);

@@ -78,4 +78,21 @@ describe('llmAnime Three.js 渲染配置', () => {
     const tabletHorizontalTangent = Math.tan(THREE.MathUtils.degToRad(fittedFov) / 2) * tabletAspect
     expect(tabletHorizontalTangent).toBeCloseTo(baseHorizontalTangent, 10)
   })
+
+  it.each([DEFAULT_TABLE_SCENE_PROFILE, LLM_ANIME_SCENE_PROFILE])('任意有效宽高比都连续保持水平视野且宽屏不放大', (profile) => {
+    const aspects = [4 / 3, 1.4, 1.5, 1.599, 1.6, 1.777, 16 / 9, 1.999, 2, 2.17, 21 / 9]
+    const fitted = aspects.map((aspect) => responsiveCameraFov(profile.camera.fov, aspect))
+    for (let index = 1; index < fitted.length; index += 1) {
+      expect(fitted[index]).toBeLessThanOrEqual(fitted[index - 1] + 1e-10)
+    }
+    for (const [index, aspect] of aspects.entries()) {
+      const fov = fitted[index]
+      if (aspect >= 16 / 9) expect(fov).toBe(profile.camera.fov)
+      else {
+        const horizontal = Math.tan(THREE.MathUtils.degToRad(fov) / 2) * aspect
+        const reference = Math.tan(THREE.MathUtils.degToRad(profile.camera.fov) / 2) * (16 / 9)
+        expect(horizontal).toBeCloseTo(reference, 10)
+      }
+    }
+  })
 })

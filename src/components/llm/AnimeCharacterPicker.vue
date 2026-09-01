@@ -61,7 +61,7 @@ defineEmits<{ 'update:modelValue': [value: CharacterId] }>()
 .anime-character-grid button.active { border-color: #bd5b48; background: #f6d9c4; box-shadow: inset 0 -4px #bd5b48; transform: translateY(-1px) rotate(-1deg); }
 .anime-character-grid img { width: 44px; height: 44px; border: 2px solid #2d2923; border-radius: 12px 12px 5px 5px; object-fit: cover; background: #e8dcc7; }
 .anime-character-grid span { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 700px), (max-height: 520px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .anime-character-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 126px; }
   .anime-character-grid img { width: 36px; height: 36px; }
 }

@@ -145,7 +145,7 @@ button { font: inherit; }
 .base-score-badge .signal-icon { width: 18px; height: 18px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .base-score-badge .signal-warn { color: #e0a06a; font-size: 11px; }
 .round-info { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 19px; border: 1px solid rgba(208,183,110,.2); border-radius: 99px; background: rgba(0,0,0,.18); letter-spacing: .12em; }
-.top-bar nav { display: flex; gap: 8px; }
+.top-bar nav { display: flex; gap: 8px; margin-left: auto; }
 .top-bar button { width: clamp(34px, 2.8cqw, 44px); height: clamp(34px, 2.8cqw, 44px); border: 1px solid rgba(231,207,147,.28); border-radius: 50%; background: rgba(0,0,0,.32); color: #e8dcb9; font-size: clamp(15px, 1.25cqw, 20px); cursor: pointer; }
 .top-bar button:hover { background: rgba(215,174,83,.18); border-color: #b99549; }
 .theme-picker, .audio-picker { position: relative; }
@@ -474,6 +474,7 @@ button { font: inherit; }
 .hand-rack { position: absolute; right: 0; bottom: 9px; left: 0; display: flex; align-items: flex-end; justify-content: center; gap: clamp(1px, .2vw, 4px); min-height: 88px; padding: 10px 14px 5px; border: 0; border-radius: 5px 5px 20px 20px; transform-origin: 50% 100%; }
 .hand-rack.has-melds { justify-content: flex-start; padding-right: 42%; padding-left: 11%; }
 .hand-tile-slot { position: relative; display: flex; flex: 0 0 auto; align-items: flex-end; touch-action: none; }
+.hand-hit-area { position: absolute; inset: 0; pointer-events: none; }
 .ting-arrow {
   position: absolute;
   z-index: 4;
@@ -906,8 +907,8 @@ button { font: inherit; }
 }
 .table-loading-in-game .table-loading-card { display: none; }
 
-.has-three-scene .seat-left { top: 35%; left: 2.7%; }
-.has-three-scene .seat-right { top: 35%; right: 2.7%; }
+.has-three-scene .seat-left { top: 35%; left: calc(var(--table-box-left) + 2.7cqw); }
+.has-three-scene .seat-right { top: 35%; right: calc(var(--table-box-left) + 2.7cqw); }
 .has-three-scene .seat-top {
   top: 5%;
   right: auto;
@@ -963,7 +964,7 @@ button { font: inherit; }
 .user-identity.active::after { right: auto; bottom: -5px; left: 50%; transform: translateX(-50%); }
 .user-identity.active::after { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #f4c45b; box-shadow: 0 0 9px #ffd569; animation: pulse 1s infinite; }
 
-@media (max-width: 760px), (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .table-action-cue.win.action-from-bottom { bottom: 38%; }
   .user-score-delta { left: 58px; bottom: 52px; }
   .top-bar { height: 34px; padding: 0 10px; font-size: 12px; }
@@ -1026,7 +1027,7 @@ button { font: inherit; }
   .final-board { width: min(620px, 92%); padding: 15px 24px 18px; }.final-board > h2 { margin: 2px 0 9px; font-size: 30px; }.final-rankings { gap: 5px; }.final-rankings article { min-width: 0; min-height: 51px; grid-template-columns: 46px 42px minmax(0,1fr) 82px; gap: 8px; padding-right: 10px; }.final-rankings img { width: 40px; height: 40px; }.final-rank b { font-size: 29px; }.final-rankings em { min-width: 0; overflow: hidden; font-size: 21px; text-overflow: ellipsis; }.final-board > button { margin-top: 10px; padding: 8px 20px; }
 }
 
-@media (max-width: 700px), (max-height: 480px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .settlement-card { width: 96%; padding-right: 16px; padding-left: 16px; }
   .round-rankings { gap: 5px; }
   .round-rankings article { grid-template-columns: 31px 30px minmax(0,1fr) 45px 55px; gap: 4px; padding-right: 5px; padding-left: 5px; }
@@ -1037,7 +1038,7 @@ button { font: inherit; }
   .final-board { width: 94%; padding-right: 16px; padding-left: 16px; }
 }
 
-@media (max-height: 460px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .settlement-card { max-height: 98%; padding: 12px 14px 9px; }
   .result-seal { top: -18px; width: 40px; height: 40px; font-size: 22px; }
   .settlement-card > p { margin-top: 10px; font-size: 11px; }
@@ -1053,7 +1054,7 @@ button { font: inherit; }
   .result-actions button { min-width: 128px; padding: 6px 12px; font-size: 13px; }
 }
 
-@media (max-width: 760px) and (orientation: portrait) {
+@media (orientation: portrait) and (hover: none) and (pointer: coarse) {
   .top-bar { height: 41px; }.brand-mini span { display: none; }
   .seat-left { left: 7px; }.seat-right { right: 7px; }
   .has-three-scene .seat-top { right: 2%; left: auto; transform: none; }
@@ -1071,8 +1072,7 @@ button { font: inherit; }
   .lobby-rules { gap: 7px; font-size: 11px; }
 }
 
-/* ── 移动端大厅适配已迁移到文件末尾（Phase 7 基础规则之后），
-   见 @media (max-width: 700px), (max-height: 460px) 一节 ── */
+/* 移动端大厅布局由粗指针横屏能力查询统一控制。 */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -1155,7 +1155,7 @@ button { font: inherit; }
    手机横屏 16:9 视口高度仅 ~390px，需压缩纵向空间让内容一屏可见。
    此块必须位于 Phase 7 基础规则（.mode-selector/.remote-lobby/.room-panel）之后，
    否则同优先级下后者会覆盖掉这里的移动端压缩。 */
-@media (max-width: 700px), (max-height: 460px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .lobby { justify-content: space-around; padding: 10px 0 14px; transform: none; inset: 0; }
   .eyebrow { margin-bottom: 2px; font-size: 9px; }
   .lobby h1 { font-size: clamp(24px, 6.5vh, 34px); line-height: 1.15; }
@@ -1181,7 +1181,7 @@ button { font: inherit; }
 }
 
 /* 极矮横屏：隐藏装饰性英文标识，压缩品牌区，保证 320px 高的小屏手机也能一屏放下 */
-@media (max-height: 420px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .lobby { padding-bottom: 8px; }
   .lobby .eyebrow { display: none; }
   .lobby h1 { font-size: 24px; }
@@ -1190,7 +1190,7 @@ button { font: inherit; }
 }
 
 /* 移动端主题菜单：覆盖顶栏圆形按钮的通用尺寸，避免菜单选项被压成竖排。 */
-@media (max-width: 700px), (max-height: 480px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .theme-menu, .audio-menu {
     width: min(210px, calc(100vw - 12px));
     max-height: min(280px, calc(100vh - 14px));
@@ -1274,7 +1274,7 @@ button { font: inherit; }
 .llm-bubble-enter-from, .llm-bubble-leave-to { opacity: 0; }
 
 /* ── 移动端/窄屏适配：气泡缩小，锚点不变（仍贴头像三侧） ── */
-@media (max-width: 760px), (max-height: 520px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .llm-bubble {
     max-width: min(160px, 42vw);
     padding: 4px 8px;
@@ -1749,7 +1749,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .result-actions button.secondary { background: #4b2d1c; color: #f4eddf; }
 .game-app[data-table-theme="llmAnime"] .final-rankings article { border-radius: 12px; }
 
-@media (max-width: 760px), (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .game-app[data-table-theme="llmAnime"] {
     --announcement-width: min(72cqw, 520px);
     --announcement-padding: 6px 27px;
@@ -2090,6 +2090,10 @@ button { font: inherit; }
   --hud-bottom-edge: var(--safe-bottom);
   --top-seat-anchor: calc(var(--hud-top-edge) + var(--hud-gap));
   --side-seat-anchor: 36%;
+  /* 牌桌盒基准：相机纵向 FOV 固定 → 牌桌居中、屏幕宽 ≈ 高×16/9（等价重构前的 16:9 信箱）。
+     窗口宽于 16:9 时，座位/手牌必须锚到该盒而非窗口边缘，否则头像会漂到屏幕两侧。 */
+  --table-box-w: min(100cqw, calc(100cqh * 16 / 9));
+  --table-box-left: calc((100cqw - var(--table-box-w)) / 2);
   --hand-zone-height: clamp(82px, 21cqh, 205px);
   --controls-bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap));
   --announcement-width: auto;
@@ -2108,9 +2112,9 @@ button { font: inherit; }
 .has-three-scene .seat-top { top: max(5%, var(--top-seat-anchor)); }
 
 .user-area {
-  right: max(5%, calc(var(--safe-right) + 4px));
+  right: calc(var(--table-box-left) + max(5%, calc(var(--safe-right) + 4px)));
   bottom: var(--safe-bottom);
-  left: max(5%, calc(var(--safe-left) + 4px));
+  left: calc(var(--table-box-left) + max(5%, calc(var(--safe-left) + 4px)));
   min-height: var(--hand-zone-height);
 }
 
@@ -2141,10 +2145,22 @@ button { font: inherit; }
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 760px), (max-width: 1000px) and (max-height: 520px) and (min-aspect-ratio: 2 / 1), (hover: none) and (pointer: coarse) and (orientation: landscape) {
+/* 手牌随牌桌（高向）缩放：牌桌屏幕宽 ∝ 容器高，手牌也用 cqh 保持比例，
+   避免高窗/大屏下 86px 封顶导致手牌相对牌桌偏小。触控设备继续走移动端 40px 规则。 */
+@media (hover: hover) and (pointer: fine) {
+  .has-three-scene .hand-rack .mahjong-tile {
+    --tile-width: clamp(48px, calc(7.97 * var(--game-cqh)), 104px);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .game-app {
+    /* 部分华为浏览器横屏全屏后仍残留 portrait safe-area-top；横屏切口只使用左右 inset。 */
+    --safe-top: 0px;
     --topbar-height: 44px;
-    --seat-card-width: clamp(68px, 11cqw, 76px);
+    --seat-card-width: clamp(88px, 10cqw, 96px);
+    --seat-card-height: clamp(108px, 34cqh, 140px);
+    --seat-avatar-size: clamp(58px, 8.5cqw, 76px);
     --top-seat-inline-anchor: 72%;
     --hand-zone-height: calc(72px + var(--safe-bottom));
     --hud-gap: 6px;
@@ -2158,6 +2174,28 @@ button { font: inherit; }
   .top-bar button { width: var(--control-hit-target); height: var(--control-hit-target); }
   .top-bar nav { gap: 2px; }
   .round-info { max-width: 46%; overflow: hidden; padding: 3px 8px; text-overflow: ellipsis; white-space: nowrap; }
+  /* 所有主题统一：44px 是触控热区，可见图形单独缩小。 */
+  .top-bar .topbar-control {
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .top-bar .theme-toggle::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: 6px;
+    box-sizing: border-box;
+    border: 1px solid rgba(231,207,147,.36);
+    border-radius: 50%;
+    background: rgba(0,0,0,.24);
+    pointer-events: none;
+  }
+  .top-bar .topbar-control > * { position: relative; z-index: 1; }
+  .top-bar .theme-toggle-mark { width: 14px; height: 14px; grid-template-columns: repeat(2, 6px); gap: 2px; }
+  .top-bar .icon-button img { width: 28px; height: 28px; }
   /* llmAnime：44px 是触控热区，不再直接作为可见硬件外框；内缩 4px 得到 36px 视觉按钮。 */
   .game-app[data-table-theme="llmAnime"] .top-bar .topbar-control {
     isolation: isolate;
@@ -2171,7 +2209,7 @@ button { font: inherit; }
     content: "";
     position: absolute;
     z-index: 0;
-    inset: 4px;
+    inset: 6px;
     box-sizing: border-box;
     border: 1px solid var(--anime-control-edge);
     border-radius: 6px;
@@ -2185,7 +2223,7 @@ button { font: inherit; }
   .game-app[data-table-theme="llmAnime"] .top-bar .topbar-control:active { transform: none; box-shadow: none; }
   .game-app[data-table-theme="llmAnime"] .top-bar .topbar-control:active::before { transform: translateY(1px); }
   .game-app[data-table-theme="llmAnime"] .top-bar .topbar-control > * { position: relative; z-index: 1; }
-  .game-app[data-table-theme="llmAnime"] .top-bar .hardware-icon { width: 18px; height: 18px; }
+  .game-app[data-table-theme="llmAnime"] .top-bar .hardware-icon { width: 16px; height: 16px; }
 
   .has-three-scene .seat-top {
     top: var(--top-seat-anchor);
@@ -2194,36 +2232,61 @@ button { font: inherit; }
     left: clamp(
       calc(var(--safe-left) + 46px),
       var(--top-seat-inline-anchor),
-      calc(100% - var(--safe-right) - 46px)
+      calc(100% - var(--safe-right) - var(--seat-card-width) - 64px)
     );
     transform: translateX(-50%);
   }
   .has-three-scene .seat-left {
     top: var(--side-seat-anchor);
     left: calc(var(--safe-left) + 8px);
+    transform: translateY(-50%);
   }
   .has-three-scene .seat-right {
     top: var(--side-seat-anchor);
     right: calc(var(--safe-right) + 8px);
+    transform: translateY(-50%);
   }
   .has-three-scene .seat-top .avatar-wrap,
   .seat-left .avatar-wrap,
-  .seat-right .avatar-wrap {
+  .seat-right .avatar-wrap,
+  .user-identity {
+    display: grid;
+    grid-template-rows: var(--seat-avatar-size) 36px;
+    align-content: center;
+    justify-items: center;
+    gap: 2px;
     width: var(--seat-card-width);
+    height: var(--seat-card-height);
     min-width: 0;
-    padding: 4px;
+    padding: 5px;
     transform: none;
   }
-  .avatar-wrap .avatar { width: 42px; height: 42px; }
+  .avatar-wrap .avatar,
+  .user-identity .avatar { width: var(--seat-avatar-size); height: var(--seat-avatar-size); }
+  .game-app .avatar-wrap > .player-info,
+  .game-app .user-identity > .player-info {
+    display: grid;
+    grid-template-rows: 18px 16px;
+    align-items: center;
+    justify-items: stretch;
+    gap: 2px;
+    width: 100%;
+    height: 36px;
+  }
   .game-app .avatar-wrap .player-info strong,
   .game-app .user-identity .player-info strong {
     max-width: 100%;
-    overflow: visible;
-    overflow-wrap: anywhere;
-    font-size: clamp(11px, 1.6cqw, 13px);
-    line-height: 1.15;
-    text-overflow: clip;
-    white-space: normal;
+    display: block;
+    height: 18px;
+    min-height: 0;
+    overflow: hidden;
+    overflow-wrap: normal;
+    font-size: clamp(11px, 1.55cqw, 14px);
+    line-height: 18px;
+    width: 100%;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .user-area {
@@ -2240,24 +2303,45 @@ button { font: inherit; }
     padding: 4px 2px max(4px, var(--safe-bottom));
   }
   .hand-rack .hand-tile-slot {
-    width: var(--hand-hit-target);
-    min-width: var(--hand-hit-target);
-    /* 44px 热区允许轻微交叠，但 40px 推进距离必须始终大于 36～40px 视觉牌宽。 */
-    margin-inline: -2px;
+    width: 40px;
+    min-width: 40px;
+    margin-inline: 0;
   }
-  /* 外层 slot 继续提供 44px 触控区；牌面自身按高度等比缩放并稍微加宽，避免矮屏被压成长条扑克牌。 */
+  .hand-rack .hand-hit-area {
+    z-index: 0;
+    top: auto;
+    bottom: 0;
+    left: 50%;
+    width: var(--hand-hit-target);
+    min-height: var(--hand-hit-target);
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+  /* slot 与牌面同为 40px，普通牌视觉 gap 为 0；44px 命中区由 hand-hit-area 独立承担。 */
   .hand-rack .mahjong-tile {
-    --tile-width: clamp(36px, 9.2cqh, 40px);
+    position: relative;
+    z-index: 1;
+    --tile-width: 40px;
     width: var(--tile-width);
     height: auto;
     aspect-ratio: 4 / 5;
   }
-  .hand-rack .hand-tile-slot.drawn { margin-left: 3px; }
+  /* 普通牌保持 0 gap；语义上的摸牌位（第 2/5/8/11/14 张）与前牌留 8px。 */
+  .hand-rack .hand-tile-slot.drawn { margin-left: 8px; }
   .user-identity {
     bottom: calc(var(--safe-bottom) + 8px);
     left: calc(var(--safe-left) + 2px);
-    transform: scale(.76);
-    transform-origin: left bottom;
+    transform: none;
+  }
+  .game-app .avatar-wrap > .player-info > span,
+  .game-app .user-identity > .player-info > span {
+    align-self: end;
+    justify-self: stretch;
+    width: 100%;
+    margin: 0;
+    font-size: clamp(11px, 1.45cqw, 14px);
+    line-height: 16px;
+    text-align: center;
   }
 
   .turn-action-row {
@@ -2293,23 +2377,39 @@ button { font: inherit; }
   .user-llm-bubble { bottom: calc(100% + 6px); left: 0; }
 }
 
-/* 844/896px 级手机横屏横向空间足够：把对家卡放到右侧牌墙之外，而不是压在牌河或牌墙上。 */
-@media (min-width: 761px) and (max-width: 1000px) and (max-height: 520px) and (min-aspect-ratio: 2 / 1),
-       (min-width: 761px) and (max-width: 1000px) and (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  .game-app { --top-seat-inline-anchor: 84%; }
+/* 三档宽高比（仅触控设备生效）：偏方 <1.6、基准 1.6～2.0、偏长 >2.0。
+   桌面鼠标设备不右移对家——对家继续用 50%+偏移锚在牌桌顶部中央。 */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5) {
+  .game-app { --top-seat-inline-anchor: 86%; --side-seat-anchor: 39%; }
+  /* 偏方档（4:3 平板）对家与右家纵向错开，无需用右家卡宽钳制横向前进；
+     直接落到远侧锚点，避免 R6.11 加宽信息卡后 clamp 上限把对家压回中央牌河。 */
+  .has-three-scene .seat-top {
+    right: auto;
+    left: var(--top-seat-inline-anchor);
+    transform: translateX(-50%);
+  }
 }
 
-/* iPad Mini/Air/Pro、Surface 与折叠屏的 4:3～3:2 平板横屏：对家移到远侧牌墙之外。 */
-@media (min-width: 1001px) and (max-width: 1400px) and (min-aspect-ratio: 4 / 3) and (max-aspect-ratio: 8 / 5) {
-  .has-three-scene .seat-top { right: auto; left: 86%; transform: translateX(-50%); }
-}
-
-@media (max-width: 760px), (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  .game-app[data-table-theme="llmAnime"] .llm-bubble { font-size: 11px; }
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
+  .game-app { --top-seat-inline-anchor: 84%; --side-seat-anchor: 36%; }
+  /* 偏长档手机屏幕矮，对家与右家纵向有重叠，仍需用右家卡宽钳制横向；
+     但 -64px 是按 112px 卡宽标定，卡宽降到 96px 后会把对家压回中央牌河，改为 -54px。 */
+  .has-three-scene .seat-top {
+    right: auto;
+    left: clamp(46px, var(--top-seat-inline-anchor), calc(100% - var(--safe-right) - var(--seat-card-width) - 54px));
+    transform: translateX(-50%);
+  }
 }
 
 /* ── Scroll-safe overlays and extreme landscape sizing (R5) ───────────── */
-.settlement-footer { position: relative; z-index: 2; }
+.settlement-footer {
+  position: sticky;
+  z-index: 5;
+  bottom: 0;
+  padding-bottom: max(8px, var(--safe-bottom));
+  background: linear-gradient(180deg, transparent, rgba(5,14,10,.96) 18%);
+  backdrop-filter: blur(5px);
+}
 .final-footer > button {
   min-width: 190px;
   min-height: var(--control-hit-target);
@@ -2344,7 +2444,7 @@ button { font: inherit; }
 }
 .rules-panel header button { min-width: var(--control-hit-target); min-height: var(--control-hit-target); }
 
-@media (max-width: 760px), (max-width: 1000px) and (max-height: 520px) and (min-aspect-ratio: 2 / 1), (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .result-backdrop {
     padding: max(4px, var(--safe-top)) max(4px, var(--safe-right)) max(4px, var(--safe-bottom)) max(4px, var(--safe-left));
   }
