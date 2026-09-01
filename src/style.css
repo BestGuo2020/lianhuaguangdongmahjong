@@ -2260,13 +2260,8 @@ button { font: inherit; }
     transform: translateY(-50%);
   }
   /* 动作 cue 座位锚定（两种 cue 共用，R6.19）：贴各座位卡、远离牌桌中央。
-     对家对齐对家卡列并位于卡下方；左右家贴卡内缘并垂直对齐卡中心；本家保持手牌区上方。 */
-  .game-app .anime-action-cue.action-from-top,
-  .game-app .table-action-cue.action-from-top {
-    top: calc(var(--top-seat-anchor) + var(--seat-card-height) + var(--hud-gap));
-    left: var(--top-seat-resolved-left);
-    transform: translate(-50%, 0);
-  }
+     对家沿用桌面几何（立绘 18%/50%、文字 20%/50% 顶部居中贴上方牌墙，由基础层规则生效）；
+     左右家贴卡内缘并垂直对齐卡中心；本家保持手牌区上方。 */
   .game-app .anime-action-cue.action-from-left,
   .game-app .table-action-cue.action-from-left {
     top: var(--side-seat-anchor);
@@ -2475,12 +2470,10 @@ button { font: inherit; }
   .has-three-scene .seat-top {
     left: var(--top-seat-resolved-left);
   }
-  /* 动作 cue 随座位一起切回桌面几何（两种 cue 的桌面锚点与基础层一致）。 */
-  .game-app .anime-action-cue.action-from-top { top: 18%; left: 50%; transform: translate(-50%, 0); }
+  /* 动作 cue 随座位一起切回桌面几何（两种 cue 的桌面锚点与基础层一致；对家 18%/50% 与 20%/50% 由基础层规则生效，无需重述）。 */
   .game-app .anime-action-cue.action-from-right { top: 34%; right: 28%; transform: translate(0, -50%); }
   .game-app .anime-action-cue.action-from-bottom { bottom: 29%; left: 50%; transform: translate(-50%, 0); }
   .game-app .anime-action-cue.action-from-left { top: 34%; left: 28%; transform: translate(0, -50%); }
-  .game-app .table-action-cue.action-from-top { top: 20%; left: 50%; transform: translate(-50%, -50%); }
   .game-app .table-action-cue.action-from-right { top: 43%; right: 17%; transform: translate(50%, -50%); }
   .game-app .table-action-cue.action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
   .game-app .table-action-cue.action-from-left { top: 43%; left: 17%; transform: translate(-50%, -50%); }

@@ -689,19 +689,21 @@ test('移动端动作 cue 锚定到行动座位并远离牌桌中央（R6.19）'
           topSeat: rect('.seat-top .avatar-wrap'),
           leftSeat: rect('.seat-left .avatar-wrap'),
           rightSeat: rect('.seat-right .avatar-wrap'),
+          topbar,
           handOverlap: cue && hand ? overlap(cue, hand) : 0,
           topbarOverlap: cue && topbar ? overlap(cue, topbar) : 0,
           width: innerWidth,
+          height: innerHeight,
         }
       })
       expect(metrics.cue).not.toBeNull()
       expect(metrics.handOverlap).toBe(0)
       expect(metrics.topbarOverlap).toBe(0)
       if (side === 'top') {
-        // 对家：与对家卡同列（--top-seat-resolved-left，66%），位于卡下方，远离屏幕中央。
-        expect(Math.abs(metrics.cue!.cx - metrics.topSeat!.cx)).toBeLessThanOrEqual(2)
-        expect(metrics.cue!.y).toBeGreaterThanOrEqual(metrics.topSeat!.bottom - 10)
-        expect(metrics.cue!.cx).toBeGreaterThanOrEqual(metrics.width * 0.6 - 2)
+        // 对家：沿用桌面几何——水平 50% 居中、顶部 18%（立绘），贴上方牌墙（R6.19 修正）。
+        expect(Math.abs(metrics.cue!.cx - metrics.width / 2)).toBeLessThanOrEqual(2)
+        expect(metrics.cue!.y).toBeCloseTo(metrics.height * 0.18, 0)
+        expect(metrics.cue!.y).toBeGreaterThanOrEqual(metrics.topbar!.bottom - 1)
       } else if (side === 'left') {
         // 上家：贴左卡内缘（不再被 max(20%) 推进牌桌），垂直对齐卡中心。
         expect(metrics.cue!.x).toBeGreaterThanOrEqual(metrics.leftSeat!.right - 2)
