@@ -78,7 +78,7 @@ function onPortraitError(event: Event) {
   pointer-events: none;
   filter: drop-shadow(3px 5px 0 rgba(45, 36, 28, .26));
   isolation: isolate;
-  animation: anime-action-enter .26s cubic-bezier(.16, .88, .25, 1.08) both;
+  animation: anime-action-enter .26s cubic-bezier(.16, .88, .25, 1.08) backwards;
 }
 .anime-action-cue::before {
   content: '';
@@ -192,7 +192,7 @@ function onPortraitError(event: Event) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .anime-action-cue { animation: anime-action-fade .16s ease-out both; }
+  .anime-action-cue { animation: anime-action-fade .16s ease-out backwards; }
   .anime-action-burst { display: none; }
 }
 @keyframes anime-action-fade { from { opacity: 0; } to { opacity: 1; } }
