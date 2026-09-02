@@ -338,7 +338,7 @@ function changeTableTheme(theme: TableThemeName) {
 
 <template>
   <OrientationGate />
-  <main class="game-app" :data-table-theme="tableThemeName">
+  <main class="game-app" :class="{ 'is-lobby': showLobby }" :data-table-theme="tableThemeName">
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting' && !matchFinished" class="remote-banner" role="status">{{ phase === 'lobby' ? '网络断开，正在重连…' : '房主连接中断，等待恢复…' }}</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId && !matchFinished" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && rejoining" class="remote-banner" role="status">尝试重新加入房间…</div>
