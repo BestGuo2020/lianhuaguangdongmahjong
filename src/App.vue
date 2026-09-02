@@ -263,7 +263,13 @@ const {
   sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
   llmEnabled, effectiveLlmEnabled, llmAvailable,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
+  roomTableThemeName, configureTableTheme,
 } = remoteGame
+
+// 房主改主题 → 全房间同步；非房主只读（本地 tableThemeName 随房间主题）。
+watch(roomTableThemeName, (theme) => {
+  if (gameMode.value === 'remote' && roomId.value) tableThemeName.value = theme
+})
 
 // 联机：加入房间后，本家角色变化同步到服务器座位（开局前生效）。
 watch(animeCharacterId, (value) => {
@@ -372,9 +378,25 @@ const continueCountdown = useRemoteContinueCountdown({
   continueRound: nextRound,
 })
 
+// 联机房间内主题切换锁定：非房主始终锁定；房主开局后也锁定（大厅阶段可改）。
+const themeLocked = computed(() => (
+  gameMode.value === 'remote' && Boolean(roomId.value)
+    && (!isCreator.value || phase.value !== 'lobby')
+))
+const themeLockReason = computed(() => (
+  isCreator.value ? '对局开始后锁定主题' : '主题由房主控制'
+))
+
 function changeTableTheme(theme: TableThemeName) {
+  if (gameMode.value === 'remote' && roomId.value) {
+    // 联机房间内主题由房主权威控制：非房主（或开局后）禁用切换。
+    if (!isCreator.value) return
+    tableThemeName.value = theme
+    configureTableTheme(theme)
+    remoteGame.updatePresentationAudioMode()
+    return
+  }
   tableThemeName.value = theme
-  remoteGame.updatePresentationAudioMode()
   explicitTableThemeSelected.value = true
   const url = new URL(window.location.href)
   // 手动选择（包括墨玉）始终写入 URL，确保 LLM 开启时刷新后仍尊重用户覆盖。
@@ -402,6 +424,8 @@ function changeTableTheme(theme: TableThemeName) {
         :signal-quality="signalQuality"
         :signal-warning-threshold="1"
         :theme-name="tableThemeName"
+        :theme-locked="themeLocked"
+        :theme-lock-reason="themeLockReason"
         @quit="quitMatch"
         @open-rules="rulesOpen = true"
         @change-theme="changeTableTheme"

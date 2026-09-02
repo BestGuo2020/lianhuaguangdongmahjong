@@ -16,6 +16,7 @@ const TABLE_ACTION_TYPES = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
   'wind-kong', 'self-draw', 'discard-win', 'robbed-kong-win',
 ])
+const TABLE_THEMES = new Set(['jade', 'majsoul', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'])
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -183,6 +184,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
           && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
           && isString(raw.nickname) && isString(raw.rejoinCode)
+          && isOptional(raw.theme, (value): value is string => isString(value) && TABLE_THEMES.has(value))
       case 'rejoin_err':
       case 'error': return isString(raw.code)
       case 'turn_request':
@@ -246,6 +248,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           ))
       case 'room_closed':
       case 'pong': return true
+      case 'table_theme': return isString(raw.theme) && TABLE_THEMES.has(raw.theme)
       default: return false
     }
   })()

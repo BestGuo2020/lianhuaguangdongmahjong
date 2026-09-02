@@ -141,6 +141,7 @@ button { font: inherit; }
 .top-bar button:hover { background: rgba(215,174,83,.18); border-color: #b99549; }
 .theme-picker, .audio-picker { position: relative; }
 .theme-toggle { display: grid; place-items: center; padding: 0; }
+.topbar-control:disabled { opacity: .45; cursor: not-allowed; }
 .theme-toggle-mark { display: grid; grid-template-columns: repeat(2, 7px); gap: 2px; width: 17px; height: 17px; transform: rotate(45deg); }
 .theme-toggle-mark i { display: block; border: 1px solid rgba(255,239,179,.78); border-radius: 2px; background: #2a7287; box-shadow: 0 0 3px rgba(255,213,102,.22); }
 .theme-toggle-mark i:nth-child(2) { background: #b87343; }

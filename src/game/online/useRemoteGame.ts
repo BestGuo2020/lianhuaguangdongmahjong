@@ -38,6 +38,7 @@ import {
   toLocalSeat,
 } from './protocol/mapper'
 import type { AnimeFixedTtsExecutor, AnimeSeat } from '../llm/animeFixedTtsExecutor'
+import type { TableThemeName } from '../../components/table/three/tableTheme'
 import { resolveAnimeAudioPolicy, shouldSuppressLegacyAnimeSpeech } from '../core/presentation/animeAudioPolicy'
 
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
@@ -83,6 +84,8 @@ export function useRemoteGame({
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     turnCanHu, turnCanWindKong,
   } = state
+  // 房间权威主题：房主改主题广播全房，非房主只读（本地 tableThemeName 随它同步）。
+  const roomTableThemeName = ref<TableThemeName>('jade')
   const presentedWinActions = new Set<string>()
   let fallbackActionSequence = 0
   let fallbackSettlementSequence = 0
@@ -304,6 +307,11 @@ export function useRemoteGame({
     })
   }
 
+  function configureTableTheme(theme: TableThemeName) {
+    if (!roomId.value || wsStatus.value !== 'connected') return
+    roomSocket.send({ type: 'set_table_theme', theme })
+  }
+
   // ── 定时器工具 ─────────────────────────────────────────
 
   function later(callback: () => void, delay: number) {
@@ -375,6 +383,7 @@ export function useRemoteGame({
       rejoinCode.value = msg.rejoinCode
       matchType.value = msg.mode
       rulesetId.value = msg.rulesetId ?? 'lotus-classic'
+      roomTableThemeName.value = msg.theme ?? 'jade'
       wsStatus.value = 'connected'
       sessionStatus.value = 'connected'
       sessionError.value = ''
@@ -401,6 +410,9 @@ export function useRemoteGame({
       roomLifecycle.clearSession()
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
+    table_theme: (msg) => {
+      roomTableThemeName.value = msg.theme
+    },
     round_start: (msg) => {
       fallbackSettlementSequence += 1
       animeFixedTts?.reset()
@@ -563,5 +575,7 @@ export function useRemoteGame({
     userGangFromDiscard, userGang, userChi, userWindKong, userHu,
     nextRound, returnToLobby, tileName, debugPreviewWin,
     updatePresentationAudioMode,
+    roomTableThemeName,
+    configureTableTheme,
   })
 }

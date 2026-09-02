@@ -9,6 +9,7 @@ import type { ServerSnapshot } from './dto'
 import type { ServerMeldDto } from './dto'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
+import type { TableThemeName } from '../../../components/table/three/tableTheme'
 
 export type LlmSpeechPurpose = 'commentary' | 'action' | 'round-reaction'
 export type LlmSpeechSource = 'model-message' | 'fixed-line'
@@ -44,7 +45,7 @@ export type ServerMessage =
   | ServerSnapshot
   | ServerRequest
   | RoundStartMessage
-  | { kind: 'rejoin_ok'; seat: number; rejoin: boolean; roomId: string; mode: MatchType; rulesetId?: RuleVariant; nickname: string; rejoinCode: string }
+  | { kind: 'rejoin_ok'; seat: number; rejoin: boolean; roomId: string; mode: MatchType; rulesetId?: RuleVariant; nickname: string; rejoinCode: string; theme?: TableThemeName }
   | { kind: 'rejoin_err'; code: string }
   | { kind: 'table_action'; event: TableActionEvent }
   | { kind: 'score_flow'; deltas: ScoreDelta[] }
@@ -56,5 +57,6 @@ export type ServerMessage =
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }> }
   | { kind: 'room_closed' }
+  | { kind: 'table_theme'; theme: TableThemeName }
   | { kind: 'pong' }
   | { kind: 'error'; code: string }
