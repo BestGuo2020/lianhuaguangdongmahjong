@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createClientLobby, createHostLobby, isHostLobbyMessage, type LobbySeat } from './vibeLobby'
+import { createClientLobby, createHostLobby, isClientLobbyMessage, isHostLobbyMessage, type LobbySeat } from './vibeLobby'
 import { createMockVibeRoom, type MockVibeRoom } from '../host/mockVibeRoom'
 import { createMockVibeClient } from './mockVibeHub'
 
@@ -770,5 +770,48 @@ describe('vibeLobby', () => {
     vi.advanceTimersByTime(15000)
     expect(rosters[rosters.length - 1]).toHaveLength(2) // 一直有心跳 → 座位保留
     restorePeers()
+  })
+
+  it('房主 setHostCharacter 把本家形象广播进 roster seat 0', () => {
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    const host = createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    host.setHostCharacter('qwen')
+    expect(rosters[rosters.length - 1][0]).toMatchObject({ seat: 0, characterId: 'qwen' })
+  })
+
+  it('房主收到 peer lobby_character 后广播该座位的本家形象', () => {
+    const room = createMockVibeRoom(true)
+    const rosters: LobbySeat[][] = []
+    createHostLobby({
+      room, capacity: 4, hostNickname: '房主', hostAvatar: '',
+      onRoster: (seats) => rosters.push(seats),
+      onStart: () => {},
+    })
+    room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
+    room.emit('peer1', { type: 'lobby_character', characterId: 'gpt' })
+    expect(rosters[rosters.length - 1].find((s) => s.seat === 1)).toMatchObject({ characterId: 'gpt' })
+  })
+
+  it('客户端 setCharacter 发送 lobby_character', () => {
+    const room = createMockVibeRoom(false)
+    const client = createClientLobby({ room, onRoster: () => {}, onStart: () => {}, onClosed: () => {} })
+    client.hello('玩家')
+    client.setCharacter('qwen')
+    const msg = room.sent.find((s) => (s.message as { type?: string }).type === 'lobby_character')?.message as { characterId?: string }
+    expect(msg?.characterId).toBe('qwen')
+  })
+
+  it('lobby_character 拒绝非法角色 id', () => {
+    expect(isClientLobbyMessage({ type: 'lobby_character', characterId: 'not-a-character' })).toBe(false)
+    expect(isClientLobbyMessage({ type: 'lobby_character', characterId: 'qwen' })).toBe(true)
+    expect(isHostLobbyMessage({
+      type: 'lobby_roster', hostSeat: 0, revision: 1,
+      seats: [{ seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false, characterId: 'bad' }],
+    })).toBe(false)
   })
 })
