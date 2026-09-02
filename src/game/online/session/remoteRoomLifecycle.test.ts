@@ -50,6 +50,7 @@ function createHarness(savedSession: StoredSession | null = null) {
       roomId: 'ABC123', seat: 2, nickname: '莲花', rejoinCode: 'AAAA-BBBB',
       playerId: 'guest', rejoin: false,
     })),
+    updateCharacter: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, characterId: 'deepseek' })),
     leaveRoom: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, left: true })),
     readyRoom: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, ready: true })),
     startRoom: vi.fn(async () => ({ roomId: 'ABC123', status: 'playing' })),

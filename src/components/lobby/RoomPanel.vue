@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
+import type { CharacterId } from '../../game/llm/animeCharacters'
+import type { TableThemeName } from '../table/three/tableTheme'
 import type {
   LlmProviderInfo,
   LlmSeatRequest,
@@ -29,6 +32,10 @@ interface Props {
   llmAvailable: boolean
   /** 服务端注册的提供商（不含 key），房主为空位选择 */
   llmProviders: Array<LlmProviderInfo>
+  /** 当前牌桌主题（二次元主题下在房间内选本家形象） */
+  tableThemeName: TableThemeName
+  /** 本家当前选择的二次元角色 */
+  characterId: CharacterId
 }
 
 const props = defineProps<Props>()
@@ -39,6 +46,7 @@ const emit = defineEmits<{
   start: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leave: []
   close: []
+  'update:characterId': [value: CharacterId]
 }>()
 
 /** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
@@ -132,6 +140,11 @@ function startPayload() {
         <b v-else>等待加入…</b>
       </div>
     </div>
+    <AnimeCharacterPicker
+      v-if="tableThemeName === 'llmAnime'"
+      :model-value="characterId"
+      @update:model-value="$emit('update:characterId', $event)"
+    />
     <div class="room-owner-actions">
       <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button

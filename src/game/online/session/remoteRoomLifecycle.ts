@@ -10,6 +10,7 @@ import {
   leaveRoom,
   readyRoom,
   startRoom,
+  updateCharacter,
   type LlmSeatRequest,
   type RoomSeatState,
 } from '../api/roomApi'
@@ -47,6 +48,7 @@ export interface RemoteRoomApi {
   createRoom: typeof createRoom
   getRoom: typeof getRoom
   joinRoom: typeof joinRoom
+  updateCharacter: typeof updateCharacter
   leaveRoom: typeof leaveRoom
   readyRoom: typeof readyRoom
   startRoom: typeof startRoom
@@ -71,7 +73,7 @@ export interface RemoteRoomLifecycleOptions {
 }
 
 const DEFAULT_API: RemoteRoomApi = {
-  createRoom, getRoom, joinRoom, leaveRoom, readyRoom, startRoom, closeRoom,
+  createRoom, getRoom, joinRoom, updateCharacter, leaveRoom, readyRoom, startRoom, closeRoom,
 }
 
 const REMOTE_ERROR_TEXT: Record<string, string> = {
@@ -254,6 +256,16 @@ export function createRemoteRoomLifecycle({
     }
   }
 
+  async function updateCharacter(characterId: string) {
+    if (!state.roomId.value || state.mySeat.value < 0 || !state.rejoinCode.value) return
+    try {
+      await api.updateCharacter(state.roomId.value, state.mySeat.value, state.rejoinCode.value, characterId)
+      await refreshRoom()
+    } catch (error) {
+      state.sessionError.value = readableError(error, '更新角色失败')
+    }
+  }
+
   async function startMatch(llmSeats?: Array<LlmSeatRequest>) {
     if (!state.roomId.value) return
     try {
@@ -296,6 +308,7 @@ export function createRemoteRoomLifecycle({
     createRoom: createRemoteRoom,
     joinRoom: joinRemoteRoom,
     toggleReady,
+    updateCharacter,
     startMatch,
     leaveRoom: leaveRemoteRoom,
     closeRoom: closeRemoteRoom,

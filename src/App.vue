@@ -265,6 +265,13 @@ const {
   autoPlay: remoteAutoPlay, toggleAutoPlay,
 } = remoteGame
 
+// 联机：加入房间后，本家角色变化同步到服务器座位（开局前生效）。
+watch(animeCharacterId, (value) => {
+  if (gameMode.value === 'remote' && roomId.value && mySeat.value >= 0) {
+    void remoteActions.updateCharacter(value).catch(() => {})
+  }
+})
+
 // 联机房间的大模型能力可能在恢复会话或房间元数据返回后才生效。
 watch(effectiveLlmEnabled, (enabled) => preferLlmTableTheme(enabled), { immediate: true })
 

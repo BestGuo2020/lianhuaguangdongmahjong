@@ -11,7 +11,8 @@ import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVari
 import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
-import type { CharacterId } from '../../game/llm/animeCharacters'
+import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 import type { TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
@@ -76,7 +77,7 @@ const emit = defineEmits<{
   wakuLogout: []
 }>()
 
-type DialogName = 'create' | 'join' | 'match' | 'rule' | null
+type DialogName = 'create' | 'join' | 'match' | 'rule' | 'character' | null
 const dialog = ref<DialogName>(null)
 const pickerReturn = ref<'create' | null>(null)
 /** 联机房间专用开关：只控制服务端 LLM，与单机 localStorage provider 完全独立。 */
@@ -86,11 +87,14 @@ const matchOption = computed(() => props.selectedMatch === 'east'
   ? { name: '东风场', description: '一场 4 局' }
   : { name: '半庄场', description: '一场 8 局' })
 const ruleOption = computed(() => getRuleVariant(props.selectedRule))
+const currentCharacter = computed(() => resolveAnimeCharacter(props.animeCharacterId))
+const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.animeCharacterId))
 const dialogTitle = computed(() => ({
   create: '创建房间',
   join: '加入房间',
   match: '选择场次',
   rule: '选择规则玩法',
+  character: '本家形象',
 }[dialog.value ?? 'create']))
 
 function openPicker(name: 'match' | 'rule', fromCreate = false) {
@@ -111,6 +115,11 @@ function selectMatch(value: MatchType) {
 function selectRule(value: RuleVariant) {
   emit('update:selectedRule', value)
   closePicker()
+}
+
+function selectCharacter(value: CharacterId) {
+  emit('update:animeCharacterId', value)
+  dialog.value = null
 }
 
 function confirmCreate() {
@@ -183,20 +192,21 @@ function toggleWakuDemoAuth() {
         @select-match="openPicker('match')"
         @select-rule="openPicker('rule')"
       />
-      <AnimeCharacterPicker
+      <button
         v-if="tableThemeName === 'llmAnime'"
-        :model-value="animeCharacterId"
-        @update:model-value="$emit('update:animeCharacterId', $event)"
-      />
+        type="button"
+        class="character-shortcut"
+        @click="dialog = 'character'"
+      >
+        <img :src="currentCharacterAvatar" alt="" aria-hidden="true">
+        <span class="character-shortcut-label">本家形象</span>
+        <b>{{ currentCharacter.label }}</b>
+        <span class="character-shortcut-chevron">›</span>
+      </button>
       <button class="start-button" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
     </template>
 
     <div v-else class="remote-lobby">
-      <AnimeCharacterPicker
-        v-if="tableThemeName === 'llmAnime'"
-        :model-value="animeCharacterId"
-        @update:model-value="$emit('update:animeCharacterId', $event)"
-      />
       <label class="remote-field">
         <span>昵称</span>
         <input
@@ -240,15 +250,18 @@ function toggleWakuDemoAuth() {
         :closing="closing"
         :match-name="matchName"
         :rule-name="ruleOption.name"
+        :table-theme-name="tableThemeName"
+        :character-id="animeCharacterId"
         @copy="$emit('copyRoom')"
         @toggle-ready="$emit('toggleReady')"
         @start="$emit('startRemote', $event)"
         @leave="$emit('leaveRoom')"
         @close="$emit('closeRoom')"
+        @update:character-id="$emit('update:animeCharacterId', $event)"
       />
     </div>
 
-    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule'" @close="closeDialog">
+    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule' || dialog === 'character'" @close="closeDialog">
       <template v-if="dialog === 'create'">
         <GameSettingsSummary
           :match-name="matchOption.name"
@@ -296,6 +309,12 @@ function toggleWakuDemoAuth() {
         </div>
       </template>
 
+      <AnimeCharacterPicker
+        v-else-if="dialog === 'character'"
+        :model-value="animeCharacterId"
+        @update:model-value="selectCharacter"
+      />
+
       <MatchTypePicker v-else-if="dialog === 'match'" :model-value="selectedMatch" @close="closePicker" @confirm="selectMatch" />
       <RuleVariantPicker v-else :model-value="selectedRule" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
@@ -310,3 +329,33 @@ function toggleWakuDemoAuth() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.character-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(430px, 92vw);
+  margin: 0 auto 16px;
+  padding: 8px 12px;
+  border: 1px solid rgba(231, 207, 147, .28);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .32);
+  color: #e8dcb9;
+  cursor: pointer;
+  text-align: left;
+}
+.character-shortcut:hover { background: rgba(215, 174, 83, .14); border-color: #b99549; }
+.character-shortcut img {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 2px solid #2d2923;
+  border-radius: 10px 10px 4px 4px;
+  object-fit: cover;
+  background: #e8dcc7;
+}
+.character-shortcut-label { font-size: 12px; color: #a99f8a; }
+.character-shortcut b { flex: 1; min-width: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.character-shortcut-chevron { font-size: 18px; line-height: 1; color: #b99549; }
+</style>

@@ -117,6 +117,13 @@ export function joinRoom(roomId: string, nickname: string, playerId?: string, ch
   })
 }
 
+export function updateCharacter(roomId: string, seat: number, rejoinCode: string, characterId: string): Promise<{ roomId: string; seat: number; characterId: string }> {
+  return request<{ roomId: string; seat: number; characterId: string }>(`/api/rooms/${encodeURIComponent(roomId)}/character`, {
+    method: 'POST',
+    body: JSON.stringify({ seat, rejoinCode, characterId }),
+  })
+}
+
 export function leaveRoom(roomId: string, seat: number, rejoinCode: string): Promise<LeaveResult> {
   return request<LeaveResult>(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
     method: 'POST',
