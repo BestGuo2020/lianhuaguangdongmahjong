@@ -354,6 +354,15 @@ function changeTableTheme(theme: TableThemeName) {
   window.history.replaceState(window.history.state, '', url)
 }
 
+// 联机房间内主题切换锁定：非房主始终锁定；房主开局后也锁定（大厅阶段可改）。
+const themeLocked = computed(() => (
+  gameMode.value === 'remote' && Boolean(roomId.value)
+    && (!isHost.value || phase.value !== 'lobby')
+))
+const themeLockReason = computed(() => (
+  isHost.value ? '对局开始后锁定主题' : '主题由房主控制'
+))
+
 </script>
 
 <template>
@@ -375,6 +384,8 @@ function changeTableTheme(theme: TableThemeName) {
         :signal-quality="signalQuality"
         :sound-on="soundOn"
         :theme-name="tableThemeName"
+        :theme-locked="themeLocked"
+        :theme-lock-reason="themeLockReason"
         @quit="quitMatch"
         @toggle-sound="soundOn = !soundOn"
         @open-rules="rulesOpen = true"
