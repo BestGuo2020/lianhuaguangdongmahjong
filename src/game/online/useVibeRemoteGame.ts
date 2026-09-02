@@ -11,7 +11,7 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch }
 import { defineGamePort, type GamePhase, type GamePort } from '../core/contracts/gamePort'
 import type { RoundResult } from '../core/contracts/gamePort'
 import { tileName } from '../core/rules/tiles'
-import type { MatchType, TileType, WinPresentation } from '../core/contracts/types'
+import type { MatchType, TableActionEvent, TileType, WinPresentation } from '../core/contracts/types'
 import { createWall } from '../core/rules/tiles'
 import { advanceMatchState } from '../core/local/matchProgress'
 import { LOTUS_RULESET } from '../variants/lotus/lotusRules'
@@ -67,6 +67,7 @@ import {
 } from './protocol/mapper'
 import type { TableThemeName } from '../../components/table/three/tableTheme'
 import { isTableThemeName } from '../../components/table/three/tableThemePreference'
+import type { AnimeFixedTtsExecutor, AnimeSeat } from '../llm/animeFixedTtsExecutor'
 
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
 const AUTHORITY_SILENCE_TIMEOUT_MS = 25000
@@ -250,6 +251,8 @@ interface UseVibeRemoteGameOptions {
   waitForTableReady?: () => Promise<void>
   onLlmMessage?: (localSeat: number, text: string) => void
   getTableThemeName?: () => TableThemeName
+  /** 二次元固定台词执行器（吃碰杠胡动作音 + 胡牌后结算台词）。 */
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function useVibeRemoteGame({
@@ -258,6 +261,7 @@ export function useVibeRemoteGame({
   waitForTableReady,
   onLlmMessage = () => {},
   getTableThemeName = () => 'jade',
+  animeFixedTts,
 }: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
@@ -289,6 +293,19 @@ export function useVibeRemoteGame({
   const plannedAiSeats = ref<PublicAiSeat[]>([])
   const initialTableThemeName = getTableThemeName()
   const roomTableThemeName = ref<TableThemeName>(isTableThemeName(initialTableThemeName) ? initialTableThemeName : 'jade')
+  const playAnimeAction = (event: TableActionEvent) => {
+    if (!animeFixedTts || roomTableThemeName.value !== 'llmAnime') return
+    const actor = players[event.actorIndex]
+    if (event.actorIndex < 0 || event.actorIndex > 3) return
+    void animeFixedTts.executeAction({
+      eventId: event.id,
+      seat: event.actorIndex as AnimeSeat,
+      characterId: actor?.characterId,
+      action: event.type,
+    }).then((result) => {
+      if (result.fallbackAudioFile) playSound(result.fallbackAudioFile)
+    }).catch(() => {})
+  }
   let hostLlmSelections: HostLlmSeatSelection[] = []
   let activeHostLlmRuntime: VibeHostLlmRuntime<PlayerController> | VibeHostLlmRuntime<LotusController> | null = null
   let llmMessageSequence = 0
@@ -872,6 +889,9 @@ export function useVibeRemoteGame({
     mapPresentation: (value) => mapWinPresentation(value),
     toLocalSeat: toLocal,
     playSound,
+    getThemeName: () => roomTableThemeName.value,
+    getCharacterIds: () => players.map((player) => player.characterId),
+    animeFixedTts,
     isLlmSeat: (localSeat) => state.players[localSeat]?.isLlm === true,
     onResultMissingAfterReveal: (settledRound, settledHonba) => {
       console.warn('[client] 亮牌动画结束仍缺少结算结果，单次请求房主补发结算事实')
@@ -1014,6 +1034,8 @@ export function useVibeRemoteGame({
     showServerAnnouncement: snapshotReconciler.showAnnouncement,
     playSound,
     later,
+    getThemeName: () => roomTableThemeName.value,
+    onFixedAnimeAction: playAnimeAction,
   })
 
   const user = computed(() => players[0])
@@ -1180,6 +1202,7 @@ export function useVibeRemoteGame({
     requestCoordinator.clearCountdown()
     if (!options.preserveOpening) openingTimeline.cancel()
     settlementTimeline.cancel()
+    animeFixedTts?.cancel()
     transientEventPresenter.clear()
   }
 
@@ -1948,6 +1971,7 @@ export function useVibeRemoteGame({
   }
 
   function resetAll() {
+    animeFixedTts?.reset()
     resetWinEffectDedup()
     matchLifecycle.resetAll()
   }

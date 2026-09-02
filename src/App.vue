@@ -100,10 +100,12 @@ const createFixedTtsExecutor = () => createAnimeFixedTtsExecutor(undefined, {
 })
 const localAnimeFixedTts = createFixedTtsExecutor()
 const lotusAnimeFixedTts = createFixedTtsExecutor()
+const remoteAnimeFixedTts = createFixedTtsExecutor()
 watch(tableThemeName, (theme) => {
   if (theme === 'llmAnime') return
   localAnimeFixedTts.cancel()
   lotusAnimeFixedTts.cancel()
+  remoteAnimeFixedTts.cancel()
 })
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
@@ -149,6 +151,7 @@ const vibeRemoteGame = useVibeRemoteGame({
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
   getTableThemeName: () => tableThemeName.value,
+  animeFixedTts: remoteAnimeFixedTts,
 })
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。

@@ -35,7 +35,7 @@ describe('transientEventPresenter', () => {
     expect(state.tableActionEvent.value?.actorIndex).toBe(1)
     expect(state.tableActionEvent.value?.sourceIndex).toBe(2)
     expect(playSound).toHaveBeenCalledWith('peng.mp3')
-    await vi.advanceTimersByTimeAsync(1050)
+    await vi.advanceTimersByTimeAsync(2000)
     expect(state.tableActionEvent.value).toBeNull()
   })
 

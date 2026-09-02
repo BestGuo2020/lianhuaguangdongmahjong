@@ -9,6 +9,8 @@ import {
   WIN_REVEAL_DURATION,
 } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
+import type { AnimeFixedTtsExecutor, AnimeRoundWinType } from '../../llm/animeFixedTtsExecutor'
 
 export type SettlementPresentationPayload = Pick<
   ServerSnapshot,
@@ -38,6 +40,9 @@ export interface SettlementTimelineOptions {
   isLlmSeat?: (localSeat: number) => boolean
   reducedMotion?: () => boolean
   onResultMissingAfterReveal?: (round: number, honba: number) => void
+  getThemeName?: () => string
+  getCharacterIds?: () => readonly unknown[]
+  animeFixedTts?: AnimeFixedTtsExecutor
 }
 
 export function createSettlementTimeline({
@@ -49,6 +54,9 @@ export function createSettlementTimeline({
   isLlmSeat = () => false,
   reducedMotion = prefersReducedMotion,
   onResultMissingAfterReveal,
+  getThemeName = () => 'jade',
+  getCharacterIds = () => [],
+  animeFixedTts,
 }: SettlementTimelineOptions) {
   let serial = 0
   const timers = new Set<number>()
@@ -79,6 +87,38 @@ export function createSettlementTimeline({
     activeKey = null
   }
 
+  let pendingSnapshot: SettlementEffectPayload | null = null
+
+  function queueFixedRound(snapshot: { round: number; honba: number } | null, mappedResult: RoundResult | null) {
+    if (!animeFixedTts) return
+    const policy = resolveAnimeAudioPolicy({ themeName: getThemeName(), playerKind: 'unknown' })
+    if (policy.resultVoice !== 'fixed-line') return
+    const rawWinType = mappedResult?.winType
+    const winType: AnimeRoundWinType = rawWinType === 'discard' || rawWinType === 'dihu'
+      ? 'discard'
+      : rawWinType === 'robbed-kong' ? 'robbed-kong' : 'self-draw'
+    const draw = Boolean(mappedResult?.draw)
+    const winnerIndex = draw ? null : (mappedResult?.winnerIndex ?? null)
+    const eventId = `remote-round:${snapshot?.round ?? ''}:${snapshot?.honba ?? ''}:${draw ? 'draw' : winnerIndex}:${rawWinType ?? ''}`
+    return animeFixedTts.executeRound({
+      eventId,
+      characterIds: getCharacterIds(),
+      winnerIndex,
+      winType,
+      draw,
+    }).then(() => undefined, () => undefined)
+  }
+
+  function finishSettlementAfterSpeech(snapshot: { round: number; honba: number } | null, mappedResult: RoundResult | null) {
+    const speech = queueFixedRound(snapshot, mappedResult)
+    const finish = () => {
+      state.phase.value = 'settled'
+      state.result.value = mappedResult
+    }
+    if (speech) void speech.then(finish, finish)
+    else finish()
+  }
+
   function effectKey(snapshot: SettlementEffectPayload) {
     const presentation = snapshot.winPresentation
     return presentation
@@ -97,8 +137,8 @@ export function createSettlementTimeline({
 
   function settleIfReady() {
     if (!hasResult || !revealComplete) return
-    state.phase.value = 'settled'
-    state.result.value = pendingResult
+    if (state.phase.value === 'settled') return
+    finishSettlementAfterSpeech(pendingSnapshot, pendingResult)
   }
 
   function beginEffect(snapshot: SettlementEffectPayload, result?: RoundResult | null) {
@@ -106,6 +146,7 @@ export function createSettlementTimeline({
     const currentSerial = serial
     const presentation = mapPresentation(snapshot.winPresentation)
     activeKey = effectKey(snapshot)
+    pendingSnapshot = snapshot
     if (arguments.length >= 2) {
       pendingResult = result ?? null
       hasResult = true
@@ -168,13 +209,13 @@ export function createSettlementTimeline({
 
     if (isDraw) {
       cancel()
-      // 流局直接结算并亮牌（对齐单机 endDraw），不加 600ms revealing 停顿。
-      state.phase.value = 'settled'
+      // 流局立即亮牌；二次元主题等待四家固定发言后再打开结算窗口。
+      state.phase.value = 'revealing'
       state.revealHands.value = true
       state.winPresentation.value = null
       state.winEffect.value = null
       state.winningPlayerIndex.value = mappedResult?.winnerIndex ?? -1
-      state.result.value = mappedResult
+      finishSettlementAfterSpeech(snapshot, mappedResult)
       return
     }
 
