@@ -129,8 +129,8 @@ function onPortraitError(event: Event) {
 }
 .anime-action-copy {
   position: absolute;
-  right: -58%;
-  bottom: -46%;
+  right: -54%;
+  bottom: -42%;
   display: grid;
   justify-items: end;
   transform: rotate(-4deg);
@@ -167,7 +167,7 @@ function onPortraitError(event: Event) {
 /* 四个方向的座位锚点统一由共享样式表（src/style.css）维护；
    组件内只保留镜像、文字等纯视觉规则。 */
 .action-from-left img.base-q-avatar { left: auto; right: 0; transform: scaleX(-1); }
-.action-from-left .anime-action-copy { right: auto; left: -58%; align-items: start; }
+.action-from-left .anime-action-copy { right: auto; left: -54%; align-items: start; }
 @keyframes anime-action-enter {
   from { opacity: 0; scale: .88; filter: blur(2px) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
   to { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
