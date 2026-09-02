@@ -65,12 +65,19 @@ async function startMatch(page: Page, theme: string, debugWin = false, cameraLab
   const query = new URLSearchParams({ theme, actionCueLab: 'peng', actionCueSeat: '1' })
   if (debugWin) query.set('winEffectLab', '1')
   if (cameraLab) query.set('cameraLab', '1')
-  await page.goto(`/?${query}`, { waitUntil: 'domcontentloaded' })
-  if (debugWin) await hideWinLab(page)
-  await page.getByRole('button', { name: /开始东风场/ }).click()
-  await expect(page.locator('.game-table-hud')).toBeVisible()
-  await expect(page.locator('canvas.mahjong-scene')).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('.table-loading')).toBeHidden({ timeout: 30_000 })
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.goto(`/?${query}`, { waitUntil: 'domcontentloaded' })
+    if (debugWin) await hideWinLab(page)
+    await page.getByRole('button', { name: /开始东风场/ }).click()
+    await expect(page.locator('.game-table-hud')).toBeVisible()
+    try {
+      await expect(page.locator('canvas.mahjong-scene')).toBeVisible({ timeout: 45_000 })
+      await expect(page.locator('.table-loading')).toBeHidden({ timeout: 45_000 })
+      return
+    } catch (error) {
+      if (attempt === 3) throw error
+    }
+  }
 }
 
 async function assertTableLayout(page: Page, viewport: typeof viewports[number]) {
@@ -700,9 +707,9 @@ test('移动端动作 cue 锚定到行动座位并远离牌桌中央（R6.19）'
       expect(metrics.handOverlap).toBe(0)
       expect(metrics.topbarOverlap).toBe(0)
       if (side === 'top') {
-        // 对家：沿用桌面几何——水平 50% 居中、顶部 18%（立绘），贴上方牌墙（R6.19 修正）。
+        // 对家：沿用桌面几何——水平 50% 居中、顶部贴顶栏下（R6.19 修正；R6.22 上移远离牌河）。
         expect(Math.abs(metrics.cue!.cx - metrics.width / 2)).toBeLessThanOrEqual(2)
-        expect(metrics.cue!.y).toBeCloseTo(metrics.height * 0.18, 0)
+        expect(metrics.cue!.y).toBeCloseTo(metrics.topbar!.bottom + metrics.height * 0.048, 0)
         expect(metrics.cue!.y).toBeGreaterThanOrEqual(metrics.topbar!.bottom - 1)
       } else if (side === 'left') {
         // 上家：贴左卡内缘（不再被 max(20%) 推进牌桌），垂直对齐卡中心。

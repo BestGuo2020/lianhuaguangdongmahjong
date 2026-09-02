@@ -129,23 +129,23 @@ function onPortraitError(event: Event) {
 }
 .anime-action-copy {
   position: absolute;
-  right: -54%;
-  bottom: -42%;
+  right: calc((1 - var(--action-art-scale)) * 50%);
+  bottom: calc((1 - var(--action-art-scale)) * 50%);
   display: grid;
   justify-items: end;
-  transform: rotate(-4deg);
+  transform: translate(50%, 50%) rotate(-4deg);
 }
 .anime-action-copy strong {
   position: relative;
   color: #fff8e7;
   font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  font-size: clamp(24px, 2.45vw, 38px);
+  font-size: clamp(48px, 4.9vw, 76px);
   font-weight: 1000;
   line-height: .92;
   letter-spacing: -.08em;
   paint-order: stroke fill;
-  -webkit-text-stroke: clamp(2px, .22vw, 3px) #2d241c;
-  text-shadow: 2px 2px 0 rgba(45, 36, 28, .22);
+  -webkit-text-stroke: clamp(4px, .44vw, 6px) #2d241c;
+  text-shadow: 3px 3px 0 rgba(45, 36, 28, .22);
 }
 .anime-action-copy strong::after {
   content: attr(data-text);
@@ -153,10 +153,10 @@ function onPortraitError(event: Event) {
   inset: 0;
   z-index: -1;
   color: transparent;
-  -webkit-text-stroke: clamp(4px, .38vw, 6px) var(--anime-accent, #bd5b48);
+  -webkit-text-stroke: clamp(8px, .76vw, 12px) var(--anime-accent, #bd5b48);
 }
 .anime-action-zimo .anime-action-copy strong,
-.anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(22px, 2.35vw, 36px); letter-spacing: -.12em; }
+.anime-action-qiangganghu .anime-action-copy strong { font-size: clamp(44px, 4.7vw, 72px); letter-spacing: -.12em; }
 .anime-action-cue.anime-action-hu,
 .anime-action-cue.anime-action-zimo,
 .anime-action-cue.anime-action-qiangganghu {
@@ -167,7 +167,12 @@ function onPortraitError(event: Event) {
 /* 四个方向的座位锚点统一由共享样式表（src/style.css）维护；
    组件内只保留镜像、文字等纯视觉规则。 */
 .action-from-left img.base-q-avatar { left: auto; right: 0; transform: scaleX(-1); }
-.action-from-left .anime-action-copy { right: auto; left: -54%; align-items: start; }
+.action-from-left .anime-action-copy {
+  right: auto;
+  left: calc((1 - var(--action-art-scale)) * 50%);
+  align-items: start;
+  transform: translate(-50%, 50%) rotate(-4deg);
+}
 @keyframes anime-action-enter {
   from { opacity: 0; scale: .88; filter: blur(2px) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
   to { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
@@ -188,9 +193,6 @@ function onPortraitError(event: Event) {
   .anime-action-cue.anime-action-hu,
   .anime-action-cue.anime-action-zimo,
   .anime-action-cue.anime-action-qiangganghu { width: clamp(96px, 15cqw, 124px); height: clamp(72px, 11cqw, 92px); }
-  /* 移动立绘只外扩 7.5%（--action-art-scale: 1.15），动作字相应贴到移动立绘的右/下缘。 */
-  .anime-action-copy { right: -8%; bottom: -8%; }
-  .action-from-left .anime-action-copy { left: -8%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .anime-action-cue { animation: anime-action-fade .16s ease-out both; }
