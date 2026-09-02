@@ -161,8 +161,7 @@ function onPortraitError(event: Event) {
 .anime-action-cue.anime-action-hu,
 .anime-action-cue.anime-action-zimo,
 .anime-action-cue.anime-action-qiangganghu {
-  width: clamp(138px, 12.2vw, 191px);
-  height: clamp(106px, 9.7vw, 145px);
+  /* 胡牌与吃碰杠同尺寸（用户确认）；仅叠加串行演出动画。 */
   animation: anime-win-cue-serial calc(1600ms + 400ms) ease-out both;
 }
 /* 四个方向的座位锚点统一由共享样式表（src/style.css）维护；
@@ -191,9 +190,6 @@ function onPortraitError(event: Event) {
     height: clamp(64px, 10cqw, 86px);
     max-height: var(--action-art-max-height);
   }
-  .anime-action-cue.anime-action-hu,
-  .anime-action-cue.anime-action-zimo,
-  .anime-action-cue.anime-action-qiangganghu { width: clamp(96px, 15cqw, 124px); height: clamp(72px, 11cqw, 92px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .anime-action-cue { animation: anime-action-fade .16s ease-out both; }
