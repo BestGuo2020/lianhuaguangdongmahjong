@@ -76,7 +76,6 @@ try {
     'src/game/online/state/remoteGameState.test.ts'
     'src/game/shared/runtime/matchLifecycle.ts'
     'src/game/shared/runtime/timerScheduler.ts'
-    'src/game/shared/settlement/settlementTimeline.ts'
     'src/game/variants/lotus/lotusGame.ts'
     'tests/e2e/local-game.smoke.spec.ts'
   )
