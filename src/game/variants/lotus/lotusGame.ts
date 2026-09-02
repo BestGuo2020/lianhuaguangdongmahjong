@@ -1,7 +1,7 @@
 // 「莲花麻将」本地引擎组装：把规则/开局/回合/杠/结算/人类/AI 拼成 GamePort。
 // 结构仿 core/local/useGame.ts，但整体独立于「莲花广麻」，复用共享的计时/瞬态事件/音效模块。
 import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
-import type { TileType } from '../../core/contracts/types'
+import type { TableActionEvent, TileType } from '../../core/contracts/types'
 import { defineGamePort, type GameStartOptions } from '../../core/contracts/gamePort'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
 import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
@@ -25,6 +25,15 @@ import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
+import {
+  ANIME_ACTION_FALLBACK_AUDIO,
+  type AnimeFixedTtsExecutor,
+  type AnimeSeat,
+} from '../../llm/animeFixedTtsExecutor'
+
+const ANIME_FIXED_ACTION_AUDIO_FILES: ReadonlySet<string> = new Set(
+  Object.values(ANIME_ACTION_FALLBACK_AUDIO),
+)
 
 interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -45,6 +54,8 @@ interface UseLotusGameOptions {
   waitForOpeningReady?: () => Promise<void>
   /** 表现层动态读取当前牌桌主题（二次元主题声音策略据此决定是否报牌名）。 */
   getTableThemeName?: () => string
+  /** 二次元固定台词执行器（吃碰杠胡动作音 + 胡牌后结算台词）。 */
+  animeFixedTts?: AnimeFixedTtsExecutor
   ruleset?: RuleSet
 }
 
@@ -60,6 +71,7 @@ export function useLotusGame({
   headless = false,
   waitForOpeningReady,
   getTableThemeName = () => 'jade',
+  animeFixedTts,
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
   const sound = headless ? () => {} : playSound
@@ -77,6 +89,35 @@ export function useLotusGame({
   let playerActions!: ReturnType<typeof createLotusHuman>
   let countdown!: ReturnType<typeof createLocalCountdownController>
   let transient!: ReturnType<typeof createLocalTransientEventPresenter>
+
+  const usesAnimeFixedActionVoice = () => resolveAnimeAudioPolicy({
+    themeName: getTableThemeName(),
+    playerKind: 'unknown',
+  }).actionVoice === 'fixed-line'
+  const playPresentationSound = (name: string, volume?: number, onFinish?: () => void) => {
+    if (usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)) return
+    if (onFinish !== undefined) return sound(name, volume, onFinish)
+    if (volume !== undefined) return sound(name, volume)
+    return sound(name)
+  }
+  const playPresentationSoundAndWait = (name: string, volume?: number) => (
+    usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)
+      ? Promise.resolve()
+      : soundAndWait(name, volume)
+  )
+  const playAnimeAction = (event: TableActionEvent) => {
+    if (!animeFixedTts || !usesAnimeFixedActionVoice()) return
+    const actor = state.players[event.actorIndex]
+    if (!actor || event.actorIndex < 0 || event.actorIndex > 3) return
+    void animeFixedTts.executeAction({
+      eventId: event.id,
+      seat: event.actorIndex as AnimeSeat,
+      characterId: actor.characterId,
+      action: event.type,
+    }).then((result) => {
+      if (result.fallbackAudioFile) sound(result.fallbackAudioFile)
+    }).catch(() => {})
+  }
 
   const humanBridge: LotusHumanBridge = {
     isTurn: ref(false),
@@ -134,11 +175,15 @@ export function useLotusGame({
     stopCountdown: () => countdown?.stop(),
     cancelOpening: () => openingTimeline?.cancel(),
   })
+  const clearPresentation = () => {
+    timer.clear()
+    animeFixedTts?.cancel()
+  }
   // 无头仅让「结算动画」即时，出牌/碰杠的 PACE_MS 节奏保留（否则出牌动画消失）。
   const settlementLater = headless
     ? (callback: () => void) => timer.later(callback, 0)
     : timer.later
-  transient = createLocalTransientEventPresenter({ state, later: timer.later })
+  transient = createLocalTransientEventPresenter({ state, later: timer.later, onTableAction: playAnimeAction })
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
   const followDealer = createFollowDealerTracker({
@@ -165,14 +210,16 @@ export function useLotusGame({
 
   settlementTimeline = createLotusSettlement({
     state,
-    clearTimers: timer.clear,
+    clearTimers: clearPresentation,
     later: settlementLater,
-    playSound: sound,
-    playSoundAndWait: soundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: playPresentationSoundAndWait,
     showTableAction: transient.showTableAction,
     structuralMeldCount: (playerIndex) => structuralMeldCount(state.players[playerIndex]),
     getRoundLabel: () => selectors.roundLabel.value,
     ruleset,
+    getThemeName: getTableThemeName,
+    animeFixedTts,
     // 房主权威无头引擎的 AI 身份由在线 runtime 管理；不得读取单机全局语音注册表。
     isLlmVoiceSeat: headless ? () => false : undefined,
     announceLlmRoundReactions: headless ? () => undefined : undefined,
@@ -180,7 +227,7 @@ export function useLotusGame({
 
   countdown = createLocalCountdownController({
     state,
-    playSound: sound,
+    playSound: playPresentationSound,
     enabled: countdownEnabled,
     onDiscard: () => playerActions.userDiscard(),
     onPass: () => playerActions.userPass(),
@@ -191,8 +238,8 @@ export function useLotusGame({
     controllers,
     getTurnOrchestrator: () => turnOrchestrator,
     endDraw,
-    playSound: sound,
-    playSoundAndWait: soundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: playPresentationSoundAndWait,
     shouldAnnounceDiscard: (_playerIndex, player) => (
       resolveAnimeAudioPolicy({
         themeName: getTableThemeName(),
@@ -207,12 +254,12 @@ export function useLotusGame({
 
   openingTimeline = createLotusOpening({
     state,
-    clearTimers: timer.clear,
+    clearTimers: clearPresentation,
     takeTile: tileFlowExecutor.takeTile,
     wait: openingInstant ? async () => {} : timer.wait,
     later: timer.later,
-    playSound: sound,
-    playSoundAndWait: openingInstant ? async () => {} : soundAndWait,
+    playSound: playPresentationSound,
+    playSoundAndWait: openingInstant ? async () => {} : playPresentationSoundAndWait,
     announce: transient.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -222,6 +269,7 @@ export function useLotusGame({
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions & { waitForOpeningReady?: () => Promise<void> }) => {
+    animeFixedTts?.reset()
     followDealer.reset()
     return openingTimeline.start(mode, {
       ...options,
@@ -235,14 +283,14 @@ export function useLotusGame({
     sortHand: (hand) => sortTilesWithJokers(hand, state.jokerTiles.value),
     showTableAction: transient.showTableAction,
     showScoreFlow: transient.showScoreFlow,
-    playSound: sound,
+    playSound: playPresentationSound,
   }
 
   kong = createLotusKong({
     state,
     showTableAction: transient.showTableAction,
     showScoreFlow: transient.showScoreFlow,
-    playSound: sound,
+    playSound: playPresentationSound,
     later: timer.later,
     ruleset,
     beginTurn,
@@ -283,11 +331,11 @@ export function useLotusGame({
     beginTurn: (playerIndex, options) => beginTurn(playerIndex, options),
     endGame,
     announce: transient.announce,
-    playSound: sound,
+    playSound: playPresentationSound,
     later: timer.later,
   })
 
-  const matchLifecycle = createMatchLifecycle({ state, clearTimers: timer.clear, startGame })
+  const matchLifecycle = createMatchLifecycle({ state, clearTimers: clearPresentation, startGame })
   const capabilities = computed(() => ({
     chi: { choose: playerActions.userChi },
     windKong: { available: selectors.userHasWindKong.value, execute: playerActions.userWindKong },
@@ -301,7 +349,7 @@ export function useLotusGame({
   }))
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
-  if (getCurrentInstance()) onBeforeUnmount(timer.clear)
+  if (getCurrentInstance()) onBeforeUnmount(clearPresentation)
 
   return defineGamePort({
     phase: state.phase,

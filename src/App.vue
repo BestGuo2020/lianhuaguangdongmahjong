@@ -13,6 +13,7 @@ import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
 import type { LlmControllerStats } from './game/llm/llmController'
+import { createAnimeFixedTtsExecutor } from './game/llm/animeFixedTtsExecutor'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import { useVibeRemoteGame } from './game/online/useVibeRemoteGame'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
@@ -92,6 +93,18 @@ const llmHook = {
     }, 4000)
   },
 }
+const createFixedTtsExecutor = () => createAnimeFixedTtsExecutor(undefined, {
+  onLine: (event, request) => {
+    if (request.kind === 'result') llmHook.onLlmMessage(event.seat, request.normalizedText)
+  },
+})
+const localAnimeFixedTts = createFixedTtsExecutor()
+const lotusAnimeFixedTts = createFixedTtsExecutor()
+watch(tableThemeName, (theme) => {
+  if (theme === 'llmAnime') return
+  localAnimeFixedTts.cancel()
+  lotusAnimeFixedTts.cancel()
+})
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
 
@@ -119,6 +132,7 @@ const localGame = useGame({
   aiControllers: localLlm.value.controllers ?? undefined,
   aiPlayerSeeds: localLlmSeeds,
   getTableThemeName: () => tableThemeName.value,
+  animeFixedTts: localAnimeFixedTts,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -127,6 +141,7 @@ const lotusGame = useLotusGame({
   aiControllers: lotusLlm.value.controllers ?? undefined,
   aiPlayerSeeds: lotusLlmSeeds,
   getTableThemeName: () => tableThemeName.value,
+  animeFixedTts: lotusAnimeFixedTts,
 })
 const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,
