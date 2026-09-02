@@ -66,8 +66,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
 
 <template>
   <header class="top-bar">
-    <div class="brand-mini"><span v-if="!hasPlayers">莲花广麻</span></div>
-    <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
+    <div v-if="hasPlayers" class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
     <div v-if="hasPlayers" class="base-score-badge">
       <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
       <span>底分{{ BASE_SCORE }}</span>
@@ -83,7 +82,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
     <nav>
       <div ref="themePicker" class="theme-picker">
         <button
-          class="theme-toggle"
+          class="theme-toggle topbar-control"
           aria-label="切换牌桌主题"
           :aria-expanded="themeMenuOpen"
           title="切换牌桌主题"
@@ -108,20 +107,25 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
       </div>
       <button
         v-if="gameMode === 'remote' && phase !== 'lobby'"
-        class="quit-match"
+        class="quit-match topbar-control"
         aria-label="退出对局"
         title="退出对局"
         @click="emit('quit')"
       ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
       <div ref="audioPicker" class="audio-picker">
         <button
-          class="icon-button"
+          class="icon-button topbar-control"
           aria-label="声音设置"
           :aria-expanded="audioMenuOpen"
           title="声音设置"
           @click.stop="toggleAudioMenu"
         >
-          <img :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
+          <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9h4l5-4v14l-5-4H4z" />
+            <path v-if="hasAudibleAudio" d="M16 8.5c1.5 1.8 1.5 5.2 0 7M19 6c3 3.2 3 8.8 0 12" />
+            <path v-else d="m16 9 5 6m0-6-5 6" />
+          </svg>
+          <img v-else :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
         </button>
         <div v-if="audioMenuOpen" class="audio-menu" role="group" aria-label="声音设置">
           <p>声音设置</p>
@@ -139,8 +143,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
           </button>
         </div>
       </div>
-      <button class="icon-button" aria-label="查看规则" @click="emit('openRules')">
-        <img :src="`${imageBase}manual.png`" alt="" />
+      <button class="icon-button topbar-control" aria-label="查看规则" @click="emit('openRules')">
+        <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5.5c2.7-.8 5.3-.3 8 1.5v12c-2.7-1.8-5.3-2.3-8-1.5zM20 5.5c-2.7-.8-5.3-.3-8 1.5v12c2.7-1.8 5.3-2.3 8-1.5z" />
+          <path d="M12 7v12" />
+        </svg>
+        <img v-else :src="`${imageBase}manual.png`" alt="" />
       </button>
     </nav>
   </header>

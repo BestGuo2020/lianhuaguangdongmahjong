@@ -41,16 +41,37 @@ describe('大模型二次元牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llmAnime',
       label: '大模型二次元',
-      description: '灰绿绒面、胡桃木与角色演出',
+      description: '鼠尾草绒面、树脂麻将与角色演出',
     })
   })
 
-  it('使用独立的灰绿绒面、象牙白牌材质与纯色朱砂牌背', () => {
+  it('使用独立的鼠尾草绒面、树脂麻将与珊瑚牌背', () => {
     expect(llmAnimeTheme.table.jade).not.toEqual(llmTheme.table.jade)
     expect(llmAnimeTheme.tile).not.toBe(defaultTableTheme.tile)
+    expect(llmAnimeTheme.tileGeometry).toEqual({ segments: 4, baseRadius: .07, capRadius: .075 })
     expect(llmAnimeTheme.tableFelt).toBe(true)
-    expect(llmAnimeTheme.woodTrim).toBe(true)
-    expect(llmAnimeTheme.tileBackGradient).toEqual(['#a65f52', '#a65f52', '#a65f52'])
+    expect(llmAnimeTheme.tableVignette).toBe(.14)
+    expect(llmAnimeTheme.tableFeltVariation).toBe(8)
+    expect(llmAnimeTheme.tableGuide).toBeDefined()
+    expect(llmAnimeTheme.tableGuide?.slotOpacity).toBe(.42)
+    expect(llmAnimeTheme.machineScale).toBe(1.081)
+    expect(llmAnimeTheme.machineRelief).toBe(1.22)
+    expect(llmAnimeTheme.staticTableCastShadow).toBe(false)
+    expect(llmAnimeTheme.edgeTrimTopMatchesSurface).toBe(true)
+    expect(llmAnimeTheme.edgeAccentMaterial?.metalness).toBeLessThan(.3)
+    expect(llmAnimeTheme.table.machineTop.clearcoat).toBeLessThan(.1)
+    expect(llmAnimeTheme.table.gold.metalness).toBeLessThan(.3)
+    expect(llmAnimeTheme.woodTrim).toBe(false)
+    expect(llmAnimeTheme.tileBackGradient).toEqual(['#bd5b48', '#bd5b48', '#bd5b48'])
+    expect(llmAnimeTheme.tileFaceGradient).toEqual(['#f8f5ed', '#e8e5dc', '#cfd2ca'])
+    expect(llmAnimeTheme.tileAoIntensity).toBe(.32)
+    expect(llmAnimeTheme.tile.faceSide.roughness).toBeGreaterThanOrEqual(.15)
+    expect(llmAnimeTheme.tile.faceSide.roughness).toBeLessThanOrEqual(.22)
+    expect(llmAnimeTheme.tile.faceSide.clearcoat).toBe(1)
+    expect(llmAnimeTheme.tile.faceSide.clearcoatRoughness).toBe(.1)
+    expect(llmAnimeTheme.tile.face.clearcoat).toBe(1)
+    expect(llmAnimeTheme.tile.back.clearcoat).toBe(1)
+    expect(llmAnimeTheme.tile.faceSide.envMapIntensity).toBeGreaterThan(0)
     expect(llmAnimeTheme.tableSurfaceTexture).toBeUndefined()
   })
 })

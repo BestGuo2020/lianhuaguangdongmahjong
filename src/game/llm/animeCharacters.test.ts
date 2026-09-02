@@ -30,7 +30,7 @@ describe('llmAnime character contract', () => {
       ['claude', '克劳德书姬'],
       ['deepseek', '大肥鱼'],
       ['doubao', '豆包学妹'],
-      ['gemini', '双子星姬'],
+      ['gemini', '美国豆包'],
       ['glm', '智谱狐姬'],
       ['gpt', 'GPT龙姬'],
       ['grok', 'Grok小恶魔'],

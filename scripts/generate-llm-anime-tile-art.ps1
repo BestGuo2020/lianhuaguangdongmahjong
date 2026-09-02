@@ -17,7 +17,7 @@ $backWidth = 256
 $backHeight = 352
 $back = [System.Drawing.Bitmap]::new($backWidth, $backHeight, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
 try {
-  $backColor = [System.Drawing.Color]::FromArgb(166, 95, 82)
+  $backColor = [System.Drawing.Color]::FromArgb(189, 91, 72)
   for ($y = 0; $y -lt $backHeight; $y += 1) {
     for ($x = 0; $x -lt $backWidth; $x += 1) { $back.SetPixel($x, $y, $backColor) }
   }

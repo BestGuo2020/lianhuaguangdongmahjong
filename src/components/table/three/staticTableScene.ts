@@ -5,6 +5,7 @@ import { windForSeat } from '../../../game/core/presentation/tableLayout'
 import type { TileType } from '../../../game/core/contracts/types'
 import { defaultTableTheme } from './tableTheme'
 import type { TableTheme } from './tableTheme'
+import { tableLiftSlots } from './tableLiftSlots'
 
 interface TableSceneOptions {
   renderer: THREE.WebGLRenderer
@@ -32,13 +33,52 @@ export function createStaticTableScene(options: TableSceneOptions) {
   const theme = options.theme ?? defaultTableTheme
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
   const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
+  // 环境反射只注入麻将牌材质，让圆角捕捉柔和室内高光；桌面仍由主题材质控制。
+  const tileEnvironment = scene.userData.tileEnvironment
+  const tileEnvironmentParams = tileEnvironment ? { envMap: tileEnvironment } : {}
+  let tileAoTexture: THREE.CanvasTexture | null = null
+
+  function makeTileAoTexture() {
+    if (tileAoTexture) return tileAoTexture
+    const size = 128
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    const imageData = ctx.createImageData(size, size)
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const edge = Math.min(x, y, size - 1 - x, size - 1 - y) / (size * .18)
+        const edgeShade = THREE.MathUtils.clamp(edge, 0, 1)
+        const lowerShade = y / (size - 1)
+        const value = Math.round(214 + edgeShade * 35 - lowerShade * 7)
+        const offset = (y * size + x) * 4
+        imageData.data[offset] = value
+        imageData.data[offset + 1] = value
+        imageData.data[offset + 2] = value
+        imageData.data[offset + 3] = 255
+      }
+    }
+    ctx.putImageData(imageData, 0, 0)
+    tileAoTexture = own(new THREE.CanvasTexture(canvas))
+    tileAoTexture.colorSpace = THREE.NoColorSpace
+    tileAoTexture.channel = 1
+    return tileAoTexture
+  }
+
+  const tileAoParams = theme.tileAoIntensity
+    ? { aoMap: makeTileAoTexture(), aoMapIntensity: theme.tileAoIntensity }
+    : {}
 
 // 台面表面纹理（单张合成，避免 map 通道冲突）：
 // - tableFelt：近白底 + 低对比度蓝灰颗粒（保持材质基础色、只做轻微明暗起伏），模拟绒面颗粒且不显脏；
 // - tableVignette：径向渐变边缘压暗（中心亮、四周暗）。
 // 无平铺（ClampToEdge），整张覆盖台面 UV。
 function makeTableSurfaceTexture() {
-  const size = 256
+  // 带机械接缝的主题用 1024：1 个真实纹理像素映射到画面约 1–2px，
+  // 既能稳定显示，又不会像低分辨率放大线那样发粗。
+  const size = theme.tableGuide ? 1024 : 256
+  const guideScale = size / 256
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
@@ -51,7 +91,7 @@ function makeTableSurfaceTexture() {
     // 这里使用接近白色的低对比度蓝灰像素，让 map 只改变明暗，不把基础蓝色压成黑蓝。
     const imageData = ctx.createImageData(size, size)
     for (let i = 0; i < imageData.data.length; i += 4) {
-      const variation = Math.floor(Math.random() * 16)
+      const variation = Math.floor(Math.random() * (theme.tableFeltVariation ?? 16))
       imageData.data[i] = 232 + variation
       imageData.data[i + 1] = 238 + variation
       imageData.data[i + 2] = 248 + Math.floor(variation / 2)
@@ -70,10 +110,78 @@ function makeTableSurfaceTexture() {
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, size, size)
   }
+  if (theme.tableGuide) {
+    const { dark, light, opacity, slotDark = dark, slotOpacity = opacity * .58 } = theme.tableGuide
+    const roundedRectPath = (x: number, y: number, width: number, height: number, radius: number) => {
+      x *= guideScale
+      y *= guideScale
+      width *= guideScale
+      height *= guideScale
+      radius *= guideScale
+      const right = x + width
+      const bottom = y + height
+      ctx.moveTo(x + radius, y)
+      ctx.lineTo(right - radius, y)
+      ctx.quadraticCurveTo(right, y, right, y + radius)
+      ctx.lineTo(right, bottom - radius)
+      ctx.quadraticCurveTo(right, bottom, right - radius, bottom)
+      ctx.lineTo(x + radius, bottom)
+      ctx.quadraticCurveTo(x, bottom, x, bottom - radius)
+      ctx.lineTo(x, y + radius)
+      ctx.quadraticCurveTo(x, y, x + radius, y)
+      ctx.closePath()
+    }
+    const traceCenterSeam = () => roundedRectPath(99, 99, 58, 58, 3.5)
+    const traceLiftSlots = () => {
+      // 从牌墙真实世界坐标反推桌布 UV；不再用截图像素猜位置。
+      const guideSize = 256
+      const surfaceHalf = 11.65
+      const surfaceCenterZ = -1.62
+      const worldToGuideX = (worldX: number) => (worldX + surfaceHalf) / (surfaceHalf * 2) * guideSize
+      const worldToGuideZ = (worldZ: number) => (worldZ - surfaceCenterZ + surfaceHalf) / (surfaceHalf * 2) * guideSize
+      const worldLengthToGuide = (length: number) => length / (surfaceHalf * 2) * guideSize
+      tableLiftSlots().forEach((slot) => {
+        const width = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.length : slot.width)
+        const height = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.width : slot.length)
+        roundedRectPath(
+          worldToGuideX(slot.centerX) - width / 2,
+          worldToGuideZ(slot.centerZ) - height / 2,
+          width,
+          height,
+          Math.min(width, height) * .08,
+        )
+      })
+    }
+    const drawGuide = (
+      offsetX: number,
+      offsetY: number,
+      strokeStyle: string,
+      alpha: number,
+      lineWidth: number,
+      trace: () => void,
+    ) => {
+      ctx.save()
+      ctx.translate(offsetX * guideScale, offsetY * guideScale)
+      ctx.globalAlpha = alpha
+      ctx.strokeStyle = strokeStyle
+      ctx.lineWidth = lineWidth * guideScale
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      trace()
+      ctx.stroke()
+      ctx.restore()
+    }
+    // 中央大盘接缝保留原有层次。
+    drawGuide(0, 0, dark, opacity, .3, traceCenterSeam)
+    drawGuide(0, -.35, light, opacity * .3, .16, traceCenterSeam)
+    // 升牌槽保持细尺寸，但用独立深色提高可读性；高光仍只作克制的单侧提边。
+    drawGuide(0, 0, slotDark, slotOpacity, .25, traceLiftSlots)
+    drawGuide(0, -.12, light, slotOpacity * .22, .12, traceLiftSlots)
+  }
   const texture = own(new THREE.CanvasTexture(canvas))
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
   texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
   return texture
 }
 
@@ -193,8 +301,8 @@ function makeBackTexture() {
   surface.width = 256
   surface.height = 352
   const ctx = surface.getContext('2d')
-  const gradient = ctx.createLinearGradient(22, 8, 232, 344)
   const [c1, c2, c3] = theme.tileBackGradient ?? ['#3eb34a', '#26983a', '#176d2b']
+  const gradient = ctx.createLinearGradient(22, 8, 232, 344)
   gradient.addColorStop(0, c1)
   gradient.addColorStop(.46, c2)
   gradient.addColorStop(1, c3)
@@ -216,9 +324,10 @@ function makeBackTexture() {
 function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
-  faceGradient.addColorStop(0, '#e9e8df')
-  faceGradient.addColorStop(.58, '#dad9d0')
-  faceGradient.addColorStop(1, '#c9ccc2')
+  const [faceTop, faceMiddle, faceBottom] = theme.tileFaceGradient ?? ['#e9e8df', '#dad9d0', '#c9ccc2']
+  faceGradient.addColorStop(0, faceTop)
+  faceGradient.addColorStop(.58, faceMiddle)
+  faceGradient.addColorStop(1, faceBottom)
   ctx.fillStyle = faceGradient
   ctx.fillRect(x, y, w, h)
   if (image) {
@@ -268,7 +377,8 @@ function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi'
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
   const material = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.face,
   })))
   if (!options.isGlossy()) {
@@ -281,47 +391,60 @@ function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi'
   return material
 }
 
-// 买马未中：牌面正常渲染（能识别是哪张牌），整牌 75% 透明（半透明、区别于中马）。
-// 共享材质按 75% 透明度克隆缓存，避免影响正常牌。
-const transparentMaterialCache = new Map<THREE.Material, THREE.Material>()
-function transparentClone(material: THREE.Material) {
-  if (!transparentMaterialCache.has(material)) {
-    const clone = material.clone()
-    clone.transparent = true
-    clone.opacity = .75
-    clone.depthWrite = false
-    transparentMaterialCache.set(material, clone)
+// 买马未中：不能用透明度弱化。透明牌会与桌布混色且触发透明排序，俯视角下牌面会近乎消失。
+// 改用不透明、低饱和的哑光克隆；中马继续由正常彩色牌面与金光负责强调。
+const dimmedMaterialCache = new Map<THREE.Material, THREE.Material>()
+function configureDimmedHorseMaterial<T extends THREE.Material>(clone: T): T {
+  clone.transparent = false
+  clone.opacity = 1
+  clone.depthWrite = true
+  if (clone instanceof THREE.MeshPhysicalMaterial) {
+    clone.color.set(0xe1e2dc)
+    clone.emissive.set(0x454b47)
+    clone.emissiveIntensity = .12
+    clone.roughness = Math.max(clone.roughness, .68)
+    clone.clearcoat = 0
+    clone.envMapIntensity = .18
+    clone.aoMapIntensity *= .55
   }
-  return transparentMaterialCache.get(material)!
+  return clone
+}
+function dimmedClone(material: THREE.Material) {
+  if (!dimmedMaterialCache.has(material)) {
+    const clone = configureDimmedHorseMaterial(material.clone())
+    dimmedMaterialCache.set(material, clone)
+  }
+  return dimmedMaterialCache.get(material)!
 }
 
-function makeTransparentFaceMaterial(tile: TileType) {
+function makeDimmedFaceMaterial(tile: TileType) {
   const key = `dim:${tile}`
   if (faceMaterials.has(key)) return faceMaterials.get(key)
-  const material = makeFaceMaterial(tile).clone()
-  material.transparent = true
-  material.opacity = .75
-  material.depthWrite = false
+  const material = configureDimmedHorseMaterial(makeFaceMaterial(tile).clone())
   faceMaterials.set(key, material)
   return material
 }
 
-// 未中马牌：牌面（+y）+ 整体 75% 透明，仍能看清是哪张牌。
+// 未中马牌：不透明哑光牌体，保留完整牌面辨识度。
 function makeDimmedHorseTile(tile: TileType) {
   const tileObj = new THREE.Group()
   const base = new THREE.Mesh(scene.userData.tileBaseGeometry, [
-    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.faceSide),
-    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.backMaterial),
-    transparentClone(scene.userData.faceSide), transparentClone(scene.userData.faceSide),
+    dimmedClone(scene.userData.faceSide), dimmedClone(scene.userData.faceSide),
+    dimmedClone(scene.userData.faceSide), dimmedClone(scene.userData.backMaterial),
+    dimmedClone(scene.userData.faceSide), dimmedClone(scene.userData.faceSide),
   ])
   base.position.y = -.06
+  base.castShadow = Boolean(theme.tileGeometry)
+  base.receiveShadow = Boolean(theme.tileGeometry)
   tileObj.add(base)
   const cap = new THREE.Mesh(scene.userData.tileCapGeometry, [
-    transparentClone(scene.userData.tileSide), transparentClone(scene.userData.tileSide),
-    makeTransparentFaceMaterial(tile), transparentClone(scene.userData.tileBottom),
-    transparentClone(scene.userData.tileSide), transparentClone(scene.userData.tileSide),
+    dimmedClone(scene.userData.tileSide), dimmedClone(scene.userData.tileSide),
+    makeDimmedFaceMaterial(tile), dimmedClone(scene.userData.tileBottom),
+    dimmedClone(scene.userData.tileSide), dimmedClone(scene.userData.tileSide),
   ])
   cap.position.y = .13
+  cap.castShadow = Boolean(theme.tileGeometry)
+  cap.receiveShadow = Boolean(theme.tileGeometry)
   tileObj.add(cap)
   return tileObj
 }
@@ -450,7 +573,8 @@ function getAtlasMaterial() {
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
   const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.face,
   })))
   // 每实例 UV 偏移：aUvOffset 由 InstancedMesh 逐实例提供，把顶面 UV 折进对应图集格。
@@ -491,7 +615,8 @@ function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
   const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: texture,
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.face,
   })))
   if (!options.isGlossy()) {
@@ -604,7 +729,7 @@ function addStaticMesh(geometry, material, x, y, z) {
   own(geometry)
   const item = new THREE.Mesh(geometry, material)
   item.position.set(x, y, z)
-  item.castShadow = true
+  item.castShadow = theme.staticTableCastShadow !== false
   item.receiveShadow = true
   scene.add(item)
   return item
@@ -624,27 +749,38 @@ function addTable() {
   const goldHighlight = own(new THREE.MeshPhysicalMaterial({ ...theme.table.goldHighlight }))
   const machine = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machine }))
   scene.userData.tileSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.side,
   })))
   scene.userData.faceSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.faceSide,
   })))
   scene.userData.tileBottom = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.bottom,
   })))
   scene.userData.backMaterial = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
     map: makeBackTexture(),
-    envMap: scene.userData.tileEnvironment,
+    ...tileEnvironmentParams,
+    ...tileAoParams,
     ...theme.tile.back,
   })))
   scene.userData.highlightMaterial = own(new THREE.MeshStandardMaterial({ ...theme.highlight }))
   // 牌体几何由整桌共享，避免每次手牌、牌河更新时重复构建和销毁圆角网格。
   // 绿色牌背层略微内收，白色正面层形成完整外轮廓。
-  scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .22, .94, 6, .07))
-  scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .34, .95, 6, .072))
+  const tileGeometry = theme.tileGeometry ?? { segments: 6, baseRadius: .07, capRadius: .072 }
+  scene.userData.tileBaseGeometry = own(new RoundedBoxGeometry(.68, .22, .94, tileGeometry.segments, tileGeometry.baseRadius))
+  scene.userData.tileCapGeometry = own(new RoundedBoxGeometry(.69, .34, .95, tileGeometry.segments, tileGeometry.capRadius))
+  if (theme.tileAoIntensity) {
+    ;[scene.userData.tileBaseGeometry, scene.userData.tileCapGeometry].forEach((geometry: THREE.BufferGeometry) => {
+      const uv = geometry.getAttribute('uv')
+      if (uv) geometry.setAttribute('uv1', uv.clone())
+    })
+  }
 
   // 墨玉台芯、鎏金托边与双层金线保持原有牌桌尺寸，不影响牌河和副露坐标。
   // 几何正方形：宽 = 深 = 21.8，桌身中心保持在 z=-1.65。
@@ -749,11 +885,17 @@ function addTable() {
     trimShape.holes.push(trimHole)
     const trimMaterial = own(new THREE.MeshPhysicalMaterial({ ...theme.edgeTrim }))
     const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .17, bevelEnabled: false }))
-    const trim = addStaticMesh(trimGeometry, trimMaterial, -outerHalf, .05, -1.65 + outerHalf)
+    const trim = addStaticMesh(
+      trimGeometry,
+      theme.edgeTrimTopMatchesSurface ? [trimMaterial, jade, trimMaterial] : trimMaterial,
+      -outerHalf,
+      .05,
+      -1.65 + outerHalf,
+    )
     trim.rotation.x = -Math.PI / 2
 
     if (theme.edgeAccent) {
-      const accentMaterial = own(new THREE.MeshPhysicalMaterial({
+      const accentMaterial = own(new THREE.MeshPhysicalMaterial(theme.edgeAccentMaterial ?? {
         ...theme.table.goldHighlight,
         color: 0xe2c15f,
         emissive: 0x4b350a,
@@ -785,11 +927,13 @@ function addTable() {
     ...theme.table.machineTop,
   }))
   const machineBottom = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machineBottom }))
-  addStaticMesh(new RoundedBoxGeometry(3.85, .2, 3.85, 3, .22), gold, 0, .14, PLAY_AREA_OFFSET_Z)
-  addStaticMesh(new RoundedBoxGeometry(3.58, .16, 3.58, 3, .18), darkJade, 0, .25, PLAY_AREA_OFFSET_Z)
-  const machineGeometry = own(new RoundedBoxGeometry(3.35, .28, 3.35, 3, .16))
+  const machineScale = theme.machineScale ?? 1
+  const machineRelief = theme.machineRelief ?? 1
+  addStaticMesh(new RoundedBoxGeometry(3.85 * machineScale, .2 * machineRelief, 3.85 * machineScale, 3, .22), gold, 0, .14, PLAY_AREA_OFFSET_Z)
+  addStaticMesh(new RoundedBoxGeometry(3.58 * machineScale, .16 * machineRelief, 3.58 * machineScale, 3, .18), darkJade, 0, .25, PLAY_AREA_OFFSET_Z)
+  const machineGeometry = own(new RoundedBoxGeometry(3.35 * machineScale, .28 * machineRelief, 3.35 * machineScale, 3, .16))
   const machineMesh = new THREE.Mesh(machineGeometry, [machine, machine, machineTop, machineBottom, machine, machine])
-  machineMesh.position.set(0, .21, PLAY_AREA_OFFSET_Z)
+  machineMesh.position.set(0, .21 + (machineRelief - 1) * .1, PLAY_AREA_OFFSET_Z)
   machineMesh.castShadow = true
   machineMesh.receiveShadow = true
   scene.add(machineMesh)

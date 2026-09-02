@@ -1,6 +1,6 @@
 # 独立大模型二次元主题实施计划
 
-> 2026-08-30 美术方向修订：`llmAnime` 不再使用蓝紫粉霓虹作为“二次元”主表达。对局基底改为低饱和灰绿绒面、深胡桃木、象牙白麻将与纯色朱砂牌背；香槟金和角色色只作小面积强调。二次元感主要由角色头像、漫画气泡、座位附近的鸣牌切入和专属结算演出承担。现有 `llm` 深蓝星轨主题保持不变。
+> 2026-08-31 3D 方向修订：`llmAnime` 保留鼠尾草桌面、墨色结构、奶油白麻将与珊瑚牌背配色，牌桌质感改为对标《雀魂》的低写实 3D：圆角牌体、树脂清漆材质、环境高光、VSM 软阴影、34° 偏长焦机位与 ACES 色彩管理。Q 版角色牌、漫画气泡、座位附近的鸣牌切入和分镜式结算继续承担二次元身份表达。现有 `llm` 深蓝星轨主题保持不变。
 
 > 状态：实施中，基于 2026-08-30 的前端、后端与素材审计。
 
@@ -12,7 +12,7 @@
 - 已撤销第三方字体方案，首版使用系统字体栈加 CSS/SVG 字效。
 - 平时座位、选角、气泡与结算改为复用现有 Q 版头像；完整比例立绘不再作为主题运行时主资源。
 - LLM 座位继续显示其激进/稳健/话痨/高冷策略头像；只有真人和普通 bot 使用基础稳健头像。
-- 已生成并接入 DeepSeek 的通用鸣牌卡与通用胡牌卡两张；其余 22 张动作卡待逐批生成与审核。
+- 已生成并接入全部 12 角色共 24 张动作卡（每角色通用鸣牌卡 `call` + 通用胡牌卡 `win` 各一张，单张 228~343 KiB，成品审核通过）；动作卡资产缺口已关闭。
 - 已把六类动作和五类赛后固定文案接入现有 TTS 缓存：主音色失败尝试替代音色，开始播放前动作最多等待 4.5s、赛后单句最多等待 2s；一旦开始播放不再截断。自定义聚合中转按完整模型 ID 识别角色（如 OrcaRouter 的 Claude）。
 - 已落实 `llmAnime` 声音矩阵：真人只保留落牌声、普通 bot 继续报牌、LLM 保留普通出牌吐槽，动作和赛后不再使用模型自由文案。
 - 已落地单机与 WebSocket 的四家赛后队列；赢家先说、其余顺时针，流局按座位顺序，队列结束后才开放结算窗口，取消/失败会立即放行。
@@ -62,7 +62,7 @@
 | `claude` | 克劳德书姬 |
 | `deepseek` | 大肥鱼 |
 | `doubao` | 豆包学妹 |
-| `gemini` | 双子星姬 |
+| `gemini` | 美国豆包 |
 | `glm` | 智谱狐姬 |
 | `gpt` | GPT龙姬 |
 | `grok` | Grok小恶魔 |
@@ -144,7 +144,7 @@
 - 现有牌面只有 `public/tiles/` 的 34 张 75×100 RGBA PNG，总计约 0.43 MiB。
 - 现有桌布 `public/img/llm-table.webp` 为 1024×1024 VP8L lossless，约 1.05 MiB。
 - 代码目前只一等识别 DeepSeek、Kimi、Qwen、Doubao、MiniMax、GPT、GLM、Claude 八家；Gemini、Grok、Muse 只能手填 `avatarFolder`，Mistral 没有线上头像、provider 或 TTS 映射，`custom` 目录也不存在。
-- 当前已存在 44 张基础 Q 版头像和 DeepSeek 两张动作卡；主题牌面、图片牌背及其余 22 张动作卡尚未完成。
+- 当前已存在 44 张基础 Q 版头像和 24 张动作卡（12 角色 × `call`/`win`），主题牌面与图片牌背亦已完成（`public/themes/llm-anime/v1/`）；本行原“DeepSeek 两张、其余 22 张动作卡未完成”的审计结论已于 2026-09-02 修正。
 - 已有通用吃、碰、杠、胡、自摸语音，但它们不是 12 角色固定语音；没有独立抢杠胡语音。
 
 `tmp/` 被忽略，不能成为可重复构建的唯一真源。Wave 0 必须把批准使用的原图和可用 DeepSeek cutout 移到受版本管理的 `assets-src/llm-anime/`；若版权或仓库体积不允许提交原图，则必须使用外部只读归档并在源 manifest 中记录 URL、SHA256、字节数和恢复步骤。`cutout-v2` 写入拒绝清单，不能被流水线误选。
@@ -153,48 +153,22 @@
 
 ```text
 assets-src/llm-anime/
-  manifest.json
-  SOURCES.json
-  characters/<id>/source.jpg
-  characters/<id>/portrait-master.png
-  rejected/deepseek-cutout-v2.png
+  README.md
+  characters/<id>/                 （源文件归档；目前仅 deepseek 有 source.jpg、portrait-master.png）
 
-public/themes/llm-anime/<assetVersion>/
-  characters/
-    deepseek/
-      avatar.webp
-      thumb.webp
-      actions/
-        call.jpg
-        win.jpg
-    ...
-  actions/
-    chi.svg
-    peng.svg
-    gang.svg
-    hu.svg
-    zimo.svg
-    qiangganghu.svg
-  tiles/
-    faces/
-      1m.webp ... 9m.webp
-      1p.webp ... 9p.webp
-      1s.webp ... 9s.webp
-      1z.webp ... 7z.webp
-    back.webp
-  table/
-    surface.webp
-  ui/
-    broadcast-frame.svg
-    bubble-frame.svg
-    bubble-tail.svg
-    settlement-bg.webp
-    settlement-frame.svg
+public/themes/llm-anime/v1/
+  characters/<id>/actions/
+    call.jpg                       （12 角色 × 通用鸣牌卡）
+    win.jpg                        （12 角色 × 通用胡牌卡）
+  tiles/faces/1m.png ... 7z.png    （34 张主题牌面 PNG）
+  tile-back.png                    （图片牌背）
 ```
 
-图片保留在 `public`，所有 URL 通过生成的 TypeScript manifest 使用 `import.meta.env.BASE_URL` 解析。首版不包含字体资产；动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
+> 2026-09-02 修正（实际布局）：本节蓝图中的 `manifest.json`、`SOURCES.json`、`ui/` 与 `actions/` SVG 资产并未落地。座位/选角/结算头像复用 `public/img/llm/<id>/`（经 `animeCharacterAvatarUrl` 解析，缺目录角色回退 deepseek——当前 mistral 即如此）；广播框、气泡、动作字、结算框均为 CSS + 系统字体实现，无 SVG 资产；所有 URL 由 `llmAnimeAssets.ts` / `tileAssets.ts` 硬编码 `v1` 版本路径 + `import.meta.env.BASE_URL` 解析。首版不包含字体资产；动作/赛后音频由 TTS 服务生成后进入现有磁盘缓存，不作为 public 构建资产。
 
 ### 4.3 主题 manifest
+
+> 2026-09-02 同步修正：本节描述的 manifest 生成器蓝图未落地。实际实现为 `src/game/core/presentation/llmAnimeAssets.ts`（`LLM_ANIME_ASSET_VERSION='v1'` + `SHIPPED_ANIME_ACTION_CARD_CHARACTERS = ANIME_CHARACTER_IDS` 硬编码 URL 构建，见 `animeActionArtUrl`），角色/alias/voice/固定文案分散在 `animeCharacters.ts`、`animeCharacterPreference.ts` 与 TTS 文案模块中；仓库不存在 `manifest.json`、`SOURCES.json` 与 `llmAnimeThemeManifest.generated.ts`。若未来引入多版本/内容哈希长缓存，再按本节蓝图回补生成器。
 
 `assets-src/llm-anime/manifest.json` 是可编辑的唯一真源；构建脚本生成 `src/game/core/presentation/llmAnimeThemeManifest.generated.ts`，业务代码不得手写第二份路径表。
 
@@ -702,3 +676,262 @@ git switch master
 Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 `characterId -> voiceKey/speaker` 映射、11 条固定文案、替代音色及 TTS 音色使用/缓存授权记录；中文展示名已完成，不再作为待定项。
 
 在该合同完成前可以搭建 schema、校验器和占位资源，但不得把 132 个“角色 × 语音槽位”投入正式 TTS 缓存预热。
+
+## 15. PC / 移动端响应式重构里程碑（2026-08-31 新增）
+
+> 状态：Phase R1～R6 及响应式补丁 R6.1～R6.11 实施与浏览器验收完成（R6.11 已于 2026-09-01 收尾复测通过）；未提交、未同步 `vibehub`，仓库流程关闭项待后续执行。
+>
+> 本节是后续响应式改造的唯一实施与验收入口。正式实施时必须持续更新 §15.6 的记录表，并为每个批次保存“修改前 / 修改后”截图与测试结果；只修改代码但不补记录和验收证据，不视为完成。
+
+### 15.1 实施边界与冻结原则
+
+1. **共享骨架先行**：先修复所有主题共用的视口、容器、HUD 锚点、触控区和安全区，再处理 `llmAnime` 角色立绘等主题特例。禁止为六个主题分别复制响应式定位规则。
+2. **不移动 Three.js 玩法坐标**：现有牌山、牌河、中控台、手牌、副露和麻将尺寸继续使用当前世界坐标；响应式阶段只调整容器、相机宽高比、DOM HUD 与表现层时序。
+3. **牌桌不拉伸**：取消外层强制 16:9 后，Three.js 相机按实际 Canvas 宽高比更新；宽屏显示更多横向桌面，窄屏收紧安全区域，不允许非等比拉伸麻将与中控台。
+4. **布局与主题解耦**：共享 CSS 负责尺寸、位置、断点、安全区和交互热区；主题 CSS 只负责颜色、材质、边框、阴影、字体风格和主题变量。
+5. **桌面立绘保持 200%**：`llmAnime` 桌面端动作立绘继续遵守已确认的 `width: 200%; height: 200%`。移动端必须使用独立尺寸变量和最大可用区域约束，不继承桌面 200%。
+6. **胡牌演出改为串行**：胡牌立绘和 Three.js 胡牌光效不得同时占用中央区域。冻结方向为“立绘引导 450–600ms → 立绘淡出/收回赢家座位 → 启动 Three.js 光束与粒子”；最终时长以录屏验收为准。
+7. **触控热区不等于视觉尺寸**：移动端麻将可以保持当前视觉密度，但手牌外层、顶栏按钮、结算按钮等主要交互热区必须达到至少 44×44 CSS px。
+8. **安全区为硬要求**：顶栏、左右头像、本家手牌、本家头像、操作区、弹出菜单和结算按钮必须使用 `env(safe-area-inset-*)`；移动端高度使用 `dvh/svh` 回退链，不只依赖 `vh`。
+9. **不以“一屏塞完”为唯一目标**：结算页和复杂菜单优先保证字号与触控尺寸；内容超出时允许内容区滚动，核心操作按钮固定在安全区域内。
+
+### 15.2 响应式审计基线
+
+2026-08-31 已在 `llmAnime` 上完成 1440×720、844×390、667×375 实际渲染审计，并结合共享 CSS 判断影响范围。开发用 `winEffectLab` 面板不计入正式 UI 问题。
+
+| ID | 严重度 | 问题 | 影响范围 | 基线证据 | 状态 |
+|---|---|---|---|---|---|
+| RWD-01 | P0 | DOM 动作 cue 位于 Canvas 上方；胡牌时角色立绘与 Three.js 胡牌光效同时启动，立绘遮挡光束与爆发中心 | 所有主题有层级风险，`llmAnime` 最严重 | Canvas `z-index: 1`，动作 cue `z-index: 45`；实际复拍确认遮挡 | 已验收（R3/R6） |
+| RWD-02 | P0 | `llmAnime` 移动端只缩小 cue 容器，专用立绘仍为 200%；胡牌变体的高优先级尺寸还会压过移动端通用规则 | `llmAnime` | 844×390 自摸立绘约 240×184；667×375 普通动作立绘约 184×136 | 已验收（R3/R6） |
+| RWD-03 | P1 | `.game-app` 强制 16:9，超宽 PC 与 19.5:9/20:9 手机横屏产生左右黑边并缩小牌桌 | 所有主题 | 1440×720 游戏区 1280×720；844×390 游戏区约 693×390 | 已验收（R1/R6） |
+| RWD-04 | P1 | Three.js 按游戏容器缩放，DOM HUD 大量使用全视口 `vw/vh`，出现两套缩放基准 | 所有主题 | 有黑边时 DOM 相对牌桌变大，移动端立绘/头像/按钮更易侵入桌面 | 已验收（R1/R4/R6） |
+| RWD-05 | P1 | 移动横屏对家头像进入顶栏；翻精面板与对家头像直接相交 | 所有主题的 3D 牌桌/莲花麻将 | 667×375：顶栏 y=0–34、对家卡 y=19–98；翻精面板 x=550–655、对家卡 x=520–588 | 已验收（R2/R6） |
+| RWD-06 | P1 | 移动端关键触控目标过小 | 所有主题 | 667×375：顶栏按钮 28×28、手牌约 32×43、结算按钮高约 31px | 已验收（R2/R5/R6） |
+| RWD-07 | P1 | 缺少刘海屏/手势区安全边距，且牌桌高度只依赖 `vh` | 所有主题 | 全局无 `safe-area-inset-*`；主体无 `100dvh/100svh` | 已验收（R1/R6） |
+| RWD-08 | P1 | 操作按钮区与手牌缺少稳定安全间距；按钮满载、计时器和吃/杠选择器可能进入手牌区 | 所有主题 | 667×375 基线中操作区底部与手牌顶部仅约 3px | 已验收（R2/R6） |
+| RWD-09 | P2 | LLM 气泡只按头像绝对定位，没有避让牌墙、中控台、翻精面板和动作 cue | 所有主题的 LLM 座位 | PC 参考图右家气泡已覆盖右侧牌墙；移动端最大宽度仍可达 160–180px | 已验收（R2/R4/R6） |
+| RWD-10 | P2 | 移动端结算页靠过度压缩换取不溢出，可读性和可操作性不足 | 所有主题 | 667×375：排名约 11–12px、马牌约 29px、按钮高约 31px | 已验收（R5/R6） |
+| RWD-11 | P2 | 断点只按宽/高判断，PC 矮窗口误入移动压缩；后置主题规则又会覆盖前面的移动端规则 | 所有主题，`llmAnime` 有额外覆盖 | `max-height: 620px` 不区分指针；`llmAnime` 高优先级位置/尺寸规则位于媒体查询之后 | 已验收（R4/R6） |
+| RWD-12 | P2 | 缺少响应式视觉回归，现有构建/单测不能发现遮挡、黑边和触控尺寸退化 | 所有主题 | 无视口矩阵、重叠断言和动作立绘/胡牌光效组合截图 | 已验收（R6） |
+
+### 15.3 分阶段实施计划
+
+#### Phase R1：共享视口与缩放基座
+
+- 将 `.game-app` 改为占满可用视口，不再强制 16:9 外框。
+- 使用 `100dvh`，并提供 `100svh/100vh` 兼容回退。
+- Four-side safe area 写入统一变量，例如 `--safe-top/right/bottom/left`。
+- Canvas 填满容器；Three.js 继续通过 `ResizeObserver` 更新 renderer 与 camera aspect。
+- 建立基于游戏容器的缩放变量或 container query，替换会与 16:9 游戏区脱节的关键 `vw/vh`。
+- 验收 RWD-03、RWD-04、RWD-07。
+
+#### Phase R2：共享 HUD 锚点与触控区
+
+- 建立顶栏区、对家信息区、左右玩家区、中央牌桌区、底部手牌区和操作区六个安全锚点。
+- 对家头像离开顶栏；翻精面板拥有独立锚点，展开/折叠均不得覆盖头像和顶栏按钮。
+- 手牌视觉尺寸与点击热区拆分；顶栏按钮、主要操作按钮、结算按钮热区至少 44×44。
+- 操作区与手牌设置稳定间距，并覆盖按钮满载、计时器、听牌、吃/杠选择器同时出现的情况。
+- LLM 气泡增加边界钳制和核心牌桌避让。
+- 验收 RWD-05、RWD-06、RWD-08、RWD-09。
+
+#### Phase R3：动作立绘与胡牌光效编排
+
+- 非胡牌动作继续即时显示，按行动者座位锚定，不侵入顶栏、手牌与主要牌河。
+- 胡牌动作拆成明确阶段：立绘引导、立绘退出、Three.js 光效、亮牌/结算。
+- 桌面端专用动作立绘保持 200%；移动端通过 `--action-art-scale`、最大宽高和座位安全矩形单独控制。
+- `prefers-reduced-motion` 下取消位移动画，但仍保证立绘与光效不重叠。
+- 本地、WebSocket 与调试预览使用同一表现时序合同。
+- 验收 RWD-01、RWD-02。
+
+#### Phase R4：主题样式与共享布局解耦
+
+- 从 `llmAnime`、`llm` 等主题块移除直接控制布局的 `top/right/bottom/left/width/height`，必要差异改为共享变量。
+- 合并重复的 `llmAnime` 覆盖块，保证移动端规则不会被后置主题选择器意外覆盖。
+- 鼠标矮窗口与触控横屏使用不同断点，不再仅以 `max-height` 代表移动端。
+- 六个主题均通过共享布局回归，主题只保留视觉差异。
+- 验收 RWD-11。
+
+#### Phase R5：结算、菜单与极限尺寸
+
+- 移动端结算改为“可滚动内容区 + 固定操作区”，保留可读字号与 44px 按钮。
+- 主题菜单、声音菜单、规则面板和听牌面板加入边缘钳制、安全区与最大高度。
+- 覆盖 568×320 极矮横屏；无法同时保留的信息按优先级折叠，不允许无提示裁切。
+- 验收 RWD-10。
+
+#### Phase R6：视觉回归与全主题验收
+
+- 建立响应式 Playwright 截图矩阵、关键 DOM 边界测量和重叠断言。
+- 全主题执行共享布局场景；`llmAnime` 额外执行动作立绘、胡牌光效、翻精公告和固定角色表现。
+- 保存最终截图索引与测试命令输出，完成 RWD-12。
+
+#### Phase R7：动作立绘放大与一番街式大字（R6.21，2026-09-02 立项，已回退）
+
+> 立项确认（2026-09-02）：①三端一起放大（PC 立绘高约 45% 视口高、平板随容器等比、手机约 30% 视口高）；②一番街式大字倾斜特效**取代**现有右下贴边小字；③PC 贴边字先向内收约 4~6px（右/下缘各收回）。
+>
+> ⚠️ 2026-09-02 实施后用户验收**不通过**：对家位置被挪到角落、PC 字过大且遮挡立绘、座位位置整体不对。已全部回退至 R6.20（字贴边收回版）状态。重新立项时必须**先与用户确认**：①各座位立绘保持原锚点还是改位置；②动作字的字号上限与是否允许压角色；③放大比例的具体数值。未确认前不得再动代码。
+
+### 15.4 统一响应式变量建议
+
+正式实现时优先建立一组共享变量，禁止组件继续散落硬编码断点：
+
+```css
+--safe-top
+--safe-right
+--safe-bottom
+--safe-left
+--topbar-height
+--seat-card-width
+--seat-card-height
+--hand-visual-width
+--hand-hit-target
+--control-hit-target
+--action-art-scale
+--action-art-max-width
+--action-art-max-height
+--hud-gap
+```
+
+变量由共享布局模式赋值；主题最多调整视觉 token，不直接修改锚点坐标。
+
+### 15.5 视口、主题与状态验收矩阵
+
+#### 必测视口
+
+布局不再按设备分辨率写 CSS。运行时只允许以下三个 aspect 档位，加一个与几何无关的粗指针交互条件：
+
+- 偏方档 `< 1.6`：扩大相机纵向 FOV，保持 16:9 水平视野；对家使用远侧安全锚点。
+- 基准档 `1.6～2.0`：沿用 1920×1080 设计比例，尺寸通过 `cqw/cqh + clamp()` 连续变化。
+- 偏长档 `> 2.0`：对家使用右侧安全锚点，HUD 继续遵守四向 safe-area。
+- `(hover: none) and (pointer: coarse)`：只控制触控热区、移动菜单和手势表现，不决定牌桌几何。
+
+响应式 CSS 合同禁止重新引入 `@media (min/max-width)` 或 `@media (min/max-height)` 形式的设备枚举。
+
+| 类别 | CSS 逻辑视口（横屏） | 优先级 | 重点 |
+|---|---|---|---|
+| 手机 | 667×375、812×375 | P1 | 16:9/刘海屏、安全区、手牌与操作区 |
+| 手机 | 844×390、852×393 | P0 | 主流 iPhone、动作立绘、气泡、翻精 |
+| 手机 | 926×428、932×430 | P1 | Plus/Pro Max 连续缩放 |
+| 手机 | 800×360、915×412 | P0 | 安卓 20:9 与安全区 |
+| 手机 | 640×360、720×360 | P2 | 老机、16:9～18:9 最低密度 |
+| 平板 | 1024×768 | P1 | iPad mini/老 iPad，偏方 FOV |
+| 平板 | 1180×820、1194×834 | P0 | iPad Air/Pro 11，完整水平桌面 |
+| 平板 | 1366×1024 | P1 | iPad Pro 12.9 |
+| 扩展平板 | 1368×912、1280×853 | P1 | Surface/折叠屏 3:2 临界区 |
+| 桌面 | 1280×720、1366×768 | P0/P1 | 窗口化与存量笔记本 |
+| 桌面 | 1920×1080、2560×1440 | P0/P1 | FHD/2K 基准 |
+| 桌面 | 3440×1440 | P2 | 21:9 带鱼屏偏长档 |
+| 桌面 | 3840×2160 | P1 | 4K CSS 视口 |
+| 高 DPR | 1920×1080 @ DPR=2 | P1 | 3840×2160 Canvas backing store |
+| 属性测试 | 901×507、999×699、1000×626/621/503/497、1111×777、1537×641、1703×901、2049×1153、2237×997、2879×1599 | 必测 | 非标准拖拽尺寸与 1.6/2.0 两侧边界 |
+
+#### 必测主题
+
+- `jade`
+- `majsoul`
+- `happyMahjong`
+- `rosewood`
+- `llm`
+- `llmAnime`
+
+共享布局至少在六主题的“正常对局 + 结算”状态各覆盖一次；`llmAnime` 额外覆盖所有专属表现。
+
+#### 必测状态
+
+1. 开局 cue、第一次发牌和正常出牌。
+2. 13/14 张本家手牌、摸牌间隙、带副露手牌。
+3. 吃、碰、明杠、暗杠、补杠、风杠。
+4. 动作按钮满载、计时器、听牌面板、吃/杠选择器。
+5. 三家与本家 LLM 气泡，长文本和连续气泡。
+6. 莲花麻将翻精徽章收起/展开。
+7. 自摸、点炮、抢杠胡：立绘退出后胡牌光效完整可见。
+8. 买马桌面、局结算、最终结算。
+9. 主题菜单、声音菜单、规则面板。
+10. `prefers-reduced-motion`、静音和移动浏览器非全屏状态。
+
+### 15.6 实施记录（正式修改时强制更新）
+
+| 日期 | 批次 | 关联问题 | 实施内容 | 影响文件 | 修改前证据 | 修改后证据 | 测试/命令 | 结果 | 剩余问题 |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-08-31 | 响应式基线审计 | RWD-01～RWD-12 | 完成源码审计及 1440×720、844×390、667×375 实际渲染检查；本批未修改代码 | `src/style.css`、`GameTableHud.vue`、`AnimeActionCue.vue`、`OrientationGate.vue` | 用户 PC 截图及浏览器实测 | 不适用 | 只读审计 | 完成 | 等待 Phase R1 正式实施 |
+| 2026-08-31 | Phase R1 | RWD-03、RWD-04、RWD-07 | 移除强制 16:9 外框，游戏根节点改用 `100vh`→`100svh`→`100dvh` 回退链；建立四向 safe-area、命名尺寸容器及共享响应式 token；Canvas 严格填满同一容器，现有 `ResizeObserver`/camera aspect 链路保持不变 | `src/style.css` | `test-results/responsive-r1/before/jade-1920x900-game.png`、`jade-844x390-game.png`、`jade-667x375-game.png` | `test-results/responsive-r1/after/jade-1920x900-game.png`、`jade-844x390-game.png`、`jade-667x375-game.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "starts a local match" --project=chromium`；浏览器边界测量 | 通过：1920×900 容器 1600→1920px、844×390 容器 693→844px；Canvas/容器同尺寸且三视口 overflow=0；typecheck 通过，E2E 1 passed。首次 4173 旧服务 `page.goto` 超时，改用本轮 5175 服务复测通过 | 本批仅验收 R1 范围；HUD 互斥区、44px 热区、动作演出和结算由 R2～R5 继续处理 |
+| 2026-08-31 | Phase R2 | RWD-05、RWD-06、RWD-08、RWD-09 | 建立顶栏、对家、左右座位、中央桌面、底部手牌、操作区共享锚点；移动横屏对家移到顶栏下方中央，翻精面板独立靠右；顶栏/手牌 slot/动作/结算按钮统一至少 44px；操作区由手牌区高度推导；四家气泡限制宽度并在移动端改为头像外侧安全方向 | `src/style.css`、`src/components/table/GameTableHud.vue` | `test-results/responsive-r1/before/jade-667x375-game.png` | `test-results/responsive-r2/after/jade-844x390-game.png`、`jade-667x375-game.png`、`llmAnime-667x375-game.png`、`jade-667x375-flip-collapsed.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "starts a local match" --project=chromium`；浏览器矩形重叠/热区测量 | 通过：844×390 与 667×375 顶栏 44px、实测最小主要目标 44×44；对家/顶栏、翻精/对家、翻精/顶栏重叠面积均为 0；页面 overflow=0；typecheck 通过，E2E 1 passed | 满载动作按钮将在 R6 专用场景持续回归；气泡连续队列需要调试数据入口覆盖 |
+| 2026-08-31 | Phase R3 | RWD-01、RWD-02 | 胡牌流程新增共享串行合同：DOM 立绘引导 520ms、退出 180ms 后才创建 Three.js winEffect；reduced-motion 使用 450ms 无位移前导；本地、远程、调试入口统一；winEffect 激活后 HUD 强制隐藏胡牌 cue；桌面动作卡保持 `width/height: 200%`，移动端改用 `--action-art-scale: 1.15` 与座位安全锚点 | `src/game/core/presentation/winEffect.ts`、`src/game/shared/settlement/settlementTimeline.ts`、`src/game/online/presentation/settlementTimeline.ts`、`src/components/table/GameTableHud.vue`、`src/components/table/AnimeActionCue.vue`、`src/style.css`、相关 5 个测试文件 | `test-results/responsive-r3/before/llmAnime-844x390-win-concurrent.png`、`llmAnime-1920x1080-action-peng.png`、`llmAnime-667x375-action-peng.png` | `test-results/responsive-r3/after/llmAnime-844x390-win-cue.png`、`llmAnime-844x390-win-effect.png`、`llmAnime-1920x1080-action-peng.png`、`llmAnime-667x375-action-peng.png` | `pnpm run typecheck`；`npm exec vitest -- run`（5 个受影响测试入口）；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "win presentation" --project=chromium`；浏览器按阶段采样 | 通过：修改前 cueOpacity=1 且 winEffectId>0；修改后 cue 阶段 winEffectId=-1，光效阶段 cueOpacity=0；桌面 art/cue=2.00，移动端从 2.00 降为 1.15；受影响测试 271 passed，E2E 1 passed | WebSocket 实机房间的跨客户端录像由 R6 完整矩阵继续覆盖；浏览器截图调用本身会消耗墙钟时间，精确 520/180ms 由 fake timer 单测锁定 |
+| 2026-08-31 | Phase R4 | RWD-11 | 移除 `llmAnime` 座位、头像、动作按钮等主题专属几何坐标；两个根主题 token 块合并为一处；公告/气泡/开局 cue 的必要尺寸差异改由共享变量承载；`llm` 听牌按钮不再清空 44px 热区；移动横屏断点改为窄宽、粗指针横屏或小尺寸高宽比组合，1366×500 桌面矮窗不再进入移动压缩；桌面对家锚点也强制位于顶栏下方 | `src/style.css` | `test-results/responsive-r4/before/llmAnime-844x390-game.png`、`jade-1366x500-short-desktop.png` | `test-results/responsive-r4/after/llmAnime-844x390-game.png`、`jade-844x390-game.png`、`jade-1366x500-short-desktop.png`、六主题 `*-1366x768-game.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/llm-theme.smoke.spec.ts --project=chromium`；六主题浏览器截图/边界测量 | 通过：六主题 Canvas 均 1366×768、overflow=0；844×390 jade/llmAnime 使用同一锚点；1366×500 保留桌面 112px 手牌/44px 顶栏按钮且对家 y=54.8>顶栏底部；typecheck 通过，E2E 3 passed | 主题块仍保留图标内部尺寸、装饰伪元素坐标和按压位移，这些属于视觉 token，不参与 HUD 锚点 |
+| 2026-08-31 | Phase R5 | RWD-10 | 结算与最终排名加入 sticky 安全操作 footer；极矮横屏卡片保留可读字号并启用纵向滚动；查看牌桌/继续/返回按钮保持 44px；主题/声音菜单、规则面板、听牌面板统一使用 safe-area、dvh 最大高度与 overscroll 钳制；规则面板关闭按钮扩大到 44px | `src/components/settlement/SettlementOverlay.vue`、`src/style.css` | `test-results/responsive-r5/before/jade-568x320-settlement.png`、`llmAnime-568x320-settlement.png` | `test-results/responsive-r5/after/jade-568x320-settlement.png`、`llmAnime-568x320-settlement.png`、`jade-568x320-rules.png` | `pnpm run typecheck`；`$env:E2E_PORT='5175'; npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts --grep "win presentation" --project=chromium`；568×320 浏览器滚动/边界测量 | 通过：结算卡 312px 可视高、scrollHeight 368、`overflow-y:auto`；footer 为 sticky 且 y=225～315、按钮高 44px；规则面板 390×320 完全位于视口并可滚动至 1643px；typecheck 通过，E2E 1 passed | 主题菜单在本轮 in-app 浏览器的极矮大厅点击未展开（同一按钮在既有 E2E 正常）；R6 新增 Playwright 断言直接覆盖菜单边界，若失败则继续修复 |
+| 2026-08-31 | Phase R6 | RWD-12 | 新增响应式 Playwright 视觉矩阵：`jade`/`llmAnime` × 7 视口正常牌桌与结算；六主题 1366×768 正常/结算；极矮主题菜单、规则面板、翻精；reduced-motion 胡牌串行；断言容器/Canvas、滚动溢出、矩形重叠、44px 热区、立绘 2.00/1.15 比例和 sticky footer。测试发现并修复大厅遮挡顶栏、菜单底部越界 1px；Playwright 输出目录改为子目录，避免清除阶段证据 | `tests/e2e/responsive-layout.visual.spec.ts`、`playwright.config.ts`、`src/App.vue`、`src/style.css`、`test-results/responsive-r6/README.md` | 前五阶段 `test-results/responsive-r*/before/` | `test-results/responsive-r6/viewport-table/`、`viewport-settlement/`、`themes/`、`extreme/`、`reduced-motion/`（45 张，索引见 `README.md`） | 响应式 E2E：5 passed（6.5m）；`pnpm run typecheck`；`pnpm test`；smoke E2E；`pnpm run build`；`git diff --check` | 通过：typecheck；275 files/2283 tests passed（另 1 file/2 tests skipped）；smoke E2E 5 passed；响应式 E2E 5 passed；生产构建通过；diff check=0 | 按用户要求未 commit、未运行 `pnpm sync:vibehub`；WebSocket/P2P 真机多人联调与分支同步在提交后按仓库流程执行 |
+| 2026-08-31 | Phase R6.1 小横屏补丁 | RWD-05、RWD-06 | 修复 896×414/iPhone XR 横屏：对家卡不再居中压住 Three.js 牌河，761～1000px 粗指针/超宽矮屏改锚到 84% 右侧牌墙外，≤760px 保持 72% 并继续避让翻精；本家手牌把 44px 触控 slot 与视觉牌分离，视觉牌按容器高度缩放为 36～40px 宽、固定 4:5，避免细长“扑克牌”观感 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户截图；`test-results/responsive-hotfix-20260831/before/llm-896x414-game.png` | `test-results/responsive-hotfix-20260831/after/llm-896x414-game.png`、`test-results/responsive-r6/extreme/llm-896x414-game.png` | 响应式定向 E2E（896×414 + 568/667 极限场景）；`pnpm run build`；`git diff --check` | 通过：2 passed；对家卡 left=714.6、右家卡 left=812.8、重叠 0；牌面 38.08×47.60、比例 0.80；slot ≥44px；构建与 diff check 通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.2 气泡方向补丁 | RWD-09 | 修复左右家气泡移动到头像下方后仍沿用侧向尾巴的问题：小横屏左/右气泡尾巴分别旋转 +90°/-90°，统一朝上并以 38px 偏移对准头像中心；增加 `bubbleLab=1` 开发场景，直接使用真实 `PlayerSeat` 气泡节点验证左右边界、头像间距和伪元素方向 | `src/components/table/GameTableHud.vue`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户左右家气泡截图 | `test-results/responsive-hotfix-20260831/after/llm-896x414-bubbles.png`、`test-results/responsive-r6/extreme/llm-896x414-bubbles.png` | `pnpm run typecheck`；定向响应式 E2E；`pnpm run build` | 通过：气泡 E2E 1 passed；左右气泡完全位于 896×414 视口内，距头像底部 ≥4px，尾巴 top=-12px 且方向矩阵分别为 +90°/-90°；构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.3 手牌间距补丁 | RWD-06、RWD-08 | 修复移动端本家手牌视觉交叠：44px 触控 slot 的水平负边距由 -5px 收敛到 -2px，使布局推进距离约 40px，始终不小于 36～40px 视觉牌宽；回归测试读取全部手牌矩形并断言任意相邻牌间距不小于 0 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户 896×414/iPhone XR 手牌交叠截图 | `test-results/responsive-r6/extreme/llm-896x414-game.png` | 896×414 定向响应式 E2E；`pnpm run build`；`git diff --check` | 通过：E2E 1 passed；896×414 牌宽约 38.08px、推进约 40px、可见间距约 1.92px，slot 仍为 44px；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-08-31 | Phase R6.4 二次元菜单/顶栏补丁 | RWD-06、RWD-11 | 修复 `llmAnime` 的 `.top-bar button` 误伤菜单内部按钮：为四类顶栏触发器增加 `topbar-control`，硬件视觉仅作用于主题/声音/规则/退出触发器，主题菜单与声音菜单恢复共享行式版式；移动端触发器保留 44×44 热区，使用 `::before` 内缩 4px 绘制 36×36 可见外框，并把硬件图标收敛至 18px | `src/components/shell/GameShellHeader.vue`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户二次元声音菜单、主题菜单和顶栏按钮截图 | `test-results/responsive-r6/extreme/llmAnime-896x414-theme-menu.png`、`llmAnime-896x414-audio-menu.png` | `pnpm run typecheck`；896×414 菜单/按钮定向 E2E；`pnpm run build`；`git diff --check` | 通过：E2E 1 passed；触发器热区 44×44、可见面 36×36；菜单项不再带硬件渐变/背景，主题行高 ≤50px、声音行高 ≤56px，两个菜单均位于视口内；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.5 长名字/相机稳定补丁 | RWD-01、RWD-05、RWD-11 | 所有主题共用玩家名完整换行规则，删除 `:not([data-table-theme="llmAnime"])` 分支；移除所有主题相机的常驻正弦漂移，新增 `tableCameraPosition` 每帧从主题基准机位计算完整 XYZ，普通摸打固定零偏移，胡牌 shake 只在效果帧叠加，下一帧无条件复原；增加 `cameraLab` 坐标采样 | `src/style.css`、`src/components/MahjongTable3D.vue`、`src/components/table/three/sceneRenderProfile.ts`、`sceneRenderProfile.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户玩家名省略截图；摸打阶段牌桌晃动复现 | `test-results/responsive-r6/extreme/rosewood-896x414-long-player-names.png`、`llmAnime-896x414-long-player-names.png`、`test-results/responsive-r6/camera/jade-1366x768-restored.png` | `pnpm run typecheck`；`sceneRenderProfile.test.ts`；全主题长名字/相机定向 E2E；`pnpm run build`；`git diff --check` | 通过：共享单测覆盖默认与二次元两套相机 profile；浏览器验证 rosewood/llmAnime 名字均完整显示且无 scroll 裁切；摸打连续 6 次坐标均为 `0,17.2,11.8`，胡牌 winEffect 结束后连续 5 次精确恢复同一基准；生产构建通过 | 无；继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.6 平板兼容补丁 | RWD-03、RWD-04、RWD-05、RWD-11 | 对实际 Canvas aspect 小于 16:9 的平板动态扩大纵向 FOV，以保持原 16:9 水平视野；只更新投影矩阵，不移动任何玩法世界坐标；新增 1001～1400px、4:3～8:5 平板锚点，把对家移到 86% 远侧牌墙外；使用粗指针移动上下文覆盖五类平板 | `src/components/MahjongTable3D.vue`、`src/components/table/three/sceneRenderProfile.ts`、`sceneRenderProfile.test.ts`、`src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户 iPad Mini/Air/Pro、Surface Pro 7、Zenbook Fold 六张截图 | `test-results/responsive-r6/tablet/rosewood-ipad-mini-1024x768.png`、`rosewood-ipad-air-1180x820.png`、`rosewood-ipad-pro-1366x1024.png`、`rosewood-surface-pro-7-1368x912.png`、`rosewood-zenbook-fold-1280x853.png` | `pnpm run typecheck`；`sceneRenderProfile.test.ts`；平板矩阵 E2E；`pnpm run build`；`git diff --check` | 通过：单测 7 passed；平板 E2E 1 passed；五个视口 Canvas/容器同尺寸、FOV 39°→约 44～51°、对家/右家重叠 0、所有长名字完整显示、截图保留完整桌面水平视野 | 无；继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.7 三档连续响应式重构 | RWD-03～RWD-12 | 删除游戏布局及相关组件全部 `min/max-width`、`min/max-height` 设备枚举；共享布局冻结为偏方 `<1.6`、基准 `1.6～2.0`、偏长 `>2.0` 三档，粗指针条件只负责触控表现；尺寸统一使用 `cqw/cqh + clamp()`；对家锚点上限由视口剩余空间、右家卡宽和固定安全间距连续计算；结算 sticky footer 提升为无条件基础结构；增加 CSS 静态合同，禁止未来重新引入分辨率媒体查询 | `src/style.css`、`AnimeCharacterPicker.vue`、`AnimeActionCue.vue`、`GameTableHud.vue`、`sceneRenderProfile.test.ts`、`src/responsiveCssContract.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 §15.5 | 用户完整手机/平板/桌面分辨率清单及随机尺寸错乱反馈 | `test-results/responsive-r6/phone-matrix/`、`tablet/`、`desktop-matrix/`、`viewport-table/`、`viewport-settlement/`、`themes/`、`extreme/`、`camera/`、`reduced-motion/` | `pnpm run typecheck`；CSS/FOV 合同单测；完整 `pnpm test`；响应式 Playwright 全套；smoke E2E；`pnpm run build`；`git diff --check` | 通过：响应式 E2E 14 passed（10.4m）；10 手机、6 平板、6 桌面、12 非标准/临界拖拽尺寸、DPR=2、六主题及全部专属状态通过；完整 src 为 276 files/2291 tests passed（另 1 file/2 tests skipped）；smoke E2E 5 passed | 无；按用户要求继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.8 华为全屏/统一触控尺寸补丁 | RWD-05、RWD-06、RWD-07、RWD-08、RWD-11 | 粗指针横屏强制 `--safe-top: 0px`，规避华为浏览器全屏后残留 portrait 顶部 inset；大厅顶栏移除品牌/局文字并让导航始终靠右；所有主题顶栏按钮保留 44px 命中区，可见主题面 32px、普通图标 ≤28px、二次元硬件图标 16px；本家手牌 slot 与牌面统一 40px、CSS gap 0，新增绝对定位 44px `hand-hit-area`，取消摸牌额外间隔；删除本家 `scale(.76)`，四家信息卡统一同一宽度变量、88px 高、40px 头像和共享字号 | `src/style.css`、`src/components/table/GameTableHud.vue`、`src/components/shell/GameShellHeader.vue`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户华为全屏大厅/牌桌截图；旧 `llmAnime-android-mainstream-800x360.png` 三大一小截图 | `test-results/responsive-r6/phone-matrix/llmAnime-android-mainstream-800x360.png`、`test-results/responsive-r6/extreme/jade-896x414-compact-topbar-controls.png`、`llm-896x414-game.png` | CSS 合同；手机矩阵/菜单/手牌定向 E2E；完整响应式 E2E；`pnpm run typecheck`；`pnpm test`；smoke E2E；`pnpm run build`；`git diff --check` | 通过：最终响应式 E2E 14 passed（10.2m）；10 个手机尺寸均验证 safe-top=0、四家卡 CSS 尺寸集合唯一、手牌 computed gap=0px、40px 视觉牌/44px 命中层、顶栏命中区≥44px且可见图形缩小；大厅无品牌/局文字；完整 src 最终复跑 276 files/2291 tests passed（另 1 file/2 tests skipped），smoke E2E 5 passed。首次完整 src 随机整局模拟出现 1 次牌数守恒失败，定向复跑 10 passed，随后完整复跑全绿，记录为随机模拟波动 | 无；按用户要求继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.9 信息卡固定轨道补丁 | RWD-05、RWD-09、RWD-11 | 移动端四家信息卡从“固定高度 + 顶部 flex 堆叠”改为主流棋牌游戏的固定轨道：36px 头像行、26px 双行名称槽、12px 分数行，行间距 1px、卡片高 82px；庄家/回合标记继续绝对定位，不占正文；四家共用同一网格，分数贴近底边 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts` | 用户指出 `llmAnime-android-mainstream-800x360.png` 信息框底边留白 | `test-results/responsive-r6/phone-matrix/llmAnime-android-mainstream-800x360.png` | 手机完整矩阵；全主题长名字、平板矩阵、896×414 手牌定向 E2E；`pnpm run typecheck`；`pnpm run build`；`git diff --check` | 通过：10 手机尺寸中四家卡 computed CSS 尺寸集合唯一、矩形差≤1px；分数到底边 2～4px；手机矩阵 1 passed，关联回归 3 passed | 无；按用户要求继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.10 本家分数中线补丁 | RWD-05、RWD-09、RWD-11 | 修复早期 `.user-identity > div:last-child` 高优先级 flex 规则覆盖移动端共享信息网格的问题；用同一组直接子元素选择器统一四家 `player-info` 的 26px 名称轨道与 12px 分数轨道，并将姓名、分数强制铺满轨道后水平居中；浏览器回归新增四家“分数中心与卡片中心偏差≤0.5px”断言 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts`、本文、`test-results/responsive-r6/README.md` | 用户在 800×360 截图标注本家分数横向偏右 | `test-results/responsive-r6/phone-matrix/llmAnime-android-mainstream-800x360.png` | 手机完整矩阵；`pnpm run typecheck`；`pnpm run build`；`git diff --check` | 通过：10 个手机横屏尺寸 1 passed（1.7m），四家分数中心偏差均≤0.5px；800×360 截图人工复核本家头像、昵称、分数共用同一中线 | 无；按用户要求继续保留未提交/未同步状态 |
+| 2026-09-01 | Phase R6.11 指针判定/移动信息卡/摸牌间隔调整（已验收） | RWD-05、RWD-06、RWD-08、RWD-11 | 触控横屏媒体条件由主指针 `(hover: none) and (pointer: coarse)` 改为触控能力 `(any-pointer: coarse)`；移动信息卡改连续尺寸大头像/单行昵称省略/下方分数；普通手牌 gap=0、`.drawn` 摸牌位额外 `margin-left: 8px`（第 2/5/8/11/14 张）；移除移动端左右座位 `rotateY`。收尾补充：①两处长名 seed 加 `nickname: '克劳德书姬'`、玩家名测试超时 90s→180s；②信息卡宽 `clamp(88px,12.5cqw,112px)`→`clamp(88px,10cqw,96px)`（112px 在 896px 屏放不下）；③偏方档对家锚点改回固定 86%（去掉 clamp 上限）；④偏长档对家 clamp 上限 `-64px`→`-54px` | `src/style.css`、`src/components/llm/AnimeCharacterPicker.vue`、`src/components/table/AnimeActionCue.vue`、`src/components/table/GameTableHud.vue`、`src/responsiveCssContract.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 用户手机信息卡/顶栏截图（codex-clipboard-*.png）；896×414 对家压牌河复现 | `test-results/responsive-r6/`（phone-matrix、tablet、extreme、viewport-table、themes、desktop-matrix、camera、reduced-motion 全套截图） | `pnpm run typecheck`；`pnpm test`；`$env:E2E_PORT='5190'; npm run test:e2e -- tests/e2e/responsive-layout.visual.spec.ts --project=chromium`；`pnpm run build`；`git diff --check` | 通过：完整响应式 E2E 14 passed（12.0m）；typecheck 通过；`pnpm test` 276 files/2291 tests passed（另 1 file/2 tests skipped）；生产构建通过；diff check=0。平板顶家 left≥0.8、896×414 顶家 left≥0.78、四家卡矩形差≤1px | DevTools 元素选择器瞬时切换主指针由 `any-pointer` 覆盖但未单独 E2E 复现；按用户要求未提交、未同步 vibehub |
+| 2026-09-01 | Phase R6.12 PC 桌面回归修复 | RWD-03、RWD-04、RWD-05、RWD-06 | 引入牌桌盒锚点基准 `--table-box-w/--table-box-left`，左右家、本家身份、手牌改为锚到居中牌桌盒而非窗口百分比（宽窗口头像不再漂到屏幕边缘）；移动端几何媒体条件由 `any-pointer` 回退为主指针 `(hover: none) and (pointer: coarse)`（含 AnimeCharacterPicker/AnimeActionCue 组件样式）；偏方/偏长对家右移与竖屏块改为仅触控设备生效；手牌随牌桌高向缩放（7.97cqh，1080p 86px → 1209 高 96px） | `src/style.css`、`src/components/table/GameTableHud.vue`、`src/components/llm/AnimeCharacterPicker.vue`、`src/components/table/AnimeActionCue.vue`、`src/responsiveCssContract.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 用户 PC 截图（2250×1209 左右家贴屏幕边缘、手牌偏小）；`test-results/analysis-user-viewports/` 修复前测量：左家 60.8px、手牌 86px、带鱼屏对家 2889.6px | `test-results/analysis-user-viewports/` 修复后：左家 111.1px、手牌 96.3px；`test-results/responsive-r6/desktop-matrix/llmAnime-2250x1209-aligned.png`、`llmAnime-3440x1440-aligned.png` | `pnpm run typecheck`；`pnpm test`；`$env:E2E_PORT='5191'; npm run test:e2e -- tests/e2e/responsive-layout.visual.spec.ts --project=chromium`；`npm run test:e2e -- tests/e2e/local-game.smoke.spec.ts tests/e2e/llm-theme.smoke.spec.ts tests/e2e/lotus-legacy.smoke.spec.ts --project=chromium`；`pnpm run build`；`git diff --check` | 通过：响应式 E2E 15 passed（11.9m，新增宽窗口对齐断言）；smoke E2E 6 passed；typecheck 通过；`pnpm test` 276 files/2291 tests passed（另 1 file/2 tests skipped）；生产构建通过；diff check=0。2250×1209 左家 60.8→111.1px、手牌 86→96.3px；带鱼屏对家 2889.6→2085px（回到 50%+365 基准） | 平板/手机紧凑触控布局座位仍贴边属既有设计，未在本批改动；`pnpm sync:vibehub` 按用户要求暂缓 |
+| 2026-09-01 | Phase R6.13 手机信息卡回缩与平板手牌放大 | RWD-06、RWD-10 | 移动端信息卡从"大头像"回缩：`--seat-avatar-size` 58～76→36～56px、`--seat-card-height` 108～140→88～112px（手机卡高 88px、头像 36px）；手牌从写死 40px 改为随容器高缩放 `clamp(40px,8cqh,68px)`（槽位同宽），手牌区高、摸牌间距同步 `cqh` 缩放——手机仍 40px、平板自动到 61～68px 接近 PC | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 用户 F12 仿真截图：图1/2 手机头像框过大、图3/4 平板手牌过小 | `test-results/responsive-r6/phone-matrix/`、`tablet/` 更新截图 | `pnpm run typecheck`；`npx vitest run src/responsiveCssContract.test.ts`；响应式 E2E 15 passed；`pnpm run build`；`git diff --check` | 通过：手机卡高 88px/头像 36px、平板手牌 ≥55px（实测 61～68px）；响应式 E2E 15 passed（14.1m）；typecheck/合同单测通过；diff check=0 | 无 |
+| 2026-09-01 | Phase R6.14 手机对家避让与平板 PC 样式 | RWD-05、RWD-06、RWD-10 | 手机对家锚点 `--top-seat-inline-anchor` 72%→60% 远离下家；<1024×768 小平板信息卡封顶 112→100px；新增 `@container (min-width:1024px) and (min-height:768px)` 容器查询：平板（≥1024×768）切回 PC/桌面样式——卡片 76~104px/头像 52~76px、手牌 7.97cqh、桌面座位锚点（对家 50%+偏移、左右家贴牌桌盒）、顶栏 45px，大厅同样回 PC 版式（标题/按钮/间距） | `src/style.css`、`src/responsiveCssContract.test.ts`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 用户 F12 仿真截图：图1 手机对家贴近下家、图2 平板需 PC 样式 | `test-results/analysis-tablet-phone.json`、`test-results/responsive-r6/phone-matrix/`、`tablet/` 更新截图 | `pnpm run typecheck`；`npx vitest run src/responsiveCssContract.test.ts`；响应式 E2E；`pnpm run build`；`git diff --check` | 通过：手机对家 60%（离下家 127~164px）；平板 1024×768 卡片 76px/头像 52px/手牌 61px/顶栏 45px、大厅标题 61px；平板矩阵与手机矩阵 E2E passed；响应式 E2E 15 passed（含 1 次 reduced-motion 时序抖动，定向复跑通过）；typecheck/合同单测/构建/diff check 全绿 | 无 |
+| 2026-09-01 | Phase R6.15 结算页平板 PC 版式 | RWD-10 | 结算页（result-card / settlement-card / round-rankings / final-board / result-actions）在 `@container (≥1024×768)` 下回到 PC 版式：卡片 min(860px,94%)、按钮 170px、桌面网格；容器查询置于文件末尾以覆盖 R5 移动端结算块 | `src/style.css`、本文 | 用户指出结算页也需平板 PC 化 | `test-results/` 结算测量（1024×768 卡片 860px/按钮 160px vs 手机 780px/128px） | `pnpm run build`；`git diff --check` | 通过：构建通过、diff check=0 | 无 |
+| 2026-09-01 | Phase R6.16 手牌宽度上限/平板卡片字号/精牌避让/移动信息卡 | RWD-05、RWD-06、RWD-10 | ①手牌宽加宽度上限 `min(7.97cqh, 5.5cqw)`，4:3 窄窗 14 张不再横向溢出被遮（1024×768 61→56px）；②平板容器查询补齐桌面字号（名字 12px、llmAnime 10px）与内边距 6px 7px 7px；③平板翻精指示牌回桌面常显完整卡片（GameTableHud 加 `@container` 容器查询）；④手机翻精徽章移到左上并缩小，左右家头像下移 36%→40% 避免与对家/下家重叠；⑤移动端信息卡对齐图2：头像 36→44px、名字/分数 14→12/13px、信息行 18/16→16/15px | `src/style.css`、`src/components/table/GameTableHud.vue`、本文 | 用户 3 张截图：PC(1024×768) 手牌被遮、平板头像/精牌样式、移动端信息卡（图2 参考） | `test-results/` 测量（平板手牌 56.3px/名字 10px、手机精牌 0 重叠/头像 44px/名字 11px） | `pnpm run typecheck`；`npx vitest run src/responsiveCssContract.test.ts`；响应式 E2E；`pnpm run build`；`git diff --check` | 通过：平板手牌 61→56.3px、名字 10px、精牌桌面全卡片；手机精牌与对家/下家/上家重叠均为 0、头像 44px/名字 11px；响应式 E2E 15 passed（reduced-motion 时序抖动复跑通过）；typecheck/合同单测/构建/diff check 全绿 | 无 |
+| 2026-09-01 | Phase R6.17 偏长对家统一与移动卡片对齐桌面 | RWD-05、RWD-06 | ①偏长档对家锚点 84%→60%（与基准一致），812×375 下对家从 682px 移到 487px、离下家拉开 110px+，对家气泡不再遮挡下家；②移动端 avatar-wrap 结构对齐桌面（非 F12 仿真）：grid 固定轨道 → flex 纵向卡片，头像 44→52px（桌面 clamp 52~76px）、名字/分数用桌面字号（含 llmAnime 10px）、padding 6px 7px 7px、自然行高；③E2E 896×414 对家断言 0.78→0.5，发牌等待超时 30s→60s（发牌慢抖动） | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 用户 2 张截图：手机对家气泡遮挡下家、移动信息卡需对齐桌面 | `test-results/` 测量（偏长对家 60%、移动头像 52px） | `pnpm run typecheck`；`npx vitest run src/responsiveCssContract.test.ts`；响应式 E2E；`pnpm run build`；`git diff --check` | 通过：移动头像 52px/名字 10px、卡片 flex 对齐桌面；偏长对家 60% 离下家 110px+；响应式 E2E 15 passed（reduced-motion 时序抖动复跑通过）；构建/diff check 全绿 | 无 |
+| 2026-09-01 | Phase R6.18 手机对家锚点 66% | RWD-05 | 对家锚点 60%→66%（基准+偏长 2 处）：实测 60% 会把对家头像压到对家牌河（667×375 下重叠 16px），66% 落在牌河右侧、下家左侧安全区间——牌河无重叠、气泡离下家 56~105px；E2E 896×414 对家断言 0.5→0.6 | `src/style.css`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | 验证发现 60% 遮挡对家牌河（投影：牌河 x∈[-1.7,1.7]/z∈[-4.1,-6.0]） | `test-results/` 测量（66% 下 812×375 对家左缘 492px、牌河右缘 444px、gap 48px） | 响应式 E2E 平板矩阵/手机矩阵/896×414 3 passed；`pnpm run build`；`git diff --check` | 通过：66% 对家牌河无重叠、气泡离下家 56~105px；构建/diff check 全绿 | 手机下家立绘 cue 与对家头像仍有约 36px 瞬时重叠（既有行为，比原 72% 的 96px 更小，仅在动作瞬间） |
+| 2026-09-02 | Phase R6.19 动作 cue 座位锚定统一 | RWD-02、RWD-05、RWD-09、RWD-11 | 移动端动作 cue（二次元立绘 + 全主题文字“吃碰杠胡”）座位几何统一到共享层一处：新增 `--top-seat-resolved-left` 三档解析变量（座位卡与 cue 共同引用，杜绝漂移）；对家 cue 沿用桌面几何（立绘 18%/50%、文字 20%/50% 顶部居中贴上方牌墙，按用户箭头截图确认）、左右家 cue 贴卡内缘并垂直对齐卡中心（移除 max(20%) 推进牌桌）、本家保持手牌区上方；文字 cue 补齐与立绘一致的 transform 约定；`--action-art-scale: 1.15` 移入共享移动 token，立绘 200%/115% 缩放统一为基础公式；平板容器块把两种 cue 与座位一起切回桌面几何；`AnimeActionCue.vue` 删除全部 scoped 几何仅保留视觉。附带修复 348dde3 两处回归：①注释掉 `width: var(--seat-card-width)` 导致本家卡回落遗留 72px（四家不一致）→ 移除 72px 遗留规则、四家统一 76px；②偏长档 `translateY(-20px)` 使对家卡顶进 44px 顶栏（RWD-05）→ 收敛为 `-4px`。E2E 新增“cue 锚定行动座位”测试，卡宽断言更新为 72.5~80px | `src/style.css`、`src/components/table/AnimeActionCue.vue`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | `test-results/responsive-r6.19/before/`（llmAnime/jade × 812×375、800×360、667×375 × 四座位 24 张：对家立绘在屏幕正中 50% 列、左右家立绘被 max(20%) 推进牌桌、本家卡 72px） | `test-results/responsive-r6.19/after/` 同矩阵 24 张（最终代码重采）；像素对比热图确认改动仅发生在 cue 区域；`test-results/responsive-r6/action-cue/`、`phone-matrix/` 由完整套件重新生成 | `pnpm run typecheck`；`pnpm test`（276 files/2291 tests passed，另 1 file/2 tests skipped；首次完整跑 exit=1 无失败项、复跑 exit=0，记录为随机模拟波动）；`$env:E2E_PORT='5198'; npm run test:e2e -- tests/e2e/responsive-layout.visual.spec.ts --project=chromium`（16 passed）；对家顶部居中修正后定向复跑（5199：手机矩阵 + R6.19 测试 2 passed）与完整复跑（5200：15 passed，reduced-motion 已知时序抖动 1 次，定向复跑 passed）；`pnpm run build`；`git diff --check` | 通过：响应式 E2E 16 passed（15.2m，新增 R6.19 座位锚定测试）；812×375 对家 cue 中心 406px=50% 列、顶部 67.5px=18% 高贴上方牌墙（改前同列但 y≈152 挂在屏幕中部）、左右家 cue 距卡 10px（改前约 160px 处悬于牌桌）、jade 文字 cue 同锚点生效；三视口 cue 与手牌/顶栏重叠 0、立绘比例 1.15/2.0 保持；手机矩阵四家卡尺寸集合唯一（76px）；偏长档对家卡顶 46px 不触顶栏；typecheck/单测/构建/diff check 全绿 | 首轮按“对家卡下方”实现后经用户箭头截图复核修正为顶部居中（视觉恢复后可读图）；2026-09-02 用户移动端验收通过；`pnpm sync:vibehub` 按用户惯例暂缓 |
+| 2026-09-02 | Phase R6.20 动作字贴边小调 | RWD-02（视觉） | 桌面动作字从 cue 容器右下内缩（right 5%/bottom 10%）改为贴立绘右缘/下缘（right -58%/bottom -46%，对齐 200% 立绘边缘）；左家镜像贴左缘；移动端按 1.15 外扩比例贴边（-8%） | `src/components/table/AnimeActionCue.vue`、本文 | `test-results/responsive-r6.20/before/`（llmAnime 1920×1080、1366×768 × 四座位 8 张：碰字距立绘右缘约 55~60px、下缘约 45~50px） | `test-results/responsive-r6.20/after/` 同矩阵 8 张（碰字贴立绘右下缘）；`responsive-r6/phone-matrix/` 移动端截图同步更新 | `pnpm run typecheck`；合同单测；定向响应式 E2E（手机矩阵 + R6.19 测试 2 passed，端口 5202）；`pnpm run build`；`git diff --check` | 通过：桌面三座位字均贴立绘外侧边缘、不压角色主体、无裁切（视觉复核）；移动端同样贴边；typecheck/单测/构建/diff check 全绿 | 用户 PC 验收通过（贴边效果确认），按反馈再向内收约 4~5px（见 R6.21）；一番街式大字倾斜特效与立绘放大已转 Phase R7 立项 |
+| 2026-09-02 | Phase R6.22 座位垂直居中 + 立绘远离牌河 + 动作字×2骑角 | RWD-05、RWD-09、RWD-11 | ①（优先）全部主题 `.seat-left`/`.seat-right` 座位容器三端统一垂直居中：锚点 42%/43%/35%/40%/39% → 50%，`--side-seat-anchor: 50%`（根、偏方、偏长、平板容器块同步），实测 1920×1080 左右家卡中心 y≈536（中线 540）、完全对称；②PC/平板 llmAnime 立绘小幅远离牌河（不要求完全离开）：对家上移贴顶栏下（18% → `topbar + 4.8cqh`，与顶河重叠 102px → 4.8px）、左右家外移（28% → 26%）并上移（34% → 32.8%，与侧河重叠 10px → 间隙 2.8px）、本家上移（29% → 31%，距底河 5px → 27px），手机端不动（覆盖牌河正常）；③动作字 ×2（实测 37.3 → 74.6px），几何中心随 `--action-art-scale` 骑在立绘角点（右/本家=右下角、左家=左下角，实测中心偏差 dx=0/dy=0），描边/阴影同步翻倍 | `src/style.css`、`src/components/table/AnimeActionCue.vue`、`tests/e2e/responsive-layout.visual.spec.ts`、本文 | R6.20 修改后截图与 `test-results/responsive-r6/action-cue|phone-matrix` | `test-results/responsive-r6.22/after/`（llmAnime 1920×1080、1366×768、1180×820、812×375 × 四座位 16 张；临时证据 spec 已删） | `pnpm run typecheck`；合同单测；定向响应式 E2E（平板/手机矩阵 + R6.19 测试 3 passed，端口 5207；R6.19 对家断言更新为 `topbar+4.8cqh`）；完整响应式 E2E（端口 5208）；`pnpm run build`；`git diff --check` | 通过：完整响应式 E2E 16 passed（17.3m，startMatch 三次重试缓解 3D 加载瞬态）；定向回归 3 passed；typecheck/合同单测/构建/diff check 全绿；实测座位 cy≈536（中线 540）对称、字中心贴角 dx=0/dy=0、字 74.6px（×2） | 手机侧家气泡随座位下移至 50% 锚点，与手牌关系待用户真机视觉复核 |
+| 2026-09-02 | Phase R6.23 立绘放大+停留2秒+座位回红框位置 | RWD-02、RWD-05、RWD-09、RWD-11 | ①PC 立绘按用户红框目标放大约 15%（普通盒 `clamp(96,8.5vw,132)` → `clamp(110,9.8vw,152)`、胡牌 `clamp(120,10.6vw,166)` → `clamp(138,12.2vw,191)`，手机分档不动）；②动作 cue 停留统一 2 秒：普通动作定时 1050→2000ms（本地+联机 presenter），胡牌串行 520+180 → **1600+400ms**（winEffect 常量 + `anime-win-cue-serial` CSS 同步；REDUCED 450/0 保持不动）；③左右家座位：R6.22 的 50% 取消，按用户红框截图回到红框位置（桌面 3D 35%、2D 42/43%、移动 `--side-seat-anchor` 40%、偏方 39%、偏长 40%、平板容器 35%）；④E2E smoke 超时 30s→120s（vite 源码变更后首包重打包慢载的环境记录）；单测 8 处硬编码时长按新常量更新，winEffect 测试改 `filter + forEach` 规避 2000ms 双定时器（presenter 清除与 cue 退出）撞车 | `src/style.css`、`src/components/table/AnimeActionCue.vue`、`src/game/core/presentation/winEffect.ts`、`src/game/core/local/localTransientEventPresenter.ts`、`src/game/online/presentation/transientEventPresenter.ts`、5 个测试文件、本文 | R6.22 修改后截图 | `test-results/responsive-r6.23/after/`（llmAnime 1920×1080、1366×768、1180×820、812×375 × 四座位 16 张；临时证据 spec 已删） | `pnpm run typecheck`；`npx vitest run src`（276 files/2291 tests passed，另 1 file/2 skipped；受影响定向 279 passed）；定向响应式 E2E + smoke（5210/5213）；`pnpm run build`；`git diff --check` | 通过：定向响应式 E2E 4 passed（R6.19/手机矩阵/平板矩阵/reduced-motion）+ smoke 2 passed（预热后 16.8s/12.3s）；单测 276 files/2291 tests 全绿；构建/diff check 全绿 | 完整响应式 E2E 未重跑（本轮改动集中于 cue 时长/尺寸与座位锚点，定向已覆盖；如需可补跑）；smoke 冷服务首载卡 30s 为 vite 重打包慢载，已放宽记档；座位回 35% 后与手机气泡位置关系待真机复核 |
+
+每个正式实施批次必须执行：
+
+1. 开工前把对应阶段状态改为“实施中”，记录修改前截图路径和可复现步骤。
+2. 完成代码后记录实际修改文件，不以计划中的预计文件代替。
+3. 运行 typecheck、相关单测和响应式 E2E；失败项必须记录原因，禁止只填写“通过”。
+4. 按 §15.5 生成修改后截图；截图存放在 `test-results/` 下，并在记录表中写入路径。
+5. 对照关联 RWD 编号逐项验收；仍存在的问题写入“剩余问题”，不得把部分完成标记为通过。
+6. 前端形成完整提交后，按仓库工作流在 master 工作区干净时运行 `pnpm sync:vibehub`，并记录同步与 vibehub 验证结果。
+
+### 15.7 单批验收清单
+
+- [x] 当前批次对应的 RWD 问题已有修改前证据。
+- [x] PC、移动端没有新增裁切、黑边、遮挡或滚动条。
+- [x] Three.js 麻将、牌山、中控台和牌河没有发生非预期拉伸或坐标漂移。
+- [x] DOM HUD 与 Canvas 使用同一游戏容器基准。
+- [x] 移动端主要触控热区至少 44×44 CSS px。
+- [x] 顶栏、头像、翻精、气泡、动作区和手牌之间无矩形重叠。
+- [x] 胡牌立绘不遮挡胡牌光束、星芒、胡牌张和关键牌河。
+- [x] 刘海屏/手势区安全变量生效，浏览器栏变化不裁切底部内容。
+- [x] 六个主题的共享布局没有回归。
+- [x] `llmAnime` 桌面动作立绘仍为 200%，移动端使用独立缩放。
+- [x] reduced motion 下仍满足不遮挡要求。
+- [x] 类型检查、单测、E2E 和截图回归结果已写入 §15.6。
+
+### 15.8 响应式里程碑完成定义
+
+> 2026-08-31 验收结论：代码、浏览器矩阵与质量闸门已满足本节技术条件；本轮因用户明确要求“不自行提交或同步 vibehub”，最后一项仓库流程尚未执行，因此当前状态为“可提交/可同步”，不虚报为已完成双分支关闭。
+>
+> 2026-09-01 补充：Phase R6.11 收尾完成并复测通过（完整响应式 E2E 14 passed、typecheck/`pnpm test`/生产构建/`git diff --check` 全绿），RWD-01～RWD-12 全部有代码落地与修改后证据；仍按用户要求未提交、未同步 vibehub，里程碑状态保持“可提交/可同步”，双分支关闭待后续执行。
+>
+> 2026-09-01 补充（R6.12）：修复 PC 桌面回归——宽窗口 HUD 座位/手牌锚回居中牌桌盒、移动端几何回退主指针粗指针判定；typecheck / `pnpm test`（276 files/2291 tests）/ 响应式 E2E（15 passed）/ smoke E2E（6 passed）/ 生产构建 / `git diff --check` 全绿。已提交 master（未 push）；`pnpm sync:vibehub` 按用户要求暂缓，双分支关闭待后续执行。
+>
+> 2026-09-01 补充（R6.13～R6.18，响应式后续微调）：已完成并逐批提交 master（未 push）——①R6.13 手机信息卡回缩+平板手牌放大；②R6.14 平板（≥1024×768）PC 样式（对局页+大厅）+手机对家避让+小卡片封顶；③R6.15 结算页平板 PC 版式；④R6.16 手牌宽度上限+平板卡片字号+精牌避让+移动信息卡；⑤R6.17 偏长对家统一+移动卡片对齐桌面；⑥R6.18 手机对家锚点 66%（避开牌河）。以上每批 typecheck/合同单测/响应式 E2E/构建/diff check 全绿；`pnpm sync:vibehub` 始终按用户要求暂缓。另有用户自行提交 348dde3（.gitignore + 微调对家 user-profile）。
+>
+> 2026-09-02 补充（R6.19 动作 cue 座位锚定统一）：移动端动作 cue（二次元立绘与全主题文字“吃碰杠胡”）的座位几何统一到共享层一处——新增 `--top-seat-resolved-left` 三档解析变量与共享座位锚定块，对家立绘按用户箭头截图修正为顶部居中（18%/50%，与桌面端一致、贴上方牌墙）、左右家立绘贴卡内缘（远离牌桌）；同时消除 R6.18 遗留的“下家立绘与对家头像 36px 瞬时重叠”。附带修复 348dde3 引入的两处回归：本家卡 72px 遗留规则（四家统一 76px）与偏长档对家卡 `translateY(-20px)` 顶进顶栏（收敛为 -4px）。响应式 E2E 16 passed（15.2m，新增 R6.19 座位锚定测试）、typecheck / `pnpm test`（276 files/2291 tests）/ 生产构建 / `git diff --check` 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。
+>
+> 2026-09-02 补充（R6.20 动作字贴边小调）：桌面动作字由立绘内部右下内缩改为贴立绘右缘/下缘（左家镜像贴左缘，移动端按 1.15 外扩比例贴边），参照用户截图做视觉复核（三座位均贴外侧边缘、不压角色、无裁切）；typecheck / 合同单测 / 定向响应式 E2E / 生产构建 / `git diff --check` 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。一番街式大字倾斜特效不在本批，后续如需再立验收条目。
+>
+> 2026-09-02 补充（R6.22 座位垂直居中 + 立绘远离牌河 + 动作字×2骑角）：①全部主题左右家座位容器三端垂直居中（锚点统一 50%，实测左右对称）；②PC/平板 llmAnime 立绘向远离牌河方向小幅平移（对家上移贴顶栏、左右家外移+上移、本家上移，手机不动）；③动作字 ×2 且几何中心骑在立绘角点（实测 dx=0/dy=0）。完整响应式 E2E 16 passed（17.3m）、typecheck/单测/构建/diff check 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。注：①中的 50% 座位居中经用户红框截图确认后于 R6.23 回退至原锚点。
+>
+> 2026-09-02 补充（R6.23 立绘放大+停留2秒+座位回红框位置）：PC 立绘放大约 15% 至用户红框目标；动作 cue 停留统一 2 秒（普通 2000ms；胡牌串行 1600+400ms；reduced-motion 保持 450/0）；左右家座位按红框撤回原锚点（桌面 35% 等）。定向响应式 E2E 4 passed、smoke 2 passed、单测 276 files/2291 tests、构建与 diff check 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。
+
+只有同时满足以下条件，PC / 移动端响应式里程碑才允许标记为完成：
+
+- RWD-01～RWD-12 均有代码落地、修改后证据和明确验收结论。
+- §15.5 的全部视口至少完成 `jade` 与 `llmAnime` 全状态验证；六主题完成共享正常对局与结算回归。
+- 超宽 PC 与现代手机横屏不再因为强制 16:9 出现无用途黑边，Three.js 牌桌保持等比。
+- 对家头像、顶栏、翻精面板、气泡、动作 cue、操作区和手牌无关键遮挡。
+- 胡牌立绘与 Three.js 光效按冻结时序播放，光束和胡牌张完整可见。
+- 移动端主要交互热区达到 44×44 CSS px，并通过安全区检查。
+- 结算页在 568×320 仍可完成查看牌桌、继续/返回大厅等操作。
+- `pnpm run typecheck`、`pnpm test`、响应式 E2E 和截图回归通过；任何已知例外均有原因、影响和后续编号。
+- master 提交完成并按双分支流程同步、验证 vibehub；文档 §15.6 记录完整。

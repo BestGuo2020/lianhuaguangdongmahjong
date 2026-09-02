@@ -526,7 +526,7 @@ function addWall() {
 }
 
 // 买马：胡牌后把 8 张马牌显示到赢家牌河里（续接在赢家弃牌河之后）。
-// 中马按胡牌者相对庄家的座位判定；中马牌正常牌面 + 四周金光（金色发光边框），未中则整牌 75% 透明。
+// 中马按胡牌者相对庄家的座位判定；中马牌正常牌面 + 四周金光，未中使用清晰的低饱和哑光牌面。
 function addHorses() {
   const horses = props.horses || []
   if (!horses.length) return

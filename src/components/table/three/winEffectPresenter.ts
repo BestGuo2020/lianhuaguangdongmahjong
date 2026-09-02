@@ -135,31 +135,43 @@ function robbedKongSourceTransform(effect: WinEffect) {
 }
 
 // 胡牌特效的几何体与光晕纹理在组件生命周期内固定不变，缓存复用避免每次胡牌重新分配/上传。
-let cachedFlareTexture: THREE.CanvasTexture | null = null
+const cachedFlareTextures = new Map<'gold' | 'anime', THREE.CanvasTexture>()
 
 function getFlareTexture() {
-  if (cachedFlareTexture) return cachedFlareTexture
+  const key = props.themeName === 'llmAnime' ? 'anime' : 'gold'
+  const cached = cachedFlareTextures.get(key)
+  if (cached) return cached
   const flareCanvas = document.createElement('canvas')
   flareCanvas.width = 64
   flareCanvas.height = 64
   const flareContext = flareCanvas.getContext('2d')
   const flareGradient = flareContext.createRadialGradient(32, 32, 0, 32, 32, 31)
-  flareGradient.addColorStop(0, 'rgba(255,255,235,1)')
-  flareGradient.addColorStop(.18, 'rgba(255,224,125,.95)')
-  flareGradient.addColorStop(.52, 'rgba(255,188,55,.38)')
-  flareGradient.addColorStop(1, 'rgba(255,170,30,0)')
+  if (key === 'anime') {
+    flareGradient.addColorStop(0, 'rgba(255,255,255,1)')
+    flareGradient.addColorStop(.18, 'rgba(255,151,190,.95)')
+    flareGradient.addColorStop(.52, 'rgba(108,220,255,.42)')
+    flareGradient.addColorStop(1, 'rgba(92,190,255,0)')
+  } else {
+    flareGradient.addColorStop(0, 'rgba(255,255,235,1)')
+    flareGradient.addColorStop(.18, 'rgba(255,224,125,.95)')
+    flareGradient.addColorStop(.52, 'rgba(255,188,55,.38)')
+    flareGradient.addColorStop(1, 'rgba(255,170,30,0)')
+  }
   flareContext.fillStyle = flareGradient
   flareContext.fillRect(0, 0, 64, 64)
-  cachedFlareTexture = own(new THREE.CanvasTexture(flareCanvas))
-  cachedFlareTexture.colorSpace = THREE.SRGBColorSpace
-  return cachedFlareTexture
+  const texture = own(new THREE.CanvasTexture(flareCanvas))
+  texture.colorSpace = THREE.SRGBColorSpace
+  cachedFlareTextures.set(key, texture)
+  return texture
 }
 
 // 金色星芒贴图：胡牌牌处向外爆发的光束（12 道光芒 + 中心柔光）。
 // 信标式竖直光束纹理：底部亮金、向上渐隐（贴在圆柱侧面，v 沿高度）。
-let cachedBeamTexture: THREE.CanvasTexture | null = null
+const cachedBeamTextures = new Map<'gold' | 'anime', THREE.CanvasTexture>()
 function getBeamTexture() {
-  if (cachedBeamTexture) return cachedBeamTexture
+  const key = props.themeName === 'llmAnime' ? 'anime' : 'gold'
+  const cached = cachedBeamTextures.get(key)
+  if (cached) return cached
   const w = 32
   const h = 256
   const canvas = document.createElement('canvas')
@@ -167,15 +179,24 @@ function getBeamTexture() {
   canvas.height = h
   const ctx = canvas.getContext('2d')
   const grad = ctx.createLinearGradient(0, h, 0, 0)
-  grad.addColorStop(0, 'rgba(255,222,135,.95)')
-  grad.addColorStop(.3, 'rgba(255,210,115,.55)')
-  grad.addColorStop(.65, 'rgba(255,195,95,.2)')
-  grad.addColorStop(1, 'rgba(255,185,85,0)')
+  if (key === 'anime') {
+    // 动漫主题由内外两层材质分别着色；纹理只保存亮度/透明度，避免彩色纹理与材质色相乘后发灰。
+    grad.addColorStop(0, 'rgba(255,255,255,.98)')
+    grad.addColorStop(.3, 'rgba(255,255,255,.68)')
+    grad.addColorStop(.65, 'rgba(255,255,255,.26)')
+    grad.addColorStop(1, 'rgba(255,255,255,0)')
+  } else {
+    grad.addColorStop(0, 'rgba(255,222,135,.95)')
+    grad.addColorStop(.3, 'rgba(255,210,115,.55)')
+    grad.addColorStop(.65, 'rgba(255,195,95,.2)')
+    grad.addColorStop(1, 'rgba(255,185,85,0)')
+  }
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, w, h)
-  cachedBeamTexture = own(new THREE.CanvasTexture(canvas))
-  cachedBeamTexture.colorSpace = THREE.SRGBColorSpace
-  return cachedBeamTexture
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.colorSpace = THREE.SRGBColorSpace
+  cachedBeamTextures.set(key, texture)
+  return texture
 }
 
 // 信标内芯光束（细、亮）
@@ -193,9 +214,11 @@ function getBeamGlowGeometry() {
 }
 
 // 金色星芒纹理：光束底部向外爆发的光芒（12 道），与信标光束叠加。
-let cachedStarburstTexture: THREE.CanvasTexture | null = null
+const cachedStarburstTextures = new Map<'gold' | 'anime', THREE.CanvasTexture>()
 function getStarburstTexture() {
-  if (cachedStarburstTexture) return cachedStarburstTexture
+  const key = props.themeName === 'llmAnime' ? 'anime' : 'gold'
+  const cached = cachedStarburstTextures.get(key)
+  if (cached) return cached
   const size = 256
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -204,9 +227,15 @@ function getStarburstTexture() {
   const cx = size / 2
   const cy = size / 2
   const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2)
-  core.addColorStop(0, 'rgba(255,255,235,1)')
-  core.addColorStop(.22, 'rgba(255,228,140,.9)')
-  core.addColorStop(1, 'rgba(255,195,70,0)')
+  if (key === 'anime') {
+    core.addColorStop(0, 'rgba(255,255,255,1)')
+    core.addColorStop(.22, 'rgba(255,150,192,.9)')
+    core.addColorStop(1, 'rgba(102,214,255,0)')
+  } else {
+    core.addColorStop(0, 'rgba(255,255,235,1)')
+    core.addColorStop(.22, 'rgba(255,228,140,.9)')
+    core.addColorStop(1, 'rgba(255,195,70,0)')
+  }
   ctx.fillStyle = core
   ctx.fillRect(0, 0, size, size)
   const rays = 12
@@ -214,9 +243,16 @@ function getStarburstTexture() {
   for (let i = 0; i < rays; i++) {
     const angle = (i / rays) * Math.PI * 2
     const grad = ctx.createLinearGradient(0, 0, rayLen, 0)
-    grad.addColorStop(0, 'rgba(255,238,180,.95)')
-    grad.addColorStop(.6, 'rgba(255,212,110,.45)')
-    grad.addColorStop(1, 'rgba(255,195,70,0)')
+    if (key === 'anime') {
+      const coralRay = i % 2 === 0
+      grad.addColorStop(0, coralRay ? 'rgba(255,185,212,.95)' : 'rgba(178,238,255,.95)')
+      grad.addColorStop(.6, coralRay ? 'rgba(255,116,169,.46)' : 'rgba(95,207,255,.46)')
+      grad.addColorStop(1, coralRay ? 'rgba(255,95,154,0)' : 'rgba(91,190,255,0)')
+    } else {
+      grad.addColorStop(0, 'rgba(255,238,180,.95)')
+      grad.addColorStop(.6, 'rgba(255,212,110,.45)')
+      grad.addColorStop(1, 'rgba(255,195,70,0)')
+    }
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate(angle)
@@ -229,9 +265,10 @@ function getStarburstTexture() {
     ctx.fill()
     ctx.restore()
   }
-  cachedStarburstTexture = own(new THREE.CanvasTexture(canvas))
-  cachedStarburstTexture.colorSpace = THREE.SRGBColorSpace
-  return cachedStarburstTexture
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.colorSpace = THREE.SRGBColorSpace
+  cachedStarburstTextures.set(key, texture)
+  return texture
 }
 
 // 金色菱形粒子几何体（八面体 = 立体菱形）。
@@ -243,6 +280,7 @@ function getDiamondGeometry() {
 
 function addWinEffect() {
   if (!props.winEffect?.tile) return
+  const animeEffect = props.themeName === 'llmAnime'
   const anchor = winEffectAnchor(props.winEffect.winnerIndex)
   anchor.z += TILE_LAYER_Z
   const faceCenter = anchor.clone().setY(anchor.y + .25)
@@ -253,23 +291,29 @@ function addWinEffect() {
   // 信标式竖直光束：从胡牌牌垂直射向天空（垂直于牌面），带光晕
   const beamMaterial = ownDynamic(new THREE.MeshBasicMaterial({
     map: getBeamTexture(),
+    color: animeEffect ? 0x36dfff : 0xffffff,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: !animeEffect,
     side: THREE.DoubleSide,
   }))
+  beamMaterial.userData.outlineParameters = { visible: false }
   const beam = new THREE.Mesh(getBeamGeometry(), beamMaterial)
   beam.position.set(anchor.x, anchor.y + .25 + 8.5 / 2, anchor.z)
   group.add(beam)
   const beamGlowMaterial = ownDynamic(new THREE.MeshBasicMaterial({
     map: getBeamTexture(),
+    color: animeEffect ? 0xff4f9a : 0xffffff,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: !animeEffect,
     side: THREE.DoubleSide,
   }))
+  beamGlowMaterial.userData.outlineParameters = { visible: false }
   const beamGlow = new THREE.Mesh(getBeamGlowGeometry(), beamGlowMaterial)
   beamGlow.position.set(anchor.x, anchor.y + .3 + 7 / 2, anchor.z)
   group.add(beamGlow)
@@ -277,12 +321,14 @@ function addWinEffect() {
   // 星芒：光束底部向外爆发的光芒（与信标光束叠加）
   const starburstMaterial = ownDynamic(new THREE.SpriteMaterial({
     map: getStarburstTexture(),
-    color: 0xffd86e,
+    color: animeEffect ? 0xffffff : 0xffd86e,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: !animeEffect,
   }))
+  starburstMaterial.userData.outlineParameters = { visible: false }
   const starburst = new THREE.Sprite(starburstMaterial)
   starburst.position.copy(anchor).setY(anchor.y + .4)
   starburst.scale.setScalar(.4)
@@ -291,12 +337,14 @@ function addWinEffect() {
   // 金色光晕：落在牌上的强光晕
   const glowMaterial = ownDynamic(new THREE.SpriteMaterial({
     map: getFlareTexture(),
-    color: 0xffc23d,
+    color: animeEffect ? 0xffffff : 0xffc23d,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: !animeEffect,
   }))
+  glowMaterial.userData.outlineParameters = { visible: false }
   const glow = new THREE.Sprite(glowMaterial)
   glow.position.copy(anchor).setY(anchor.y + .35)
   glow.scale.setScalar(.5)
@@ -304,12 +352,14 @@ function addWinEffect() {
 
   // 大量金色菱形粒子：向四周 3D 散射（黄金比例均匀撒布）
   const diamondMaterial = ownDynamic(new THREE.MeshBasicMaterial({
-    color: 0xffe9a8,
+    color: animeEffect ? 0xffffff : 0xffe9a8,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: !animeEffect,
   }))
+  diamondMaterial.userData.outlineParameters = { visible: false }
   const diamonds = Array.from({ length: 40 }, (_, index) => {
     const y = (index / 40) * 2 - 1
     const radius = Math.sqrt(Math.max(0, 1 - y * y))
@@ -317,6 +367,9 @@ function addWinEffect() {
     const speed = 1.5 + index % 8 * .26
     const diamond = new THREE.Mesh(getDiamondGeometry(), diamondMaterial.clone())
     ownDynamic(diamond.material)
+    if (animeEffect) {
+      diamond.material.color.set([0xff9fc2, 0x8fe5ff, 0xffe3a8][index % 3])
+    }
     diamond.scale.setScalar(.6 + index % 4 * .22)
     diamond.position.copy(burstAnchor)
     group.add(diamond)
@@ -368,8 +421,8 @@ function addWinEffect() {
     const beamIn = THREE.MathUtils.smoothstep(progress, .08, .15)
     const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .55, 1)
     const beamVis = beamIn * beamOut
-    effect.beam.material.opacity = beamVis * .8
-    effect.beamGlow.material.opacity = beamVis * .32
+    effect.beam.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .92 : .8)
+    effect.beamGlow.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .62 : .32)
     const burstIn = THREE.MathUtils.smoothstep(progress, .08, .16)
     const burstOut = 1 - THREE.MathUtils.smoothstep(progress, .3, .42)
     effect.starburst.material.opacity = burstIn * burstOut * .85

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EndGameOptions, GamePlayer } from '../contracts/types'
-import { WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../presentation/winEffect'
+import { WIN_CUE_EXIT_DURATION, WIN_CUE_LEAD_DURATION, WIN_EFFECT_DURATION, WIN_EFFECT_SOUND_DELAY, WIN_REVEAL_DURATION } from '../presentation/winEffect'
 import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 import { createLocalGameState } from './localGameState'
 import { createLocalSettlementTimeline } from './localSettlementTimeline'
@@ -24,6 +24,10 @@ async function flushPromises() {
   for (let index = 0; index < 5; index += 1) await Promise.resolve()
 }
 
+function startWinEffect(scheduled: Array<{ callback: () => void; delay: number }>) {
+  scheduled.find((item) => item.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION)!.callback()
+}
+
 describe('localSettlementTimeline', () => {
   it('rejects a non-winning settlement request even when a caller bypasses the turn orchestrator', () => {
     const state = createLocalGameState()
@@ -45,7 +49,7 @@ describe('localSettlementTimeline', () => {
     expect(state.result.value).toBeNull()
   })
 
-  it('keeps win effect, reveal, and final scoring as ordered phases', () => {
+  it('keeps win cue, Three.js effect, reveal, and final scoring as ordered phases', () => {
     const state = createLocalGameState()
     state.phase.value = 'thinking'
     state.players.push(
@@ -54,12 +58,13 @@ describe('localSettlementTimeline', () => {
     )
     state.wall.value = ['m1', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 'p4']
     const scheduled: Array<{ callback: () => void; delay: number }> = []
+    const showTableAction = vi.fn()
     const timeline = createLocalSettlementTimeline({
       state,
       clearTimers: vi.fn(),
       later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
       playSound: vi.fn(),
-      showTableAction: vi.fn(),
+      showTableAction,
       structuralMeldCount: () => 0,
       getRoundLabel: () => '东1局',
     })
@@ -67,7 +72,11 @@ describe('localSettlementTimeline', () => {
     timeline.endGame(0)
     expect(state.phase.value).toBe('win-effect')
     expect(state.winPresentation.value).toMatchObject({ winnerIndex: 0, tile: 'east' })
+    expect(state.winEffect.value).toBeNull()
+    expect(showTableAction).toHaveBeenCalledWith('self-draw', 0, null, 'east', -1)
 
+    startWinEffect(scheduled)
+    expect(state.winEffect.value).toMatchObject({ winnerIndex: 0, tile: 'east' })
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     expect(state.phase.value).toBe('revealing')
 
@@ -105,6 +114,7 @@ describe('localSettlementTimeline', () => {
     })
 
     timeline.endGame(0)
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
     expect(state.phase.value).toBe('revealing')
@@ -156,6 +166,7 @@ describe('localSettlementTimeline', () => {
     expect(scheduled).toHaveLength(1)
     expect(scheduled[0].delay).toBe(DISCARD_WIN_EFFECT_DELAY)
     scheduled[0].callback()
+    startWinEffect(scheduled)
     expect(state.players[1].discards).toEqual([])
     expect(state.lastDiscard.value).toBeNull()
     expect(state.winEffect.value).toMatchObject({ winnerIndex: 0, tile: 'm9' })
@@ -190,6 +201,7 @@ describe('localSettlementTimeline', () => {
     await flushPromises()
     expect(announce).toHaveBeenCalledWith('自摸，意料之中。')
     expect(playSound).not.toHaveBeenCalledWith('zimo.mp3')
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_SOUND_DELAY)!.callback()
     expect(playSound).toHaveBeenCalledWith('hu_effect_sound.mp3', 0.72)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
@@ -230,6 +242,7 @@ describe('localSettlementTimeline', () => {
     expect(order).toEqual(['clear', `announce:1:${expectedType}`])
     await flushPromises()
     scheduled.find((item) => item.delay === DISCARD_WIN_EFFECT_DELAY)?.callback()
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
     await flushPromises()
@@ -268,6 +281,7 @@ describe('localSettlementTimeline', () => {
     await flushPromises()
     expect(spoken).toEqual([2])
     expect(state.phase.value).toBe('win-effect')
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
 
@@ -334,6 +348,7 @@ describe('localSettlementTimeline', () => {
     timeline.endGame(1)
 
     expect(onlineAnnouncement).toHaveBeenCalledWith({ winnerIndex: 1, winType: 'self-draw' })
+    startWinEffect(scheduled)
     scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
     scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
     await flushPromises()

@@ -21,6 +21,12 @@ export interface TableSurfaceTextureConfig {
 }
 
 export interface TableTheme {
+  /** 主题专属牌体圆角；未配置时保留原有 6 段几何，避免旧主题视觉变化。 */
+  tileGeometry?: {
+    segments: number
+    baseRadius: number
+    capRadius: number
+  }
   /** 牌桌台身、鎏金边、麻将机等静态部件的材质。 */
   table: {
     /** 墨玉台面（最上层桌面）。 */
@@ -44,6 +50,21 @@ export interface TableTheme {
   tableFelt?: boolean
   /** 桌面暗角强度 0-1：台面中心亮、向四周渐暗（径向渐变压暗边缘），不传不启用。 */
   tableVignette?: number
+  /** 呢绒亮度噪点范围；值越小纹理越细腻均匀。 */
+  tableFeltVariation?: number
+  /** 仅作为桌布纹理绘制的四向分区压线，不改变牌桌几何和玩法布局。 */
+  tableGuide?: {
+    dark: string
+    light: string
+    opacity: number
+    slotDark?: string
+    slotOpacity?: number
+  }
+  /** 中控台视觉缩放与厚度倍率；不改变牌河/牌墙坐标。 */
+  machineScale?: number
+  machineRelief?: number
+  /** 桌身、外框等静态几何是否投影；关闭后仍接收麻将与中控台阴影。 */
+  staticTableCastShadow?: boolean
   /** 外部桌布图片；优先级高于 tableFelt / tableVignette 的程序纹理。 */
   tableSurfaceTexture?: TableSurfaceTextureConfig
   /** 木质包边：台面四周一圈程序木纹框（雀魂等木框桌用），与 plainSurface 配合。 */
@@ -63,6 +84,10 @@ export interface TableTheme {
   edgeTrimWidth?: number
   /** 非木质包边上的细金线与装饰纹样。 */
   edgeAccent?: boolean
+  /** 包边金线的主题专属材质；未配置时沿用现有金属高光。 */
+  edgeAccentMaterial?: PhysicalParams
+  /** 包边顶面复用桌面材质，只保留深色立面，避免形成宽色带。 */
+  edgeTrimTopMatchesSurface?: boolean
   /** 牌桌侧向补光；不同主题可换成相配的色温。 */
   rimLight?: {
     color: number
@@ -70,6 +95,10 @@ export interface TableTheme {
   }
   /** 牌背渐变纹理的三段颜色（canvas 程序纹理），不传用默认绿色渐变。 */
   tileBackGradient?: [string, string, string]
+  /** 牌面底色的顶部/中部/底部烘焙明暗；不传保留默认牌面。 */
+  tileFaceGradient?: [string, string, string]
+  /** 牌体边缘低成本 AO 强度；0/不传时禁用。 */
+  tileAoIntensity?: number
   /** 麻将牌共享材质（所有牌共用的白身/绿背/牌底等）。 */
   tile: {
     /** 牌体白色侧面。 */
@@ -710,136 +739,197 @@ export const llmTheme: TableTheme = {
   highlight: defaultTableTheme.highlight,
 }
 
-/** 大模型二次元主题：灰绿绒面 + 胡桃木包边 + 象牙白标准牌面。 */
+/**
+ * 大模型二次元主题：鼠尾草绒面 + 墨色结构 + 香槟金点缀。
+ *
+ * 角色/UI 保持二次元表达，Three.js 牌桌则使用雀魂式软阴影、长焦机位和
+ * 树脂清漆麻将，避免平涂牌体悬浮、塑料发灰和广角边缘发散。
+ */
 export const llmAnimeTheme: TableTheme = {
   ...defaultTableTheme,
+  tileGeometry: { segments: 4, baseRadius: .07, capRadius: .075 },
   table: {
     ...defaultTableTheme.table,
     jade: {
       ...defaultTableTheme.table.jade,
-      color: 0x68796d,
-      emissive: 0x151d18,
-      emissiveIntensity: .06,
-      roughness: .86,
+      color: 0x667b6d,
+      emissive: 0x172619,
+      emissiveIntensity: .025,
+      roughness: .82,
       metalness: 0,
-      clearcoat: .05,
-      clearcoatRoughness: .7,
-      sheen: .28,
-      sheenColor: 0x87958a,
-      sheenRoughness: .86,
+      clearcoat: .04,
+      clearcoatRoughness: .72,
+      sheen: .22,
+      sheenColor: 0x9bad98,
+      sheenRoughness: .82,
     },
     darkJade: {
       ...defaultTableTheme.table.darkJade,
-      color: 0x26322c,
-      emissive: 0x0b100d,
-      emissiveIntensity: .06,
-      roughness: .72,
-      metalness: .04,
-      clearcoat: .12,
-      clearcoatRoughness: .55,
+      color: 0x35463a,
+      emissive: 0x101811,
+      emissiveIntensity: .025,
+      roughness: .58,
+      metalness: .05,
+      clearcoat: .2,
+      clearcoatRoughness: .44,
     },
     gold: {
       ...defaultTableTheme.table.gold,
-      color: 0xc9a965,
-      emissive: 0x33250e,
-      emissiveIntensity: .12,
-      roughness: .42,
-      metalness: .7,
+      color: 0xd3ad68,
+      emissive: 0x211507,
+      emissiveIntensity: .1,
+      roughness: .62,
+      metalness: .22,
+      clearcoat: .1,
+      clearcoatRoughness: .58,
     },
     goldHighlight: {
       ...defaultTableTheme.table.goldHighlight,
-      color: 0xe4c887,
-      emissive: 0x3a2a10,
-      emissiveIntensity: .16,
-      roughness: .34,
-      metalness: .78,
+      color: 0xf0cc82,
+      emissive: 0x2a1d0b,
+      emissiveIntensity: .12,
+      roughness: .56,
+      metalness: .26,
+      clearcoat: .12,
+      clearcoatRoughness: .52,
     },
     machine: {
       ...defaultTableTheme.table.machine,
-      color: 0x30231f,
-      roughness: .48,
-      metalness: .08,
-      clearcoat: .24,
+      color: 0x252c28,
+      roughness: .68,
+      metalness: .02,
+      clearcoat: .06,
+      clearcoatRoughness: .62,
     },
     machineTop: {
       ...defaultTableTheme.table.machineTop,
-      roughness: .48,
-      metalness: .06,
-      clearcoat: .24,
+      emissive: 0x101d16,
+      emissiveIntensity: .14,
+      roughness: .7,
+      metalness: 0,
+      clearcoat: .04,
+      clearcoatRoughness: .68,
     },
     machineBottom: {
       ...defaultTableTheme.table.machineBottom,
-      color: 0x17100e,
-      roughness: .58,
-      metalness: .12,
+      color: 0x171c19,
+      roughness: .75,
+      metalness: 0,
+      clearcoat: .03,
+      clearcoatRoughness: .7,
     },
   },
   tableFelt: true,
-  tableVignette: .16,
-  plainSurface: true,
-  woodTrim: true,
-  woodTrimColors: ['#493632', '#352724', '#231a18'],
-  woodTrimMaterial: {
-    roughness: .68,
-    metalness: .02,
-    clearcoat: .08,
-    clearcoatRoughness: .55,
+  tableVignette: .14,
+  tableFeltVariation: 8,
+  tableGuide: {
+    dark: '#30443a',
+    light: '#b5c2aa',
+    opacity: .14,
+    slotDark: '#102018',
+    slotOpacity: .42,
   },
+  // 原 3.85×1.13 的中控台总宽高缩小 0.2 个牌长（0.94×0.2）。
+  machineScale: 1.081,
+  machineRelief: 1.22,
+  staticTableCastShadow: false,
+  plainSurface: true,
+  woodTrim: false,
   edgeTrim: {
-    color: 0x3a2115,
-    emissive: 0x100804,
-    emissiveIntensity: .06,
-    roughness: .58,
-    metalness: .04,
-    clearcoat: .14,
-    clearcoatRoughness: .48,
+    color: 0x27332c,
+    emissive: 0x0c130e,
+    emissiveIntensity: .025,
+    roughness: .76,
+    metalness: 0,
+    clearcoat: .04,
+    clearcoatRoughness: .72,
   },
   edgeTrimWidth: .65,
   edgeAccent: true,
-  rimLight: {
-    color: 0xd7b875,
-    intensity: .72,
+  edgeAccentMaterial: {
+    color: 0xc7a45b,
+    emissive: 0x2c210d,
+    emissiveIntensity: .08,
+    roughness: .62,
+    metalness: .18,
+    clearcoat: .08,
+    clearcoatRoughness: .6,
   },
-  tileBackGradient: ['#a65f52', '#a65f52', '#a65f52'],
+  edgeTrimTopMatchesSurface: true,
+  rimLight: {
+    color: 0xffe2ae,
+    intensity: .12,
+  },
+  tileBackGradient: ['#bd5b48', '#bd5b48', '#bd5b48'],
+  tileFaceGradient: ['#f8f5ed', '#e8e5dc', '#cfd2ca'],
+  tileAoIntensity: .32,
   tile: {
     ...defaultTableTheme.tile,
     side: {
       ...defaultTableTheme.tile.side,
-      color: 0xd8d0bd,
-      roughness: .46,
-      clearcoat: .22,
+      color: 0xfff9ec,
+      metalness: 0,
+      roughness: .18,
+      clearcoat: 1,
+      clearcoatRoughness: .1,
+      ior: 1.48,
+      specularIntensity: .72,
+      specularColor: 0xffffff,
+      envMapIntensity: .62,
     },
     faceSide: {
       ...defaultTableTheme.tile.faceSide,
-      color: 0xa65f52,
-      roughness: .48,
-      clearcoat: .24,
-      specularIntensity: .28,
+      color: 0xa94d3b,
+      metalness: 0,
+      roughness: .16,
+      clearcoat: 1,
+      clearcoatRoughness: .1,
+      ior: 1.48,
+      specularIntensity: .82,
+      specularColor: 0xfff3e8,
+      envMapIntensity: 1,
     },
     bottom: {
       ...defaultTableTheme.tile.bottom,
-      color: 0xc5bdab,
-      roughness: .48,
+      color: 0xe9e1d0,
+      metalness: 0,
+      roughness: .22,
+      clearcoat: 1,
+      clearcoatRoughness: .1,
+      ior: 1.48,
+      specularIntensity: .62,
+      envMapIntensity: .48,
     },
     back: {
       ...defaultTableTheme.tile.back,
-      color: 0xe5decc,
-      roughness: .52,
-      clearcoat: .2,
+      color: 0xf0a58f,
+      metalness: 0,
+      roughness: .17,
+      clearcoat: 1,
+      clearcoatRoughness: .1,
+      ior: 1.48,
+      specularIntensity: 1,
+      specularColor: 0xfff3e8,
+      envMapIntensity: 1,
     },
     face: {
       ...defaultTableTheme.tile.face,
-      color: 0xf1eadb,
-      roughness: .5,
-      clearcoat: .2,
-      specularColor: 0xfffaf0,
+      color: 0xffffff,
+      metalness: 0,
+      roughness: .2,
+      clearcoat: 1,
+      clearcoatRoughness: .1,
+      ior: 1.48,
+      specularIntensity: .72,
+      specularColor: 0xffffff,
+      envMapIntensity: .82,
     },
   },
   highlight: {
-    color: 0xd7a84d,
-    emissive: 0x63400d,
-    emissiveIntensity: .5,
-    roughness: .42,
+    color: 0xe4b861,
+    emissive: 0x3a240b,
+    emissiveIntensity: .42,
+    roughness: .3,
   },
 }
 
@@ -859,7 +949,7 @@ export const TABLE_THEME_OPTIONS = [
   { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
   { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
   { value: 'llm', label: '大模型专属', description: '双模型娘化对决与深蓝星轨' },
-  { value: 'llmAnime', label: '大模型二次元', description: '灰绿绒面、胡桃木与角色演出' },
+  { value: 'llmAnime', label: '大模型二次元', description: '鼠尾草绒面、树脂麻将与角色演出' },
 ] as const
 
 export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']
