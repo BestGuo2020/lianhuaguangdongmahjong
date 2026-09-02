@@ -134,13 +134,13 @@ function onPortraitError(event: Event) {
   bottom: calc((1 - var(--action-art-scale)) * 50%);
   display: grid;
   justify-items: end;
-  transform: translate(50%, 50%) rotate(-4deg);
+  transform: rotate(-4deg);
 }
 .anime-action-copy strong {
   position: relative;
   color: #fff8e7;
   font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  font-size: clamp(48px, 4.9vw, 76px);
+  font-size: clamp(10px, 5.9vh, 76px);
   font-weight: 1000;
   line-height: .92;
   letter-spacing: -.08em;
@@ -172,7 +172,7 @@ function onPortraitError(event: Event) {
   right: auto;
   left: calc((1 - var(--action-art-scale)) * 50%);
   align-items: start;
-  transform: translate(-50%, 50%) rotate(-4deg);
+  transform: rotate(-4deg);
 }
 @keyframes anime-action-enter {
   from { opacity: 0; scale: .88; filter: blur(2px) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }

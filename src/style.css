@@ -418,9 +418,9 @@ button { font: inherit; }
    四个方向的锚点统一放在共享样式表（R6.19）。
    R6.22：向远离牌河方向小幅平移——对家上移贴顶栏、左右家外移并上移、本家上移。 */
 .anime-action-cue.action-from-top { top: calc(var(--topbar-height) + 4.8cqh); left: 50%; transform: translate(-50%, 0); }
-.anime-action-cue.action-from-right { top: 32.8%; right: 26%; transform: translate(0, -50%); }
+.anime-action-cue.action-from-right { top: 43%; right: 18%; transform: translate(0, -50%); }
 .anime-action-cue.action-from-bottom { bottom: 31%; left: 50%; transform: translate(-50%, 0); }
-.anime-action-cue.action-from-left { top: 32.8%; left: 26%; transform: translate(0, -50%); }
+.anime-action-cue.action-from-left { top: 43%; left: 18%; transform: translate(0, -50%); }
 
 .player-seat.action-active .avatar-wrap,
 .user-identity.action-active {
@@ -2461,20 +2461,20 @@ button { font: inherit; }
     --action-art-scale: 2;
   }
   .has-three-scene .seat-left {
-    top: 35%;
+    top: 43%;
     left: calc(var(--table-box-left) + 2.7cqw);
   }
   .has-three-scene .seat-right {
-    top: 35%;
+    top: 43%;
     right: calc(var(--table-box-left) + 2.7cqw);
   }
   .has-three-scene .seat-top {
     left: var(--top-seat-resolved-left);
   }
   /* 动作 cue 随座位一起切回桌面几何（两种 cue 的桌面锚点与基础层一致；对家顶部与 20%/50% 文字版由基础层规则生效，无需重述）。 */
-  .game-app .anime-action-cue.action-from-right { top: 32.8%; right: 26%; transform: translate(0, -50%); }
+  .game-app .anime-action-cue.action-from-right { top: 43%; right: 18%; transform: translate(0, -50%); }
   .game-app .anime-action-cue.action-from-bottom { bottom: 31%; left: 50%; transform: translate(-50%, 0); }
-  .game-app .anime-action-cue.action-from-left { top: 32.8%; left: 26%; transform: translate(0, -50%); }
+  .game-app .anime-action-cue.action-from-left { top: 43%; left: 18%; transform: translate(0, -50%); }
   .game-app .table-action-cue.action-from-right { top: 43%; right: 17%; transform: translate(50%, -50%); }
   .game-app .table-action-cue.action-from-bottom { bottom: 20%; left: 50%; transform: translate(-50%, 50%); }
   .game-app .table-action-cue.action-from-left { top: 43%; left: 17%; transform: translate(-50%, -50%); }
