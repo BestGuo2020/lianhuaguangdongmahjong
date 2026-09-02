@@ -343,32 +343,24 @@ function changeTableTheme(theme: TableThemeName) {
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId && !matchFinished" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && rejoining" class="remote-banner" role="status">尝试重新加入房间…</div>
     <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>
-    <div class="wood-frame">
-      <div class="felt-table" :class="{ 'has-three-scene': players.length }">
-        <GameShellHeader
-          :game-mode="gameMode"
-          :phase="showLobby ? 'lobby' : phase"
-          :has-players="Boolean(players.length)"
-          :match-name="matchName"
-          :round-label="roundLabel"
-          :honba="honba"
-          :room-id="roomId"
-          :signal-quality="signalQuality"
-          :sound-on="soundOn"
-          :theme-name="tableThemeName"
-          @quit="quitMatch"
-          @toggle-sound="soundOn = !soundOn"
-          @open-rules="rulesOpen = true"
-          @change-theme="changeTableTheme"
-        />
-        <div class="table-depth" aria-hidden="true">
-          <i class="table-edge edge-top"></i>
-          <i class="table-edge edge-right"></i>
-          <i class="table-edge edge-bottom"></i>
-          <i class="table-edge edge-left"></i>
-        </div>
-
-        <GameTableHud
+    <div class="" :class="{ 'has-three-scene': players.length }">
+      <GameShellHeader
+        :game-mode="gameMode"
+        :phase="showLobby ? 'lobby' : phase"
+        :has-players="Boolean(players.length)"
+        :match-name="matchName"
+        :round-label="roundLabel"
+        :honba="honba"
+        :room-id="roomId"
+        :signal-quality="signalQuality"
+        :sound-on="soundOn"
+        :theme-name="tableThemeName"
+        @quit="quitMatch"
+        @toggle-sound="soundOn = !soundOn"
+        @open-rules="rulesOpen = true"
+        @change-theme="changeTableTheme"
+      />
+      <GameTableHud
           v-if="players.length && user"
           :players="players"
           :user="user"
@@ -502,7 +494,6 @@ function changeTableTheme(theme: TableThemeName) {
           @preview-four-red="debugFourRed"
         />
       </div>
-    </div>
     <RulesPanel :open="rulesOpen" :variant="selectedRule" @close="rulesOpen = false" />
     <button
       v-if="gameMode === 'local' && showLobby"
