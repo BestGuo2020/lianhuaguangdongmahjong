@@ -1003,6 +1003,7 @@ export function useVibeRemoteGame({
     clearCountdown,
     onFinishedSnapshot: clearPendingRequest,
     playSound,
+    getThemeName: () => roomTableThemeName.value,
     later,
     isLocalAuthority: () => isHost.value,
   })

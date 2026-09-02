@@ -1,4 +1,5 @@
 import { tileAudioFile } from '../../core/rules/tiles'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
 import type { TileType } from '../../core/contracts/types'
 import type { Announcement } from '../../core/contracts/gamePort'
 import type { RemoteGameState } from '../state/remoteGameState'
@@ -41,6 +42,8 @@ export interface SnapshotReconcilerOptions {
   clearCountdown(): void
   onFinishedSnapshot(): void
   playSound(name: string, volume?: number): unknown
+  /** 表现层动态读取当前牌桌主题（二次元主题声音策略据此决定是否报牌名）。 */
+  getThemeName(): string
   later(callback: () => void, delay: number): void
   /** 房主视图：快照 phase 里的 discard/prompt 是房主自己的回合/提示，直接保留（客户端则折叠为 playing）。 */
   isLocalAuthority?(): boolean
@@ -57,6 +60,7 @@ export function createSnapshotReconciler({
   clearCountdown,
   onFinishedSnapshot,
   playSound,
+  getThemeName,
   later,
   isLocalAuthority,
 }: SnapshotReconcilerOptions) {
@@ -122,8 +126,14 @@ export function createSnapshotReconciler({
     lastDiscardIdApplied = discard.id
     if (opening.isRunning()) return
     playSound('dapai.mp3', 0.8)
-    // 大模型保留实体落牌声，但不播放牌名人声；其表达统一由吐槽 TTS 承担。
-    if (snapshot.players.find((player) => player.seat === discard.from)?.isLlm) return
+    // 所有座位都保留实体落牌声；是否报牌由主题与明确玩家身份共同决定。
+    const actor = snapshot.players.find((player) => player.seat === discard.from)
+    const policy = resolveAnimeAudioPolicy({
+      themeName: getThemeName(),
+      playerKind: actor?.playerKind,
+      isLlm: actor?.isLlm,
+    })
+    if (policy.discard.tileName === 'suppress' || actor?.isLlm) return
     const audio = tileAudioFile(discard.tile)
     if (audio) later(() => playSound(audio), 80)
   }

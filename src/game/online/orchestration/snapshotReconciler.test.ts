@@ -64,6 +64,7 @@ function setup() {
     clearCountdown: vi.fn(),
     onFinishedSnapshot,
     playSound,
+    getThemeName: () => 'jade',
     later: (callback) => { scheduled.push(callback) },
   })
   return {
