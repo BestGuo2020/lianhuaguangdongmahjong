@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import MahjongTile from './MahjongTile.vue'
 import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
-import type { GamePlayer, TileType } from '../game/core/contracts/types'
+import type { GamePlayer } from '../game/core/contracts/types'
 import type { TableThemeName } from './table/three/tableTheme'
 import { animeCharacterAccent } from '../game/core/presentation/animeCharacterPalette'
 
@@ -14,16 +13,12 @@ const props = withDefaults(defineProps<{
   scoreFlowId?: number
   position: string
   dealer?: boolean
-  renderHand?: boolean
-  renderMelds?: boolean
-  jokerTiles?: TileType[]
-  wildcardTiles?: TileType[]
   themeName?: TableThemeName
   /** 主题表现头像覆盖，不修改权威玩家 avatar。 */
   avatarOverride?: string
   /** AI 大模型吐槽气泡（可选；由上层管理过期） */
   bubble?: { text: string; id: number; persistent?: boolean } | null
-}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, renderHand: true, renderMelds: true, jokerTiles: undefined, wildcardTiles: undefined, avatarOverride: undefined, bubble: null })
+}>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, avatarOverride: undefined, bubble: null })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
 const avatarSrc = ref(props.avatarOverride || props.player.avatar)
@@ -61,22 +56,6 @@ const animeStyle = computed(() => props.themeName === 'llmAnime'
       <Transition name="llm-bubble">
         <div v-if="bubble" :key="bubble.id" class="llm-bubble" role="status" aria-live="polite">{{ bubble.text }}</div>
       </Transition>
-    </div>
-    <div v-if="renderHand" class="opponent-hand" :class="`hand-${position}`">
-      <MahjongTile
-        v-for="index in Math.min(player.concealedTileCount ?? player.hand.length, 14)"
-        :key="index"
-        tile="back"
-        :theme-name="themeName"
-        hidden
-        small
-        disabled
-      />
-    </div>
-    <div v-if="renderMelds && player.melds.length" class="seat-melds">
-      <div v-for="(meld, index) in player.melds" :key="`${meld.type}-${index}`" class="mini-meld">
-        <MahjongTile v-for="(tile, tileIndex) in meld.tiles" :key="tileIndex" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
-      </div>
     </div>
   </section>
 </template>

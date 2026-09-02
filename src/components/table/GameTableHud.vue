@@ -429,7 +429,7 @@ function onAvatarError(entry: GamePlayer) {
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
-      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1" :render-hand="false" :render-melds="false" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
+      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1"
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :theme-name="themeName"
       :bubble="presentedLlmBubbles?.[index + 1]"
