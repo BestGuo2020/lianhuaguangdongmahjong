@@ -69,14 +69,17 @@ const MELD_HAND_GAP = 1.24
 const MELD_UP_MOVE = 3 * .68
 const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初始高度（略高于两墩牌顶）
 
-// 渲染分辨率上限（清晰度 vs 帧率）：默认 3 取设备原生 DPR，真机实测本设备 2.2 vs 2.0 帧率无差，原生清晰免费。
+// 触屏设备（真机）判定：主指针 coarse 且无 hover。
+const isMobileLike = typeof window.matchMedia === 'function'
+  && window.matchMedia('(hover: none) and (pointer: coarse)').matches
+// 渲染分辨率上限（清晰度 vs 帧率）：桌面 3、真机 2.5（在 2 的清晰与 3 的帧率间取平衡）。
 // URL 带 ?pr=<数字> 可覆盖。
-const DEFAULT_PIXEL_RATIO_CAP = 3
-let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || DEFAULT_PIXEL_RATIO_CAP
+let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || (isMobileLike ? 2.5 : 3)
 
-// 抗锯齿开关：默认开；URL 带 ?aa=off 关闭 MSAA（省一大截 fill，但牌边缘会出现锯齿）。
-// 牌桌主题：URL 带 ?theme=<name> 可切换（见 tableTheme.ts TABLE_THEMES），不传用默认墨玉翡翠。
-const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
+// 抗锯齿开关：桌面默认开；真机默认关 MSAA（DPR 2.2 下整屏 4× 采样 fill 极大）。
+// URL 带 ?aa=on/off 可覆盖。
+const aaEnabled = new URLSearchParams(window.location.search).get('aa') === 'on'
+  || (new URLSearchParams(window.location.search).get('aa') !== 'off' && !isMobileLike)
 const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
@@ -286,7 +289,30 @@ onMounted(async () => {
 
   const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
   const activeTheme = tableThemeByName(activeThemeName)
+  // 真机降低牌体圆角细分（segments→2）：RoundedBoxGeometry 三角面数随 segments² 增长，
+  // 是 494k 三角面的主要来源之一；桌面保持原细分（llmAnime=4）。
+  if (isMobileLike) {
+    const base = activeTheme.tileGeometry ?? { segments: 6, baseRadius: .07, capRadius: .072 }
+    activeTheme.tileGeometry = { ...base, segments: 2 }
+  }
   renderProfile = tableSceneRenderProfile(activeThemeName)
+
+  // 真机性能：触屏设备把 llmAnime 的 VSM 2048 软阴影降为 PCFSoft 1024，
+  // 并用半球光+主光提亮来补偿去掉的面光（RectAreaLight LTC 极贵）。
+  if (isMobileLike && renderProfile.shadows.mapType === THREE.VSMShadowMap) {
+    renderProfile = {
+      ...renderProfile,
+      hemisphere: { ...renderProfile.hemisphere, intensity: renderProfile.hemisphere.intensity * 1.5 },
+      keyLight: { ...renderProfile.keyLight, intensity: renderProfile.keyLight.intensity * 1.5 },
+      shadows: {
+        ...renderProfile.shadows,
+        mapType: THREE.PCFSoftShadowMap,
+        mapSize: 1024,
+        radius: 1,
+        blurSamples: 8,
+      },
+    }
+  }
 
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: aaEnabled, alpha: true, powerPreference: 'high-performance' })
   applyRendererProfile(renderer, renderProfile)
@@ -309,7 +335,8 @@ onMounted(async () => {
     renderProfile.hemisphere.groundColor,
     renderProfile.hemisphere.intensity,
   ))
-  if (renderProfile.areaLights?.length) {
+  // 真机跳过 RectAreaLight（LTC 面光片元极贵）；亮度由半球光+主光提亮补偿。
+  if (renderProfile.areaLights?.length && !isMobileLike) {
     RectAreaLightUniformsLib.init()
     renderProfile.areaLights.forEach((profile) => {
       const areaLight = new THREE.RectAreaLight(profile.color, profile.intensity, profile.width, profile.height)
@@ -346,8 +373,9 @@ onMounted(async () => {
     trackTileMaterial,
     isGlossy: () => glossyMaterials,
   })
-  if (renderProfile.outline) {
-    // 描边只保留轻薄的轮廓，树脂材质的倒角高光仍是牌体主要边界。
+  // 描边只保留轻薄的轮廓，树脂材质的倒角高光仍是牌体主要边界。
+  // 真机跳过 OutlineEffect（多趟后处理极贵），小屏看不出描边差异、帧率收益大。
+  if (renderProfile.outline && !isMobileLike) {
     outlineEffect = new OutlineEffect(renderer, {
       defaultThickness: renderProfile.outline.thickness,
       defaultColor: [...renderProfile.outline.color],

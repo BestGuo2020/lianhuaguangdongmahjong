@@ -1496,6 +1496,12 @@ button { font: inherit; }
   border-color: #c9a965;
   background: #f4eddf;
 }
+/* 吃/杠选择弹窗单独改深色：与牌桌墨色/鼠尾草一致，不再复用结算卡的米色纸底。 */
+.game-app[data-table-theme="llmAnime"] .kong-picker-card {
+  border-color: var(--anime-gold);
+  background: radial-gradient(circle at 50% 0, rgba(197, 154, 74, .16), transparent 44%),
+    linear-gradient(145deg, #38433a, #111813 78%);
+}
 .game-app[data-table-theme="llmAnime"] .round-rankings article,
 .game-app[data-table-theme="llmAnime"] .final-rankings article {
   border-color: color-mix(in srgb, var(--anime-accent, #b56a52) 58%, #a88b5b);
@@ -2415,6 +2421,9 @@ button { font: inherit; }
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .result-backdrop {
     padding: max(4px, var(--safe-top)) max(4px, var(--safe-right)) max(4px, var(--safe-bottom)) max(4px, var(--safe-left));
+    /* 真机省 GPU：关掉整屏 backdrop-filter 模糊，改用半透明遮罩（背景 rgba 已提供）。 */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .settlement-card,
   .final-board {
