@@ -9,6 +9,7 @@
 import type { PublicAiSeat } from './vibeLlm'
 import type { TableThemeName } from '../../../components/table/three/tableTheme'
 import { isTableThemeName } from '../../../components/table/three/tableThemePreference'
+import { isCharacterId } from '../../llm/animeCharacters'
 
 export interface LobbySeat {
   seat: number
@@ -16,6 +17,8 @@ export interface LobbySeat {
   nickname: string
   avatar: string
   ready: boolean
+  /** 二次元主题下该座位的本家形象（缺失按 deepseek 兜底）。 */
+  characterId?: string
 }
 
 export interface LobbyParticipant {
@@ -43,6 +46,7 @@ interface HostedSeat extends LobbySeat {
 export type ClientLobbyMessage =
   | { type: 'lobby_hello'; nickname: string; avatar: string; playerId?: string; seatToken?: string }
   | { type: 'lobby_ready'; ready: boolean }
+  | { type: 'lobby_character'; characterId: string }
   | { type: 'lobby_leave' }
 
 // host → client
@@ -102,6 +106,7 @@ export function isClientLobbyMessage(message: unknown): message is ClientLobbyMe
       && (value.seatToken === undefined || typeof value.seatToken === 'string')
   }
   if (value.type === 'lobby_ready') return typeof value.ready === 'boolean'
+  if (value.type === 'lobby_character') return typeof value.characterId === 'string' && isCharacterId(value.characterId)
   return value.type === 'lobby_leave'
 }
 
@@ -121,6 +126,7 @@ export function isHostLobbyMessage(message: unknown): message is HostLobbyMessag
         if (!Number.isInteger(item.seat) || (item.seat as number) < 0 || (item.seat as number) > 3) return false
         if (typeof item.peerId !== 'string' || typeof item.nickname !== 'string'
           || typeof item.avatar !== 'string' || typeof item.ready !== 'boolean') return false
+        if (item.characterId !== undefined && (typeof item.characterId !== 'string' || !isCharacterId(item.characterId))) return false
         if (seatNumbers.has(item.seat as number) || peerIds.has(item.peerId)) return false
         seatNumbers.add(item.seat as number)
         peerIds.add(item.peerId)
@@ -183,6 +189,7 @@ export function createHostLobby({
   const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const relayPeers = new Set<string>()
   let hostReady = false
+  let hostCharacterId = 'deepseek'
   let rosterRevision = 0
   let plannedAiSeats: PublicAiSeat[] = []
   let tableThemeName = initialTableThemeName
@@ -190,7 +197,7 @@ export function createHostLobby({
   function roster(): LobbySeat[] {
     const publicPeers = [...peers.values()].map(({ playerId: _playerId, seatToken: _seatToken, ...seat }) => seat)
     return [
-      { seat: 0, peerId: room.peerId, nickname: hostNickname, avatar: hostAvatar, ready: hostReady },
+      { seat: 0, peerId: room.peerId, nickname: hostNickname, avatar: hostAvatar, ready: hostReady, characterId: hostCharacterId },
       ...publicPeers.sort((a, b) => a.seat - b.seat),
     ]
   }
@@ -364,6 +371,12 @@ export function createHostLobby({
         seat.ready = message.ready
         broadcast()
       }
+    } else if (message.type === 'lobby_character') {
+      const seat = peers.get(fromPeerId)
+      if (seat) {
+        seat.characterId = message.characterId
+        broadcast()
+      }
     } else if (message.type === 'lobby_leave') {
       const seat = peers.get(fromPeerId)
       if (seat) {
@@ -385,6 +398,10 @@ export function createHostLobby({
     },
     setTableTheme(themeName: TableThemeName) {
       tableThemeName = themeName
+      broadcast()
+    },
+    setHostCharacter(characterId: string) {
+      hostCharacterId = characterId
       broadcast()
     },
     setHostReady(ready: boolean) {
@@ -610,6 +627,9 @@ export function createClientLobby({ room, onRoster, onSeatToken, onStart, onClos
       // 分配竞态中把 lobby_ready 丢在房主 peers 表建立之前。
       desiredReady = ready
       if (assignedSeat != null) sendReady()
+    },
+    setCharacter(characterId: string) {
+      room.send({ type: 'lobby_character', characterId } satisfies ClientLobbyMessage)
     },
     leave() {
       stopRetry()

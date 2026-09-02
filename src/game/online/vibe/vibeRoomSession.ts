@@ -13,6 +13,7 @@ import { createClientLobby, createHostLobby, type LobbyStartDetails, type LobbyS
 import type { PublicAiSeat } from './vibeLlm'
 import type { TableThemeName } from '../../../components/table/three/tableTheme'
 import { isTableThemeName } from '../../../components/table/three/tableThemePreference'
+import { isCharacterId } from '../../llm/animeCharacters'
 
 export interface VibeRoomSessionState {
   roomId: Ref<string>
@@ -256,6 +257,12 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     if (!started) throw new Error('大厅成员状态已变化，请确认所有玩家仍已准备')
   }
 
+  function updateCharacter(characterId: string): void {
+    if (!isCharacterId(characterId)) return
+    if (state.isHost.value) hostLobby?.setHostCharacter(characterId)
+    else clientLobby?.setCharacter(characterId)
+  }
+
   function setAiSeats(aiSeats: PublicAiSeat[]): void {
     if (!state.isHost.value) return
     hostLobby?.setAiSeats(aiSeats)
@@ -311,6 +318,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     startMatch,
     setAiSeats,
     setTableTheme,
+    updateCharacter,
     leaveRoom,
     closeRoom,
     resumeSession,

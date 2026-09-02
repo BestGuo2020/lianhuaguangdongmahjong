@@ -26,6 +26,9 @@ import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVa
 import type { TableThemeName } from './components/table/three/tableTheme'
 import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
+import type { PlayerSeed } from './game/shared/runtime/localOpening'
+import { readAnimeCharacterPreference, saveAnimeCharacterPreference, animeCharacterAvatarUrl } from './game/llm/animeCharacterPreference'
+import type { CharacterId } from './game/llm/animeCharacters'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
@@ -118,6 +121,18 @@ preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
+const animeCharacterId = ref<CharacterId>(readAnimeCharacterPreference())
+const localHumanSeed: PlayerSeed = {
+  name: '巅峰雀神',
+  avatar: animeCharacterAvatarUrl(animeCharacterId.value),
+  characterId: animeCharacterId.value,
+  playerKind: 'human',
+}
+watch(animeCharacterId, (value) => {
+  const saved = saveAnimeCharacterPreference(value)
+  localHumanSeed.characterId = saved
+  localHumanSeed.avatar = animeCharacterAvatarUrl(saved)
+})
 const vibeLlmOptions = listHostLlmOptions()
 const llmStats = computed<LlmControllerStats>(() => ({
   requests: localLlm.value.stats.requests + lotusLlm.value.stats.requests,
@@ -133,6 +148,7 @@ const localGame = useGame({
   countdownEnabled: false,
   aiControllers: localLlm.value.controllers ?? undefined,
   aiPlayerSeeds: localLlmSeeds,
+  humanPlayerSeed: localHumanSeed,
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: localAnimeFixedTts,
 })
@@ -142,6 +158,7 @@ const lotusGame = useLotusGame({
   countdownEnabled: false,
   aiControllers: lotusLlm.value.controllers ?? undefined,
   aiPlayerSeeds: lotusLlmSeeds,
+  humanPlayerSeed: localHumanSeed,
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: lotusAnimeFixedTts,
 })
@@ -151,6 +168,7 @@ const vibeRemoteGame = useVibeRemoteGame({
   waitForTableReady,
   onLlmMessage: llmHook.onLlmMessage,
   getTableThemeName: () => tableThemeName.value,
+  getCharacterId: () => animeCharacterId.value,
   animeFixedTts: remoteAnimeFixedTts,
 })
 
@@ -227,6 +245,10 @@ watch(roomTableThemeName, (themeName) => {
 })
 watch([gameMode, roomId], ([mode, currentRoomId]) => {
   if (mode === 'remote' && currentRoomId) tableThemeName.value = roomTableThemeName.value
+})
+// 联机房间内本家角色变化 → 同步到大厅座位（房主广播 / 客户端发送 lobby_character）。
+watch(animeCharacterId, (value) => {
+  if (gameMode.value === 'remote' && roomId.value) remoteActions.updateCharacter(value)
 })
 
 // SDK 无服务端房间容量元数据，「剩余房间」不再展示。
@@ -459,6 +481,8 @@ const themeLockReason = computed(() => (
           v-model:selected-rule="selectedRule"
           v-model:nickname-input="nicknameInput"
           v-model:join-code="joinCode"
+          v-model:anime-character-id="animeCharacterId"
+          :table-theme-name="tableThemeName"
           :room-id="roomId"
           :match-name="matchName"
           :room-meta="roomMeta"

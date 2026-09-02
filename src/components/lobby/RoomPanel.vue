@@ -2,6 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
+import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
+import type { CharacterId } from '../../game/llm/animeCharacters'
+import type { TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
   roomId: string
@@ -19,6 +22,10 @@ interface Props {
   closing: boolean
   matchName: string
   ruleName: string
+  /** 当前牌桌主题（二次元主题下在房间内选本家形象） */
+  tableThemeName: TableThemeName
+  /** 本家当前选择的二次元角色 */
+  characterId: CharacterId
 }
 
 const props = defineProps<Props>()
@@ -30,6 +37,7 @@ const emit = defineEmits<{
   configureAiSeats: [selections: HostLlmSeatSelection[]]
   leave: []
   close: []
+  'update:characterId': [value: CharacterId]
 }>()
 
 const PICK_SEPARATOR = '::'
@@ -130,6 +138,11 @@ function aiAt(seat: number): PublicAiSeat | undefined {
     </div>
     <p v-if="isHost && llmOptions.length" class="room-ai-hint">大模型座位将被预留；为保证至少 2 名真人，最多选择 2 席。</p>
     <p v-if="isHost && !llmOptions.length" class="room-ai-hint">未启用可用的大模型预置，空位将使用普通 AI。</p>
+    <AnimeCharacterPicker
+      v-if="tableThemeName === 'llmAnime'"
+      :model-value="characterId"
+      @update:model-value="$emit('update:characterId', $event)"
+    />
     <div class="room-owner-actions">
       <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button

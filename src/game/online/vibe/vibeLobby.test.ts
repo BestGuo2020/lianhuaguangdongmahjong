@@ -29,7 +29,7 @@ describe('vibeLobby', () => {
     })
     room.emit('peer1', { type: 'lobby_hello', nickname: '玩家1', avatar: '' })
     expect(rosters[rosters.length - 1]).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false, characterId: 'deepseek' },
       { seat: 1, peerId: 'peer1', nickname: '玩家1', avatar: '', ready: false },
     ])
   })
@@ -182,7 +182,7 @@ describe('vibeLobby', () => {
     expect(rosters[rosters.length - 1]).toHaveLength(2)
     room.emit('peer1', { type: 'lobby_leave' })
     expect(rosters[rosters.length - 1]).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false, characterId: 'deepseek' },
     ])
   })
 
@@ -579,7 +579,7 @@ describe('vibeLobby', () => {
     room.emit('peer-old', { type: 'lobby_hello', nickname: '玩家1', avatar: '', playerId: 'user-1' })
     room.emit('peer-old', { type: 'lobby_leave' })
     expect(rosters[rosters.length - 1]).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false, characterId: 'deepseek' },
       { seat: 1, peerId: 'peer-old', nickname: '玩家1', avatar: '', ready: false },
     ])
 
@@ -645,7 +645,7 @@ describe('vibeLobby', () => {
     room.emit('peer-new', { type: 'lobby_ready', ready: true })
     room.emitPeer({ type: 'leave', id: 'peer-old' })
     expect(rosters.at(-1)).toEqual([
-      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false },
+      { seat: 0, peerId: 'host-peer', nickname: '房主', avatar: '', ready: false, characterId: 'deepseek' },
       { seat: 1, peerId: 'peer-new', nickname: '账号2', avatar: '', ready: true },
     ])
 

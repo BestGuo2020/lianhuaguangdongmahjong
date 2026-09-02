@@ -251,6 +251,8 @@ interface UseVibeRemoteGameOptions {
   waitForTableReady?: () => Promise<void>
   onLlmMessage?: (localSeat: number, text: string) => void
   getTableThemeName?: () => TableThemeName
+  /** 房主本家二次元角色（用于无头引擎 seat 0 的形象）。 */
+  getCharacterId?: () => string
   /** 二次元固定台词执行器（吃碰杠胡动作音 + 胡牌后结算台词）。 */
   animeFixedTts?: AnimeFixedTtsExecutor
 }
@@ -261,6 +263,7 @@ export function useVibeRemoteGame({
   waitForTableReady,
   onLlmMessage = () => {},
   getTableThemeName = () => 'jade',
+  getCharacterId = () => 'deepseek',
   animeFixedTts,
 }: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
@@ -441,6 +444,7 @@ export function useVibeRemoteGame({
       plannedAiSeats.value = resolvedLlm.publicSeats
       const seatNames = new Map<number, string>()
       const seatAvatars = new Map<number, string>()
+      const seatCharacters = new Map<number, string>()
       // round_shuffle_start 是瞬时消息。对局中刷新/Relay 切换可能恰好发生在它发送
       // 前后，因此由房主保留当前消息，等 peer 恢复或 lobby_hello 绑定新 peerId 后
       // 定向重放，避免客户端永远没有机会发承诺。
@@ -460,9 +464,12 @@ export function useVibeRemoteGame({
       for (const seat of lobbySeats.value) {
         seatNames.set(seat.seat, seat.nickname)
         seatAvatars.set(seat.seat, seat.avatar)
+        if (seat.characterId) seatCharacters.set(seat.seat, seat.characterId)
         // 首局承诺映射已经由 lobby_start 锁定；不能把乱序到达的旧 roster
         // peer 混进当前房主的参与者集合。
       }
+      // 房主 seat 0 的本家形象来自本地选择（getCharacterId）。
+      seatCharacters.set(0, getCharacterId())
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
       const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
       const emitHostLlmMessage = async (
@@ -532,6 +539,7 @@ export function useVibeRemoteGame({
           seatByPeer,
           seatNames,
           seatAvatars,
+          seatCharacters,
           createController: (r, peerId, onPending, onAI, requestContext) => new LotusRemotePlayerController(r, peerId, onPending, undefined, onAI, requestContext),
           createGame: (controllers, waitForOpeningReady) => useLotusGame({
             remoteControllers: controllers,
@@ -558,6 +566,7 @@ export function useVibeRemoteGame({
           seatByPeer,
           seatNames,
           seatAvatars,
+          seatCharacters,
            createController: (r, peerId, onPending, onAI, requestContext) => new RemotePlayerController(r, peerId, onPending, undefined, onAI, requestContext),
           createGame: (controllers, waitForOpeningReady) => useGame({
             remoteControllers: controllers,

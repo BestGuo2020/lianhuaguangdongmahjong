@@ -39,6 +39,8 @@ export interface HostGameRunnerOptions<TController> {
   seatNames?: Map<number, string>
   /** seat → 头像（SDK 用户头像；房主 + 远端真人）。 */
   seatAvatars?: Map<number, string>
+  /** seat → 二次元角色（房主本家形象 + 远端真人 lobby_character）。 */
+  seatCharacters?: Map<number, string>
   /** 当前大厅座位表（peerId → seat）：重连恢复时优先按大厅分配恢复（比昵称可靠）。 */
   getSeatByPeer?: () => Map<string, number>
   /** 房主自视快照（seat 0 脱敏视图）：喂给房主自己的表现层 viewer。 */
@@ -84,7 +86,7 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
   /** 外部强制 AI 接管某座位（续接安全网），成功返回 true。 */
   enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
 } {
-  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, onLocalSnapshot, onLocalEvent, onPeerRecovered, openingBarrier: openingBarrierEnabled = false } = options
+  const { room, rulesetId, mode, seatByPeer, createController, createGame, seatNames, seatAvatars, seatCharacters, onLocalSnapshot, onLocalEvent, onPeerRecovered, openingBarrier: openingBarrierEnabled = false } = options
   let active = true
 
   // 这是一次房主引擎生命周期的唯一代次。刷新/重新创建房主后即使 roomId
@@ -542,6 +544,12 @@ export function startHostGame<TController>(options: HostGameRunnerOptions<TContr
       for (const [seat, avatar] of seatAvatars) {
         const player = game.players[seat]
         if (player) player.avatar = avatar
+      }
+    }
+    if (seatCharacters) {
+      for (const [seat, characterId] of seatCharacters) {
+        const player = game.players[seat]
+        if (player) player.characterId = characterId
       }
     }
     // 临时诊断：定位「闲家方位是房主方位」的座位映射问题。

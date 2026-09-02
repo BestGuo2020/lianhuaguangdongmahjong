@@ -41,6 +41,8 @@ interface UseGameOptions {
   remoteControllers?: Array<PlayerController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed | undefined>
+  /** 单机本家座位 0 的展示形象（昵称/头像/角色）。 */
+  humanPlayerSeed?: PlayerSeed
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   /** 房主权威联机：开局瞬间发牌（无动画），供客户端用全量手牌快照自行动画发牌。 */
@@ -63,6 +65,7 @@ export function useGame({
   aiControllers,
   remoteControllers,
   aiPlayerSeeds,
+  humanPlayerSeed,
   countdownEnabled = true,
   instantOpening = false,
   headless = false,
@@ -256,6 +259,7 @@ export function useGame({
     beginTurn,
     endGame,
     playerSeeds: aiPlayerSeeds,
+    humanPlayerSeed,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions & { waitForOpeningReady?: () => Promise<void> }) => {
