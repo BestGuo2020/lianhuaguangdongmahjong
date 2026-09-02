@@ -71,8 +71,9 @@ function onPortraitError(event: Event) {
 .anime-action-cue {
   position: absolute;
   z-index: 45;
-  width: clamp(96px, 8.5vw, 132px);
-  height: clamp(72px, 7vw, 102px);
+  /* R6.23：PC 立绘按用户红框目标放大约 15%（手机分档在下方媒体块，不受影响）。 */
+  width: clamp(110px, 9.8vw, 152px);
+  height: clamp(83px, 8vw, 117px);
   overflow: visible;
   pointer-events: none;
   filter: drop-shadow(3px 5px 0 rgba(45, 36, 28, .26));
@@ -160,9 +161,9 @@ function onPortraitError(event: Event) {
 .anime-action-cue.anime-action-hu,
 .anime-action-cue.anime-action-zimo,
 .anime-action-cue.anime-action-qiangganghu {
-  width: clamp(120px, 10.6vw, 166px);
-  height: clamp(92px, 8.4vw, 126px);
-  animation: anime-win-cue-serial calc(520ms + 180ms) ease-out both;
+  width: clamp(138px, 12.2vw, 191px);
+  height: clamp(106px, 9.7vw, 145px);
+  animation: anime-win-cue-serial calc(1600ms + 400ms) ease-out both;
 }
 /* 四个方向的座位锚点统一由共享样式表（src/style.css）维护；
    组件内只保留镜像、文字等纯视觉规则。 */

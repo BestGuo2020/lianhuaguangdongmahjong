@@ -97,8 +97,8 @@ describe('胡牌演出流程', () => {
     })
     expect(splitWinningTile(game.players[1].hand, game.winPresentation.value).hand).toHaveLength(13)
 
-    timers.find((timer) => timer.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION).callback()
-    timers.find((timer) => timer.delay === 2600).callback()
+    timers.filter((timer) => timer.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION).forEach((timer) => timer.callback())
+    timers.find((timer) => timer.delay === 2600)!.callback()
     expect(game.phase.value).toBe('revealing')
     expect(game.winEffect.value).toBeNull()
     expect(game.winPresentation.value?.tile).toBe('east')
@@ -129,7 +129,7 @@ describe('胡牌演出流程', () => {
     })
     expect(game.players[2].melds[0]).not.toHaveProperty('added')
     expect(game.players[2].melds[0]).not.toHaveProperty('pending')
-    timers.find((timer) => timer.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION).callback()
+    timers.filter((timer) => timer.delay === WIN_CUE_LEAD_DURATION + WIN_CUE_EXIT_DURATION).forEach((timer) => timer.callback())
     expect(game.winEffect.value).toMatchObject({
       robbedKong: true,
       robbedKongPlayerIndex: 2,

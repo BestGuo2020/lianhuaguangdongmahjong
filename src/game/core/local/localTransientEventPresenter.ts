@@ -31,7 +31,7 @@ export function createLocalTransientEventPresenter(options: LocalTransientEventP
     try { options.onTableAction?.(event) } catch { /* 表现失败不影响牌局 */ }
     options.later(() => {
       if (state.tableActionEvent.value?.id === event.id) state.tableActionEvent.value = null
-    }, 1050)
+    }, 2000)
   }
 
   function showScoreFlow(deltas: ScoreDelta[]) {

@@ -273,7 +273,7 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
       event: { id: 77, type: 'discard-win', actorIndex: 1, sourceIndex: 0, tile: 'm1', meldIndex: -1 },
     })
     expect(executeAction).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1_100)
+    await vi.advanceTimersByTimeAsync(2_100)
     expect(game.tableActionEvent.value).toBeNull()
 
     mockSocket!.receive({
@@ -535,7 +535,7 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     expect(game.winPresentation.value?.winnerIndex).toBe(0)
 
     // 动画结束 → 翻牌 → 结算弹窗
-    await vi.advanceTimersByTimeAsync(3300)
+    await vi.advanceTimersByTimeAsync(4600)
     expect(game.phase.value).toBe('revealing')
     expect(game.revealHands.value).toBe(true)
     // 亮牌前必须清掉 winEffect：否则 3D rebuild 会用新 startedAt 重播胡牌特效（"执行两遍"）
@@ -562,7 +562,7 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     mockSocket!.receive(makeSnapshot({ phase: 'drawing', round: 2, dealer: 1, lastDiscard: { tile: 'm9', from: 0, id: 1 } }))
     expect(game.phase.value).toBe('win-effect')   // 未被打断
 
-    await vi.advanceTimersByTimeAsync(4800)
+    await vi.advanceTimersByTimeAsync(6100)
     expect(game.phase.value).toBe('settled')
     expect(game.result.value).not.toBeNull()
 
@@ -677,7 +677,7 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     mockSocket!.receive(makeSnapshot({ phase: 'drawing', round: 2, dealer: 1, announcement: { text: '东2局 · 开牌', tone: 'gold', id: 2 } }))
     expect(game.phase.value).toBe('win-effect')
 
-    await vi.advanceTimersByTimeAsync(4800)
+    await vi.advanceTimersByTimeAsync(6100)
     expect(game.phase.value).toBe('settled')
 
     // 点继续：对话框保留等待其他玩家
@@ -705,7 +705,7 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
     mockSocket!.receive(settleSnapshot())
     expect(sounds).toContain('zimo.mp3')
     // 胡牌特效音：WIN_EFFECT_SOUND_DELAY（320ms）后播出，对齐本地 endGame
-    await vi.advanceTimersByTimeAsync(1020)
+    await vi.advanceTimersByTimeAsync(2320)
     expect(sounds).toContain('hu_effect_sound.mp3')
   })
 
@@ -723,7 +723,7 @@ describe('useRemoteGame 公告去重与赢牌音效', () => {
       winningPlayerIndex: 2,
     }))
     expect(sounds).toContain('hu.mp3')
-    await vi.advanceTimersByTimeAsync(1020)
+    await vi.advanceTimersByTimeAsync(2320)
     expect(sounds).toContain('hu_effect_sound.mp3')
   })
 
@@ -873,7 +873,7 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
     expect(game.openingStage.value).toBeNull()
     expect(game.phase.value).toBe('win-effect')
 
-    await vi.advanceTimersByTimeAsync(4800)
+    await vi.advanceTimersByTimeAsync(6100)
     expect(game.phase.value).toBe('settled')
 
     game.nextRound()

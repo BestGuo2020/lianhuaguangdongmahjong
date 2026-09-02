@@ -4,10 +4,10 @@ export const WIN_EFFECT_DURATION = 2600
 export const WIN_REVEAL_DURATION = 1500
 export const WIN_EFFECT_SOUND_DELAY = 320
 
-/** DOM 胡牌立绘的独占引导段；结束后再启动 Three.js 光束。 */
-export const WIN_CUE_LEAD_DURATION = 520
+/** DOM 胡牌立绘的独占引导段；结束后再启动 Three.js 光束（R6.23：按用户要求立绘停留约 2 秒）。 */
+export const WIN_CUE_LEAD_DURATION = 1600
 /** 立绘退出段，保证透明度归零后才让光束占用中央区域。 */
-export const WIN_CUE_EXIT_DURATION = 180
+export const WIN_CUE_EXIT_DURATION = 400
 
 export const REDUCED_WIN_EFFECT_DURATION = 420
 export const REDUCED_WIN_REVEAL_DURATION = 360

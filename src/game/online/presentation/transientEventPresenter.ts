@@ -64,7 +64,7 @@ export function createTransientEventPresenter({
     state.tableActionEvent.value = event
     later(() => {
       if (state.tableActionEvent.value?.id === event.id) state.tableActionEvent.value = null
-    }, 1050)
+    }, 2000)
 
     // 胡牌声音由结算时间线统一播放，避免 table_action 与 settled 快照双响。
     const actor = state.players[event.actorIndex]

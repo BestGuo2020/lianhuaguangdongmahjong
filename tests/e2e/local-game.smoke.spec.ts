@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
+// 源码变更后 vite dev 首次重打包可能超过默认 30s（R6.23 记录的环境慢载）；放开关口。
+test.setTimeout(120_000)
 
 test('starts a local match and begins the opening deal', async ({ page }) => {
   const pageErrors: string[] = []

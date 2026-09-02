@@ -37,7 +37,7 @@ describe('transientEventPresenter', () => {
     expect(state.tableActionEvent.value?.actorIndex).toBe(1)
     expect(state.tableActionEvent.value?.sourceIndex).toBe(2)
     expect(playSound).toHaveBeenCalledWith('peng.mp3')
-    await vi.advanceTimersByTimeAsync(1050)
+    await vi.advanceTimersByTimeAsync(2000)
     expect(state.tableActionEvent.value).toBeNull()
   })
 
@@ -111,7 +111,7 @@ describe('transientEventPresenter', () => {
     expect(state.scoreFlowEvent.value?.deltas).toEqual([
       { playerIndex: 0, amount: 300 }, { playerIndex: 2, amount: -100 },
     ])
-    await vi.advanceTimersByTimeAsync(1050)
+    await vi.advanceTimersByTimeAsync(2000)
     expect(state.scoreFlowEvent.value).toBeNull()
   })
 

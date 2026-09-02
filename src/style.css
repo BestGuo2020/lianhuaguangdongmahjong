@@ -291,9 +291,9 @@ button { font: inherit; }
 
 .seat-top { top: 49px; left: 50%; transform: translateX(-50%) perspective(700px) rotateX(-2deg); }
 .seat-top .avatar-wrap { margin: 0 auto 7px; transform: translate(-60%, -30%); }
-.seat-right { top: 50%; right: 17px; transform: translateY(-50%) perspective(700px) rotateY(-4deg); transform-origin: right center; }
+.seat-right { top: 42%; right: 17px; transform: translateY(-50%) perspective(700px) rotateY(-4deg); transform-origin: right center; }
 .seat-right .avatar-wrap { margin: 0 0 8px auto; }
-.seat-left { top: 50%; left: 17px; transform: translateY(-50%) perspective(700px) rotateY(4deg); transform-origin: left center; }
+.seat-left { top: 42%; left: 17px; transform: translateY(-50%) perspective(700px) rotateY(4deg); transform-origin: left center; }
 .seat-left .avatar-wrap { margin-bottom: 8px; }
 .opponent-hand { display: flex; gap: 2px; padding: 4px 6px 8px; border-bottom: 5px solid rgba(92,58,26,.9); border-radius: 3px 3px 9px 9px; background: linear-gradient(180deg, transparent 42%, rgba(0,0,0,.34)); box-shadow: 0 7px 10px rgba(0,0,0,.3); }
 .seat-right .opponent-hand, .seat-left .opponent-hand {
@@ -797,8 +797,8 @@ button { font: inherit; }
 .seat-top .avatar-wrap { width: clamp(210px, 18vw, 286px); min-width: 0; }
 .seat-top .opponent-hand { gap: 1px; padding: 5px 8px 11px; transform: perspective(700px) rotateX(-7deg); transform-origin: 50% 100%; }
 .seat-top .opponent-hand .mahjong-tile { --tile-width: clamp(30px, 2.8vw, 48px); }
-.seat-left { top: 50%; left: 2.2%; }
-.seat-right { top: 50%; right: 2.2%; }
+.seat-left { top: 43%; left: 2.2%; }
+.seat-right { top: 43%; right: 2.2%; }
 .seat-left .opponent-hand, .seat-right .opponent-hand { width: 47px; gap: 1px; padding: 4px 5px; }
 .seat-left .opponent-hand { transform: perspective(600px) rotateZ(-5deg) rotateY(8deg); }
 .seat-right .opponent-hand { transform: perspective(600px) rotateZ(5deg) rotateY(-8deg); }
@@ -915,8 +915,8 @@ button { font: inherit; }
 }
 .table-loading-in-game .table-loading-card { display: none; }
 
-.has-three-scene .seat-left { top: 50%; left: calc(var(--table-box-left) + 2.7cqw); }
-.has-three-scene .seat-right { top: 50%; right: calc(var(--table-box-left) + 2.7cqw); }
+.has-three-scene .seat-left { top: 35%; left: calc(var(--table-box-left) + 2.7cqw); }
+.has-three-scene .seat-right { top: 35%; right: calc(var(--table-box-left) + 2.7cqw); }
 .has-three-scene .seat-top {
   top: 5%;
   right: auto;
@@ -2098,7 +2098,7 @@ button { font: inherit; }
   --hud-top-edge: calc(var(--safe-top) + var(--topbar-height));
   --hud-bottom-edge: var(--safe-bottom);
   --top-seat-anchor: calc(var(--hud-top-edge) + var(--hud-gap));
-  --side-seat-anchor: 50%;
+  --side-seat-anchor: 40%;
   /* 牌桌盒基准：相机纵向 FOV 固定 → 牌桌居中、屏幕宽 ≈ 高×16/9（等价重构前的 16:9 信箱）。
      窗口宽于 16:9 时，座位/手牌必须锚到该盒而非窗口边缘，否则头像会漂到屏幕两侧。 */
   --table-box-w: min(100cqw, calc(100cqh * 16 / 9));
@@ -2415,7 +2415,7 @@ button { font: inherit; }
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5) {
   .game-app {
     --top-seat-inline-anchor: 86%;
-    --side-seat-anchor: 50%;
+    --side-seat-anchor: 39%;
     --top-seat-resolved-left: var(--top-seat-inline-anchor);
   }
   /* 偏方档（4:3 平板）对家与右家纵向错开，无需用右家卡宽钳制横向前进；
@@ -2430,7 +2430,7 @@ button { font: inherit; }
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
   .game-app {
     --top-seat-inline-anchor: 66%;
-    --side-seat-anchor: 50%;
+    --side-seat-anchor: 40%;
     --top-seat-resolved-left: clamp(
       46px,
       var(--top-seat-inline-anchor),
@@ -2461,11 +2461,11 @@ button { font: inherit; }
     --action-art-scale: 2;
   }
   .has-three-scene .seat-left {
-    top: 50%;
+    top: 35%;
     left: calc(var(--table-box-left) + 2.7cqw);
   }
   .has-three-scene .seat-right {
-    top: 50%;
+    top: 35%;
     right: calc(var(--table-box-left) + 2.7cqw);
   }
   .has-three-scene .seat-top {
