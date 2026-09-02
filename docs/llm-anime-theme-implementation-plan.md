@@ -923,6 +923,8 @@ Wave 1 开始前必须形成并评审通过的具体交付物：12 个角色的 
 > 2026-09-02 补充（R6.22 座位垂直居中 + 立绘远离牌河 + 动作字×2骑角）：①全部主题左右家座位容器三端垂直居中（锚点统一 50%，实测左右对称）；②PC/平板 llmAnime 立绘向远离牌河方向小幅平移（对家上移贴顶栏、左右家外移+上移、本家上移，手机不动）；③动作字 ×2 且几何中心骑在立绘角点（实测 dx=0/dy=0）。完整响应式 E2E 16 passed（17.3m）、typecheck/单测/构建/diff check 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。注：①中的 50% 座位居中经用户红框截图确认后于 R6.23 回退至原锚点。
 >
 > 2026-09-02 补充（R6.23 立绘放大+停留2秒+座位回红框位置）：PC 立绘放大约 15% 至用户红框目标；动作 cue 停留统一 2 秒（普通 2000ms；胡牌串行 1600+400ms；reduced-motion 保持 450/0）；左右家座位按红框撤回原锚点（桌面 35% 等）。定向响应式 E2E 4 passed、smoke 2 passed、单测 276 files/2291 tests、构建与 diff check 全绿；已提交 master（未 push），`pnpm sync:vibehub` 按用户要求暂缓。
+>
+> 2026-09-02 补充（收尾：push + sync vibehub，里程碑关闭）：用户最终视觉验收通过。①`git push origin master`（含用户两笔 `cfa5f6a 立绘微调`、`c503488 结算样式微调`）；②`pnpm sync:vibehub` 同步并提交（vibehub `12aa04d`）；③修复同步清单遗留问题（用户选定方案 A）：`shared/settlement/settlementTimeline.ts` 从 `$vibehubKeep` 移除、改随 master（否则 vibehub 旧版结算时间线缺 R3/R6.23 串行合同，导致 13 个结算测试失败），同步更新 `docs/branch-sync-workflow.md` 与脚本；④vibehub 复跑 typecheck + `pnpm test`（100 files/923 tests，另 2 skipped）全绿；⑤`git push origin master` + `git push origin vibehub`（master `af58984`、vibehub `67d5324`）。`vibehub:solo` 全流程对局脚本默认连线上部署工作区（`https://vibe.lumigrav.space/works/B5AJupT1/`），因该外部页面未显示“莲花广麻”标题而未能跑通，属外部环境依赖，非本仓库回归。至此双分支同步关闭，响应式里程碑“可提交/可同步”状态转为已完成。
 
 只有同时满足以下条件，PC / 移动端响应式里程碑才允许标记为完成：
 

@@ -112,15 +112,6 @@ button { font: inherit; }
     #07110d;
 }
 
-.table-depth { position: absolute; z-index: 2; inset: 7.5% 6.5% 12%; pointer-events: none; transform: perspective(1100px) rotateX(1.5deg); transform-style: preserve-3d; }
-.table-depth::before { content: ""; position: absolute; inset: 2.5% 3.2%; border: 1px solid rgba(207,176,103,.08); clip-path: polygon(8% 0, 92% 0, 100% 11%, 100% 89%, 92% 100%, 8% 100%, 0 89%, 0 11%); box-shadow: inset 0 0 40px rgba(0,0,0,.14); }
-.table-edge { position: absolute; display: block; border: 1px solid rgba(183,138,63,.22); background: linear-gradient(180deg, rgba(123,80,36,.32), rgba(19,15,10,.32)); box-shadow: 0 5px 15px rgba(0,0,0,.22), inset 0 1px rgba(255,220,154,.12); }
-.edge-top, .edge-bottom { right: 22%; left: 22%; height: 7px; border-radius: 50%; }
-.edge-top { top: 0; transform: perspective(500px) rotateX(58deg); }
-.edge-bottom { bottom: 0; transform: perspective(500px) rotateX(-58deg); }
-.edge-left, .edge-right { top: 21%; bottom: 21%; width: 7px; border-radius: 50%; }
-.edge-left { left: 0; transform: perspective(500px) rotateY(-58deg); }
-.edge-right { right: 0; transform: perspective(500px) rotateY(58deg); }
 
 .top-bar {
   position: absolute;
@@ -295,77 +286,8 @@ button { font: inherit; }
 .seat-right .avatar-wrap { margin: 0 0 8px auto; }
 .seat-left { top: 42%; left: 17px; transform: translateY(-50%) perspective(700px) rotateY(4deg); transform-origin: left center; }
 .seat-left .avatar-wrap { margin-bottom: 8px; }
-.opponent-hand { display: flex; gap: 2px; padding: 4px 6px 8px; border-bottom: 5px solid rgba(92,58,26,.9); border-radius: 3px 3px 9px 9px; background: linear-gradient(180deg, transparent 42%, rgba(0,0,0,.34)); box-shadow: 0 7px 10px rgba(0,0,0,.3); }
-.seat-right .opponent-hand, .seat-left .opponent-hand {
-  width: 38px;
-  height: auto;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 2px;
-  padding: 4px 4px;
-  border: 0;
-  border-right: 5px solid rgba(92,58,26,.9);
-  border-radius: 4px 9px 9px 4px;
-  background: linear-gradient(90deg, transparent 30%, rgba(0,0,0,.3));
-  box-shadow: 7px 0 10px rgba(0,0,0,.28);
-}
-.seat-right .opponent-hand .mahjong-tile, .seat-left .opponent-hand .mahjong-tile {
-  --tile-width: 36px;
-  width: 36px;
-  height: 18px;
-  margin: 0;
-  aspect-ratio: auto;
-  border-radius: 4px;
-  transform: none;
-  box-shadow: 2px 0 0 #9faa97, 3px 1px 2px rgba(0,0,0,.42);
-}
-.seat-left .opponent-hand { border-right: 0; border-left: 5px solid rgba(92,58,26,.9); border-radius: 9px 4px 4px 9px; background: linear-gradient(-90deg, transparent 30%, rgba(0,0,0,.3)); box-shadow: -7px 0 10px rgba(0,0,0,.28); }
-.seat-right .opponent-hand .tile-back::before, .seat-left .opponent-hand .tile-back::before { inset: 2px 3px 4px; border-radius: 2px; }
-.seat-right .opponent-hand .tile-back::after, .seat-left .opponent-hand .tile-back::after { right: 5px; bottom: 1px; left: 5px; height: 2px; }
-.seat-melds { position: absolute; display: flex; gap: 4px; }
-.seat-top .seat-melds { top: 67px; right: 100%; margin-right: 10px; }
-.seat-right .seat-melds { top: 52px; right: 48px; flex-direction: column; }
-.seat-left .seat-melds { top: 52px; left: 48px; flex-direction: column; }
-.mini-meld { display: flex; gap: 1px; }
 
-.table-machine {
-  position: absolute;
-  z-index: 9;
-  top: 43%;
-  left: 50%;
-  width: clamp(106px, 11vw, 168px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%) rotate(45deg);
-  border: 8px solid #1d1e1d;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #262a29, #080b0a 47%, #1b1d1c);
-  box-shadow: 8px 13px 0 rgba(7,9,8,.75), 0 21px 34px rgba(0,0,0,.6), inset 0 0 0 2px #4b4034, inset 0 0 25px #000;
-  transform-style: preserve-3d;
-}
-.table-machine::before { content: ""; position: absolute; inset: -15px; z-index: -1; border: 1px solid rgba(203,163,77,.16); border-radius: 22px; background: linear-gradient(135deg, rgba(75,67,50,.38), rgba(5,7,6,.62)); box-shadow: inset 0 0 18px #000; }
-.table-machine::after { content: ""; position: absolute; top: 5px; right: 5px; bottom: 5px; left: 5px; border-top: 1px solid rgba(255,223,145,.2); border-left: 1px solid rgba(255,223,145,.1); border-radius: 7px; pointer-events: none; }
-.machine-screen { position: absolute; inset: 21%; display: grid; grid-template-columns: 1fr auto; place-items: center; align-content: center; border: 1px solid #7d6743; border-radius: 6px; background: radial-gradient(circle, #202624, #060807 70%); transform: rotate(-45deg); color: #cfbc8a; text-align: center; }
-.machine-screen small { grid-column: 1 / 3; color: #78847d; font-size: 8px; letter-spacing: .22em; }
-.machine-screen strong { font: 700 clamp(22px, 2.7vw, 42px) Georgia, serif; color: #f4d369; text-shadow: 0 0 8px rgba(255,197,76,.45); }
-.machine-screen span { align-self: end; margin-bottom: 6px; color: #8f9b95; font-size: 8px; }
-.wind { position: absolute; display: grid; place-items: center; width: 22px; height: 22px; transform: rotate(-45deg); color: #827661; font: 700 11px serif; }
-.wind-top { top: -5px; left: calc(50% - 11px); }.wind-bottom { bottom: -5px; left: calc(50% - 11px); }.wind-left { top: calc(50% - 11px); left: -5px; }.wind-right { top: calc(50% - 11px); right: -5px; }
-.active-wind { border-radius: 50%; background: #9f252b; color: white; box-shadow: 0 0 7px #c13b3f; }
-.turn-ring { position: absolute; inset: -17px; border: 3px solid transparent; border-top-color: #e9c65e; border-radius: 20px; transition: transform .35s ease; filter: drop-shadow(0 0 5px #e6be55); }
 
-.discard-zone { position: absolute; z-index: 5; display: grid; gap: 3px; padding: 5px; border-radius: 7px; transform-style: preserve-3d; }
-.discard-top, .discard-bottom { grid-template-columns: repeat(6, auto); }
-.discard-left, .discard-right { grid-template-columns: repeat(4, auto); }
-.discard-top { top: 21%; left: 50%; transform: translateX(-50%) perspective(500px) rotateX(-7deg); }
-.discard-bottom { bottom: 24%; left: 50%; transform: translateX(-50%) perspective(500px) rotateX(7deg); }
-.discard-left { top: 31%; left: 29%; transform: translateX(-50%) rotate(90deg) perspective(500px) rotateX(-6deg); }
-.discard-right { top: 31%; right: 29%; transform: translateX(50%) rotate(-90deg) perspective(500px) rotateX(-6deg); }
-.discard-zone .mahjong-tile { box-shadow: 0 2px 0 #9ca697, 0 4px 4px rgba(0,0,0,.42); }
-
-.last-discard { position: absolute; z-index: 16; top: 43%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; transform-style: preserve-3d; }
-.last-discard::after { content: ""; position: absolute; right: -18%; bottom: -14%; left: -18%; height: 13px; border-radius: 50%; background: rgba(0,0,0,.5); filter: blur(6px); }
-.last-discard .mahjong-tile { --tile-width: clamp(44px, 5vw, 74px); z-index: 2; box-shadow: 0 5px 0 #a9b09f, 0 0 0 3px rgba(255,205,83,.58), 0 11px 13px rgba(0,0,0,.58); }
-.last-discard.from-top { transform: translate(-50%, -165%); }.last-discard.from-bottom { transform: translate(-50%, 60%); }.last-discard.from-left { transform: translate(-180%, -50%) rotate(90deg); }.last-discard.from-right { transform: translate(80%, -50%) rotate(-90deg); }
 
 .announcement { position: absolute; z-index: 40; top: 34%; left: 50%; transform: translate(-50%, -50%); padding: 4px 37px; background: linear-gradient(90deg, transparent, rgba(10,11,8,.86) 20%, rgba(10,11,8,.86) 80%, transparent); pointer-events: none; }
 .announcement span { display: block; min-width: 140px; color: #f3d47c; font: 900 clamp(20px, 2.7vw, 40px) "Noto Serif SC", serif; letter-spacing: .12em; text-align: center; text-shadow: 0 2px 4px #000, 0 0 14px rgba(240,188,67,.45); }
@@ -732,18 +654,9 @@ button { font: inherit; }
 .score-flow-enter-active { animation: score-flow-in .78s .12s cubic-bezier(.16,.84,.24,1) both; }
 .score-flow-leave-active { transition: opacity .16s, filter .16s; }
 .score-flow-leave-to { opacity: 0; filter: blur(2px); }
-.discard-pop-enter-active { animation-duration: .42s; animation-timing-function: cubic-bezier(.16,.84,.28,1.08); }.discard-pop-leave-active { transition: opacity .16s; }.discard-pop-leave-to { opacity: 0; }
-.from-top.discard-pop-enter-active { animation-name: discard-from-top; }
-.from-right.discard-pop-enter-active { animation-name: discard-from-right; }
-.from-bottom.discard-pop-enter-active { animation-name: discard-from-bottom; }
-.from-left.discard-pop-enter-active { animation-name: discard-from-left; }
 .actions-enter-active, .actions-leave-active { transition: opacity .2s, transform .2s; }.actions-enter-from, .actions-leave-to { opacity: 0; transform: translateY(8px); }
 
 @keyframes pulse { 50% { transform: scale(1.4); opacity: .6; } }
-@keyframes discard-from-top { from { opacity: .2; transform: translate(-50%, -430%) scale(.72) rotateX(18deg); } to { opacity: 1; transform: translate(-50%, -165%) scale(1); } }
-@keyframes discard-from-right { from { opacity: .2; transform: translate(430%, -50%) rotate(-90deg) scale(.72); } to { opacity: 1; transform: translate(80%, -50%) rotate(-90deg) scale(1); } }
-@keyframes discard-from-bottom { from { opacity: .2; transform: translate(-50%, 520%) scale(.72) rotateX(-18deg); } to { opacity: 1; transform: translate(-50%, 60%) scale(1); } }
-@keyframes discard-from-left { from { opacity: .2; transform: translate(-430%, -50%) rotate(90deg) scale(.72); } to { opacity: 1; transform: translate(-180%, -50%) rotate(90deg) scale(1); } }
 @keyframes announce-in { from { opacity: 0; transform: translate(-50%, -45%) scale(.8); filter: blur(3px); } }
 @keyframes table-action-in { from { opacity: 0; scale: .55; filter: brightness(1.8) blur(4px); } 70% { scale: 1.08; } }
 @keyframes win-cue-serial {
@@ -760,72 +673,16 @@ button { font: inherit; }
 
 /* 强透视桌面：按参考视频的上窄下宽镜头重构整张牌桌 */
 
-.table-depth { z-index: 2; inset: 10% 13% 12%; transform: none; }
-.table-depth::before {
-  inset: 5% 5% 4%;
-  border: 0;
-  clip-path: polygon(11% 0, 89% 0, 100% 100%, 0 100%, .4% 99.2%, 99.6% 99.2%, 88.4% 1.4%, 11.6% 1.4%);
-  background: rgba(6,31,22,.38);
-  box-shadow: none;
-}
-.table-depth::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  top: 23%;
-  right: 24%;
-  bottom: 19%;
-  left: 24%;
-  clip-path: polygon(12% 0, 88% 0, 100% 17%, 100% 83%, 88% 100%, 12% 100%, 0 83%, 0 17%);
-  background:
-    linear-gradient(35deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 0 0/50% 50%,
-    linear-gradient(-35deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 100% 0/50% 50%,
-    linear-gradient(145deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 0 100%/50% 50%,
-    linear-gradient(-145deg, transparent 49.5%, rgba(3,28,19,.5) 50% 50.5%, transparent 51%) 100% 100%/50% 50%,
-    rgba(37,66,35,.3);
-  background-repeat: no-repeat;
-  box-shadow: inset 0 0 0 2px rgba(4,37,25,.7), inset 0 0 0 4px rgba(74,133,97,.12);
-}
-.table-edge { opacity: .32; background: linear-gradient(180deg, rgba(12,35,25,.7), rgba(3,18,12,.6)); border-color: rgba(3,27,18,.55); }
-.edge-top, .edge-bottom { right: 18%; left: 18%; height: 10px; }
-.edge-left, .edge-right { top: 13%; bottom: 13%; width: 10px; }
 
 .mahjong-tile { --tile-width: clamp(44px, 4.75vw, 86px); box-shadow: 0 5px 0 #d8ddd2, 0 9px 0 #4e9b43, 0 13px 9px rgba(0,0,0,.54), inset 0 1px rgba(255,255,255,.9); }
 .mahjong-tile.small { --tile-width: clamp(25px, 2.45vw, 42px); box-shadow: 0 3px 0 #d5dbd0, 0 6px 0 #4c9341, 0 8px 5px rgba(0,0,0,.5); position: relative; top: -3px; }
 
 .seat-top { top: 13%; transform: translateX(calc(115% - 140px)); }
 .seat-top .avatar-wrap { width: clamp(210px, 18vw, 286px); min-width: 0; }
-.seat-top .opponent-hand { gap: 1px; padding: 5px 8px 11px; transform: perspective(700px) rotateX(-7deg); transform-origin: 50% 100%; }
-.seat-top .opponent-hand .mahjong-tile { --tile-width: clamp(30px, 2.8vw, 48px); }
 .seat-left { top: 43%; left: 2.2%; }
 .seat-right { top: 43%; right: 2.2%; }
-.seat-left .opponent-hand, .seat-right .opponent-hand { width: 47px; gap: 1px; padding: 4px 5px; }
-.seat-left .opponent-hand { transform: perspective(600px) rotateZ(-5deg) rotateY(8deg); }
-.seat-right .opponent-hand { transform: perspective(600px) rotateZ(5deg) rotateY(-8deg); }
-.seat-left .opponent-hand .mahjong-tile, .seat-right .opponent-hand .mahjong-tile {
-  --tile-width: 42px;
-  width: 42px;
-  height: 24px;
-  box-shadow: 3px 0 0 #9ca896, 5px 2px 4px rgba(0,0,0,.5);
-}
 
-.table-machine {
-  top: 43%;
-  width: clamp(168px, 16vw, 270px);
-  transform: translate(-50%, -50%) perspective(700px) rotateX(8deg);
-  border-width: 11px;
-  border-radius: 10px;
-  box-shadow: 0 13px 0 #070807, 0 27px 35px rgba(0,0,0,.62), inset 0 0 0 2px #4b4034, inset 0 0 30px #000;
-}
-.table-machine::before { inset: -14px; border-radius: 15px; }
-.machine-screen { inset: 22%; transform: none; }
-.wind { transform: none; }
-.turn-ring { inset: -18px; border-radius: 15px; }
 
-.discard-top { top: 20%; }
-.discard-bottom { bottom: 24%; }
-.discard-left { left: 29%; }
-.discard-right { right: 29%; }
 
 .user-area { right: 5%; left: 5%; bottom: 0; min-height: clamp(125px, 21vh, 205px); }
 .user-identity { left: -3.3%; bottom: 40px; }
@@ -834,8 +691,6 @@ button { font: inherit; }
 .hand-rack .mahjong-tile { box-shadow: 0 6px 0 #d8ddd2, 0 10px 0 #4e9b43, 0 15px 9px rgba(0,0,0,.6), inset 0 1px rgba(255,255,255,.9); }
 .hand-rack .hand-tile-slot.drawn { margin-left: clamp(10px, 1vw, 18px); }
 
-.last-discard .mahjong-tile { --tile-width: clamp(58px, 6vw, 96px); box-shadow: 0 7px 0 #a7afa0, 0 0 0 3px rgba(255,205,83,.62), 0 17px 18px rgba(0,0,0,.62); }
-.last-discard.from-top { transform: translate(-50%, -75%); }
 
 /* Three.js 真实桌面坐标系：三家暗牌不再依附屏幕边缘。 */
 .mahjong-scene {
@@ -924,17 +779,6 @@ button { font: inherit; }
   transform: translateX(-50%);
 }
 .has-three-scene .seat-top .avatar-wrap { width: clamp(180px, 16vw, 245px); transform: none; }
-.has-three-scene .table-machine {
-  top: 45%;
-  width: clamp(130px, 12vw, 195px);
-  border-width: 7px;
-  background: rgba(10, 13, 12, .83);
-  box-shadow: 0 8px 0 rgba(3, 4, 3, .8), 0 17px 22px rgba(0,0,0,.46), inset 0 0 0 1px #5d503e;
-}
-.has-three-scene .discard-top { top: 25%; }
-.has-three-scene .discard-left { top: 35%; left: 34%; }
-.has-three-scene .discard-right { top: 35%; right: 34%; }
-.has-three-scene .last-discard { top: 45%; }
 
 /* 玩家信息统一为头像、昵称、积分的竖向卡片。 */
 .avatar-wrap,
@@ -1069,9 +913,6 @@ button { font: inherit; }
   .has-three-scene .seat-top { right: 2%; left: auto; transform: none; }
   .seat-left .avatar-wrap, .seat-right .avatar-wrap { width: 68px; min-width: 0; padding: 4px; }
   .seat-left .player-info, .seat-right .player-info { display: flex; }
-  .discard-left { left: 20%; }.discard-right { right: 20%; }
-  .table-machine { top: 45%; }
-  .discard-top { top: 25%; }.discard-bottom { bottom: 28%; }
   .user-area { right: 1%; left: 1%; }.user-identity { left: 1%; bottom: 96px; width: 68px; min-width: 0; padding: 4px; }.user-identity > div:last-child { display: flex; }
   .mahjong-tile { --tile-width: min(6.6vw, 38px); }.mahjong-tile.small { --tile-width: min(4.7vw, 25px); }
   .hand-rack { box-sizing: border-box; max-width: 100%; gap: 0; padding-right: 2px; padding-left: 2px; overflow: visible; }
