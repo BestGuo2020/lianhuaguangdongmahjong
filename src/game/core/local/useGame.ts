@@ -20,6 +20,7 @@ import { createLocalTurnOrchestrator } from './localTurnOrchestrator'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 import type { PlayerSeed } from '../../shared/runtime/localOpening'
+import { resolveAnimeAudioPolicy } from '../presentation/animeAudioPolicy'
 
 interface UseGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -39,6 +40,8 @@ interface UseGameOptions {
   headless?: boolean
   /** 房主权威联机：每一局进入首回合前等待所有在线客户端完成开局表现。 */
   waitForOpeningReady?: () => Promise<void>
+  /** 表现层动态读取当前牌桌主题（二次元主题声音策略据此决定是否报牌名）。 */
+  getTableThemeName?: () => string
   ruleset?: RuleSet
 }
 
@@ -53,6 +56,7 @@ export function useGame({
   instantOpening = false,
   headless = false,
   waitForOpeningReady,
+  getTableThemeName = () => 'jade',
   ruleset = DEFAULT_RULESET,
 }: UseGameOptions = {}) {
   const sound = headless ? () => {} : playSound
@@ -179,6 +183,13 @@ export function useGame({
     showTableAction: transientEvents.showTableAction,
     playSound: sound,
     playSoundAndWait: soundAndWait,
+    shouldAnnounceDiscard: (_playerIndex, player) => (
+      resolveAnimeAudioPolicy({
+        themeName: getTableThemeName(),
+        playerKind: player.playerKind,
+        isLlm: player.isLlm,
+      }).discard.tileName !== 'suppress'
+    ),
     later: scheduler.later,
     wait: scheduler.wait,
     stopCountdown: countdown.stop,

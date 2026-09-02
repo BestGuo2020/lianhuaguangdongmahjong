@@ -6,6 +6,9 @@ import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import type { RoundResult } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
+import type { TableThemeName } from '../table/three/tableTheme'
+import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
+import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 
@@ -24,6 +27,7 @@ interface Props {
   humanSeats?: number[]
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  themeName?: TableThemeName
 }
 
 const props = defineProps<Props>()
@@ -38,6 +42,29 @@ function onAvatarError(entry?: { avatar?: string; seat?: number; fallbackAvatar?
   if (!entry) return
   const target = entry.fallbackAvatar ?? (entry.seat != null ? defaultAvatarForSeat(entry.seat) : '')
   if (target && entry.avatar !== target) entry.avatar = target
+}
+
+function displayedAvatar(entry?: {
+  avatar?: string
+  characterId?: string
+  playerKind?: 'human' | 'llm' | 'bot'
+  isLlm?: boolean
+}) {
+  if (!entry?.avatar) return ''
+  return props.themeName === 'llmAnime'
+    ? animeAvatarForPlayer({
+      avatar: entry.avatar,
+      characterId: entry.characterId,
+      playerKind: entry.playerKind,
+      isLlm: entry.isLlm,
+    })
+    : entry?.avatar
+}
+
+function animeEntryStyle(entry?: { characterId?: string }) {
+  return props.themeName === 'llmAnime'
+    ? { '--anime-accent': animeCharacterAccent(entry?.characterId) }
+    : undefined
 }
 
 /** 结算标题：莲花麻将按 winType 展示（天胡/地胡/点炮），否则按旧逻辑。 */
@@ -76,13 +103,13 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         </div>
         <div v-if="result.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
+            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">
-          <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }">
+          <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }" :style="animeEntryStyle(entry)">
             <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
-            <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
+            <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <span class="player-line">
               {{ entry.name }}
               <i v-if="entry.playerIndex === dealer" class="mark dealer">庄</i>
@@ -92,14 +119,16 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
             <b>{{ entry.score }}</b>
           </article>
         </div>
-        <div class="result-actions">
-          <button class="secondary" @click="$emit('update:resultVisible', false)">查看牌桌</button>
-          <button :disabled="waitingNextRound" @click="$emit('nextRound')">
-            <template v-if="waitingNextRound">等待其他玩家确定...</template>
-            <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
-          </button>
+        <div class="settlement-footer">
+          <div class="result-actions">
+            <button class="secondary" @click="$emit('update:resultVisible', false)">查看牌桌</button>
+            <button :disabled="waitingNextRound" @click="$emit('nextRound')">
+              <template v-if="waitingNextRound">等待其他玩家确定...</template>
+              <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
+            </button>
+          </div>
+          <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
         </div>
-        <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
       </section>
     </div>
   </Transition>
@@ -110,18 +139,24 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         <p>{{ matchName }} · 对局结束</p>
         <h2>最终排名</h2>
         <div class="final-rankings">
-          <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]">
+          <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]" :style="animeEntryStyle(entry)">
             <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
-            <img :src="entry.avatar" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
+            <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <div class="final-name">
               <strong>{{ entry.name }}</strong>
               <small v-if="entry.playerIndex === 0">你</small>
+              <button
+                v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
+                class="report-link" @click="$emit('report', entry.name)"
+              >举报</button>
             </div>
             <em>{{ entry.score }}</em>
           </article>
         </div>
-        <button @click="$emit('returnToLobby')">返回大厅</button>
-        <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
+        <div class="settlement-footer final-footer">
+          <button @click="$emit('returnToLobby')">返回大厅</button>
+          <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
+        </div>
       </section>
     </div>
   </Transition>

@@ -472,6 +472,7 @@ function changeTableTheme(theme: TableThemeName) {
           :human-seats="humanSeats"
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
+          :theme-name="tableThemeName"
           @next-round="nextRound"
           @return-to-lobby="returnToLobby"
           @report="reportPlayer"
