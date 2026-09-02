@@ -17,10 +17,16 @@ interface Props {
   signalQuality: number
   signalWarningThreshold?: number
   themeName: TableThemeName
+  /** 联机房间内锁定主题切换（非房主 / 开局后）。 */
+  themeLocked?: boolean
+  /** 锁定时给用户的提示文案。 */
+  themeLockReason?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   signalWarningThreshold: 0,
+  themeLocked: false,
+  themeLockReason: '主题由房主控制',
 })
 const emit = defineEmits<{
   quit: []
@@ -51,6 +57,7 @@ function closeThemeMenu(event: PointerEvent) {
 }
 
 function toggleThemeMenu() {
+  if (props.themeLocked) return
   audioMenuOpen.value = false
   themeMenuOpen.value = !themeMenuOpen.value
 }
@@ -83,9 +90,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
       <div ref="themePicker" class="theme-picker">
         <button
           class="theme-toggle topbar-control"
+          :class="{ locked: themeLocked }"
+          :disabled="themeLocked"
           aria-label="切换牌桌主题"
           :aria-expanded="themeMenuOpen"
-          title="切换牌桌主题"
+          :title="themeLocked ? themeLockReason : '切换牌桌主题'"
           @click.stop="toggleThemeMenu"
         >
           <span class="theme-toggle-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
