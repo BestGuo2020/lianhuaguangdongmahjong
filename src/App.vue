@@ -118,6 +118,7 @@ const localGame = useGame({
   countdownEnabled: false,
   aiControllers: localLlm.value.controllers ?? undefined,
   aiPlayerSeeds: localLlmSeeds,
+  getTableThemeName: () => tableThemeName.value,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -125,6 +126,7 @@ const lotusGame = useLotusGame({
   countdownEnabled: false,
   aiControllers: lotusLlm.value.controllers ?? undefined,
   aiPlayerSeeds: lotusLlmSeeds,
+  getTableThemeName: () => tableThemeName.value,
 })
 const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,

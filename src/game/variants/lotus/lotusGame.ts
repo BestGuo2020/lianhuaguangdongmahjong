@@ -24,6 +24,7 @@ import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
+import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
 
 interface UseLotusGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -42,6 +43,8 @@ interface UseLotusGameOptions {
   headless?: boolean
   /** 房主权威联机：每一局进入首回合前等待所有在线客户端完成开局表现。 */
   waitForOpeningReady?: () => Promise<void>
+  /** 表现层动态读取当前牌桌主题（二次元主题声音策略据此决定是否报牌名）。 */
+  getTableThemeName?: () => string
   ruleset?: RuleSet
 }
 
@@ -56,6 +59,7 @@ export function useLotusGame({
   instantOpening = false,
   headless = false,
   waitForOpeningReady,
+  getTableThemeName = () => 'jade',
   ruleset = LOTUS_RULESET,
 }: UseLotusGameOptions = {}) {
   const sound = headless ? () => {} : playSound
@@ -189,6 +193,13 @@ export function useLotusGame({
     endDraw,
     playSound: sound,
     playSoundAndWait: soundAndWait,
+    shouldAnnounceDiscard: (_playerIndex, player) => (
+      resolveAnimeAudioPolicy({
+        themeName: getTableThemeName(),
+        playerKind: player.playerKind,
+        isLlm: player.isLlm,
+      }).discard.tileName !== 'suppress'
+    ),
     later: timer.later,
     stopCountdown: countdown.stop,
     followDealer,
