@@ -70,7 +70,11 @@ import { isTableThemeName } from '../../components/table/three/tableThemePrefere
 import type { AnimeFixedTtsExecutor, AnimeSeat } from '../llm/animeFixedTtsExecutor'
 
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
-const AUTHORITY_SILENCE_TIMEOUT_MS = 25000
+// 必须严格大于房主的 REMOTE_REQUEST_TIMEOUT_MS（25000ms）：房主在等待远端响应时
+// 会跳过普通快照广播，若两侧同为 25s，客户端看门狗恰好在房主 AI 接管/恢复广播
+// 落地前开枪重进（「对局权威连续静默」每 ~60s 循环），新 peerId 又打乱续局确认，
+// 造成第二局无法正常开。多留 15s 让房主的接管快照先到，再判定真实静默。
+const AUTHORITY_SILENCE_TIMEOUT_MS = 40000
 
 /** 房主自视：把远程动作消息映射到本地权威引擎的动作方法（房主自己就是权威，不走网络）。 */
 function sendToEngine(game: GamePort, message: RemotePlayerActionMessage) {
