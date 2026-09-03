@@ -19,7 +19,11 @@ export type AnimeSeat = 0 | 1 | 2 | 3
 export type AnimeFixedTtsEventId = string | number
 /** 首次冷合成通常超过 900ms；覆盖火山主音色的正常请求窗口，缓存命中仍立即播放。 */
 export const ANIME_ACTION_TTS_WAIT_MS = 4_500
-export const ANIME_ROUND_TTS_WAIT_MS = 2_000
+// 赛后感言必须覆盖 4 家串行发言的最长冷合成窗口：单家合成超时被记为 failed 后
+// 会立刻轮到下一位，若各家合成都偏慢，结算会在第 1 家发言后提前打开，与房主
+// 等满 4 家的节奏分叉。6s 覆盖慢网关 + 排队播放启动，仍被 waitForCompletion 的
+// 完整播放约束。
+export const ANIME_ROUND_TTS_WAIT_MS = 6_000
 
 export const ANIME_TABLE_ACTION_VOICE_KEYS: Readonly<Record<TableActionType, AnimeActionVoiceKey>> = {
   chi: 'chi',

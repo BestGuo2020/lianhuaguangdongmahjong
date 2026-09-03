@@ -75,8 +75,12 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
   const timeline = createSettlementTimeline<EndGameOptions>({
     ...options,
     playSound: (name, volume) => {
-      const suppress = isLlmVoiceSeat(state.winningPlayerIndex.value)
-        && (name === 'zimo.mp3' || name === 'hu.mp3')
+      // 二次元主题固定台词 TTS 承担胡牌/自摸人声（fixedResultVoiceForCurrentSettlement），
+      // 不再叠加本地 zimo.mp3/hu.mp3；LLM 座位同样只播后端吐槽，不叠旧音效。
+      const isWinSound = name === 'zimo.mp3' || name === 'hu.mp3'
+      const suppress = isWinSound && (
+        isLlmVoiceSeat(state.winningPlayerIndex.value) || fixedResultVoiceForCurrentSettlement
+      )
       if (!suppress) return volume === undefined
         ? options.playSound(name)
         : options.playSound(name, volume)
