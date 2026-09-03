@@ -80,11 +80,11 @@ export const LLM_ANIME_SCENE_PROFILE: TableSceneRenderProfile = {
   toneMapping: THREE.NeutralToneMapping,
   exposure: 1,
   fog: false,
-  hemisphere: { skyColor: 0xfff4e8, groundColor: 0x2b3b32, intensity: .65 },
-  keyLight: { color: 0xfff0dc, intensity: .75, position: [-4, 22, 6], targetZ: -1.65 },
+  hemisphere: { skyColor: 0xf6f8f6, groundColor: 0x2b3b32, intensity: .65 },
+  keyLight: { color: 0xffffff, intensity: .75, position: [-4, 22, 6], targetZ: -1.65 },
   areaLights: [
     {
-      color: 0xfff0dc,
+      color: 0xffffff,
       intensity: 4,
       width: 16,
       height: 10,
