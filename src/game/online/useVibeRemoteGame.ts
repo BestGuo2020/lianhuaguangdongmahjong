@@ -907,8 +907,12 @@ export function useVibeRemoteGame({
     animeFixedTts,
     isLlmSeat: (localSeat) => state.players[localSeat]?.isLlm === true,
     onResultMissingAfterReveal: (settledRound, settledHonba) => {
+      // 二次元主题固定台词：房主与客户端都要等四家赛后感言播完（约 12s）才进入
+      // settled 并广播结算事实。这里不能 0s 就请求补发，否则正常发言期间的
+      // revealing 快照会被当成「没有结算」→ 1s 后重进 → 打断续局确认（第二局
+      // 开不了）。等足发言时长后再走补发/重进。
       console.warn('[client] 亮牌动画结束仍缺少结算结果，单次请求房主补发结算事实')
-      armSettlementRecovery(settledRound, settledHonba, 0, true)
+      armSettlementRecovery(settledRound, settledHonba, 30000, true)
     },
   })
   // win_effect 使用独立于快照的事件序号；新房主生命周期/新场次会显式归零。
@@ -927,7 +931,7 @@ export function useVibeRemoteGame({
     settlementRecoveryHand = null
     settlementPresentationWasReady = false
   }
-  function armSettlementRecovery(round: number, currentHonba: number, delay = 5000, syncFirst = true) {
+  function armSettlementRecovery(round: number, currentHonba: number, delay = 30000, syncFirst = true) {
     clearSettlementRecovery()
     settlementRecoveryTimer = window.setTimeout(() => {
       settlementRecoveryTimer = null
@@ -969,8 +973,9 @@ export function useVibeRemoteGame({
       return
     }
     // 同一局的公共事实、定向快照和胡牌事件可能先后到达。它们只能确认同一个
-    // 看门狗，不能反复把 5 秒截止时间向后推迟；否则终局密集状态变化会让恢复饥饿。
-    if (decision === 'retry') armSettlementRecovery(round, currentHonba, 0, true)
+    // 看门狗，不能反复把截止时间向后推迟；否则终局密集状态变化会让恢复饥饿。
+    // 重挂也沿用默认 15s 发言窗口：胡牌后四家固定台词约 12s，settled 必然先到。
+    if (decision === 'retry') armSettlementRecovery(round, currentHonba)
   }
   watch(() => state.winPresentation.value, (presentation) => {
     if (!presentation || hostGame.value != null || state.matchFinished.value) return
