@@ -820,7 +820,7 @@ export const llmAnimeTheme: TableTheme = {
     },
   },
   tableFelt: true,
-  tableVignette: .14,
+  tableVignette: .38,
   tableFeltVariation: 8,
   tableGuide: {
     dark: '#30443a',
