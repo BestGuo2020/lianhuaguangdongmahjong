@@ -822,6 +822,11 @@ export const llmAnimeTheme: TableTheme = {
   tableFelt: true,
   tableVignette: .38,
   tableFeltVariation: 8,
+  // 外部动漫桌布：12 个 Q 版角色围边 + 中央留白（整张铺，不平铺）。优先于程序化绒面。
+  tableSurfaceTexture: {
+    url: `${import.meta.env.BASE_URL}themes/llm-anime/v1/table-felt.png`,
+    tint: 0xffffff,
+  },
   tableGuide: {
     dark: '#30443a',
     light: '#b5c2aa',
