@@ -56,7 +56,7 @@ describe('vibe host LLM runtime', () => {
     ], new Set([0, 1]), settings())
 
     expect(resolved.privateSeats).toEqual([{ seat: 2, presetId: 'gpt', style: '高冷' }])
-    expect(resolved.publicSeats[0]).toMatchObject({ seat: 2, displayName: 'GPT（高冷）', model: 'gpt-test' })
+    expect(resolved.publicSeats[0]).toMatchObject({ seat: 2, displayName: 'GPT龙姬', model: 'gpt-test' })
     const wire = JSON.stringify(resolved.publicSeats)
     expect(wire).not.toContain('presetId')
     expect(wire).not.toContain('another-secret')
@@ -71,7 +71,7 @@ describe('vibe host LLM runtime', () => {
 
     expect(core.controllers).toHaveLength(3)
     expect(lotus.controllers).toHaveLength(3)
-    expect(core.seeds[1]).toMatchObject({ name: '大肥鱼（话痨）', isLlm: true })
+    expect(core.seeds[1]).toMatchObject({ name: '大肥鱼', isLlm: true })
     expect(lotus.profiles.get(2)).toMatchObject({ style: '话痨', voiceKey: 'deepseek' })
   })
 
