@@ -50,7 +50,7 @@ describe('大模型二次元牌桌主题', () => {
     expect(llmAnimeTheme.tile).not.toBe(defaultTableTheme.tile)
     expect(llmAnimeTheme.tileGeometry).toEqual({ segments: 4, baseRadius: .07, capRadius: .075 })
     expect(llmAnimeTheme.tableFelt).toBe(true)
-    expect(llmAnimeTheme.tableVignette).toBe(.14)
+    expect(llmAnimeTheme.tableVignette).toBe(.38)
     expect(llmAnimeTheme.tableFeltVariation).toBe(8)
     expect(llmAnimeTheme.tableGuide).toBeDefined()
     expect(llmAnimeTheme.tableGuide?.slotOpacity).toBe(.42)
