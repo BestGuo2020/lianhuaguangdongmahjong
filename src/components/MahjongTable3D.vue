@@ -81,8 +81,8 @@ const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off
 const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
 // 廉价真3D 实验开关（dev）：?cheapTable=1 关闭实时阴影/描边/环境反射/面光，走雀魂式低成本渲染。
 const cheapTable = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cheapTable')
-// 二次元 cel 渲染开关（dev）：?animeTable=1 牌体切 MeshToonMaterial + 硬边明暗 + 描边，替代 PBR。
-const animeTable = import.meta.env.DEV && new URLSearchParams(window.location.search).has('animeTable')
+// 二次元 cel 渲染：llmAnime 主题默认启用（?animeTable=0 强制关闭回退写实）。
+let animeTable = false
 // 开发态调试钩子：暴露累计渲染帧数 + 最近一帧 draw calls，供 E2E 验证按需渲染与廉价档收益。
 if (import.meta.env.DEV) {
   ;(window as unknown as { __tableRenderedFrames?: () => number }).__tableRenderedFrames = () => renderedFrames
@@ -329,6 +329,8 @@ onMounted(async () => {
   if (destroyed) return
 
   const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
+  // llmAnime 默认走二次元 cel；?animeTable=0 可强制关闭回退写实 PBR。
+  animeTable = activeThemeName === 'llmAnime' && new URLSearchParams(window.location.search).get('animeTable') !== '0'
   const activeTheme = tableThemeByName(activeThemeName)
   // 真机降低牌体圆角细分（segments→2）：RoundedBoxGeometry 三角面数随 segments² 增长，
   // 是 494k 三角面的主要来源之一；桌面保持原细分（llmAnime=4）。
