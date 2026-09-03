@@ -60,6 +60,7 @@ function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
     name: player.name,
     avatar: player.avatar,
     isLlm: player.isLlm === true,
+    characterId: player.characterId,
     score: player.score,
     seat: player.seat,
     discards: [...player.discards],

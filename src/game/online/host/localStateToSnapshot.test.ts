@@ -107,4 +107,20 @@ describe('serializeStateToSnapshot', () => {
     const snapshot = serializeStateToSnapshot(source, 0, context())
     expect(snapshot.wallBreakIndex).toBe(104)
   })
+
+  it('本家形象 characterId 随快照下发（二次元主题角色同步）', () => {
+    // 回归：房主引擎 seat 0 的 characterId 已经由 applySeatProfiles 正确覆盖，
+    // 但 toServerPlayer 此前漏序列化该字段，客户端/表现层回退成默认 deepseek。
+    const players = [
+      { ...player(0, []), characterId: 'qwen' },
+      { ...player(1, []), characterId: 'gpt' },
+      player(2, []),
+      player(3, []),
+    ]
+    const snapshot = serializeStateToSnapshot(makeSource(players), 0, context())
+    expect(snapshot.players[0].characterId).toBe('qwen')
+    expect(snapshot.players[1].characterId).toBe('gpt')
+    expect(snapshot.players[2].characterId).toBeUndefined()
+    expect(decodeServerMessage(snapshot)).not.toBeNull()
+  })
 })
