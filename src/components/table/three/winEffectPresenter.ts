@@ -411,6 +411,7 @@ function addWinEffect() {
     if (!winEffectAnimation) return null
     const effect = winEffectAnimation
     const progress = Math.max(0, Math.min(1, (time - effect.startedAt) / effect.duration))
+    if (progress >= 1) return null
     const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .15)
     if (effect.winningTile) {
       effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)

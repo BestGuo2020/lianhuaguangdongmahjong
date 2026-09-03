@@ -100,7 +100,7 @@ export function createDicePresenter(options: DicePresenterOptions) {
     if (stage !== 'dice') {
       if (group.visible) group.visible = false
       lastStage = stage
-      return
+      return false
     }
     const enteredDice = lastStage !== 'dice'
     // 重新进入骰子阶段，或骰子值变化（莲花麻将两次掷骰）时重新起势
@@ -124,6 +124,7 @@ export function createDicePresenter(options: DicePresenterOptions) {
       if (progress < settleStart) die.quaternion.copy(rollingQuaternion(index, progress))
       else die.quaternion.copy(rollingQuaternion(index, settleStart)).slerp(settledQuaternion(options.getValues()[index] || 1), (progress - settleStart) / (1 - settleStart))
     })
+    return progress < 1
   }
 
   setVisible(options.getOpeningStage() === 'dice')

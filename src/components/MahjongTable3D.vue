@@ -81,11 +81,30 @@ let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') === 'on'
   || (new URLSearchParams(window.location.search).get('aa') !== 'off' && !isMobileLike)
 const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
+// 开发态调试钩子：暴露累计渲染帧数，供 E2E 验证「静止停帧」后不再重绘。
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __tableRenderedFrames?: () => number }).__tableRenderedFrames = () => renderedFrames
+}
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
   onChange: applyQuality,
 })
 let lastFrameAt = 0
+// 静止停帧：只有「有动画在跑」或「状态变更（dirty）」时才重绘，否则停掉 RAF。
+let rendering = false
+let dirty = false
+let started = false
+let renderedFrames = 0
+// 静止停顿后重新开画时，帧间隔会被放大成一个假的大间隔，喂给 adaptiveQuality 会误判卡顿。
+// 超过该阈值的间隔视为「新的一段」，frameMs 归零，不参与降档判断。
+const FRAME_GAP_RESET_MS = 250
+
+function invalidate() {
+  // 挂载期（首帧 render() 之前）的变更由首帧统一绘制，避免在 compileAsync 期间提前开画。
+  if (!started) return
+  dirty = true
+  if (!rendering && !animationFrame) animationFrame = requestAnimationFrame(render)
+}
 
 function own(resource) {
   staticResources.push(resource)
@@ -231,6 +250,7 @@ function resize() {
   camera.aspect = width / Math.max(height, 1)
   camera.fov = responsiveCameraFov(renderProfile.camera.fov, camera.aspect)
   camera.updateProjectionMatrix()
+  invalidate()
 }
 
 function applyQuality(levelIndex = adaptiveQuality.level) {
@@ -243,41 +263,54 @@ function applyQuality(levelIndex = adaptiveQuality.level) {
     shadowLight.shadow.map = null
     shadowLight.shadow.needsUpdate = true
   }
+  invalidate()
 }
 
 function render(time = 0) {
+  animationFrame = 0
   if (!renderer) return
-  perfHud?.frame(time)
-  const frameMs = lastFrameAt ? time - lastFrameAt : 0
-  lastFrameAt = time
-  adaptiveQuality.frame(frameMs)
-  let cameraShakeX = 0
-  let cameraShakeZ = 0
-  let exposure = renderProfile.exposure
-  dicePresenter?.animate(time)
-  tableTiles.animate(time, scratchVector)
-  const winFrame = winEffectPresenter?.animate(time)
-  if (winFrame) {
-    // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
-    // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
-    exposure = renderProfile.exposure + (winFrame.exposure - DEFAULT_TABLE_SCENE_PROFILE.exposure)
-    cameraShakeX = winFrame.shakeX
-    cameraShakeZ = winFrame.shakeZ
+  rendering = true
+  dirty = false
+  let keepGoing = false
+  try {
+    perfHud?.frame(time)
+    const frameMs = lastFrameAt && time > lastFrameAt && time - lastFrameAt <= FRAME_GAP_RESET_MS
+      ? time - lastFrameAt
+      : 0
+    lastFrameAt = time
+    adaptiveQuality.frame(frameMs)
+    let cameraShakeX = 0
+    let cameraShakeZ = 0
+    let exposure = renderProfile.exposure
+    const diceActive = dicePresenter?.animate(time) ?? false
+    const tilesActive = tableTiles.animate(time, scratchVector)
+    const winFrame = winEffectPresenter?.animate(time)
+    if (winFrame) {
+      // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
+      // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
+      exposure = renderProfile.exposure + (winFrame.exposure - DEFAULT_TABLE_SCENE_PROFILE.exposure)
+      cameraShakeX = winFrame.shakeX
+      cameraShakeZ = winFrame.shakeZ
+    }
+    renderer.toneMappingExposure = exposure
+    const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
+    camera.position.set(...cameraPosition)
+    camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+    if (cameraLabEnabled && canvas.value) {
+      const canvasElement = canvas.value as HTMLCanvasElement
+      canvasElement.dataset.cameraPosition = cameraPosition
+        .map((value) => value.toFixed(6))
+        .join(',')
+      canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
+    }
+    if (outlineEffect) outlineEffect.render(scene, camera)
+    else renderer.render(scene, camera)
+    renderedFrames += 1
+    keepGoing = diceActive || tilesActive || Boolean(winFrame) || dirty
+  } finally {
+    rendering = false
   }
-  renderer.toneMappingExposure = exposure
-  const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
-  camera.position.set(...cameraPosition)
-  camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
-  if (cameraLabEnabled && canvas.value) {
-    const canvasElement = canvas.value as HTMLCanvasElement
-    canvasElement.dataset.cameraPosition = cameraPosition
-      .map((value) => value.toFixed(6))
-      .join(',')
-    canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
-  }
-  if (outlineEffect) outlineEffect.render(scene, camera)
-  else renderer.render(scene, camera)
-  animationFrame = requestAnimationFrame(render)
+  if (keepGoing) animationFrame = requestAnimationFrame(render)
 }
 
 onMounted(async () => {
@@ -466,6 +499,7 @@ onMounted(async () => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   if (destroyed) return
+  started = true
   render(performance.now())
   // ready 必须晚于资源、图集、着色器和合成首帧，否则父层不得隐藏加载层。
   emit('ready')
@@ -502,18 +536,34 @@ watch(
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。
-  () => tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' }),
+  () => {
+    tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' })
+    invalidate()
+  },
 )
 
 watch(() => props.openingStage, (stage) => {
   dicePresenter?.setVisible(stage === 'dice')
+  invalidate()
 })
 
-watch(() => props.dealerIndex, () => tableScene?.updateMachineTexture())
+// 骰子值/掷骰者变化（莲花麻将二次掷骰）只影响骰子动画，单独监听并请求重绘。
+watch(() => props.diceValues.join(',') + '|' + props.diceThrowerIndex, () => invalidate())
+
+watch(() => props.dealerIndex, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
 
 // 剩余牌数与当前玩家只影响中央机器 LCD（数字 / 高亮边），单独监听即可，避免整桌重建
-watch(() => props.wallCount, () => tableScene?.updateMachineTexture())
-watch(() => props.currentPlayer, () => tableScene?.updateMachineTexture())
+watch(() => props.wallCount, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
+watch(() => props.currentPlayer, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
 
 onBeforeUnmount(() => {
   destroyed = true
