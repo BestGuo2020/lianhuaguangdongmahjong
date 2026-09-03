@@ -173,7 +173,12 @@ export function createSettlementTimeline({
       id: Date.now(),
     }
     if (!isLlmSeat(state.winningPlayerIndex.value)) {
-      playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+      // 二次元主题的胡牌/自摸人声由固定台词 TTS 承担（queueFixedRound），
+      // 这里不再叠加本地 hu.mp3/zimo.mp3，避免固定台词与旧音效双响。
+      const policy = resolveAnimeAudioPolicy({ themeName: getThemeName(), playerKind: 'unknown' })
+      if (policy.resultVoice !== 'fixed-line') {
+        playSound(presentation.discardWin || presentation.robbedKong ? 'hu.mp3' : 'zimo.mp3')
+      }
     }
     if (!reduceMotion) {
       later(() => {

@@ -20,6 +20,7 @@ import { createRemoteLobbyController } from './game/online/orchestration/remoteL
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
+import { preloadAnimeCharacterAssets } from './game/core/presentation/llmAnimeAssets'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
@@ -105,7 +106,10 @@ const localAnimeFixedTts = createFixedTtsExecutor()
 const lotusAnimeFixedTts = createFixedTtsExecutor()
 const remoteAnimeFixedTts = createFixedTtsExecutor()
 watch(tableThemeName, (theme) => {
-  if (theme === 'llmAnime') return
+  if (theme === 'llmAnime') {
+    void preloadAnimeCharacterAssets()
+    return
+  }
   localAnimeFixedTts.cancel()
   lotusAnimeFixedTts.cancel()
   remoteAnimeFixedTts.cancel()
