@@ -117,11 +117,104 @@ export function createStaticTableScene(options: TableSceneOptions) {
 // - tableFelt：近白底 + 低对比度蓝灰颗粒（保持材质基础色、只做轻微明暗起伏），模拟绒面颗粒且不显脏；
 // - tableVignette：径向渐变边缘压暗（中心亮、四周暗）。
 // 无平铺（ClampToEdge），整张覆盖台面 UV。
+
+/** 把主题的机械接缝（中央大盘 + 升牌槽）画到给定的 2D 画布上；无 tableGuide 则跳过。 */
+function drawTableGuide(ctx: CanvasRenderingContext2D, size: number) {
+  if (!theme.tableGuide) return
+  const guideScale = size / 256
+  const { dark, light, opacity, slotDark = dark, slotOpacity = opacity * .58 } = theme.tableGuide
+  const roundedRectPath = (x: number, y: number, width: number, height: number, radius: number) => {
+    x *= guideScale
+    y *= guideScale
+    width *= guideScale
+    height *= guideScale
+    radius *= guideScale
+    const right = x + width
+    const bottom = y + height
+    ctx.moveTo(x + radius, y)
+    ctx.lineTo(right - radius, y)
+    ctx.quadraticCurveTo(right, y, right, y + radius)
+    ctx.lineTo(right, bottom - radius)
+    ctx.quadraticCurveTo(right, bottom, right - radius, bottom)
+    ctx.lineTo(x + radius, bottom)
+    ctx.quadraticCurveTo(x, bottom, x, bottom - radius)
+    ctx.lineTo(x, y + radius)
+    ctx.quadraticCurveTo(x, y, x + radius, y)
+    ctx.closePath()
+  }
+  const traceCenterSeam = () => roundedRectPath(99, 99, 58, 58, 3.5)
+  const traceLiftSlots = () => {
+    // 从牌墙真实世界坐标反推桌布 UV；不再用截图像素猜位置。
+    const guideSize = 256
+    const surfaceHalf = 11.65
+    const surfaceCenterZ = -1.62
+    const worldToGuideX = (worldX: number) => (worldX + surfaceHalf) / (surfaceHalf * 2) * guideSize
+    const worldToGuideZ = (worldZ: number) => (worldZ - surfaceCenterZ + surfaceHalf) / (surfaceHalf * 2) * guideSize
+    const worldLengthToGuide = (length: number) => length / (surfaceHalf * 2) * guideSize
+    tableLiftSlots().forEach((slot) => {
+      const width = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.length : slot.width)
+      const height = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.width : slot.length)
+      roundedRectPath(
+        worldToGuideX(slot.centerX) - width / 2,
+        worldToGuideZ(slot.centerZ) - height / 2,
+        width,
+        height,
+        Math.min(width, height) * .08,
+      )
+    })
+  }
+  const drawGuide = (
+    offsetX: number,
+    offsetY: number,
+    strokeStyle: string,
+    alpha: number,
+    lineWidth: number,
+    trace: () => void,
+  ) => {
+    ctx.save()
+    ctx.translate(offsetX * guideScale, offsetY * guideScale)
+    ctx.globalAlpha = alpha
+    ctx.strokeStyle = strokeStyle
+    ctx.lineWidth = lineWidth * guideScale
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    trace()
+    ctx.stroke()
+    ctx.restore()
+  }
+  // 中央大盘接缝保留原有层次。
+  drawGuide(0, 0, dark, opacity, .3, traceCenterSeam)
+  drawGuide(0, -.35, light, opacity * .3, .16, traceCenterSeam)
+  // 升牌槽保持细尺寸，但用独立深色提高可读性；高光仍只作克制的单侧提边。
+  drawGuide(0, 0, slotDark, slotOpacity, .25, traceLiftSlots)
+  drawGuide(0, -.12, light, slotOpacity * .22, .12, traceLiftSlots)
+}
+
+/** 把外部桌布图与主题接缝合成到同一张纹理上，保留机械接缝的层次。 */
+function composeSurfaceWithGuide(imageTexture: THREE.Texture): THREE.Texture {
+  const size = 1024
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx || !imageTexture.image) return imageTexture
+  try {
+    ctx.drawImage(imageTexture.image as CanvasImageSource, 0, 0, size, size)
+  } catch {
+    return imageTexture
+  }
+  drawTableGuide(ctx, size)
+  const texture = own(new THREE.CanvasTexture(canvas))
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
+  return texture
+}
+
 function makeTableSurfaceTexture() {
   // 带机械接缝的主题用 1024：1 个真实纹理像素映射到画面约 1–2px，
   // 既能稳定显示，又不会像低分辨率放大线那样发粗。
   const size = theme.tableGuide ? 1024 : 256
-  const guideScale = size / 256
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
@@ -153,74 +246,7 @@ function makeTableSurfaceTexture() {
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, size, size)
   }
-  if (theme.tableGuide) {
-    const { dark, light, opacity, slotDark = dark, slotOpacity = opacity * .58 } = theme.tableGuide
-    const roundedRectPath = (x: number, y: number, width: number, height: number, radius: number) => {
-      x *= guideScale
-      y *= guideScale
-      width *= guideScale
-      height *= guideScale
-      radius *= guideScale
-      const right = x + width
-      const bottom = y + height
-      ctx.moveTo(x + radius, y)
-      ctx.lineTo(right - radius, y)
-      ctx.quadraticCurveTo(right, y, right, y + radius)
-      ctx.lineTo(right, bottom - radius)
-      ctx.quadraticCurveTo(right, bottom, right - radius, bottom)
-      ctx.lineTo(x + radius, bottom)
-      ctx.quadraticCurveTo(x, bottom, x, bottom - radius)
-      ctx.lineTo(x, y + radius)
-      ctx.quadraticCurveTo(x, y, x + radius, y)
-      ctx.closePath()
-    }
-    const traceCenterSeam = () => roundedRectPath(99, 99, 58, 58, 3.5)
-    const traceLiftSlots = () => {
-      // 从牌墙真实世界坐标反推桌布 UV；不再用截图像素猜位置。
-      const guideSize = 256
-      const surfaceHalf = 11.65
-      const surfaceCenterZ = -1.62
-      const worldToGuideX = (worldX: number) => (worldX + surfaceHalf) / (surfaceHalf * 2) * guideSize
-      const worldToGuideZ = (worldZ: number) => (worldZ - surfaceCenterZ + surfaceHalf) / (surfaceHalf * 2) * guideSize
-      const worldLengthToGuide = (length: number) => length / (surfaceHalf * 2) * guideSize
-      tableLiftSlots().forEach((slot) => {
-        const width = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.length : slot.width)
-        const height = worldLengthToGuide(slot.orientation === 'horizontal' ? slot.width : slot.length)
-        roundedRectPath(
-          worldToGuideX(slot.centerX) - width / 2,
-          worldToGuideZ(slot.centerZ) - height / 2,
-          width,
-          height,
-          Math.min(width, height) * .08,
-        )
-      })
-    }
-    const drawGuide = (
-      offsetX: number,
-      offsetY: number,
-      strokeStyle: string,
-      alpha: number,
-      lineWidth: number,
-      trace: () => void,
-    ) => {
-      ctx.save()
-      ctx.translate(offsetX * guideScale, offsetY * guideScale)
-      ctx.globalAlpha = alpha
-      ctx.strokeStyle = strokeStyle
-      ctx.lineWidth = lineWidth * guideScale
-      ctx.lineJoin = 'round'
-      ctx.beginPath()
-      trace()
-      ctx.stroke()
-      ctx.restore()
-    }
-    // 中央大盘接缝保留原有层次。
-    drawGuide(0, 0, dark, opacity, .3, traceCenterSeam)
-    drawGuide(0, -.35, light, opacity * .3, .16, traceCenterSeam)
-    // 升牌槽保持细尺寸，但用独立深色提高可读性；高光仍只作克制的单侧提边。
-    drawGuide(0, 0, slotDark, slotOpacity, .25, traceLiftSlots)
-    drawGuide(0, -.12, light, slotOpacity * .22, .12, traceLiftSlots)
-  }
+  drawTableGuide(ctx, size)
   const texture = own(new THREE.CanvasTexture(canvas))
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
   texture.colorSpace = THREE.SRGBColorSpace
@@ -796,7 +822,12 @@ function addTable() {
   const jade = own(tileMaterial({
     ...theme.table.jade,
     ...(options.surfaceTexture
-      ? { map: options.surfaceTexture, color: theme.tableSurfaceTexture?.tint ?? 0xffffff }
+      ? {
+        map: theme.tableGuide
+          ? composeSurfaceWithGuide(options.surfaceTexture)
+          : options.surfaceTexture,
+        color: theme.tableSurfaceTexture?.tint ?? 0xffffff,
+      }
       : theme.tableFelt || theme.tableVignette
         ? { map: makeTableSurfaceTexture() }
         : {}),
