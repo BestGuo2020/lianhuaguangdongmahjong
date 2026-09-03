@@ -238,7 +238,7 @@ function presetName(id: string | null): string {
           <span>昵称</span>
           <input
             v-model="selected.nickname" type="text" data-testid="llm-nickname"
-            :placeholder="`默认：${defaultNicknameFor(selected.baseUrl, selected.name)}（对局显示：昵称（策略））`"
+            :placeholder="`默认：${defaultNicknameFor(selected.baseUrl, selected.name)}（对局显示：仅昵称）`"
           >
         </label>
         <label v-if="selected.fromCustomTemplate" class="llm-row">

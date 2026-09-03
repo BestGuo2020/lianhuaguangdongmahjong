@@ -76,16 +76,38 @@ const isMobileLike = typeof window.matchMedia === 'function'
 // URL 带 ?pr=<数字> 可覆盖。
 let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || (isMobileLike ? 2.5 : 3)
 
-// 抗锯齿开关：桌面默认开；真机默认关 MSAA（DPR 2.2 下整屏 4× 采样 fill 极大）。
-// URL 带 ?aa=on/off 可覆盖。
-const aaEnabled = new URLSearchParams(window.location.search).get('aa') === 'on'
-  || (new URLSearchParams(window.location.search).get('aa') !== 'off' && !isMobileLike)
+// 抗锯齿：默认开（二次元渲染已足够轻，真机也能扛）；?aa=off 可关。
+const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
 const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
+// 廉价真3D 实验开关（dev）：?cheapTable=1 关闭实时阴影/描边/环境反射/面光，走雀魂式低成本渲染。
+const cheapTable = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cheapTable')
+// 二次元 cel 渲染：llmAnime 主题默认启用（?animeTable=0 强制关闭回退写实）。
+let animeTable = false
+// 开发态调试钩子：暴露累计渲染帧数 + 最近一帧 draw calls，供 E2E 验证按需渲染与廉价档收益。
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __tableRenderedFrames?: () => number }).__tableRenderedFrames = () => renderedFrames
+  ;(window as unknown as { __tableDrawCalls?: () => number }).__tableDrawCalls = () => renderer?.info.render.calls ?? 0
+}
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
   onChange: applyQuality,
 })
 let lastFrameAt = 0
+// 静止停帧：只有「有动画在跑」或「状态变更（dirty）」时才重绘，否则停掉 RAF。
+let rendering = false
+let dirty = false
+let started = false
+let renderedFrames = 0
+// 静止停顿后重新开画时，帧间隔会被放大成一个假的大间隔，喂给 adaptiveQuality 会误判卡顿。
+// 超过该阈值的间隔视为「新的一段」，frameMs 归零，不参与降档判断。
+const FRAME_GAP_RESET_MS = 250
+
+function invalidate() {
+  // 挂载期（首帧 render() 之前）的变更由首帧统一绘制，避免在 compileAsync 期间提前开画。
+  if (!started) return
+  dirty = true
+  if (!rendering && !animationFrame) animationFrame = requestAnimationFrame(render)
+}
 
 function own(resource) {
   staticResources.push(resource)
@@ -194,13 +216,17 @@ let shadowLight: THREE.DirectionalLight | null = null
 let glossyMaterials = true
 let renderProfile: TableSceneRenderProfile = DEFAULT_TABLE_SCENE_PROFILE
 
-// 共享牌体材质：创建时把满配参数存入 userData，高负载时清零 clearcoat/specular/ior 以砍掉片元开销。
-const tileMaterials: THREE.MeshPhysicalMaterial[] = []
-function trackTileMaterial(material: THREE.MeshPhysicalMaterial) {
-  material.userData.fullClearcoat = material.clearcoat
-  material.userData.fullClearcoatRoughness = material.clearcoatRoughness
-  material.userData.fullSpecularIntensity = material.specularIntensity
-  material.userData.fullIor = material.ior
+// 共享牌体材质：写实档把满配 PBR 参数存入 userData，高负载时清零 clearcoat/specular/ior；
+// 二次元档（ToonMaterial）没有这些字段，track/apply 里按 instanceof 跳过。
+type TileMaterial = THREE.MeshPhysicalMaterial | THREE.MeshToonMaterial
+const tileMaterials: TileMaterial[] = []
+function trackTileMaterial(material: TileMaterial): TileMaterial {
+  if (material instanceof THREE.MeshPhysicalMaterial) {
+    material.userData.fullClearcoat = material.clearcoat
+    material.userData.fullClearcoatRoughness = material.clearcoatRoughness
+    material.userData.fullSpecularIntensity = material.specularIntensity
+    material.userData.fullIor = material.ior
+  }
   tileMaterials.push(material)
   return material
 }
@@ -208,7 +234,8 @@ function trackTileMaterial(material: THREE.MeshPhysicalMaterial) {
 function applyGlossy(glossy: boolean) {
   if (glossyMaterials === glossy) return
   glossyMaterials = glossy
-  const change = (m: THREE.MeshPhysicalMaterial) => {
+  const change = (m: TileMaterial) => {
+    if (!(m instanceof THREE.MeshPhysicalMaterial)) return
     m.clearcoat = glossy ? m.userData.fullClearcoat : 0
     m.clearcoatRoughness = glossy ? m.userData.fullClearcoatRoughness : 0
     m.specularIntensity = glossy ? m.userData.fullSpecularIntensity : 0
@@ -231,6 +258,7 @@ function resize() {
   camera.aspect = width / Math.max(height, 1)
   camera.fov = responsiveCameraFov(renderProfile.camera.fov, camera.aspect)
   camera.updateProjectionMatrix()
+  invalidate()
 }
 
 function applyQuality(levelIndex = adaptiveQuality.level) {
@@ -243,41 +271,54 @@ function applyQuality(levelIndex = adaptiveQuality.level) {
     shadowLight.shadow.map = null
     shadowLight.shadow.needsUpdate = true
   }
+  invalidate()
 }
 
 function render(time = 0) {
+  animationFrame = 0
   if (!renderer) return
-  perfHud?.frame(time)
-  const frameMs = lastFrameAt ? time - lastFrameAt : 0
-  lastFrameAt = time
-  adaptiveQuality.frame(frameMs)
-  let cameraShakeX = 0
-  let cameraShakeZ = 0
-  let exposure = renderProfile.exposure
-  dicePresenter?.animate(time)
-  tableTiles.animate(time, scratchVector)
-  const winFrame = winEffectPresenter?.animate(time)
-  if (winFrame) {
-    // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
-    // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
-    exposure = renderProfile.exposure + (winFrame.exposure - DEFAULT_TABLE_SCENE_PROFILE.exposure)
-    cameraShakeX = winFrame.shakeX
-    cameraShakeZ = winFrame.shakeZ
+  rendering = true
+  dirty = false
+  let keepGoing = false
+  try {
+    perfHud?.frame(time)
+    const frameMs = lastFrameAt && time > lastFrameAt && time - lastFrameAt <= FRAME_GAP_RESET_MS
+      ? time - lastFrameAt
+      : 0
+    lastFrameAt = time
+    adaptiveQuality.frame(frameMs)
+    let cameraShakeX = 0
+    let cameraShakeZ = 0
+    let exposure = renderProfile.exposure
+    const diceActive = dicePresenter?.animate(time) ?? false
+    const tilesActive = tableTiles.animate(time, scratchVector)
+    const winFrame = winEffectPresenter?.animate(time)
+    if (winFrame) {
+      // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
+      // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
+      exposure = renderProfile.exposure + (winFrame.exposure - DEFAULT_TABLE_SCENE_PROFILE.exposure)
+      cameraShakeX = winFrame.shakeX
+      cameraShakeZ = winFrame.shakeZ
+    }
+    renderer.toneMappingExposure = exposure
+    const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
+    camera.position.set(...cameraPosition)
+    camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+    if (cameraLabEnabled && canvas.value) {
+      const canvasElement = canvas.value as HTMLCanvasElement
+      canvasElement.dataset.cameraPosition = cameraPosition
+        .map((value) => value.toFixed(6))
+        .join(',')
+      canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
+    }
+    if (outlineEffect) outlineEffect.render(scene, camera)
+    else renderer.render(scene, camera)
+    renderedFrames += 1
+    keepGoing = diceActive || tilesActive || Boolean(winFrame) || dirty
+  } finally {
+    rendering = false
   }
-  renderer.toneMappingExposure = exposure
-  const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
-  camera.position.set(...cameraPosition)
-  camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
-  if (cameraLabEnabled && canvas.value) {
-    const canvasElement = canvas.value as HTMLCanvasElement
-    canvasElement.dataset.cameraPosition = cameraPosition
-      .map((value) => value.toFixed(6))
-      .join(',')
-    canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
-  }
-  if (outlineEffect) outlineEffect.render(scene, camera)
-  else renderer.render(scene, camera)
-  animationFrame = requestAnimationFrame(render)
+  if (keepGoing) animationFrame = requestAnimationFrame(render)
 }
 
 onMounted(async () => {
@@ -288,6 +329,8 @@ onMounted(async () => {
   if (destroyed) return
 
   const activeThemeName = (props.themeName ?? new URLSearchParams(window.location.search).get('theme') ?? 'jade') as TileAssetTheme
+  // llmAnime 默认走二次元 cel；?animeTable=0 可强制关闭回退写实 PBR。
+  animeTable = activeThemeName === 'llmAnime' && new URLSearchParams(window.location.search).get('animeTable') !== '0'
   const activeTheme = tableThemeByName(activeThemeName)
   // 真机降低牌体圆角细分（segments→2）：RoundedBoxGeometry 三角面数随 segments² 增长，
   // 是 494k 三角面的主要来源之一；桌面保持原细分（llmAnime=4）。
@@ -314,20 +357,41 @@ onMounted(async () => {
     }
   }
 
+  // 廉价真3D：连实时阴影一起关，用半球+主光提亮补偿去掉的面光与环境反射。
+  if (cheapTable) {
+    renderProfile = {
+      ...renderProfile,
+      hemisphere: { ...renderProfile.hemisphere, intensity: renderProfile.hemisphere.intensity * 1.6 },
+      keyLight: { ...renderProfile.keyLight, intensity: renderProfile.keyLight.intensity * 1.6 },
+    }
+  }
+
+  // 二次元：去掉面光/环境反射后整体偏暗，用固定半球+主光提亮，PC 与真机亮度一致。
+  if (animeTable) {
+    renderProfile = {
+      ...renderProfile,
+      hemisphere: { ...renderProfile.hemisphere, intensity: 1.8 },
+      keyLight: { ...renderProfile.keyLight, intensity: 2.2 },
+    }
+  }
+
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: aaEnabled, alpha: true, powerPreference: 'high-performance' })
   applyRendererProfile(renderer, renderProfile)
+  if (cheapTable || animeTable) renderer.shadowMap.enabled = false
   renderer.setClearColor(0x050706, 0)
 
   scene = new THREE.Scene()
   // 雾推到桌身之外（桌角最远约 30）：让整张桌（含对家远侧）都在雾区外，只让背景淡出。
   scene.fog = renderProfile.fog ? new THREE.Fog(0x03100b, 32, 60) : null
-  const pmremGenerator = new THREE.PMREMGenerator(renderer)
-  const roomEnvironment = new RoomEnvironment()
-  const environmentTarget = own(pmremGenerator.fromScene(roomEnvironment, .04))
-  // 环境反射只服务于麻将牌，提供树脂/亚克力边缘高光，不整体提亮桌面。
-  scene.userData.tileEnvironment = environmentTarget.texture
-  roomEnvironment.dispose()
-  pmremGenerator.dispose()
+  if (!cheapTable) {
+    const pmremGenerator = new THREE.PMREMGenerator(renderer)
+    const roomEnvironment = new RoomEnvironment()
+    const environmentTarget = own(pmremGenerator.fromScene(roomEnvironment, .04))
+    // 环境反射只服务于麻将牌，提供树脂/亚克力边缘高光，不整体提亮桌面。
+    scene.userData.tileEnvironment = environmentTarget.texture
+    roomEnvironment.dispose()
+    pmremGenerator.dispose()
+  }
   camera = new THREE.PerspectiveCamera(renderProfile.camera.fov, 1, .1, 60)
   camera.position.set(0, renderProfile.camera.positionY, renderProfile.camera.positionZ)
   scene.add(new THREE.HemisphereLight(
@@ -335,8 +399,8 @@ onMounted(async () => {
     renderProfile.hemisphere.groundColor,
     renderProfile.hemisphere.intensity,
   ))
-  // 真机跳过 RectAreaLight（LTC 面光片元极贵）；亮度由半球光+主光提亮补偿。
-  if (renderProfile.areaLights?.length && !isMobileLike) {
+  // 真机/廉价档跳过 RectAreaLight（LTC 面光片元极贵）；二次元档也不需要面光（cel 靠方向光+半球光）。
+  if (renderProfile.areaLights?.length && !isMobileLike && !cheapTable && !animeTable) {
     RectAreaLightUniformsLib.init()
     renderProfile.areaLights.forEach((profile) => {
       const areaLight = new THREE.RectAreaLight(profile.color, profile.intensity, profile.width, profile.height)
@@ -348,7 +412,9 @@ onMounted(async () => {
   const keyLight = new THREE.DirectionalLight(renderProfile.keyLight.color, renderProfile.keyLight.intensity)
   keyLight.position.set(...renderProfile.keyLight.position)
   keyLight.target.position.set(0, 0, renderProfile.keyLight.targetZ)
-  applyDirectionalShadowProfile(keyLight, renderProfile)
+  if (!cheapTable && !animeTable) {
+    applyDirectionalShadowProfile(keyLight, renderProfile)
+  }
   scene.add(keyLight)
   scene.add(keyLight.target)
   shadowLight = keyLight
@@ -372,14 +438,14 @@ onMounted(async () => {
     ownDynamic,
     trackTileMaterial,
     isGlossy: () => glossyMaterials,
+    animeTable,
   })
-  // 描边只保留轻薄的轮廓，树脂材质的倒角高光仍是牌体主要边界。
-  // 真机跳过 OutlineEffect（多趟后处理极贵），小屏看不出描边差异、帧率收益大。
-  if (renderProfile.outline && !isMobileLike) {
+  // 描边：二次元档不用后处理描边（雀魂靠 cel 明暗 + 倒角勾边，后处理描边会产生「薄膜」壳）；写实档保留轻薄描边。
+  if (renderProfile.outline && !cheapTable && !animeTable && !isMobileLike) {
     outlineEffect = new OutlineEffect(renderer, {
-      defaultThickness: renderProfile.outline.thickness,
-      defaultColor: [...renderProfile.outline.color],
-      defaultAlpha: renderProfile.outline.alpha,
+      defaultThickness: animeTable ? 0.003 : renderProfile.outline.thickness,
+      defaultColor: animeTable ? [0.22, 0.22, 0.22] : [...renderProfile.outline.color],
+      defaultAlpha: animeTable ? 0.55 : renderProfile.outline.alpha,
       defaultKeepAlive: true,
     })
   }
@@ -396,6 +462,7 @@ onMounted(async () => {
     isJoker: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'joker',
     isWildcard: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'wildcard',
     isLaizi: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'laizi',
+    contactShadowY: animeTable ? 0.075 : undefined,
   })
   tableTiles = createTableTilePresenter({
     props,
@@ -436,6 +503,7 @@ onMounted(async () => {
     getValues: () => props.diceValues,
     getThrowerIndex: () => props.diceThrowerIndex,
     tileLayerZ: TILE_LAYER_Z,
+    anime: animeTable,
   })
 
   // 所有牌面必须下载并完成图片解码，之后才能创建 3D 图集。
@@ -466,6 +534,7 @@ onMounted(async () => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   if (destroyed) return
+  started = true
   render(performance.now())
   // ready 必须晚于资源、图集、着色器和合成首帧，否则父层不得隐藏加载层。
   emit('ready')
@@ -502,18 +571,34 @@ watch(
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。
-  () => tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' }),
+  () => {
+    tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' })
+    invalidate()
+  },
 )
 
 watch(() => props.openingStage, (stage) => {
   dicePresenter?.setVisible(stage === 'dice')
+  invalidate()
 })
 
-watch(() => props.dealerIndex, () => tableScene?.updateMachineTexture())
+// 骰子值/掷骰者变化（莲花麻将二次掷骰）只影响骰子动画，单独监听并请求重绘。
+watch(() => props.diceValues.join(',') + '|' + props.diceThrowerIndex, () => invalidate())
+
+watch(() => props.dealerIndex, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
 
 // 剩余牌数与当前玩家只影响中央机器 LCD（数字 / 高亮边），单独监听即可，避免整桌重建
-watch(() => props.wallCount, () => tableScene?.updateMachineTexture())
-watch(() => props.currentPlayer, () => tableScene?.updateMachineTexture())
+watch(() => props.wallCount, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
+watch(() => props.currentPlayer, () => {
+  tableScene?.updateMachineTexture()
+  invalidate()
+})
 
 onBeforeUnmount(() => {
   destroyed = true

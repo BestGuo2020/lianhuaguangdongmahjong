@@ -7,6 +7,9 @@ import { defaultTableTheme } from './tableTheme'
 import type { TableTheme } from './tableTheme'
 import { tableLiftSlots } from './tableLiftSlots'
 
+/** 牌体材质：写实档用 PBR，二次元档用 Toon（cel）。 */
+type TileMaterial = THREE.MeshPhysicalMaterial | THREE.MeshToonMaterial
+
 interface TableSceneOptions {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
@@ -24,18 +27,58 @@ interface TableSceneOptions {
   tileBackTexture?: THREE.Texture
   own<T>(resource: T): T
   ownDynamic<T>(resource: T): T
-  trackTileMaterial(material: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial
+  trackTileMaterial(material: TileMaterial): TileMaterial
   isGlossy(): boolean
+  /** 二次元 cel 渲染：牌体用 MeshToonMaterial + 渐变 ramp，关闭 envMap/clearcoat。 */
+  animeTable: boolean
+}
+
+// 二次元 cel 的 3 档明暗 ramp（暗 → 中 → 亮），由 MeshToonMaterial.gradientMap 消费。
+let sharedToonGradientMap: THREE.DataTexture | null = null
+export function toonGradientMap() {
+  if (sharedToonGradientMap) return sharedToonGradientMap
+  const data = new Uint8Array([
+    150, 150, 150, 255,
+    200, 200, 200, 255,
+    255, 255, 255, 255,
+  ])
+  const texture = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat)
+  texture.minFilter = THREE.NearestFilter
+  texture.magFilter = THREE.NearestFilter
+  texture.generateMipmaps = false
+  texture.needsUpdate = true
+  sharedToonGradientMap = texture
+  return texture
 }
 
 export function createStaticTableScene(options: TableSceneOptions) {
   const { renderer, scene, props, own, ownDynamic, trackTileMaterial } = options
   const theme = options.theme ?? defaultTableTheme
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
-  const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>()
-  // 环境反射只注入麻将牌材质，让圆角捕捉柔和室内高光；桌面仍由主题材质控制。
+  const faceMaterials = new Map<string, TileMaterial>()
+  // 环境反射只注入麻将牌材质，让圆角捕捉柔和室内高光；二次元档不需要（改用 cel ramp）。
   const tileEnvironment = scene.userData.tileEnvironment
-  const tileEnvironmentParams = tileEnvironment ? { envMap: tileEnvironment } : {}
+  const tileEnvironmentParams = tileEnvironment && !options.animeTable ? { envMap: tileEnvironment } : {}
+
+  // 二次元档：MeshToonMaterial + 3 档 ramp；写实档：MeshPhysicalMaterial。
+  // PBR 独有字段 ToonMaterial 不认识，二次元档剔除，避免 setValues 警告与无效赋值。
+  const PBR_ONLY_PROPS = new Set([
+    'roughness', 'metalness', 'roughnessMap', 'metalnessMap',
+    'clearcoat', 'clearcoatRoughness',
+    'specularIntensity', 'specularColor', 'ior', 'envMap', 'envMapIntensity',
+    'iridescence', 'iridescenceIOR', 'sheen', 'sheenRoughness', 'sheenColor',
+    'transmission', 'thickness', 'attenuationDistance', 'attenuationColor',
+  ])
+  function tileMaterial(props: Record<string, unknown>): TileMaterial {
+    if (options.animeTable) {
+      const toonProps: Record<string, unknown> = {}
+      for (const key of Object.keys(props)) {
+        if (!PBR_ONLY_PROPS.has(key)) toonProps[key] = props[key]
+      }
+      return new THREE.MeshToonMaterial({ gradientMap: toonGradientMap(), ...toonProps })
+    }
+    return new THREE.MeshPhysicalMaterial(props)
+  }
   let tileAoTexture: THREE.CanvasTexture | null = null
 
   function makeTileAoTexture() {
@@ -323,13 +366,19 @@ function makeBackTexture() {
 // 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
 function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
-  const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
   const [faceTop, faceMiddle, faceBottom] = theme.tileFaceGradient ?? ['#e9e8df', '#dad9d0', '#c9ccc2']
-  faceGradient.addColorStop(0, faceTop)
-  faceGradient.addColorStop(.58, faceMiddle)
-  faceGradient.addColorStop(1, faceBottom)
-  ctx.fillStyle = faceGradient
-  ctx.fillRect(x, y, w, h)
+  if (options.animeTable) {
+    // 二次元：扁平象牙底，明暗交给 ToonMaterial 的 ramp。
+    ctx.fillStyle = faceTop
+    ctx.fillRect(x, y, w, h)
+  } else {
+    const faceGradient = ctx.createLinearGradient(x, y, x + w, y + h)
+    faceGradient.addColorStop(0, faceTop)
+    faceGradient.addColorStop(.58, faceMiddle)
+    faceGradient.addColorStop(1, faceBottom)
+    ctx.fillStyle = faceGradient
+    ctx.fillRect(x, y, w, h)
+  }
   if (image) {
     ctx.save()
     ctx.shadowColor = 'rgba(40,30,18,.24)'
@@ -363,6 +412,11 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.fillText(markerLabel, x + w * .79, y + h * .15)
     ctx.restore()
   }
+  if (options.animeTable) {
+    // 卡通高光：画在牌面图案之上，压成顶边一条硬边白色亮线。
+    ctx.fillStyle = 'rgba(255,255,255,.8)'
+    ctx.fillRect(x, y, w, h * .05)
+  }
 }
 
 function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
@@ -375,17 +429,18 @@ function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi'
   const texture = own(new THREE.CanvasTexture(surface))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8)
-  const material = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  const material = trackTileMaterial(own(tileMaterial({
     map: texture,
     ...tileEnvironmentParams,
     ...tileAoParams,
     ...theme.tile.face,
   })))
-  if (!options.isGlossy()) {
-    material.clearcoat = 0
-    material.clearcoatRoughness = 0
-    material.specularIntensity = 0
-    material.ior = 1.5
+  if (!options.animeTable && !options.isGlossy()) {
+    const physical = material as THREE.MeshPhysicalMaterial
+    physical.clearcoat = 0
+    physical.clearcoatRoughness = 0
+    physical.specularIntensity = 0
+    physical.ior = 1.5
   }
   faceMaterials.set(key, material)
   return material
@@ -539,7 +594,7 @@ const ATLAS_CELL_W = 96
 const ATLAS_CELL_H = 128
 const ATLAS_CELL_U = 1 / ATLAS_COLS
 const ATLAS_CELL_V = 1 / ATLAS_ROWS
-let atlasMaterial: THREE.MeshPhysicalMaterial | null = null
+let atlasMaterial: TileMaterial | null = null
 let atlasUvData: Float32Array | null = null
 // 图集 cap 用克隆几何体，aUvOffset 只挂在克隆上，绝不动共享的 tileCapGeometry（避免污染 back cap）。
 let atlasCapGeometry: THREE.BufferGeometry | null = null
@@ -571,7 +626,7 @@ function getAtlasMaterial() {
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
-  const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  const mat = trackTileMaterial(own(tileMaterial({
     map: texture,
     ...tileEnvironmentParams,
     ...tileAoParams,
@@ -590,11 +645,12 @@ function getAtlasMaterial() {
       #endif`,
     )
   }
-  if (!options.isGlossy()) {
-    mat.clearcoat = 0
-    mat.clearcoatRoughness = 0
-    mat.specularIntensity = 0
-    mat.ior = 1.5
+  if (!options.animeTable && !options.isGlossy()) {
+    const physical = mat as THREE.MeshPhysicalMaterial
+    physical.clearcoat = 0
+    physical.clearcoatRoughness = 0
+    physical.specularIntensity = 0
+    physical.ior = 1.5
   }
   atlasMaterial = mat
   return mat
@@ -613,17 +669,18 @@ function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
   const texture = own(new THREE.CanvasTexture(canvas))
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4)
-  const mat = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  const mat = trackTileMaterial(own(tileMaterial({
     map: texture,
     ...tileEnvironmentParams,
     ...tileAoParams,
     ...theme.tile.face,
   })))
-  if (!options.isGlossy()) {
-    mat.clearcoat = 0
-    mat.clearcoatRoughness = 0
-    mat.specularIntensity = 0
-    mat.ior = 1.5
+  if (!options.animeTable && !options.isGlossy()) {
+    const physical = mat as THREE.MeshPhysicalMaterial
+    physical.clearcoat = 0
+    physical.clearcoatRoughness = 0
+    physical.specularIntensity = 0
+    physical.ior = 1.5
   }
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader
@@ -639,19 +696,19 @@ function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
   return mat
 }
 
-let jokerAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+let jokerAtlasMaterial: TileMaterial | null = null
 function getJokerAtlasMaterial() {
   if (!jokerAtlasMaterial) jokerAtlasMaterial = makeAtlasMaterial('joker')
   return jokerAtlasMaterial
 }
 
-let wildcardAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+let wildcardAtlasMaterial: TileMaterial | null = null
 function getWildcardAtlasMaterial() {
   if (!wildcardAtlasMaterial) wildcardAtlasMaterial = makeAtlasMaterial('wildcard')
   return wildcardAtlasMaterial
 }
 
-let laiziAtlasMaterial: THREE.MeshPhysicalMaterial | null = null
+let laiziAtlasMaterial: TileMaterial | null = null
 function getLaiziAtlasMaterial() {
   if (!laiziAtlasMaterial) laiziAtlasMaterial = makeAtlasMaterial('laizi')
   return laiziAtlasMaterial
@@ -736,7 +793,7 @@ function addStaticMesh(geometry, material, x, y, z) {
 }
 
 function addTable() {
-  const jade = own(new THREE.MeshPhysicalMaterial({
+  const jade = own(tileMaterial({
     ...theme.table.jade,
     ...(options.surfaceTexture
       ? { map: options.surfaceTexture, color: theme.tableSurfaceTexture?.tint ?? 0xffffff }
@@ -744,26 +801,28 @@ function addTable() {
         ? { map: makeTableSurfaceTexture() }
         : {}),
   }))
-  const darkJade = own(new THREE.MeshPhysicalMaterial({ ...theme.table.darkJade }))
-  const gold = own(new THREE.MeshPhysicalMaterial({ ...theme.table.gold }))
-  const goldHighlight = own(new THREE.MeshPhysicalMaterial({ ...theme.table.goldHighlight }))
-  const machine = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machine }))
-  scene.userData.tileSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  const darkJade = own(tileMaterial({ ...theme.table.darkJade }))
+  const gold = own(tileMaterial({ ...theme.table.gold }))
+  const goldHighlight = own(tileMaterial({ ...theme.table.goldHighlight }))
+  const machine = own(tileMaterial({ ...theme.table.machine }))
+  scene.userData.tileSide = trackTileMaterial(own(tileMaterial({
     ...tileEnvironmentParams,
     ...tileAoParams,
     ...theme.tile.side,
+    ...(options.animeTable ? { color: 0xc8b7a5 } : {}),
   })))
-  scene.userData.faceSide = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  scene.userData.faceSide = trackTileMaterial(own(tileMaterial({
     ...tileEnvironmentParams,
     ...tileAoParams,
     ...theme.tile.faceSide,
   })))
-  scene.userData.tileBottom = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  scene.userData.tileBottom = trackTileMaterial(own(tileMaterial({
     ...tileEnvironmentParams,
     ...tileAoParams,
     ...theme.tile.bottom,
+    ...(options.animeTable ? { color: 0xc4bba8 } : {}),
   })))
-  scene.userData.backMaterial = trackTileMaterial(own(new THREE.MeshPhysicalMaterial({
+  scene.userData.backMaterial = trackTileMaterial(own(tileMaterial({
     map: makeBackTexture(),
     ...tileEnvironmentParams,
     ...tileAoParams,
@@ -817,7 +876,7 @@ function addTable() {
   if (theme.woodTrim) {
     // 顶面：全幅木纹 + 噪点凹凸/光泽不均；立面（内/外/底面）：纯色木料，避免立面 UV 拉伸成塑料感。
     const woodFinish = theme.woodTrimMaterial ?? {}
-    const woodTop = own(new THREE.MeshPhysicalMaterial({
+    const woodTop = own(tileMaterial({
       map: makeWoodTexture(),
       bumpMap: makeWoodDetailTexture(),
       bumpScale: .01,
@@ -829,7 +888,7 @@ function addTable() {
       clearcoatRoughness: .3,
       ...woodFinish,
     }))
-    const woodSide = own(new THREE.MeshPhysicalMaterial({
+    const woodSide = own(tileMaterial({
       color: 0x6b421f,
       roughness: .5,
       metalness: .05,
@@ -883,7 +942,7 @@ function addTable() {
     trimHole.lineTo(outer - inner, inner)
     trimHole.closePath()
     trimShape.holes.push(trimHole)
-    const trimMaterial = own(new THREE.MeshPhysicalMaterial({ ...theme.edgeTrim }))
+    const trimMaterial = own(tileMaterial({ ...theme.edgeTrim }))
     const trimGeometry = own(new THREE.ExtrudeGeometry(trimShape, { depth: .17, bevelEnabled: false }))
     const trim = addStaticMesh(
       trimGeometry,
@@ -895,7 +954,7 @@ function addTable() {
     trim.rotation.x = -Math.PI / 2
 
     if (theme.edgeAccent) {
-      const accentMaterial = own(new THREE.MeshPhysicalMaterial(theme.edgeAccentMaterial ?? {
+      const accentMaterial = own(tileMaterial(theme.edgeAccentMaterial ?? {
         ...theme.table.goldHighlight,
         color: 0xe2c15f,
         emissive: 0x4b350a,
@@ -922,11 +981,11 @@ function addTable() {
     }
   }
 
-  const machineTop = own(new THREE.MeshPhysicalMaterial({
+  const machineTop = own(tileMaterial({
     map: makeMachineTexture(),
     ...theme.table.machineTop,
   }))
-  const machineBottom = own(new THREE.MeshPhysicalMaterial({ ...theme.table.machineBottom }))
+  const machineBottom = own(tileMaterial({ ...theme.table.machineBottom }))
   const machineScale = theme.machineScale ?? 1
   const machineRelief = theme.machineRelief ?? 1
   addStaticMesh(new RoundedBoxGeometry(3.85 * machineScale, .2 * machineRelief, 3.85 * machineScale, 3, .22), gold, 0, .14, PLAY_AREA_OFFSET_Z)
@@ -952,7 +1011,7 @@ function addTable() {
     getJokerAtlasMaterial,
     getWildcardAtlasMaterial,
     getLaiziAtlasMaterial,
-    forEachFaceMaterial(callback: (material: THREE.MeshPhysicalMaterial) => void) {
+    forEachFaceMaterial(callback: (material: TileMaterial) => void) {
       faceMaterials.forEach(callback)
     },
     invalidateTileFaces() {

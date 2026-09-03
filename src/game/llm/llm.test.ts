@@ -1043,7 +1043,7 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     expect(runtime.enabled).toBe(true)
   })
 
-  it('人设种子：昵称（策略）+ 策略头像；未启用为空', () => {
+  it('人设种子：仅昵称 + 策略头像；未启用为空', () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
     const off = createLocalLlmControllers()
@@ -1055,11 +1055,11 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
     }, storage)
     const runtime = createLocalLlmControllers()
     expect(runtime.seeds).toHaveLength(3)
-    // 座位1（预置B=Kimi，风格覆盖=高冷）→ Kimi（高冷）；头像=高冷裁切
-    expect(runtime.seeds[0].name).toBe('Kimi（高冷）')
+    // 座位1（预置B=Kimi，风格覆盖=高冷）→ Kimi月姬（不追加策略括弧）；头像=高冷裁切
+    expect(runtime.seeds[0].name).toBe('Kimi月姬')
     expect(runtime.seeds[0].avatar).toContain('llm-avatar-gaoleng')
-    // 座位2（预置A=DeepSeek，无覆盖）→ 大肥鱼（稳健）；头像=稳健裁切
-    expect(runtime.seeds[1].name).toBe('大肥鱼（稳健）')
+    // 座位2（预置A=DeepSeek，无覆盖）→ 大肥鱼；头像=稳健裁切
+    expect(runtime.seeds[1].name).toBe('大肥鱼')
     expect(runtime.seeds[1].avatar).toContain('llm-avatar-wenjian')
   })
 
@@ -1084,18 +1084,18 @@ describe('createLocalLlmControllers（§9.1/运行时工厂）', () => {
 })
 
 describe('LLM 人设（persona）', () => {
-  it('供应商默认昵称：DeepSeek=大肥鱼；其余用对应中文名', () => {
+  it('供应商默认昵称对齐二次元角色名', () => {
     expect(defaultNicknameFor('https://api.deepseek.com/v1', 'DeepSeek')).toBe('大肥鱼')
-    expect(defaultNicknameFor('https://api.moonshot.cn/v1', 'Kimi')).toBe('Kimi')
-    expect(defaultNicknameFor('https://dashscope.aliyuncs.com/compatible-mode/v1', '通义千问')).toBe('千问')
-    expect(defaultNicknameFor('https://open.bigmodel.cn/api/paas/v4', '智谱')).toBe('智谱')
+    expect(defaultNicknameFor('https://api.moonshot.cn/v1', 'Kimi')).toBe('Kimi月姬')
+    expect(defaultNicknameFor('https://dashscope.aliyuncs.com/compatible-mode/v1', '通义千问')).toBe('千问大小姐')
+    expect(defaultNicknameFor('https://open.bigmodel.cn/api/paas/v4', '智谱')).toBe('智谱狐姬')
     expect(defaultNicknameFor('https://my.proxy.com/v1', '我的代理')).toBe('我的代理')
   })
 
-  it('自定义昵称优先；对局显示为 昵称（策略）；头像按 供应商文件夹+策略 映射', () => {
+  it('自定义昵称优先；对局显示仅昵称；头像按 供应商文件夹+策略 映射', () => {
     const preset = { id: 'p1', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk', model: 'm', style: '稳健' as const, timeoutMs: 8000, nickname: '大肥鱼二号' }
     expect(effectiveNickname(preset)).toBe('大肥鱼二号')
-    expect(displayNameOf('大肥鱼', '激进')).toBe('大肥鱼（激进）')
+    expect(displayNameOf('大肥鱼', '激进')).toBe('大肥鱼')
     expect(avatarFor({ baseUrl: 'https://api.deepseek.com/v1' }, '激进')).toContain('img/llm/deepseek/llm-avatar-jijin.png')
     expect(avatarFor({ baseUrl: 'https://api.moonshot.cn/v1' }, '话痨')).toContain('img/llm/kimi/llm-avatar-huayao.png')
     expect(avatarFor({ baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }, '高冷')).toContain('img/llm/qwen/llm-avatar-gaoleng.png')
@@ -1103,7 +1103,7 @@ describe('LLM 人设（persona）', () => {
     expect(avatarFolderFor('https://open.bigmodel.cn/api/paas/v4')).toBe('glm')
     expect(avatarFor({ baseUrl: 'https://open.bigmodel.cn/api/paas/v4' }, '稳健')).toContain('img/llm/glm/llm-avatar-wenjian.png')
     expect(avatarFor({ baseUrl: 'https://api.anthropic.com/v1' }, '话痨')).toContain('img/llm/claude/llm-avatar-huayao.png')
-    expect(defaultNicknameFor('https://api.anthropic.com/v1', 'Claude')).toBe('Claude')
+    expect(defaultNicknameFor('https://api.anthropic.com/v1', 'Claude')).toBe('克劳德书姬')
   })
 
   it('自定义模板可覆盖头像文件夹；非法字符忽略；模板改 baseUrl 不需要覆盖项', () => {

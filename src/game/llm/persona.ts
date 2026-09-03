@@ -1,5 +1,5 @@
 // LLM 玩家形象：供应商文件夹（img/llm/<provider>/）+ 策略头像 + 默认昵称。
-// 对局显示：`昵称（策略）`，如「大肥鱼（激进）」。
+// 对局显示：仅昵称（不追加策略括弧）。
 // 素材结构：img/llm/<provider>/deepseek-strategy.png（四宫格：左上激进/右上稳健/左下话痨/右下高冷），
 //           img/llm/<provider>/llm-avatar-<策略>.png（裁切产物）。
 import {
@@ -17,16 +17,16 @@ const STYLE_AVATARS: Record<LlmStyle, string> = {
   高冷: 'llm-avatar-gaoleng.png',
 }
 
-/** 供应商档案：文件夹名（其英文名）+ 默认昵称（按 Base URL 识别；DeepSeek 特殊为大肥鱼） */
+/** 供应商档案：文件夹名（其英文名）+ 默认昵称（对齐二次元角色名）。 */
 const PROVIDER_PROFILES: Array<{ pattern: RegExp; folder: string; nickname: string }> = [
   { pattern: /api\.deepseek\.com/i, folder: 'deepseek', nickname: '大肥鱼' },
-  { pattern: /api\.moonshot\.cn/i, folder: 'kimi', nickname: 'Kimi' },
-  { pattern: /dashscope\.aliyuncs\.com/i, folder: 'qwen', nickname: '千问' },
-  { pattern: /volces\.com|ark\.cn-beijing/i, folder: 'doubao', nickname: '豆包' },
-  { pattern: /api\.minimax\.chat/i, folder: 'minimax', nickname: 'MiniMax' },
-  { pattern: /api\.openai\.com/i, folder: 'gpt', nickname: 'GPT' },
-  { pattern: /open\.bigmodel\.cn/i, folder: 'glm', nickname: '智谱' },
-  { pattern: /api\.anthropic\.com/i, folder: 'claude', nickname: 'Claude' },
+  { pattern: /api\.moonshot\.cn/i, folder: 'kimi', nickname: 'Kimi月姬' },
+  { pattern: /dashscope\.aliyuncs\.com/i, folder: 'qwen', nickname: '千问大小姐' },
+  { pattern: /volces\.com|ark\.cn-beijing/i, folder: 'doubao', nickname: '豆包学妹' },
+  { pattern: /api\.minimax\.chat/i, folder: 'minimax', nickname: 'MiniMax导演' },
+  { pattern: /api\.openai\.com/i, folder: 'gpt', nickname: 'GPT龙姬' },
+  { pattern: /open\.bigmodel\.cn/i, folder: 'glm', nickname: '智谱狐姬' },
+  { pattern: /api\.anthropic\.com/i, folder: 'claude', nickname: '克劳德书姬' },
 ]
 
 function profileFor(baseUrl: string): { folder: string; nickname: string } {
@@ -80,7 +80,7 @@ export function effectiveNickname(preset: LlmProviderPreset): string {
   return custom || defaultNicknameFor(preset.baseUrl, preset.name)
 }
 
-/** 对局显示名：昵称（策略）。 */
-export function displayNameOf(nickname: string, style: LlmStyle): string {
-  return `${nickname}（${style}）`
+/** 对局显示名：仅昵称，不追加策略括弧。 */
+export function displayNameOf(nickname: string, _style: LlmStyle): string {
+  return nickname
 }
