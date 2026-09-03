@@ -822,6 +822,11 @@ export const llmAnimeTheme: TableTheme = {
   tableFelt: true,
   tableVignette: .38,
   tableFeltVariation: 8,
+  // 外部动漫桌布：12 个 Q 版角色围边 + 中央留白（整张铺，不平铺）。优先于程序化绒面。
+  tableSurfaceTexture: {
+    url: `${import.meta.env.BASE_URL}themes/llm-anime/v1/table-felt.png`,
+    tint: 0xffffff,
+  },
   tableGuide: {
     dark: '#30443a',
     light: '#b5c2aa',
@@ -857,7 +862,7 @@ export const llmAnimeTheme: TableTheme = {
   },
   edgeTrimTopMatchesSurface: true,
   rimLight: {
-    color: 0xffe2ae,
+    color: 0xffffff,
     intensity: .12,
   },
   tileBackGradient: ['#bd5b48', '#bd5b48', '#bd5b48'],
@@ -867,7 +872,7 @@ export const llmAnimeTheme: TableTheme = {
     ...defaultTableTheme.tile,
     side: {
       ...defaultTableTheme.tile.side,
-      color: 0xfff9ec,
+      color: 0xffffff,
       metalness: 0,
       roughness: .18,
       clearcoat: 1,
@@ -886,7 +891,7 @@ export const llmAnimeTheme: TableTheme = {
       clearcoatRoughness: .1,
       ior: 1.48,
       specularIntensity: .82,
-      specularColor: 0xfff3e8,
+      specularColor: 0xffffff,
       envMapIntensity: 1,
     },
     bottom: {
@@ -902,14 +907,14 @@ export const llmAnimeTheme: TableTheme = {
     },
     back: {
       ...defaultTableTheme.tile.back,
-      color: 0xf0a58f,
+      color: 0xffffff,
       metalness: 0,
       roughness: .17,
       clearcoat: 1,
       clearcoatRoughness: .1,
       ior: 1.48,
       specularIntensity: 1,
-      specularColor: 0xfff3e8,
+      specularColor: 0xffffff,
       envMapIntensity: 1,
     },
     face: {

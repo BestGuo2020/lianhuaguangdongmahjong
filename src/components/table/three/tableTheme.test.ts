@@ -72,6 +72,7 @@ describe('大模型二次元牌桌主题', () => {
     expect(llmAnimeTheme.tile.face.clearcoat).toBe(1)
     expect(llmAnimeTheme.tile.back.clearcoat).toBe(1)
     expect(llmAnimeTheme.tile.faceSide.envMapIntensity).toBeGreaterThan(0)
-    expect(llmAnimeTheme.tableSurfaceTexture).toBeUndefined()
+    expect(llmAnimeTheme.tableSurfaceTexture?.url).toMatch(/themes\/llm-anime\/v1\/table-felt\.png$/)
+    expect(llmAnimeTheme.tableSurfaceTexture?.tint).toBe(0xffffff)
   })
 })

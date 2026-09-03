@@ -2291,7 +2291,7 @@ button { font: inherit; }
   .has-three-scene .seat-top {
     right: auto;
     left: var(--top-seat-resolved-left);
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateX(-50%) translateY(-30px);
   }
 }
 
