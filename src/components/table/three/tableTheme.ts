@@ -862,7 +862,7 @@ export const llmAnimeTheme: TableTheme = {
   },
   edgeTrimTopMatchesSurface: true,
   rimLight: {
-    color: 0xffe2ae,
+    color: 0xffffff,
     intensity: .12,
   },
   tileBackGradient: ['#bd5b48', '#bd5b48', '#bd5b48'],
@@ -872,7 +872,7 @@ export const llmAnimeTheme: TableTheme = {
     ...defaultTableTheme.tile,
     side: {
       ...defaultTableTheme.tile.side,
-      color: 0xfff9ec,
+      color: 0xffffff,
       metalness: 0,
       roughness: .18,
       clearcoat: 1,
@@ -891,7 +891,7 @@ export const llmAnimeTheme: TableTheme = {
       clearcoatRoughness: .1,
       ior: 1.48,
       specularIntensity: .82,
-      specularColor: 0xfff3e8,
+      specularColor: 0xffffff,
       envMapIntensity: 1,
     },
     bottom: {
@@ -907,14 +907,14 @@ export const llmAnimeTheme: TableTheme = {
     },
     back: {
       ...defaultTableTheme.tile.back,
-      color: 0xf0a58f,
+      color: 0xffffff,
       metalness: 0,
       roughness: .17,
       clearcoat: 1,
       clearcoatRoughness: .1,
       ior: 1.48,
       specularIntensity: 1,
-      specularColor: 0xfff3e8,
+      specularColor: 0xffffff,
       envMapIntensity: 1,
     },
     face: {
