@@ -467,18 +467,20 @@ button.llm-seat-row:hover { background: color-mix(in srgb, var(--theme-accent) 1
 .llm-panel[data-table-theme="happyMahjong"] { border-radius: 26px 0 0 26px; }
 .llm-panel[data-table-theme="rosewood"] { border-left-width: 3px; border-radius: 5px 0 0 5px; }
 .llm-panel[data-table-theme="llm"] { clip-path: polygon(12px 0,100% 0,100% 100%,0 100%,0 12px); }
-.llm-panel[data-table-theme="llmAnime"] { border-left: 2px solid #2d2923; background: linear-gradient(160deg, #f4eddf, #dfcdb4 70%); color: #2d2923; color-scheme: light; }
-.llm-panel[data-table-theme="llmAnime"] h2,
-.llm-panel[data-table-theme="llmAnime"] .llm-provider-item b { color: #2d2923; }
-.llm-panel[data-table-theme="llmAnime"] .llm-hint,
-.llm-panel[data-table-theme="llmAnime"] .llm-row > span,
-.llm-panel[data-table-theme="llmAnime"] .llm-sub-title { color: #6f6255; }
-.llm-panel[data-table-theme="llmAnime"] .llm-row input,
-.llm-panel[data-table-theme="llmAnime"] .llm-row select,
-.llm-panel[data-table-theme="llmAnime"] .llm-seat-row select,
-.llm-panel[data-table-theme="llmAnime"] .llm-provider-add select { border-color: rgba(45,41,35,.38); background: #fffaf0; color: #2d2923; }
-.llm-panel[data-table-theme="llmAnime"] .llm-provider-item,
-.llm-panel[data-table-theme="llmAnime"] .llm-seat-assign { border-color: rgba(45,41,35,.25); }
-.llm-panel[data-table-theme="llmAnime"] .llm-provider-item { color: #2d2923; }
-.llm-panel[data-table-theme="llmAnime"] .llm-provider-item span { color: #756a5d; }
+.llm-panel[data-table-theme="llmAnime"] {
+  border-left: 2px solid #2d2923;
+  box-shadow: -5px 0 0 rgba(189,91,72,.32), -18px 0 48px rgba(0,0,0,.4);
+}
+.llm-panel[data-table-theme="llmAnime"] :is(input, select, .llm-provider-item, .llm-seat-assign, .llm-actions button, .llm-provider-add button) { border-radius: 7px; }
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item { background: var(--theme-panel); }
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item.active {
+  border-color: var(--theme-accent);
+  background: color-mix(in srgb, var(--theme-accent) 15%, var(--theme-panel));
+  box-shadow: inset 4px 0 var(--theme-accent), 3px 3px 0 rgba(0,0,0,.2);
+}
+.llm-panel[data-table-theme="llmAnime"] .llm-actions button[data-action-role="primary"] { border: 2px solid #2d2923; box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
+.llm-panel[data-table-theme="llmAnime"] button:enabled:hover { border-color: var(--theme-accent); }
+.llm-panel[data-table-theme="llmAnime"] button:enabled:active { box-shadow: none; }
+.llm-panel[data-table-theme="llmAnime"] button:disabled { box-shadow: none; }
+.llm-panel[data-table-theme="llmAnime"] :is(.llm-hint strong, .llm-hint b, .llm-provider-item.default::after, .llm-seat-row.chosen, .llm-provider-add button, .llm-actions button:not([data-action-role="primary"]):not([data-action-role="danger"])) { color: #f2aa96; }
 </style>

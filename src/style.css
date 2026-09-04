@@ -182,18 +182,18 @@ button { font: inherit; }
 }
 .game-app[data-table-theme="llmAnime"] {
   --theme-page-background: radial-gradient(circle at 28% 20%, rgba(120,216,232,.12), transparent 28%), radial-gradient(circle at 75% 70%, rgba(189,91,72,.16), transparent 34%), #0a120f;
-  --theme-surface: #667b6d;
+  --theme-surface: #29372f;
   --theme-panel: #18231e;
   --theme-panel-elevated: #29372f;
-  --theme-text: #fff3df;
+  --theme-text: #fff8ec;
   --theme-text-muted: #c8c4b9;
-  --theme-border: #c7a45b;
+  --theme-border: #9d9282;
   --theme-accent: #bd5b48;
   --theme-accent-secondary: #78d8e8;
   --theme-positive: #70bf89;
   --theme-negative: #ed786a;
   --theme-top-bar: linear-gradient(180deg, rgba(8,14,11,.96), rgba(20,31,26,.66), transparent);
-  --theme-button: linear-gradient(180deg, #c9a451, #9f6f32);
+  --theme-button: linear-gradient(180deg, #bd5b48, #9f4035);
   --theme-tooltip: linear-gradient(155deg, rgba(36,48,41,.98), rgba(12,20,16,.99) 72%);
 }
 
@@ -1666,8 +1666,8 @@ button { font: inherit; }
   --anime-muted: #756a5d;
   --anime-control: #27352f;
   --anime-control-deep: #151e1a;
-  --anime-control-edge: #c7a45b;
-  --anime-control-label: #f1e5c7;
+  --anime-control-edge: #9d9282;
+  --anime-control-label: #fff8ec;
   --anime-control-muted: #98a79f;
   --anime-control-highlight: rgba(255,255,255,.13);
   --anime-control-shadow: rgba(9,13,11,.58);
@@ -1884,9 +1884,7 @@ button { font: inherit; }
   .game-app[data-table-theme="llmAnime"] .final-board { animation: none; }
 }
 
-/* ── llmAnime · 牌桌硬件式 UI ──
-   视觉原则：深墨绿哑光面板、香槟金窄包边、暖白蚀刻字和珊瑚状态灯。
-   控件像麻将机上的实体键与信息屏，不再使用纸张卡片或漫画硬阴影。 */
+/* llmAnime 常驻 HUD 的几何；双表面颜色和漫画描边在 Phase 12 统一。 */
 .game-app[data-table-theme="llmAnime"] .top-bar {
   color: var(--anime-control-label);
 }
@@ -2951,7 +2949,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut img { width: 48px; height: 48px; flex-basis: 48px; border-color: #2d2923; border-radius: 13px 13px 5px 5px; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: #7a6454; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-chevron { color: #bd5b48; }
-.game-app[data-table-theme="llmAnime"] .start-button { border: 2px solid #2d2923; border-radius: 6px; background: linear-gradient(145deg, #caa452, #a87435); color: #2d2923; box-shadow: 5px 5px 0 rgba(189,91,72,.58), 0 12px 28px rgba(0,0,0,.34); }
+.game-app[data-table-theme="llmAnime"] .start-button { border: 2px solid #2d2923; border-radius: 6px; background: var(--theme-button); color: var(--theme-text); box-shadow: 5px 5px 0 rgba(189,91,72,.58), 0 12px 28px rgba(0,0,0,.34); }
 .game-app[data-table-theme="llmAnime"] .lobby-dialog { border: 2px solid #2d2923; border-radius: 10px; background: linear-gradient(150deg, #f3e5cf, #dfcdb4); color: #2d2923; box-shadow: 8px 8px 0 rgba(189,91,72,.45), 0 26px 78px rgba(0,0,0,.66); }
 .game-app[data-table-theme="llmAnime"] .lobby-dialog h2,
 .game-app[data-table-theme="llmAnime"] .lobby-dialog .picker-options b { color: #2d2923; }
@@ -3367,54 +3365,62 @@ button { font: inherit; }
 .lobby-dialog-backdrop[data-table-theme="happyMahjong"] .lobby-dialog { border-width: 3px; border-radius: 24px; }
 .lobby-dialog-backdrop[data-table-theme="rosewood"] .lobby-dialog { border-width: 2px; border-radius: 5px; }
 .lobby-dialog-backdrop[data-table-theme="llm"] .lobby-dialog { border-radius: 4px; clip-path: polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px); }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog { border: 2px solid #2d2923; border-radius: 10px; background: linear-gradient(150deg, #f3e5cf, #dfcdb4); color: #2d2923; box-shadow: 8px 8px 0 rgba(189,91,72,.45), 0 26px 78px rgba(0,0,0,.66); }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog h2,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options b { color: #2d2923; }
+/* 纸张变量放在弹窗本体，覆盖 Teleport 根节点的场景变量；业务控件自然继承。 */
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] { background: rgba(12,20,16,.82); }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog > header { border-bottom: 2px solid rgba(45,41,35,.16); }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog-close { border-color: rgba(45,41,35,.28); background: rgba(255,250,240,.54); color: #594c40; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog {
+  --theme-panel: #fff8ec;
+  --theme-panel-elevated: #f3e5cf;
+  --theme-surface: #f3e5cf;
+  --theme-text: #2d2923;
+  --theme-text-muted: #6f6255;
+  --theme-border: #2d2923;
+  --theme-positive: #39754c;
+  --theme-negative: #9f4035;
+  color-scheme: light;
+  border: 2px solid var(--theme-border);
+  border-radius: 10px;
+  background: linear-gradient(150deg, var(--theme-panel), var(--theme-panel-elevated));
+  color: var(--theme-text);
+  box-shadow: 6px 6px 0 rgba(189,91,72,.4), 0 26px 78px rgba(0,0,0,.6);
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-accent) var(--theme-panel-elevated);
+}
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button {
-  border: 1px solid rgba(45,41,35,.26);
+  border: 2px solid color-mix(in srgb, var(--theme-border) 26%, transparent);
   border-radius: 7px;
-  background: rgba(255,250,240,.58);
-  color: #4f4439;
+  background: var(--theme-panel);
+  color: var(--theme-text);
   box-shadow: none;
 }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button:hover {
-  border-color: rgba(189,91,72,.72);
-  background: #fff8ec;
-}
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button.active {
-  border: 2px solid #bd5b48;
-  background: linear-gradient(105deg, #fff8ec, #f4d4c2);
-  box-shadow: inset 5px 0 #bd5b48, 3px 3px 0 rgba(45,41,35,.16);
+  border-color: var(--theme-accent);
+  background: #f4d4c2;
+  box-shadow: inset 4px 0 var(--theme-accent), 3px 3px 0 rgba(45,41,35,.16);
 }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button > i {
-  border-color: #6b5f52;
-  background: #fffaf0;
-  box-shadow: inset 0 0 0 4px #fffaf0;
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] :is(.view-rules-link, .picker-options b em) { color: #9f4035; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .primary {
+  border: 2px solid var(--theme-border);
+  background: var(--theme-button);
+  color: #fff8ec;
+  box-shadow: 3px 3px 0 rgba(45,41,35,.26);
 }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button.active > i {
-  border-color: #9f4035;
-  background: #bd5b48;
-  box-shadow: inset 0 0 0 4px #fffaf0;
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .secondary { color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings {
+  border-color: color-mix(in srgb, var(--theme-border) 28%, transparent);
+  background: var(--theme-panel);
+  color: var(--theme-text);
 }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options small,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-hint { color: #6f6255; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options b em { border-color: rgba(159,64,53,.48); background: rgba(189,91,72,.08); color: #9f4035; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .view-rules-link { color: #9f4035; font-weight: 800; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .secondary { border: 1px solid rgba(45,41,35,.38); background: rgba(255,250,240,.72); color: #4f4439; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .primary { border: 2px solid #2d2923; background: linear-gradient(145deg, #d46f59, #bd5b48); color: #fffaf0; box-shadow: 3px 3px 0 rgba(45,41,35,.26); }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field span,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option b { color: #4f4439; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field input,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings { border-color: rgba(45,41,35,.28); background: rgba(255,250,240,.56); color: #2d2923; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings-title,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > span,
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > small { color: #756859; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > strong { color: #2d2923; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .game-settings-title { background: var(--theme-panel-elevated); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] :is(.game-settings-title, .game-settings > button > span, .game-settings > button > small) { color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .game-settings > button > strong { color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .game-settings > button:hover { background: #f4d4c2; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field input::placeholder { color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option b { color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] :is(.session-error, .dialog-error) { color: var(--theme-negative); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button { border-radius: 7px; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button:enabled:hover { filter: brightness(1.06); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button:enabled:active { box-shadow: none; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] button:disabled { opacity: .48; filter: grayscale(.45); box-shadow: none; cursor: not-allowed; }
 
 .lobby [data-action-role="primary"],
 .lobby-dialog [data-action-role="primary"] { font-weight: 900; }
@@ -3468,4 +3474,66 @@ button { font: inherit; }
 
 @container (max-height: 340px) {
   .lobby.room-focused .room-seats { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+}
+
+/* Phase 12 · 常驻场景与临时纸张共享墨线、珊瑚状态和短错位阴影。 */
+.game-app[data-table-theme="llmAnime"] .top-bar { background: var(--theme-top-bar); }
+.game-app[data-table-theme="llmAnime"] :is(.top-bar .topbar-control, .round-info, .avatar-wrap, .user-identity, .turn-timer, .action) {
+  border-color: var(--anime-ink);
+  background: linear-gradient(150deg, var(--theme-panel-elevated), var(--theme-panel));
+  color: var(--theme-text);
+  box-shadow: 3px 3px 0 rgba(189,91,72,.3), inset 0 1px rgba(255,248,236,.1);
+}
+.game-app[data-table-theme="llmAnime"] .top-bar .topbar-control:hover {
+  border-color: var(--theme-accent);
+  background: var(--theme-panel-elevated);
+}
+.game-app[data-table-theme="llmAnime"] :is(.action.primary, .action.hu, .start-button, .remote-entry-actions button, .room-owner-actions button[data-action-role="primary"], .table-loading-retry) {
+  border: 2px solid var(--anime-ink);
+  border-radius: 7px;
+  background: var(--theme-button);
+  color: var(--theme-text);
+  box-shadow: 3px 3px 0 rgba(189,91,72,.32);
+}
+.game-app[data-table-theme="llmAnime"] :is(.action span, .waiting-action span) { color: var(--theme-text-muted); }
+.game-app[data-table-theme="llmAnime"] :is(.action.pass, .discard-action) { color: var(--theme-text-muted); box-shadow: none; }
+.game-app[data-table-theme="llmAnime"] :is(.waiting-action.active, .autoplay-action.active) {
+  border-color: var(--theme-accent);
+  box-shadow: inset 4px 0 var(--theme-accent), 3px 3px 0 rgba(189,91,72,.3);
+}
+.game-app[data-table-theme="llmAnime"] :is(.lobby-actions, .room-panel) {
+  border-color: var(--anime-ink);
+  background: linear-gradient(150deg, var(--theme-panel-elevated), var(--theme-panel));
+}
+.game-app[data-table-theme="llmAnime"] .room-panel { border-radius: 10px; }
+.game-app[data-table-theme="llmAnime"] .mode-selector button { border-color: var(--anime-ink); color: var(--theme-text); }
+.game-app[data-table-theme="llmAnime"] .mode-selector button.active { border-color: var(--theme-accent); color: var(--theme-text); box-shadow: inset 4px 0 var(--theme-accent), 3px 3px 0 rgba(45,41,35,.28); }
+.game-app[data-table-theme="llmAnime"] .mode-selector button b { color: var(--theme-text); }
+.game-app[data-table-theme="llmAnime"] .waku-account button { border-color: var(--theme-border); background: var(--theme-panel); color: var(--theme-text); }
+.game-app[data-table-theme="llmAnime"] .game-settings > button > i::before,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .game-settings > button > i::before { border-color: var(--theme-accent); }
+.game-app[data-table-theme="llmAnime"] :is(.room-meta-note b, .room-seat em.unready) { color: var(--theme-text-muted); }
+.game-app[data-table-theme="llmAnime"] .room-code:hover strong { color: #f2aa96; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field input:focus { border-color: var(--theme-accent); box-shadow: 0 0 0 2px rgba(189,91,72,.16); }
+.game-app[data-table-theme="llmAnime"] .character-shortcut { background: var(--theme-panel); color: var(--theme-text); box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
+.game-app[data-table-theme="llmAnime"] .character-shortcut:hover { background: var(--theme-panel-elevated); border-color: var(--theme-accent); }
+.game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: var(--theme-text-muted); }
+.game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button, .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-text); }
+.game-app[data-table-theme="llmAnime"] :is(.kong-picker-card, .llm-bubble) {
+  --theme-text: #2d2923;
+  --theme-text-muted: #6f6255;
+  --theme-panel: #fff8ec;
+  --theme-panel-elevated: #f3e5cf;
+  background: var(--theme-panel);
+  color: var(--theme-text);
+}
+.game-app[data-table-theme="llmAnime"] .chi-picker-option { background: #fff8ec; }
+.game-app[data-table-theme="llmAnime"] :is(.action, .topbar-control, .start-button, .remote-entry-actions button):enabled:active { box-shadow: none; }
+.game-app[data-table-theme="llmAnime"] button:disabled { box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-table-theme="llmAnime"] :is(.action, .topbar-control, .dialog-actions button, .picker-options > button, .anime-character-grid button) {
+    transform: none !important;
+    transition: none !important;
+  }
 }

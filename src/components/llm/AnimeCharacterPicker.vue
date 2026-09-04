@@ -102,10 +102,13 @@ function markAvatarFailed(characterId: CharacterId) {
   background: #fffaf0;
   color: #302a24;
   cursor: pointer;
-  clip-path: polygon(0 3px, 4px 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%);
+  /* 保留完整边界，避免裁掉键盘焦点环。 */
   transition: transform .14s ease, background-color .14s ease, border-color .14s ease;
 }
 .anime-character-grid button:hover { transform: translateY(-2px) rotate(-1deg); border-color: #bd5b48; }
+.anime-character-grid { scrollbar-width: thin; scrollbar-color: #bd5b48 #f3e5cf; }
+.anime-character-grid button:focus-visible { outline: 2px solid #9f4035; outline-offset: -3px; }
+.anime-character-grid button:active { transform: translateY(1px); }
 .anime-character-grid button.active { border-width: 2px; border-color: #bd5b48; background: #f6d9c4; box-shadow: inset 0 -4px #bd5b48; transform: translateY(-1px) rotate(-1deg); }
 .anime-character-thumb { display: grid; width: 52px; height: 52px; place-items: center; overflow: hidden; border: 1px solid rgba(45,41,35,.54); border-radius: 12px 12px 5px 5px; background: #e8dcc7; }
 .anime-character-grid img { width: 100%; height: 100%; object-fit: cover; }

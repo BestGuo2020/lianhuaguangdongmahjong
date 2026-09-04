@@ -188,15 +188,15 @@ export const THEME_PRESENTATIONS = {
       particle: 'theme-art',
     },
     palette: {
-      surface: '#667b6d', panel: '#18231e', panelElevated: '#29372f', text: '#fff3df',
-      textMuted: '#c8c4b9', border: '#c7a45b', accent: '#bd5b48', accentSecondary: '#78d8e8',
+      surface: '#29372f', panel: '#18231e', panelElevated: '#29372f', text: '#fff8ec',
+      textMuted: '#c8c4b9', border: '#9d9282', accent: '#bd5b48', accentSecondary: '#78d8e8',
       positive: '#70bf89', negative: '#ed786a',
     },
     typography: { headingClass: 'theme-heading-comic', numberClass: 'theme-number-comic', actionClass: 'theme-action-comic' },
     hud: {
       playerFrame: 'anime',
       topBar: 'linear-gradient(180deg, rgba(8,14,11,.96), rgba(20,31,26,.66), transparent)',
-      button: 'linear-gradient(180deg, #c9a451, #9f6f32)',
+      button: 'linear-gradient(180deg, #bd5b48, #9f4035)',
       tooltip: 'linear-gradient(155deg, rgba(36,48,41,.98), rgba(12,20,16,.99) 72%)',
     },
     presentation: {
