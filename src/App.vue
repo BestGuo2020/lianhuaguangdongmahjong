@@ -425,7 +425,7 @@ function changeTableTheme(theme: TableThemeName) {
 </script>
 
 <template>
-  <OrientationGate />
+  <OrientationGate :theme-name="tableThemeName" />
   <main
     class="game-app"
     :class="[{ 'is-lobby': showLobby }, themePresentation.typography.headingClass]"

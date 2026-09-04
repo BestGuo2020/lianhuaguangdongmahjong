@@ -5,6 +5,7 @@ import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { GamePhase } from '../../game/core/contracts/gamePort'
 import { useAudioControls } from '../../game/core/presentation/useAudio'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from '../table/three/tableTheme'
+import { THEME_PRESENTATIONS } from '../../theme/themePresentation'
 
 interface Props {
   gameMode: GameMode
@@ -44,6 +45,15 @@ const hasAudibleAudio = computed(() => soundOn.value && (bgmOn.value || effectsO
 const signalText = computed(() => (
   { 0: '网络不稳定', 1: '网络波动', 2: '网络良好', 3: '网络流畅' }[props.signalQuality] ?? ''
 ))
+const themeOptions = TABLE_THEME_OPTIONS.map((option) => ({
+  ...option,
+  previewUrl: THEME_PRESENTATIONS[option.value].identity.previewUrl,
+  previewBackground: THEME_PRESENTATIONS[option.value].shell.pageBackground,
+}))
+
+function hideBrokenPreview(event: Event) {
+  ;(event.currentTarget as HTMLImageElement).hidden = true
+}
 
 function chooseTheme(theme: TableThemeName) {
   themeMenuOpen.value = false
@@ -67,8 +77,20 @@ function toggleAudioMenu() {
   audioMenuOpen.value = !audioMenuOpen.value
 }
 
-onMounted(() => document.addEventListener('pointerdown', closeThemeMenu))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu))
+function closeMenusOnEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  themeMenuOpen.value = false
+  audioMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', closeThemeMenu)
+  document.addEventListener('keydown', closeMenusOnEscape)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeThemeMenu)
+  document.removeEventListener('keydown', closeMenusOnEscape)
+})
 </script>
 
 <template>
@@ -102,14 +124,17 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeThemeMenu
         <div v-if="themeMenuOpen" class="theme-menu" role="menu" aria-label="牌桌主题">
           <p>牌桌主题</p>
           <button
-            v-for="option in TABLE_THEME_OPTIONS"
+            v-for="option in themeOptions"
             :key="option.value"
             :class="{ active: option.value === themeName }"
             role="menuitemradio"
             :aria-checked="option.value === themeName"
             @click="chooseTheme(option.value)"
           >
-            <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+            <span class="theme-card-preview" :style="{ background: option.previewBackground }" aria-hidden="true">
+              <img :src="option.previewUrl" alt="" loading="lazy" @error="hideBrokenPreview" />
+            </span>
+            <span class="theme-card-copy"><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
             <i aria-hidden="true"></i>
           </button>
         </div>

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import type { TableThemeName } from '../../theme/themeIdentity'
+import { themePresentationByName, themePresentationCssVariables } from '../../theme/themePresentation'
+
+const props = defineProps<{ themeName: TableThemeName }>()
+const presentation = computed(() => themePresentationByName(props.themeName))
+const presentationStyle = computed(() => themePresentationCssVariables(presentation.value))
 
 const required = ref(false)
 const message = ref('')
@@ -42,7 +48,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="required" class="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
+  <div
+    v-if="required"
+    class="orientation-gate"
+    :data-table-theme="themeName"
+    :data-theme-player-frame="presentation.hud.playerFrame"
+    :style="presentationStyle"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="orientation-title"
+  >
     <div class="orientation-card">
       <div class="phone-rotate-icon" aria-hidden="true"><span></span></div>
       <p class="eyebrow">LANDSCAPE MODE</p>
