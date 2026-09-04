@@ -830,7 +830,7 @@ export const llmAnimeTheme: TableTheme = {
   tableGuide: {
     dark: '#30443a',
     light: '#b5c2aa',
-    opacity: .3,
+    opacity: .5,
     slotDark: '#102018',
     slotOpacity: .62,
   },
