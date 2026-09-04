@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
-import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
-import type { CharacterId } from '../../game/llm/animeCharacters'
+import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 import type { TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
@@ -29,6 +29,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const currentCharacter = computed(() => resolveAnimeCharacter(props.characterId))
+const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.characterId))
 const robotIconUrl = `${import.meta.env.BASE_URL}img/robot.svg`
 const emit = defineEmits<{
   copy: []
@@ -37,6 +39,7 @@ const emit = defineEmits<{
   configureAiSeats: [selections: HostLlmSeatSelection[]]
   leave: []
   close: []
+  openCharacter: []
   'update:characterId': [value: CharacterId]
 }>()
 
@@ -85,8 +88,8 @@ function aiAt(seat: number): PublicAiSeat | undefined {
 
 <template>
   <div class="room-panel">
-    <div class="room-code" title="点击复制房间码" role="button" tabindex="0" @click="$emit('copy')" @keyup.enter="$emit('copy')">
-      房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
+    <div class="room-code" data-action-role="light" title="点击复制房间码" role="button" tabindex="0" @click="$emit('copy')" @keyup.enter="$emit('copy')">
+      <span class="room-code-label">房间码</span><strong>{{ roomId }}</strong><span class="room-code-copied" :class="{ visible: copied }" :aria-hidden="!copied">已复制</span>
     </div>
     <div class="room-game-config"><b>{{ matchName }}</b><span>·</span><b>{{ ruleName }}</b></div>
     <p v-if="aiSeats.length" class="room-llm-note">
@@ -138,23 +141,30 @@ function aiAt(seat: number): PublicAiSeat | undefined {
     </div>
     <p v-if="isHost && llmOptions.length" class="room-ai-hint">大模型座位将被预留；为保证至少 2 名真人，最多选择 2 席。</p>
     <p v-if="isHost && !llmOptions.length" class="room-ai-hint">未启用可用的大模型预置，空位将使用普通 AI。</p>
-    <AnimeCharacterPicker
+    <button
       v-if="tableThemeName === 'llmAnime'"
-      :model-value="characterId"
-      @update:model-value="$emit('update:characterId', $event)"
-    />
+      class="room-character-entry"
+      type="button"
+      data-action-role="secondary"
+      @click="$emit('openCharacter')"
+    >
+      <img :src="currentCharacterAvatar" alt="" aria-hidden="true">
+      <span><small>本家形象</small><b>{{ currentCharacter.label }}</b></span>
+      <em>更换 ›</em>
+    </button>
     <div class="room-owner-actions">
-      <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
+      <button v-if="mySeat >= 0" class="secondary" :data-action-role="isHost && allOccupiedReady ? 'secondary' : 'primary'" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button
         v-if="isHost"
         class="start-button room-start"
+        :data-action-role="!allOccupiedReady || matchStarting ? 'disabled' : 'primary'"
         :disabled="!allOccupiedReady || matchStarting"
         @click="$emit('start')"
       ><b>开始对局</b><span>{{ matchStarting ? '正在打扫房间' : (roomSeats.length < 2 ? '至少需要 2 名玩家' : (allOccupiedReady ? '全员已准备' : '等待全员准备')) }}</span></button>
     </div>
     <div class="room-actions-row">
-      <button class="text-button room-leave" :disabled="leaving || closing" @click="$emit('leave')">{{ leaving ? '离开中…' : '离开房间' }}</button>
-      <button v-if="isHost" class="text-button room-close" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
+      <button class="text-button room-leave" data-action-role="danger" :disabled="leaving || closing" @click="$emit('leave')">{{ leaving ? '离开中…' : '离开房间' }}</button>
+      <button v-if="isHost" class="text-button room-close" data-action-role="danger" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
     </div>
   </div>
 </template>
@@ -167,14 +177,14 @@ function aiAt(seat: number): PublicAiSeat | undefined {
   justify-content: center;
   gap: 6px;
   margin: 0 0 8px;
-  color: #91caa2;
+  color: var(--theme-positive);
   font-size: 12px;
 }
 .room-llm-note img { width: 18px; height: 18px; }
-.room-ai-hint { color: #9ea99e; }
+.room-ai-hint { color: var(--theme-text-muted); }
 .room-seat.llm-planned {
-  border-color: rgba(91, 190, 126, 0.4);
-  background: linear-gradient(100deg, rgba(38, 102, 67, 0.2), rgba(2, 12, 9, 0.62));
+  border-color: color-mix(in srgb, var(--theme-positive) 40%, transparent);
+  background: color-mix(in srgb, var(--theme-positive) 12%, var(--theme-panel));
 }
 .room-seat-provider-wrap,
 .room-seat-ai-view {
@@ -200,16 +210,29 @@ function aiAt(seat: number): PublicAiSeat | undefined {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #e4eadf;
+  color: var(--theme-text);
   color-scheme: dark;
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
   cursor: pointer;
 }
-.room-seat-provider option { background: #07150f; color: #e8ddc4; }
+.room-seat-provider option { background: var(--theme-panel); color: var(--theme-text); }
 .room-seat-provider:disabled { opacity: 0.48; cursor: not-allowed; }
 .room-seat-ai-view { flex-wrap: wrap; }
 .room-seat-ai-view b { flex: 1; min-width: 0; }
-.room-seat-ai-view small { width: 100%; padding-left: 30px; color: #91a493; font-size: 10px; }
+.room-seat-ai-view small { width: 100%; padding-left: 30px; color: var(--theme-text-muted); font-size: 10px; }
+
+.room-character-entry { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 6px 9px; border: 1px solid var(--theme-border); border-radius: 7px; background: var(--theme-panel-elevated); color: var(--theme-text); text-align: left; cursor: pointer; }
+.room-character-entry img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
+.room-character-entry span { display: grid; min-width: 0; }
+.room-character-entry small { color: var(--theme-text-muted); font-size: 9px; }
+.room-character-entry b { font-size: 12px; }
+.room-character-entry em { color: var(--theme-accent); font-size: 11px; font-style: normal; }
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .room-llm-note, .room-ai-hint { margin: 0; font-size: 9px; line-height: 1.2; }
+  .room-character-entry { grid-template-columns: 26px minmax(0, 1fr) auto; padding: 3px 6px; }
+  .room-character-entry img { width: 26px; height: 26px; }
+  .room-seat-provider { padding: 4px 0; font-size: 10px; }
+}
 </style>

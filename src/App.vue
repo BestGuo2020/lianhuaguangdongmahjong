@@ -25,6 +25,7 @@ import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeCli
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 import type { TableThemeName } from './components/table/three/tableTheme'
+import { themePresentationByName, themePresentationCssVariables } from './theme/themePresentation'
 import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
 import type { PlayerSeed } from './game/shared/runtime/localOpening'
@@ -67,6 +68,8 @@ function resetTableReady() {
 const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
 const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate)
 const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
+const themePresentation = computed(() => themePresentationByName(tableThemeName.value))
+const themePresentationStyle = computed(() => themePresentationCssVariables(themePresentation.value))
 const explicitTableThemeSelected = ref(initialTableTheme.explicit)
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { soundOn, playEffect, playEffectAndWait, startBgm } = useAudio()
@@ -285,8 +288,10 @@ const lobbyController = createRemoteLobbyController({
 // P1 重连：刷新页面自动重进上次的房间（对局进行中则快照重同步 + rejoin_ok 恢复座位）。
 // 生产环境需先登录（SDK token 不落盘），未登录就 join 会失败或留下半状态（只响声音
 // 进不去游戏）；本地（mock 匿名）无需登录，立即重进。登录后的重进由 vibeUser watch 触发。
-onMounted(() => {
-  if (vibeRemoteGame.savedSessionExists.value && !loginRequired.value) lobbyController.resumeSession()
+onMounted(async () => {
+  await initVibeHub()
+  // 初始化期间的登录回调也可能已开始恢复；只在空闲时发起一次自动重进。
+  if (vibeRemoteGame.savedSessionExists.value && !loginRequired.value && sessionStatus.value === 'idle') lobbyController.resumeSession()
 })
 const {
   nicknameInput, joinCode, allOccupiedReady, copied, matchStarting, leaving, closing,
@@ -392,8 +397,16 @@ const themeLockReason = computed(() => (
 </script>
 
 <template>
-  <OrientationGate />
-  <main class="game-app" :class="{ 'is-lobby': showLobby }" :data-table-theme="tableThemeName">
+  <OrientationGate :theme-name="tableThemeName" />
+  <main
+    class="game-app"
+    :class="[{ 'is-lobby': showLobby }, themePresentation.typography.headingClass]"
+    :data-table-theme="tableThemeName"
+    :data-theme-player-frame="themePresentation.hud.playerFrame"
+    :data-theme-particle="themePresentation.shell.particle"
+    :data-theme-loading="themePresentation.presentation.loading"
+    :style="themePresentationStyle"
+  >
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting' && !matchFinished" class="remote-banner" role="status">{{ phase === 'lobby' ? '网络断开，正在重连…' : '房主连接中断，等待恢复…' }}</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId && !matchFinished" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && rejoining" class="remote-banner" role="status">尝试重新加入房间…</div>
@@ -558,6 +571,7 @@ const themeLockReason = computed(() => (
     <button
       v-if="gameMode === 'local' && showLobby"
       class="llm-fab"
+      data-action-role="secondary"
       aria-label="AI 设置"
       title="AI 大模型设置"
       data-testid="llm-fab"
@@ -565,6 +579,7 @@ const themeLockReason = computed(() => (
     ><img :src="robotIconUrl" alt="" aria-hidden="true"></button>
     <LlmSettingsPanel
       :open="llmOpen && showLobby"
+      :theme-name="tableThemeName"
       :messages="llmMessages"
       :stats="llmStats"
       @close="llmOpen = false"

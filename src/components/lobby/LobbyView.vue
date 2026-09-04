@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import RoomPanel from './RoomPanel.vue'
+import LobbyThemeVisual from './LobbyThemeVisual.vue'
 import GameSettingsSummary from './GameSettingsSummary.vue'
 import LobbyDialog from './LobbyDialog.vue'
 import MatchTypePicker from './MatchTypePicker.vue'
@@ -13,8 +14,7 @@ import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
 import LoginButton from '../account/LoginButton.vue'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
-import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
-import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
+import type { CharacterId } from '../../game/llm/animeCharacters'
 import type { TableThemeName } from '../table/three/tableTheme'
 
 interface Props {
@@ -73,8 +73,6 @@ const matchOption = computed(() => props.selectedMatch === 'east'
   ? { name: '东风场', description: '一场 4 局' }
   : { name: '半庄场', description: '一场 8 局' })
 const ruleOption = computed(() => getRuleVariant(props.selectedRule))
-const currentCharacter = computed(() => resolveAnimeCharacter(props.animeCharacterId))
-const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.animeCharacterId))
 const dialogTitle = computed(() => ({
   create: '创建房间',
   join: '加入房间',
@@ -134,94 +132,95 @@ function closeDialog() {
 </script>
 
 <template>
-  <section class="lobby">
-    <p class="eyebrow">LIANHUA MAHJONG COLLECTIONS</p>
-    <h1>莲花<span>广麻</span></h1>
-    <p class="subtitle">一款莲花县特有的地方麻将游戏玩法</p>
-    <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
-      <button :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
-      <button v-if="!singlePlayerOnly" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>
-    </div>
-    <template v-if="gameMode === 'local'">
-      <GameSettingsSummary
-        :match-name="matchOption.name"
-        :match-description="matchOption.description"
-        :rule-name="ruleOption.name"
-        :rule-description="ruleOption.highlights.slice(0, 2).join(' · ')"
-        @select-match="openPicker('match')"
-        @select-rule="openPicker('rule')"
-      />
-      <button
-        v-if="tableThemeName === 'llmAnime'"
-        type="button"
-        class="character-shortcut"
-        @click="dialog = 'character'"
-      >
-        <img :src="currentCharacterAvatar" alt="" aria-hidden="true">
-        <span class="character-shortcut-label">本家形象</span>
-        <b>{{ currentCharacter.label }}</b>
-        <span class="character-shortcut-chevron">›</span>
-      </button>
-      <button class="start-button" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
-    </template>
-
-    <div v-else class="remote-lobby">
-      <div v-if="loginRequired" class="remote-login-gate">
-        <p class="remote-login-hint">多人对战需要 VibeHub 账号登录</p>
-        <LoginButton />
-      </div>
-      <template v-else>
-        <label class="remote-field">
-          <span>昵称</span>
-          <input
-            :value="nicknameInput"
-            maxlength="12"
-            placeholder="输入昵称"
-            @input="$emit('update:nicknameInput', ($event.target as HTMLInputElement).value)"
-            @keyup.enter="dialog = 'create'"
-          />
-        </label>
-        <div v-if="!roomId" class="remote-entry-actions">
-          <button class="remote-create" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
-            {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
-          </button>
-          <button class="remote-join-btn" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
-            {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
-          </button>
+  <section class="lobby" :class="{ 'room-focused': Boolean(roomId) }">
+    <div class="lobby-layout" :class="{ 'room-focused': Boolean(roomId) }">
+      <LobbyThemeVisual :theme-name="tableThemeName" :character-id="animeCharacterId" @select-character="dialog = 'character'" />
+      <section class="lobby-actions" aria-label="对局操作">
+        <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
+          <button data-action-role="secondary" :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
+          <button v-if="!singlePlayerOnly" data-action-role="secondary" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>
         </div>
-        <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
+        <template v-if="gameMode === 'local'">
+          <GameSettingsSummary
+            :match-name="matchOption.name"
+            :match-description="matchOption.description"
+            :rule-name="ruleOption.name"
+            :rule-description="ruleOption.highlights.slice(0, 2).join(' · ')"
+            @select-match="openPicker('match')"
+            @select-rule="openPicker('rule')"
+          />
+          <button class="start-button" data-action-role="primary" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
+        </template>
 
-        <RoomPanel
-          v-if="roomId"
-          :room-id="roomId"
-          :room-time-limit="roomTimeLimit"
-          :room-seats="roomSeats"
-          :ai-seats="aiSeats"
-          :llm-options="llmOptions"
-          :my-seat="mySeat"
-          :is-host="isHost"
-          :session-status="sessionStatus"
-          :all-occupied-ready="allOccupiedReady"
-          :match-starting="matchStarting"
-          :copied="copied"
-          :leaving="leaving"
-          :closing="closing"
-          :match-name="matchName"
-          :rule-name="ruleOption.name"
-          :table-theme-name="tableThemeName"
-          :character-id="animeCharacterId"
-          @copy="$emit('copyRoom')"
-          @toggle-ready="$emit('toggleReady')"
-          @start="$emit('startRemote')"
-          @configure-ai-seats="$emit('configureAiSeats', $event)"
-          @leave="$emit('leaveRoom')"
-          @close="$emit('closeRoom')"
-          @update:character-id="$emit('update:animeCharacterId', $event)"
-        />
-      </template>
+        <div v-else class="remote-lobby">
+          <div v-if="loginRequired" class="remote-login-gate">
+            <p class="remote-login-hint">多人对战需要 VibeHub 账号登录</p>
+            <LoginButton />
+          </div>
+          <template v-else>
+            <label v-if="!roomId" class="remote-field">
+              <span>昵称</span>
+              <input
+                :value="nicknameInput"
+                maxlength="12"
+                placeholder="输入昵称"
+                @input="$emit('update:nicknameInput', ($event.target as HTMLInputElement).value)"
+                @keyup.enter="dialog = 'create'"
+              />
+            </label>
+            <div v-if="!roomId" class="remote-entry-actions">
+              <button class="remote-create" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
+                {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
+              </button>
+              <button class="remote-join-btn" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
+                {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
+              </button>
+            </div>
+            <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
+
+            <RoomPanel
+              v-if="roomId"
+              :room-id="roomId"
+              :room-time-limit="roomTimeLimit"
+              :room-seats="roomSeats"
+              :ai-seats="aiSeats"
+              :llm-options="llmOptions"
+              :my-seat="mySeat"
+              :is-host="isHost"
+              :session-status="sessionStatus"
+              :all-occupied-ready="allOccupiedReady"
+              :match-starting="matchStarting"
+              :copied="copied"
+              :leaving="leaving"
+              :closing="closing"
+              :match-name="matchName"
+              :rule-name="ruleOption.name"
+              :table-theme-name="tableThemeName"
+              :character-id="animeCharacterId"
+              @copy="$emit('copyRoom')"
+              @toggle-ready="$emit('toggleReady')"
+              @start="$emit('startRemote')"
+              @configure-ai-seats="$emit('configureAiSeats', $event)"
+              @leave="$emit('leaveRoom')"
+              @close="$emit('closeRoom')"
+              @open-character="dialog = 'character'"
+              @update:character-id="$emit('update:animeCharacterId', $event)"
+            />
+          </template>
+        </div>
+
+        <div class="lobby-links">
+          <button v-if="gameMode === 'remote' && !loginRequired" class="text-button" data-action-role="light" @click="$emit('openStats')">我的战绩 →</button>
+          <button class="text-button" data-action-role="light" @click="$emit('openRules')">游戏规则 →</button>
+          <a class="repository-link" data-action-role="light" href="https://github.com/BestGuo2020/lianhuaguangdongmahjong" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 新标签页打开莲花广麻仓库">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.24c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18A11 11 0 0 1 12 6.1c.98 0 1.95.13 2.87.39 2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+            GitHub ↗
+          </a>
+        </div>
+      </section>
     </div>
 
-    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule' || dialog === 'character'" @close="closeDialog">
+    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule' || dialog === 'character'" :theme-name="tableThemeName" :variant="dialog" @close="closeDialog">
       <template v-if="dialog === 'create'">
         <GameSettingsSummary
           :match-name="matchOption.name"
@@ -232,8 +231,8 @@ function closeDialog() {
           @select-rule="openPicker('rule', true)"
         />
         <div class="dialog-actions">
-          <button class="secondary" type="button" @click="dialog = null">取消</button>
-          <button class="primary" type="button" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="confirmCreate">确认创建</button>
+          <button class="secondary" type="button" data-action-role="light" @click="dialog = null">取消</button>
+          <button class="primary" type="button" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="confirmCreate">确认创建</button>
         </div>
       </template>
 
@@ -251,8 +250,8 @@ function closeDialog() {
         </label>
         <p class="dialog-hint">场次和规则玩法由房主设置，加入后可查看。</p>
         <div class="dialog-actions">
-          <button class="secondary" type="button" @click="dialog = null">取消</button>
-          <button class="primary" type="button" :disabled="!joinCode.trim() || sessionStatus === 'joining'" @click="confirmJoin">确认加入</button>
+          <button class="secondary" type="button" data-action-role="light" @click="dialog = null">取消</button>
+          <button class="primary" type="button" data-action-role="primary" :disabled="!joinCode.trim() || sessionStatus === 'joining'" @click="confirmJoin">确认加入</button>
         </div>
       </template>
 
@@ -266,53 +265,22 @@ function closeDialog() {
       <RuleVariantPicker v-else :model-value="selectedRule" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
 
-    <div class="lobby-links">
-      <button v-if="gameMode === 'remote' && !loginRequired" class="text-button" @click="$emit('openStats')">我的战绩 →</button>
-      <button class="text-button" @click="$emit('openRules')">游戏规则 →</button>
-      <a class="repository-link" href="https://github.com/BestGuo2020/lianhuaguangdongmahjong" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 新标签页打开莲花广麻仓库">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.24c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18A11 11 0 0 1 12 6.1c.98 0 1.95.13 2.87.39 2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
-        GitHub ↗
-      </a>
-    </div>
   </section>
 </template>
 
 <style scoped>
-.character-shortcut {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(430px, 92vw);
-  margin: 0 auto 16px;
-  padding: 8px 12px;
-  border: 1px solid rgba(231, 207, 147, .28);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, .32);
-  color: #e8dcb9;
-  cursor: pointer;
-  text-align: left;
-}
-.character-shortcut:hover { background: rgba(215, 174, 83, .14); border-color: #b99549; }
-.character-shortcut img {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  border: 2px solid #2d2923;
-  border-radius: 10px 10px 4px 4px;
-  object-fit: cover;
-  background: #e8dcc7;
-}
-.character-shortcut-label { font-size: 12px; color: #a99f8a; }
-.character-shortcut b { flex: 1; min-width: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.character-shortcut-chevron { font-size: 18px; line-height: 1; color: #b99549; }
 .remote-login-gate {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+.remote-login-gate :deep(.vibe-auth-status) { color: var(--theme-text-muted); }
+.remote-login-gate :deep(.vibe-auth-login),
+.remote-login-gate :deep(.vibe-auth-logout) { border-color: var(--theme-border); border-radius: 7px; background: var(--theme-panel-elevated); color: var(--theme-text); }
+.remote-login-gate :deep(.vibe-auth-error) { color: var(--theme-negative); }
 .remote-login-hint {
   margin: 0;
-  color: #d0c39e;
+  color: var(--theme-text-muted);
   font-size: 14px;
   letter-spacing: 0.1em;
 }
