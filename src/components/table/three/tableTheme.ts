@@ -830,9 +830,9 @@ export const llmAnimeTheme: TableTheme = {
   tableGuide: {
     dark: '#30443a',
     light: '#b5c2aa',
-    opacity: .14,
+    opacity: .3,
     slotDark: '#102018',
-    slotOpacity: .42,
+    slotOpacity: .62,
   },
   // 原 3.85×1.13 的中控台总宽高缩小 0.2 个牌长（0.94×0.2）。
   machineScale: 1.081,
