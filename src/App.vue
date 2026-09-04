@@ -31,6 +31,10 @@ import {
   shouldAutoUseLlmTheme,
 } from './components/table/three/tableThemePreference'
 import {
+  themePresentationByName,
+  themePresentationCssVariables,
+} from './theme/themePresentation'
+import {
   animeCharacterAvatarUrl,
   readAnimeCharacterPreference,
   saveAnimeCharacterPreference,
@@ -77,6 +81,8 @@ const initialThemeCandidate = new URLSearchParams(window.location.search).get('t
 const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate, readTableThemePreference())
 const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
 const explicitTableThemeSelected = ref(initialTableTheme.explicit)
+const themePresentation = computed(() => themePresentationByName(tableThemeName.value))
+const themePresentationStyle = computed(() => themePresentationCssVariables(themePresentation.value))
 if (initialThemeCandidate !== null && initialThemeCandidate !== initialTableTheme.theme) {
   const canonicalUrl = new URL(window.location.href)
   canonicalUrl.searchParams.set('theme', initialTableTheme.theme)
@@ -420,7 +426,15 @@ function changeTableTheme(theme: TableThemeName) {
 
 <template>
   <OrientationGate />
-  <main class="game-app" :class="{ 'is-lobby': showLobby }" :data-table-theme="tableThemeName">
+  <main
+    class="game-app"
+    :class="[{ 'is-lobby': showLobby }, themePresentation.typography.headingClass]"
+    :data-table-theme="tableThemeName"
+    :data-theme-player-frame="themePresentation.hud.playerFrame"
+    :data-theme-particle="themePresentation.shell.particle"
+    :data-theme-loading="themePresentation.presentation.loading"
+    :style="themePresentationStyle"
+  >
     <div v-if="gameMode === 'remote' && wsStatus === 'reconnecting'" class="remote-banner" role="status">网络断开，正在重连…</div>
     <div v-else-if="gameMode === 'remote' && wsStatus === 'closed' && roomId" class="remote-banner error" role="status">连接已断开，正在尝试恢复…</div>
     <div v-if="gameMode === 'remote' && waitingNextRound" class="remote-banner" role="status">已确认，等待其他玩家…</div>

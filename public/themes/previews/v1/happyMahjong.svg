@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="欢乐麻将主题预览">
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#23849a"/><stop offset="1" stop-color="#0a3541"/></linearGradient></defs>
+  <rect width="320" height="180" rx="24" fill="url(#bg)"/><rect x="45" y="28" width="230" height="124" rx="30" fill="#176274" stroke="#ffd65b" stroke-width="5"/>
+  <circle cx="160" cy="90" r="31" fill="#f7ca4e"/><path d="M149 72h22v36h-22z" fill="#fff9e8"/><g fill="#f07a5d"><circle cx="34" cy="42" r="7"/><circle cx="286" cy="132" r="9"/><path d="M275 25l12 16-18 5zM48 137l15 11-14 10z"/></g><g fill="#fff9e8" opacity=".8"><circle cx="66" cy="46" r="4"/><circle cx="265" cy="74" r="5"/></g>
+</svg>

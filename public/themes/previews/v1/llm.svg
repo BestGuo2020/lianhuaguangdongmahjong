@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="大模型专属主题预览">
+  <defs><radialGradient id="bg"><stop stop-color="#183a88"/><stop offset="1" stop-color="#03081b"/></radialGradient></defs><rect width="320" height="180" rx="20" fill="url(#bg)"/>
+  <g fill="none" stroke="#76d9ff" stroke-opacity=".5"><ellipse cx="160" cy="90" rx="104" ry="48"/><ellipse cx="160" cy="90" rx="55" ry="80" transform="rotate(55 160 90)"/><path d="M38 130L100 82l61 8 58-45 68 60"/></g>
+  <g fill="#9a8af0"><circle cx="100" cy="82" r="7"/><circle cx="219" cy="45" r="8"/></g><g fill="#76d9ff"><circle cx="38" cy="130" r="4"/><circle cx="161" cy="90" r="10"/><circle cx="287" cy="105" r="5"/></g><g fill="#fff" opacity=".65"><circle cx="50" cy="35" r="2"/><circle cx="266" cy="28" r="2"/><circle cx="278" cy="145" r="2"/></g>
+</svg>

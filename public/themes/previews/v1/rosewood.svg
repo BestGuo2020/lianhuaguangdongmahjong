@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="红木金丝主题预览">
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#7c3b28"/><stop offset="1" stop-color="#27100a"/></linearGradient></defs>
+  <rect width="320" height="180" rx="18" fill="url(#bg)"/><g fill="none" stroke="#dba958" stroke-width="3"><rect x="24" y="18" width="272" height="144" rx="12"/><rect x="44" y="34" width="232" height="112" rx="5"/></g>
+  <g fill="none" stroke="#f0c985" stroke-opacity=".16"><path d="M18 48c62-25 110 28 178 2s94-4 120 7M8 112c76-22 122 31 192 3s93-2 119 9M30 76c48-18 75 16 120 1s89-10 140 4"/></g><circle cx="160" cy="90" r="25" fill="#35150e" stroke="#e2b45c" stroke-width="3"/>
+</svg>

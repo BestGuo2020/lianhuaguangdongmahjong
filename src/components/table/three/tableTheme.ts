@@ -1,4 +1,7 @@
 import type * as THREE from 'three'
+import { TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
+
+export { TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
 
 // 牌桌主题配置：把原来硬编码在 staticTableScene.ts 里的所有共享材质参数抽成数据。
 // 换肤 = 换一份 TableTheme；运行时 Texture 仍由创建方注入，主题这里只保存可序列化的图片地址与变换参数。
@@ -832,26 +835,16 @@ export const llmAnimeTheme: TableTheme = {
 }
 
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
-export const TABLE_THEMES: Record<string, TableTheme> = {
+export const TABLE_THEMES: Record<TableThemeName, TableTheme> = {
   jade: defaultTableTheme,
-  rosewood: rosewoodTheme,
   happyMahjong: happyMahjongTheme,
+  rosewood: rosewoodTheme,
   llm: llmTheme,
   llmAnime: llmAnimeTheme,
 }
 
-export const TABLE_THEME_OPTIONS = [
-  { value: 'jade', label: '默认墨玉', description: '深绿玉石与金色桌沿' },
-  { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
-  { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
-  { value: 'llm', label: '大模型专属', description: '双模型娘化对决与深蓝星轨' },
-  { value: 'llmAnime', label: '大模型二次元', description: '鼠尾草绒面、树脂麻将与角色演出' },
-] as const
-
-export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']
-
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
 export function tableThemeByName(name: string | null | undefined): TableTheme | undefined {
-  return name ? TABLE_THEMES[name] : undefined
+  return name ? TABLE_THEMES[name as TableThemeName] : undefined
 }
 

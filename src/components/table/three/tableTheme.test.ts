@@ -14,7 +14,7 @@ describe('牌桌主题注册表', () => {
       'jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime',
     ])
     expect(Object.keys(TABLE_THEMES)).toEqual([
-      'jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime',
+      'jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime',
     ])
     expect(tableThemeByName('majsoul')).toBeUndefined()
     expect(tableThemeByName('unknown')).toBeUndefined()
@@ -27,7 +27,7 @@ describe('大模型专属牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llm',
       label: '大模型专属',
-      description: '双模型娘化对决与深蓝星轨',
+      description: '深蓝星轨、数据线与模型对抗',
     })
   })
 
@@ -55,7 +55,7 @@ describe('大模型二次元牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llmAnime',
       label: '大模型二次元',
-      description: '鼠尾草绒面、树脂麻将与角色演出',
+      description: '角色群像、漫画字效与动作演出',
     })
   })
 

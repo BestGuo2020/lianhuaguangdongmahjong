@@ -1,4 +1,4 @@
-import { TABLE_THEME_OPTIONS, type TableThemeName } from './tableTheme'
+import { isTableThemeName, type TableThemeName } from '../../../theme/themeIdentity'
 
 export const TABLE_THEME_PREFERENCE_STORAGE_KEY = 'lianhua-guangma:table-theme:v1'
 
@@ -12,9 +12,7 @@ export interface InitialTableTheme {
   explicit: boolean
 }
 
-export function isTableThemeName(value: string | null | undefined): value is TableThemeName {
-  return TABLE_THEME_OPTIONS.some((option) => option.value === value)
-}
+export { isTableThemeName }
 
 /** 读取持久化主题；旧主题或损坏值迁移到默认墨玉，存储不可用时静默降级。 */
 export function readTableThemePreference(
