@@ -179,6 +179,13 @@ export const defaultTableTheme: TableTheme = {
     },
   },
   tableVignette: .35,
+  tableGuide: {
+    dark: '#0c1a10',
+    light: '#7fa888',
+    opacity: .5,
+    slotDark: '#061008',
+    slotOpacity: .62,
+  },
   plainSurface: true,
   edgeTrim: {
     color: 0x163a2c,
@@ -313,6 +320,13 @@ export const rosewoodTheme: TableTheme = {
     },
   },
   tableVignette: .45,
+  tableGuide: {
+    dark: '#2a120a',
+    light: '#c0917a',
+    opacity: .5,
+    slotDark: '#120804',
+    slotOpacity: .62,
+  },
   plainSurface: true,
   rimLight: {
     color: 0xb45b3f,
@@ -453,6 +467,13 @@ export const majsoulTheme: TableTheme = {
   plainSurface: true,
   tableFelt: true,
   tableVignette: .32,
+  tableGuide: {
+    dark: '#182c4a',
+    light: '#93a8d0',
+    opacity: .5,
+    slotDark: '#0c1630',
+    slotOpacity: .62,
+  },
   woodTrim: true,
   woodTrimColors: ['#78502b', '#62401f', '#452b17'],
   woodTrimMaterial: {
@@ -591,6 +612,13 @@ export const happyMahjongTheme: TableTheme = {
   plainSurface: true,
   tableFelt: true,
   tableVignette: .3,
+  tableGuide: {
+    dark: '#0e3240',
+    light: '#84bcc8',
+    opacity: .5,
+    slotDark: '#061a20',
+    slotOpacity: .62,
+  },
   woodTrim: false,
   rimLight: {
     color: 0x477a73,
@@ -718,6 +746,13 @@ export const llmTheme: TableTheme = {
     url: `${import.meta.env.BASE_URL}img/llm-table.webp`,
     tint: 0xffffff,
   },
+  tableGuide: {
+    dark: '#081430',
+    light: '#88a0c8',
+    opacity: .5,
+    slotDark: '#040a18',
+    slotOpacity: .62,
+  },
   plainSurface: true,
   edgeTrim: {
     color: 0x101d43,
@@ -830,9 +865,9 @@ export const llmAnimeTheme: TableTheme = {
   tableGuide: {
     dark: '#30443a',
     light: '#b5c2aa',
-    opacity: .14,
+    opacity: .5,
     slotDark: '#102018',
-    slotOpacity: .42,
+    slotOpacity: .62,
   },
   // 原 3.85×1.13 的中控台总宽高缩小 0.2 个牌长（0.94×0.2）。
   machineScale: 1.081,
