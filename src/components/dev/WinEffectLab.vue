@@ -2,6 +2,7 @@
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   previewWin: [seat: number, options?: { robbedKong?: boolean }]
+  previewDraw: []
   previewKong: [mode: 'concealed' | 'added' | 'both']
   previewFourRed: []
 }>()
@@ -16,6 +17,11 @@ const seats = ['本家', '下家', '对家', '上家']
       <span>{{ seat }}</span>
       <button :data-testid="`win-self-${index}`" @click="emit('previewWin', index)">自摸</button>
       <button :data-testid="`win-rob-${index}`" @click="emit('previewWin', index, { robbedKong: true })">抢杠胡</button>
+    </div>
+    <strong>流局测试</strong>
+    <div class="draw-debug">
+      <span>全桌</span>
+      <button data-testid="round-draw" @click="emit('previewDraw')">流局</button>
     </div>
     <strong>杠选牌测试</strong>
     <div class="kong-debug">

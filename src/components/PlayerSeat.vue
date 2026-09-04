@@ -4,6 +4,7 @@ import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
 import type { GamePlayer } from '../game/core/contracts/types'
 import type { TableThemeName } from './table/three/tableTheme'
 import { animeCharacterAccent } from '../game/core/presentation/animeCharacterPalette'
+import { scoreDirection } from '../theme/themeEventPresentation'
 
 const props = withDefaults(defineProps<{
   player: GamePlayer
@@ -50,7 +51,8 @@ const animeStyle = computed(() => props.themeName === 'llmAnime'
           v-if="scoreDelta"
           :key="`${scoreFlowId}-${player.seat}`"
           class="score-delta"
-          :class="scoreDelta > 0 ? 'positive' : 'negative'"
+          :class="scoreDirection(scoreDelta)"
+          :data-score-direction="scoreDirection(scoreDelta)"
         >{{ scoreDelta > 0 ? '+' : '' }}{{ scoreDelta }}</strong>
       </Transition>
       <Transition name="llm-bubble">

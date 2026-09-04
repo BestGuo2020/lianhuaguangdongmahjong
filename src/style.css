@@ -740,9 +740,10 @@ button { font: inherit; }
 .result-reopen.continue { right: calc(4% + 170px); border-color: #b98a36; }
 .win-effect-lab { position: fixed; z-index: 150; top: 12px; left: 12px; display: grid; gap: 5px; width: 230px; padding: 10px; border: 1px solid #bd974c; border-radius: 7px; background: rgba(4,16,12,.94); color: #f3dfad; font-size: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
 .win-effect-lab > strong { margin-bottom: 3px; text-align: center; }
-.win-effect-lab > div { display: grid; grid-template-columns: 42px 1fr 1fr; align-items: center; gap: 5px; }
+.win-effect-lab > div { display: grid; grid-template-columns: 42px repeat(2, 1fr); align-items: center; gap: 5px; }
 .win-effect-lab button { padding: 4px 5px; border: 1px solid rgba(214,178,91,.5); border-radius: 4px; background: #17372c; color: #f4dfac; cursor: pointer; }
 .win-effect-lab .kong-debug { grid-template-columns: 42px repeat(3, 1fr); }
+.win-effect-lab .draw-debug { grid-template-columns: 42px 1fr; }
 
 .round-settlement { background: radial-gradient(circle at 50% 45%, rgba(28,63,92,.3), transparent 55%), rgba(1,5,10,.82); }
 .settlement-card { width: min(860px, 94%); max-height: 94%; padding-top: 31px; overflow: hidden auto; }
@@ -1055,7 +1056,7 @@ button { font: inherit; }
 /* 移动端大厅布局由粗指针横屏能力查询统一控制。 */
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
 }
 
 /* ── Phase 7 联机对战：模式切换 / 远程房间 Lobby ── */
@@ -2962,4 +2963,117 @@ button { font: inherit; }
 @keyframes jade-seat-glint {
   0%, 100% { box-shadow: 0 0 0 1px rgba(217,185,97,.22), 0 0 14px rgba(91,151,108,.18); }
   50% { box-shadow: 0 0 0 2px rgba(217,185,97,.42), 0 0 24px rgba(116,183,135,.32); }
+}
+
+/* ── Phase 6 · 共享动作强度、分数变化与结算状态矩阵 ── */
+.table-action-cue {
+  --event-primary: var(--theme-accent);
+  --event-secondary: var(--theme-accent-secondary);
+  --event-text: var(--theme-text);
+}
+.table-action-cue.action-chi { --event-primary: var(--theme-positive); --event-secondary: var(--theme-accent-secondary); }
+.table-action-cue.action-peng { --event-primary: var(--theme-accent); --event-secondary: var(--theme-surface); }
+.table-action-cue.action-gang { --event-primary: var(--theme-accent-secondary); --event-secondary: var(--theme-accent); }
+.table-action-cue.action-win { --event-primary: var(--theme-accent); --event-secondary: var(--theme-negative); }
+.table-action-cue.strength-medium.table-action-enter-active { animation: theme-action-medium-in .52s cubic-bezier(.18,.86,.24,1.12) both; }
+.table-action-cue.strength-strong.table-action-enter-active { animation: theme-action-strong-in .72s cubic-bezier(.14,.9,.22,1.16) both; }
+.table-action-cue.strength-climax.table-action-enter-active { animation: theme-action-climax-in .88s cubic-bezier(.12,.88,.2,1.12) both; }
+.table-action-cue.strength-strong { filter: drop-shadow(0 9px 16px rgba(0,0,0,.58)) saturate(1.1); }
+.table-action-cue.strength-climax { filter: drop-shadow(0 12px 22px rgba(0,0,0,.62)) saturate(1.16); }
+
+.game-app[data-table-theme="jade"] .table-action-cue { background: radial-gradient(circle, color-mix(in srgb, var(--event-primary) 42%, #173f2f) 0 32%, color-mix(in srgb, var(--event-secondary) 42%, transparent) 50%, transparent 72%); }
+.game-app[data-table-theme="jade"] .table-action-cue.action-gang { box-shadow: inset 0 0 0 2px rgba(231,193,102,.3); }
+.game-app[data-table-theme="jade"] .table-action-cue.action-win { background: radial-gradient(ellipse, rgba(83,54,20,.98) 0 30%, rgba(206,155,62,.58) 50%, transparent 74%); }
+
+.game-app[data-table-theme="happyMahjong"] .table-action-cue { border-radius: 28%; background: radial-gradient(circle at 42% 34%, var(--event-primary) 0 25%, color-mix(in srgb, var(--event-secondary) 82%, #0e3b48) 47%, transparent 72%); }
+.game-app[data-table-theme="happyMahjong"] .table-action-cue.action-chi::after { border-style: dashed; transform: rotate(14deg); }
+.game-app[data-table-theme="happyMahjong"] .table-action-cue.action-gang { box-shadow: 7px 7px 0 rgba(240,122,93,.35); }
+.game-app[data-table-theme="happyMahjong"] .table-action-cue.action-win { background: radial-gradient(circle at 50% 46%, #f7ca4e 0 24%, #ef7657 43%, transparent 70%), radial-gradient(circle at 18% 18%, #fff9e8 0 3px, transparent 4px); }
+
+.game-app[data-table-theme="rosewood"] .table-action-cue { border-radius: 5px; background: radial-gradient(circle, color-mix(in srgb, var(--event-primary) 58%, #6f2d20) 0 34%, color-mix(in srgb, var(--event-secondary) 48%, transparent) 50%, transparent 72%); }
+.game-app[data-table-theme="rosewood"] .table-action-cue.action-chi { --event-primary: #cf8d57; }
+.game-app[data-table-theme="rosewood"] .table-action-cue.action-gang { box-shadow: inset 0 0 0 5px rgba(245,213,152,.08), 0 0 24px rgba(176,64,40,.34); }
+.game-app[data-table-theme="rosewood"] .table-action-cue.action-win { background: radial-gradient(ellipse, #7f3022 0 28%, rgba(224,180,92,.76) 48%, transparent 73%); }
+
+.game-app[data-table-theme="llm"] .table-action-cue { border-radius: 5px; background: radial-gradient(circle, color-mix(in srgb, var(--event-primary) 52%, #112f78) 0 33%, color-mix(in srgb, var(--event-secondary) 44%, transparent) 50%, transparent 72%); }
+.game-app[data-table-theme="llm"] .table-action-cue::after { border-style: dashed; animation: llm-event-scan 1.4s linear infinite; }
+.game-app[data-table-theme="llm"] .table-action-cue.action-gang { box-shadow: inset 0 0 22px rgba(154,138,240,.2), 0 0 26px rgba(79,143,255,.3); }
+.game-app[data-table-theme="llm"] .table-action-cue.action-win { background: radial-gradient(ellipse, #263f96 0 28%, rgba(118,217,255,.62) 48%, transparent 73%); }
+
+.game-app[data-table-theme="llmAnime"] .anime-action-cue.action-chi { filter: drop-shadow(0 10px 18px rgba(112,191,137,.24)); }
+.game-app[data-table-theme="llmAnime"] .anime-action-cue.action-peng { filter: drop-shadow(0 10px 18px rgba(120,216,232,.24)); }
+.game-app[data-table-theme="llmAnime"] .anime-action-cue.action-gang { filter: drop-shadow(0 12px 22px rgba(255,145,121,.34)); }
+.game-app[data-table-theme="llmAnime"] .anime-action-cue.action-win { filter: drop-shadow(0 15px 28px rgba(199,164,91,.42)); }
+
+.score-delta {
+  border: 1px solid color-mix(in srgb, currentColor 46%, transparent);
+  background: color-mix(in srgb, var(--theme-panel) 88%, transparent);
+}
+.score-delta[data-score-direction="positive"] { color: var(--theme-positive); text-shadow: 0 2px 2px #10261a, 0 0 14px color-mix(in srgb, currentColor 62%, transparent); }
+.score-delta[data-score-direction="negative"] { color: var(--theme-negative); text-shadow: 0 2px 2px #2b0d0b, 0 0 14px color-mix(in srgb, currentColor 62%, transparent); }
+.game-app[data-table-theme="jade"] .score-delta { border-radius: 3px; box-shadow: inset 3px 0 currentColor, 0 8px 18px rgba(0,0,0,.34); }
+.game-app[data-table-theme="happyMahjong"] .score-delta { border-width: 2px; border-radius: 16px; box-shadow: 0 4px 0 color-mix(in srgb, currentColor 34%, transparent), 0 9px 18px rgba(0,0,0,.3); }
+.game-app[data-table-theme="rosewood"] .score-delta { border-radius: 3px; background: #f0ddba; color: #6a2a1d; box-shadow: 4px 4px 0 rgba(72,24,13,.32); text-shadow: none; }
+.game-app[data-table-theme="rosewood"] .score-delta[data-score-direction="positive"] { color: #39734b; }
+.game-app[data-table-theme="rosewood"] .score-delta[data-score-direction="negative"] { color: #a33e31; }
+.game-app[data-table-theme="llm"] .score-delta { border-radius: 2px; clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); font-family: Consolas, "Microsoft YaHei", monospace; box-shadow: inset 3px 0 currentColor, 0 0 20px color-mix(in srgb, currentColor 28%, transparent); }
+.game-app[data-table-theme="llmAnime"] .score-delta { border: 2px solid #2d2923; border-radius: 7px; background: #fff0db; box-shadow: 4px 4px 0 rgba(45,41,35,.3); text-shadow: none; }
+
+.game-app .settlement-card[data-result-kind="draw"],
+.game-app:has(.game-table-hud[data-round-result-kind="draw"]) .settlement-card:not([data-result-kind]) { border-style: dashed; }
+.game-app .settlement-card[data-result-kind="draw"] h2,
+.game-app:has(.game-table-hud[data-round-result-kind="draw"]) .settlement-card:not([data-result-kind]) h2 { color: var(--theme-text-muted); }
+.game-app .settlement-card[data-result-kind="self-draw"],
+.game-app:has(.game-table-hud[data-round-result-kind="self-draw"]) .settlement-card:not([data-result-kind]) { box-shadow: inset 0 0 0 7px color-mix(in srgb, var(--theme-positive) 6%, transparent), 0 28px 76px rgba(0,0,0,.58); }
+.game-app .settlement-card[data-result-kind="discard"],
+.game-app:has(.game-table-hud[data-round-result-kind="discard"]) .settlement-card:not([data-result-kind]) { box-shadow: inset 0 0 0 7px color-mix(in srgb, var(--theme-accent-secondary) 8%, transparent), 0 28px 76px rgba(0,0,0,.58); }
+.game-app .settlement-card[data-result-kind="robbed-kong"],
+.game-app:has(.game-table-hud[data-round-result-kind="robbed-kong"]) .settlement-card:not([data-result-kind]) { border-color: var(--theme-negative); box-shadow: inset 0 0 0 7px color-mix(in srgb, var(--theme-negative) 9%, transparent), 0 0 34px color-mix(in srgb, var(--theme-negative) 22%, transparent), 0 28px 76px rgba(0,0,0,.62); }
+.game-app .settlement-card[data-result-kind="tianhu"],
+.game-app .settlement-card[data-result-kind="dihu"],
+.game-app:has(.game-table-hud[data-round-result-kind="tianhu"]) .settlement-card:not([data-result-kind]),
+.game-app:has(.game-table-hud[data-round-result-kind="dihu"]) .settlement-card:not([data-result-kind]) { border-color: var(--theme-accent); box-shadow: inset 0 0 0 7px color-mix(in srgb, var(--theme-accent) 10%, transparent), 0 0 40px color-mix(in srgb, var(--theme-accent) 25%, transparent), 0 28px 76px rgba(0,0,0,.62); }
+.game-app .settlement-card[data-result-kind="robbed-kong"] h2,
+.game-app:has(.game-table-hud[data-round-result-kind="robbed-kong"]) .settlement-card:not([data-result-kind]) h2 { color: var(--theme-negative); }
+.game-app .settlement-card[data-result-kind="self-draw"] h2,
+.game-app .settlement-card[data-result-kind="tianhu"] h2,
+.game-app .settlement-card[data-result-kind="dihu"] h2,
+.game-app:has(.game-table-hud[data-round-result-kind="self-draw"]) .settlement-card:not([data-result-kind]) h2,
+.game-app:has(.game-table-hud[data-round-result-kind="tianhu"]) .settlement-card:not([data-result-kind]) h2,
+.game-app:has(.game-table-hud[data-round-result-kind="dihu"]) .settlement-card:not([data-result-kind]) h2 { color: var(--theme-accent); }
+.game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="draw"] h2 { color: #76503a; }
+.game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="robbed-kong"] h2 { color: #a33e31; }
+.game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="self-draw"] h2 { color: #5e2b1d; }
+.final-board[data-result-kind="final"],
+.game-app:has(.game-table-hud[data-match-finished="1"]) .final-board:not([data-result-kind]) { animation-duration: 1.25s; }
+
+@keyframes theme-action-medium-in {
+  0% { opacity: 0; scale: .74; }
+  62% { opacity: 1; scale: 1.06; }
+  100% { opacity: 1; scale: 1; }
+}
+@keyframes theme-action-strong-in {
+  0% { opacity: 0; scale: .62; rotate: -5deg; }
+  56% { opacity: 1; scale: 1.13; rotate: 2deg; }
+  100% { opacity: 1; scale: 1; rotate: 0deg; }
+}
+@keyframes theme-action-climax-in {
+  0% { opacity: 0; scale: .5; filter: brightness(1.8); }
+  48% { opacity: 1; scale: 1.16; filter: brightness(1.28); }
+  100% { opacity: 1; scale: 1; filter: brightness(1); }
+}
+@keyframes llm-event-scan { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .table-action-cue,
+  .anime-action-cue,
+  .score-delta,
+  .settlement-card,
+  .final-board {
+    animation: none !important;
+    transition: none !important;
+    scale: 1 !important;
+    rotate: 0deg !important;
+  }
+  .game-app[data-table-theme="llm"] .table-action-cue::after { animation: none !important; }
 }

@@ -306,6 +306,7 @@ export function useGame({
     resetPlayers: openingTimeline.resetPlayers,
     announce: transientEvents.announce,
     endGame,
+    endDraw,
     beginTurn: (playerIndex) => beginTurn(playerIndex),
   })
 

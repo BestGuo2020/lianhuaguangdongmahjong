@@ -272,6 +272,10 @@ const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}
   if (gameMode.value !== 'local' || singlePlayerOnly.value) return
   localGame.debugPreviewWin(winnerIndex, options)
 }
+const debugPreviewDraw = () => {
+  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
+  localGame.debugPreviewDraw()
+}
 
 // ── 联机模式状态（远程房间 / WS 连接）──────────────────
 const {
@@ -596,6 +600,7 @@ function changeTableTheme(theme: TableThemeName) {
       <WinEffectLab
         :open="winEffectLab"
         @preview-win="debugPreviewWin"
+        @preview-draw="debugPreviewDraw"
         @preview-kong="debugKong"
         @preview-four-red="debugFourRed"
       />

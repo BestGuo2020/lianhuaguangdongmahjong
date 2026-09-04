@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import { isHorseForSeat } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
@@ -9,6 +9,10 @@ import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { TableThemeName } from '../table/three/tableTheme'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
+import {
+  resolveRoundResultPresentation,
+  type RoundResultPresentationKind,
+} from '../../theme/themeEventPresentation'
 
 type Standing = GamePlayer & { playerIndex: number; rank: number }
 
@@ -67,19 +71,40 @@ function animeEntryStyle(entry?: { characterId?: string }) {
     : undefined
 }
 
-/** 结算标题：莲花麻将按 winType 展示（天胡/地胡/点炮），否则按旧逻辑。 */
-const winLabel = computed(() => {
-  const result = props.result
-  if (!result) return ''
-  if (result.draw) return '流局'
-  switch (result.winType) {
-    case 'tianhu': return '天胡'
-    case 'dihu': return '地胡'
-    case 'robbed-kong': return '抢杠胡'
-    case 'self-draw': return '自摸'
-    case 'discard': return '点炮'
-    default: return result.robbedKong ? '抢杠胡' : '自摸'
+const resultKindLabCandidate = import.meta.env.DEV
+  ? new URLSearchParams(window.location.search).get('resultKindLab') as RoundResultPresentationKind | null
+  : null
+const resultKindLabValues = new Set<RoundResultPresentationKind>([
+  'draw', 'self-draw', 'discard', 'robbed-kong', 'tianhu', 'dihu',
+])
+const resultKindLab = ref(resultKindLabCandidate && resultKindLabValues.has(resultKindLabCandidate)
+  ? resultKindLabCandidate
+  : null)
+const finalRankingLab = ref(import.meta.env.DEV && new URLSearchParams(window.location.search).has('finalRankLab'))
+type ResultKindLabWindow = Window & {
+  __setRoundResultKindLab?: (kind: RoundResultPresentationKind | null) => void
+  __setFinalRankingLab?: (active: boolean) => void
+}
+const resultKindLabWindow = window as ResultKindLabWindow
+const setRoundResultKindLab = (kind: RoundResultPresentationKind | null) => {
+  resultKindLab.value = kind && resultKindLabValues.has(kind) ? kind : null
+}
+if (import.meta.env.DEV) resultKindLabWindow.__setRoundResultKindLab = setRoundResultKindLab
+const setFinalRankingLab = (active: boolean) => { finalRankingLab.value = Boolean(active) }
+if (import.meta.env.DEV) resultKindLabWindow.__setFinalRankingLab = setFinalRankingLab
+onBeforeUnmount(() => {
+  if (resultKindLabWindow.__setRoundResultKindLab === setRoundResultKindLab) {
+    delete resultKindLabWindow.__setRoundResultKindLab
   }
+  if (resultKindLabWindow.__setFinalRankingLab === setFinalRankingLab) {
+    delete resultKindLabWindow.__setFinalRankingLab
+  }
+})
+const resultPresentation = computed(() => {
+  if (!resultKindLab.value) return resolveRoundResultPresentation(props.result)
+  return resultKindLab.value === 'draw'
+    ? resolveRoundResultPresentation({ draw: true })
+    : resolveRoundResultPresentation({ winType: resultKindLab.value })
 })
 
 /** 胡牌者相对庄家的座位：0=庄家(A) / 1=下家(B) / 2=对家(C) / 3=上家(D)。 */
@@ -92,16 +117,29 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
 
 <template>
   <Transition name="modal">
-    <div v-if="result && resultVisible && !matchFinished" class="result-backdrop round-settlement">
-      <section class="result-card settlement-card">
-        <h2>{{ result.roundLabel }} · {{ winLabel }}</h2>
-        <div v-if="!result.draw" class="score-total"><span>总倍数</span><strong>×{{ result.totalMultiplier ?? result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
-        <div v-if="result.details?.length" class="score-details">
+    <div
+      v-if="result && resultVisible && !matchFinished && !finalRankingLab"
+      class="result-backdrop round-settlement"
+      :class="`result-${resultPresentation.kind}`"
+      :data-result-kind="resultPresentation.kind"
+      :data-result-strength="resultPresentation.strength"
+      :data-result-source="resultKindLab ? 'lab' : 'game'"
+    >
+      <section
+        class="result-card settlement-card"
+        :class="`result-${resultPresentation.kind}`"
+        :data-result-kind="resultPresentation.kind"
+        :data-result-strength="resultPresentation.strength"
+        :data-result-source="resultKindLab ? 'lab' : 'game'"
+      >
+        <h2>{{ result.roundLabel }} · {{ resultPresentation.label }}</h2>
+        <div v-if="resultPresentation.kind !== 'draw'" class="score-total"><span>总倍数</span><strong>×{{ result.totalMultiplier ?? result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
+        <div v-if="resultPresentation.kind !== 'draw' && result.details?.length" class="score-details">
           <span v-for="detail in result.details" :key="detail.label">
             {{ detail.label }} <b>{{ detail.points != null ? `+${detail.points} 分` : `×${detail.multiplier}` }}</b>
           </span>
         </div>
-        <div v-if="result.horses?.length" class="horse-area">
+        <div v-if="resultPresentation.kind !== 'draw' && result.horses?.length" class="horse-area">
           <div>
             <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
@@ -134,8 +172,8 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
   </Transition>
 
   <Transition name="final-board">
-    <div v-if="matchFinished" class="result-backdrop final-backdrop">
-      <section class="final-board">
+    <div v-if="matchFinished || finalRankingLab" class="result-backdrop final-backdrop" data-result-kind="final" data-result-strength="climax">
+      <section class="final-board" data-result-kind="final" data-result-strength="climax" :data-result-source="finalRankingLab ? 'lab' : 'game'">
         <p>{{ matchName }} · 对局结束</p>
         <h2>最终排名</h2>
         <div class="final-rankings">
