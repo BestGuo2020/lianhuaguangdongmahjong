@@ -927,7 +927,7 @@ function addTable() {
       clearcoatRoughness: .35,
       ...woodFinish,
     }))
-    // 木框保持原有宽度，避免影响雀魂主题的牌墙空间。
+    // 木框保持原有宽度，避免影响共享牌墙空间。
     // 台面/桌身已随之外扩（surfaceHalf 11.65 / tableHalf 12.5），框不悬空、绒布无露底。
     const outer = 24.8
     const inner = 23.2

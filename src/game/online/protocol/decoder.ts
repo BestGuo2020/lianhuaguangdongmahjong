@@ -16,7 +16,7 @@ const TABLE_ACTION_TYPES = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang',
   'wind-kong', 'self-draw', 'discard-win', 'robbed-kong-win',
 ])
-const TABLE_THEMES = new Set(['jade', 'majsoul', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'])
+const TABLE_THEMES = new Set(['jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'])
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

@@ -3,9 +3,23 @@ import {
   defaultTableTheme,
   llmAnimeTheme,
   llmTheme,
+  TABLE_THEMES,
   TABLE_THEME_OPTIONS,
   tableThemeByName,
 } from './tableTheme'
+
+describe('牌桌主题注册表', () => {
+  it('只公开五个保留主题并拒绝旧主题 ID', () => {
+    expect(TABLE_THEME_OPTIONS.map(({ value }) => value)).toEqual([
+      'jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime',
+    ])
+    expect(Object.keys(TABLE_THEMES)).toEqual([
+      'jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime',
+    ])
+    expect(tableThemeByName('majsoul')).toBeUndefined()
+    expect(tableThemeByName('unknown')).toBeUndefined()
+  })
+})
 
 describe('大模型专属牌桌主题', () => {
   it('注册为可公开选择的 llm 主题', () => {

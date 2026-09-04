@@ -14,7 +14,7 @@ const viewports = [
   { name: '568x320', width: 568, height: 320 },
 ] as const
 
-const themes = ['jade', 'majsoul', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'] as const
+const themes = ['jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'] as const
 
 const phoneLandscapeViewports = [
   { name: 'iphone-se', width: 667, height: 375 },
@@ -192,7 +192,7 @@ test('jade 与 llmAnime 覆盖 §15.5 全视口滚动结算矩阵', async ({ pag
   }
 })
 
-test('六主题在共享 1366×768 布局完成正常对局与结算回归', async ({ page }) => {
+test('五主题在共享 1366×768 布局完成正常对局与结算回归', async ({ page }) => {
   test.setTimeout(300_000)
   await mkdir(`${evidenceRoot}/themes`, { recursive: true })
   await page.setViewportSize({ width: 1366, height: 768 })

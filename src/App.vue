@@ -24,7 +24,12 @@ import { useAudio } from './game/core/presentation/useAudio'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
 import type { TableThemeName } from './components/table/three/tableTheme'
-import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
+import {
+  readTableThemePreference,
+  resolveInitialTableTheme,
+  saveTableThemePreference,
+  shouldAutoUseLlmTheme,
+} from './components/table/three/tableThemePreference'
 import {
   animeCharacterAvatarUrl,
   readAnimeCharacterPreference,
@@ -69,9 +74,14 @@ function resetTableReady() {
   tableReadyPromise = null
 }
 const initialThemeCandidate = new URLSearchParams(window.location.search).get('theme')
-const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate)
+const initialTableTheme = resolveInitialTableTheme(initialThemeCandidate, readTableThemePreference())
 const tableThemeName = ref<TableThemeName>(initialTableTheme.theme)
 const explicitTableThemeSelected = ref(initialTableTheme.explicit)
+if (initialThemeCandidate !== null && initialThemeCandidate !== initialTableTheme.theme) {
+  const canonicalUrl = new URL(window.location.href)
+  canonicalUrl.searchParams.set('theme', initialTableTheme.theme)
+  window.history.replaceState(window.history.state, '', canonicalUrl)
+}
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
@@ -392,12 +402,14 @@ function changeTableTheme(theme: TableThemeName) {
     // 联机房间内主题由房主权威控制：非房主（或开局后）禁用切换。
     if (!isCreator.value) return
     tableThemeName.value = theme
+    saveTableThemePreference(theme)
     configureTableTheme(theme)
     remoteGame.updatePresentationAudioMode()
     return
   }
   tableThemeName.value = theme
   explicitTableThemeSelected.value = true
+  saveTableThemePreference(theme)
   const url = new URL(window.location.href)
   // 手动选择（包括墨玉）始终写入 URL，确保 LLM 开启时刷新后仍尊重用户覆盖。
   url.searchParams.set('theme', theme)

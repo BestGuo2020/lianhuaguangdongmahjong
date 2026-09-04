@@ -13,6 +13,12 @@ describe('decodeServerMessage', () => {
     expect(decodeServerMessage({ kind: 'hand_result', result: { winTile: 'm10' } })).toBeNull()
   })
 
+  it('rejects the removed majsoul theme from active protocol messages', () => {
+    expect(decodeServerMessage({ kind: 'table_theme', theme: 'jade' }))
+      .toEqual({ kind: 'table_theme', theme: 'jade' })
+    expect(decodeServerMessage({ kind: 'table_theme', theme: 'majsoul' })).toBeNull()
+  })
+
   it('accepts bounded LLM bubble messages and rejects malformed seats/text', () => {
     const message = {
       kind: 'llm_message', seat: 2, text: '这一手稳住。', id: 7, priority: 'important',
