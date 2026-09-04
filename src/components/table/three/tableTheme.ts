@@ -346,6 +346,7 @@ export const rosewoodTheme: TableTheme = {
   },
   edgeTrimWidth: .65,
   edgeAccent: true,
+  tileBackGradient: ['#8e3f2e', '#6d2a20', '#46170f'],
   tile: {
     side: {
       color: 0xcfc9bd,
@@ -359,11 +360,11 @@ export const rosewoodTheme: TableTheme = {
       envMapIntensity: .3,
     },
     faceSide: {
-      color: 0x32a73a,
+      color: 0x7e3023,
       metalness: 0,
-      roughness: .3,
-      clearcoat: .68,
-      clearcoatRoughness: .18,
+      roughness: .34,
+      clearcoat: .72,
+      clearcoatRoughness: .2,
       ior: 1.46,
       specularIntensity: .62,
       envMapIntensity: .46,
@@ -630,8 +631,28 @@ export const llmTheme: TableTheme = {
     color: 0x67a8ff,
     intensity: 1.1,
   },
-  // tile / highlight 直接继承 defaultTableTheme，不改变牌面、绿色牌背与选中高亮。
-  tile: defaultTableTheme.tile,
+  tileBackGradient: ['#3c65bd', '#29478f', '#172958'],
+  tile: {
+    ...defaultTableTheme.tile,
+    faceSide: {
+      ...defaultTableTheme.tile.faceSide,
+      color: 0x3155a1,
+      roughness: .3,
+      clearcoat: .78,
+      clearcoatRoughness: .16,
+      specularColor: 0xa7c7ff,
+      envMapIntensity: .58,
+    },
+    back: {
+      ...defaultTableTheme.tile.back,
+      color: 0xe8ecf2,
+      roughness: .3,
+      clearcoat: .58,
+      clearcoatRoughness: .22,
+      specularColor: 0xc5d8ff,
+      envMapIntensity: .4,
+    },
+  },
   highlight: defaultTableTheme.highlight,
 }
 
