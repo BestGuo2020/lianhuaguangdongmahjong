@@ -20,7 +20,7 @@ function makeState() {
     rulesetId: ref<'lotus-classic' | 'lotus-legacy'>('lotus-classic'),
     matchType: ref<'east' | 'hanchan'>('east'),
     isHost: ref(false),
-    tableThemeName: ref<'jade' | 'rosewood' | 'majsoul' | 'happyMahjong' | 'llm'>('jade'),
+    tableThemeName: ref<'jade' | 'happyMahjong' | 'rosewood' | 'llm' | 'llmAnime'>('jade'),
     phase: ref('lobby'),
   }
 }
