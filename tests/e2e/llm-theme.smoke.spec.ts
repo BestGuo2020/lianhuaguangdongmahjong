@@ -73,7 +73,8 @@ test('独立二次元主题可选本家角色并保持现有 LLM 默认推荐不
   const picker = page.getByRole('radiogroup', { name: '选择本家二次元角色' })
   await expect(picker).toBeVisible()
   await picker.getByRole('radio', { name: '千问大小姐' }).click()
-  await expect(page.getByRole('button', { name: /本家形象/ })).toContainText('千问大小姐')
+  await expect(page.locator('.theme-showcase-copy strong')).toHaveText('千问大小姐')
+  await expect(page.getByRole('button', { name: '更换本家形象' })).toBeVisible()
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.locator('main.game-app')).toHaveAttribute('data-table-theme', 'llmAnime')

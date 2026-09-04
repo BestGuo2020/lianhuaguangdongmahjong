@@ -13,6 +13,7 @@ const pending = ref(props.modelValue)
       v-for="option in RULE_VARIANTS"
       :key="option.id"
       type="button"
+      data-action-role="secondary"
       :class="{ active: pending === option.id }"
       @click="pending = option.id"
     >
@@ -23,9 +24,9 @@ const pending = ref(props.modelValue)
       </span>
     </button>
   </div>
-  <button class="view-rules-link" type="button" @click="emit('viewRules')">查看详细规则 →</button>
+  <button class="view-rules-link" type="button" data-action-role="light" @click="emit('viewRules')">查看详细规则 →</button>
   <div class="dialog-actions">
-    <button class="secondary" type="button" @click="emit('close')">取消</button>
-    <button class="primary" type="button" @click="emit('confirm', pending)">确定</button>
+    <button class="secondary" type="button" data-action-role="light" @click="emit('close')">取消</button>
+    <button class="primary" type="button" data-action-role="primary" @click="emit('confirm', pending)">确定</button>
   </div>
 </template>

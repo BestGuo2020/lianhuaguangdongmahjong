@@ -92,6 +92,8 @@ export const ANIME_TTS_SPEAKERS: Readonly<Record<AnimeTtsVoiceKey, string>> = {
 export interface AnimeCharacterProfile {
   readonly id: CharacterId
   readonly label: string
+  /** 大厅与选择器使用的短角色说明，不参与模型提示词或联机合同。 */
+  readonly description: string
   /** 精确匹配的安全别名；不把任意 URL 或模型名当作角色 ID。 */
   readonly providerAliases: readonly string[]
   readonly voiceKey: AnimeTtsVoiceKey
@@ -101,6 +103,21 @@ export interface AnimeCharacterProfile {
   readonly speaker: string
   readonly lines: Readonly<Record<AnimeVoiceKey, string>>
   readonly ttsStyle: Extract<LlmStyle, '稳健'>
+}
+
+export const ANIME_CHARACTER_DESCRIPTIONS: Readonly<Record<CharacterId, string>> = {
+  claude: '沉静可靠的书姬，善于从牌局细节里整理线索。',
+  deepseek: '认真又有点贪吃的深海女仆，稳稳守住每一巡。',
+  doubao: '元气十足的学妹，用轻快节奏陪你推进牌局。',
+  gemini: '沿着双星轨道观察牌势，在变化中寻找呼应。',
+  glm: '冷静推演的狐姬，会把复杂局面拆成清楚步骤。',
+  gpt: '从容周全的龙姬，擅长在攻守之间保持平衡。',
+  grok: '爱制造惊喜的小恶魔，出牌风格大胆又俏皮。',
+  kimi: '安静细致的月姬，耐心等待牌局里的好时机。',
+  minimax: '把每一局当作新镜头的导演，喜欢抓住高光。',
+  mistral: '乘风而来的狐姬，用敏锐直觉追踪牌势变化。',
+  muse: '从牌桌节奏寻找灵感的梦姬，温柔而专注。',
+  qwen: '礼貌自信的大小姐，落子果断且讲究分寸。',
 }
 
 const profile = (
@@ -113,6 +130,7 @@ const profile = (
 ): AnimeCharacterProfile => ({
   id,
   label,
+  description: ANIME_CHARACTER_DESCRIPTIONS[id],
   providerAliases,
   voiceKey,
   fallbackVoiceKey,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ANIME_CHARACTER_IDS } from '../../../game/llm/animeCharacters'
 import {
   defaultTableTheme,
   llmAnimeTheme,
@@ -99,5 +100,11 @@ describe('大模型二次元牌桌主题', () => {
     expect(llmAnimeTheme.tile.faceSide.envMapIntensity).toBeGreaterThan(0)
     expect(llmAnimeTheme.tableSurfaceTexture?.url).toMatch(/themes\/llm-anime\/v1\/table-felt\.png$/)
     expect(llmAnimeTheme.tableSurfaceTexture?.tint).toBe(0xffffff)
+  })
+
+  it('固定群像桌布不绑定任何本家角色 ID', () => {
+    const surfaceUrl = llmAnimeTheme.tableSurfaceTexture?.url ?? ''
+    expect(surfaceUrl).toMatch(/llm-anime\/v1\/table-felt\.png$/)
+    expect(ANIME_CHARACTER_IDS.every((characterId) => !surfaceUrl.includes(characterId))).toBe(true)
   })
 })
