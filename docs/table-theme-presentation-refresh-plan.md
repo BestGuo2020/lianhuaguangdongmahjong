@@ -1,10 +1,10 @@
 # 牌桌主题表现系统改造实施方案
 
-> 状态：Phase 0～11 在 master 完成；Phase 12（`llmAnime` 双表面统一）在 master 已验收，共享文件已同步到 vibehub。vibehub 保留入口仍有独立适配缺口，见 §13.3。
+> 状态：Phase 0～12 在 `master` 已完成；共享文件已同步到 `vibehub`。`vibehub` 受保护的 P2P 壳层仍缺 Phase 11V 独立适配与验收，见 §11/§13.3～13.4。
 >
 > 决策日期：2026-09-04
 >
-> 2026-09-04 实施进度：Phase 0～7 已完成。五主题表现、动作/结算矩阵、资源与 WebGL 回退、主题热切换、缓存隔离、静音、`prefers-reduced-motion` 和 568×320～3840×2160 响应式矩阵均已验证；硬件 GPU 验证使用 Intel Arc 130T / D3D11 / WebGL 2.0。2026-09-05 根据实际页面复核追加并完成 Phase 8～11：大厅双区域、真实牌桌主视觉、移动房间聚焦、Teleport 弹层主题上下文、`llmAnime` 角色选择与轻量表现均已交付，未推翻既有主题架构。同日追加 Phase 12，收口 `llmAnime` 奶油漫画弹层与深色场景控件混用的问题。
+> 2026-09-04 实施进度：Phase 0～7 已完成。五主题表现、动作/结算矩阵、资源与 WebGL 回退、主题热切换、缓存隔离、静音、`prefers-reduced-motion` 和 568×320～3840×2160 响应式矩阵均已验证；硬件 GPU 验证使用 Intel Arc 130T / D3D11 / WebGL 2.0。2026-09-05 根据实际页面复核在 `master` 追加并完成 Phase 8～11：大厅双区域、真实牌桌主视觉、移动房间聚焦、Teleport 弹层主题上下文、`llmAnime` 角色选择与轻量表现均已交付；随后完成 Phase 12，收口 `llmAnime` 双表面视觉。再次复核确认：这些共享文件已进入 `vibehub`，但同步脚本保留的 P2P `App.vue`、`LobbyView.vue`、`RoomPanel.vue` 不会自动获得 master 壳层接线，因此新增 Phase 11V，单独完成 vibehub 适配。
 >
 > 适用分支：先在 `master` 实施并提交，再按仓库工作流同步到 `vibehub`
 >
@@ -495,7 +495,7 @@ interface ThemePresentation {
 - 确认工作区干净后运行 `pnpm sync:vibehub`；
 - 检查同步结果只保留预期联机层差异。
 
-### 已实施增量阶段（Phase 8～11）
+### 后续增量记录（`master` Phase 8～12 已完成，`vibehub` Phase 11V 待实施）
 
 #### 后续 Phase 8～11 的范围原则
 
@@ -814,6 +814,68 @@ Phase 9 不能只检查大厅主卡、牌桌和结算。以下用户可见表面
 - 运行 typecheck、受影响单测、关键 E2E、生产构建和 `git diff --check`；
 - 在 `master` 提交并确认工作区干净后运行 `pnpm sync:vibehub`。
 
+#### Phase 11V：`vibehub` 受保护 P2P 壳层适配
+
+Phase 11V 是分支专属接线，不是重新实施 Phase 8～11，也不是把 master 的 WebSocket 大厅复制到 `vibehub`。
+
+##### 根因与边界
+
+- 同步脚本会从同步前的 `vibehub` tip 恢复 `src/App.vue`、`src/components/lobby/LobbyView.vue`、`RoomPanel.vue` 等 `$vibehubKeep` 文件。
+- 共享的 `LobbyDialog`、`LlmSettingsPanel`、`OrientationGate` 和主题 CSS 已支持主题表现，但受保护调用方未完整传入 `themeName`、`variant` 或根主题表现属性时，会回退 `jade` 或缺少新版大厅状态 class。
+- 不从 `$vibehubKeep` 删除这些文件，不用 master 整文件覆盖，不把 WakuDemo、WebSocket API、`roomSocket` 或服务端房间容量逻辑带入 P2P 分支。
+- 不使用 CSS/DOM 旁路、全局查询或隐藏门禁来掩盖调用方缺参；主题由已有 `tableThemeName` 显式向下传递。
+- 本阶段只允许在明确授权的 vibehub 专属适配提交中修改受保护文件；该提交只保留在 `vibehub`，不反向合并到 master。
+
+##### `vibehub` `src/App.vue`
+
+只移植表现接线，保留全部 Vibe SDK 与 P2P 编排：
+
+- 基于现有 `tableThemeName` 计算 `themePresentation` 和 `themePresentationStyle`。
+- 向 `OrientationGate` 显式传入 `themeName`，消除初始 `jade` 回退/闪动；组件自身观察回退可以保留。
+- 在 `.game-app` 根节点补齐当前主题的字体 class、`data-theme-player-frame`、`data-theme-particle`、`data-theme-loading` 和主题 CSS 变量。
+- 向 `LlmSettingsPanel` 显式传入 `themeName`，使 Teleport 抽屉不再默认 `jade`。
+- 保留 P2P 初始化、房间主题广播、客户端主题锁定、断线恢复、AI 座位和开局流程。
+
+##### `vibehub` `LobbyView.vue`
+
+- 复用该分支已有 `tableThemeName`，向每个 `LobbyDialog` 传入 `themeName` 和当前 `variant`。
+- 按 P2P 数据结构接入共享 `LobbyThemeVisual`、双区域布局和 `room-focused` 状态，不复制 master 的 WakuDemo/HTTP 房间字段。
+- 为单机、联机未入房、创建/加入弹窗和已入房状态标注正确的主/次/轻/危险操作角色。
+- 保留 P2P 登录要求、房间恢复、主题同步、AI 座位配置和所有现有 emits/props。
+- 场次、玩法、角色、创建和加入弹窗继续使用该分支原业务内容，只补主题参数和表现结构。
+
+##### `vibehub` `RoomPanel.vue`
+
+- 房间码与场次/玩法摘要恢复居中，复制反馈前后不得水平跳动。
+- 接入移动横屏房间聚焦：隐藏完整主题视觉，四个座位和准备/开始操作优先，一般视口不产生页面级滚动。
+- `llmAnime` 本家形象改为紧凑入口并打开主题化弹窗，不在移动房间内嵌完整选择器。
+- 保留 P2P 房主身份、AI 座位配置、准备、开始、主题广播、离开和关闭房间行为。
+- 不以 master `RoomPanel` 替换 P2P 版本；逐项移植表现能力并审核每个差异。
+
+##### 其它受保护文件
+
+- `StatsOverlay.vue`、`SettlementOverlay.vue` 只在确认存在主题参数或 P2P 专属状态缺口时做最小适配。
+- 已经位于 `.game-app` 主题上下文且表现正确的受保护组件不因本阶段再次改写。
+- 任何受保护文件改动都必须说明其 P2P 保留理由，并与 master 对应共享组件的职责边界一致。
+
+##### 分支实施顺序
+
+1. 在 `master` 完成并提交共享组件、CSS、测试和本文档。
+2. 保证 master 工作区干净后运行 `pnpm sync:vibehub`，仅同步共享文件。
+3. 在独立的 `vibehub` 工作区/工作树中实施上述 P2P 壳层适配；不要在未提交的 master 工作区直接切分支。
+4. 在 `vibehub` 提交独立适配和 P2P 测试，不把该提交 cherry-pick/merge 回 master。
+5. 后续再次同步 master 时，`$vibehubKeep` 继续保留该适配。
+
+##### Phase 11V 验收
+
+- 五主题分别打开场次、玩法、创建、加入和角色弹窗，Teleport 根节点主题正确；弹窗保持打开时切换主题可同步更新。
+- 五主题打开大模型配置页，抽屉主题正确，配置字段、顺序、默认值、保存、测试和导入导出行为不变。
+- 844×390、800×360、667×375 的 P2P 已入房大厅无页面级滚动，房间码居中，四个座位及准备/开始操作无需滚动可见。
+- `llmAnime` 弹层遵守深色场景层/奶油纸张层合同，不回退墨玉控件。
+- P2P 创建、加入、准备、房主开始、AI 座位配置、房主主题同步、客户端主题锁定和断线恢复通过回归。
+- 构建产物不出现 WebSocket API、`roomSocket`、WakuDemo 或其它 master-only 依赖。
+- 在 `vibehub` 运行 typecheck、受影响单测、P2P smoke、生产构建和 `git diff --check`。
+
 #### Phase 12：`llmAnime` 双表面统一
 
 Phase 12 只收口 `llmAnime` 视觉语言，不改变 Phase 0～11 已完成的布局、组件结构、业务内容和交互逻辑。
@@ -959,7 +1021,19 @@ Phase 12 只收口 `llmAnime` 视觉语言，不改变 Phase 0～11 已完成的
 - 本轮起点：master 为 `54d0747`；vibehub 为 `1d0ddd1`，其最近同步来源为 Phase 0～7 的 `2eecd96`。因此原“Phase 8～11 已同步”勾选不能作为完成证据。
 - `check-vibehub-ahead.ps1` 列出的本轮相关共享源码，与 `2eecd96` 基线一致；差异来自 master 后续功能新增，不存在需要反向移植的 vibehub 独有修复。
 - 自动同步会保留 vibehub 的 `src/App.vue`、`src/components/lobby/LobbyView.vue`、`RoomPanel.vue` 等文件。旧入口尚未给 `LobbyDialog` 传入 `themeName`/`variant`，也未给 `LlmSettingsPanel` 传入 `themeName`，其弹层会回退 jade。
-- 同步共享样式与组件不等于 vibehub 已完成双区域大厅、移动房间聚焦和双表面验收。按仓库禁止手工修改上述保留文件的要求，本轮不改它们，也不引入 CSS/DOM 旁路掩盖入口缺失；后续需单独明确该分支入口适配的范围和允许方式。
+- 同步共享样式与组件不等于 vibehub 已完成双区域大厅、移动房间聚焦和双表面验收。不引入 CSS/DOM 旁路掩盖入口缺失；后续按 Phase 11V 在明确授权的 vibehub 专属提交中逐项适配受保护调用方，保留 P2P 逻辑且不反向合并到 master。
+
+### 13.4 Phase 11V `vibehub` 完成定义
+
+- [ ] `vibehub` `App.vue` 已向 OrientationGate 和 LlmSettingsPanel 显式传入当前主题，并在 `.game-app` 装配完整主题表现属性与 CSS 变量。
+- [ ] `vibehub` `LobbyView.vue` 已向 LobbyDialog 传入 `themeName`/`variant`，并按 P2P 数据结构完成双区域与 `room-focused` 接线。
+- [ ] `vibehub` `RoomPanel.vue` 已完成房间码居中、移动房间聚焦和 `llmAnime` 紧凑本家入口，同时保留 P2P AI 座位及房主流程。
+- [ ] 五主题的场次、玩法、创建、加入、角色弹窗和大模型配置抽屉在 vibehub 不再回退 `jade`。
+- [ ] `llmAnime` 在 vibehub 遵守深色场景层/奶油纸张层合同。
+- [ ] P2P 创建、加入、准备、房主开始、AI 座位、主题同步/锁定和断线恢复回归通过。
+- [ ] vibehub 构建不包含 WebSocket、WakuDemo 或其它 master-only 依赖。
+- [ ] vibehub typecheck、受影响单测、P2P smoke、生产构建和 `git diff --check` 通过。
+- [ ] 适配以 vibehub 独立提交保存，未修改 `$vibehubKeep`，未反向合并到 master。
 
 ## 14. 提交记录与后续建议
 
@@ -985,6 +1059,13 @@ Phase 12 只收口 `llmAnime` 视觉语言，不改变 Phase 0～11 已完成的
 4. `test(theme): cover follow-up lobby and presentation scope`
 
 该序列是精简增量，不要求重构已完成的主题 registry、结算时间线、音频系统或资源加载系统。
+
+### Phase 11V `vibehub` 待实施提交序列
+
+1. `fix(vibehub): wire protected lobby shell to theme presentation`
+2. `test(vibehub): cover themed dialogs and mobile room layout`
+
+这两个提交只属于 `vibehub`。不得整文件复制 master 大厅，不得移除 `$vibehubKeep`，不得反向合并到 master。
 
 ### Phase 12 实施提交序列
 
