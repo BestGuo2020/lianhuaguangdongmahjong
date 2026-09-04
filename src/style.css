@@ -1194,6 +1194,134 @@ button { font: inherit; }
   .user-llm-bubble { left: calc(100% + 6px); bottom: 14px; }
 }
 
+/* ── 欢乐麻将试点：明快色块、圆润触感与短促弹性反馈 ── */
+.game-app[data-table-theme="happyMahjong"] .lobby {
+  background:
+    radial-gradient(circle at 12% 20%, rgba(247,202,78,.13) 0 5px, transparent 6px),
+    radial-gradient(circle at 86% 74%, rgba(240,122,93,.12) 0 7px, transparent 8px),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 2px, transparent 2px 22px),
+    linear-gradient(rgba(7,42,52,.86), rgba(5,29,37,.94));
+}
+.game-app[data-table-theme="happyMahjong"] .eyebrow,
+.game-app[data-table-theme="happyMahjong"] .subtitle,
+.game-app[data-table-theme="happyMahjong"] .lobby-rules,
+.game-app[data-table-theme="happyMahjong"] .text-button,
+.game-app[data-table-theme="happyMahjong"] .repository-link { color: var(--theme-text-muted); }
+.game-app[data-table-theme="happyMahjong"] .lobby h1 {
+  color: var(--theme-text);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-shadow: 0 4px 0 rgba(2,25,31,.55), 0 10px 28px rgba(0,0,0,.35);
+}
+.game-app[data-table-theme="happyMahjong"] .lobby h1 span { color: var(--theme-accent); }
+.game-app[data-table-theme="happyMahjong"] .lobby-rules i { background: var(--theme-accent-secondary); }
+.game-app[data-table-theme="happyMahjong"] .waku-account,
+.game-app[data-table-theme="happyMahjong"] .game-settings,
+.game-app[data-table-theme="happyMahjong"] .mode-selector button,
+.game-app[data-table-theme="happyMahjong"] .match-selector button {
+  border-color: color-mix(in srgb, var(--theme-accent) 34%, transparent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--theme-panel) 82%, transparent);
+}
+.game-app[data-table-theme="happyMahjong"] .mode-selector button.active,
+.game-app[data-table-theme="happyMahjong"] .match-selector button.active {
+  border-color: var(--theme-accent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--theme-accent) 20%, var(--theme-panel-elevated)), var(--theme-panel));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--theme-accent-secondary) 34%, transparent), 0 10px 22px rgba(0,0,0,.22);
+}
+.game-app[data-table-theme="happyMahjong"] .game-settings-title,
+.game-app[data-table-theme="happyMahjong"] .game-settings > button > span,
+.game-app[data-table-theme="happyMahjong"] .game-settings > button > small,
+.game-app[data-table-theme="happyMahjong"] .waku-account small { color: var(--theme-text-muted); }
+.game-app[data-table-theme="happyMahjong"] .game-settings > button > strong,
+.game-app[data-table-theme="happyMahjong"] .waku-account b,
+.game-app[data-table-theme="happyMahjong"] .mode-selector button b { color: var(--theme-text); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.game-app[data-table-theme="happyMahjong"] .game-settings > button > i::before { border-color: var(--theme-accent); }
+.game-app[data-table-theme="happyMahjong"] .start-button {
+  min-height: 54px;
+  border: 2px solid #ffe39a;
+  border-radius: 18px;
+  background: var(--theme-button);
+  color: #163640;
+  box-shadow: 0 7px 0 #bd6b45, 0 15px 30px rgba(0,0,0,.30), inset 0 1px rgba(255,255,255,.62);
+  transition: transform .18s cubic-bezier(.2,.9,.25,1.2), filter .18s ease, box-shadow .18s ease;
+}
+.game-app[data-table-theme="happyMahjong"] .start-button:hover { transform: translateY(-3px); }
+.game-app[data-table-theme="happyMahjong"] .start-button:active { transform: translateY(4px); box-shadow: 0 3px 0 #bd6b45, 0 8px 18px rgba(0,0,0,.28); }
+.game-app[data-table-theme="happyMahjong"] .lobby-dialog {
+  border: 2px solid color-mix(in srgb, var(--theme-accent) 66%, transparent);
+  border-radius: 20px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--theme-panel-elevated) 97%, transparent), var(--theme-panel));
+}
+.game-app[data-table-theme="happyMahjong"] .lobby-dialog h2 { color: var(--theme-text); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.game-app[data-table-theme="happyMahjong"] .picker-options > button { border-radius: 13px; }
+.game-app[data-table-theme="happyMahjong"] .top-bar { color: var(--theme-text-muted); }
+.game-app[data-table-theme="happyMahjong"] .top-bar .topbar-control,
+.game-app[data-table-theme="happyMahjong"] .round-info { border-width: 2px; border-radius: 14px; }
+.game-app[data-table-theme="happyMahjong"] .action { border-width: 2px; border-radius: 16px; box-shadow: 0 4px 0 color-mix(in srgb, var(--theme-accent-secondary) 38%, transparent), 0 8px 14px rgba(0,0,0,.28); }
+.game-app[data-table-theme="happyMahjong"] .action:hover { transform: translateY(-3px) scale(1.03); }
+.game-app[data-table-theme="happyMahjong"] .action:active { transform: translateY(2px) scale(.98); }
+.game-app[data-table-theme="happyMahjong"] .action.hu { border-color: #ffac83; background: linear-gradient(145deg, #ef7a5d, #bd4e49); color: #fff9e8; }
+.game-app[data-table-theme="happyMahjong"] .turn-timer { border-radius: 16px; background: linear-gradient(145deg, var(--theme-panel-elevated), var(--theme-panel)); }
+.game-app[data-table-theme="happyMahjong"] .table-loading-card { border-width: 2px; border-radius: 18px; box-shadow: 0 7px 0 rgba(240,122,93,.28), 0 16px 36px rgba(0,0,0,.34); }
+.game-app[data-table-theme="happyMahjong"] .start-cue {
+  border: 3px solid color-mix(in srgb, var(--theme-accent) 78%, transparent);
+  border-radius: 28px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--theme-panel-elevated) 96%, transparent), color-mix(in srgb, var(--theme-panel) 94%, transparent));
+  box-shadow: 8px 8px 0 color-mix(in srgb, var(--theme-accent-secondary) 38%, transparent), 0 20px 45px rgba(0,0,0,.32);
+}
+.game-app[data-table-theme="happyMahjong"] .start-cue strong { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; letter-spacing: .08em; }
+.game-app[data-table-theme="happyMahjong"] .start-cue i { height: 5px; border-radius: 5px; background: linear-gradient(90deg, var(--theme-accent-secondary), var(--theme-accent), var(--theme-accent-secondary)); }
+.game-app[data-table-theme="happyMahjong"] .table-action-cue {
+  border-radius: 28%;
+  background: radial-gradient(circle at 42% 35%, rgba(247,202,78,.94) 0 24%, rgba(240,122,93,.78) 46%, transparent 72%);
+  animation: happy-action-pop .58s cubic-bezier(.18,.92,.24,1.25) both;
+}
+.game-app[data-table-theme="happyMahjong"] .table-action-cue::before,
+.game-app[data-table-theme="happyMahjong"] .table-action-cue::after { border-radius: 26%; border-color: rgba(255,249,232,.72); }
+.game-app[data-table-theme="happyMahjong"] .table-action-cue span { color: #fff9e8; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; text-shadow: 0 3px 0 #8e3e3d, 0 0 14px rgba(255,224,126,.74); }
+.game-app[data-table-theme="happyMahjong"] .announcement { border-radius: 18px; background: linear-gradient(90deg, transparent, rgba(14,59,72,.94) 14%, rgba(14,59,72,.94) 86%, transparent); }
+.game-app[data-table-theme="happyMahjong"] .announcement span { color: var(--theme-accent); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.game-app[data-table-theme="happyMahjong"] .result-backdrop { background: radial-gradient(circle at 50% 35%, rgba(247,202,78,.18), transparent 42%), rgba(3,27,34,.82); }
+.game-app[data-table-theme="happyMahjong"] .settlement-card,
+.game-app[data-table-theme="happyMahjong"] .final-board {
+  border: 3px solid #f1c758;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(240,122,93,.13) 0 8px, transparent 9px),
+    radial-gradient(circle at 92% 18%, rgba(247,202,78,.14) 0 7px, transparent 8px),
+    linear-gradient(150deg, #185d6d, #0d3441 72%);
+  box-shadow: 10px 10px 0 rgba(240,122,93,.26), 0 28px 70px rgba(0,0,0,.46);
+}
+.game-app[data-table-theme="happyMahjong"] .settlement-card::before { border-color: rgba(255,249,232,.12); border-radius: 18px; }
+.game-app[data-table-theme="happyMahjong"] .settlement-footer { background: linear-gradient(180deg, transparent, rgba(5,35,43,.98) 20%); }
+.game-app[data-table-theme="happyMahjong"] .settlement-card h2,
+.game-app[data-table-theme="happyMahjong"] .final-board > h2 { color: var(--theme-text); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.game-app[data-table-theme="happyMahjong"] .score-total span,
+.game-app[data-table-theme="happyMahjong"] .score-total em,
+.game-app[data-table-theme="happyMahjong"] .result-disclaimer-note,
+.game-app[data-table-theme="happyMahjong"] .final-board > p { color: var(--theme-text-muted); }
+.game-app[data-table-theme="happyMahjong"] .score-total strong { color: var(--theme-accent); text-shadow: 0 3px 0 rgba(120,68,30,.55); }
+.game-app[data-table-theme="happyMahjong"] .score-details span,
+.game-app[data-table-theme="happyMahjong"] .horse-area { border-color: rgba(247,202,78,.36); border-radius: 13px; background: rgba(5,35,43,.48); }
+.game-app[data-table-theme="happyMahjong"] .round-rankings article,
+.game-app[data-table-theme="happyMahjong"] .final-rankings article { clip-path: none; border-color: rgba(185,216,214,.28); border-radius: 15px; background: linear-gradient(105deg, rgba(20,79,93,.96), rgba(9,45,56,.96)); }
+.game-app[data-table-theme="happyMahjong"] .round-rankings article.winner,
+.game-app[data-table-theme="happyMahjong"] .final-rankings article.rank-1 { border-color: var(--theme-accent); background: linear-gradient(105deg, rgba(118,92,34,.94), rgba(22,79,91,.96)); box-shadow: 0 4px 0 rgba(240,122,93,.30); }
+.game-app[data-table-theme="happyMahjong"] .round-rankings img,
+.game-app[data-table-theme="happyMahjong"] .final-rankings img { border-color: var(--theme-accent); border-radius: 50%; }
+.game-app[data-table-theme="happyMahjong"] .result-actions button,
+.game-app[data-table-theme="happyMahjong"] .final-footer > button,
+.game-app[data-table-theme="happyMahjong"] .result-reopen { border: 2px solid #ffe39a; border-radius: 16px; background: var(--theme-button); color: #163640; box-shadow: 0 4px 0 rgba(189,107,69,.72); }
+.game-app[data-table-theme="happyMahjong"] .result-actions button.secondary { border-color: rgba(185,216,214,.48); background: var(--theme-panel); color: var(--theme-text); box-shadow: none; }
+
+@keyframes happy-action-pop {
+  0% { opacity: 0; scale: .58; rotate: -8deg; }
+  64% { opacity: 1; scale: 1.12; rotate: 3deg; }
+  100% { opacity: 1; scale: 1; rotate: 0deg; }
+}
+
 /* ── 大模型专属主题：与 llm-table.webp 的深蓝、星轨、香槟金统一 ── */
 .game-app[data-table-theme="llm"] {
   --llm-bg: #050b22;

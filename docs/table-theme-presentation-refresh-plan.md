@@ -4,7 +4,7 @@
 >
 > 决策日期：2026-09-04
 >
-> 2026-09-04 首批进度：Phase 0 审计完成；Phase 1 已删除 `majsoul` 运行时主题并补齐旧 URL/本地偏好回退；Phase 2 已建立五主题 `ThemePresentation` 合同、CSS 变量和轻量预览资源；Phase 3 已开始接入主题选择卡、顶部 HUD、玩家席位、加载/错误态与横屏门禁。
+> 2026-09-04 首批进度：Phase 0 审计完成；Phase 1 已删除 `majsoul` 运行时主题并补齐旧 URL/本地偏好回退；Phase 2 已建立五主题 `ThemePresentation` 合同、CSS 变量和轻量预览资源；Phase 3 已接入主题选择卡、顶部 HUD、玩家席位、加载/错误态与横屏门禁；Phase 4 已开始落地 `happyMahjong` 大厅、HUD、开局、动作与结算试点。
 >
 > 适用分支：先在 `master` 实施并提交，再按仓库工作流同步到 `vibehub`
 >
