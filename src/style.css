@@ -3213,7 +3213,7 @@ button { font: inherit; }
   .lobby-actions .game-settings-title { padding: 3px 9px 2px; }
   .lobby-actions .game-settings > button { min-height: 34px; padding: 3px 8px; }
   .current-config { margin-bottom: 5px; }
-  .game-app .lobby-actions .start-button { flex: 0 0 auto; min-height: 42px; padding: 3px 12px; }
+  .game-app .lobby-actions > .start-button { flex: 0 0 auto; min-height: 42px; padding: 3px 12px; }
   .lobby-actions .start-button b { font-size: 17px; line-height: 1.1; }
   .lobby-actions .start-button span { margin-top: 1px; font-size: 10px; line-height: 1.2; }
   .game-app.is-lobby .llm-fab { top: max(4px, var(--safe-top)); left: max(8px, var(--safe-left)); right: auto; bottom: auto; }
