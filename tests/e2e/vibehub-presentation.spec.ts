@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 
-const evidence = 'test-results/phase11v'
+const evidence = process.env.PHASE11V_EVIDENCE_DIR || 'test-results/phase11v'
 const themes = [
   ['jade', '默认墨玉'], ['happyMahjong', '欢乐麻将'], ['rosewood', '红木金丝'],
   ['llm', '大模型专属'], ['llmAnime', '大模型二次元'],

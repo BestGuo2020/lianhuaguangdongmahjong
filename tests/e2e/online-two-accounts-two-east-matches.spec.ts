@@ -1,6 +1,6 @@
 // 真实线上部署回归：凭据与 URL 只在运行时从 tmp/online_test 读取，绝不写入日志/附件。
 // 两个 VibeHub 账号分别作为房主、客人；空余两席由引擎 AI 补齐，连续完成两个东风场。
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { chromium, expect, test, type Browser, type BrowserContext, type CDPSession, type Page, type TestInfo } from '@playwright/test'
 
 interface Account { email: string; password: string }
@@ -1485,6 +1485,11 @@ async function attachDualScreenshots(pages: [Page, Page], testInfo: TestInfo, na
   try {
     for (let index = 0; index < pages.length; index += 1) {
       const body = await pages[index].screenshot({ timeout: 8000 })
+      if (process.env.ONLINE_EVIDENCE_DIR) {
+        mkdirSync(process.env.ONLINE_EVIDENCE_DIR, { recursive: true })
+        const filename = `${name}-${index === 0 ? 'host' : 'client'}`.replace(/[<>:"/\\|?*]/g, '-')
+        writeFileSync(`${process.env.ONLINE_EVIDENCE_DIR}/${filename}.png`, body)
+      }
       await testInfo.attach(`${name}-${index === 0 ? 'host' : 'client'}`, {
         body, contentType: 'image/png',
       })
@@ -2785,12 +2790,30 @@ test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, te
       const finals = await Promise.all(pages.map(page => page.locator('.final-backdrop').isVisible()))
       if (finals.every(Boolean)) break
       if (Date.now() - handStarted > 480_000) throw new Error(`${lastHand} 超过 8 分钟未推进`)
-      const overlays = await Promise.all(pages.map(page => page.locator('.round-settlement').isVisible()))
-      if (token && overlays.every(Boolean) && handToken(labels[1]) === token) {
+      // 结算退场与下一局标题可能短暂同屏；在一次 DOM 读取中绑定 phase、局号和分数。
+      const settlements = await Promise.all(pages.map(page => page.evaluate(() => {
+        const hud = document.querySelector<HTMLElement>('.game-table-hud')
+        const overlay = document.querySelector<HTMLElement>('.round-settlement')
+        if (hud?.dataset.phase !== 'settled' || !overlay?.getClientRects().length || /modal-leave/.test(overlay.className)) return null
+        return {
+          label: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+          summary: overlay.querySelector('.settlement-card > h2')?.textContent?.trim() ?? '',
+          scores: [...overlay.querySelectorAll('.round-rankings article')].map(article => ({
+            name: [...(article.querySelector('.player-line')?.childNodes ?? [])].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim(),
+            score: Number(article.querySelector(':scope > b')?.textContent?.trim()),
+            delta: Number(article.querySelector('em')?.textContent?.trim()),
+          })).sort((a, b) => a.name.localeCompare(b.name)),
+        }
+      })))
+      if (token && settlements.every(s => s && handToken(s.label) === token && roundToken(s.summary) === roundToken(labels[0]))) {
         if (!verified.has(token)) {
-          await Promise.all(pages.map(page => expect(page.locator('.round-rankings article')).toHaveCount(4)))
-          const states = await Promise.all(pages.map(readNormalizedTableState))
-          const scores = states.map(state => state.players.map(player => ({ seat: player.seat, score: player.score })))
+          const scores = settlements.map(s => s!.scores)
+          for (const entries of scores) expect(entries).toHaveLength(4)
+          for (const entries of scores) for (const entry of entries) {
+            expect(entry.name).not.toBe('')
+            expect(Number.isFinite(entry.score)).toBe(true)
+            expect(Number.isFinite(entry.delta)).toBe(true)
+          }
           expect(scores[1]).toEqual(scores[0])
           samples.push({ hand: token, scores: scores[0].map(player => player.score) })
           settled.forEach(set => set.add(token))
@@ -2814,7 +2837,9 @@ test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, te
     expect(standings[1]).toEqual(standings[0])
     expect(applicationErrors).toEqual([])
     await attachDualScreenshots(pages, testInfo, 'phase11v-online-final')
-    await testInfo.attach('phase11v-online-result', { body: JSON.stringify({ roomCode, observed, settlements: samples, standings: standings[0], applicationErrors }, null, 2), contentType: 'application/json' })
+    const resultJson = JSON.stringify({ roomCode, observed, settlements: samples, standings: standings[0], applicationErrors }, null, 2)
+    await testInfo.attach('phase11v-online-result', { body: resultJson, contentType: 'application/json' })
+    if (process.env.ONLINE_EVIDENCE_DIR) writeFileSync(`${process.env.ONLINE_EVIDENCE_DIR}/result.json`, resultJson)
     for (const page of pages) {
       await page.locator('.final-backdrop').getByRole('button', { name: '返回大厅', exact: true }).click()
       await expect(page.locator('.lobby')).toBeVisible()
