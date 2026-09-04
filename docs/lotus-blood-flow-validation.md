@@ -22,7 +22,11 @@
 | master 完整 `pnpm test` | 修正临时样本位置后退出 0；1855 passed、4 skipped，188 文件通过、2 跳过 |
 | master `pnpm build` | 退出 0，含 vue-tsc；保留原大型 chunk 提示，未进行无关打包重构 |
 | `git diff --check` | 退出 0 |
-| 真实分支 `pnpm sync:vibehub`、P2P 类型/测试 | 在干净提交后执行并追加结果 |
+| 真实分支 `pnpm sync:vibehub` | 退出 0；在既有 P2P 工作树完成，master 未切分支，无 push |
+| P2P `pnpm test` | 退出 0；1086 passed、2 skipped，105 文件通过、1 跳过，使用该分支自己的 Vitest 配置 |
+| P2P `node node_modules/vitest/vitest.mjs run game/variants/lotus/bloodFlow` | 退出 0；本批新增 141 项全部通过 |
+| P2P `pnpm build` | 退出 0，含 vue-tsc；同样仅有大型 chunk 提示 |
+| 受保护文件与共享文件检查 | `git diff 8f728b6 vibehub -- src/App.vue src/game/core/contracts/gamePort.ts src/game/variants/lotus/lotusGame.ts src/game/online src/components/lobby src/components/settlement/SettlementOverlay.vue` 为空；两分支新 bloodFlow/patterns 目录 diff 为空 |
 
 原有完整测试的 4 个跳过仍是跳过，不属于本批新增失败。构建包仅为旧玩法加未启用基础模块，并非 E09 可发布的新玩法包。大型日志在忽略的 `work/blood-flow-*.log`，此文保留可追溯摘要，不声称日志已纳入提交。
 
@@ -30,7 +34,9 @@
 
 ## 提交与继续实施
 
-本文件随 E00/E01 主提交交付；主提交标题为 `feat: define blood-flow rules and contracts`。随后按仓库要求同步，确切两个分支提交与结果在后续记录中补全，避免自引用伪造提交 ID。
+E00/E01 主提交：master `07c3388`（`feat: define blood-flow rules and contracts`）；对应 P2P 同步提交 `eb2ca2d`。以上最终检查针对这两份实现。验收结果随后以文档提交补记并再次同步；该文档提交不改变已验收代码。
+
+真实同步前 check 脚本列出的两个差异是本批 master 新改动（同步脚本与工作流说明），并非 P2P 新修复；已核对后正常合并。P2P 的 pnpm 命令自动从本地存储恢复已有锁定依赖，未添加依赖或变更 manifest/lockfile。两个工作树最终均干净。未运行 E2E，因为本批没有开放游戏入口、改动 UI 或 P2P 运行接线；完整游戏 E2E 仍属于后续阶段，未勾选。
 
 下一阶段 E02 应把两个 JSON fixture 集连接到真实评分器测试，逐一实现并审查替代/自然分解，尤其是外来精按本张、白板受限、点炮补刻归属、风杠、包含关系与同分解硬胡。当前 fixtures 的 `winning=false` pending 杠输入表示不接受未提交的副露作为已完成评分输入；抢杠权威流程需要回退原碰后重新组装输入。
 
