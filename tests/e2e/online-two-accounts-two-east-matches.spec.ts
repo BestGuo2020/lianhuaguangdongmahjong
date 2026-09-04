@@ -123,11 +123,11 @@ interface PageErrorRecord {
 }
 
 function readOnlineConfig(): OnlineConfig {
-  const raw = readFileSync('tmp/online_test', 'utf8')
+  const raw = readFileSync(process.env.ONLINE_CONFIG_PATH || 'tmp/online_test', 'utf8')
   const url = raw.match(/测试 url：([^\r\n]+)/)?.[1]?.trim()
   const accounts = [...raw.matchAll(/账号\d+：([^，\r\n]+)，密码：([^\r\n]+)/g)]
     .map((match) => ({ email: match[1].trim(), password: match[2].trim() }))
-  const deepseekApiKey = raw.match(/deepseek\s+api\s+key\s*[：:=]\s*([^\r\n]+)/i)?.[1]?.trim()
+  const deepseekApiKey = raw.match(/deepseek\s+api\s*key\s*[：:=]\s*([^\r\n]+)/i)?.[1]?.trim()
   if (!url || accounts.length < 2 || !deepseekApiKey) {
     throw new Error('tmp/online_test 缺少测试 URL、两个账号或 DeepSeek API Key')
   }
@@ -172,8 +172,9 @@ async function launchAccountBrowserPair(): Promise<AccountBrowserPair> {
     ...accountProxy(index),
   }))) as [Browser, Browser]
   try {
-    const contexts = await Promise.all(browsers.map((browser) => browser.newContext({
-      viewport: { width: 1280, height: 720 },
+    const contexts = await Promise.all(browsers.map((browser, index) => browser.newContext({
+      viewport: index === 1 && process.env.ONLINE_MOBILE_CLIENT === '1' ? { width: 844, height: 390 } : { width: 1280, height: 720 },
+      ...(index === 1 && process.env.ONLINE_MOBILE_CLIENT === '1' ? { hasTouch: true, isMobile: true } : {}),
     }))) as [BrowserContext, BrowserContext]
     return { browsers, contexts }
   } catch (error) {
@@ -195,7 +196,10 @@ async function replaceAccountBrowser(pair: AccountBrowserPair, index: 0 | 1) {
     args: ACCOUNT_BROWSER_ARGS,
     ...accountProxy(index),
   })
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } })
+  const context = await browser.newContext({
+    viewport: index === 1 && process.env.ONLINE_MOBILE_CLIENT === '1' ? { width: 844, height: 390 } : { width: 1280, height: 720 },
+    ...(index === 1 && process.env.ONLINE_MOBILE_CLIENT === '1' ? { hasTouch: true, isMobile: true } : {}),
+  })
   pair.browsers[index] = browser
   pair.contexts[index] = context
   await installAudioProbe(context)
@@ -2708,5 +2712,115 @@ test('两个线上账号轻量完成一场房主大模型莲花麻将东风场',
     console.log(`[ONLINE-SLIM] 一场房主大模型莲花麻将东风场完整通过，房间 ${roomCode}`)
   } finally {
     await closeAccountBrowserPair(accountPair)
+  }
+})
+
+test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, testInfo) => {
+  test.setTimeout(2_400_000)
+  const pair = await launchAccountBrowserPair()
+  let pages: [Page, Page] | null = null
+  const observed: [string[], string[]] = [[], []]
+  const settled: [Set<string>, Set<string>] = [new Set(), new Set()]
+  const applicationErrors: string[] = []
+  const samples: Array<{ hand: string; scores: number[] }> = []
+  let roomCode = ''
+  try {
+    pages = [await authenticateAccount(pair, 0, ONLINE.accounts[0]), await authenticateAccount(pair, 1, ONLINE.accounts[1])]
+    const [host, client] = pages
+    pages.forEach((page) => page.on('pageerror', error => {
+      // SDK 自身的外网拒绝单独计入诊断；应用异常才是本次构建回归。
+      if (!/vibehub\.js/.test(error.stack ?? '')) applicationErrors.push(error.message)
+    }))
+    for (const page of pages) {
+      await expect(page.locator('.lobby-layout')).toBeVisible()
+      await expect(page.locator('.game-app')).toHaveClass(/theme-heading-/)
+    }
+    await enterOnlineLobby(host, '适配验收房主', 'host')
+    await host.getByRole('button', { name: '创建房间', exact: true }).click()
+    await host.locator('.game-settings button', { hasText: '玩法' }).click()
+    await host.getByRole('button', { name: /^莲花麻将/ }).click()
+    await host.getByRole('button', { name: '确定', exact: true }).click()
+    await host.getByRole('button', { name: '确认创建', exact: true }).click()
+    await acceptDisclaimerIfShown(host)
+    await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 60_000 })
+    roomCode = (await host.locator('.room-code strong').innerText()).trim()
+    await expect(host.locator('.room-game-config')).toContainText('东风场')
+    await expect(host.locator('.room-game-config')).toContainText('莲花麻将')
+    await enterOnlineLobby(client, '适配验收客人', 'client')
+    await client.getByRole('button', { name: '加入房间', exact: true }).click()
+    await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
+    await client.getByRole('button', { name: '确认加入', exact: true }).click()
+    await acceptDisclaimerIfShown(client)
+    await waitForRoomReady(host, client, roomCode)
+    await host.getByLabel('切换牌桌主题').click()
+    await host.getByRole('menuitemradio', { name: /大模型二次元/ }).click()
+    await expect(client.locator('.game-app')).toHaveAttribute('data-table-theme', 'llmAnime')
+    await expect(client.getByLabel('切换牌桌主题')).toBeDisabled()
+    await expect(host.getByTestId('room-llm-pick')).toHaveCount(2)
+    // 本轮验证两真人 + 普通 AI 完整对局，不注入模型 Key 或改变生产规则。
+    await expect(host.locator('.room-seat.llm-planned')).toHaveCount(0)
+    await attachDualScreenshots(pages, testInfo, 'phase11v-online-room')
+    await host.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await client.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await expect(host.locator('.room-start')).toBeEnabled({ timeout: 30_000 })
+    await host.locator('.room-start').click()
+    await Promise.all(pages.map(page => installHostAutoPlayer(page)))
+    const deadline = Date.now() + 1_800_000
+    let lastProgress = 0
+    let lastHand = ''
+    let handStarted = Date.now()
+    const verified = new Set<string>()
+    while (Date.now() < deadline) {
+      const labels = await Promise.all(pages.map(readRoundLabel))
+      labels.forEach((label, index) => {
+        const marker = roundToken(label)
+        if (marker && !observed[index].includes(marker)) observed[index].push(marker)
+      })
+      const token = handToken(labels[0])
+      if (token && token !== lastHand) {
+        lastHand = token
+        handStarted = Date.now()
+        console.log(`[PHASE11V-ONLINE] 进入 ${token}`)
+      }
+      const finals = await Promise.all(pages.map(page => page.locator('.final-backdrop').isVisible()))
+      if (finals.every(Boolean)) break
+      if (Date.now() - handStarted > 480_000) throw new Error(`${lastHand} 超过 8 分钟未推进`)
+      const overlays = await Promise.all(pages.map(page => page.locator('.round-settlement').isVisible()))
+      if (token && overlays.every(Boolean) && handToken(labels[1]) === token) {
+        if (!verified.has(token)) {
+          await Promise.all(pages.map(page => expect(page.locator('.round-rankings article')).toHaveCount(4)))
+          const states = await Promise.all(pages.map(readNormalizedTableState))
+          const scores = states.map(state => state.players.map(player => ({ seat: player.seat, score: player.score })))
+          expect(scores[1]).toEqual(scores[0])
+          samples.push({ hand: token, scores: scores[0].map(player => player.score) })
+          settled.forEach(set => set.add(token))
+          verified.add(token)
+          await attachDualScreenshots(pages, testInfo, `phase11v-online-${token.replace(':', '-')}-settlement`)
+          console.log(`[PHASE11V-ONLINE] ${token} 双端结算一致`)
+        }
+        await Promise.all(pages.map(clickContinueIfAvailable))
+      }
+      if (Date.now() - lastProgress > 30_000) {
+        console.log(`[PHASE11V-ONLINE] ${labels.join(' | ')}；已验收 ${verified.size} 次结算`)
+        lastProgress = Date.now()
+      }
+      await host.waitForTimeout(350)
+    }
+    for (const seen of observed) expect(seen).toEqual(['东1局', '东2局', '东3局', '东4局'])
+    for (const set of settled) for (const round of ['东1局', '东2局', '东3局', '东4局']) expect([...set].some(token => token.startsWith(round))).toBe(true)
+    await Promise.all(pages.map(page => expect(page.locator('.final-backdrop')).toBeVisible()))
+    const standings = await Promise.all(pages.map(readFinalStandings))
+    expect(standings[0]).toHaveLength(4)
+    expect(standings[1]).toEqual(standings[0])
+    expect(applicationErrors).toEqual([])
+    await attachDualScreenshots(pages, testInfo, 'phase11v-online-final')
+    await testInfo.attach('phase11v-online-result', { body: JSON.stringify({ roomCode, observed, settlements: samples, standings: standings[0], applicationErrors }, null, 2), contentType: 'application/json' })
+    for (const page of pages) {
+      await page.locator('.final-backdrop').getByRole('button', { name: '返回大厅', exact: true }).click()
+      await expect(page.locator('.lobby')).toBeVisible()
+    }
+    console.log(`[PHASE11V-ONLINE] 完整东风场通过：两端东1～东4结算及最终排名一致，均已返回大厅。房间 ${roomCode}`)
+  } finally {
+    await closeAccountBrowserPair(pair)
   }
 })

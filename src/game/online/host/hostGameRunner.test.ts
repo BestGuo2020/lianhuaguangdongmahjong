@@ -12,9 +12,22 @@ import { LotusRemotePlayerController } from './lotusRemotePlayerController'
 import { windKong } from '../../variants/lotus/lotusRules'
 import type { LotusController } from '../../variants/lotus/lotusControllers'
 import type { TileType } from '../../core/contracts/types'
-import { createWall } from '../../core/rules/tiles'
+import { createWall, shuffle } from '../../core/rules/tiles'
 
 const realSetTimeout = globalThis.setTimeout
+
+/** 超时/恢复用例需要先轮到客人；固定合法牌墙，避免随机开局胡牌提前结束。 */
+function recoveryOpening() {
+  let state = 1
+  return {
+    initialWall: shuffle(createWall(), () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+      return state / 0x100000000
+    }),
+    openingDice: [1, 1] as [number, number],
+    openingSecondDice: [1, 1] as [number, number],
+  }
+}
 
 function stubWindow() {
   vi.useFakeTimers()
@@ -272,6 +285,7 @@ describe('startHostGame 无头权威', () => {
       if ((message as { kind?: string })?.kind === 'claim_request') guestRoom.send({ type: 'pass' })
     })
     const runner = startHostGame<LotusController>({
+      opening: recoveryOpening(),
       room: hostRoom,
       rulesetId: 'lotus-legacy',
       mode: 'east',
@@ -398,6 +412,7 @@ describe('startHostGame 无头权威', () => {
       if ((message as { kind?: string })?.kind === 'claim_request') guestRoomA.send({ type: 'pass' })
     })
     const runner = startHostGame<LotusController>({
+      opening: recoveryOpening(),
       room: hostRoom,
       rulesetId: 'lotus-legacy',
       mode: 'east',
