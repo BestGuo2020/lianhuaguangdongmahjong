@@ -5,6 +5,7 @@ import type { TileType } from '../contracts/types'
 // 2D（CSS background）与 3D（图集）共用同一份，避免各路径重复请求 / 重复解码。
 
 export type TileAssetTheme = 'jade' | 'llmAnime' | (string & {})
+type TileCacheKey = 'jade' | 'llmAnime'
 
 export interface TileAssetManifest {
   /** 34 张牌面候选地址，第一项为主题资源，第二项为稳定的默认资源。 */
@@ -13,9 +14,9 @@ export interface TileAssetManifest {
   back: readonly [string, string]
 }
 
-const TILE_CACHE = new Map<TileAssetTheme, Map<TileType, HTMLImageElement>>()
-const TILE_URL_CACHE = new Map<TileAssetTheme, Map<TileType, string>>()
-const READY_CACHE = new Map<TileAssetTheme, Promise<void>>()
+const TILE_CACHE = new Map<TileCacheKey, Map<TileType, HTMLImageElement>>()
+const TILE_URL_CACHE = new Map<TileCacheKey, Map<TileType, string>>()
+const READY_CACHE = new Map<TileCacheKey, Promise<void>>()
 const objectUrls = new Set<string>()                       // 存活到页面结束，不 revoke
 let activeTheme: TileAssetTheme = 'jade'
 const MAX_LOAD_ATTEMPTS = 3
@@ -48,10 +49,15 @@ export function tileAssetManifest(theme: TileAssetTheme = activeTheme): TileAsse
   return { faces, back: [themedBack, `${import.meta.env.BASE_URL}tiles/tile-back.png`] }
 }
 
+function tileCacheKey(theme: TileAssetTheme): TileCacheKey {
+  return theme === 'llmAnime' ? 'llmAnime' : 'jade'
+}
+
 function cachesFor(theme: TileAssetTheme) {
-  if (!TILE_CACHE.has(theme)) TILE_CACHE.set(theme, new Map())
-  if (!TILE_URL_CACHE.has(theme)) TILE_URL_CACHE.set(theme, new Map())
-  return { images: TILE_CACHE.get(theme)!, urls: TILE_URL_CACHE.get(theme)! }
+  const key = tileCacheKey(theme)
+  if (!TILE_CACHE.has(key)) TILE_CACHE.set(key, new Map())
+  if (!TILE_URL_CACHE.has(key)) TILE_URL_CACHE.set(key, new Map())
+  return { images: TILE_CACHE.get(key)!, urls: TILE_URL_CACHE.get(key)! }
 }
 
 function decodeImage(src: string): Promise<HTMLImageElement> {
@@ -128,7 +134,8 @@ async function loadTile(theme: TileAssetTheme, tile: TileType): Promise<void> {
  */
 export function preloadTileImages(theme: TileAssetTheme = activeTheme): Promise<void> {
   activeTheme = theme
-  const existing = READY_CACHE.get(theme)
+  const key = tileCacheKey(theme)
+  const existing = READY_CACHE.get(key)
   if (existing) return existing
   const loading = Promise.allSettled(TILE_TYPES.map((tile) => loadTile(theme, tile))).then((results) => {
     const failed = results
@@ -137,10 +144,10 @@ export function preloadTileImages(theme: TileAssetTheme = activeTheme): Promise<
     if (failed.length) throw new Error(`牌面资源加载失败：${failed.join('、')}`)
   })
   const ready = loading.catch((error) => {
-    READY_CACHE.delete(theme)
+    READY_CACHE.delete(key)
     throw error
   })
-  READY_CACHE.set(theme, ready)
+  READY_CACHE.set(key, ready)
   return ready
 }
 

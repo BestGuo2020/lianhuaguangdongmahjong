@@ -102,4 +102,19 @@ describe('tile asset preload', () => {
     expect(preloadedTileImages('llmAnime').size).toBe(TILE_TYPES.length)
     expect(preloadedTileImages('jade').size).toBe(TILE_TYPES.length)
   })
+
+  it('shares one decoded cache across all non-anime presentation themes', async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob(['tile']), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { preloadTileImages, preloadedTileImages } = await import('./tileAssets')
+
+    for (const theme of ['jade', 'happyMahjong', 'rosewood', 'llm']) {
+      await preloadTileImages(theme)
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(TILE_TYPES.length)
+    expect(preloadedTileImages('happyMahjong')).toBe(preloadedTileImages('jade'))
+    expect(preloadedTileImages('rosewood')).toBe(preloadedTileImages('jade'))
+    expect(preloadedTileImages('llm')).toBe(preloadedTileImages('jade'))
+  })
 })

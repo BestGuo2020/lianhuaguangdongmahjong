@@ -84,9 +84,16 @@ const cheapTable = import.meta.env.DEV && new URLSearchParams(window.location.se
 // 二次元 cel 渲染：llmAnime 主题默认启用（?animeTable=0 强制关闭回退写实）。
 let animeTable = false
 // 开发态调试钩子：暴露累计渲染帧数 + 最近一帧 draw calls，供 E2E 验证按需渲染与廉价档收益。
+type TableDebugWindow = Window & {
+  __tableRenderedFrames?: () => number
+  __tableDrawCalls?: () => number
+}
+const tableDebugWindow = window as TableDebugWindow
+const renderedFramesProbe = () => renderedFrames
+const drawCallsProbe = () => renderer?.info.render.calls ?? 0
 if (import.meta.env.DEV) {
-  ;(window as unknown as { __tableRenderedFrames?: () => number }).__tableRenderedFrames = () => renderedFrames
-  ;(window as unknown as { __tableDrawCalls?: () => number }).__tableDrawCalls = () => renderer?.info.render.calls ?? 0
+  tableDebugWindow.__tableRenderedFrames = renderedFramesProbe
+  tableDebugWindow.__tableDrawCalls = drawCallsProbe
 }
 const adaptiveQuality = createAdaptiveQualityController({
   override: parseQualityOverride(window.location.search),
@@ -609,11 +616,13 @@ onBeforeUnmount(() => {
   if (scene) clearDynamicScene()
   staticResources.forEach((resource) => resource.dispose?.())
   renderer?.dispose()
+  if (tableDebugWindow.__tableRenderedFrames === renderedFramesProbe) delete tableDebugWindow.__tableRenderedFrames
+  if (tableDebugWindow.__tableDrawCalls === drawCallsProbe) delete tableDebugWindow.__tableDrawCalls
   outlineEffect = null
   renderer = null
 })
 </script>
 
 <template>
-  <canvas ref="canvas" class="mahjong-scene" aria-hidden="true"></canvas>
+  <canvas ref="canvas" class="mahjong-scene" :data-table-theme="props.themeName ?? 'jade'" aria-hidden="true"></canvas>
 </template>
