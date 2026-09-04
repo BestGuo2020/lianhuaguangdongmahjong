@@ -3077,3 +3077,395 @@ button { font: inherit; }
   }
   .game-app[data-table-theme="llm"] .table-action-cue::after { animation: none !important; }
 }
+
+/* 竖屏门禁生效时不在其后继续展示或暴露可交互大厅。 */
+.orientation-gate ~ .game-app { visibility: hidden; }
+
+/* ── Phase 8 · 大厅主题视觉区 + 连续对局操作区 ── */
+.lobby {
+  display: block;
+  box-sizing: border-box;
+  padding: calc(var(--safe-top) + var(--topbar-height) + 12px) max(14px, var(--safe-right)) max(14px, var(--safe-bottom)) max(14px, var(--safe-left));
+  text-align: initial;
+  transform: none;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.game-app.is-lobby .lobby { padding-top: calc(var(--safe-top) + var(--topbar-height) + 12px); }
+
+.lobby-layout {
+  display: grid;
+  align-content: start;
+  gap: clamp(18px, 3cqh, 34px);
+  width: min(1160px, 100%);
+  height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - var(--topbar-height) - 26px);
+  min-height: 0;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  min-height: 0;
+  max-height: 100%;
+  width: min(450px, 100%);
+  margin: 0 auto;
+  padding: clamp(14px, 2cqw, 24px);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 30%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--theme-panel) 78%, transparent);
+  box-shadow: 0 24px 64px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.04);
+}
+
+.lobby-actions .waku-account,
+.lobby-actions .waku-auth-error,
+.lobby-actions .mode-selector,
+.lobby-actions .game-settings,
+.lobby-actions .remote-lobby {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+}
+
+.lobby-account-slot { order: 8; margin-top: 12px; }
+.lobby-actions .waku-account { margin: 0; padding: 8px 2px 0; border-width: 1px 0 0; border-radius: 0; background: transparent; opacity: .7; }
+.lobby-actions .waku-account:hover,
+.lobby-actions .waku-account:focus-within { opacity: 1; }
+.lobby-actions .waku-auth-error { margin: 5px 0 0; }
+.lobby-actions .continue-session { margin: 0 0 12px; }
+.lobby-actions .mode-selector { margin: 0 0 14px; }
+.lobby-actions .game-settings { margin: 0 0 10px; border-width: 1px 0; border-radius: 0; background: transparent; box-shadow: none; }
+.lobby-actions .game-settings-title { background: transparent; }
+.lobby-actions .remote-lobby { margin: 0; }
+.lobby-actions .lobby-links { order: 9; justify-content: center; margin-top: 10px; }
+
+.current-config {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--theme-text-muted);
+  font-size: 10px;
+}
+
+.current-config span { letter-spacing: .1em; }
+.current-config b { min-width: 0; overflow: hidden; color: var(--theme-text); font-size: 12px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.current-config small { font-size: 10px; }
+.lobby-actions .start-button { width: 100%; min-width: 0; min-height: 56px; }
+
+.game-app[data-table-theme="happyMahjong"] .lobby-actions { border-radius: 26px; }
+.game-app[data-table-theme="rosewood"] .lobby-actions { border-radius: 7px; }
+.game-app[data-table-theme="llm"] .lobby-actions { border-radius: 5px; clip-path: polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
+.game-app[data-table-theme="llmAnime"] .lobby-actions { border: 2px solid #2d2923; border-radius: 10px; background: linear-gradient(150deg, rgba(42,57,48,.96), rgba(15,26,20,.97)); box-shadow: 7px 7px 0 rgba(189,91,72,.34), 0 22px 60px rgba(0,0,0,.4); }
+
+@container (min-width: 860px) and (min-height: 520px) {
+  .lobby { display: grid; align-items: center; }
+  .lobby-layout {
+    grid-template-columns: minmax(0, 1.14fr) minmax(360px, .86fr);
+    align-content: center;
+    align-items: center;
+    column-gap: clamp(34px, 5cqw, 82px);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .lobby,
+  .game-app.is-lobby .lobby { padding: calc(var(--safe-top) + var(--topbar-height) + 4px) max(7px, var(--safe-right)) max(6px, var(--safe-bottom)) max(7px, var(--safe-left)); }
+  .lobby-layout {
+    grid-template-columns: minmax(155px, .62fr) minmax(320px, 1.38fr);
+    align-content: center;
+    align-items: center;
+    gap: clamp(8px, 2cqw, 18px);
+    height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - var(--topbar-height) - 10px);
+    min-height: 0;
+  }
+  .lobby-actions { box-sizing: border-box; padding: 8px; border-radius: 10px; }
+  .lobby-actions .mode-selector { margin-bottom: 6px; gap: 5px; }
+  .lobby-actions .mode-selector button { padding: 6px 7px 5px; }
+  .lobby-actions .game-settings { margin-bottom: 5px; }
+  .lobby-actions .game-settings-title { padding: 3px 9px 2px; }
+  .lobby-actions .game-settings > button { min-height: 34px; padding: 3px 8px; }
+  .current-config { margin-bottom: 5px; }
+  .lobby-actions .start-button { min-height: 42px; padding: 5px 12px; }
+  .lobby-actions .lobby-links { margin-top: 5px; }
+  .lobby-account-slot { margin-top: 5px; }
+  .lobby-actions .waku-account { padding: 5px 8px; }
+  .lobby.room-focused .lobby-layout { grid-template-columns: minmax(0, 1fr); }
+  .lobby.room-focused .lobby-visual,
+  .lobby.room-focused .mode-selector,
+  .lobby.room-focused .lobby-account-slot,
+  .lobby.room-focused .lobby-links { display: none; }
+  .lobby.room-focused .lobby-actions { width: min(760px, 100%); height: 100%; padding: 4px 8px; }
+  .lobby.room-focused .remote-lobby { flex: 1; min-height: 0; }
+  .lobby.room-focused .room-panel { flex: 1; min-height: 0; margin: 0; }
+}
+
+@container (max-width: 859px) and (orientation: portrait) {
+  .lobby-layout { padding-top: 6px; padding-bottom: 10px; }
+  .lobby-actions { box-sizing: border-box; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-actions,
+  .theme-showcase,
+  .character-shortcut { animation: none !important; transition: none !important; transform: none !important; }
+}
+
+/* ── Phase 9 · 共享外围状态层级与稳定结算恢复 ── */
+.topbar-control:focus-visible,
+.mode-selector button:focus-visible,
+.game-settings > button:focus-visible,
+.start-button:focus-visible,
+.action:focus-visible,
+.chi-picker-option:focus-visible,
+.result-actions button:focus-visible,
+.result-reopen:focus-visible,
+.lobby-dialog button:focus-visible,
+.lobby-dialog input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--theme-accent) 86%, white);
+  outline-offset: 3px;
+}
+
+.action[data-action-role="primary"] {
+  border-color: color-mix(in srgb, var(--theme-accent) 74%, var(--theme-border));
+}
+
+.action[data-action-role="major"] {
+  border-width: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 20%, transparent), 0 8px 24px color-mix(in srgb, var(--theme-negative) 22%, transparent);
+}
+
+.action[data-action-role="danger"] {
+  border-color: color-mix(in srgb, var(--theme-negative) 48%, var(--theme-border));
+  color: color-mix(in srgb, var(--theme-text) 82%, var(--theme-negative));
+}
+
+.action:disabled,
+.result-actions button:disabled,
+.result-reopen:disabled,
+.lobby button:disabled {
+  filter: grayscale(.5);
+  opacity: .48;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.table-loading-card,
+.kong-picker-card,
+.waiting-tip {
+  border-color: color-mix(in srgb, var(--theme-border) 70%, transparent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--theme-panel-elevated) 96%, transparent), color-mix(in srgb, var(--theme-panel) 98%, transparent));
+  color: var(--theme-text);
+}
+
+.kong-picker-card h2 { color: var(--theme-text); }
+.chi-picker-option {
+  border: 1px solid color-mix(in srgb, var(--theme-border) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-surface) 62%, var(--theme-panel));
+  cursor: pointer;
+}
+.chi-picker-option:hover { border-color: var(--theme-accent); filter: brightness(1.08); transform: translateY(-2px); }
+
+.round-settlement.is-restored.modal-enter-active .settlement-card,
+.round-settlement.is-restored .round-rankings article {
+  animation: none !important;
+  animation-delay: 0s !important;
+}
+
+.game-app[data-table-theme="llmAnime"] .kong-picker-card {
+  border: 2px solid #2d2923;
+  border-radius: 8px;
+  background: #f4eddf;
+  box-shadow: 7px 7px 0 rgba(189,91,72,.4), 0 22px 58px rgba(0,0,0,.48);
+}
+.game-app[data-table-theme="llmAnime"] .kong-picker-card h2 { color: #2d2923; text-shadow: none; }
+.game-app[data-table-theme="llmAnime"] .chi-picker-option { border: 2px solid #2d2923; border-radius: 5px; background: #fffaf0; box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
+
+@media (prefers-reduced-motion: reduce) {
+  .chi-picker-option:hover { transform: none; }
+}
+
+/* ── Phase 8/9 follow-up · 房间聚焦、Teleport 主题上下文与语义控件 ── */
+.room-panel {
+  min-height: 0;
+  border-color: color-mix(in srgb, var(--theme-border) 34%, transparent);
+  background: color-mix(in srgb, var(--theme-panel) 70%, transparent);
+}
+.room-code {
+  display: grid;
+  grid-template-columns: minmax(54px, 1fr) auto minmax(54px, 1fr);
+  align-items: center;
+  justify-items: center;
+  width: 100%;
+  color: var(--theme-text-muted);
+  text-align: center;
+}
+.room-code-label { justify-self: end; }
+.room-code strong { margin: 0; color: var(--theme-text); }
+.room-code-copied { justify-self: start; visibility: hidden; margin-left: 8px; border-color: color-mix(in srgb, var(--theme-positive) 55%, transparent); background: color-mix(in srgb, var(--theme-positive) 12%, transparent); color: var(--theme-positive); opacity: 0; }
+.room-code-copied.visible { visibility: visible; opacity: 1; }
+.room-code:focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 3px; }
+.room-game-config { margin-top: -5px; color: var(--theme-text-muted); text-align: center; }
+.room-game-config b { color: color-mix(in srgb, var(--theme-text) 76%, var(--theme-accent)); }
+.room-limit-note { color: var(--theme-text-muted); }
+.room-seats { min-height: 0; }
+.room-seat { border-color: color-mix(in srgb, var(--theme-border) 22%, transparent); background: color-mix(in srgb, var(--theme-panel) 70%, transparent); color: var(--theme-text-muted); }
+.room-seat.occupied { border-color: color-mix(in srgb, var(--theme-border) 46%, transparent); color: var(--theme-text); }
+.room-seat-no { background: color-mix(in srgb, var(--theme-accent) 16%, transparent); color: var(--theme-text); }
+.room-owner-actions button[data-action-role="primary"] { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.room-start[data-action-role="disabled"] { box-shadow: none; }
+.room-actions-row [data-action-role="danger"] { padding: 6px 11px; border: 1px solid color-mix(in srgb, var(--theme-negative) 58%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--theme-negative) 10%, transparent); color: var(--theme-negative); }
+.room-seat-provider { color: var(--theme-text); color-scheme: dark; }
+.room-seat-provider:focus-visible { box-shadow: 0 0 0 2px var(--theme-accent); }
+.room-seat-provider option { background: var(--theme-panel); color: var(--theme-text); }
+
+.lobby-dialog-backdrop[data-table-theme] {
+  overflow: hidden;
+  overscroll-behavior: none;
+  color: var(--theme-text);
+  background: color-mix(in srgb, var(--theme-panel) 76%, transparent);
+}
+.lobby-dialog-backdrop[data-table-theme] .lobby-dialog {
+  overscroll-behavior: contain;
+  border-color: color-mix(in srgb, var(--theme-border) 72%, transparent);
+  background: linear-gradient(155deg, color-mix(in srgb, var(--theme-panel-elevated) 98%, transparent), color-mix(in srgb, var(--theme-panel) 99%, transparent) 72%);
+  color: var(--theme-text);
+}
+.lobby-dialog-backdrop[data-table-theme] .lobby-dialog > header { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); }
+.lobby-dialog-backdrop[data-table-theme] .lobby-dialog h2,
+.lobby-dialog-backdrop[data-table-theme] .picker-options b { color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme] .lobby-dialog-close { border-color: color-mix(in srgb, var(--theme-border) 38%, transparent); color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button { border-color: color-mix(in srgb, var(--theme-border) 24%, transparent); background: color-mix(in srgb, var(--theme-panel) 64%, transparent); color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button:hover { border-color: color-mix(in srgb, var(--theme-accent) 62%, transparent); background: color-mix(in srgb, var(--theme-accent) 8%, var(--theme-panel)); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button:active { transform: translateY(1px); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button.active { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 15%, var(--theme-panel)); box-shadow: inset 4px 0 var(--theme-accent); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button > i { border-color: var(--theme-text-muted); box-shadow: inset 0 0 0 4px var(--theme-panel); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options > button.active > i { border-color: var(--theme-accent); background: var(--theme-accent); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options small,
+.lobby-dialog-backdrop[data-table-theme] .dialog-hint { color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options b em { border-color: color-mix(in srgb, var(--theme-accent) 52%, transparent); color: var(--theme-accent); }
+.lobby-dialog-backdrop[data-table-theme] .view-rules-link { color: var(--theme-accent); }
+.lobby-dialog-backdrop[data-table-theme] .dialog-actions .primary { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.26); }
+.lobby-dialog-backdrop[data-table-theme] .dialog-actions .secondary { border-color: color-mix(in srgb, var(--theme-border) 38%, transparent); background: color-mix(in srgb, var(--theme-panel) 88%, transparent); color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] .join-dialog-field span { color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] .join-dialog-field input { border-color: color-mix(in srgb, var(--theme-border) 44%, transparent); background: color-mix(in srgb, var(--theme-surface) 40%, var(--theme-panel)); color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme] .join-dialog-field input::placeholder { color: color-mix(in srgb, var(--theme-text-muted) 66%, transparent); }
+.lobby-dialog-backdrop[data-table-theme] .remote-llm-create-option { border-color: color-mix(in srgb, var(--theme-border) 36%, transparent); background: color-mix(in srgb, var(--theme-surface) 28%, var(--theme-panel)); color: var(--theme-text); }
+.lobby-dialog-backdrop[data-table-theme] .remote-llm-create-option small { color: var(--theme-text-muted); }
+.lobby-dialog-backdrop[data-table-theme] input[type="checkbox"] { accent-color: var(--theme-accent); }
+.lobby-dialog-backdrop[data-table-theme] :is(button, input):focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 2px; }
+.lobby-dialog.character-dialog { display: flex; flex-direction: column; overflow: hidden; }
+.lobby-dialog.character-dialog > header { flex: 0 0 auto; }
+.lobby-dialog.character-dialog > .anime-character-picker { flex: 1; min-height: 0; overflow: hidden; }
+
+.lobby-dialog-backdrop[data-table-theme="happyMahjong"] .lobby-dialog { border-width: 3px; border-radius: 24px; }
+.lobby-dialog-backdrop[data-table-theme="rosewood"] .lobby-dialog { border-width: 2px; border-radius: 5px; }
+.lobby-dialog-backdrop[data-table-theme="llm"] .lobby-dialog { border-radius: 4px; clip-path: polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog { border: 2px solid #2d2923; border-radius: 10px; background: linear-gradient(150deg, #f3e5cf, #dfcdb4); color: #2d2923; box-shadow: 8px 8px 0 rgba(189,91,72,.45), 0 26px 78px rgba(0,0,0,.66); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog h2,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options b { color: #2d2923; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] { background: rgba(12,20,16,.82); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog > header { border-bottom: 2px solid rgba(45,41,35,.16); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog-close { border-color: rgba(45,41,35,.28); background: rgba(255,250,240,.54); color: #594c40; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button {
+  border: 1px solid rgba(45,41,35,.26);
+  border-radius: 7px;
+  background: rgba(255,250,240,.58);
+  color: #4f4439;
+  box-shadow: none;
+}
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button:hover {
+  border-color: rgba(189,91,72,.72);
+  background: #fff8ec;
+}
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button.active {
+  border: 2px solid #bd5b48;
+  background: linear-gradient(105deg, #fff8ec, #f4d4c2);
+  box-shadow: inset 5px 0 #bd5b48, 3px 3px 0 rgba(45,41,35,.16);
+}
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button > i {
+  border-color: #6b5f52;
+  background: #fffaf0;
+  box-shadow: inset 0 0 0 4px #fffaf0;
+}
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options > button.active > i {
+  border-color: #9f4035;
+  background: #bd5b48;
+  box-shadow: inset 0 0 0 4px #fffaf0;
+}
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options small,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-hint { color: #6f6255; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .picker-options b em { border-color: rgba(159,64,53,.48); background: rgba(189,91,72,.08); color: #9f4035; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .view-rules-link { color: #9f4035; font-weight: 800; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .secondary { border: 1px solid rgba(45,41,35,.38); background: rgba(255,250,240,.72); color: #4f4439; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions .primary { border: 2px solid #2d2923; background: linear-gradient(145deg, #d46f59, #bd5b48); color: #fffaf0; box-shadow: 3px 3px 0 rgba(45,41,35,.26); }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field span,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option b { color: #4f4439; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .join-dialog-field input,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .remote-llm-create-option,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings { border-color: rgba(45,41,35,.28); background: rgba(255,250,240,.56); color: #2d2923; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings-title,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > span,
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > small { color: #756859; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog .game-settings > button > strong { color: #2d2923; }
+
+.lobby [data-action-role="primary"],
+.lobby-dialog [data-action-role="primary"] { font-weight: 900; }
+.lobby [data-action-role="light"],
+.lobby-dialog [data-action-role="light"] { box-shadow: none; }
+.lobby :is(input, select) { border-color: color-mix(in srgb, var(--theme-border) 40%, transparent); background: color-mix(in srgb, var(--theme-surface) 36%, var(--theme-panel)); color: var(--theme-text); }
+.lobby :is(input, select)::placeholder { color: color-mix(in srgb, var(--theme-text-muted) 68%, transparent); }
+.lobby input[type="checkbox"] { accent-color: var(--theme-accent); }
+.lobby :is(input, select, button):focus-visible,
+.lobby a:focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 2px; }
+.remote-field { border-color: color-mix(in srgb, var(--theme-border) 30%, transparent); background: color-mix(in srgb, var(--theme-panel) 72%, transparent); }
+.remote-field span,
+.room-meta-note { color: var(--theme-text-muted); }
+.remote-entry-actions button { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.session-error,
+.waku-auth-error { color: var(--theme-negative); }
+.text-button,
+.repository-link { color: var(--theme-text-muted); }
+.text-button:hover,
+.repository-link:hover { color: var(--theme-accent); }
+
+.rules-panel { border-color: var(--theme-border); background: linear-gradient(160deg, var(--theme-panel-elevated), var(--theme-panel) 65%); }
+.rules-panel h2,
+.rule-list h3 { color: var(--theme-text); }
+.rule-list p,
+.rules-panel .disclaimer-block p,
+.rules-panel .disclaimer-block li { color: var(--theme-text-muted); }
+.rules-panel .eyebrow,
+.rules-panel .disclaimer-block > h3,
+.rules-panel .disclaimer-block h4,
+.rule-note { color: var(--theme-accent); }
+.rules-panel header,
+.rules-panel .disclaimer-block,
+.rule-note { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); }
+.rules-panel header button:focus-visible { outline-color: var(--theme-accent); }
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .room-panel { gap: 5px; height: 100%; padding: 6px 9px; overflow: hidden; }
+  .room-code strong { font-size: clamp(18px, 4.4cqh, 24px); }
+  .room-limit-note,
+  .room-llm-note { margin: 0; font-size: 9px; line-height: 1.2; }
+  .room-character-entry { grid-template-columns: 28px minmax(0, 1fr) auto; padding: 3px 6px; }
+  .room-character-entry img { width: 26px; height: 26px; }
+  .room-seats { flex: 0 0 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; min-height: 0; }
+  .room-seat { min-width: 0; padding: 5px 6px; }
+  .room-owner-actions { flex: 0 0 auto; flex-direction: row; gap: 7px; }
+  .room-owner-actions > button { flex: 1; min-height: 38px; padding: 5px 10px; }
+  .room-start { min-width: 0; }
+  .room-actions-row { flex: 0 0 auto; justify-content: center; gap: 8px; }
+}
+
+@container (max-height: 340px) {
+  .lobby.room-focused .room-seats { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+}

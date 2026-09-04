@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
-import type { CharacterId } from '../../game/llm/animeCharacters'
+import { computed, ref } from 'vue'
+import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
+import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
 import type { TableThemeName } from '../table/three/tableTheme'
 import type {
   LlmProviderInfo,
@@ -46,8 +46,11 @@ const emit = defineEmits<{
   start: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leave: []
   close: []
+  openCharacter: []
   'update:characterId': [value: CharacterId]
 }>()
+const currentCharacter = computed(() => resolveAnimeCharacter(props.characterId))
+const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.characterId))
 
 /** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
 const picks = ref<Record<number, string>>({})
@@ -86,8 +89,18 @@ function startPayload() {
 
 <template>
   <div class="room-panel">
-    <div class="room-code" title="点击复制房间码" role="button" tabindex="0" @click="$emit('copy')" @keyup.enter="$emit('copy')">
-      房间码 <strong>{{ roomId }}</strong><span v-if="copied" class="room-code-copied">已复制</span>
+    <div
+      class="room-code"
+      title="点击复制房间码"
+      role="button"
+      tabindex="0"
+      :aria-label="`复制房间码 ${roomId}`"
+      @click="$emit('copy')"
+      @keyup.enter="$emit('copy')"
+    >
+      <span class="room-code-label">房间码</span>
+      <strong>{{ roomId }}</strong>
+      <span class="room-code-copied" :class="{ visible: copied }" aria-live="polite">已复制</span>
     </div>
     <div class="room-game-config"><b>{{ matchName }}</b><span>·</span><b>{{ ruleName }}</b></div>
     <p v-if="effectiveLlmEnabled" class="room-llm-note on">
@@ -99,6 +112,17 @@ function startPayload() {
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
     </p>
+    <button
+      v-if="tableThemeName === 'llmAnime'"
+      type="button"
+      class="room-character-entry"
+      data-action-role="secondary"
+      @click="$emit('openCharacter')"
+    >
+      <img :src="currentCharacterAvatar" alt="" aria-hidden="true">
+      <span><small>本家形象</small><b>{{ currentCharacter.label }}</b></span>
+      <em>更换 ›</em>
+    </button>
     <div class="room-seats">
       <div
         v-for="(seat, index) in roomSeats"
@@ -140,23 +164,19 @@ function startPayload() {
         <b v-else>等待加入…</b>
       </div>
     </div>
-    <AnimeCharacterPicker
-      v-if="tableThemeName === 'llmAnime'"
-      :model-value="characterId"
-      @update:model-value="$emit('update:characterId', $event)"
-    />
     <div class="room-owner-actions">
-      <button v-if="mySeat >= 0" class="secondary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
+      <button v-if="mySeat >= 0" class="secondary" data-action-role="primary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button
         v-if="isCreator"
         class="start-button room-start"
+        :data-action-role="allOccupiedReady ? 'primary' : 'disabled'"
         :disabled="!allOccupiedReady || matchStarting"
         @click="$emit('start', startPayload())"
       ><b>开始对局</b><span>{{ matchStarting ? '正在打扫房间' : (allOccupiedReady ? '全员已准备' : '等待全员准备') }}</span></button>
     </div>
     <div class="room-actions-row">
-      <button class="text-button room-leave" :disabled="leaving || closing" @click="$emit('leave')">{{ leaving ? '离开中…' : '离开房间' }}</button>
-      <button v-if="isCreator" class="text-button room-close" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
+      <button class="text-button room-leave" data-action-role="danger" :disabled="leaving || closing" @click="$emit('leave')">{{ leaving ? '离开中…' : '离开房间' }}</button>
+      <button v-if="isCreator" class="text-button room-close" data-action-role="danger" :disabled="leaving || closing" @click="$emit('close')">{{ closing ? '关闭中…' : '关闭房间' }}</button>
     </div>
   </div>
 </template>
@@ -174,14 +194,20 @@ function startPayload() {
 .room-llm-note img { width: 18px; height: 18px; }
 .room-llm-note.on { color: #4caf50; }
 .room-llm-note.off { color: #e6a23c; }
+.room-character-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--theme-border) 38%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--theme-panel-elevated) 72%, transparent); color: var(--theme-text); text-align: left; cursor: pointer; }
+.room-character-entry img { width: 32px; height: 32px; border-radius: 8px 8px 3px 3px; object-fit: cover; background: var(--theme-surface); }
+.room-character-entry span { display: grid; min-width: 0; }
+.room-character-entry small { color: var(--theme-text-muted); font-size: 9px; }
+.room-character-entry b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.room-character-entry em { color: var(--theme-accent); font-size: 10px; font-style: normal; }
 .room-seat.llm-planned {
-  border-color: rgba(91, 190, 126, 0.34);
-  background: linear-gradient(100deg, rgba(38, 102, 67, 0.16), rgba(2, 12, 9, 0.62));
-  color: #94cda4;
+  border-color: color-mix(in srgb, var(--theme-positive) 42%, transparent);
+  background: color-mix(in srgb, var(--theme-positive) 10%, var(--theme-panel));
+  color: var(--theme-positive);
 }
 .room-seat.llm-planned .room-seat-no {
-  background: rgba(91, 190, 126, 0.2);
-  color: #b8dfbd;
+  background: color-mix(in srgb, var(--theme-positive) 20%, transparent);
+  color: var(--theme-text);
 }
 .room-seat-provider {
   flex: 1;
@@ -192,7 +218,7 @@ function startPayload() {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #d8e7d8;
+  color: var(--theme-text);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -213,10 +239,10 @@ function startPayload() {
 }
 .room-seat-provider:focus-visible {
   border-radius: 4px;
-  box-shadow: 0 0 0 1px rgba(115, 207, 142, 0.55);
+  box-shadow: 0 0 0 2px var(--theme-accent);
 }
 .room-seat-provider option {
-  background: #07150f;
-  color: #e8ddc4;
+  background: var(--theme-panel);
+  color: var(--theme-text);
 }
 </style>

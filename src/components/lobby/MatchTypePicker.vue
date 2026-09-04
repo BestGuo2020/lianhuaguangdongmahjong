@@ -18,6 +18,7 @@ const options: Array<{ id: MatchType; name: string; description: string }> = [
       v-for="option in options"
       :key="option.id"
       type="button"
+      data-action-role="secondary"
       :class="{ active: pending === option.id }"
       @click="pending = option.id"
     >
@@ -26,7 +27,7 @@ const options: Array<{ id: MatchType; name: string; description: string }> = [
     </button>
   </div>
   <div class="dialog-actions">
-    <button class="secondary" type="button" @click="emit('close')">取消</button>
-    <button class="primary" type="button" @click="emit('confirm', pending)">确定</button>
+    <button class="secondary" type="button" data-action-role="light" @click="emit('close')">取消</button>
+    <button class="primary" type="button" data-action-role="primary" @click="emit('confirm', pending)">确定</button>
   </div>
 </template>

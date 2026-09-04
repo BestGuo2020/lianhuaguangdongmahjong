@@ -609,6 +609,7 @@ function changeTableTheme(theme: TableThemeName) {
     <button
       v-if="gameMode === 'local' && showLobby"
       class="llm-fab"
+      data-action-role="secondary"
       aria-label="AI 设置"
       title="AI 大模型设置（联机由服务端提供商配置）"
       data-testid="llm-fab"
@@ -618,6 +619,7 @@ function changeTableTheme(theme: TableThemeName) {
       :open="llmOpen && showLobby"
       :messages="llmMessages"
       :stats="llmStats"
+      :theme-name="tableThemeName"
       @close="llmOpen = false"
       @saved="applyLlmSettings"
     />

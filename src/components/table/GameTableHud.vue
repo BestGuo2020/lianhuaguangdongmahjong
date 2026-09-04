@@ -536,40 +536,40 @@ function onAvatarError(entry: GamePlayer) {
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
-        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
+        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
           <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
           <img v-else class="action-icon" :src="`${imageBase}tips.png`" alt="" />
         </button>
         <template v-if="actionPrompt?.type === 'claim'">
-          <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+          <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'response'">
-          <button v-if="actionPrompt.canPeng" class="action primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="actionPrompt.chiOptions?.length" class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button v-if="actionPrompt.canHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
-          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
-          <button class="action hu" @click="$emit('hu')"><b>胡</b></button>
-          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+          <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'chi'">
-          <button class="action primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button class="action pass" @click="$emit('pass')"><b>过</b></button>
+          <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else>
-          <button v-if="userKongs.length" class="action primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
-          <button v-if="userHasWindKong" class="action primary" @click="$emit('windKong')"><b>风杠</b></button>
-          <button v-if="userCanHu" class="action hu" @click="$emit('hu')"><b>胡</b></button>
+          <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
+          <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
+          <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
         </template>
       </div>
       <button
-        v-if="showAutoPlay" class="action autoplay-action" :class="{ active: autoPlay }"
+        v-if="showAutoPlay" class="action autoplay-action" :class="{ active: autoPlay }" data-action-role="secondary"
         :aria-pressed="autoPlay" :aria-label="autoPlay ? '取消机器人托管，恢复手动操作' : '开启机器人托管，自动出牌与过牌'"
         :title="autoPlay ? '机器人托管中：点击恢复手动' : '点击机器人托管：到您的回合自动出牌/过牌'"
         @click="$emit('toggleAutoPlay')"

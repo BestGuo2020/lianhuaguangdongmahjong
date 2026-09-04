@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import { isHorseForSeat } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
@@ -81,6 +81,20 @@ const resultKindLab = ref(resultKindLabCandidate && resultKindLabValues.has(resu
   ? resultKindLabCandidate
   : null)
 const finalRankingLab = ref(import.meta.env.DEV && new URLSearchParams(window.location.search).has('finalRankLab'))
+const restoredSettlement = ref(false)
+let trackedResult: RoundResult | null = null
+let trackedResultWasOpened = false
+
+watch([() => props.result, () => props.resultVisible], ([result, visible]) => {
+  if (result !== trackedResult) {
+    trackedResult = result
+    trackedResultWasOpened = false
+    restoredSettlement.value = false
+  }
+  if (!result || !visible) return
+  restoredSettlement.value = trackedResultWasOpened
+  trackedResultWasOpened = true
+}, { immediate: true })
 type ResultKindLabWindow = Window & {
   __setRoundResultKindLab?: (kind: RoundResultPresentationKind | null) => void
   __setFinalRankingLab?: (active: boolean) => void
@@ -120,10 +134,11 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
     <div
       v-if="result && resultVisible && !matchFinished && !finalRankingLab"
       class="result-backdrop round-settlement"
-      :class="`result-${resultPresentation.kind}`"
+      :class="[`result-${resultPresentation.kind}`, { 'is-restored': restoredSettlement }]"
       :data-result-kind="resultPresentation.kind"
       :data-result-strength="resultPresentation.strength"
       :data-result-source="resultKindLab ? 'lab' : 'game'"
+      :data-settlement-state="restoredSettlement ? 'restored' : 'entering'"
     >
       <section
         class="result-card settlement-card"

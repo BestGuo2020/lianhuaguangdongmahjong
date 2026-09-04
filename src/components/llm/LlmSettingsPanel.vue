@@ -9,13 +9,18 @@ import { testLlmConnection } from '../../game/llm/client'
 import { inferProviderDialect, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 import { LOCAL_LLM_SEAT_OPTIONS } from './seatAssignment'
+import type { TableThemeName } from '../../theme/themeIdentity'
+import { themePresentationByName, themePresentationCssVariables } from '../../theme/themePresentation'
 
 const props = defineProps<{
   open: boolean
   messages: string[]
   stats: LlmControllerStats
+  themeName?: TableThemeName
 }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
+const activeTheme = computed(() => props.themeName ?? 'jade')
+const themeStyle = computed(() => themePresentationCssVariables(themePresentationByName(activeTheme.value)))
 
 /** 工作副本（打开时从存储载入；保存时整体写回） */
 const settings = ref<LlmSettings>(emptyLlmSettings())
@@ -166,10 +171,17 @@ function presetName(id: string | null): string {
 
 <template>
   <Teleport to="body">
-    <section v-if="props.open" class="llm-panel" aria-label="AI 设置">
+    <section
+      v-if="props.open"
+      class="llm-panel"
+      :data-table-theme="activeTheme"
+      :style="themeStyle"
+      data-teleport-surface="llm-settings"
+      aria-label="AI 设置"
+    >
       <header>
         <h2>AI 大模型</h2>
-        <button class="llm-close" aria-label="关闭" data-testid="llm-close" @click="emit('close')">✕</button>
+        <button class="llm-close" data-action-role="light" aria-label="关闭" data-testid="llm-close" @click="emit('close')">✕</button>
       </header>
 
       <p class="llm-hint">
@@ -198,7 +210,7 @@ function presetName(id: string | null): string {
           <select v-model.number="templateIndex" data-testid="llm-template" aria-label="添加模板">
             <option v-for="(template, index) in PROVIDER_TEMPLATES" :key="template.name" :value="index">{{ template.name }}</option>
           </select>
-          <button data-testid="llm-add" @click="addFromTemplate">＋添加</button>
+          <button data-testid="llm-add" data-action-role="secondary" @click="addFromTemplate">＋添加</button>
         </div>
       </div>
 
@@ -300,18 +312,18 @@ function presetName(id: string | null): string {
         </label>
 
         <div class="llm-actions">
-          <button data-testid="llm-remove" @click="removeSelected">删除该供应商</button>
+          <button data-testid="llm-remove" data-action-role="danger" @click="removeSelected">删除该供应商</button>
         </div>
       </template>
 
       <div class="llm-actions">
-        <button data-testid="llm-save" @click="save">保存</button>
-        <button data-testid="llm-test" :disabled="!selected || testing" @click="testConnection">
+        <button data-testid="llm-save" data-action-role="primary" @click="save">保存</button>
+        <button data-testid="llm-test" data-action-role="secondary" :disabled="!selected || testing" @click="testConnection">
           {{ testing ? '测试中…' : '测试连接' }}
         </button>
-        <button data-testid="llm-clear-key" :disabled="!selected" @click="clearKey">清除当前 Key</button>
-        <button data-testid="llm-export-json" :disabled="settings.presets.length === 0" @click="exportSettingsJson">导出 JSON</button>
-        <button data-testid="llm-import-json" @click="chooseImportFile">导入 JSON</button>
+        <button data-testid="llm-clear-key" data-action-role="danger" :disabled="!selected" @click="clearKey">清除当前 Key</button>
+        <button data-testid="llm-export-json" data-action-role="light" :disabled="settings.presets.length === 0" @click="exportSettingsJson">导出 JSON</button>
+        <button data-testid="llm-import-json" data-action-role="light" @click="chooseImportFile">导入 JSON</button>
         <input
           ref="importInput" class="llm-import-input" type="file" accept="application/json,.json"
           data-testid="llm-import-file" @change="importSettingsJson"
@@ -401,4 +413,72 @@ button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
 .llm-stats h3 { margin: 0 0 4px; color: #8ca296; font-size: 12px; letter-spacing: .18em; }
 .llm-messages { margin: 8px 0 0; padding: 0; list-style: none; }
 .llm-messages li { margin: 5px 0; padding: 7px 10px; border-radius: 8px; background: rgba(211, 174, 87, .08); color: #e8dcc0; }
+
+/* Teleport 表面显式接收 ThemePresentation 变量；仅换肤，不改变任何字段或行为。 */
+.llm-panel {
+  overscroll-behavior: contain;
+  border-left-color: var(--theme-border);
+  background: linear-gradient(160deg, var(--theme-panel-elevated), var(--theme-panel) 65%);
+  color: var(--theme-text);
+  color-scheme: dark;
+}
+.llm-panel h2,
+.llm-provider-item b { color: var(--theme-text); }
+.llm-close,
+.llm-hint,
+.llm-row > span,
+.llm-sub-title,
+.llm-transfer-hint,
+.llm-stats h3 { color: var(--theme-text-muted); }
+.llm-hint strong,
+.llm-hint b,
+.llm-provider-item.default::after,
+.llm-seat-row.chosen { color: var(--theme-accent); }
+.llm-provider-warning { color: var(--theme-accent-secondary); }
+.llm-timeout-toggle { color: var(--theme-text) !important; }
+.llm-row input,
+.llm-row select,
+.llm-seat-row select,
+.llm-provider-add select {
+  border-color: color-mix(in srgb, var(--theme-border) 42%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 42%, var(--theme-panel));
+  color: var(--theme-text);
+}
+.llm-row input::placeholder { color: color-mix(in srgb, var(--theme-text-muted) 68%, transparent); }
+.llm-panel input[type="checkbox"] { accent-color: var(--theme-accent); }
+.llm-provider-item { border-color: color-mix(in srgb, var(--theme-border) 24%, transparent); color: var(--theme-text); }
+.llm-provider-item span { color: var(--theme-text-muted); }
+.llm-provider-item.active { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 10%, transparent); }
+.llm-provider-add button,
+.llm-actions button { border-color: var(--theme-border); color: var(--theme-accent); }
+.llm-seat-assign { border-color: color-mix(in srgb, var(--theme-border) 24%, transparent); }
+button.llm-seat-row { color: var(--theme-text); }
+button.llm-seat-row:hover { background: color-mix(in srgb, var(--theme-accent) 10%, transparent); }
+.llm-actions button[data-action-role="primary"] { background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.llm-actions button[data-action-role="danger"] { border-color: var(--theme-negative); background: color-mix(in srgb, var(--theme-negative) 12%, transparent); color: var(--theme-negative); }
+.llm-actions button:disabled { filter: grayscale(.45); opacity: .5; box-shadow: none; }
+.llm-panel button:focus-visible,
+.llm-panel input:focus-visible,
+.llm-panel select:focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 2px; }
+.llm-status.ok { color: var(--theme-positive); }
+.llm-status.err { color: var(--theme-negative); }
+.llm-stats { border-top-color: color-mix(in srgb, var(--theme-border) 20%, transparent); }
+.llm-messages li { background: color-mix(in srgb, var(--theme-accent) 8%, transparent); color: var(--theme-text); }
+.llm-panel[data-table-theme="happyMahjong"] { border-radius: 26px 0 0 26px; }
+.llm-panel[data-table-theme="rosewood"] { border-left-width: 3px; border-radius: 5px 0 0 5px; }
+.llm-panel[data-table-theme="llm"] { clip-path: polygon(12px 0,100% 0,100% 100%,0 100%,0 12px); }
+.llm-panel[data-table-theme="llmAnime"] { border-left: 2px solid #2d2923; background: linear-gradient(160deg, #f4eddf, #dfcdb4 70%); color: #2d2923; color-scheme: light; }
+.llm-panel[data-table-theme="llmAnime"] h2,
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item b { color: #2d2923; }
+.llm-panel[data-table-theme="llmAnime"] .llm-hint,
+.llm-panel[data-table-theme="llmAnime"] .llm-row > span,
+.llm-panel[data-table-theme="llmAnime"] .llm-sub-title { color: #6f6255; }
+.llm-panel[data-table-theme="llmAnime"] .llm-row input,
+.llm-panel[data-table-theme="llmAnime"] .llm-row select,
+.llm-panel[data-table-theme="llmAnime"] .llm-seat-row select,
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-add select { border-color: rgba(45,41,35,.38); background: #fffaf0; color: #2d2923; }
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item,
+.llm-panel[data-table-theme="llmAnime"] .llm-seat-assign { border-color: rgba(45,41,35,.25); }
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item { color: #2d2923; }
+.llm-panel[data-table-theme="llmAnime"] .llm-provider-item span { color: #756a5d; }
 </style>
