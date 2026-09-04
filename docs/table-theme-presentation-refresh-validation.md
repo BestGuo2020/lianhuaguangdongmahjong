@@ -138,3 +138,7 @@ GPU 专用 Playwright 配置使用 Chromium 新版 headless、D3D11 ANGLE，并�
 - 既有五主题桌面大厅、手机触控大厅检查通过。房间回归最初在复用的 4173/8000 服务上未获得 WebSocket 就绪；改用独立 4185/8015 本地服务后通过，覆盖移动房间聚焦及房间码居中。
 - 类型检查、生产构建、`git diff --check` 通过，保留既有大 chunk 警告。业务模板、按钮事件和联机逻辑均未改动。
 - 截图：`test-results/theme-presentation/landscape-sizing/{theme}-{width}x{height}.png`。人工复核 jade 896×414、happyMahjong 和 llmAnime 568×320：两区连贯、预览可辨识、主操作和底栏完整，AI 入口不再遮挡登录。
+
+## Phase 11V 已完成（2026-09-05）
+
+此前记录的 vibehub 受保护入口缺口已完成独立适配并发布。两个真实账号在线上完成莲花麻将完整东风场，含东4局两次连庄，共6次双端结算，最终排名一致且均返回大厅。完整记录见 [vibehub-theme-presentation-validation.md](vibehub-theme-presentation-validation.md)。
