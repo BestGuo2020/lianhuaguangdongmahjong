@@ -17,7 +17,7 @@
    pnpm sync:vibehub
    # 或：powershell -ExecutionPolicy Bypass -File scripts/sync-master-to-vibehub.ps1
    ```
-3. 脚本自动完成：切到 vibehub → merge master（冲突采用 master 版）→ 恢复 vibehub 联机文件 → 删除 WS 版死代码 → 提交 → 切回 master
+3. 脚本自动完成：查找已签出 vibehub 的干净工作树并在其中执行；没有独立工作树时才临时切分支。随后 merge master（冲突采用 master 版）→ 恢复 vibehub 联机文件 → 删除 WS 版死代码 → 提交。原 master 工作树保持在 master。
 
 ## 哪些文件跟随 master（自动采用 master 版）
 
@@ -40,7 +40,8 @@
 
 ## 注意
 
-- 脚本要求 **master 工作区干净**（先提交或 stash）
+- 必须从 master 工作树运行；**master 和已签出 vibehub 的目标工作树都必须干净**。脏工作区直接中止，不自动 stash、清理文件或移除工作树。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-sync-worktrees.ps1` 在系统临时目录下的 Git 仓库验证工作树同步、脏文件保护、keep 恢复与 WS 删除，不操作正式分支，也不被项目单测收集。
 - 同步完成后建议在 vibehub 上跑 `pnpm test` 验证
 - 若改动涉及联机层（大厅/登录/传输），master 和 vibehub 需各自实现——这是两套后端的本质差异，无法合并
 - 清单维护：改脚本里的 `$vibehubKeep`（保留 vibehub 版）与 `$masterOnly`（删除）数组

@@ -1,0 +1,278 @@
+{
+  "ruleVersion": "lotus-blood-flow-v1",
+  "cases": [
+    {
+      "id": "orphans-hard-discard",
+      "candidates": [
+        {
+          "patterns": [
+            "thirteenOrphans"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 32,
+        "paymentPerPayer": 320,
+        "totalWon": 320
+      }
+    },
+    {
+      "id": "orphans-hard-self-draw",
+      "candidates": [
+        {
+          "patterns": [
+            "thirteenOrphans"
+          ],
+          "natural": true,
+          "source": "self-draw",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 64,
+        "paymentPerPayer": 640,
+        "totalWon": 1920
+      }
+    },
+    {
+      "id": "pure-triplets-hard-self-draw",
+      "candidates": [
+        {
+          "patterns": [
+            "pure-suit",
+            "all-triplets"
+          ],
+          "natural": true,
+          "source": "self-draw",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 20,
+        "paymentPerPayer": 200,
+        "totalWon": 600
+      }
+    },
+    {
+      "id": "no-hard-win-borrowing",
+      "candidates": [
+        {
+          "patterns": [
+            "pinghu"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        },
+        {
+          "patterns": [
+            "all-green"
+          ],
+          "natural": false,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 1,
+        "finalMultiplier": 16,
+        "paymentPerPayer": 160,
+        "totalWon": 160
+      }
+    },
+    {
+      "id": "natural-preferred-at-cap",
+      "candidates": [
+        {
+          "patterns": [
+            "all-honors",
+            "big-four-winds"
+          ],
+          "natural": false,
+          "source": "kong-bloom",
+          "opening": false
+        },
+        {
+          "patterns": [
+            "all-honors",
+            "big-four-winds"
+          ],
+          "natural": true,
+          "source": "kong-bloom",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 1,
+        "finalMultiplier": 64,
+        "paymentPerPayer": 640,
+        "totalWon": 1920
+      }
+    },
+    {
+      "id": "heaven-floor-then-hard",
+      "candidates": [
+        {
+          "patterns": [
+            "pinghu"
+          ],
+          "natural": true,
+          "source": "self-draw",
+          "opening": true
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 16,
+        "paymentPerPayer": 160,
+        "totalWon": 480
+      }
+    },
+    {
+      "id": "earth-does-not-multiply",
+      "candidates": [
+        {
+          "patterns": [
+            "pure-suit",
+            "all-triplets"
+          ],
+          "natural": false,
+          "source": "discard",
+          "opening": true
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 8,
+        "paymentPerPayer": 80,
+        "totalWon": 80
+      }
+    },
+    {
+      "id": "opening-keeps-bigger-pattern",
+      "candidates": [
+        {
+          "patterns": [
+            "thirteenOrphans"
+          ],
+          "natural": false,
+          "source": "discard",
+          "opening": true
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 16,
+        "paymentPerPayer": 160,
+        "totalWon": 160
+      }
+    },
+    {
+      "id": "four-concealed-excludes-two",
+      "candidates": [
+        {
+          "patterns": [
+            "four-concealed-triplets",
+            "three-concealed-triplets",
+            "all-triplets"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 16,
+        "paymentPerPayer": 160,
+        "totalWon": 160
+      }
+    },
+    {
+      "id": "four-kongs-excludes-two",
+      "candidates": [
+        {
+          "patterns": [
+            "four-kongs",
+            "three-kongs",
+            "all-triplets"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 32,
+        "paymentPerPayer": 320,
+        "totalWon": 320
+      }
+    },
+    {
+      "id": "nine-gates-excludes-pure",
+      "candidates": [
+        {
+          "patterns": [
+            "nine-gates",
+            "pure-suit"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 32,
+        "paymentPerPayer": 320,
+        "totalWon": 320
+      }
+    },
+    {
+      "id": "big-dragons-retains-triplets",
+      "candidates": [
+        {
+          "patterns": [
+            "big-three-dragons",
+            "all-triplets"
+          ],
+          "natural": true,
+          "source": "discard",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 18,
+        "paymentPerPayer": 180,
+        "totalWon": 180
+      }
+    },
+    {
+      "id": "robbed-kong-single-payer",
+      "candidates": [
+        {
+          "patterns": [
+            "pinghu"
+          ],
+          "natural": true,
+          "source": "robbed-kong",
+          "opening": false
+        }
+      ],
+      "expected": {
+        "candidateIndex": 0,
+        "finalMultiplier": 4,
+        "paymentPerPayer": 40,
+        "totalWon": 40
+      }
+    }
+  ]
+}

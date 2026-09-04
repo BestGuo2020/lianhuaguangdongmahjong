@@ -1,0 +1,1788 @@
+{
+  "ruleVersion": "lotus-blood-flow-v1",
+  "description": "E01 independently specified acceptance inputs; E02 must evaluate every case. concealed excludes the winning tile.",
+  "cases": [
+    {
+      "id": "pure-suit-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "m4",
+          "m5",
+          "m6",
+          "m7",
+          "m8",
+          "m9",
+          "m5"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          }
+        ],
+        "winningTile": "m5",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "pure-suit"
+        ]
+      }
+    },
+    {
+      "id": "pure-suit-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "pure-suit"
+        ]
+      }
+    },
+    {
+      "id": "mixed-suit-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "m4",
+          "m5",
+          "m6",
+          "m7",
+          "m8",
+          "m9",
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "mixed-suit"
+        ]
+      }
+    },
+    {
+      "id": "mixed-suit-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "mixed-suit"
+        ]
+      }
+    },
+    {
+      "id": "all-triplets-positive",
+      "input": {
+        "concealed": [
+          "p2",
+          "p2",
+          "p2",
+          "s4",
+          "s4",
+          "s4",
+          "red",
+          "red",
+          "red",
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1"
+            ]
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "all-triplets"
+        ]
+      }
+    },
+    {
+      "id": "all-triplets-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "all-triplets"
+        ]
+      }
+    },
+    {
+      "id": "little-three-dragons-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p4",
+          "p5",
+          "p6",
+          "white"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "red",
+            "tiles": [
+              "red",
+              "red",
+              "red"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "green",
+            "tiles": [
+              "green",
+              "green",
+              "green"
+            ]
+          }
+        ],
+        "winningTile": "white",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "little-three-dragons"
+        ]
+      }
+    },
+    {
+      "id": "little-three-dragons-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "little-three-dragons"
+        ]
+      }
+    },
+    {
+      "id": "big-three-dragons-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "red",
+            "tiles": [
+              "red",
+              "red",
+              "red"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "green",
+            "tiles": [
+              "green",
+              "green",
+              "green"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "white",
+            "tiles": [
+              "white",
+              "white",
+              "white"
+            ]
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "big-three-dragons"
+        ]
+      }
+    },
+    {
+      "id": "big-three-dragons-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "big-three-dragons"
+        ]
+      }
+    },
+    {
+      "id": "little-four-winds-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "north"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "south",
+            "tiles": [
+              "south",
+              "south",
+              "south"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "west",
+            "tiles": [
+              "west",
+              "west",
+              "west"
+            ]
+          }
+        ],
+        "winningTile": "north",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "little-four-winds"
+        ]
+      }
+    },
+    {
+      "id": "little-four-winds-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "little-four-winds"
+        ]
+      }
+    },
+    {
+      "id": "big-four-winds-positive",
+      "input": {
+        "concealed": [
+          "p5"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "south",
+            "tiles": [
+              "south",
+              "south",
+              "south"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "west",
+            "tiles": [
+              "west",
+              "west",
+              "west"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "north",
+            "tiles": [
+              "north",
+              "north",
+              "north"
+            ]
+          }
+        ],
+        "winningTile": "p5",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "big-four-winds"
+        ]
+      }
+    },
+    {
+      "id": "big-four-winds-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "big-four-winds"
+        ]
+      }
+    },
+    {
+      "id": "nine-gates-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m1",
+          "m1",
+          "m2",
+          "m3",
+          "m4",
+          "m5",
+          "m6",
+          "m7",
+          "m8",
+          "m9",
+          "m9",
+          "m9"
+        ],
+        "melds": [],
+        "winningTile": "m5",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "nine-gates"
+        ]
+      }
+    },
+    {
+      "id": "nine-gates-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "nine-gates"
+        ]
+      }
+    },
+    {
+      "id": "all-green-positive",
+      "input": {
+        "concealed": [
+          "s2",
+          "s3",
+          "s4",
+          "s2",
+          "s3",
+          "s4",
+          "s6",
+          "s6",
+          "s6",
+          "s8",
+          "s8",
+          "s8",
+          "green"
+        ],
+        "melds": [],
+        "winningTile": "green",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "all-green"
+        ]
+      }
+    },
+    {
+      "id": "all-green-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "all-green"
+        ]
+      }
+    },
+    {
+      "id": "pure-terminals-positive",
+      "input": {
+        "concealed": [
+          "s1"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "m9",
+            "tiles": [
+              "m9",
+              "m9",
+              "m9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "p1",
+            "tiles": [
+              "p1",
+              "p1",
+              "p1"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "p9",
+            "tiles": [
+              "p9",
+              "p9",
+              "p9"
+            ]
+          }
+        ],
+        "winningTile": "s1",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "pure-terminals"
+        ]
+      }
+    },
+    {
+      "id": "pure-terminals-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "pure-terminals"
+        ]
+      }
+    },
+    {
+      "id": "mixed-terminals-positive",
+      "input": {
+        "concealed": [
+          "p9"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "m9",
+            "tiles": [
+              "m9",
+              "m9",
+              "m9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "south",
+            "tiles": [
+              "south",
+              "south",
+              "south"
+            ]
+          }
+        ],
+        "winningTile": "p9",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "mixed-terminals"
+        ]
+      }
+    },
+    {
+      "id": "mixed-terminals-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "mixed-terminals"
+        ]
+      }
+    },
+    {
+      "id": "three-concealed-triplets-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m1",
+          "m1",
+          "p2",
+          "p2",
+          "p2",
+          "s4",
+          "s4",
+          "s4",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "three-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "three-concealed-triplets-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "three-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "four-concealed-triplets-positive",
+      "input": {
+        "concealed": [
+          "m1",
+          "m1",
+          "m1",
+          "p2",
+          "p2",
+          "p2",
+          "s4",
+          "s4",
+          "s4",
+          "red",
+          "red",
+          "red",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "four-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "four-concealed-triplets-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "four-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "all-honors-positive",
+      "input": {
+        "concealed": [
+          "east",
+          "south",
+          "west",
+          "east",
+          "south",
+          "west",
+          "red",
+          "green",
+          "white",
+          "north",
+          "north",
+          "north",
+          "red"
+        ],
+        "melds": [],
+        "winningTile": "red",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "all-honors"
+        ]
+      }
+    },
+    {
+      "id": "all-honors-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "all-honors"
+        ]
+      }
+    },
+    {
+      "id": "three-kongs-positive",
+      "input": {
+        "concealed": [
+          "m4",
+          "m5",
+          "m6",
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "gang",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "p2",
+            "tiles": [
+              "p2",
+              "p2",
+              "p2",
+              "p2"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "s3",
+            "tiles": [
+              "s3",
+              "s3",
+              "s3",
+              "s3"
+            ],
+            "added": true
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "three-kongs"
+        ]
+      }
+    },
+    {
+      "id": "three-kongs-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "three-kongs"
+        ]
+      }
+    },
+    {
+      "id": "four-kongs-positive",
+      "input": {
+        "concealed": [
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "gang",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "p2",
+            "tiles": [
+              "p2",
+              "p2",
+              "p2",
+              "p2"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "s3",
+            "tiles": [
+              "s3",
+              "s3",
+              "s3",
+              "s3"
+            ],
+            "added": true
+          },
+          {
+            "type": "gang",
+            "tile": "red",
+            "tiles": [
+              "red",
+              "red",
+              "red",
+              "red"
+            ]
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "four-kongs"
+        ]
+      }
+    },
+    {
+      "id": "four-kongs-negative",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "excludes": [
+          "four-kongs"
+        ]
+      }
+    },
+    {
+      "id": "plain-hard",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "standard",
+        "hardWin": true,
+        "paymentPerPayer": 20
+      }
+    },
+    {
+      "id": "seven-pairs",
+      "input": {
+        "concealed": [
+          "m1",
+          "m1",
+          "m2",
+          "m2",
+          "p3",
+          "p3",
+          "p4",
+          "p4",
+          "s5",
+          "s5",
+          "s6",
+          "s6",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "sevenPairs",
+        "includes": [
+          "sevenPairs"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 40
+      }
+    },
+    {
+      "id": "thirteen-disconnected",
+      "input": {
+        "concealed": [
+          "m1",
+          "m4",
+          "m7",
+          "p2",
+          "p5",
+          "p8",
+          "s3",
+          "s6",
+          "s9",
+          "east",
+          "south",
+          "west",
+          "north"
+        ],
+        "melds": [],
+        "winningTile": "red",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "shiSanLan",
+        "includes": [
+          "shiSanLan"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 40
+      }
+    },
+    {
+      "id": "seven-stars",
+      "input": {
+        "concealed": [
+          "m1",
+          "m4",
+          "m7",
+          "p2",
+          "p5",
+          "p8",
+          "s3",
+          "east",
+          "south",
+          "west",
+          "north",
+          "red",
+          "green"
+        ],
+        "melds": [],
+        "winningTile": "white",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "qiXing",
+        "includes": [
+          "qiXing"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 80
+      }
+    },
+    {
+      "id": "hard-orphans-discard",
+      "input": {
+        "concealed": [
+          "m1",
+          "m9",
+          "p1",
+          "p9",
+          "s1",
+          "s9",
+          "east",
+          "south",
+          "west",
+          "north",
+          "red",
+          "green",
+          "white"
+        ],
+        "melds": [],
+        "winningTile": "m1",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "thirteenOrphans",
+        "hardWin": true,
+        "paymentPerPayer": 320
+      }
+    },
+    {
+      "id": "hard-orphans-self-draw",
+      "input": {
+        "concealed": [
+          "m1",
+          "m9",
+          "p1",
+          "p9",
+          "s1",
+          "s9",
+          "east",
+          "south",
+          "west",
+          "north",
+          "red",
+          "green",
+          "white"
+        ],
+        "melds": [],
+        "winningTile": "m1",
+        "source": "self-draw",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "thirteenOrphans",
+        "hardWin": true,
+        "paymentPerPayer": 640
+      }
+    },
+    {
+      "id": "hard-pure-triplets-self-draw",
+      "input": {
+        "concealed": [
+          "m4",
+          "m4",
+          "m4",
+          "m7",
+          "m7",
+          "m7",
+          "m9"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "m2",
+            "tiles": [
+              "m2",
+              "m2",
+              "m2"
+            ]
+          }
+        ],
+        "winningTile": "m9",
+        "source": "self-draw",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "pure-suit",
+          "all-triplets"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 200
+      }
+    },
+    {
+      "id": "external-joker-natural",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "m8",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [
+          "east",
+          "south"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "hardWin": true,
+        "paymentPerPayer": 20
+      }
+    },
+    {
+      "id": "external-joker-only-one-ordinary",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "east",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [
+          "east",
+          "south"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "hardWin": false,
+        "paymentPerPayer": 10
+      }
+    },
+    {
+      "id": "soft-orphans",
+      "input": {
+        "concealed": [
+          "m1",
+          "m9",
+          "p1",
+          "p9",
+          "s1",
+          "s9",
+          "east",
+          "south",
+          "west",
+          "north",
+          "red",
+          "green",
+          "white"
+        ],
+        "melds": [],
+        "winningTile": "m2",
+        "source": "self-draw",
+        "jokers": [
+          "m2",
+          "m3"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "shape": "thirteenOrphans",
+        "hardWin": false,
+        "paymentPerPayer": 320
+      }
+    },
+    {
+      "id": "external-joker-cannot-fill-anything",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "east",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "south",
+        "source": "discard",
+        "jokers": [
+          "south",
+          "west"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": false
+      }
+    },
+    {
+      "id": "white-limited-cannot-fill-m8",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "east",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "white",
+        "source": "self-draw",
+        "jokers": [
+          "p8",
+          "p9"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": false
+      }
+    },
+    {
+      "id": "white-limited-can-fill-joker",
+      "input": {
+        "concealed": [
+          "m1",
+          "m2",
+          "m3",
+          "p2",
+          "p3",
+          "p4",
+          "s4",
+          "s5",
+          "s6",
+          "m6",
+          "m7",
+          "east",
+          "east"
+        ],
+        "melds": [],
+        "winningTile": "white",
+        "source": "self-draw",
+        "jokers": [
+          "m8",
+          "m9"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "hardWin": false,
+        "paymentPerPayer": 20
+      }
+    },
+    {
+      "id": "discard-completes-triplet",
+      "input": {
+        "concealed": [
+          "m1",
+          "m1",
+          "m1",
+          "p2",
+          "p2",
+          "p2",
+          "s4",
+          "s4",
+          "s4",
+          "east",
+          "east",
+          "red",
+          "red"
+        ],
+        "melds": [],
+        "winningTile": "red",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "three-concealed-triplets",
+          "all-triplets"
+        ],
+        "excludes": [
+          "four-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "wind-kong-not-fourth-kong",
+      "input": {
+        "concealed": [
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "gang",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "p2",
+            "tiles": [
+              "p2",
+              "p2",
+              "p2",
+              "p2"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "s3",
+            "tiles": [
+              "s3",
+              "s3",
+              "s3",
+              "s3"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "south",
+              "west",
+              "north"
+            ],
+            "windKong": true
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "three-kongs"
+        ],
+        "excludes": [
+          "four-kongs",
+          "all-triplets",
+          "four-concealed-triplets"
+        ]
+      }
+    },
+    {
+      "id": "pending-kong-not-third",
+      "input": {
+        "concealed": [
+          "m4",
+          "m5",
+          "m6",
+          "east"
+        ],
+        "melds": [
+          {
+            "type": "gang",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "p2",
+            "tiles": [
+              "p2",
+              "p2",
+              "p2",
+              "p2"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "s3",
+            "tiles": [
+              "s3",
+              "s3",
+              "s3",
+              "s3"
+            ],
+            "added": true,
+            "pending": true
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": false
+      }
+    }
+  ]
+}
