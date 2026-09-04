@@ -1,4 +1,7 @@
 import type * as THREE from 'three'
+import { isTableThemeName, TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
+
+export { TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
 
 // 牌桌主题配置：把原来硬编码在 staticTableScene.ts 里的所有共享材质参数抽成数据。
 // 换肤 = 换一份 TableTheme；运行时 Texture 仍由创建方注入，主题这里只保存可序列化的图片地址与变换参数。
@@ -44,7 +47,7 @@ export interface TableTheme {
     /** 麻将机底面。 */
     machineBottom: PhysicalParams
   }
-  /** 素面模式：不建鎏金托边/四边金线/四角饰钉（雀魂等素面风格用）。桌身仍为两层（底 + 台面）。 */
+  /** 素面模式：不建鎏金托边/四边金线/四角饰钉。桌身仍为两层（底 + 台面）。 */
   plainSurface?: boolean
   /** 桌面呢绒纹理：给台面材质叠加程序化噪点贴图，模拟织物绒感（配合高 roughness）。 */
   tableFelt?: boolean
@@ -67,7 +70,7 @@ export interface TableTheme {
   staticTableCastShadow?: boolean
   /** 外部桌布图片；优先级高于 tableFelt / tableVignette 的程序纹理。 */
   tableSurfaceTexture?: TableSurfaceTextureConfig
-  /** 木质包边：台面四周一圈程序木纹框（雀魂等木框桌用），与 plainSurface 配合。 */
+  /** 木质包边：台面四周一圈程序木纹框，与 plainSurface 配合。 */
   woodTrim?: boolean
   /** 木纹三段颜色（canvas 程序纹理），不传用默认深棕。 */
   woodTrimColors?: [string, string, string]
@@ -403,148 +406,6 @@ export const rosewoodTheme: TableTheme = {
   },
 }
 
-/** 示例主题「雀魂风」：深蓝绒布渐变桌（中心亮 #4262AC → 边缘暗 #1F3358）+ 哑光瓷白牌 + 橙色牌背（#E69D47 系）。 */
-export const majsoulTheme: TableTheme = {
-  table: {
-    jade: {
-      color: 0x4262ac,
-      emissive: 0x14234a,
-      emissiveIntensity: .08,
-      roughness: .85,
-      metalness: 0,
-      clearcoat: .08,
-      clearcoatRoughness: .6,
-      sheen: .35,
-      sheenColor: 0x4a5f9e,
-      sheenRoughness: .8,
-    },
-    darkJade: {
-      color: 0x16263f,
-      emissive: 0x0a1424,
-      emissiveIntensity: .05,
-      roughness: .9,
-      metalness: 0,
-      clearcoat: 0,
-    },
-    gold: {
-      color: 0x2a2a28,
-      emissive: 0x0a0a08,
-      emissiveIntensity: .1,
-      roughness: .5,
-      metalness: .4,
-      clearcoat: .1,
-      clearcoatRoughness: .5,
-    },
-    goldHighlight: {
-      color: 0x3a3a36,
-      emissive: 0x0d0d0a,
-      emissiveIntensity: .08,
-      roughness: .55,
-      metalness: .35,
-      clearcoat: .1,
-      clearcoatRoughness: .5,
-    },
-    machine: {
-      color: 0x0a1210,
-      roughness: .5,
-      metalness: .1,
-      clearcoat: .3,
-      clearcoatRoughness: .4,
-    },
-    machineTop: {
-      roughness: .55,
-      metalness: .05,
-      clearcoat: .2,
-      clearcoatRoughness: .5,
-    },
-    machineBottom: {
-      color: 0x040605,
-      roughness: .6,
-      metalness: .1,
-      clearcoat: .1,
-    },
-  },
-  plainSurface: true,
-  tableFelt: true,
-  tableVignette: .32,
-  tableGuide: {
-    dark: '#182c4a',
-    light: '#93a8d0',
-    opacity: .5,
-    slotDark: '#0c1630',
-    slotOpacity: .62,
-  },
-  woodTrim: true,
-  woodTrimColors: ['#78502b', '#62401f', '#452b17'],
-  woodTrimMaterial: {
-    roughness: .62,
-    metalness: .04,
-    clearcoat: .1,
-    clearcoatRoughness: .4,
-  },
-  tileBackGradient: ['#e5a04a', '#d58b35', '#b97127'],
-  tile: {
-    side: {
-      color: 0xe8e8e4,
-      metalness: 0,
-      roughness: .5,
-      clearcoat: .18,
-      clearcoatRoughness: .4,
-      ior: 1.45,
-      specularIntensity: .15,
-      specularColor: 0xffffff,
-      envMapIntensity: .22,
-    },
-    faceSide: {
-      color: 0xe69d47,
-      metalness: 0,
-      roughness: .55,
-      clearcoat: .2,
-      clearcoatRoughness: .4,
-      ior: 1.45,
-      specularIntensity: .18,
-      envMapIntensity: .25,
-    },
-    bottom: {
-      color: 0xd8d8d2,
-      metalness: 0,
-      roughness: .5,
-      clearcoat: .2,
-      clearcoatRoughness: .4,
-      ior: 1.45,
-      envMapIntensity: .2,
-    },
-    back: {
-      color: 0xffffff,
-      metalness: 0,
-      roughness: .75,
-      clearcoat: .06,
-      clearcoatRoughness: .5,
-      ior: 1.45,
-      specularIntensity: .03,
-      specularColor: 0x8a5a20,
-      envMapIntensity: .06,
-    },
-    face: {
-      color: 0xf2f1ea,
-      metalness: 0,
-      roughness: .55,
-      clearcoat: .22,
-      clearcoatRoughness: .4,
-      ior: 1.45,
-      specularIntensity: .18,
-      specularColor: 0xffffff,
-      envMapIntensity: .22,
-    },
-  },
-  highlight: {
-    color: 0xe3b948,
-    emissive: 0x7d4d08,
-    emissiveIntensity: .8,
-    roughness: .4,
-  },
-}
-
 /** 欢乐麻将风：青绿色绒面台 + 翡翠色牌背 + 暖白牌体 + 深青外沿金线。 */
 export const happyMahjongTheme: TableTheme = {
   ...defaultTableTheme,
@@ -777,7 +638,7 @@ export const llmTheme: TableTheme = {
 /**
  * 大模型二次元主题：鼠尾草绒面 + 墨色结构 + 香槟金点缀。
  *
- * 角色/UI 保持二次元表达，Three.js 牌桌则使用雀魂式软阴影、长焦机位和
+ * 角色/UI 保持二次元表达，Three.js 牌桌则使用低写实商业 3D、软阴影、偏长焦机位和
  * 树脂清漆麻将，避免平涂牌体悬浮、塑料发灰和广角边缘发散。
  */
 export const llmAnimeTheme: TableTheme = {
@@ -974,28 +835,16 @@ export const llmAnimeTheme: TableTheme = {
 }
 
 /** 主题注册表：按名字取主题（URL ?theme=<name> 等调试/换肤入口用）。 */
-export const TABLE_THEMES: Record<string, TableTheme> = {
+export const TABLE_THEMES: Record<TableThemeName, TableTheme> = {
   jade: defaultTableTheme,
-  rosewood: rosewoodTheme,
-  majsoul: majsoulTheme,
   happyMahjong: happyMahjongTheme,
+  rosewood: rosewoodTheme,
   llm: llmTheme,
   llmAnime: llmAnimeTheme,
 }
 
-export const TABLE_THEME_OPTIONS = [
-  { value: 'jade', label: '默认墨玉', description: '深绿玉石与金色桌沿' },
-  { value: 'majsoul', label: '雀魂风', description: '蓝灰台面与木质边框' },
-  { value: 'happyMahjong', label: '欢乐麻将', description: '青绿色绒面与翡翠牌背' },
-  { value: 'rosewood', label: '红木金丝', description: '红棕台面与暖金包边' },
-  { value: 'llm', label: '大模型专属', description: '双模型娘化对决与深蓝星轨' },
-  { value: 'llmAnime', label: '大模型二次元', description: '鼠尾草绒面、树脂麻将与角色演出' },
-] as const
-
-export type TableThemeName = typeof TABLE_THEME_OPTIONS[number]['value']
-
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
 export function tableThemeByName(name: string | null | undefined): TableTheme | undefined {
-  return name ? TABLE_THEMES[name] : undefined
+  return isTableThemeName(name) ? TABLE_THEMES[name] : undefined
 }
 

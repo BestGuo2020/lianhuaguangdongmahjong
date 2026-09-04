@@ -69,7 +69,7 @@ export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
 }
 
 /**
- * 大模型二次元主题的雀魂式 3D 配置。
+ * 大模型二次元主题的低写实商业 3D 配置。
  *
  * 34° 偏长焦配合后移机位压缩左右牌山透视；暖色主光与较弱半球光拉开
  * 明暗层次，2048 软阴影负责把牌压回桌面。描边只保留很薄的一层，避免

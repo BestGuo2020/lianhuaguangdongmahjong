@@ -79,7 +79,7 @@ let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('
 // 抗锯齿：默认开（二次元渲染已足够轻，真机也能扛）；?aa=off 可关。
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
 const cameraLabEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cameraLab')
-// 廉价真3D 实验开关（dev）：?cheapTable=1 关闭实时阴影/描边/环境反射/面光，走雀魂式低成本渲染。
+// 低成本真 3D 实验开关（dev）：?cheapTable=1 关闭实时阴影/描边/环境反射/面光。
 const cheapTable = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cheapTable')
 // 二次元 cel 渲染：llmAnime 主题默认启用（?animeTable=0 强制关闭回退写实）。
 let animeTable = false
@@ -440,7 +440,7 @@ onMounted(async () => {
     isGlossy: () => glossyMaterials,
     animeTable,
   })
-  // 描边：二次元档不用后处理描边（雀魂靠 cel 明暗 + 倒角勾边，后处理描边会产生「薄膜」壳）；写实档保留轻薄描边。
+  // 描边：二次元档依靠 cel 明暗与倒角勾边；后处理描边会产生「薄膜」壳，写实档仅保留轻薄描边。
   if (renderProfile.outline && !cheapTable && !animeTable && !isMobileLike) {
     outlineEffect = new OutlineEffect(renderer, {
       defaultThickness: animeTable ? 0.003 : renderProfile.outline.thickness,

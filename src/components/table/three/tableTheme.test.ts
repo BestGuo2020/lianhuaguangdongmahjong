@@ -3,9 +3,23 @@ import {
   defaultTableTheme,
   llmAnimeTheme,
   llmTheme,
+  TABLE_THEMES,
   TABLE_THEME_OPTIONS,
   tableThemeByName,
 } from './tableTheme'
+
+describe('牌桌主题注册表', () => {
+  it('只公开五个保留主题并拒绝旧主题 ID', () => {
+    expect(TABLE_THEME_OPTIONS.map(({ value }) => value)).toEqual([
+      'jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime',
+    ])
+    expect(Object.keys(TABLE_THEMES)).toEqual([
+      'jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime',
+    ])
+    expect(tableThemeByName('majsoul')).toBeUndefined()
+    expect(tableThemeByName('unknown')).toBeUndefined()
+  })
+})
 
 describe('大模型专属牌桌主题', () => {
   it('注册为可公开选择的 llm 主题', () => {
@@ -13,7 +27,7 @@ describe('大模型专属牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llm',
       label: '大模型专属',
-      description: '双模型娘化对决与深蓝星轨',
+      description: '深蓝星轨、数据线与模型对抗',
     })
   })
 
@@ -41,7 +55,7 @@ describe('大模型二次元牌桌主题', () => {
     expect(TABLE_THEME_OPTIONS).toContainEqual({
       value: 'llmAnime',
       label: '大模型二次元',
-      description: '鼠尾草绒面、树脂麻将与角色演出',
+      description: '角色群像、漫画字效与动作演出',
     })
   })
 

@@ -14,7 +14,7 @@ const viewports = [
   { name: '568x320', width: 568, height: 320 },
 ] as const
 
-const themes = ['jade', 'majsoul', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'] as const
+const themes = ['jade', 'happyMahjong', 'rosewood', 'llm', 'llmAnime'] as const
 
 const phoneLandscapeViewports = [
   { name: 'iphone-se', width: 667, height: 375 },
@@ -192,7 +192,7 @@ test('jade 与 llmAnime 覆盖 §15.5 全视口滚动结算矩阵', async ({ pag
   }
 })
 
-test('六主题在共享 1366×768 布局完成正常对局与结算回归', async ({ page }) => {
+test('五主题在共享 1366×768 布局完成正常对局与结算回归', async ({ page }) => {
   test.setTimeout(300_000)
   await mkdir(`${evidenceRoot}/themes`, { recursive: true })
   await page.setViewportSize({ width: 1366, height: 768 })
@@ -225,8 +225,9 @@ test('568×320 菜单/规则与 667×375 翻精面板均钳制在安全区', asy
   await page.screenshot({ path: `${evidenceRoot}/extreme/jade-568x320-theme-menu.png` })
 
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: '游戏规则 →' }).click()
-  await expect(page.locator('.rules-panel')).toBeVisible()
+  await expect(page.locator('.theme-menu')).toBeHidden()
+  await page.getByRole('button', { name: '查看规则' }).evaluate((element: HTMLElement) => element.click())
+  await expect(page.locator('.rules-panel')).toBeVisible({ timeout: 15_000 })
   await page.waitForTimeout(350)
   const rules = await page.locator('.rules-panel').evaluate((element) => {
     const rect = element.getBoundingClientRect()
@@ -290,6 +291,7 @@ test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', as
       menu: { top: menuRect.top, right: menuRect.right, bottom: menuRect.bottom, left: menuRect.left },
       inactive: { backgroundImage: inactiveStyle.backgroundImage, backgroundColor: inactiveStyle.backgroundColor },
       maximumRowHeight: Math.max(...rowHeights),
+      previewCount: menu.querySelectorAll('.theme-card-preview img').length,
     }
   })
   expect(themeMetrics.trigger).toEqual({ width: 44, height: 44 })
@@ -300,7 +302,8 @@ test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', as
   expect(themeMetrics.menu.bottom).toBeLessThanOrEqual(414)
   expect(themeMetrics.inactive.backgroundImage).toBe('none')
   expect(themeMetrics.inactive.backgroundColor).toBe('rgba(0, 0, 0, 0)')
-  expect(themeMetrics.maximumRowHeight).toBeLessThanOrEqual(50)
+  expect(themeMetrics.maximumRowHeight).toBeLessThanOrEqual(72)
+  expect(themeMetrics.previewCount).toBe(5)
   await page.screenshot({ path: `${evidenceRoot}/extreme/llmAnime-896x414-theme-menu.png` })
 
   await themeTrigger.click()

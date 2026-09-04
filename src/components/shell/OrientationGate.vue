@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { isTableThemeName, type TableThemeName } from '../../theme/themeIdentity'
+import { themePresentationByName, themePresentationCssVariables } from '../../theme/themePresentation'
+import { resolveInitialTableTheme } from '../table/three/tableThemePreference'
+
+const props = defineProps<{ themeName?: TableThemeName }>()
+const observedTheme = ref<TableThemeName>(resolveInitialTableTheme(
+  typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('theme'),
+).theme)
+const activeTheme = computed(() => props.themeName ?? observedTheme.value)
+const presentation = computed(() => themePresentationByName(activeTheme.value))
+const presentationStyle = computed(() => themePresentationCssVariables(presentation.value))
+let themeObserver: MutationObserver | null = null
 
 const required = ref(false)
 const message = ref('')
@@ -29,12 +41,24 @@ async function enterLandscapeFullscreen() {
 
 onMounted(() => {
   update()
+  const gameApp = document.querySelector<HTMLElement>('.game-app')
+  if (gameApp) {
+    const syncTheme = () => {
+      const theme = gameApp.dataset.tableTheme
+      if (isTableThemeName(theme)) observedTheme.value = theme
+    }
+    syncTheme()
+    themeObserver = new MutationObserver(syncTheme)
+    themeObserver.observe(gameApp, { attributes: true, attributeFilter: ['data-table-theme'] })
+  }
   window.addEventListener('resize', update)
   window.addEventListener('orientationchange', update)
   screen.orientation?.addEventListener?.('change', update)
 })
 
 onUnmounted(() => {
+  themeObserver?.disconnect()
+  themeObserver = null
   window.removeEventListener('resize', update)
   window.removeEventListener('orientationchange', update)
   screen.orientation?.removeEventListener?.('change', update)
@@ -42,7 +66,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="required" class="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
+  <div
+    v-if="required"
+    class="orientation-gate"
+    :data-table-theme="activeTheme"
+    :data-theme-player-frame="presentation.hud.playerFrame"
+    :style="presentationStyle"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="orientation-title"
+  >
     <div class="orientation-card">
       <div class="phone-rotate-icon" aria-hidden="true"><span></span></div>
       <p class="eyebrow">LANDSCAPE MODE</p>

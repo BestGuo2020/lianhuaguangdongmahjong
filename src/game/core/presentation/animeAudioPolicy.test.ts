@@ -33,7 +33,7 @@ describe('llmAnime 声音策略', () => {
     },
   )
 
-  it.each([undefined, null, 'llm', 'jade', 'majsoul', 'happyMahjong', 'rosewood'])(
+  it.each([undefined, null, 'llm', 'jade', 'happyMahjong', 'rosewood'])(
     '非 llmAnime 主题 %s 完整保留 legacy 路由',
     (themeName) => {
       expect(resolveAnimeAudioPolicy({ themeName, playerKind: 'human' })).toEqual({
