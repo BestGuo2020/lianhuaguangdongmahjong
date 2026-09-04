@@ -11,16 +11,35 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$switchedLocally = $false
+$targetLocationPushed = $false
 Push-Location $root
 try {
   Write-Host '==> checking master working tree'
-  git checkout master
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout master failed' }
+  $branch = git branch --show-current
+  if ($LASTEXITCODE -ne 0 -or $branch -ne 'master') {
+    throw 'Run sync from the master worktree; no branches were switched.'
+  }
   $dirty = git status --porcelain
   if ($dirty) {
-    Write-Host 'master has uncommitted changes; commit or stash them first:' -ForegroundColor Red
+    Write-Host 'master has uncommitted changes; preserve and commit them before syncing:' -ForegroundColor Red
     Write-Host $dirty
     exit 1
+  }
+
+  # An existing checkout owns its branch. Never force checkout or remove a worktree.
+  $targetWorktree = $null
+  $worktreePath = $null
+  $worktrees = @(git -c core.quotePath=false worktree list --porcelain)
+  if ($LASTEXITCODE -ne 0) { throw 'git worktree list failed' }
+  foreach ($line in $worktrees) {
+    if ($line.StartsWith('worktree ')) { $worktreePath = $line.Substring(9) }
+    if ($line -eq 'branch refs/heads/vibehub') { $targetWorktree = $worktreePath }
+  }
+  if ($targetWorktree) {
+    $targetDirty = git -C $targetWorktree status --porcelain
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect vibehub worktree' }
+    if ($targetDirty) { throw "vibehub worktree is dirty; preserve its changes before syncing: $targetWorktree" }
   }
 
   # Nothing to sync when master has no commits that vibehub lacks.
@@ -51,6 +70,7 @@ try {
     'src/components/settlement/SettlementOverlay.vue'
     'src/content/disclaimer.ts'
     'src/game/core/local/useGame.ts'
+    'src/game/core/local/useGame.test.ts'
     'src/game/core/contracts/activeGamePort.ts'
     'src/game/core/contracts/activeGamePort.test.ts'
     'src/game/core/contracts/gamePort.ts'
@@ -76,6 +96,7 @@ try {
     'src/game/online/state/remoteGameState.test.ts'
     'src/game/shared/runtime/matchLifecycle.ts'
     'src/game/shared/runtime/timerScheduler.ts'
+    'src/game/shared/settlement/settlementTimeline.ts'
     'src/game/variants/lotus/lotusGame.ts'
     'tests/e2e/local-game.smoke.spec.ts'
   )
@@ -97,15 +118,24 @@ try {
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
 
-  Write-Host '==> switching to vibehub and merging master (conflicts -> master)'
-  git checkout vibehub
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
+  if ($targetWorktree) {
+    Write-Host "==> syncing in existing vibehub worktree: $targetWorktree"
+    Push-Location $targetWorktree
+    $targetLocationPushed = $true
+  } else {
+    git checkout vibehub
+    if ($LASTEXITCODE -ne 0) { throw 'git checkout vibehub failed' }
+    $switchedLocally = $true
+  }
   # 合并前的 vibehub tip：keep 文件从中检出，确保「保留 vibehub 版本」语义可靠。
   # （git checkout --ours 只对带冲突阶段的路径生效；已被自动合并的文件会被忽略，
   #   脚本早期版本因此失效——keep 文件被 master 合并版覆盖。）
   $keepBase = git rev-parse HEAD
   if ($LASTEXITCODE -ne 0) { throw 'git rev-parse HEAD failed' }
   git merge master --no-commit --no-ff -X theirs
+  $mergeExit = $LASTEXITCODE
+  git rev-parse -q --verify MERGE_HEAD *> $null
+  if ($LASTEXITCODE -ne 0) { throw "Merge did not start (exit $mergeExit); no files restored." }
 
   # 新版 git（ort 合并后端，2.34+）对 modify/delete 冲突不随 -X theirs 自动解决：
   # master-only 文件在 vibehub 上已删除、而 master 又修改了它们时会留下未解决冲突。
@@ -163,10 +193,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
   }
 
-  Write-Host '==> switching back to master'
-  git checkout master
-  if ($LASTEXITCODE -ne 0) { throw 'git checkout master after sync failed' }
   Write-Host 'sync done. It is recommended to run tests on vibehub: pnpm test' -ForegroundColor Green
 } finally {
+  if ($targetLocationPushed) { Pop-Location }
+  if ($switchedLocally) {
+    # Leave an unfinished merge visible for recovery; never force a checkout.
+    git rev-parse -q --verify MERGE_HEAD *> $null
+    if ($LASTEXITCODE -ne 0) {
+      git checkout master
+      if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not return to master; inspect worktree before continuing.' }
+    }
+  }
   Pop-Location
 }
