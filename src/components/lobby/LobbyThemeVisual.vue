@@ -121,8 +121,9 @@ function markImageFailed() {
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .lobby-visual { align-content: center; gap: 4px; text-align: left; }
   .theme-showcase { width: 100%; box-sizing: border-box; padding: 3px; gap: 3px; }
-  .theme-showcase-frame { max-height: 25cqh; }
-  .theme-showcase.is-anime .theme-showcase-frame { width: min(96px, 17cqw, 25cqh); }
+  /* 按列宽保持画面比例，避免 max-height 反向压窄预览、留下空白列。 */
+  .theme-showcase-frame { width: 100%; }
+  .theme-showcase.is-anime .theme-showcase-frame { width: min(150px, 100%, 27cqh); }
   .theme-showcase-copy strong { font-size: 14px; }
   .theme-showcase-copy p { font-size: 9px; line-height: 1.25; }
   .theme-showcase-kicker, .anime-table-theme { font-size: 8px; }

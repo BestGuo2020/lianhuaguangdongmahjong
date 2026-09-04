@@ -72,8 +72,32 @@ button { font: inherit; }
 .orientation-card .eyebrow { margin: 18px 0 5px; color: var(--theme-accent); font-size: 10px; letter-spacing: .28em; }
 .orientation-card h2 { margin: 0; color: var(--theme-text); font: 700 28px Georgia, "Microsoft YaHei", serif; }
 .orientation-card > p:not(.eyebrow) { margin: 12px auto 20px; color: var(--theme-text-muted); font-size: 14px; line-height: 1.7; }
-.orientation-card button { width: 100%; min-height: 44px; padding: 12px 16px; border: 1px solid var(--theme-border); border-radius: 999px; color: var(--theme-panel); background: var(--theme-button); font-weight: 700; cursor: pointer; }
+.orientation-card button { width: 100%; min-height: 44px; padding: 12px 16px; border: 1px solid var(--theme-border); border-radius: 10px; color: var(--theme-text); background: var(--theme-button); font-weight: 800; cursor: pointer; }
+.orientation-card button:hover { box-shadow: 0 0 0 1px var(--theme-accent); }
+.orientation-card button:active { box-shadow: inset 0 2px 5px rgba(0,0,0,.3); }
 .orientation-card small { display: block; margin-top: 13px; color: var(--theme-accent); line-height: 1.5; }
+
+/* 门禁是 game-app 的兄弟节点，主题变体必须作用于门禁自身。 */
+.orientation-gate[data-table-theme="happyMahjong"] .orientation-card { border-width: 2px; border-radius: 24px; }
+.orientation-gate[data-table-theme="happyMahjong"] .orientation-card button { border-radius: 16px; color: var(--theme-panel); }
+.orientation-gate[data-table-theme="rosewood"] .orientation-card { border-width: 2px; border-radius: 7px; }
+.orientation-gate[data-table-theme="llm"] .orientation-card { border-radius: 5px; }
+.orientation-gate:is([data-table-theme="happyMahjong"], [data-table-theme="llm"], [data-table-theme="llmAnime"]) h2 { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.orientation-gate[data-table-theme="llmAnime"] .orientation-card {
+  border: 2px solid #2d2923;
+  border-radius: 10px;
+  background: linear-gradient(150deg, var(--theme-panel-elevated), var(--theme-panel));
+  box-shadow: 5px 5px 0 rgba(189,91,72,.4), 0 22px 60px rgba(0,0,0,.48);
+}
+.orientation-gate[data-table-theme="llmAnime"] .orientation-card button {
+  border: 2px solid #2d2923;
+  border-radius: 7px;
+  /* 小字号按钮使用较深珊瑚底，奶油文字在整个渐变上均达到 4.5:1。 */
+  background: linear-gradient(180deg, #ad4e3e, #9f4035);
+  box-shadow: 3px 3px 0 rgba(189,91,72,.32);
+}
+.orientation-gate[data-table-theme="llmAnime"] .orientation-card button:active { box-shadow: none; }
+.orientation-gate[data-table-theme="llmAnime"] :is(.eyebrow, .orientation-card small) { color: #f2aa96; }
 
 .phone-rotate-icon { position: relative; width: 78px; height: 52px; margin: 2px auto 0; border: 3px solid var(--theme-accent); border-radius: 10px; animation: phone-rotate 1.8s ease-in-out infinite; }
 .phone-rotate-icon::before { content: ""; position: absolute; top: 50%; left: 5px; width: 4px; height: 4px; border-radius: 50%; background: var(--theme-accent); transform: translateY(-50%); }
@@ -3182,14 +3206,17 @@ button { font: inherit; }
     height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - var(--topbar-height) - 10px);
     min-height: 0;
   }
-  .lobby-actions { box-sizing: border-box; padding: 8px; border-radius: 10px; }
+  .lobby-actions { box-sizing: border-box; width: 100%; padding: 8px; border-radius: 10px; }
   .lobby-actions .mode-selector { margin-bottom: 6px; gap: 5px; }
   .lobby-actions .mode-selector button { padding: 6px 7px 5px; }
   .lobby-actions .game-settings { margin-bottom: 5px; }
   .lobby-actions .game-settings-title { padding: 3px 9px 2px; }
   .lobby-actions .game-settings > button { min-height: 34px; padding: 3px 8px; }
   .current-config { margin-bottom: 5px; }
-  .lobby-actions .start-button { min-height: 42px; padding: 5px 12px; }
+  .game-app .lobby-actions .start-button { flex: 0 0 auto; min-height: 42px; padding: 3px 12px; }
+  .lobby-actions .start-button b { font-size: 17px; line-height: 1.1; }
+  .lobby-actions .start-button span { margin-top: 1px; font-size: 10px; line-height: 1.2; }
+  .game-app.is-lobby .llm-fab { top: max(4px, var(--safe-top)); left: max(8px, var(--safe-left)); right: auto; bottom: auto; }
   .lobby-actions .lobby-links { margin-top: 5px; }
   .lobby-account-slot { margin-top: 5px; }
   .lobby-actions .waku-account { padding: 5px 8px; }
@@ -3474,6 +3501,12 @@ button { font: inherit; }
 
 @container (max-height: 340px) {
   .lobby.room-focused .room-seats { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  .lobby:not(.room-focused) .lobby-actions { padding: 6px; }
+  .lobby-actions .mode-selector { margin-bottom: 4px; }
+  .lobby-actions .game-settings { margin-bottom: 3px; }
+  .lobby-account-slot,
+  .lobby-actions .lobby-links { margin-top: 3px; }
+  .lobby-actions .waku-account { padding: 3px 8px; }
 }
 
 /* Phase 12 · 常驻场景与临时纸张共享墨线、珊瑚状态和短错位阴影。 */
