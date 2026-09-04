@@ -49,6 +49,7 @@ describe('llmAnime character contract', () => {
     expect(ANIME_RESULT_VOICE_KEYS).toHaveLength(5)
 
     for (const character of ANIME_CHARACTERS) {
+      expect(character.description.length, `${character.id}.description`).toBeGreaterThanOrEqual(12)
       expect(Object.keys(character.lines).sort()).toEqual([...ANIME_VOICE_KEYS].sort())
       expect(character.ttsStyle).toBe('稳健')
       for (const key of ANIME_ACTION_VOICE_KEYS) {
