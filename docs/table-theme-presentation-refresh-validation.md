@@ -85,3 +85,33 @@ GPU 专用 Playwright 配置使用 Chromium 新版 headless、D3D11 ANGLE，并�
 - Three.js 当前版本提示 `PCFSoftShadowMap` 已映射为 `PCFShadowMap`。
 - Intel D3D11 着色器编译器会报告浮点精度 `X4122` warning；渲染、截图及所有断言正常。
 - Vite 仍提示 Three.js 异步 chunk 超过 500 kB；牌桌组件已异步拆分，不影响本轮功能验收。
+
+
+## Phase 12（2026-09-05）
+
+### 实施与验证
+
+- 实现提交：`1956a49`。统一深色场景 token、珊瑚主按钮、墨色描边与错位阴影；奶油变量设在弹窗本体，包含输入、选项、取消/确认及焦点、禁用状态。
+- 大模型配置抽屉恢复深色；两个角色/配置组件的 script 和 template 与本轮开始前逐字归一化比较相同，变更仅位于 style。
+- 单测：83 文件通过、1 文件跳过；769 项通过、2 项跳过。包含大模型配置内容合同、默认值、持久化与导入导出相关既有测试。
+- 类型检查、生产构建与 `git diff --check` 通过；仍有既有的 Three.js 大 chunk 警告。
+- 硬件 Chromium 配置下：`theme-presentation.two-surface.spec.ts` 4/4、`theme-presentation.followup.spec.ts` 13/13、`llm-theme.smoke.spec.ts` 4/4、`theme-presentation.smoke.spec.ts` 5/5，共 26 项通过。
+- 专项覆盖：桌面与真实触控横屏的五类弹窗；普通/选中/焦点/禁用样式；取消保留原配置；角色即时选择；两种 Teleport 表面热切换与无残留；配置字段顺序、选项、值、密码遮蔽及保存重开。
+- 专项曾发现禁用主按钮保留错位阴影：原因是 disabled 规则优先级低于主按钮规则，已修复并通过 4 项重跑。测试自身的焦点模式与 innerText/textContent 比较问题亦已修正。
+- 本环境 `pnpm exec playwright` 启动器不能解析可执行文件，因此用本地等价入口执行：`node node_modules/@playwright/test/cli.js`、`node node_modules/vitest/vitest.mjs run src`、`node node_modules/vue-tsc/bin/vue-tsc.js --noEmit`、`node node_modules/vite/bin/vite.js build`。
+
+### 截图复核
+
+| 表面 | 主题 / 视口 | 证据 | 结论 |
+|---|---|---|---|
+| 大厅 | llmAnime / 1366×768、667×375 | `test-results/theme-presentation/phase12/lobby-*.png` | 深色常驻区域，珊瑚开始按钮，角色与操作信息清楚。 |
+| 五类弹窗 | llmAnime / 1366×768、667×375 | `test-results/theme-presentation/phase12/{match,rule,character,create,join}-*.png` | 外壳、选项、表单均为奶油纸张层；选中与确认使用珊瑚色，正文为墨色。矮窗仍沿用弹窗内部滚动。 |
+| 配置抽屉 | llmAnime / 1366×768 | `test-results/theme-presentation/phase12/settings-1366.png` | 深色字段、珊瑚选中供应商与保存按钮；字段顺序和密码遮蔽不变。 |
+| 手机房间 | llmAnime / 667×375（另覆盖 844、800、568 宽） | `test-results/theme-presentation/phase11/lobby/llmAnime-room-*.png` | 四席与准备/开始可见，深色房间和珊瑚主操作保持一致。 |
+| HUD 与开局 | llmAnime / 1366×768 | `test-results/theme-presentation/llmAnime-table-action-1366x768.png` | 常驻顶栏、玩家框属于深色场景；桌布和角色演出未更改。 |
+
+以上证据为本轮重新运行生成；未将旧截图当作 Phase 12 的新验收结果。
+
+### 分支范围
+
+复核起点 vibehub 为 `1d0ddd1`，只同步至 Phase 0～7。其保留的 App、大厅及房间文件不会被自动脚本覆盖，且缺少新的弹层主题参数。本次遵守保留规则，只同步共享文件；不能据此宣称 vibehub 双区域大厅或双表面已验收。后续适配缺口记录在主计划 §13.3。

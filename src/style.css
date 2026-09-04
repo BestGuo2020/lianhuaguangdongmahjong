@@ -3420,7 +3420,7 @@ button { font: inherit; }
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button { border-radius: 7px; }
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button:enabled:hover { filter: brightness(1.06); }
 .lobby-dialog-backdrop[data-table-theme="llmAnime"] .dialog-actions button:enabled:active { box-shadow: none; }
-.lobby-dialog-backdrop[data-table-theme="llmAnime"] button:disabled { opacity: .48; filter: grayscale(.45); box-shadow: none; cursor: not-allowed; }
+.lobby-dialog-backdrop[data-table-theme="llmAnime"] .lobby-dialog button:disabled { opacity: .48; filter: grayscale(.45); box-shadow: none; cursor: not-allowed; }
 
 .lobby [data-action-role="primary"],
 .lobby-dialog [data-action-role="primary"] { font-weight: 900; }
@@ -3529,7 +3529,7 @@ button { font: inherit; }
 }
 .game-app[data-table-theme="llmAnime"] .chi-picker-option { background: #fff8ec; }
 .game-app[data-table-theme="llmAnime"] :is(.action, .topbar-control, .start-button, .remote-entry-actions button):enabled:active { box-shadow: none; }
-.game-app[data-table-theme="llmAnime"] button:disabled { box-shadow: none; }
+.game-app[data-table-theme="llmAnime"] :is(.room-owner-actions button, .start-button, .action):disabled { box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
   [data-table-theme="llmAnime"] :is(.action, .topbar-control, .dialog-actions button, .picker-options > button, .anime-character-grid button) {

@@ -481,6 +481,6 @@ button.llm-seat-row:hover { background: color-mix(in srgb, var(--theme-accent) 1
 .llm-panel[data-table-theme="llmAnime"] .llm-actions button[data-action-role="primary"] { border: 2px solid #2d2923; box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
 .llm-panel[data-table-theme="llmAnime"] button:enabled:hover { border-color: var(--theme-accent); }
 .llm-panel[data-table-theme="llmAnime"] button:enabled:active { box-shadow: none; }
-.llm-panel[data-table-theme="llmAnime"] button:disabled { box-shadow: none; }
+.llm-panel[data-table-theme="llmAnime"] .llm-actions button:disabled { box-shadow: none; }
 .llm-panel[data-table-theme="llmAnime"] :is(.llm-hint strong, .llm-hint b, .llm-provider-item.default::after, .llm-seat-row.chosen, .llm-provider-add button, .llm-actions button:not([data-action-role="primary"]):not([data-action-role="danger"])) { color: #f2aa96; }
 </style>
