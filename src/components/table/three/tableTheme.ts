@@ -1,5 +1,5 @@
 import type * as THREE from 'three'
-import { TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
+import { isTableThemeName, TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
 
 export { TABLE_THEME_OPTIONS, type TableThemeName } from '../../../theme/themeIdentity'
 
@@ -845,6 +845,6 @@ export const TABLE_THEMES: Record<TableThemeName, TableTheme> = {
 
 /** 按名字解析主题；名字未知或未提供返回 undefined（调用方回退默认主题）。 */
 export function tableThemeByName(name: string | null | undefined): TableTheme | undefined {
-  return name ? TABLE_THEMES[name as TableThemeName] : undefined
+  return isTableThemeName(name) ? TABLE_THEMES[name] : undefined
 }
 

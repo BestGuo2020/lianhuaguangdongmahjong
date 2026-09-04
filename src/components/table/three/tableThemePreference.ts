@@ -43,7 +43,7 @@ export function saveTableThemePreference(
 /** URL 优先于本地偏好；显式无效值稳定回退墨玉，缺省时才允许 LLM 自动推荐。 */
 export function resolveInitialTableTheme(
   value: string | null | undefined,
-  storedPreference: string | null | undefined = null,
+  storedPreference: string | null | undefined = readTableThemePreference(),
 ): InitialTableTheme {
   if (value != null) {
     return { theme: isTableThemeName(value) ? value : 'jade', explicit: true }

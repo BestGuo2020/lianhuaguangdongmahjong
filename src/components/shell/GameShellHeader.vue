@@ -5,6 +5,7 @@ import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { GamePhase } from '../../game/core/contracts/gamePort'
 import { useAudioControls } from '../../game/core/presentation/useAudio'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from '../table/three/tableTheme'
+import { saveTableThemePreference } from '../table/three/tableThemePreference'
 import { THEME_PRESENTATIONS } from '../../theme/themePresentation'
 
 interface Props {
@@ -57,7 +58,10 @@ function hideBrokenPreview(event: Event) {
 
 function chooseTheme(theme: TableThemeName) {
   themeMenuOpen.value = false
-  if (theme !== props.themeName) emit('changeTheme', theme)
+  if (theme !== props.themeName) {
+    saveTableThemePreference(theme)
+    emit('changeTheme', theme)
+  }
 }
 
 function closeThemeMenu(event: PointerEvent) {

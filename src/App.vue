@@ -27,7 +27,6 @@ import type { TableThemeName } from './components/table/three/tableTheme'
 import {
   readTableThemePreference,
   resolveInitialTableTheme,
-  saveTableThemePreference,
   shouldAutoUseLlmTheme,
 } from './components/table/three/tableThemePreference'
 import {
@@ -408,14 +407,12 @@ function changeTableTheme(theme: TableThemeName) {
     // 联机房间内主题由房主权威控制：非房主（或开局后）禁用切换。
     if (!isCreator.value) return
     tableThemeName.value = theme
-    saveTableThemePreference(theme)
     configureTableTheme(theme)
     remoteGame.updatePresentationAudioMode()
     return
   }
   tableThemeName.value = theme
   explicitTableThemeSelected.value = true
-  saveTableThemePreference(theme)
   const url = new URL(window.location.href)
   // 手动选择（包括墨玉）始终写入 URL，确保 LLM 开启时刷新后仍尊重用户覆盖。
   url.searchParams.set('theme', theme)
