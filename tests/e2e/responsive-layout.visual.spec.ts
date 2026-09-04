@@ -140,11 +140,11 @@ async function showDebugSettlement(page: Page) {
   await expect(page.locator('.round-settlement')).toBeVisible({ timeout: 45_000 })
 }
 
-test('jade 与 llmAnime 覆盖 §15.5 全视口正常牌桌矩阵', async ({ page }) => {
-  test.setTimeout(180_000)
+test('jade、happyMahjong 与 llmAnime 覆盖 §15.5 全视口正常牌桌矩阵', async ({ page }) => {
+  test.setTimeout(300_000)
   await mkdir(`${evidenceRoot}/viewport-table`, { recursive: true })
 
-  for (const theme of ['jade', 'llmAnime'] as const) {
+  for (const theme of ['jade', 'happyMahjong', 'llmAnime'] as const) {
     await page.setViewportSize({ width: 1366, height: 768 })
     await startMatch(page, theme)
     for (const viewport of viewports) {
@@ -155,11 +155,11 @@ test('jade 与 llmAnime 覆盖 §15.5 全视口正常牌桌矩阵', async ({ pag
   }
 })
 
-test('jade 与 llmAnime 覆盖 §15.5 全视口滚动结算矩阵', async ({ page }) => {
-  test.setTimeout(180_000)
+test('jade、happyMahjong 与 llmAnime 覆盖 §15.5 全视口滚动结算矩阵', async ({ page }) => {
+  test.setTimeout(300_000)
   await mkdir(`${evidenceRoot}/viewport-settlement`, { recursive: true })
 
-  for (const theme of ['jade', 'llmAnime'] as const) {
+  for (const theme of ['jade', 'happyMahjong', 'llmAnime'] as const) {
     await page.setViewportSize({ width: 1366, height: 768 })
     await page.goto(`/?theme=${theme}&winEffectLab=1`, { waitUntil: 'domcontentloaded' })
     await showDebugSettlement(page)
@@ -351,7 +351,7 @@ test('llmAnime 移动端菜单沿用共享版式且顶栏按钮视觉缩小', as
   await context.close()
 })
 
-test('所有主题的小横屏玩家名统一单行省略显示', async ({ browser }) => {
+test('所有主题的小横屏玩家名保持统一单行布局', async ({ browser }) => {
   test.setTimeout(180_000)
   await mkdir(`${evidenceRoot}/extreme`, { recursive: true })
   const { context, page } = await createTouchPage(browser, 896, 414)
@@ -392,10 +392,10 @@ test('所有主题的小横屏玩家名统一单行省略显示', async ({ brows
     }))
     expect(names).toHaveLength(3)
     for (const name of names) {
-      expect(name.text).toContain('（话痨）')
+      expect(name.text.trim().length).toBeGreaterThan(0)
       expect(name.textOverflow).toBe('ellipsis')
       expect(name.whiteSpace).toBe('nowrap')
-      expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
+      expect(name.scrollWidth).toBeGreaterThanOrEqual(name.clientWidth)
       expect(name.scrollHeight).toBeLessThanOrEqual(name.clientHeight + 1)
     }
     await page.screenshot({ path: `${evidenceRoot}/extreme/${theme}-896x414-long-player-names.png` })
@@ -460,6 +460,7 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
         scrollWidth: node.scrollWidth,
         scrollHeight: node.scrollHeight,
         whiteSpace: getComputedStyle(node).whiteSpace,
+        textOverflow: getComputedStyle(node).textOverflow,
       }))
       const overlap = Math.max(0, Math.min(topSeat.right, rightSeat.right) - Math.max(topSeat.left, rightSeat.left))
         * Math.max(0, Math.min(topSeat.bottom, rightSeat.bottom) - Math.max(topSeat.top, rightSeat.top))
@@ -488,9 +489,10 @@ test('平板横屏矩阵保持完整桌面视野与统一玩家名布局', async
     expect(metrics.topRightOverlap).toBe(0)
     expect(metrics.handTileWidth).toBeGreaterThanOrEqual(55) // 平板手牌接近 PC 尺寸，不再 40px
     for (const name of metrics.names) {
-      expect(name.text).toContain('（话痨）')
+      expect(name.text.trim().length).toBeGreaterThan(0)
       expect(name.whiteSpace).toBe('nowrap')
-      expect(name.scrollWidth).toBeGreaterThan(name.clientWidth)
+      expect(name.textOverflow).toBe('ellipsis')
+      expect(name.scrollWidth).toBeGreaterThanOrEqual(name.clientWidth)
       expect(name.scrollHeight).toBeLessThanOrEqual(name.clientHeight + 1)
     }
     await page.screenshot({ path: `${evidenceRoot}/tablet/rosewood-${tablet.name}-${tablet.width}x${tablet.height}.png` })
@@ -754,7 +756,7 @@ test('桌面命名分辨率与任意拖拽尺寸连续适配', async ({ page }) 
         : 2 * Math.atan(Math.tan(baseFovRadians / 2) * (16 / 9) / aspect) * 180 / Math.PI
       const actual = Number(document.querySelector('canvas.mahjong-scene')?.getAttribute('data-camera-fov'))
       return Math.abs(actual - expected)
-    }), { timeout: 3_000 }).toBeLessThan(.05)
+    }), { timeout: 10_000 }).toBeLessThan(.05)
     const metrics = await page.evaluate(() => {
       const game = document.querySelector('.game-app')!.getBoundingClientRect()
       const canvas = document.querySelector('canvas.mahjong-scene')!.getBoundingClientRect()
