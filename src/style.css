@@ -3206,14 +3206,17 @@ button { font: inherit; }
     height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - var(--topbar-height) - 10px);
     min-height: 0;
   }
-  .lobby-actions { box-sizing: border-box; padding: 8px; border-radius: 10px; }
+  .lobby-actions { box-sizing: border-box; width: 100%; padding: 8px; border-radius: 10px; }
   .lobby-actions .mode-selector { margin-bottom: 6px; gap: 5px; }
   .lobby-actions .mode-selector button { padding: 6px 7px 5px; }
   .lobby-actions .game-settings { margin-bottom: 5px; }
   .lobby-actions .game-settings-title { padding: 3px 9px 2px; }
   .lobby-actions .game-settings > button { min-height: 34px; padding: 3px 8px; }
   .current-config { margin-bottom: 5px; }
-  .lobby-actions .start-button { min-height: 42px; padding: 5px 12px; }
+  .game-app .lobby-actions .start-button { flex: 0 0 auto; min-height: 42px; padding: 3px 12px; }
+  .lobby-actions .start-button b { font-size: 17px; line-height: 1.1; }
+  .lobby-actions .start-button span { margin-top: 1px; font-size: 10px; line-height: 1.2; }
+  .game-app.is-lobby .llm-fab { top: max(4px, var(--safe-top)); left: max(8px, var(--safe-left)); right: auto; bottom: auto; }
   .lobby-actions .lobby-links { margin-top: 5px; }
   .lobby-account-slot { margin-top: 5px; }
   .lobby-actions .waku-account { padding: 5px 8px; }
@@ -3498,6 +3501,12 @@ button { font: inherit; }
 
 @container (max-height: 340px) {
   .lobby.room-focused .room-seats { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  .lobby:not(.room-focused) .lobby-actions { padding: 6px; }
+  .lobby-actions .mode-selector { margin-bottom: 4px; }
+  .lobby-actions .game-settings { margin-bottom: 3px; }
+  .lobby-account-slot,
+  .lobby-actions .lobby-links { margin-top: 3px; }
+  .lobby-actions .waku-account { padding: 3px 8px; }
 }
 
 /* Phase 12 · 常驻场景与临时纸张共享墨线、珊瑚状态和短错位阴影。 */
