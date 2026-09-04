@@ -12,6 +12,11 @@ import type { TableThemeName } from './three/tableTheme'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
+import {
+  resolveRoundResultPresentation,
+  resolveTableActionPresentation,
+  scoreDirection,
+} from '../../theme/themeEventPresentation'
 
 const MahjongTable3D = defineAsyncComponent(() => import('../MahjongTable3D.vue'))
 // 预热 3D 牌桌组件 chunk：首次开局时若等挂载才加载，WebGL 场景初始化会
@@ -114,8 +119,10 @@ const imageBase = `${import.meta.env.BASE_URL}img/`
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const actionCueLabParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
 const bubbleLabEnabled = actionCueLabParams?.get('bubbleLab') === '1'
-const actionCueLabType = actionCueLabParams?.get('actionCueLab') as TableActionEvent['type'] | null
-const actionCueLabActor = Math.min(3, Math.max(0, Number(actionCueLabParams?.get('actionCueSeat') ?? 0) || 0))
+const scoreFlowLabEnabled = actionCueLabParams?.get('scoreFlowLab') === '1'
+const actionCueLabType = ref(actionCueLabParams?.get('actionCueLab') as TableActionEvent['type'] | null)
+const actionCueLabActor = ref(Math.min(3, Math.max(0, Number(actionCueLabParams?.get('actionCueSeat') ?? 0) || 0)))
+const actionCueLabId = ref(-1)
 const actionCueLabTypes: ReadonlySet<TableActionEvent['type']> = new Set([
   'peng', 'chi', 'discard-gang', 'concealed-gang', 'added-gang', 'flower-gang', 'wind-kong',
   'self-draw', 'discard-win', 'robbed-kong-win',
@@ -124,8 +131,8 @@ const winActionTypes: ReadonlySet<TableActionEvent['type']> = new Set([
   'self-draw', 'discard-win', 'robbed-kong-win',
 ])
 const actionCueLabEvent = computed<TableActionEvent | null>(() => (
-  actionCueLabType && actionCueLabTypes.has(actionCueLabType) && props.players[actionCueLabActor]
-    ? { id: -1, type: actionCueLabType, actorIndex: actionCueLabActor, sourceIndex: null, tile: 'p5', meldIndex: -1 }
+  actionCueLabType.value && actionCueLabTypes.has(actionCueLabType.value) && props.players[actionCueLabActor.value]
+    ? { id: actionCueLabId.value, type: actionCueLabType.value, actorIndex: actionCueLabActor.value, sourceIndex: null, tile: 'p5', meldIndex: -1 }
     : null
 ))
 const presentedTableActionEvent = computed(() => {
@@ -143,6 +150,9 @@ const presentedLlmBubbles = computed(() => bubbleLabEnabled
       3: { id: -103, text: '这一张先打掉。', persistent: true },
     }
   : props.llmBubbles)
+const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.scoreFlowEvent ?? (scoreFlowLabEnabled
+  ? { id: -1, deltas: [{ playerIndex: 0, amount: 800 }, { playerIndex: 1, amount: -800 }] }
+  : null))
 const waitsOpen = ref(false)
 const tableReady = ref(false)
 const tableLoadError = ref('')
@@ -167,7 +177,22 @@ watch(() => props.themeName, () => {
   tableReady.value = false
   tableLoadError.value = ''
 })
-onBeforeUnmount(() => tableLoadRetry.dispose())
+type ActionCueLabWindow = Window & {
+  __setTableActionCueLab?: (type: TableActionEvent['type'] | null, actorIndex?: number) => void
+}
+const actionCueLabWindow = window as ActionCueLabWindow
+const setTableActionCueLab = (type: TableActionEvent['type'] | null, actorIndex = 0) => {
+  actionCueLabType.value = type && actionCueLabTypes.has(type) ? type : null
+  actionCueLabActor.value = Math.min(3, Math.max(0, Math.trunc(actorIndex) || 0))
+  actionCueLabId.value -= 1
+}
+if (import.meta.env.DEV) actionCueLabWindow.__setTableActionCueLab = setTableActionCueLab
+onBeforeUnmount(() => {
+  tableLoadRetry.dispose()
+  if (actionCueLabWindow.__setTableActionCueLab === setTableActionCueLab) {
+    delete actionCueLabWindow.__setTableActionCueLab
+  }
+})
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
 // 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
@@ -177,15 +202,14 @@ let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
 
 const tableActionPosition = computed(() => presentedTableActionEvent.value ? seatPosition[presentedTableActionEvent.value.actorIndex] : 'bottom')
-const tableActionLabel = computed(() => ({
-  peng: '碰', chi: '吃', 'discard-gang': '杠', 'concealed-gang': '杠', 'added-gang': '杠', 'wind-kong': '风杠',
-  'flower-gang': '杠', 'self-draw': '自摸', 'discard-win': '胡', 'robbed-kong-win': '抢杠胡',
-}[presentedTableActionEvent.value?.type ?? 'peng']))
-const tableActionIsWin = computed(() => winActionTypes.has(presentedTableActionEvent.value?.type ?? 'peng'))
+const tableActionPresentation = computed(() => resolveTableActionPresentation(presentedTableActionEvent.value?.type ?? 'peng'))
+const tableActionIsWin = computed(() => tableActionPresentation.value.kind === 'win')
+const roundResultPresentation = computed(() => props.result ? resolveRoundResultPresentation(props.result) : null)
 const userAvatar = computed(() => props.themeName === 'llmAnime'
   ? animeAvatarForPlayer(props.user)
   : props.user.avatar)
-const scoreDeltaFor = (playerIndex: number) => props.scoreFlowEvent?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
+const scoreDeltaFor = (playerIndex: number) => presentedScoreFlowEvent.value?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
+const scoreDirectionFor = (playerIndex: number) => scoreDirection(scoreDeltaFor(playerIndex))
 const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
   : null)
@@ -363,6 +387,8 @@ function onAvatarError(entry: GamePlayer) {
     :data-revealed-face-counts="tableFaceCountsData"
     :data-reveal-hands="revealHands ? 1 : 0"
     :data-match-finished="matchFinished ? 1 : 0"
+    :data-round-result-kind="roundResultPresentation?.kind ?? ''"
+    :data-round-result-strength="roundResultPresentation?.strength ?? ''"
     :data-discard-counts="tableDiscardsData"
     :data-meld-tile-counts="tableMeldTilesData"
     @pointerdown="clearMobileSelection"
@@ -429,7 +455,7 @@ function onAvatarError(entry: GamePlayer) {
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
-      :score-flow-id="scoreFlowEvent?.id" :dealer="dealer === index + 1"
+      :score-flow-id="presentedScoreFlowEvent?.id" :dealer="dealer === index + 1"
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :theme-name="themeName"
       :bubble="presentedLlmBubbles?.[index + 1]"
@@ -439,11 +465,29 @@ function onAvatarError(entry: GamePlayer) {
       <AnimeActionCue
         v-if="presentedAnimeActionEvent && themeName === 'llmAnime'"
         :key="`anime-${presentedAnimeActionEvent.id}`"
+        :class="[`action-${tableActionPresentation.kind}`, `strength-${tableActionPresentation.strength}`]"
+        :data-action-type="presentedAnimeActionEvent.type"
+        :data-action-kind="tableActionPresentation.kind"
+        :data-action-strength="tableActionPresentation.strength"
         :event="presentedAnimeActionEvent"
         :player="players[presentedAnimeActionEvent.actorIndex]"
         :position="presentedAnimeActionPosition"
       />
-      <div v-else-if="presentedTableActionEvent" :key="presentedTableActionEvent.id" class="table-action-cue" :class="[`action-from-${tableActionPosition}`, { gang: tableActionLabel === '杠', win: tableActionIsWin }]" aria-live="polite"><span>{{ tableActionLabel }}</span></div>
+      <div
+        v-else-if="presentedTableActionEvent"
+        :key="presentedTableActionEvent.id"
+        class="table-action-cue"
+        :class="[
+          `action-from-${tableActionPosition}`,
+          `action-${tableActionPresentation.kind}`,
+          `strength-${tableActionPresentation.strength}`,
+          { gang: tableActionPresentation.kind === 'gang', win: tableActionIsWin },
+        ]"
+        :data-action-type="presentedTableActionEvent.type"
+        :data-action-kind="tableActionPresentation.kind"
+        :data-action-strength="tableActionPresentation.strength"
+        aria-live="polite"
+      ><span>{{ tableActionPresentation.label }}</span></div>
     </Transition>
     <Transition name="announce">
       <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone"><span>{{ announcement.text }}</span></div>
@@ -468,7 +512,13 @@ function onAvatarError(entry: GamePlayer) {
         </Transition>
       </div>
       <Transition name="score-flow">
-        <strong v-if="scoreDeltaFor(0)" :key="`${scoreFlowEvent?.id}-0`" class="score-delta user-score-delta" :class="scoreDeltaFor(0) > 0 ? 'positive' : 'negative'">{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>
+        <strong
+          v-if="scoreDeltaFor(0)"
+          :key="`${presentedScoreFlowEvent?.id}-0`"
+          class="score-delta user-score-delta"
+          :class="scoreDirectionFor(0)"
+          :data-score-direction="scoreDirectionFor(0)"
+        >{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>
       </Transition>
       <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div

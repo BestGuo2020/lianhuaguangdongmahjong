@@ -8,6 +8,7 @@ interface LocalDebugScenariosOptions {
   resetPlayers(): void
   announce(text: string, tone?: string): void
   endGame(winnerIndex: number, options?: EndGameOptions): unknown
+  endDraw?(): unknown
   beginTurn(playerIndex: number): unknown
 }
 
@@ -69,6 +70,22 @@ export function createLocalDebugScenarios(options: LocalDebugScenariosOptions) {
     resetPresentation()
     state.phase.value = 'discard'
     options.endGame(winnerIndex, { robbedKong, robbedKongPlayerIndex, winTile: 'east' })
+  }
+
+  function debugPreviewDraw() {
+    if (!import.meta.env.DEV || !options.endDraw) return
+    ensurePlayers()
+    seedOpponents()
+    const hand: TileType[] = ['m1', 'm2', 'm4', 'm5', 'm7', 'p1', 'p3', 'p5', 'p7', 's2', 's4', 'east', 'red']
+    state.players[0].hand.splice(0, state.players[0].hand.length, ...hand)
+    state.players.forEach((player) => {
+      player.score = 1000
+      player.drawnTileIndex = -1
+    })
+    state.wall.value = []
+    resetPresentation()
+    state.phase.value = 'checking'
+    options.endDraw()
   }
 
   function debugPreviewKong(mode: 'concealed' | 'added' | 'both' = 'both') {
@@ -138,5 +155,5 @@ export function createLocalDebugScenarios(options: LocalDebugScenariosOptions) {
     void options.beginTurn(0)
   }
 
-  return { debugPreviewWin, debugPreviewKong, debugPreviewFourRed }
+  return { debugPreviewWin, debugPreviewDraw, debugPreviewKong, debugPreviewFourRed }
 }

@@ -98,7 +98,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header class="top-bar">
+  <header
+    class="top-bar"
+    :data-sound-enabled="soundOn ? 'true' : 'false'"
+    :data-bgm-enabled="bgmOn ? 'true' : 'false'"
+    :data-effects-enabled="effectsOn ? 'true' : 'false'"
+  >
     <div v-if="hasPlayers" class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
     <div v-if="hasPlayers" class="base-score-badge">
       <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
