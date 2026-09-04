@@ -3,6 +3,7 @@ import {
   defaultTableTheme,
   llmAnimeTheme,
   llmTheme,
+  rosewoodTheme,
   TABLE_THEMES,
   TABLE_THEME_OPTIONS,
   tableThemeByName,
@@ -36,15 +37,24 @@ describe('大模型专属牌桌主题', () => {
     expect(llmTheme.tableSurfaceTexture?.tint).toBe(0xffffff)
   })
 
-  it('完整沿用默认麻将牌与高亮材质', () => {
-    expect(llmTheme.tile).toBe(defaultTableTheme.tile)
+  it('使用蓝紫数据牌背并保留默认高亮材质', () => {
+    expect(llmTheme.tile).not.toBe(defaultTableTheme.tile)
+    expect(llmTheme.tileBackGradient).toEqual(['#3c65bd', '#29478f', '#172958'])
+    expect(llmTheme.tile.faceSide.color).toBe(0x3155a1)
     expect(llmTheme.highlight).toBe(defaultTableTheme.highlight)
-    expect(llmTheme.tileBackGradient).toBe(defaultTableTheme.tileBackGradient)
   })
 
   it('保留深蓝星轨桌布，不受二次元主题注册影响', () => {
     expect(llmTheme.tableSurfaceTexture?.url).toMatch(/img\/llm-table\.webp$/)
-    expect(llmTheme.tile).toBe(defaultTableTheme.tile)
+    expect(llmTheme.tile.faceSide).not.toEqual(defaultTableTheme.tile.faceSide)
+  })
+})
+
+describe('红木金丝牌桌主题', () => {
+  it('牌背使用与红木协调的暗红漆面', () => {
+    expect(rosewoodTheme.tileBackGradient).toEqual(['#8e3f2e', '#6d2a20', '#46170f'])
+    expect(rosewoodTheme.tile.faceSide.color).toBe(0x7e3023)
+    expect(rosewoodTheme.tile.faceSide.color).not.toBe(defaultTableTheme.tile.faceSide.color)
   })
 })
 
