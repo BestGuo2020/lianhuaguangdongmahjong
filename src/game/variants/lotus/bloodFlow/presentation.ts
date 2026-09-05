@@ -1,53 +1,58 @@
 import { BLOOD_FLOW_TIMING } from './config'
-import type { Seat, WinBatch, WinRecord } from './types'
+import type { Seat, SeatVector, SourceTileEvent, WinBatch, WinRecord } from './types'
 
 export type WinTier = 0 | 1 | 2 | 3
-export function winTier(record: WinRecord): WinTier {
-  const weight = Math.max(...record.score.items.map(p => p.weight), 1)
-  return weight >= 16 ? 3 : weight >= 8 ? 2 : weight >= 4 ? 1 : 0
-}
+export const winTier = (record: WinRecord): WinTier => { const weight=Math.max(...record.score.items.map(p=>p.weight),1); return weight>=16?3:weight>=8?2:weight>=4?1:0 }
+export const mainPattern = (record: WinRecord) => [...record.score.items].sort((a,b)=>b.weight-a.weight || a.id.localeCompare(b.id))[0]
+export type PresentationPhase='focus'|'impact'|'readable'|'score'|'exit'
 export interface BloodFlowCue {
-  id: string
-  title: string
-  tier: WinTier
-  duration: number
-  compact: boolean
-  batchIds: string[]
-  seats: { seat: Seat; record: WinRecord; mergedCount: number }[]
+  readonly id:string
+  readonly kind:'win'
+  readonly title:string
+  readonly tier:WinTier
+  readonly startedAt:number
+  readonly duration:number
+  readonly compact:boolean
+  readonly merged:boolean
+  readonly phaseMarks:Readonly<Record<PresentationPhase,number>>
+  readonly batchIds:readonly string[]
+  readonly records:readonly {record:WinRecord;source:SourceTileEvent}[]
+  readonly flights:readonly {record:WinRecord;source:SourceTileEvent}[]
+  readonly deltas:SeatVector<number>
+  readonly seats:readonly {seat:Seat;record:WinRecord;source:SourceTileEvent;mergedCount:number;income:number}[]
 }
-
-/** Pure visual queue. It has no score/hand/turn/audio APIs. */
+export function cuePhase(cue:BloodFlowCue,now:number):PresentationPhase {
+  const elapsed=now-cue.startedAt
+  return elapsed>=cue.phaseMarks.exit?'exit':elapsed>=cue.phaseMarks.score?'score':elapsed>=cue.phaseMarks.readable?'readable':elapsed>=cue.phaseMarks.impact?'impact':'focus'
+}
+/** Immutable display facts only. No scoring, turn or audio operations. */
 export class BloodFlowPresentationQueue {
-  private seen = new Set<string>()
-  private pending: { batch: WinBatch; at: number }[] = []
-  private lastFull = -Infinity
-  private lastFullTier: WinTier = 0
-  reset(batches: readonly WinBatch[] = []) {
-    this.seen = new Set(batches.map(b => b.batchId)); this.pending = []; this.lastFull = -Infinity; this.lastFullTier = 0
-  }
-  enqueue(batch: WinBatch, at: number) {
-    if (this.seen.has(batch.batchId)) return
-    this.seen.add(batch.batchId); this.pending.push({ batch, at })
-  }
-  next(now: number): BloodFlowCue | null {
-    if (!this.pending.length) return null
-    const merge = this.pending.length > 3 || now - this.pending[0].at > BLOOD_FLOW_TIMING.visualBacklogMs
-    const taken = this.pending.splice(0, merge ? this.pending.length : 1)
-    const bySeat = new Map<Seat, { seat: Seat; record: WinRecord; mergedCount: number }>()
-    for (const { batch } of taken) for (const record of batch.winners) {
-      const old = bySeat.get(record.winner)
-      bySeat.set(record.winner, { seat: record.winner, record, mergedCount: (old?.mergedCount ?? 0) + 1 })
-    }
-    const seats = [...bySeat.values()].sort((a, b) => a.seat - b.seat)
-    const strongest = [...seats].sort((a, b) => winTier(b.record) - winTier(a.record) || b.record.score.paymentPerPayer - a.record.score.paymentPerPayer || a.seat - b.seat)[0]
-    const tier = winTier(strongest.record)
-    const full = !merge && tier >= 2 && (now - this.lastFull >= BLOOD_FLOW_TIMING.fullEffectCooldownMs || tier > this.lastFullTier)
-    if (full) { this.lastFull = now; this.lastFullTier = tier }
-    const main = [...strongest.record.score.items].sort((a, b) => b.weight - a.weight || (a.id < b.id ? -1 : 1))[0]
-    const multi = taken.length === 1 && taken[0].batch.winners.length > 1
-    const batchIds = taken.map(t => t.batch.batchId)
-    return { id: batchIds.join('|'), batchIds, tier, seats, compact: !full,
-      title: merge ? `${taken.length}次胡牌` : `${multi ? `${taken[0].batch.winners.length}响 · ` : ''}${main?.label ?? '胡牌'}`,
-      duration: full ? tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs : BLOOD_FLOW_TIMING.compactWinMs }
+  private seen=new Set<string>()
+  private pending:{batch:WinBatch;at:number}[]=[]
+  private fullBySeatPattern=new Map<string,number>()
+  reset(batches:readonly WinBatch[]=[]){this.seen=new Set(batches.map(b=>b.batchId));this.pending=[];this.fullBySeatPattern.clear()}
+  enqueue(batch:WinBatch,at:number){if(this.seen.has(batch.batchId))return;this.seen.add(batch.batchId);this.pending.push({batch,at})}
+  get hasPending(){return this.pending.length>0}
+  get pendingRecordIds(){return this.pending.flatMap(p=>p.batch.winners.map(w=>w.id))}
+  next(now:number):BloodFlowCue|null {
+    if(!this.pending.length)return null
+    const merged=this.pending.length>3 || now-this.pending[0].at>BLOOD_FLOW_TIMING.visualBacklogMs
+    const taken=this.pending.splice(0,merged?this.pending.length:1)
+    const records=taken.flatMap(({batch})=>batch.winners.map(record=>({record,source:batch.source})))
+    const bySeat=new Map<Seat,{seat:Seat;record:WinRecord;source:SourceTileEvent;mergedCount:number;income:number}>()
+    for(const {record,source} of records){const old=bySeat.get(record.winner);bySeat.set(record.winner,{seat:record.winner,record,source,mergedCount:(old?.mergedCount??0)+1,income:(old?.income??0)+record.deltas[record.winner]})}
+    const seats=[...bySeat.values()].sort((a,b)=>a.seat-b.seat)
+    const strongest=[...seats].sort((a,b)=>winTier(b.record)-winTier(a.record)||b.record.score.paymentPerPayer-a.record.score.paymentPerPayer||a.seat-b.seat)[0]
+    const tier=winTier(strongest.record)
+    const full=!merged&&seats.some(s=>winTier(s.record)>=2&&now-(this.fullBySeatPattern.get(`${s.seat}/${mainPattern(s.record)?.id}`)??-Infinity)>=BLOOD_FLOW_TIMING.fullEffectCooldownMs)
+    if(full)for(const s of seats)if(winTier(s.record)>=2)this.fullBySeatPattern.set(`${s.seat}/${mainPattern(s.record)?.id}`,now)
+    const duration=full?(tier===3?1600:1400):750
+    const phaseMarks=full?{focus:0,impact:180,readable:350,score:650,exit:duration-240}:{focus:0,impact:100,readable:240,score:350,exit:580}
+    const deltas=[0,0,0,0] as [number,number,number,number]
+    for(const {batch} of taken)for(let s=0;s<4;s++)deltas[s]+=batch.deltas[s]
+    const multi=taken.length===1&&seats.length>1
+    return {id:taken.map(p=>p.batch.batchId).join('|'),kind:'win',startedAt:now,title:merged?`${taken.length}次胡牌 · 合计`:multi?(seats.length===3?'三响':'二响'):mainPattern(strongest.record)?.label??'胡牌',
+      tier,duration,compact:!full,merged,phaseMarks,batchIds:taken.map(p=>p.batch.batchId),records,
+      flights:merged?seats.map(s=>({record:s.record,source:s.source})):records,deltas,seats}
   }
 }

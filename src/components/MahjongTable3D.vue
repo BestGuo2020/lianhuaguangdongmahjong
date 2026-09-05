@@ -28,6 +28,7 @@ import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
 import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
 import { createBloodFlowWinEffects } from './table/three/bloodFlowWinEffects'
+import { cuePhase } from '../game/variants/lotus/bloodFlow/presentation'
 
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], localSeat: 0, currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
@@ -307,6 +308,7 @@ function render(time = 0) {
     const winFrame = winEffectPresenter?.animate(time)
     const bloodFlowActive = bloodFlowWinEffects?.animate(time) ?? false
     if (props.bloodFlowBatches && canvas.value) canvas.value.dataset.bloodFlowEffects = String(bloodFlowWinEffects?.activeCount ?? 0)
+    if(props.bloodFlowBatches&&canvas.value){canvas.value.dataset.bloodFlowCue=props.bloodFlowCue?.id??'';canvas.value.dataset.bloodFlowCueStart=String(props.bloodFlowCue?.startedAt??'');canvas.value.dataset.bloodFlowPhase=props.bloodFlowCue?cuePhase(props.bloodFlowCue,time):''}
     if (winFrame) {
       // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
       // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
@@ -599,6 +601,7 @@ watch(
     props.bloodFlowBatches?.map(b => b.batchId).join(','),
     props.bloodFlowCompact,
     props.bloodFlowPresentationKey,
+    props.bloodFlowCue?.id,
     props.localSeat,
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms

@@ -11,6 +11,8 @@ const props = defineProps<{
   event: TableActionEvent
   player?: GamePlayer
   position: string
+  progress?: number
+  hideCopy?: boolean
 }>()
 
 const dedicatedArtFailed = ref(false)
@@ -22,7 +24,8 @@ const artwork = computed(() => !dedicatedArtFailed.value && dedicatedArt.value
   ? dedicatedArt.value
   : animeCharacterAvatarUrl(character.value.id))
 const usesDedicatedArt = computed(() => Boolean(dedicatedArt.value && !dedicatedArtFailed.value))
-const cueStyle = computed(() => ({ '--anime-accent': animeCharacterAccent(character.value.id) }))
+const cueStyle = computed(() => ({ '--anime-accent': animeCharacterAccent(character.value.id), ...(props.progress==null?{}:{animation:'none',
+  opacity:Math.min(1,props.progress/.13,Math.max(0,(1-props.progress)/.2)),scale:1-.08*Math.max(0,1-props.progress/.13)}) }))
 
 watch(() => [props.event.id, character.value.id], () => {
   dedicatedArtFailed.value = false
@@ -61,7 +64,7 @@ function onPortraitError(event: Event) {
       aria-hidden="true"
       @error="onPortraitError"
     >
-    <div class="anime-action-copy" aria-hidden="true">
+    <div v-if="!hideCopy" class="anime-action-copy" aria-hidden="true">
       <strong :data-text="action.label">{{ action.label }}</strong>
     </div>
   </div>
