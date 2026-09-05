@@ -6,6 +6,7 @@ import { createLotusGameState } from '../lotusState'
 import { createLotusOpening } from '../lotusOpening'
 import { buildRingWall } from '../lotusWall'
 import { createCommonGameSelectors } from '../../../shared/selectors/gameSelectors'
+import { createMatchLifecycle } from '../../../shared/runtime/matchLifecycle'
 import { MATCH_NAMES } from '../../../core/local/localGameConfig'
 import { tileName } from '../../../core/rules/tiles'
 import { playDiscardName } from '../../../shared/runtime/discardAudio'
@@ -290,7 +291,15 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     state.round.value++; state.dealer.value = (state.dealer.value + 1) % 4
     return startGame(undefined, startOptions)
   }
-  function returnToLobby() { clear(); opening.cancel(); remoteOpeningId = ''; view.value = null; state.result.value = null; state.phase.value = 'lobby'; options.externalAuthority?.leave() }
+  const matchLifecycle = createMatchLifecycle({ state, clearTimers: clear, startGame })
+  function returnToLobby() {
+    opening.cancel()
+    // The shared cleanup removes players, unmounting the old HUD/3D table.
+    // The next lobby start must mount a fresh table and receive its ready event.
+    matchLifecycle.returnToLobby()
+    remoteOpeningId = ''; view.value = null; waitScores.value = []
+    options.externalAuthority?.leave()
+  }
 
   const moves = computed(() => view.value?.ownActions ?? [])
   const currentWaitInfo = computed<WaitInfo | null>(() => {
