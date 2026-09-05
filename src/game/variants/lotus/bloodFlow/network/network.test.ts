@@ -13,7 +13,7 @@ import { decideBloodFlowAction } from '../ai'
 
 function room() {
   let now = 0
-  const backend = createDirectAuthorityBackend(() => now)
+  const backend = createDirectAuthorityBackend(() => now, { winBeatMs: 0 })
   const queued: { peer: string; packet: BloodFlowPacket }[] = []
   const sync = vi.fn()
   const replicas = SEATS.map(seat => new BloodFlowReplica('room', 'p0', seat, sync))

@@ -12,6 +12,7 @@ import type { TableThemeName } from './three/tableTheme'
 import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
 import BloodFlowRoundLedger from '../settlement/BloodFlowRoundLedger.vue'
 import BloodFlowWinCard from './BloodFlowWinCard.vue'
+import BloodFlowWinPresentation from './BloodFlowWinPresentation.vue'
 import { bloodFlowWinPiles } from './three/bloodFlowWinPile'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
@@ -112,6 +113,7 @@ const resizePiles = () => { compactPiles.value = pileMedia.matches }
 pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
 const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
+const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
 watch(() => props.bloodFlow?.roundResult, result => {
   if (result) { bloodFlowLedgerSeat.value = null; bloodFlowLedgerOpen.value = true }
 }, { immediate: true })
@@ -157,13 +159,16 @@ const actionCueLabEvent = computed<TableActionEvent | null>(() => (
 ))
 const presentedTableActionEvent = computed(() => {
   const event = props.tableActionEvent ?? actionCueLabEvent.value
+  if (props.bloodFlow && event && winActionTypes.has(event.type)) return null
   return event && props.winEffect && winActionTypes.has(event.type) ? null : event
 })
 const presentedAnimeActionEvent = computed(() => presentedTableActionEvent.value)
 const presentedAnimeActionPosition = computed(() => presentedAnimeActionEvent.value
   ? seatPosition[presentedAnimeActionEvent.value.actorIndex]
   : 'bottom')
-const presentedLlmBubbles = computed(() => bubbleLabEnabled
+const presentedLlmBubbles = computed(() => props.bloodFlow
+  ? props.bloodFlow.roundResult && ['llm', 'llmAnime'].includes(props.themeName) ? props.bloodFlow.roundBubbles : undefined
+  : bubbleLabEnabled
   ? {
       ...props.llmBubbles,
       1: { id: -101, text: '这牌打得真有意思。', persistent: true },
@@ -434,13 +439,14 @@ function onAvatarError(entry: GamePlayer) {
       @load-error="handleTableLoadError"
     />
     <template v-if="bloodFlow">
+      <BloodFlowWinPresentation :batches="bloodFlow.batches" :restore-key="bloodFlow.presentationKey" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
       <button v-for="pile in bloodFlowPiles" :key="pile.absoluteSeat" type="button"
         class="blood-flow-pile-badge" :class="`pile-seat-${pile.relativeSeat}`" :data-pile-seat="pile.absoluteSeat"
         :aria-label="`${players[pile.relativeSeat]?.name}，胡${pile.count}次，查看流水`"
         @click="bloodFlowLedgerSeat = pile.absoluteSeat; bloodFlowLedgerOpen = true">
         <b>胡 {{ pile.count }}次</b><small v-if="pile.overflow">+{{ pile.overflow }} 收纳</small>
       </button>
-      <BloodFlowRoundLedger :open="bloodFlowLedgerOpen" :state="bloodFlow" :players="players" :local-seat="user.seat"
+      <BloodFlowRoundLedger :open="bloodFlowLedgerOpen" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :filter-seat="bloodFlowLedgerSeat" :match-finished="matchFinished" @close="bloodFlowLedgerOpen = false"
         @next-round="bloodFlowLedgerOpen = false; $emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" />
     </template>

@@ -5,6 +5,8 @@
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
 
 export interface LlmAudioPlaybackHooks {
+  /** Cancels only this utterance; must not cancel other seats' actions or decisions. */
+  signal?: AbortSignal
   /** HTMLAudio 真正进入 playing 状态时触发；本地气泡据此与声音同步出现。 */
   onStarted?: () => void
   /** duration 暂不可用时的动作放行兜底（从 playing 开始计时）。 */

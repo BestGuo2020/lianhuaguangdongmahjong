@@ -89,14 +89,14 @@ export class LocalTtsClient {
     hooks: LlmAudioPlaybackHooks = {},
   ): Promise<boolean> {
     const normalized = normalizeText(text)
-    if (!normalized) return false
+    if (!normalized || hooks.signal?.aborted) return false
     // 静音时不请求 TTS 网关；runtime 会立即显示气泡并继续动作。
     if (!canPlayLocalLlmAudio()) return false
     const key = JSON.stringify([normalized, voiceKey, style, hooks.cacheIdentity ?? ''])
     if ((this.negativeUntil.get(key) ?? 0) > Date.now()) return false
     let request = this.inflight.get(key)
     if (!request) {
-      request = this.synthesize(normalized, voiceKey, style, hooks.cacheIdentity)
+      request = this.synthesize(normalized, voiceKey, style, hooks.cacheIdentity, hooks.signal)
       this.inflight.set(key, request)
     }
     let url: string | null
@@ -109,7 +109,7 @@ export class LocalTtsClient {
       this.negativeUntil.set(key, Date.now() + 30_000)
       return false
     }
-    if (hooks.isCurrent?.() === false) return false
+    if (hooks.signal?.aborted || hooks.isCurrent?.() === false) return false
     this.messageId += 1
     return playLocalLlmAudioUntilMidpoint(url, seat, this.messageId, priority, {
       ...hooks,
@@ -128,10 +128,14 @@ export class LocalTtsClient {
     voiceKey: string,
     style: LlmStyle,
     cacheIdentity = '',
+    signal?: AbortSignal,
   ): Promise<string | null> {
     const controller = new AbortController()
     this.activeControllers.add(controller)
     const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    const abort = () => controller.abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) controller.abort()
     try {
       const response = await this.fetchImpl(`${this.baseUrl}/api/local-tts/synthesize`, {
         method: 'POST',
@@ -154,6 +158,7 @@ export class LocalTtsClient {
       return null
     } finally {
       this.activeControllers.delete(controller)
+      signal?.removeEventListener('abort', abort)
       globalThis.clearTimeout(timeout)
     }
   }

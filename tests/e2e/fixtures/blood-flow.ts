@@ -1,5 +1,5 @@
 // Visual capacity fixture only. Deliberately not a rules or physical-tile simulation.
-import { createApp, h } from 'vue'
+import { createApp, h, shallowRef } from 'vue'
 import '../../../src/style.css'
 import GameTableHud from '../../../src/components/table/GameTableHud.vue'
 import { scorePatterns } from '../../../src/game/variants/lotus/patterns/score'
@@ -40,4 +40,19 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
   userCurrentWaits: null, userTingOptions: [], userDiscardWaits: null, userKongs: [], userHasWindKong: false,
   rulesetId: 'lotus-blood-flow' as const, bloodFlow, jokerTiles: ['red', 'green'] as TileType[], wildcardTiles: ['white'] as TileType[] }
 const css = themePresentationCssVariables(themePresentationByName(theme))
-createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, props)])]) }).mount('#app')
+const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
+let serial = batches.length, restore = 0
+;(window as any).__appendBloodFlowWin = () => {
+  const id = `live-${++serial}`, winScore = scorePatterns(['all-green'], true, 'self-draw')
+  const deltas = vector(s => s === 0 ? winScore.paymentPerPayer * 3 : -winScore.paymentPerPayer)
+  const ordinal = liveState.value.seats[0].winCount + 1
+  const source = { id: `${id}-source`, seat: 0 as Seat, tile: 's2' as TileType, kind: 'draw' as const }
+  const batch: WinBatch = { authorityEpoch: 'fixture', sequence: serial, roundId: 'fixture-round', ruleVersion: 'lotus-blood-flow-v1', batchId: id,
+    windowId: id, source, deltas, scoresAfter: [2000, 2000, 2000, 2000], nextAction: { kind: 'draw', seat: 1 },
+    winners: [{ id: `${id}-record`, batchId: id, winner: 0, ordinal, sourceEventId: source.id, score: winScore, deltas }] }
+  liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch],
+    seats: [{ ...liveState.value.seats[0], winCount: ordinal, locked: true }, liveState.value.seats[1], liveState.value.seats[2], liveState.value.seats[3]] }
+  liveAction.value = { id: serial, type: 'self-draw', actorIndex: 0, sourceIndex: null, tile: 's2', meldIndex: -1 }
+}
+;(window as any).__restoreBloodFlow = () => { liveState.value = { ...liveState.value, presentationKey: `restore-${++restore}` } }
+createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, { ...props, bloodFlow: liveState.value, tableActionEvent: liveAction.value })])]) }).mount('#app')

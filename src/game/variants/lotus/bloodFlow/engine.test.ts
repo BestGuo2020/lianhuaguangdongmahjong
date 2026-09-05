@@ -20,13 +20,25 @@ function scenario(hands: (TileType[] | null)[], melds: Meld[][] = [[], [], [], [
   if (emptyWall) players[0].discards.push(...pool.splice(0))
   const opening: BloodFlowOpeningState = { players, wall: pool, flipTiles, jokers: ['red', 'green'], headDrawn: 134 - pool.length,
     dealerDrawnIndex: players[0].hand.length - 1, flipStack: 0, flipSeat: 0, wallBreakIndex: 2 }
-  return new BloodFlowEngine({ authorityEpoch: 'test', roundId: 'round-1', opening, now: () => 0 })
+  return new BloodFlowEngine({ authorityEpoch: 'test', roundId: 'round-1', opening, now: () => 0, winBeatMs: 0 })
 }
 function discardEast(engine: BloodFlowEngine) {
   expect(engine.submit(engine.command(0, { kind: 'discard', index: engine.players[0].hand.indexOf('east') }))).toBe(true)
 }
 
 describe('E03 authority conservation and continuous rounds', () => {
+  it('opens the next action at the authority win beat and starts its deadline then', () => {
+    const setup = scenario([[...waiting, 'east'], null, null, null])
+    let now = 0
+    const engine = new BloodFlowEngine({ ...setup.options, now: () => now, winBeatMs: 450 })
+    engine.submit(engine.command(0, { kind: 'win' }))
+    expect(engine.window!.opensAt).toBe(450)
+    expect(engine.window!.deadlineAt).toBe(15_450)
+    const action = engine.window!.options[1].find(a => a.kind === 'discard')!
+    const command = engine.command(1, action)
+    now = 449; expect(engine.submit(command)).toBe(false)
+    now = 450; expect(engine.submit(command)).toBe(true)
+  })
   it('collects three independent wins, archives once, rejects repeats, then lets a locked winner self-draw again', () => {
     // Force the dealer's hand to include the only remaining east.
     const hand0: TileType[] = ['m7', 'm8', 'm9', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'p7', 'p8', 's7', 's8', 'east']

@@ -55,3 +55,8 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
 
 /** E04/E06 will enable only independently accepted entry points. WS has no flag. */
 export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: false, p2p: false })
+
+export const BLOOD_FLOW_TIMING = Object.freeze({
+  winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 25_000, recoveryGraceMs: 12_000,
+  compactWinMs: 400, largeWinMs: 1400, topWinMs: 1600, fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
+})
