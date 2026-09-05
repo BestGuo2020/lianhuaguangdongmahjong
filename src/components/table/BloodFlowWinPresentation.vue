@@ -20,8 +20,8 @@ function titleStyleFor(seat:number,text:string,main=false){
   const relative=(seat-props.localSeat+4)%4
   // The winner owns the location, at every tier. A local high win must never
   // jump across the table merely to make room for a larger title.
-  const left=[50,78,50,22][relative]
-  const anchor=relative===0?{bottom:props.compact?'29%':'19%'}:{top:`${(props.compact?[0,28,8,28]:[0,28,12,28])[relative]}%`}
+  const left=(props.compact?[50,74,44,26]:[50,78,50,22])[relative]
+  const anchor=relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,8,42]:[0,28,12,28])[relative]}%`}
   const unit=main?(props.compact?52:110):props.cue.tier>=2?(props.compact?36:66):(props.compact?30:54)
   return {left:`${left}%`,...anchor,width:`min(${(text.length*.92+.4)*unit}px,${main?65:34}vw)`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) perspective(650px) rotateY(${m.tilt}deg) rotateX(${m.tilt*.3}deg) scale(${1+(m.scale-1)*.55}) rotate(${m.rotation}deg)`}
 }
@@ -46,7 +46,7 @@ const sourceText=computed(()=>{
 })
 const sourceStyle=computed(()=>{
   const source=props.cue?.seats[0]?.source,relative=source?(source.seat-props.localSeat+4)%4:0
-  return {left:`${[50,77,50,23][relative]}%`,...(relative===0?{bottom:props.compact?'29%':'19%'}:{top:`${[0,30,12,30][relative]}%`})}
+  return {left:`${(props.compact?[50,74,44,26]:[50,77,50,23])[relative]}%`,...(relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,12,42]:[0,30,12,30])[relative]}%`})}
 })
 const animeEvent=(seat:number):TableActionEvent=>{
   const item=props.cue!.seats.find(s=>s.seat===seat)!
@@ -125,8 +125,9 @@ const animeEvent=(seat:number):TableActionEvent=>{
 .compact .blood-flow-winner-card strong { font-size:14px; }
 .compact .blood-flow-winner-card span { font-size:9px; gap:2px; }
 .compact .blood-flow-winner-card b { font-size:20px; }
-.compact .winner-0 { bottom:29%; }.compact .winner-1 { left:79%; top:29%; }.compact .winner-2 { top:8%; }.compact .winner-3 { left:21%; top:29%; }
+.compact .winner-0 { bottom:22%; }.compact .winner-1 { left:76%; top:55%; }.compact .winner-2 { left:44%; top:8%; }.compact .winner-3 { left:24%; top:55%; }
 .compact .blood-flow-seat-feedback { padding:3px 7px; }
 .compact .blood-flow-seat-feedback b { font-size:20px; }
-.compact .feedback-0 { bottom:29%; }.compact .feedback-2 { top:10%; }
+.compact .feedback-0 { bottom:22%; }.compact .feedback-2 { top:10%; left:39%; }
+.compact .feedback-1,.compact .feedback-3 { top:55%; }
 </style>

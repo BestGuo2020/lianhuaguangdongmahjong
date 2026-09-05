@@ -736,7 +736,7 @@ function onAvatarError(entry: GamePlayer) {
 .wait-remaining { color: var(--theme-text); }
 .blood-flow-wait-tile.exhausted { opacity: .5; }
 .waiting-action .blood-flow-ting-label { font-size: 18px; color: var(--theme-accent); white-space: nowrap; }
-@media (max-width: 900px), (max-height: 500px) {
+@container (max-width: 900px) or (max-height: 500px) {
   .blood-flow-wait-grid { gap: 8px 10px; }
   .blood-flow-wait-tile { font-size: 11px; }
   .blood-flow-wait-tile .mahjong-tile.small { --tile-width: 30px; margin-bottom: 2px; }

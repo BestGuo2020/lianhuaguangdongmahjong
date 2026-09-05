@@ -51,7 +51,8 @@ const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;
 const hudState = shallowRef<Record<string, unknown>>({})
 const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
 function showHudState(state: 'waiting'|'selection'|'preview') {
-  liveState.value = { ...liveState.value, preview: score, waits: waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score})) }
+  const waits = waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score}))
+  liveState.value = { ...liveState.value, preview: score, waits, discardWaitScores:{m1:waits} }
   hudState.value = { flipTile:'red',secondDice:[2,4], userCurrentWaits:waitInfo,
     userDiscardWaits:state==='selection'?waitInfo:null,selectedIndex:state==='selection'?0:-1,
     isUserTurn:state==='selection',userCanHu:state==='preview',
