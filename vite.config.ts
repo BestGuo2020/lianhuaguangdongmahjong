@@ -4,6 +4,8 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   test: {
+    // Bound this checkout's tests; dependency-store snapshots and other worktrees are not this suite.
+    dir: './src',
     // 单测只跑 src 下的 *.test.ts / *.spec.ts。Playwright 的 e2e（tests/e2e）走
     // `npm run test:e2e`，不能被 vitest 收集，否则 @playwright/test 的
     // test.describe.configure() 会在这里报错。

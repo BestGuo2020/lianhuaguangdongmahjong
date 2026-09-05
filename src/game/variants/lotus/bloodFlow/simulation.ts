@@ -21,8 +21,9 @@ export function simulateRound(seed: number, scores: readonly [number, number, nu
     const win = moves.find(a => a.kind === 'win')
     const discards = moves.filter(a => a.kind === 'discard')
     const action = win ?? (discards.length ? discards[Math.floor(random() * discards.length)] : moves[0])
+    const wallBefore = engine.wall.length
     if (!engine.submit(engine.command(seat, action))) throw new Error(`Rejected legal action in seed ${seed}`)
-    if (firstWinWall === null && engine.archives.length) firstWinWall = engine.wall.length
+    if (firstWinWall === null && engine.archives.length) firstWinWall = wallBefore
     engine.assertConservation()
   }
   const records = engine.publicState().batches.flatMap(b => b.winners)

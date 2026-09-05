@@ -56,7 +56,7 @@ const result = computed(() => props.state.roundResult)
 </template>
 
 <style scoped>
-.blood-flow-ledger-backdrop { position: fixed; inset: 0; z-index: 180; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.65); }
+.blood-flow-ledger-backdrop { position: fixed; inset: 0; z-index: 180; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.65); container-type: size; }
 .blood-flow-ledger { width: min(700px, 96vw); max-height: 92dvh; display: flex; flex-direction: column; border: 1px solid var(--theme-border, #8a947c); border-radius: 16px; background: var(--theme-panel, #142424); color: var(--theme-text, #fff2d9); box-shadow: 0 20px 80px #0008; }
 header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 18px; flex-shrink: 0; }
 header { border-bottom: 1px solid #ffffff20; }
@@ -74,5 +74,5 @@ th:first-child { text-align: left; max-width: 120px; }
 .record-payments { margin: 5px 1px; }
 .empty { text-align: center; opacity: .6; padding: 25px 0; }
 summary { cursor: pointer; }
-@media(max-height: 450px) { header, footer { padding: 7px 12px; } h2 { font-size: 16px; } .ledger-scroll { padding: 8px 12px; } }
+@container (max-height: 450px) { header, footer { padding: 7px 12px; } h2 { font-size: 16px; } .ledger-scroll { padding: 8px 12px; } }
 </style>
