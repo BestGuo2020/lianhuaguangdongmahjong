@@ -37,20 +37,18 @@ const animeEvent=(seat:number):TableActionEvent=>{
         <AnimeActionCue v-for="item in cue.seats" :key="item.seat" :event="animeEvent(item.seat)" :player="players[(item.seat-localSeat+4)%4]"
           :position="['bottom','right','top','left'][(item.seat-localSeat+4)%4]" :progress="portraitProgress" hide-copy />
       </template>
-      <div v-if="cue.kind==='win'&&(phase==='focus'||phase==='impact'||phase==='readable')" class="blood-flow-central" :style="titleStyle"><small>{{ ['胡牌','中番','大番','顶级番型'][cue.tier] }}</small><strong>{{ cue.title }}</strong></div>
+      <div v-if="cue.kind==='win'&&(phase==='focus'||phase==='impact'||phase==='readable')" class="blood-flow-central" :style="titleStyle"><strong>{{ cue.title }}</strong></div>
       <div v-if="cue.seats.length&&(phase==='score'||phase==='exit')" class="blood-flow-winner-cards">
-        <article v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-card" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat">
-          <small>{{ name(item.seat) }} · {{ sourceLabel(item.record.score.source) }}</small>
+        <article v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-card" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat"
+          :data-payment-seat="item.seat" :data-payment-amount="cue.deltas[item.seat]" :aria-label="`${name(item.seat)}，${sourceLabel(item.record.score.source)}，${cue.merged?'合计':''}${signed(cue.deltas[item.seat])}`">
           <strong>{{ cue.merged?'最近：':'' }}{{ mainPattern(item.record)?.label??'胡牌' }}</strong>
-          <span>{{ item.record.score.finalMultiplier }}倍<template v-if="item.record.score.hardWin"> · 硬胡</template><template v-if="item.record.score.capped"> · 封顶</template></span>
-          <small>{{ item.source.kind==='draw'?'三家付款':`${name(item.source.seat)}供牌` }}</small>
-          <small>{{ cue.merged?`${item.mergedCount}次收入合计`:'收入' }} {{ signed(item.income) }}</small>
+          <span>{{ item.record.score.finalMultiplier }}倍<template v-if="item.record.score.hardWin"> · 硬胡</template> · {{ sourceLabel(item.record.score.source) }} <b :class="{negative:cue.deltas[item.seat]<0}">{{ cue.merged?'合计 ':'' }}{{ signed(cue.deltas[item.seat]) }}</b></span>
         </article>
       </div>
       <template v-if="phase==='score'||phase==='exit'">
-        <div v-for="(amount,seat) in cue.deltas" :key="seat" v-show="amount!==0||cue.merged" class="blood-flow-seat-feedback"
-          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0}]" :data-payment-seat="seat" :data-payment-amount="amount">
-          <b>{{ signed(amount) }}</b><span>{{ name(seat) }} · {{ cue.kind==='kong'?`${cue.title}收支`:cue.merged?'合计变化':'本次变化' }}</span>
+        <div v-for="(amount,seat) in cue.deltas" :key="seat" v-show="(amount!==0||cue.merged)&&!cue.seats.some(item=>item.seat===seat)" class="blood-flow-seat-feedback"
+          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
+          <b>{{ signed(amount) }}</b><span v-if="cue.kind==='kong'||cue.merged">{{ cue.kind==='kong'?cue.title:'合计' }}</span>
         </div>
       </template>
     </div>
@@ -101,4 +99,12 @@ const animeEvent=(seat:number):TableActionEvent=>{
 [data-theme="llmAnime"] .blood-flow-central strong {color:#fff3fa;-webkit-text-stroke:3px #33263f;text-shadow:4px 3px 0 #ed72a7,-3px -2px 0 #80e4ff}
 [data-theme="llmAnime"] .blood-flow-central::before {background:linear-gradient(135deg,transparent 12%,#fd8db366 15% 20%,transparent 23% 60%,#8aedff77 63% 70%,transparent 73%);transform:skewX(-15deg)}
 .compact .blood-flow-central strong,.compact .stage-main .blood-flow-central strong {font-size:22px}
+.blood-flow-winner-card {max-width: min(290px, 36vw); padding: 7px 12px; gap: 3px;}
+.blood-flow-winner-card strong {font-size:19px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.blood-flow-winner-card span {display:flex;align-items:baseline;gap:4px;white-space:nowrap;font-size:11px}
+.blood-flow-winner-card b {font-size:23px;line-height:1;color:var(--theme-positive,#7bddad);font-variant-numeric:tabular-nums}
+.blood-flow-winner-card b.negative {color:var(--theme-negative,#ffae9f)}
+.compact .blood-flow-winner-card {padding:4px 6px;max-width:100%}
+.compact .blood-flow-winner-card b {font-size:18px}
+.compact .blood-flow-winner-card span {font-size:9px;gap:2px}
 </style>

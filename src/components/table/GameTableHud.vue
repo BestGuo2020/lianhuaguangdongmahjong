@@ -248,6 +248,12 @@ onBeforeUnmount(() => {
 })
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
+const firstHuOffer = ref(true)
+const huOfferSeen = ref(false)
+watch(() => props.bloodFlow?.roundId, () => { huOfferSeen.value = false; firstHuOffer.value = true })
+watch(() => Boolean(props.bloodFlow?.preview && props.userCanHu), (available, previous) => {
+  if (available && !previous) { firstHuOffer.value = !huOfferSeen.value; huOfferSeen.value = true }
+}, { immediate: true })
 // 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
 watch(() => props.flipTile, () => { flipOpen.value = false })
 const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
@@ -266,9 +272,10 @@ const scoreDirectionFor = (playerIndex: number) => scoreDirection(scoreDeltaFor(
 const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
   : null)
-const activeWaits = computed(() => hoveredWaits.value || props.userDiscardWaits || (!props.isUserTurn ? props.userCurrentWaits : null))
+const activeWaits = computed(() => hoveredWaits.value || props.userDiscardWaits || (props.bloodFlow || !props.isUserTurn ? props.userCurrentWaits : null))
 const bloodFlowWaitTiles = computed(() => (activeWaits.value?.tiles ?? []).map(item => {
-  const score = props.bloodFlow?.waits.find(wait => wait.tile === item.tile)
+  const scores = activeWaits.value?.discard ? props.bloodFlow?.discardWaitScores?.[activeWaits.value.discard] : props.bloodFlow?.waits
+  const score = scores?.find(wait => wait.tile === item.tile)
   return { ...item, multiplier: (score?.selfDraw ?? score?.discard)?.finalMultiplier ?? null }
 }))
 // 托管开关：仅多人联机模式显示；结算/亮相/回大厅等阶段隐藏，其余对局时段（含他人回合）常驻可切换。
@@ -277,6 +284,19 @@ const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
 // 操作按钮行与倒计时同行：任一方可见时整行出现。
 const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn || props.userCurrentWaits) || showAutoPlay.value)
 const tingDiscardTiles = computed(() => new Set(props.userTingOptions.map((option) => option.discard)))
+function isTingDiscard(index: number, tile: TileType) {
+  return props.isUserTurn && tingDiscardTiles.value.has(tile)
+    && (!props.bloodFlow?.seats[props.user.seat].locked || index === userDrawnIndex.value)
+}
+function toggleWaits() {
+  if (waitsOpen.value) { waitsOpen.value = false; return }
+  if (!activeWaits.value && props.userTingOptions.length) {
+    const index = props.bloodFlow?.seats[props.user.seat].locked ? userDrawnIndex.value
+      : props.user.hand.indexOf(props.userTingOptions[0].discard!)
+    if (index >= 0) emit('selectTile', index)
+  }
+  waitsOpen.value = true
+}
 const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
   return splitWinningTile(props.user.hand, props.winPresentation).hand
@@ -327,8 +347,8 @@ function usesFinePointer() {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches
 }
 
-function previewDesktopWaits(tile: TileType) {
-  if (!props.isUserTurn || !usesFinePointer() || !tingDiscardTiles.value.has(tile)) return
+function previewDesktopWaits(tile: TileType, index: number) {
+  if (!usesFinePointer() || !isTingDiscard(index, tile)) return
   hoveredDiscard.value = tile
   waitsOpen.value = true
 }
@@ -508,9 +528,14 @@ function onAvatarError(entry: GamePlayer) {
         @click="flipOpen = !flipOpen" @keydown.enter="flipOpen = !flipOpen" @keydown.space.prevent="flipOpen = !flipOpen"
       >
         <div class="flip-indicator-head">
-          <span>翻精</span>
-          <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
-          <em>{{ tileName(flipTile) }}</em>
+          <span>{{ bloodFlow ? '精' : '翻精' }}</span>
+          <template v-if="bloodFlow">
+            <MahjongTile v-for="tile in jokerTiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :theme-name="themeName" small disabled />
+          </template>
+          <template v-else>
+            <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
+            <em>{{ tileName(flipTile) }}</em>
+          </template>
           <i class="flip-chevron" aria-hidden="true"></i>
         </div>
         <div class="flip-indicator-body">
@@ -606,25 +631,26 @@ function onAvatarError(entry: GamePlayer) {
       <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div
           v-for="(tile, index) in displayedUserHand" :key="`${tile}-${index}`" class="hand-tile-slot"
-          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isUserTurn && tingDiscardTiles.has(tile) }"
-          @mouseenter="previewDesktopWaits(tile)" @mouseleave="clearDesktopWaits"
+          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isTingDiscard(index, tile) }"
+          @mouseenter="previewDesktopWaits(tile, index)" @mouseleave="clearDesktopWaits"
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
-          <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
+          <span v-if="isTingDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
           <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
-      <div v-if="bloodFlow?.preview && userCanHu" class="blood-flow-preview" role="status">
-        <BloodFlowWinCard :score="bloodFlow.preview" compact />
-        <small>{{ bloodFlow.seats[user.seat].locked ? '手牌已锁定，可继续胡牌' : '首次胡牌后锁手，不再换张或吃碰杠' }}</small>
+      <div v-if="bloodFlow?.preview && userCanHu && !presentationBusy" class="blood-flow-preview" role="status">
+        <BloodFlowWinCard :key="bloodFlow.sourceEvent?.id" :score="bloodFlow.preview" compact preview />
+        <small>{{ bloodFlow.seats[user.seat].locked ? '已锁手 · 可续胡' : firstHuOffer ? '胡后锁手，不再换张/吃碰杠' : '胡后锁手' }}</small>
       </div>
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
-        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
-          <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
+        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
+          <b v-if="bloodFlow" class="blood-flow-ting-label">{{ userCurrentWaits ? '已听' : '可听' }}</b>
+          <template v-else-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
           <img v-else class="action-icon" :src="`${imageBase}tips.png`" alt="" />
         </button>
         <template v-if="actionPrompt?.type === 'claim'">
@@ -708,6 +734,7 @@ function onAvatarError(entry: GamePlayer) {
 .wait-multiplier { color: var(--theme-accent); font-weight: 800; }
 .wait-remaining { color: var(--theme-text); }
 .blood-flow-wait-tile.exhausted { opacity: .5; }
+.waiting-action .blood-flow-ting-label { font-size: 18px; color: var(--theme-accent); white-space: nowrap; }
 @media (max-width: 900px), (max-height: 500px) {
   .blood-flow-wait-grid { gap: 8px 10px; }
   .blood-flow-wait-tile { font-size: 11px; }
@@ -842,6 +869,11 @@ function onAvatarError(entry: GamePlayer) {
 }
 
 .chi-option-tiles { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.blood-flow-table .flip-indicator-body { display: none; }
+.blood-flow-table .flip-open .flip-indicator-body { display: grid; }
+.blood-flow-table .flip-chevron { display: block; width: 5px; height: 5px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); margin: 0 3px 3px; }
+.blood-flow-table .flip-open .flip-chevron { transform: rotate(225deg); }
+.blood-flow-table .flip-indicator-head > .mahjong-tile.small { --tile-width: 24px; }
 .chi-action { gap: 2px; }
 .chi-picker-options { align-items: stretch; }
 .chi-picker-option {

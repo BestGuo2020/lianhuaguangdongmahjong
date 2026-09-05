@@ -48,6 +48,15 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
 const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
 const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;from:number;id:number}|null>(null)
+const hudState = shallowRef<Record<string, unknown>>({})
+const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
+function showHudState(state: 'waiting'|'selection'|'preview') {
+  liveState.value = { ...liveState.value, preview: score, waits: waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score})) }
+  hudState.value = { flipTile:'red',secondDice:[2,4], userCurrentWaits:waitInfo,
+    userDiscardWaits:state==='selection'?waitInfo:null,selectedIndex:state==='selection'?0:-1,
+    isUserTurn:state==='selection',userCanHu:state==='preview',
+    actionPrompt:state==='preview'?{type:'claim',canHu:true,canPeng:true,canGang:true,chiOptions:[{tiles:['m1','m2','m3']}]}:null }
+}
 const liveFinished = shallowRef(false)
 const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
 ;(window as any).__bloodFlowNavigation = navigation
@@ -153,6 +162,7 @@ createApp({setup(){
   phase: liveState.value.roundResult ? 'settled' : props.phase,
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
   isUserTurn: !liveState.value.roundResult && !query.has('controls'), userCanHu: !liveState.value.roundResult && !query.has('controls'),
+  ...hudState.value,
   onNextRound: () => { navigation.nextRoundCalls++ },
   onReturnToLobby: () => { navigation.returnToLobbyCalls++ },
 })]), ...(query.has('controls') ? [h('nav', {style:'position:fixed;left:2px;top:2px;z-index:100;display:flex;gap:3px'}, [
@@ -160,4 +170,7 @@ createApp({setup(){
   h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('discard',1,[0],['pinghu'],false)}, '普通点炮'),
   h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('draw',0,[0],['all-green'],true)}, '高番自摸'),
   h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__appendBloodFlowMultiWin()}, '三响'),
+  ...(query.has('hudStates') ? (['waiting','selection','preview'] as const).map((state,index)=>h('button', {
+    style:'font-size:10px;padding:2px',onClick:()=>showHudState(state),
+  }, ['等待画面','选牌画面','可胡画面'][index])) : []),
 ])] : [])]) }}).mount('#app')
