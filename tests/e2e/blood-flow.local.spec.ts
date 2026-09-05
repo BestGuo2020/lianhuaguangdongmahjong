@@ -1,14 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 test.setTimeout(180_000)
-test('blood-flow is opt-in locally and cannot enter a WS room', async ({ page }) => {
+test('blood-flow is available locally and cannot enter a WS room', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto('/')
   await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
-  await expect(page.getByRole('button', { name: /莲花麻将·血流/ })).toHaveCount(0)
-  await page.goto('/?bloodFlow=1')
-  await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
+  await expect(page.getByRole('button', { name: /莲花麻将·血流/ })).toBeVisible()
   await page.getByRole('button', { name: /莲花麻将·血流/ }).click()
   await page.getByRole('button', { name: '确定', exact: true }).click()
   await expect(page.locator('.start-button')).toContainText('莲花麻将·血流')

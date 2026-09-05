@@ -661,7 +661,7 @@ function onAvatarError(entry: GamePlayer) {
 .pile-seat-1 { right: 15px; top: 62%; }
 .pile-seat-2 { left: calc(50% + 80px); top: 125px; }
 .pile-seat-3 { left: 15px; top: 62%; }
-@media(max-width: 900px), (max-height: 500px) {
+@container (max-width: 900px) or (max-height: 500px) {
   .blood-flow-pile-badge { font-size: 10px; padding: 3px 5px; min-width: 52px; min-height: 28px; }
   .pile-seat-0 { left: 20%; bottom: 78px; }
   .pile-seat-2 { left: 48%; top: 45px; }

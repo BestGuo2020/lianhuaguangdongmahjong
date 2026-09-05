@@ -53,8 +53,8 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   extraPayments: Object.freeze([]) as readonly [],
 })
 
-/** E04/E06 will enable only independently accepted entry points. WS has no flag. */
-export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: false, p2p: false })
+/** Local acceptance passed. P2P still requires real SDK acceptance; WS has no flag. */
+export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: true, p2p: false })
 
 export const BLOOD_FLOW_TIMING = Object.freeze({
   winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 25_000, recoveryGraceMs: 12_000,
