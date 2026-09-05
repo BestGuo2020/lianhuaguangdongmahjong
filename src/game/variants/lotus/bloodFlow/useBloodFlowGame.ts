@@ -23,7 +23,7 @@ import type { BloodFlowAction, BloodFlowOpeningState } from './state'
 import type { EngineCommand } from './state'
 import type { Seat } from './types'
 import type { NetworkOpening } from './network/protocol'
-import type { evaluateWaits } from '../patterns/evaluate'
+import type { HandWaitHints, WaitScores } from '../patterns/handWaits'
 import { createEvaluatorService } from '../patterns/evaluatorService'
 import { createBloodFlowAudioBridge } from './audioBridge'
 import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
@@ -55,7 +55,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
-  const waitScores = shallowRef<ReturnType<typeof evaluateWaits>>([])
+  const handHints = shallowRef<HandWaitHints | null>(null)
   const presentationSerial = shallowRef(0)
   const continuation = shallowRef<import('./types').BloodFlowTableState['continuation']>()
   const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
@@ -70,8 +70,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   })
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
-  let generation = 0, busy = false, heardAction = 0, heardDiscard = '', seenWindow = ''
+  let generation = 0, busy = false, heardAction = 0, heardDiscard = ''
   let waitQuerySerial = 0
+  let hintKey = '', hintBusy = false
   let ring: TileType[] = [], dealerTile: TileType | null = null
   let remoteOpeningId = '', countdownTicket = 0
   const completedRemoteOpenings = new Set<string>()
@@ -96,6 +97,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     waiters.forEach(resolve => resolve()); waiters.clear()
     worker?.close(); worker = null
     hintWorker?.cancel(); hintWorker = null
+    hintKey = ''; hintBusy = false; waitQuerySerial++; handHints.value = null
     actionAudio.reset()
     decisions.cancel(); pendingBots.clear(); reactions.cancel(); cancelReactionSpeech(); spoken.clear()
     cancelActionSpeech();actionSpoken.clear()
@@ -160,7 +162,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       state.matchFinished.value = state.round.value >= BLOOD_FLOW_CONFIG.rounds[state.matchType.value]
       if (!options.externalAuthority) void reactions.run(next)
     }
-    if (w?.id !== seenWindow) { seenWindow = w?.id ?? ''; waitScores.value = []; if (next.ownActions.length) void refreshWaits() }
+    void refreshWaits()
     if (previous && (next.transition?.kind === 'draw' && next.transition.id !== previous.transition?.id
       || w?.kind === 'turn' && w.source.id !== previous.window?.source.id && previous.transition?.kind !== 'draw')
       && next.players[next.currentPlayer].drawnTileIndex >= 0) sound('give.mp3', .7)
@@ -280,7 +282,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function startGame(mode?: MatchType, startOptions: GameStartOptions & { initialWall?: TileType[]; openingDice?: [number, number]; openingSecondDice?: [number, number] } = {}) {
     if (options.externalAuthority) throw new Error('Only the room authority can start this game')
     clear(); opening.cancel(); options.animeFixedTts?.reset()
-    view.value = null; waitScores.value = []; heardAction = 0; heardDiscard = ''; seenWindow = ''
+    view.value = null; heardAction = 0; heardDiscard = ''
     ring = startOptions.initialWall ? [...startOptions.initialWall] : buildRingWall(); dealerTile = null
     return opening.start(mode, { ...startOptions, initialWall: ring })
   }
@@ -297,31 +299,50 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     // The shared cleanup removes players, unmounting the old HUD/3D table.
     // The next lobby start must mount a fresh table and receive its ready event.
     matchLifecycle.returnToLobby()
-    remoteOpeningId = ''; view.value = null; waitScores.value = []
+    remoteOpeningId = ''; view.value = null
     options.externalAuthority?.leave()
   }
 
   const moves = computed(() => view.value?.ownActions ?? [])
-  const currentWaitInfo = computed<WaitInfo | null>(() => {
-    if (!view.value || !waitScores.value.length) return null
+  const hintsVisible = computed(() => view.value?.public.status === 'playing' && view.value.transition?.kind !== 'win')
+  function makeWaitInfo(scores: WaitScores, discard: TileType | null = null): WaitInfo | null {
+    if (!view.value || !hintsVisible.value || !scores.length) return null
     const visible = visibleTiles(view.value)
-    const tiles = waitScores.value.map(w => ({ tile: w.tile, remaining: Math.max(0, 4 - visible.filter(t => t === w.tile).length) }))
-    return { discard: null, tiles, any: tiles.length === 34, remaining: tiles.reduce((n, t) => n + t.remaining, 0) }
+    const tiles = scores.map(w => ({ tile: w.tile, remaining: Math.max(0, 4 - visible.filter(t => t === w.tile).length) }))
+    return { discard, tiles, any: tiles.length === 34, remaining: tiles.reduce((n, t) => n + t.remaining, 0) }
+  }
+  const currentWaitInfo = computed(() => makeWaitInfo(handHints.value?.current ?? []))
+  const userTingOptions = computed(() => !common.isUserTurn.value ? [] : (handHints.value?.discards ?? []).flatMap(item => {
+    const legal = moves.value.some(a => a.kind === 'discard' && state.players[0].hand[a.index] === item.discard)
+    const info = legal ? makeWaitInfo(item.waits, item.discard) : null
+    return info ? [info] : []
+  }))
+  const userDiscardWaits = computed(() => state.selectedIndex.value < 0 ? null
+    : userTingOptions.value.find(item => item.discard === state.players[0]?.hand[state.selectedIndex.value]) ?? null)
+  const waitScores = computed(() => {
+    const discard = userDiscardWaits.value?.discard
+    return (discard ? handHints.value?.discards.find(item => item.discard === discard)?.waits : handHints.value?.current) ?? []
   })
   async function refreshWaits() {
+    const current = view.value
+    if (!hintWorker || !current || current.public.status !== 'playing' || options.autoplay) return
+    const player = current.players[current.seat]
+    const input = { concealed: [...player.hand], melds: player.melds, jokers: current.jokers,
+      drawnTileIndex: player.drawnTileIndex, locked: current.public.seats[current.seat].locked }
+    const key = JSON.stringify([current.authorityEpoch, current.roundId, input])
+    if (key === hintKey) return
+    hintKey = key; handHints.value = null
+    // A changed hand supersedes unfinished work; selection and opponent windows
+    // reuse the same results instead of queueing exhaustive searches behind it.
+    if (hintBusy) { hintWorker.cancel(); hintWorker = createEvaluatorService() }
     const query = ++waitQuerySerial
-    const current = view.value, w = current?.window, active = hintWorker, epoch = generation
-    if (!active || !current || !w) return
-    const player = current.players[current.seat], hand = player.hand
-    const index = hand.length + 3 * player.melds.length === 14
-      ? (state.selectedIndex.value >= 0 ? state.selectedIndex.value : player.drawnTileIndex) : null
-    if (index !== null && index < 0) return
+    const active = hintWorker, epoch = generation
+    hintBusy = true
     try {
-      const concealed = [...hand]
-      if (index !== null) concealed.splice(index, 1)
-      const waits = await active.waits({ concealed, melds: player.melds, jokers: current.jokers })
-      if (query === waitQuerySerial && epoch === generation && view.value?.window?.id === w.id) waitScores.value = waits
+      const hints = await active.handWaits(input)
+      if (query === waitQuerySerial && epoch === generation && hintKey === key) handHints.value = hints
     } catch { /* closed worker has no current hint to publish */ }
+    finally { if (query === waitQuerySerial) hintBusy = false }
   }
   function cancelReactionSpeech() {
     speechControllers.forEach(c => c.abort()); speechControllers.clear()
@@ -374,7 +395,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }
     const changedRound = view.value?.roundId !== next.roundId || view.value?.authorityEpoch !== next.authorityEpoch
     if (changedRound || next.public.status === 'interrupted') {
-      clear(); remoteOpeningId = ''; view.value = null; seenWindow = ''; waitScores.value = []
+      clear(); remoteOpeningId = ''; view.value = null
       state.revealHands.value = false; state.result.value = null
       hintWorker = next.public.status === 'interrupted' ? null : createEvaluatorService()
     }
@@ -431,13 +452,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     else apply(next)
     options.externalAuthority.openingDone(meta.round)
   }
-  watch(() => state.selectedIndex.value, () => { void refreshWaits() })
   const capabilities = computed(() => ({
     lotusTable: { flipTile: state.flipTile.value, jokerTiles: state.jokerTiles.value, wildcardTiles: ['white' as const],
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:actionBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value,
+      discardWaitScores: Object.fromEntries((handHints.value?.discards ?? []).map(item => [item.discard, item.waits])),
+      presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:actionBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
@@ -445,10 +467,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     userKongs: computed(() => moves.value.flatMap(a => a.kind === 'concealed-kong' ? [a.tile]
       : a.kind === 'added-kong' ? [state.players[0].melds[a.meldIndex].tile] : [])),
     userCurrentWaits: currentWaitInfo,
-    userDiscardWaits: computed(() => state.selectedIndex.value >= 0 && currentWaitInfo.value
-      && moves.value.some(a => a.kind === 'discard' && a.index === state.selectedIndex.value)
-      ? { ...currentWaitInfo.value, discard: state.players[0].hand[state.selectedIndex.value] } : null),
-    userTingOptions: computed(() => []),
+    userDiscardWaits, userTingOptions,
     startGame, nextRound, returnToLobby, tileName,
     selectTile: (index: number) => {
       if (!moves.value.some(a => a.kind === 'discard' && a.index === index)) return

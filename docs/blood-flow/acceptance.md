@@ -108,6 +108,10 @@ Codex 通过浏览器正常大厅选择血流，使用默认速度完整打完�
 
 ## 证据按版本看
 
+2026-09-05 听牌提示缺失（G04）：原适配每换响应窗口就清空听口，仅本家存在可操作动作时重算，且 `userTingOptions` 恒为空；吃碰后没有摸牌标记时还会直接跳过计算。现由既有评分 worker 批量计算本家当前听口和每种合法弃牌听口，复用原评估器；按手牌/副露/精牌/锁手缓存，别人出牌只刷新可见余张，过期计算取消。界面显示“已听 / 可听”，恢复原弃牌箭头和悬停/选牌提示；轮到本家时也可打开当前听口，锁手仅标记实际摸牌。网格继续只显示倍数与余张，不自动展开长明细。
+
+本轮 HUD 接线随并行提交 `023cb52` 进入 master，本次补齐相应计算、数据及回归。`handWaits.test.ts` 7 条通过（14/11/8/5/2 张、当前听口与弃牌预览分开、锁手同牌摸切）；`blood-flow.claim-actions.spec.ts` 10 条通过，涵盖碰后可听、出牌后无本家动作仍保留已听、同窗重复投影、锁手箭头及触屏选择。构建（含类型检查）通过。已通过真实规则引擎固定输入在浏览器操作并观察[碰后箭头](../../work/blood-flow-playability/ting-after-peng.png)、[选牌后的网格](../../work/blood-flow-playability/ting-selected-preview.png)、[别人回合的已听入口](../../work/blood-flow-playability/ting-other-turn.png)。这不是新增计分规则，也不视为本轮演出或P2P整体验收。
+
 2026-09-05 中途退出后重开：旧血流 `returnToLobby` 未清空玩家，导致大厅背后的 HUD/3D 牌桌仍挂载；App 重开时重置就绪信号，旧牌桌却不再发送 ready，于是停在 136 张。现复用公共退场清理，旧玩家及牌桌正常卸载。新增 `blood-flow.local.spec.ts` 的 `restarts from the lobby after leaving an unfinished east match`，修复前实际失败在返回大厅后画布仍有 1 个；修复后通过（32.2s），正常点击大厅开始、发到 14 张并可出牌，牌数降至 13。首局通过保守恒的末巡输入进入真实结算以缩短准备时间；重新开局使用完整正常牌墙及默认开局时间线，没有用演出夹具模拟成功。已目视检查[退场后的大厅](../../work/blood-flow-playability/restart-lobby.png)及[重新开局后的东一局](../../work/blood-flow-playability/restarted-east-one.png)，类型检查通过。保留返回大厅按钮；此前仅验证“回到大厅”没有继续验证“再次开始”的记录，不再视作重开通过证据。
 
 2026-09-05 胡牌次数移至头像：桌面放在头像卡片积分下，小屏放在卡片侧边，去掉层数文字。已目视检查 jade / llmAnime 的 [桌面](../../work/blood-flow-playability/avatar-wins-jade-1280.png) 和 [568×320](../../work/blood-flow-playability/avatar-wins-jade-568.png)；本家卡原本禁用指针事件，已为次数按钮单独恢复点击。初次回归发现小屏与操作区重叠，调整为卡片侧边后，座位换向及 0 / 1 / 4 / 12 / 40 / 80 次布局回归 3/3 通过，结算导航 6/6 通过。对应玩家头像与流水归属一致，类型检查通过；未改变实际盖楼或计分。
