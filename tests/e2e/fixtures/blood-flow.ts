@@ -110,17 +110,17 @@ function announceBatch(batch:WinBatch){for(const record of batch.winners)actionA
   announceBatch(batch)
 }
 ;(window as any).__restoreBloodFlow = () => { liveState.value = { ...liveState.value, presentationKey: `restore-${++restore}` } }
-;(window as any).__appendBloodFlowMultiWin = () => {
+;(window as any).__appendBloodFlowMultiWin = (winnerSeats:Seat[]=[1,2,3], sourceSeat:Seat=0) => {
   const id = `multi-${++serial}`
-  const source = { id: `${id}-tile`, seat: 0 as Seat, tile: 'm1' as TileType, kind: 'discard' as const }
-  const winners = ([1, 2, 3] as Seat[]).map(winner => {const winScore=scorePatterns([(['pure-suit','big-three-dragons','thirteenOrphans'] as const)[winner-1]],true,'discard');return ({ id: `${id}-${winner}`, batchId: id, winner,
+  const source = { id: `${id}-tile`, seat: sourceSeat, tile: 'm1' as TileType, kind: 'discard' as const }
+  const winners = winnerSeats.map((winner,index) => {const winScore=scorePatterns([(['pure-suit','big-three-dragons','thirteenOrphans'] as const)[index]],true,'discard');return ({ id: `${id}-${winner}`, batchId: id, winner,
     ordinal: liveState.value.seats[winner].winCount + 1, sourceEventId: source.id, score: winScore,
-    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === 0 ? -winScore.paymentPerPayer : 0) })})
+    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === sourceSeat ? -winScore.paymentPerPayer : 0) })})
   const batch: WinBatch = { authorityEpoch: 'fixture', sequence: serial, roundId: 'fixture-round', ruleVersion: 'lotus-blood-flow-v1',
     batchId: id, windowId: id, source, winners, deltas: vector(s => winners.reduce((n,w) => n + w.deltas[s], 0)),
-    scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:1} }
+    scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:((sourceSeat+1)%4) as Seat} }
   liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
-    ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
+    ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (winnerSeats.includes(s) ? 1 : 0) })) }
   announceBatch(batch)
 }
 ;(window as any).__appendBloodFlowKong = (actor:Seat=0) => {
@@ -157,7 +157,7 @@ createApp({setup(){
     const fixed=query.has('fixedTts')?{cancel:()=>{},executeAction:async({action}:any)=>{(window as any).__bfFixedCalls++;if(query.get('fixedTts')==='fail')throw new Error('fixture TTS unavailable');const file=animeFallbackAudioForAction(action);if(file)audio.playEffect(file);return {fallbackAudioFile:null}}}:undefined
     actionAudio=createBloodFlowAudioBridge({theme:()=>theme,epoch:()=>liveState.value.roundId,player:i=>livePlayers.value[i],play:audio.playEffect,fixed:fixed as any})
   }
-  return () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
+  return () => h('main', { class: 'game-app', 'data-theme': theme, 'data-table-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
   ...props, players:livePlayers.value,user:livePlayers.value[0],lastDiscard:liveLastDiscard.value,bloodFlow: liveState.value, tableActionEvent: liveAction.value,
   phase: liveState.value.roundResult ? 'settled' : props.phase,
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
