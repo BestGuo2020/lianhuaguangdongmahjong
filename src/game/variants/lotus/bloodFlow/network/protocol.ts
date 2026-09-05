@@ -5,6 +5,7 @@ import type { BloodFlowSeatView } from '../seatView'
 import type { EngineCommand } from '../state'
 import type { Seat, WinBatch, KongLedgerEntry } from '../types'
 import type { BloodFlowReaction } from '../../../../llm/bloodFlowRuntime'
+import type {BloodFlowActionSpeech} from '../../../../llm/bloodFlowSpeech'
 import { LLM_TTS_VOICE_OPTIONS } from '../../../../llm/config'
 
 export interface BloodFlowEnvelope {
@@ -27,6 +28,7 @@ export type BloodFlowPacket =
   | (BloodFlowEnvelope & { kind: 'blood_flow_opening_done'; authorityEpoch: string; round: number })
   | (BloodFlowEnvelope & { kind: 'blood_flow_auto'; authorityEpoch: string; enabled: boolean })
   | (BloodFlowEnvelope & { kind: 'blood_flow_reaction'; reaction: BloodFlowReaction })
+  | (BloodFlowEnvelope & { kind: 'blood_flow_action_speech'; speech:BloodFlowActionSpeech })
   | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean })
   | (AuthorityEnvelope & { kind: 'win_batch'; batch: WinBatch })
   | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat })
@@ -158,6 +160,14 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
       && text(r.id) && text(r.authorityEpoch) && text(r.roundId) && seat(r.seat) && typeof r.text === 'string' && r.text.length > 0 && r.text.length <= 40
       && LLM_TTS_VOICE_OPTIONS.some(v => v.value !== 'auto' && v.value === r.voiceKey)
       && ['激进', '稳健', '话痨', '高冷'].includes(r.style) && ['llm', 'llmAnime'].includes(r.theme) ? value as BloodFlowPacket : null
+  }
+  if(value.kind==='blood_flow_action_speech'){
+    const s=value.speech
+    return object(s)&&only(s,['id','authorityEpoch','roundId','seat','stateVersion','eventKind','eventId','actionType','text','style','voiceKey','theme'])
+      &&text(s.id)&&text(s.authorityEpoch)&&text(s.roundId)&&seat(s.seat)&&int(s.stateVersion)&&['discard','action'].includes(s.eventKind)&&text(s.eventId)
+      &&['discard','chi','peng','discard-gang','added-gang','concealed-gang','wind-kong'].includes(s.actionType)
+      &&typeof s.text==='string'&&s.text.length>0&&[...s.text].length<=16&&['llm','llmAnime'].includes(s.theme)
+      &&['激进','稳健','话痨','高冷'].includes(s.style)&&LLM_TTS_VOICE_OPTIONS.some(v=>v.value!=='auto'&&v.value===s.voiceKey)?value as BloodFlowPacket:null
   }
   if (value.kind === 'blood_flow_command') {
     const c = value.command

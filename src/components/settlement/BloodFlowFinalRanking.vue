@@ -13,5 +13,5 @@ defineProps<{ result: BloodFlowRoundResult; players: GamePlayer[]; localSeat: nu
 </template>
 <style scoped>
 .bf-final-hero { text-align:center; margin:6px 0 22px; } h2 { margin:8px 0; font-size:clamp(28px,4vw,46px); color:var(--theme-accent,#e6c482); letter-spacing:.15em; } small,p { opacity:.7; font-size:12px; } p { margin:0; }
-@container (max-height:450px) { .bf-final-hero { margin:0 0 10px; } h2 { font-size:26px; margin:4px 0; } }
+@container (max-height:450px) { .bf-final-hero { display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 8px; } h2 { font-size:24px; margin:0; } small{display:none} p{font-size:10px} }
 </style>

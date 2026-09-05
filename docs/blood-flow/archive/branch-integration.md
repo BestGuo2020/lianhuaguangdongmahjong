@@ -1,10 +1,14 @@
 # 血流 E00：分支接线与基线
 
+> 历史分支盘点与三处接线授权记录。保留当时文件归属和补丁证据，不将旧 HEAD / 未授权状态当成当前状态。执行时仍读取仓库现行 AGENTS.md 与同步脚本。
+> 当前入口：[文档首页](../README.md) · [当前任务](../tasks.md) · [验收记录](../acceptance.md)。
+
+
 ## E06 工作流补充授权
 
-2026-09-05，本任务用户明确回复“授权这三处血流接线”，同意按 `docs/lotus-blood-flow-p2p-protected.patch` 在 P2P 分支的 `src/App.vue`、`src/components/lobby/LobbyView.vue`、`src/game/core/contracts/gamePort.ts` 接入玩法选择、可选能力与共享 UI。仅此三处受保护接线纳入本任务授权；保留 P2P 联机、房主主题同步/客机锁定、开局参数及模型密钥私有边界。没有删 keep 项或引用旧 Phase 11V 授权。本补充取代下文盘点时的“E06 尚未授权”状态记录。
+2026-09-05，本任务用户明确回复“授权这三处血流接线”，同意按 `docs/blood-flow/archive/p2p-protected.patch` 在 P2P 分支的 `src/App.vue`、`src/components/lobby/LobbyView.vue`、`src/game/core/contracts/gamePort.ts` 接入玩法选择、可选能力与共享 UI。仅此三处受保护接线纳入本任务授权；保留 P2P 联机、房主主题同步/客机锁定、开局参数及模型密钥私有边界。没有删 keep 项或引用旧 Phase 11V 授权。本补充取代下文盘点时的“E06 尚未授权”状态记录。
 
-盘点日期：2026-09-05。唯一规则依据：[实施计划](lotus-blood-flow-implementation-plan.md)。本记录不表示 E06 已获接线授权，也不表示新玩法可用。
+盘点日期：2026-09-05。当时规则计划已归档，现行依据见[规则与体验约定](../rules.md)。下表为授权前 E00 盘点快照；三处接线已获授权，范围以上方授权记录为限。
 
 ## 分支与工作树
 
@@ -55,7 +59,7 @@
 
 除 `src/App.vue` 外，表内路径均省略 `src/game/` 或 `src/` 的显然公共前缀；实施时以仓库真实路径为准。
 
-E01 不需要修改任何受保护既有接线，已通过新增共享模块完成。E06 尚未取得工作流补充授权。已有 `ruleset` 注入只能替换旧单胡计算，不能代替批次窗口、血流可选端口或客户端恢复。到 E05 完成时，应给出可复核最小补丁：GameCapabilities 增加 `bloodFlow?: BloodFlowPublicState`；lotusGame 为新配置装配共享生命周期并投射该字段，保留所有 headless/remote 参数；snapshot mapper/decoder/reconciler 显式白名单映射公开批次；SettlementOverlay 仅添加共享流水组件挂载。具体 diff 依赖 E03/E05 的最终接口，当前不虚构可应用补丁、不将 E06 标成已解决，也不请求空泛授权。
+E01 不需要修改任何受保护既有接线，已通过新增共享模块完成。E00 盘点时 E06 尚未取得工作流补充授权；后来三处具体接线授权见本文件开头。已有 `ruleset` 注入只能替换旧单胡计算，不能代替批次窗口、血流可选端口或客户端恢复。到 E05 完成时，应给出可复核最小补丁：GameCapabilities 增加 `bloodFlow?: BloodFlowPublicState`；lotusGame 为新配置装配共享生命周期并投射该字段，保留所有 headless/remote 参数；snapshot mapper/decoder/reconciler 显式白名单映射公开批次；SettlementOverlay 仅添加共享流水组件挂载。具体 diff 依赖 E03/E05 的最终接口，当前不虚构可应用补丁、不将 E06 标成已解决，也不请求空泛授权。
 
 ## A01 原动作音基线
 

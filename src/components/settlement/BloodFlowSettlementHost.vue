@@ -13,6 +13,7 @@ type View='table'|'round'|'final'|'details'
 const view=ref<View>('table'), detailsReturn=ref<View>('table'), filterSeat=ref<number|null>(null), requested=ref(false)
 const restored=ref(false), opened=new Set<string>()
 const result=computed(()=>props.state.roundResult)
+const bubbles=computed(()=>['llm','llmAnime'].includes(props.themeName)?props.state.roundBubbles:undefined)
 const pending=computed(()=>requested.value||props.state.continuation?.ready)
 const summary=()=>props.matchFinished?'final' as const:'round' as const
 function showSummary() { if(!result.value)return; view.value=summary(); filterSeat.value=null; restored.value=opened.has(result.value.roundId); opened.add(result.value.roundId) }
@@ -33,8 +34,8 @@ defineExpose({showSummary,showDetails,showTable})
       <header><small>莲花麻将·血流</small><button type="button" aria-label="关闭流水" @click="showTable">×</button></header>
       <div class="bf-settlement-body">
         <BloodFlowRoundLedger v-if="view==='details'" :open="true" :state="state" :players="players" :local-seat="localSeat" :filter-seat="filterSeat" :theme-name="themeName" embedded />
-        <BloodFlowFinalRanking v-else-if="view==='final'&&result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" />
-        <BloodFlowRoundSummary v-else-if="result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :round-label="roundLabel" />
+        <BloodFlowFinalRanking v-else-if="view==='final'&&result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :bubbles="bubbles" />
+        <BloodFlowRoundSummary v-else-if="result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :round-label="roundLabel" :bubbles="bubbles" />
       </div>
       <p v-if="pending" class="bf-ready-status" role="status">{{ state.continuation?.ready ? `已准备，等待其他玩家（${state.continuation.readySeats.length}/${state.continuation.requiredSeats.length}）` : state.continuation ? '正在确认准备状态…' : '正在进入下一局…' }}</p>
       <p v-if="state.status==='interrupted'" class="bf-ready-status" role="status">连接已中断，保留本局结果。恢复后可重新准备。</p>
@@ -54,7 +55,10 @@ defineExpose({showSummary,showDetails,showTable})
 <style scoped>
 .blood-flow-result-reopen { position:fixed; right:max(16px,env(safe-area-inset-right)); bottom:max(84px,22dvh); z-index:80; min-height:40px; padding:9px 22px; border:1px solid var(--theme-border,#8a947c); border-radius:10px; background:var(--theme-panel,#142424); color:var(--theme-text,#fff2d9); font:inherit; font-weight:700; cursor:pointer; box-shadow:0 4px 18px #0006; }
 .bf-settlement-backdrop { position:fixed; inset:0; z-index:180; display:grid; place-items:center; padding:12px; background:#000a; container-type:size; color:var(--theme-text,#fff2d9); }
-.bf-settlement { width:min(860px,96vw); max-height:94dvh; display:flex; flex-direction:column; border:1px solid var(--theme-border,#8a947c); border-radius:18px; background:var(--theme-panel,#142424); box-shadow:0 24px 90px #0009; overflow:hidden; }
+.bf-settlement { width:min(860px,96vw); max-height:94dvh; display:flex; flex-direction:column; border:1px solid var(--theme-border,#8a947c); border-radius:18px; background:linear-gradient(var(--theme-panel,#142424),var(--theme-panel,#142424)),#10221d; box-shadow:0 24px 90px #0009; overflow:hidden; }
+.bf-settlement:not(.restored) {animation:bf-settlement-enter .28s ease-out both}
+@keyframes bf-settlement-enter {from{opacity:0;translate:0 20px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.bf-settlement:not(.restored){animation:none}}
 header,footer { display:flex; align-items:center; gap:8px; padding:12px 18px; flex-shrink:0; } header { justify-content:space-between; border-bottom:1px solid #ffffff18; } header small { opacity:.7; } footer { flex-wrap:wrap; justify-content:center; border-top:1px solid #ffffff18; }
 .bf-settlement-body { padding:16px 20px; min-height:0; overflow:auto; overscroll-behavior:contain; }
 button { cursor:pointer; border:1px solid var(--theme-border,#8a947c); border-radius:8px; background:transparent; color:inherit; padding:7px 12px; min-height:36px; } button:disabled { cursor:default; opacity:.5; } .bf-primary { background:var(--theme-accent,#e6c482); color:var(--theme-panel,#142424); font-weight:700; }

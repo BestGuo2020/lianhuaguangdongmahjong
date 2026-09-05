@@ -1,5 +1,9 @@
 # 血流硬件 GPU 渲染测量
 
+> 历史测量记录，仅对正文标明的提交 / 环境 / 样本有效；本次迁移没有重新运行实验。
+> 当前入口：[文档首页](../README.md) · [当前任务](../tasks.md) · [验收记录](../acceptance.md)。
+
+
 日期：2026-09-05；规则：lotus-blood-flow-v1。
 
 按用户要求，两个 Playwright 配置均采用 channel: chromium 与 --enable-gpu。使用完整 Chromium 的新 headless 模式；保留 P2P 原有后台计时策略。验收断言 renderer 不为空且不含 SwiftShader、llvmpipe、software 或 Basic Render，禁止悄悄回退软件渲染。

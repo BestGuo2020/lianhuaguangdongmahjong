@@ -75,6 +75,10 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
     roundResult:summarizeRound(state.ruleVersion,state.roundId,[1700,2900,1700,1700],[1500,2700,2300,1500],[0,0,1,0],[{kind:'win',batch}])}
 }
 ;(window as any).__setBloodFlowContinuation = (ready:boolean, readySeats:Seat[]=[]) => { liveState.value={...liveState.value,continuation:{ready,readySeats,requiredSeats:[0,1]}} }
+;(window as any).__setBloodFlowBubbles = (kind:'action'|'round') => {
+  const bubbles=Object.fromEntries(livePlayers.value.map((p,i)=>[i,{id:i+1,text:`${p.name}${kind==='round'?'本局小结':'先打这张'}`,persistent:kind==='round'}]))
+  liveState.value={...liveState.value,...(kind==='round'?{roundBubbles:bubbles}:{actionBubbles:bubbles})}
+}
 ;(window as any).__nextBloodFlowFixtureRound = () => {
   liveFinished.value = false
   liveState.value = { ...bloodFlow, roundId: 'fixture-next-round', roundResult: null, status: 'playing' }

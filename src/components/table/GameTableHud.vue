@@ -198,7 +198,7 @@ const presentedAnimeActionPosition = computed(() => presentedAnimeActionEvent.va
   ? seatPosition[presentedAnimeActionEvent.value.actorIndex]
   : 'bottom')
 const presentedLlmBubbles = computed(() => props.bloodFlow
-  ? props.bloodFlow.roundResult && ['llm', 'llmAnime'].includes(props.themeName) ? props.bloodFlow.roundBubbles : undefined
+  ? ['llm','llmAnime'].includes(props.themeName)?props.bloodFlow.roundResult?(settlementVisible.value?undefined:props.bloodFlow.roundBubbles):props.bloodFlow.actionBubbles:undefined
   : bubbleLabEnabled
   ? {
       ...props.llmBubbles,
@@ -486,6 +486,7 @@ function onAvatarError(entry: GamePlayer) {
         <b>胡 {{ pile.count }}次</b><small v-if="pile.levels">{{ pile.levels }}层</small>
       </button>
       <BloodFlowSettlementHost ref="settlementHost" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
+        :presentation-busy="presentationBusy"
         :match-finished="matchFinished" :round-label="roundLabel" @visible-change="settlementVisible=$event"
         @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" />
     </template>

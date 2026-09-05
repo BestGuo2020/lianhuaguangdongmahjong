@@ -27,6 +27,7 @@ import { createBloodFlowAudioBridge } from './audioBridge'
 import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
 import { getLocalTtsClient } from '../../../llm/localTtsClient'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
+import {actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -56,7 +57,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const presentationSerial = shallowRef(0)
   const continuation = shallowRef<import('./types').BloodFlowTableState['continuation']>()
   const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
-  const decisions = createBloodFlowDecisions()
+  const actionBubbles = shallowRef<Record<number, {text:string;id:number;persistent:boolean}>>({})
+  const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade'})
+  const actionSpoken=new Set<string>(),actionSpeechControllers=new Set<AbortController>()
   const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
   let speechChain = Promise.resolve(), bubbleSerial = 0
   const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
@@ -92,11 +95,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     hintWorker?.cancel(); hintWorker = null
     actionAudio.reset()
     decisions.cancel(); pendingBots.clear(); reactions.cancel(); cancelReactionSpeech(); spoken.clear()
+    cancelActionSpeech();actionSpoken.clear()
   }
   const actionAudio = createBloodFlowAudioBridge({ epoch: () => `blood-flow:${generation}`, theme: () => options.getThemeName?.() ?? 'jade',
     player: index => state.players[index], fixed: options.animeFixedTts, play: sound })
   const transient = createLocalTransientEventPresenter({ state, later, onTableAction: actionAudio.present })
-  watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech() } })
+  watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech();cancelActionSpeech();decisions.cancelSpeech() } })
 
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
@@ -139,7 +143,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       heardAction = action.id
       transient.showTableAction(action.type, toLocal(action.actorIndex), action.sourceIndex === null ? null : toLocal(action.sourceIndex), action.tile, action.meldIndex)
     }
+    if(!options.externalAuthority)for(const line of decisions.observe(next))void presentActionSpeech(line)
     if (next.public.roundResult) {
+      cancelActionSpeech()
       const result = next.public.roundResult
       state.revealHands.value = true
       state.result.value = { winner: '本局结束', draw: result.winCounts.every(n => n === 0), roundLabel: common.roundLabel.value,
@@ -289,6 +295,23 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     speechControllers.forEach(c => c.abort()); speechControllers.clear()
     roundBubbles.value = {}; speechChain = Promise.resolve()
   }
+  function cancelActionSpeech(){actionSpeechControllers.forEach(c=>c.abort());actionSpeechControllers.clear();actionBubbles.value={}}
+  async function presentActionSpeech(line:BloodFlowActionSpeech):Promise<void>{
+    const current=view.value,theme=options.getThemeName?.()??'jade'
+    if(!current||theme!==line.theme||!bloodFlowReactionsAllowed(theme)||actionSpoken.has(line.id)||!actionSpeechMatches(line,current))return
+    actionSpoken.add(line.id)
+    const seat=(line.seat-current.seat+4)%4,id=++bubbleSerial,epoch=generation
+    actionBubbles.value={...actionBubbles.value,[seat]:{text:line.text,id,persistent:false}}
+    later(()=>{if(actionBubbles.value[seat]?.id===id){const copy={...actionBubbles.value};delete copy[seat];actionBubbles.value=copy}},5000)
+    // Chi/peng/kong already have their original action voice. Only ordinary discard commentary uses TTS.
+    if(line.eventKind!=='discard'||!canPlayLocalLlmAudio())return
+    const route=resolveAnimeAudioPolicy({themeName:theme,playerKind:'llm'})
+    if(route.discard.commentary==='suppress')return
+    const controller=new AbortController();actionSpeechControllers.add(controller)
+    const isCurrent=()=>generation===epoch&&view.value?.roundId===line.roundId&&!view.value.public.roundResult&&options.getThemeName?.()===line.theme&&!controller.signal.aborted
+    try{await getLocalTtsClient().speak(seat,line.text,line.voiceKey,line.style,'normal',{signal:controller.signal,isCurrent,cacheIdentity:line.id})}catch{/* text remains usable without voice */}
+    finally{actionSpeechControllers.delete(controller)}
+  }
   function presentRoundReaction(line: BloodFlowReaction, signal?: AbortSignal): Promise<void> {
     const current = view.value, theme = options.getThemeName?.() ?? 'jade'
     if (!current?.public.roundResult || current.authorityEpoch !== line.authorityEpoch || current.roundId !== line.roundId
@@ -381,7 +404,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:actionBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
@@ -397,6 +420,6 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const action = moves.value.find(a => a.kind === 'concealed-kong' && a.tile === tile
         || a.kind === 'added-kong' && state.players[0].melds[a.meldIndex].tile === tile)
       if (action) send(action)
-    }, refreshWaits, view, acceptRemoteView, presentRoundReaction, llmStats: decisions.stats, dispose: clear,
+    }, refreshWaits, view, acceptRemoteView, presentRoundReaction, presentActionSpeech, llmStats: decisions.stats, dispose: clear,
   })
 }
