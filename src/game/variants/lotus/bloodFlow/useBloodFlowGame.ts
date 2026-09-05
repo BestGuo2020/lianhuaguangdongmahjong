@@ -341,7 +341,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if(route.discard.commentary==='suppress')return
     const controller=new AbortController();actionSpeechControllers.add(controller)
     const isCurrent=()=>generation===epoch&&view.value?.roundId===line.roundId&&!view.value.public.roundResult&&options.getThemeName?.()===line.theme&&!controller.signal.aborted
-    try{await getLocalTtsClient().speak(seat,line.text,line.voiceKey,line.style,'normal',{signal:controller.signal,isCurrent,cacheIdentity:line.id})}catch{/* text remains usable without voice */}
+    // Event IDs only deduplicate playback; ordinary speech uses the gateway's content cache.
+    try{await getLocalTtsClient().speak(seat,line.text,line.voiceKey,line.style,'normal',{signal:controller.signal,isCurrent})}catch{/* text remains usable without voice */}
     finally{actionSpeechControllers.delete(controller)}
   }
   function presentRoundReaction(line: BloodFlowReaction, signal?: AbortSignal): Promise<void> {
@@ -360,7 +361,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const seat = (line.seat - current.seat + 4) % 4
       roundBubbles.value = { ...roundBubbles.value, [seat]: { text: line.text, id: ++bubbleSerial, persistent: true } }
       if (canPlayLocalLlmAudio()) await getLocalTtsClient().speak(seat, line.text, line.voiceKey, line.style, 'important',
-        { isCurrent, signal: controller.signal, cacheIdentity: line.id, waitForCompletion: true })
+        { isCurrent, signal: controller.signal, waitForCompletion: true })
     }).catch(() => {}).finally(() => { signal?.removeEventListener('abort', abort); speechControllers.delete(controller) })
     speechChain = operation
     return operation
