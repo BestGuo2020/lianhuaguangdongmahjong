@@ -13,7 +13,6 @@ import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/ty
 import BloodFlowSettlementHost from '../settlement/BloodFlowSettlementHost.vue'
 import BloodFlowWinCard from './BloodFlowWinCard.vue'
 import BloodFlowWinPresentation from './BloodFlowWinPresentation.vue'
-import { bloodFlowWinPiles } from './three/bloodFlowWinPile'
 import { BloodFlowPresentationDirector } from '../../game/variants/lotus/bloodFlow/presentationDirector'
 import type { BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
 import { bloodFlowImpactProfile } from '../../theme/bloodFlowPresentation'
@@ -111,13 +110,11 @@ const emit = defineEmits<{
 
 const settlementHost = ref<InstanceType<typeof BloodFlowSettlementHost>|null>(null)
 const settlementVisible = ref(false)
-const pileAnchors = ref<{ left: number; top: number }[]>([])
 const pileMedia = window.matchMedia('(max-width: 900px), (max-height: 500px)')
 const compactPiles = ref(pileMedia.matches)
 const resizePiles = () => { compactPiles.value = pileMedia.matches }
 pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
-const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
 const presentationDirector=new BloodFlowPresentationDirector(import.meta.env.DEV?Number(new URLSearchParams(window.location.search).get('motionScale'))||1:1)
 const effectPlayer=useEffectPlayer(),playedImpacts=new Set<string>()
@@ -478,17 +475,9 @@ function onAvatarError(entry: GamePlayer) {
       :blood-flow-own-draw="ownDrawScreen"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
-      @pile-anchors="pileAnchors = $event"
     />
     <template v-if="bloodFlow">
       <BloodFlowWinPresentation :cue="bloodFlowCue" :now="presentationNow" :players="players" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
-      <button v-for="pile in bloodFlowPiles" :key="pile.absoluteSeat" type="button"
-        class="blood-flow-pile-badge" :class="[`pile-seat-${pile.relativeSeat}`, { 'pile-badge-compact': compactPiles }]" :data-pile-seat="pile.absoluteSeat"
-        :style="pileAnchors[pile.relativeSeat] ? { left: `${pileAnchors[pile.relativeSeat].left}%`, top: `${pileAnchors[pile.relativeSeat].top}%` } : { visibility: 'hidden' }"
-        :aria-label="`${players[pile.relativeSeat]?.name}，胡${pile.count}次，查看流水`"
-        @click="settlementHost?.showDetails(pile.absoluteSeat)">
-        <b>胡 {{ pile.count }}次</b><small v-if="pile.levels">{{ pile.levels }}层</small>
-      </button>
       <BloodFlowSettlementHost ref="settlementHost" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :presentation-busy="presentationBusy"
         :match-finished="matchFinished" :round-label="roundLabel" @visible-change="settlementVisible=$event"
@@ -544,7 +533,13 @@ function onAvatarError(entry: GamePlayer) {
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :theme-name="themeName"
       :bubble="presentedLlmBubbles?.[index + 1]"
-    />
+    >
+      <template v-if="bloodFlow" #footer>
+        <button type="button" class="blood-flow-pile-badge" :class="`win-count-${seatPosition[index + 1]}`" :data-pile-seat="player.seat"
+          :aria-label="`${player.name}，胡${bloodFlow.seats[player.seat].winCount}次，查看流水`"
+          @click="settlementHost?.showDetails(player.seat)">胡 {{ bloodFlow.seats[player.seat].winCount }}次</button>
+      </template>
+    </PlayerSeat>
 
     <Transition name="table-action" mode="out-in">
       <AnimeActionCue
@@ -586,6 +581,9 @@ function onAvatarError(entry: GamePlayer) {
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
         <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
         <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
+        <button v-if="bloodFlow" type="button" class="blood-flow-pile-badge win-count-bottom" :data-pile-seat="user.seat"
+          :aria-label="`${user.name}，胡${bloodFlow.seats[user.seat].winCount}次，查看流水`"
+          @click="settlementHost?.showDetails(user.seat)">胡 {{ bloodFlow.seats[user.seat].winCount }}次</button>
         <Transition name="llm-bubble">
           <div
             v-if="presentedLlmBubbles?.[0]"
@@ -715,12 +713,15 @@ function onAvatarError(entry: GamePlayer) {
   .blood-flow-wait-tile { font-size: 11px; }
   .blood-flow-wait-tile .mahjong-tile.small { --tile-width: 30px; margin-bottom: 2px; }
 }
-.blood-flow-pile-badge { position: absolute; z-index: 35; display: grid; gap: 2px; padding: 5px 8px; border-radius: 8px; border: 1px solid #d2c69a80; background: #142424dc; color: #fff2d9; cursor: pointer; min-width: 62px; min-height: 32px; font-size: 12px; }
-.blood-flow-pile-badge small { opacity: .7; font-size: 10px; }
-.blood-flow-pile-badge { transform: translate(-50%, -50%); }
-.pile-badge-compact.pile-seat-0 { transform: translate(-50%, 2px); display: flex; align-items: center; white-space: nowrap; min-height: 26px; }
+.blood-flow-pile-badge { position: relative; display: block; flex-shrink: 0; max-width: 100%; min-height: 24px; padding: 3px 7px; margin-top: 2px; border: 1px solid color-mix(in srgb, var(--theme-accent) 40%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--theme-accent) 10%, transparent); color: var(--theme-text); font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.blood-flow-pile-badge { pointer-events: auto; background: var(--theme-panel); }
+.blood-flow-pile-badge:hover { border-color: var(--theme-accent); }
+.blood-flow-pile-badge:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
 @container (max-width: 900px) or (max-height: 500px) {
-  .blood-flow-pile-badge { font-size: 10px; padding: 3px 5px; min-width: 52px; min-height: 28px; }
+  .blood-flow-pile-badge { font-size: 10px; padding: 3px 4px; min-height: 22px; }
+  .blood-flow-pile-badge { position: absolute; top: 4px; right: calc(100% + 4px); margin: 0; max-width: none; }
+  .win-count-left, .win-count-bottom { left: calc(100% + 4px); right: auto; }
+  .win-count-right { top: auto; bottom: 4px; }
   .blood-flow-table .hand-rack :deep(.mahjong-tile) { --tile-width: clamp(24px, 5.2vw, 40px); }
   .blood-flow-table .hand-tile-slot { min-width: 0; }
   .blood-flow-table .hand-rack:not(.has-melds) { justify-content: flex-end; padding-left: 0; padding-right: 0; }

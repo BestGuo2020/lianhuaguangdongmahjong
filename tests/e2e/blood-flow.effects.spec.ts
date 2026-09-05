@@ -16,7 +16,7 @@ for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {
     await expect(page.locator('.table-action-cue.win')).toHaveCount(0)
     await page.evaluate(() => { for (let i = 0; i < 12; i++) (window as any).__appendBloodFlowWin() })
     await expect(page.locator('[data-pile-seat="0"]')).toContainText('胡 13次')
-    await expect(page.locator('[data-pile-seat="0"]')).toContainText('4层')
+    await expect(page.locator('[data-pile-seat="0"]')).not.toContainText('层')
     await expect(page.locator('[data-pile-seat="0"]')).not.toContainText('收纳')
     await expect(page.locator('.blood-flow-central')).toHaveCount(1)
     await page.waitForTimeout(350) // Capture the reused beam/particles after their entrance fade.
