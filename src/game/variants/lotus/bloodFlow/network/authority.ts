@@ -106,6 +106,7 @@ export class BloodFlowAuthority {
         if (message.authorityEpoch !== this.options.authorityEpoch || message.round !== this.round || !this.current?.public.roundResult) return
         this.confirmed.add(this.bindings.get(peer)!)
         await this.maybeAdvance()
+        if(this.current?.public.roundResult) await this.publish()
       }
     }).catch(() => { this.interrupt() })
     return this.chain
@@ -131,8 +132,10 @@ export class BloodFlowAuthority {
     const seat = this.bindings.get(peer)
     if (seat === undefined || !this.compatible.has(peer)) return
     const view = await this.options.backend.view(seat)
+    const requiredSeats=[...this.bindings.values()].filter(s=>!this.aiSeats.has(s))
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
-      mode: this.options.mode, dealer: this.dealer, view }
+      mode: this.options.mode, dealer: this.dealer, view,
+      ...(view.public.roundResult?{continuation:{requiredSeats,readySeats:requiredSeats.filter(s=>this.confirmed.has(s))}}:{}) }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
       : { ...base, kind: 'blood_flow_snapshot', autoPlay: this.autoSeats.has(seat), ...(this.openingGate ? { opening: this.openingData! } : {}) })
   }

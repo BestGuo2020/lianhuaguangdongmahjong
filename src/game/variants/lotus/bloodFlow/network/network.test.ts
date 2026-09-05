@@ -93,6 +93,10 @@ describe('E06 four-endpoint authority and recovery', () => {
     r.flush()
     expect(r.replicas[1].view).toEqual(replay)
     expect(r.settled).toHaveBeenCalledTimes(1)
+    await r.host.receive({...r.replicas[0].hello(),kind:'blood_flow_continue',authorityEpoch:'epoch',round:1},'p0')
+    const ready=r.flush().find(d=>d.peer==='p0'&&d.packet.kind==='round_settled')!.packet as Extract<BloodFlowPacket,{kind:'round_settled'}>
+    expect(ready.continuation).toEqual({requiredSeats:[0,1,2,3],readySeats:[0]})
+    expect(r.backend.engine.options.roundId).toBe(replay.roundId)
   }, 20_000) // Full four-replica round plus common AI; independent from a single decision's deadline.
   it('waits out Relay recovery grace and pauses all moves during host interruption', async () => {
     const r = room(); await start(r)

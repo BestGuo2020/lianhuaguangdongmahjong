@@ -58,6 +58,17 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
   // P2P snapshots replace objects without starting another round.
   liveState.value = JSON.parse(JSON.stringify(liveState.value))
 }
+;(window as any).__settleBloodFlowRanking = () => {
+  const state=liveState.value, id='ranking-final-win', source={id:`${id}-tile`,seat:2 as Seat,tile:'s2' as TileType,kind:'draw' as const}
+  const deltas=vector(s=>s===2?600:-200)
+  const batch:WinBatch={authorityEpoch:'fixture',sequence:1,roundId:state.roundId,ruleVersion:state.ruleVersion,batchId:id,windowId:id,source,
+    deltas,scoresAfter:[1500,2700,2300,1500],nextAction:{kind:'finish-round',reason:'wall-exhausted'},
+    winners:[{id:`${id}-record`,batchId:id,winner:2,ordinal:1,sourceEventId:source.id,score,deltas}]}
+  liveFinished.value=true
+  liveState.value={...state,status:'settled',preview:null,batches:[batch],seats:vector(s=>({...state.seats[s],winCount:s===2?1:0})),
+    roundResult:summarizeRound(state.ruleVersion,state.roundId,[1700,2900,1700,1700],[1500,2700,2300,1500],[0,0,1,0],[{kind:'win',batch}])}
+}
+;(window as any).__setBloodFlowContinuation = (ready:boolean, readySeats:Seat[]=[]) => { liveState.value={...liveState.value,continuation:{ready,readySeats,requiredSeats:[0,1]}} }
 ;(window as any).__nextBloodFlowFixtureRound = () => {
   liveFinished.value = false
   liveState.value = { ...bloodFlow, roundId: 'fixture-next-round', roundResult: null, status: 'playing' }
