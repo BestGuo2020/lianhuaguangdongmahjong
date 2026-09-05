@@ -18,6 +18,9 @@ export default defineConfig({
   reporter: process.env.CI ? 'dot' : 'list',
   use: {
     baseURL,
+    // Use full Chromium headless with hardware GPU, not headless-shell SwiftShader.
+    channel: 'chromium',
+    launchOptions: { args: ['--enable-gpu'] },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 720 },

@@ -62,7 +62,11 @@ onBeforeUnmount(() => { clear(); queue.reset() })
 [data-theme="llm"] .blood-flow-central { font-family: monospace; letter-spacing: .08em; border: 1px solid var(--win-color); backdrop-filter: blur(8px); }
 [data-theme="llmAnime"] .blood-flow-central { border: 3px solid var(--theme-text); background: var(--theme-accent); color: var(--theme-panel); text-shadow: none; box-shadow: 6px 6px 0 #161625; }
 .compact .blood-flow-central { top: 29%; padding: 5px 16px; box-shadow: none; backdrop-filter: none; }
-.compact .blood-flow-seat-feedback { padding: 3px 8px; }
+.compact .blood-flow-central small { display: none; }
+.compact .blood-flow-central strong { font-size: 20px; line-height: 1.2; }
+.compact .blood-flow-seat-feedback { top: 2%; bottom: auto; right: auto; padding: 3px 6px; max-width: 18%; box-sizing: border-box; }
+.compact .feedback-0 { left: 20%; }.compact .feedback-1 { left: 38%; }.compact .feedback-2 { left: 56%; }.compact .feedback-3 { left: 74%; }
+.compact .blood-flow-seat-feedback b { font-size: 16px; }
 .reduced .blood-flow-central, .reduced .blood-flow-seat-feedback { animation: none; }
 @keyframes win-enter { from { opacity: 0; transform: translateX(-50%) scale(.8); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
 @keyframes win-feedback { from { opacity: 0; margin-top: 8px; } to { opacity: 1; margin-top: 0; } }
