@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileSpan, meldTileCenter } from '../../../game/core/presentation/tableLayout'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/presentation/winEffect'
 import type { WinEffect } from '../../../game/core/contracts/gamePort'
@@ -108,8 +108,8 @@ function robbedKongSourceTransform(effect: WinEffect) {
     let sourcePlacement: TableTransform | null = null
     laidTiles.forEach((_, tileIndex) => {
       const pointsToSource = tileIndex === sourceTileIndex
-      const tileSpan = pointsToSource ? 1.025 : .725
-      const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const tileSpan = meldTileSpan(pointsToSource)
+      const centerOffset = meldTileCenter(trackOffset, tileSpan)
       const sourceRot = pointsToSource ? sourceTileRotationOffset(relativeSource) : 0
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
@@ -126,7 +126,7 @@ function robbedKongSourceTransform(effect: WinEffect) {
       trackOffset += tileSpan
     })
     if (meldIndex === effect.robbedKongMeldIndex && sourcePlacement) {
-      const offset = addedKongTileOffset(playerIndex)
+      const offset = addedKongTileOffset(playerIndex, TABLE_LAYOUT.tilePitch)
       return {
         position: new THREE.Vector3(
           sourcePlacement.x + offset.x,
@@ -136,7 +136,7 @@ function robbedKongSourceTransform(effect: WinEffect) {
         rotation: sourcePlacement.rotation,
       }
     }
-    trackOffset += .18
+    trackOffset += TABLE_LAYOUT.groupGap
   }
   return null
 }

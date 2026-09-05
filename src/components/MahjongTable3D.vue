@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js'
@@ -22,11 +22,12 @@ import {
 } from './table/three/sceneRenderProfile'
 import { tableThemeByName, type TableTheme } from './table/three/tableTheme'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
+import { TABLE_LAYOUT, winRegionFrame } from '../game/core/presentation/tableLayout'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
 import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
-import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
+import { bloodFlowPileAnchor, bloodFlowWinPiles } from './table/three/bloodFlowWinPile'
 import { createBloodFlowWinEffects } from './table/three/bloodFlowWinEffects'
 import { cuePhase } from '../game/variants/lotus/bloodFlow/presentation'
 
@@ -66,13 +67,17 @@ let tableTiles: ReturnType<typeof createTableTilePresenter>
 // 中控台与墨玉台面的 Z 中心（桌身中心，保持不变）
 const PLAY_AREA_OFFSET_Z = -1.65
 // 牌层（牌墙/牌河/手牌/副露/骰子）的 Z 中心：单独向本家（+z）偏移，靠近玩家侧
+const winRegionTop = computed(() => Math.max(.31, ...bloodFlowWinPiles(
+  props.bloodFlowBatches ?? [], props.localSeat ?? 0, props.bloodFlowCompact,
+).flatMap(pile => pile.tiles.map(tile => tile.y))))
+function applyTableCamera(position:readonly number[]) {
+  const frame = winRegionFrame(winRegionTop.value)
+  camera.position.set(position[0], position[1] * frame.distance, position[2] * frame.distance)
+  camera.lookAt(0, frame.lookAtY, renderProfile.camera.lookAtZ)
+}
 const TILE_LAYER_Z = -1.0
-const TILE_GAP_OFFSET = .685    // 手牌间隙和加杠偏移量
-const POINT_GAP_OFFSET = 0.965  // 副露指向的偏移量
-// 副露带逼近手牌时，手牌让位后的「副露-暗手」间距：原 .62 ≈ 半个麻将，改为 1.24 ≈ 一个麻将牌。
-const MELD_HAND_GAP = 1.24
-// 下家（右家）副露整体向上（-z）移动 3 个麻将牌（3 × 牌宽 0.68），给摸牌位（右侧 -z 顶端）留出间隙。
-const MELD_UP_MOVE = 3 * .68
+const TILE_GAP_OFFSET = TABLE_LAYOUT.tilePitch    // 手牌间隙和加杠偏移量
+const POINT_GAP_OFFSET = TABLE_LAYOUT.sourcePitch  // 副露指向的偏移量
 const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初始高度（略高于两墩牌顶）
 
 // 触屏设备（真机）判定：主指针 coarse 且无 hover。
@@ -320,8 +325,9 @@ function render(time = 0) {
     if(bloodFlowFrame&&!winFrame){exposure+=bloodFlowFrame.exposureDelta;cameraShakeX=bloodFlowFrame.shakeX;cameraShakeZ=bloodFlowFrame.shakeZ}
     renderer.toneMappingExposure = exposure
     const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
-    camera.position.set(...cameraPosition)
-    camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+    // Frame the complete public win region, including the highest persistent tile.
+    // This changes only the camera; tile size, layer pitch and anchors remain fixed.
+    applyTableCamera(cameraPosition)
     if (props.bloodFlowBatches) {
       camera.updateMatrixWorld()
       if(import.meta.env.DEV&&canvas.value)canvas.value.dataset.bloodFlowFlights=JSON.stringify(tableTiles.flightDebug().map(f=>{
@@ -498,7 +504,7 @@ onMounted(async () => {
     contactShadowY: animeTable ? 0.075 : undefined,
   })
   tableTiles = createTableTilePresenter({
-    projectOwnDraw:point=>{camera.updateMatrixWorld();const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(point.x*2-1,1-point.y*2),camera);return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-.56),new THREE.Vector3())},
+    projectOwnDraw:point=>{applyTableCamera(tableCameraPosition(renderProfile));camera.updateMatrixWorld();const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(point.x*2-1,1-point.y*2),camera);return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-.56),new THREE.Vector3())},
     props,
     scene,
     dynamicGroups,
@@ -511,8 +517,6 @@ onMounted(async () => {
     playAreaOffsetZ: PLAY_AREA_OFFSET_Z,
     tileGapOffset: TILE_GAP_OFFSET,
     pointGapOffset: POINT_GAP_OFFSET,
-    meldHandGap: MELD_HAND_GAP,
-    meldUpMove: MELD_UP_MOVE,
     wallDealOriginY: WALL_DEAL_ORIGIN_Y,
     addWinEffect: () => winEffectPresenter?.addWinEffect(),
     addWinningDisplayTile: () => winEffectPresenter?.addWinningDisplayTile(),

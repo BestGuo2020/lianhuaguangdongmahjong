@@ -3570,3 +3570,45 @@ button { font: inherit; }
     transition: none !important;
   }
 }
+/* Public corner bays: identity and controls use the free centre lanes. */
+.game-app .has-three-scene .seat-top {
+  top: max(4px, var(--safe-top)); left: 50%; right: auto;
+  transform: translateX(-50%);
+}
+.game-app .has-three-scene .seat-top .avatar-wrap {
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  width: auto; min-width: 0; min-height: 0; padding: 4px 7px;
+  margin: 0; transform: none;
+}
+.game-app .has-three-scene .seat-top .avatar { width: 36px; height: 36px; }
+.game-app .has-three-scene .seat-top .player-info { width: auto; min-width: 40px; }
+.game-app .has-three-scene .seat-top .blood-flow-pile-badge {
+  position: relative; inset: auto; margin: 0;
+}
+.game-app .turn-action-row {
+  right: auto; left: 51%; transform: translateX(-50%);
+  bottom: calc(var(--safe-bottom) + 16cqh); justify-content: center;
+}
+.game-app .turn-action-row:is([data-meld-count="3"], [data-meld-count="4"]) {
+  bottom: calc(var(--safe-bottom) + 4px);
+}
+@container (max-height: 450px) {
+  .game-app .turn-action-row { gap: 4px; flex-wrap: nowrap; max-width: 220px; }
+  .game-app .turn-action-row .action-bar { max-width: 220px; justify-content: center; }
+  .game-app .has-three-scene .seat-top .avatar-wrap { padding: 2px 5px; }
+  .game-app .has-three-scene .seat-top .avatar { width: 24px; height: 24px; }
+  .game-app .turn-action-row .blood-flow-preview {
+    position: absolute; left: calc(50vw + 50% - 126px); bottom: 8px;
+    width: 112px; max-width: 112px; padding: 5px;
+  }
+  .game-app .turn-action-row .blood-flow-preview > * { min-width: 0; }
+  .game-app .turn-action-row .blood-flow-preview .win-card-main strong { min-width: 0; }
+  .game-app .turn-action-row .blood-flow-preview .win-card-modifiers { flex-wrap: wrap; }
+  .game-app .turn-action-row .blood-flow-preview .blood-flow-win-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Round metadata shares the header row without covering the top player's identity. */
+.game-app:not(.is-lobby) .round-info { left: calc(var(--safe-left) + 90px); transform: none; }
+@container (max-height: 450px) {
+  .game-app:not(.is-lobby) .round-info { left: calc(var(--safe-left) + 76px); padding: 3px 6px; font-size: 10px; }
+}

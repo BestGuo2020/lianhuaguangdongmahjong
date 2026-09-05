@@ -1,3 +1,4 @@
+import { winDisplayLayout } from '../../../game/core/presentation/winEffect'
 import { describe, expect, it } from 'vitest'
 import type { WinBatch } from '../../../game/variants/lotus/bloodFlow/types'
 import { bloodFlowWinPiles } from './bloodFlowWinPile'
@@ -18,11 +19,17 @@ function batches(count: number): WinBatch[] {
 }
 describe('E05 display references and capacities', () => {
   for (const compact of [false, true]) for (const viewer of [0, 1, 2, 3]) {
-    it.each([0, 1, 4, 12, 40, 80])(`capacity %i / compact=${compact} viewer=${viewer}`, count => {
+    it.each([0, 1, 4, 5, 13, 25, 41, 80])(`capacity %i / compact=${compact} viewer=${viewer}`, count => {
       const source = batches(count), before = JSON.stringify(source)
       const layout = bloodFlowWinPiles(source, viewer, compact)
       for (const pile of layout) {
         expect(pile.count).toBe(count)
+        if(count) {
+          const anchor=winDisplayLayout(pile.relativeSeat),first=pile.tiles[0]
+          expect({x:first.x,y:first.y,z:first.z,rotation:first.rotation}).toEqual(anchor)
+          const next=pile.tiles[compact?3:4]
+          if(next) { expect(next.x).toBe(first.x);expect(next.z).toBe(first.z);expect(next.y-first.y).toBeCloseTo(.46) }
+        }
         expect(pile.tiles).toHaveLength(count)
         expect(pile.levels).toBe(Math.ceil(count / (compact ? 3 : 4)))
         expect(pile.overflow + pile.tiles.length).toBe(count)

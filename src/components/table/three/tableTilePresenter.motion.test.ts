@@ -38,7 +38,7 @@ function setup(meld?: Meld, action?: TableActionType) {
     makeFaceTile: () => new THREE.Group(), tableScene: { makeDimmedHorseTile: () => new THREE.Group(),
       makeGoldGlow: () => new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial()), makeGoldVerticalGlow: () => new THREE.Sprite() },
     tileInstances: instances, tileLayerZ: -1, playAreaOffsetZ: -1.65, tileGapOffset: .685,
-    pointGapOffset: .965, meldHandGap: 1.24, meldUpMove: 0, wallDealOriginY: 1,
+    pointGapOffset: .965, wallDealOriginY: 1,
     addWinEffect: () => {}, addWinningDisplayTile: () => {},
   })
   return { props, rendered, presenter, setNow: (t: number) => { now = t } }
