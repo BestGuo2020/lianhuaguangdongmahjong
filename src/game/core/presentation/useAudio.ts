@@ -89,6 +89,7 @@ function persistAudioPreferences(preferences: AudioPreferences) {
 
 type EffectAudio = HTMLAudioElement & { __releaseEffect?: () => void }
 interface LlmAudioItem {
+  removeAbortListener?: () => void
   url: string
   seat: number
   messageId: number
@@ -218,6 +219,7 @@ export function useAudio() {
     const resolve = item.resolveMidpoint
     if (!resolve) return
     item.resolveMidpoint = undefined
+    item.removeAbortListener?.()
     resolve(played)
   }
 
@@ -361,7 +363,7 @@ export function useAudio() {
         }
         if (activeLlmAudio && activeLlmItem?.priority === 'normal') activeLlmItem.cancel?.()
       }
-      llmAudioQueue.push({
+      const item: LlmAudioItem = {
         url, seat, messageId, priority, enqueuedAt: Date.now(),
         waitForMidpoint: true,
         waitForCompletion: hooks.waitForCompletion,
@@ -369,7 +371,17 @@ export function useAudio() {
         fallbackMidpointMs: hooks.fallbackMidpointMs,
         isCurrent: hooks.isCurrent,
         resolveMidpoint: resolve,
-      })
+      }
+      const abort = () => {
+        const index = llmAudioQueue.indexOf(item)
+        if (index >= 0) llmAudioQueue.splice(index, 1)
+        item.cancel?.()
+        settleLlmMidpoint(item, false)
+      }
+      hooks.signal?.addEventListener('abort', abort, { once: true })
+      item.removeAbortListener = () => hooks.signal?.removeEventListener('abort', abort)
+      if (hooks.signal?.aborted) { abort(); return }
+      llmAudioQueue.push(item)
       pumpLlmAudio()
     })
   }

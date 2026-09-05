@@ -6,12 +6,12 @@ import { createBloodFlowWorkerClient } from '../workerClient'
 import type { BloodFlowAuthorityBackend } from './authority'
 
 /** In-process backend for deterministic simulations. Browser hosts use worker backend. */
-export function createDirectAuthorityBackend(now: () => number = Date.now) {
+export function createDirectAuthorityBackend(now: () => number = Date.now, testTiming: { winBeatMs?: number } = {}) {
   let engine: BloodFlowEngine | null = null
   const get = () => { if (!engine) throw new Error('No authority'); return engine }
   return {
     get engine() { return get() },
-    start: async options => { engine = new BloodFlowEngine({ ...options, now }) },
+    start: async options => { engine = new BloodFlowEngine({ ...options, ...testTiming, now }) },
     view: async seat => bloodFlowSeatView(get(), seat),
     command: async command => { get().submit(command) },
     bot: async (seat, windowId) => {

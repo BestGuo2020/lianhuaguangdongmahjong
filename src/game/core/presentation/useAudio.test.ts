@@ -64,6 +64,19 @@ afterEach(() => {
 })
 
 describe('useAudio LLM voice ducking', () => {
+  it('cancels only the requested utterance and keeps another queued seat playable', async () => {
+    const audio = useAudio(), abort = new AbortController()
+    const firstUrl = `/api/local-tts/audio/${'e'.repeat(64)}.mp3`, secondUrl = `/api/local-tts/audio/${'f'.repeat(64)}.mp3`
+    const first = audio.playLocalLlmAudioUntilMidpoint(firstUrl, 1, 1, 'important', { signal: abort.signal, waitForCompletion: true })
+    const second = audio.playLocalLlmAudioUntilMidpoint(secondUrl, 2, 2, 'important', { waitForCompletion: true })
+    abort.abort()
+    await expect(first).resolves.toBe(false)
+    expect(MockAudio.instances.find(a => a.src === firstUrl)!.pause).toHaveBeenCalledOnce()
+    const next = MockAudio.instances.find(a => a.src === secondUrl)!
+    expect(next.play).toHaveBeenCalledOnce()
+    next.emit('playing'); next.emit('ended')
+    await expect(second).resolves.toBe(true)
+  })
   it('单机语音在 playing 时显示气泡，并到实际播放中点才放行动作', async () => {
     const audio = useAudio()
     const started = vi.fn()

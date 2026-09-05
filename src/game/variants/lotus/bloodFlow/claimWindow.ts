@@ -7,7 +7,7 @@ export const sameAction = (a: unknown, b: unknown) => JSON.stringify(a) === JSON
 export function acceptWindowDecision(window: EngineWindow, command: EngineCommand, now: number): boolean {
   const seat = command.seat
   if (!SEATS.includes(seat) || window.id !== command.windowId || window.version !== command.stateVersion
-    || now >= window.deadlineAt || window.decisions[seat] !== null) return false
+    || now < window.opensAt || now >= window.deadlineAt || window.decisions[seat] !== null) return false
   const allowed = window.options[seat].find(a => sameAction(a, command.action))
   if (!allowed) return false
   window.decisions[seat] = allowed

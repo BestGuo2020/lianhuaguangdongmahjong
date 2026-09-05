@@ -11,7 +11,7 @@ export function seededRandom(seed: number) {
  * this policy's statistics are not claims about player strength or game balance. */
 export function simulateRound(seed: number, scores: readonly [number, number, number, number] = [2000, 2000, 2000, 2000], dealer: Seat = 0) {
   const random = seededRandom(seed)
-  const engine = new BloodFlowEngine({ authorityEpoch: 'simulation', roundId: `seed-${seed}`, random, scores, dealer, now: () => 0 })
+  const engine = new BloodFlowEngine({ authorityEpoch: 'simulation', roundId: `seed-${seed}`, random, scores, dealer, now: () => 0, winBeatMs: 0 })
   let commands = 0, firstWinWall: number | null = null
   while (!engine.result) {
     if (++commands > 2000) throw new Error(`Stalled seed ${seed}`)

@@ -4,6 +4,8 @@ import { BLOOD_FLOW_CONFIG } from '../config'
 import type { BloodFlowSeatView } from '../seatView'
 import type { EngineCommand } from '../state'
 import type { Seat, WinBatch } from '../types'
+import type { BloodFlowReaction } from '../../../../llm/bloodFlowRuntime'
+import { LLM_TTS_VOICE_OPTIONS } from '../../../../llm/config'
 
 export interface BloodFlowEnvelope {
   roomId: string
@@ -21,7 +23,9 @@ export type BloodFlowPacket =
   | (BloodFlowEnvelope & { kind: 'blood_flow_command'; command: EngineCommand })
   | (BloodFlowEnvelope & { kind: 'blood_flow_continue'; authorityEpoch: string; round: number })
   | (BloodFlowEnvelope & { kind: 'blood_flow_opening_done'; authorityEpoch: string; round: number })
-  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening })
+  | (BloodFlowEnvelope & { kind: 'blood_flow_auto'; authorityEpoch: string; enabled: boolean })
+  | (BloodFlowEnvelope & { kind: 'blood_flow_reaction'; reaction: BloodFlowReaction })
+  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean })
   | (AuthorityEnvelope & { kind: 'win_batch'; batch: WinBatch })
   | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat })
   | (BloodFlowEnvelope & { kind: 'blood_flow_error'; code: 'INCOMPATIBLE_RULE_VERSION' | 'INTERRUPTED' })
@@ -114,8 +118,8 @@ export function isSeatView(v: unknown): v is BloodFlowSeatView {
     && (settled || s === v.seat || p.hand.length === 0) && Array.isArray(p.melds)
     && p.melds.every((m: any) => object(m) && only(m, ['type', 'tile', 'tiles', 'from', 'added', 'pending', 'windKong'])
       && ['peng', 'gang', 'angang', 'chi'].includes(m.type) && !m.pending && tiles(m.tiles, 4) && TILE_TYPES.includes(m.tile)))) return false
-  if (v.window !== null && (!object(v.window) || !only(v.window, ['id', 'version', 'kind', 'deadlineAt', 'source']) || !text(v.window.id)
-    || !int(v.window.version) || !Number.isFinite(v.window.deadlineAt) || !['turn', 'win', 'meld'].includes(v.window.kind) || !isSource(v.window.source))) return false
+  if (v.window !== null && (!object(v.window) || !only(v.window, ['id', 'version', 'kind', 'deadlineAt', 'opensAt', 'source']) || !text(v.window.id)
+    || !int(v.window.version) || !Number.isFinite(v.window.opensAt) || !Number.isFinite(v.window.deadlineAt) || !['turn', 'win', 'meld'].includes(v.window.kind) || !isSource(v.window.source))) return false
   return Array.isArray(v.ownActions) && v.ownActions.every(isAction) && (v.ownScore === null || isPublicWinScore(v.ownScore))
     && Array.isArray(v.waitingSeats) && v.waitingSeats.every(seat) && Array.isArray(v.actionEvents)
     && v.actionEvents.every((a: any) => object(a) && only(a, ['id', 'type', 'actorIndex', 'sourceIndex', 'tile', 'meldIndex'])
@@ -138,6 +142,14 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (value.kind === 'blood_flow_hello' || value.kind === 'blood_flow_sync') return value as BloodFlowPacket
   if (value.kind === 'blood_flow_error' && ['INCOMPATIBLE_RULE_VERSION', 'INTERRUPTED'].includes(value.code)) return value as BloodFlowPacket
   if (value.ruleVersion !== BLOOD_FLOW_CONFIG.version) return null
+  if (value.kind === 'blood_flow_auto') return text(value.authorityEpoch) && typeof value.enabled === 'boolean' ? value as BloodFlowPacket : null
+  if (value.kind === 'blood_flow_reaction') {
+    const r = value.reaction
+    return object(r) && only(r, ['id', 'authorityEpoch', 'roundId', 'seat', 'text', 'voiceKey', 'style', 'theme'])
+      && text(r.id) && text(r.authorityEpoch) && text(r.roundId) && seat(r.seat) && typeof r.text === 'string' && r.text.length > 0 && r.text.length <= 40
+      && LLM_TTS_VOICE_OPTIONS.some(v => v.value !== 'auto' && v.value === r.voiceKey)
+      && ['激进', '稳健', '话痨', '高冷'].includes(r.style) && ['llm', 'llmAnime'].includes(r.theme) ? value as BloodFlowPacket : null
+  }
   if (value.kind === 'blood_flow_command') {
     const c = value.command
     return object(c) && only(c, ['authorityEpoch', 'roundId', 'windowId', 'stateVersion', 'seat', 'action'])
@@ -147,6 +159,7 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (!text(value.authorityEpoch) || !int(value.sequence) || value.sequence < 1 || !int(value.round) || value.round < 1 || value.round > 8) return null
   if (value.kind === 'win_batch') return isWinBatch(value.batch) && value.batch.authorityEpoch === value.authorityEpoch ? value as BloodFlowPacket : null
   if (value.kind === 'blood_flow_snapshot' || value.kind === 'round_settled') {
+    if (value.autoPlay !== undefined && typeof value.autoPlay !== 'boolean') return null
     if (value.opening !== undefined && (!object(value.opening) || !['firstDice', 'secondDice'].every(k => Array.isArray(value.opening[k])
       && value.opening[k].length === 2 && value.opening[k].every((n: unknown) => int(n) && Number(n) >= 1 && Number(n) <= 6)))) return null
     return ['east', 'hanchan'].includes(value.mode) && seat(value.dealer) && isSeatView(value.view)

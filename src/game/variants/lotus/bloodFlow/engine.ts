@@ -3,7 +3,7 @@ import { sortTilesWithJokers, TILE_TYPES } from '../../../core/rules/tiles'
 import { canChi, concealedKongs, windKong } from '../lotusRules'
 import { buildRingWall, resolveFlip, resolveOpeningStack, buildDrawOrderWall, wallBreakIndexForOpeningStack, takeLotusTailTile } from '../lotusWall'
 import { evaluateWin } from '../patterns/evaluate'
-import { BLOOD_FLOW_CONFIG } from './config'
+import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from './config'
 import type { BloodFlowLedgerEntry, BloodFlowPublicState, BloodFlowRoundResult, Seat, SourceTileEvent, WinEvaluation, WinSource } from './types'
 import { SEATS, vector, nextSeat, newSeatStates } from './state'
 import type { BloodFlowAction, BloodFlowOpeningState, EngineCommand, EngineWindow } from './state'
@@ -23,6 +23,7 @@ export interface BloodFlowEngineOptions {
   random?: () => number
   now?: () => number
   decisionMs?: number
+  winBeatMs?: number
   opening?: BloodFlowOpeningState
 }
 
@@ -54,6 +55,8 @@ export class BloodFlowEngine {
   interrupted = false
   paused = false
   private remainingDeadline = 0
+  private remainingOpenDelay = 0
+  private winBeatUntil = 0
   private sourceSerial = 0
   private actionSerial = 0
   private evaluation = new Map<Seat, WinEvaluation>()
@@ -113,8 +116,9 @@ export class BloodFlowEngine {
   }
   private open(kind: EngineWindow['kind'], source: SourceTileEvent, options: EngineWindow['options']) {
     this.version++
+    const opensAt = Math.max(this.now(), this.winBeatUntil)
     this.window = { id: `${this.options.roundId}/window/${this.version}`, version: this.version, kind, source,
-      deadlineAt: this.now() + (this.options.decisionMs ?? 15_000), options, decisions: vector(() => null) }
+      opensAt, deadlineAt: opensAt + (this.options.decisionMs ?? BLOOD_FLOW_TIMING.normalDecisionMs), options, decisions: vector(() => null) }
   }
   private evaluate(seat: Seat, tile: TileType, source: WinSource, opening: 'heaven' | 'earth' | null = null) {
     const player = this.players[seat]
@@ -316,6 +320,7 @@ export class BloodFlowEngine {
     this.players.forEach((p, s) => { p.score = batch.scoresAfter[s] })
     this.ledger.push({ kind: 'win', batch })
     this.openingBonus = false; this.drawSource = null
+    this.winBeatUntil = this.now() + (this.options.winBeatMs ?? BLOOD_FLOW_TIMING.winBeatMs)
     if (batch.nextAction.kind === 'finish-round') this.finishRound()
     else this.draw(batch.nextAction.seat)
   }
@@ -343,14 +348,17 @@ export class BloodFlowEngine {
       roundResult: this.result ? structuredClone(this.result) : null }
   }
   currentScore(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!.score) : null }
+  windowIsOpen() { return !!this.window && !this.paused && !this.interrupted && this.now() >= this.window.opensAt }
   pause() {
     if (this.paused || this.result) return
     this.remainingDeadline = Math.max(0, (this.window?.deadlineAt ?? this.now()) - this.now())
+    this.remainingOpenDelay = Math.max(0, (this.window?.opensAt ?? this.now()) - this.now())
     this.paused = true
   }
   resume() {
     if (!this.paused || this.interrupted) return
     if (this.window) this.window.deadlineAt = this.now() + this.remainingDeadline
+    if (this.window) this.window.opensAt = this.now() + this.remainingOpenDelay
     this.paused = false
   }
   assertConservation() {

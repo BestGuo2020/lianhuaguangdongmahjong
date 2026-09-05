@@ -11,8 +11,7 @@ import { tileAudioFile, tileName } from '../../../core/rules/tiles'
 import { createLocalTransientEventPresenter } from '../../../core/local/localTransientEventPresenter'
 import { resolveAnimeAudioPolicy } from '../../../core/presentation/animeAudioPolicy'
 import { isLocalLlmSeat } from '../../../core/presentation/localLlmVoiceRegistry'
-import type { AnimeFixedTtsExecutor, AnimeSeat } from '../../../llm/animeFixedTtsExecutor'
-import { animeFallbackAudioForAction } from '../../../llm/animeFixedTtsExecutor'
+import type { AnimeFixedTtsExecutor } from '../../../llm/animeFixedTtsExecutor'
 import type { PlayerSeed } from '../../../shared/runtime/localOpening'
 import { BLOOD_FLOW_CONFIG } from './config'
 import { createBloodFlowWorkerClient } from './workerClient'
@@ -23,6 +22,10 @@ import type { EngineCommand } from './state'
 import type { NetworkOpening } from './network/protocol'
 import type { evaluateWaits } from '../patterns/evaluate'
 import { createEvaluatorService } from '../patterns/evaluatorService'
+import { createBloodFlowAudioBridge } from './audioBridge'
+import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
+import { getLocalTtsClient } from '../../../llm/localTtsClient'
+import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -42,17 +45,29 @@ export interface BloodFlowGameOptions {
     openingDone(round: number): void
   }
 }
+type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?: NetworkOpening; replay?: boolean }
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
   const waitScores = shallowRef<ReturnType<typeof evaluateWaits>>([])
+  const presentationSerial = shallowRef(0)
+  const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
+  const decisions = createBloodFlowDecisions()
+  const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
+  let speechChain = Promise.resolve(), bubbleSerial = 0
+  const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
+    current: current => view.value?.authorityEpoch === current.authorityEpoch && view.value?.roundId === current.roundId && !!view.value?.public.roundResult,
+    emit: (line, signal) => presentRoundReaction(line, signal),
+  })
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
   let generation = 0, busy = false, heardAction = 0, heardDiscard = '', seenWindow = ''
   let ring: TileType[] = [], dealerTile: TileType | null = null
   let remoteOpeningId = '', countdownTicket = 0
+  const completedRemoteOpenings = new Set<string>()
+  let pendingRemote: { view: BloodFlowSeatView; meta: RemoteViewMeta } | null = null
   const timers = new Set<ReturnType<typeof setTimeout>>()
   const waiters = new Set<() => void>()
   const sound = (name: string, volume?: number) => { try { return options.playSound?.(name, volume) } catch { return undefined } }
@@ -65,29 +80,25 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   function clear() {
     generation++; busy = false
+    presentationSerial.value++
     remoteOpeningId = ''; countdownTicket++
+    completedRemoteOpenings.clear(); pendingRemote = null
     timers.forEach(clearTimeout); timers.clear()
     waiters.forEach(resolve => resolve()); waiters.clear()
     worker?.close(); worker = null
     hintWorker?.cancel(); hintWorker = null
-    options.animeFixedTts?.cancel()
+    actionAudio.reset()
+    decisions.cancel(); pendingBots.clear(); reactions.cancel(); cancelReactionSpeech(); spoken.clear()
   }
-  const transient = createLocalTransientEventPresenter({ state, later, onTableAction: event => {
-    const route = resolveAnimeAudioPolicy({ themeName: options.getThemeName?.(), playerKind: 'unknown' })
-    if (route.actionVoice === 'fixed-line' && options.animeFixedTts) {
-      const epoch = generation
-      void options.animeFixedTts.executeAction({ eventId: `blood-flow:${generation}:${event.id}`,
-        seat: event.actorIndex as AnimeSeat, characterId: state.players[event.actorIndex]?.characterId, action: event.type })
-        .then(result => { if (epoch === generation && result.fallbackAudioFile) sound(result.fallbackAudioFile) }).catch(() => {})
-    } else {
-      const audio = animeFallbackAudioForAction(event.type)
-      if (audio) sound(audio)
-    }
-  } })
+  const actionAudio = createBloodFlowAudioBridge({ epoch: () => `blood-flow:${generation}`, theme: () => options.getThemeName?.() ?? 'jade',
+    player: index => state.players[index], fixed: options.animeFixedTts, play: sound })
+  const transient = createLocalTransientEventPresenter({ state, later, onTableAction: actionAudio.present })
+  watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech() } })
 
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
     view.value = next
+    decisions.cancelStale()
     const toLocal = (seat: number) => (seat - next.seat + 4) % 4
     const seeds = [options.humanPlayerSeed, ...(options.aiPlayerSeeds ?? [])]
     state.players.splice(0, state.players.length, ...next.players.map((_, i) => {
@@ -102,7 +113,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     state.flipStack.value = next.flipStack; state.flipSeat.value = next.flipSeat; state.wallBreakIndex.value = next.wallBreakIndex
     state.selectedIndex.value = -1
     const w = next.window, moves = next.ownActions
-    state.phase.value = next.public.roundResult ? 'settled' : next.public.status !== 'playing' ? 'checking' : w?.kind === 'turn'
+    state.phase.value = next.public.roundResult ? 'settled' : next.public.status !== 'playing' ? 'checking'
+      : w && Date.now() < w.opensAt ? 'drawing' : w?.kind === 'turn'
       ? next.currentPlayer === next.seat ? 'discard' : 'thinking' : moves.length ? 'prompt' : 'checking'
     state.userDrewThisTurn.value = Boolean(w?.kind === 'turn' && next.currentPlayer === next.seat && next.public.status === 'playing')
     state.actionPrompt.value = w && w.kind !== 'turn' && moves.length ? {
@@ -130,6 +142,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       state.result.value = { winner: '本局结束', draw: result.winCounts.every(n => n === 0), roundLabel: common.roundLabel.value,
         scoreChanges: state.players.map((p, i) => ({ playerIndex: i, name: p.name, avatar: p.avatar, delta: result.endingScores[p.seat] - result.openingScores[p.seat], score: p.score })) }
       state.matchFinished.value = state.round.value >= BLOOD_FLOW_CONFIG.rounds[state.matchType.value]
+      if (!options.externalAuthority) void reactions.run(next)
     }
     if (w?.id !== seenWindow) { seenWindow = w?.id ?? ''; waitScores.value = []; if (next.ownActions.length) void refreshWaits() }
     if (previous && w?.kind === 'turn' && w.source.id !== previous.window?.source.id
@@ -164,14 +177,39 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (options.externalAuthority) return
     const current = view.value, w = current?.window
     if (!current || !w || current.public.status !== 'playing') return
+    if (Date.now() < w.opensAt) {
+      later(() => { if (view.value?.window?.id === w.id) void request({ kind: 'view', seat: 0 }) }, w.opensAt - Date.now())
+      return
+    }
     const epoch = generation
-    const bot = current.waitingSeats.find(s => s !== 0 || options.autoplay)
-    if (bot !== undefined) later(() => {
-      if (epoch === generation && view.value?.window?.id === w.id) void request({ kind: 'bot', seat: bot, windowId: w.id })
+    for (const bot of current.waitingSeats.filter(s => s !== 0 || options.autoplay)) later(() => {
+      if (epoch === generation && view.value?.window?.id === w.id) void actBot(bot, w.id, epoch)
     }, options.paceMs ?? 650)
     if (w.deadlineAt < Number.MAX_SAFE_INTEGER) later(() => {
       if (view.value?.window?.id === w.id) void request({ kind: 'expire', windowId: w.id })
     }, Math.max(0, w.deadlineAt - Date.now()))
+  }
+  async function actBot(seat: 0 | 1 | 2 | 3, windowId: string, epoch: number) {
+    const active = worker, key = `${epoch}/${windowId}/${seat}`
+    if (!active || pendingBots.has(key)) return
+    pendingBots.add(key)
+    const current = () => epoch === generation && view.value?.window?.id === windowId && !!view.value?.waitingSeats.includes(seat)
+    try {
+      const own = await active.request<BloodFlowSeatView>({ kind: 'view', seat })
+      if (!current() || own.window?.id !== windowId) return
+      const action = await decisions.decide(own, current)
+      if (!current()) return
+      const next = await active.request<BloodFlowSeatView>(action ? { kind: 'command', command: {
+        authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
+      } } : { kind: 'bot', seat, windowId })
+      if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
+    } catch {
+      if (epoch === generation) {
+        clear(); transient.announce('对局已中断，请返回大厅重开', 'red')
+        if (view.value) view.value = { ...view.value, ownActions: [], public: { ...view.value.public, status: 'interrupted' } }
+      }
+    }
+    finally { pendingBots.delete(key) }
   }
   function send(action: BloodFlowAction) {
     const current = view.value, w = current?.window
@@ -195,6 +233,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     hintWorker = createEvaluatorService()
     await request({ kind: 'start', options: { authorityEpoch: `local-${generation}`, roundId: `round-${state.round.value}`,
       dealer: state.dealer.value as 0 | 1 | 2 | 3, opening,
+      winBeatMs: options.paceMs === 0 ? 0 : undefined,
       decisionMs: options.countdownEnabled === false ? Infinity : undefined } })
   }
   const opening = createLotusOpening({ state, automaticOpeningWin: false, clearTimers: () => {},
@@ -215,6 +254,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   function nextRound(startOptions?: Parameters<typeof startGame>[1]) {
     if (state.phase.value !== 'settled' || state.matchFinished.value) return
+    reactions.cancel(); cancelReactionSpeech()
     if (options.externalAuthority) return options.externalAuthority.nextRound()
     state.round.value++; state.dealer.value = (state.dealer.value + 1) % 4
     return startGame(undefined, startOptions)
@@ -242,9 +282,37 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (epoch === generation && view.value?.window?.id === w.id) waitScores.value = waits
     } catch { /* closed worker has no current hint to publish */ }
   }
-  async function acceptRemoteView(next: BloodFlowSeatView, meta: { round: number; dealer: number; mode: MatchType; opening?: NetworkOpening; replay?: boolean }) {
+  function cancelReactionSpeech() {
+    speechControllers.forEach(c => c.abort()); speechControllers.clear()
+    roundBubbles.value = {}; speechChain = Promise.resolve()
+  }
+  function presentRoundReaction(line: BloodFlowReaction, signal?: AbortSignal): Promise<void> {
+    const current = view.value, theme = options.getThemeName?.() ?? 'jade'
+    if (!current?.public.roundResult || current.authorityEpoch !== line.authorityEpoch || current.roundId !== line.roundId
+      || !bloodFlowReactionsAllowed(theme) || theme !== line.theme || spoken.has(line.id) || signal?.aborted) return Promise.resolve()
+    spoken.add(line.id)
+    const epoch = generation, controller = new AbortController()
+    speechControllers.add(controller)
+    const abort = () => controller.abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    const isCurrent = () => epoch === generation && view.value?.roundId === line.roundId && !!view.value?.public.roundResult
+      && options.getThemeName?.() === line.theme && !controller.signal.aborted
+    const operation = speechChain.then(async () => {
+      if (!isCurrent()) return
+      const seat = (line.seat - current.seat + 4) % 4
+      roundBubbles.value = { ...roundBubbles.value, [seat]: { text: line.text, id: ++bubbleSerial, persistent: true } }
+      if (canPlayLocalLlmAudio()) await getLocalTtsClient().speak(seat, line.text, line.voiceKey, line.style, 'important',
+        { isCurrent, signal: controller.signal, cacheIdentity: line.id, waitForCompletion: true })
+    }).catch(() => {}).finally(() => { signal?.removeEventListener('abort', abort); speechControllers.delete(controller) })
+    speechChain = operation
+    return operation
+  }
+  async function acceptRemoteView(next: BloodFlowSeatView, meta: RemoteViewMeta) {
     if (!options.externalAuthority) throw new Error('This port owns a local authority')
-    if (remoteOpeningId === next.roundId && next.public.status !== 'interrupted') return
+    if (remoteOpeningId === next.roundId && next.public.status !== 'interrupted') {
+      if (!meta.opening) pendingRemote = { view: next, meta }
+      return
+    }
     const changedRound = view.value?.roundId !== next.roundId || view.value?.authorityEpoch !== next.authorityEpoch
     if (changedRound || next.public.status === 'interrupted') {
       clear(); remoteOpeningId = ''; view.value = null; seenWindow = ''; waitScores.value = []
@@ -254,11 +322,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     state.round.value = meta.round; state.matchType.value = meta.mode
     state.dealer.value = (meta.dealer - next.seat + 4) % 4
     if (changedRound || meta.replay) {
+      presentationSerial.value++
       heardAction = next.actionEvents.at(-1)?.id ?? 0
       heardDiscard = next.lastDiscardAction?.id ?? ''
     }
     apply(next)
-    if (!meta.opening || (!changedRound && !meta.replay) || next.public.status === 'interrupted') return
+    if (!meta.opening || completedRemoteOpenings.has(next.roundId) || (!changedRound && !meta.replay) || next.public.status === 'interrupted') return
     remoteOpeningId = next.roundId
     const epoch = generation
     const finalPlayers = state.players.map(p => structuredClone(toRaw(p)))
@@ -295,8 +364,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     for (let batch = 0; batch < 3; batch++) for (const seat of order) { await deal(seat, 4); if (epoch !== generation) return }
     for (const seat of order) { await deal(seat, seat === state.dealer.value ? 2 : 1); if (epoch !== generation) return }
     remoteOpeningId = ''; state.openingStage.value = null
+    completedRemoteOpenings.add(next.roundId)
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: state.dealAnimation.value.serial + 1 }
-    apply(next)
+    const buffered = pendingRemote; pendingRemote = null
+    if (buffered) await acceptRemoteView(buffered.view, buffered.meta)
+    else apply(next)
     options.externalAuthority.openingDone(meta.round)
   }
   watch(() => state.selectedIndex.value, () => { void refreshWaits() })
@@ -305,7 +377,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
@@ -321,6 +393,6 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const action = moves.value.find(a => a.kind === 'concealed-kong' && a.tile === tile
         || a.kind === 'added-kong' && state.players[0].melds[a.meldIndex].tile === tile)
       if (action) send(action)
-    }, refreshWaits, view, acceptRemoteView, dispose: clear,
+    }, refreshWaits, view, acceptRemoteView, presentRoundReaction, llmStats: decisions.stats, dispose: clear,
   })
 }

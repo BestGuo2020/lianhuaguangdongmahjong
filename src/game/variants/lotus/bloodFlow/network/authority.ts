@@ -1,11 +1,11 @@
 import type { MatchType } from '../../../../core/contracts/types'
 import type { BloodFlowEngineOptions } from '../engine'
 import type { BloodFlowSeatView } from '../seatView'
-import type { EngineCommand } from '../state'
+import type { EngineCommand, BloodFlowAction } from '../state'
 import { vector } from '../state'
 import { sameAction } from '../claimWindow'
 import type { Seat } from '../types'
-import { BLOOD_FLOW_CONFIG } from '../config'
+import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from '../config'
 import type { BloodFlowPacket, NetworkOpening } from './protocol'
 import { decodeBloodFlowPacket } from './protocol'
 
@@ -32,6 +32,8 @@ export interface BloodFlowAuthorityOptions {
   /** Uses the existing committed shuffle in the SDK adapter. */
   prepareOpening(round: number): Promise<Pick<BloodFlowEngineOptions, 'initialWall' | 'firstDice' | 'secondDice'>>
   onRoundSettled?(view: BloodFlowSeatView, round: number): void
+  decide?(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null>
+  cancelDecisions?(): void
 }
 
 /** Transport-independent coordinator. Serializes mutations, broadcasts private snapshots,
@@ -39,6 +41,7 @@ export interface BloodFlowAuthorityOptions {
 export class BloodFlowAuthority {
   readonly compatible = new Set<string>()
   readonly aiSeats = new Set<Seat>()
+  readonly autoSeats = new Set<Seat>()
   readonly disconnected = new Map<string, number>()
   readonly settledRounds = new Set<string>()
   private confirmed = new Set<Seat>()
@@ -50,6 +53,7 @@ export class BloodFlowAuthority {
   private openingGate = false
   private openingReady = new Set<Seat>()
   private openingData: NetworkOpening | null = null
+  private publishedOpenWindow = ''
   round = 0
   dealer: Seat = 0
   readonly bindings: Map<string, Seat>
@@ -77,6 +81,12 @@ export class BloodFlowAuthority {
         return
       }
       if (!this.compatible.has(peer)) return
+      if (message.kind === 'blood_flow_auto' && message.authorityEpoch === this.options.authorityEpoch) {
+        const seat = this.bindings.get(peer)!
+        if (message.enabled) this.autoSeats.add(seat); else this.autoSeats.delete(seat)
+        if (this.current) await this.publish()
+        return
+      }
       if (message.kind === 'blood_flow_opening_done') {
         if (message.authorityEpoch === this.options.authorityEpoch && message.round === this.round && this.openingGate) {
           this.openingReady.add(this.bindings.get(peer)!); await this.releaseOpening()
@@ -111,7 +121,7 @@ export class BloodFlowAuthority {
     this.round = round; this.dealer = ((round - 1) % 4) as Seat
     this.confirmed.clear()
     await this.options.backend.start({ ...opening, authorityEpoch: this.options.authorityEpoch, roundId: `${this.options.authorityEpoch}/round/${round}`,
-      dealer: this.dealer, scores, decisionMs: 25_000 })
+      dealer: this.dealer, scores, decisionMs: BLOOD_FLOW_TIMING.remoteDecisionMs })
     await this.options.backend.pause()
     this.openingData = { firstDice: opening.firstDice, secondDice: opening.secondDice }
     this.openingGate = true; this.openingReady.clear()
@@ -124,11 +134,12 @@ export class BloodFlowAuthority {
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
       mode: this.options.mode, dealer: this.dealer, view }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
-      : { ...base, kind: 'blood_flow_snapshot', ...(this.openingGate ? { opening: this.openingData! } : {}) })
+      : { ...base, kind: 'blood_flow_snapshot', autoPlay: this.autoSeats.has(seat), ...(this.openingGate ? { opening: this.openingData! } : {}) })
   }
   private async publish() {
     if (this.stopped) return
     this.current = await this.options.backend.view(0)
+    if (this.current.window && this.now() >= this.current.window.opensAt) this.publishedOpenWindow = this.current.window.id
     this.sequence++
     for (const batch of this.current.public.batches) {
       if (this.publishedBatches.has(batch.batchId)) continue
@@ -163,12 +174,28 @@ export class BloodFlowAuthority {
       if (this.stopped || !this.current) return
       for (const [peer, since] of this.disconnected) {
         const seat = this.bindings.get(peer)
-        if (seat !== undefined && this.now() - since >= 12_000) this.aiSeats.add(seat)
+        if (seat !== undefined && this.now() - since >= BLOOD_FLOW_TIMING.recoveryGraceMs) this.aiSeats.add(seat)
       }
       if (this.current.public.status !== 'playing') { await this.releaseOpening(); await this.maybeAdvance(); return }
-      const bot = this.current.waitingSeats.find(s => this.aiSeats.has(s) || ![...this.bindings.values()].includes(s))
-      if (bot !== undefined && this.current.window) {
-        await this.options.backend.bot(bot, this.current.window.id); await this.publish()
+      if (this.current.window && this.now() < this.current.window.opensAt) return
+      if (this.current.window && this.current.window.id !== this.publishedOpenWindow) await this.publish()
+      const bots = this.current.waitingSeats.filter(s => this.aiSeats.has(s) || this.autoSeats.has(s) || ![...this.bindings.values()].includes(s))
+      if (bots.length && this.current.window) {
+        const windowId = this.current.window.id
+        // Each seat requests once; a multi-win window never waits through full budgets serially.
+        const choices = await Promise.all(bots.map(async seat => {
+          const own = await this.options.backend.view(seat)
+          const current = () => !this.stopped && this.current?.window?.id === windowId && !!this.current?.waitingSeats.includes(seat)
+          const action = this.options.decide ? await this.options.decide(own, current) : null
+          return { seat, own, action, current }
+        }))
+        for (const choice of choices) {
+          if (!choice.current()) continue
+          if (choice.action && choice.own.window) await this.options.backend.command({ authorityEpoch: choice.own.authorityEpoch,
+            roundId: choice.own.roundId, windowId, stateVersion: choice.own.window.version, seat: choice.seat, action: choice.action })
+          else await this.options.backend.bot(choice.seat, windowId)
+          await this.publish()
+        }
       } else if (this.current.window && this.now() >= this.current.window.deadlineAt) {
         await this.options.backend.expire(this.current.window.id); await this.publish()
       }
@@ -188,5 +215,5 @@ export class BloodFlowAuthority {
     for (const peer of this.bindings.keys()) this.safeSend(peer, { ...this.envelope(), kind: 'blood_flow_error', code: 'INTERRUPTED' })
     this.stop()
   }
-  stop() { this.stopped = true; this.options.backend.close() }
+  stop() { this.stopped = true; this.options.cancelDecisions?.(); this.options.backend.close() }
 }

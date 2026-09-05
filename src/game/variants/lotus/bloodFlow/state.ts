@@ -42,6 +42,7 @@ export interface EngineWindow {
   kind: 'turn' | 'win' | 'meld'
   source: SourceTileEvent
   deadlineAt: number
+  opensAt: number
   options: SeatVector<readonly BloodFlowAction[]>
   decisions: [BloodFlowAction | null, BloodFlowAction | null, BloodFlowAction | null, BloodFlowAction | null]
 }
