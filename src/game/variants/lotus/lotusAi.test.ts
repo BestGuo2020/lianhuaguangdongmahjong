@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { TileType } from '../../core/contracts/types'
-import { chooseDiscardIndex, decideClaim, decideRobKong, decideTurn } from './lotusAi'
+import { chooseDiscardIndex, chooseFallbackDiscardIndex, lotusDiscardCandidates, decideClaim, decideRobKong, decideTurn } from './lotusAi'
 import type { LotusClaimView, LotusTurnView } from './lotusAi'
 import { waitingTiles, type ChiMeld } from './lotusRules'
 
 const JOKERS: TileType[] = ['white', 'red']
+
+it('shares the original protective candidates and cheap score with restricted automatic fallbacks', () => {
+  const hand:TileType[]=['m1','m2','m5','p9','red','white']
+  expect(chooseFallbackDiscardIndex(hand,JOKERS)).toBe(chooseDiscardIndex(hand,JOKERS,()=>0))
+  expect(lotusDiscardCandidates(hand,JOKERS,[4,1,5]).map(c=>c.index)).toEqual([1])
+  expect(chooseFallbackDiscardIndex(hand,JOKERS,[4,5])).toBeGreaterThanOrEqual(4)
+  expect(chooseFallbackDiscardIndex(hand,JOKERS,[])).toBe(-1)
+  expect(lotusDiscardCandidates(hand,JOKERS,[-1,9,1,1])).toEqual([{index:1,tile:'m2'}])
+})
 
 function turnView(hand: TileType[], melds = [], exposedMelds = 0, kongBloom = false, jokers = JOKERS): LotusTurnView {
   return { hand, melds, exposedMelds, kongBloom, jokers }

@@ -10,6 +10,7 @@ import type { Seat } from '../variants/lotus/bloodFlow/types'
 import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorService'
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
+import { bloodFlowAiActions } from '../variants/lotus/bloodFlow/ai'
 
 type Request = typeof requestLlmDecision
 type Waits = ReturnType<typeof evaluateWaits>
@@ -37,13 +38,15 @@ function candidateLabel(action: BloodFlowAction, view: BloodFlowSeatView): strin
 }
 export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, requestId: string) {
   const player = view.players[view.seat], visible = visibleTiles(view)
-  const candidates = view.ownActions.map((action, index) => ({ id: `A${index}`, label: candidateLabel(action, view), action }))
+  const candidates = bloodFlowAiActions(view).map((action, index) => ({ id: `A${index}`, label: candidateLabel(action, view), action }))
   const state = {
     ruleVersion: view.public.ruleVersion, requestId, authorityEpoch: view.authorityEpoch, roundId: view.roundId,
     windowId: view.window?.id, stateVersion: view.window?.version, seat: view.seat,
     hand: player.hand.map(tileName), melds: player.melds.map(m => ({ type: m.type, tiles: m.tiles.map(tileName) })),
     publicPlayers: view.players.map(p => ({ seat: p.seat, score: p.score, discards: p.discards.map(tileName), melds: p.melds.map(m => ({ type: m.type, tiles: m.tiles.map(tileName) })) })),
     jokerTiles: view.jokers.map(tileName), wallCount: view.wallCount,
+    tileRules: '手中两种精牌可替代其他牌；白板只可替代精面或自身（白板本身翻精时按精牌）。别人打出的精按本张使用。',
+    discardPolicy: '首胡前有普通弃牌可选时，候选已保护精牌和白板；锁手后不能换手，新摸牌不能胡则必须摸切，包括精牌。',
     locked: view.public.seats[view.seat].locked, wins: view.public.seats.map(s => s.winCount),
     currentWin: view.ownScore, lockImpact: '首次胡后保留当前暗手和副露，只能对新摸牌胡、过或摸切，不能再改手或吃碰杠。已胡仍须付款。',
     waits: waits.map(w => ({ tile: tileName(w.tile), remaining: Math.max(0, 4 - visible.filter(t => t === w.tile).length),
@@ -73,7 +76,8 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
     stats,
     decide(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null> {
       if (!view.window || !view.ownActions.length || view.public.status !== 'playing' || view.public.roundResult) return Promise.resolve(null)
-      if (view.ownActions.length === 1) return Promise.resolve(view.ownActions[0])
+      const actions = bloodFlowAiActions(view)
+      if (actions.length === 1) return Promise.resolve(actions[0])
       if (view.public.seats[view.seat].locked) return Promise.resolve(view.ownActions.find(a => a.kind === 'win') ?? view.ownActions.find(a => a.kind === 'discard') ?? null)
       const provider = (options.provider ?? localBloodFlowProvider)(view.seat)
       if (!provider) return Promise.resolve(null)
