@@ -33,13 +33,13 @@ import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import type { TileType } from '../core/contracts/types'
 import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
-import { isConditionalReasoningSuppressed, requestLlmDecision } from './client'
+import { requestPreparedDecision } from './preparedDecision'
+export { safeReasoningStatus } from './preparedDecision'
 import type { LlmProviderConfig } from './config'
 import type { CanonicalAction, StateSnapshotV1 } from './schema'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { resolveDecisionSpeech, type DecisionSpeechFacts } from './decisionSpeech'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
-import { resolveReasoningPolicy } from './reasoningPolicy'
 
 export interface LlmControllerStats {
   requests: number
@@ -84,19 +84,6 @@ const IMPORTANT_SPEECH_ACTIONS = new Set<CanonicalAction['kind']>([
   'gang', 'peng', 'chi', 'added-kong', 'concealed-kong', 'wind-kong',
 ])
 
-const SAFE_REASONING_STAGES = [
-  '正在观察公开牌局',
-  '正在整理规则约束',
-  '正在比较可行动作',
-  '正在评估攻守节奏',
-  '正在复核最终选择',
-] as const
-/** 只由推理块序号生成，不接触暗手、候选或供应商原始推理内容。 */
-export function safeReasoningStatus(sequence: number): string {
-  const count = Math.max(1, Math.floor(sequence))
-  return `思考中 · ${SAFE_REASONING_STAGES[(count - 1) % SAFE_REASONING_STAGES.length]}`
-}
-
 function speechFacts(state: StateSnapshotV1, action: CanonicalAction): DecisionSpeechFacts {
   const meldTypes = (name: 'upper' | 'opposite' | 'lower') => state.snapshots[name].melds.map((meld) => meld.type)
   return {
@@ -135,55 +122,10 @@ async function decideCanonical(
       })
     } catch { /* 回退提示不影响引擎动作 */ }
   }
-  const ids = built.request.candidates.map((candidate) => candidate.id)
   const prompt = buildPrompt(config.style, built.request)
-  const requestedReasoningPolicy = resolveReasoningPolicy(config, true)
-  const alwaysThinking = requestedReasoningPolicy.mode === 'always-on'
-  const supportsReasoning = (requestedReasoningPolicy.mode === 'explicit-on' || alwaysThinking)
-    && !isConditionalReasoningSuppressed(config)
-  // 当前游戏循环没有更短的外部倒计时；条件深思拥有独立的 45 秒总预算（40 秒请求 + 余量）。
-  const trigger = supportsReasoning
-    ? reasoning.admit(built.request, input.playerIndex, reasoning.config.minRemainingBudgetMs)
-    : { enabled: false }
-  const useReasoning = trigger.enabled
-  let reasoningProgressSequence = 0
-  // always-on 的普通 low 请求不先播思考台词；收到流式推理块后仍展示安全进度气泡。
-  let reasoningStatusActive = useReasoning
-  let thinkingCounted = false
-  const countThinking = () => {
-    if (thinkingCounted) return
-    thinkingCounted = true
-    stats.thinkingRequests = (stats.thinkingRequests ?? 0) + 1
-  }
-  const onReasoningProgress = () => {
-    countThinking()
-    reasoningProgressSequence += 1
-    reasoningStatusActive = true
-    try {
-      void hooks.onLlmStatus?.(
-        input.playerIndex,
-        true,
-        safeReasoningStatus(reasoningProgressSequence),
-      )
-    } catch { /* 展示失败不影响决策 */ }
-  }
-  stats.requests += 1
-  if (alwaysThinking) countThinking()
-  if (useReasoning) {
-    stats.reasoningRequests = (stats.reasoningRequests ?? 0) + 1
-    stats.enhancedReasoningRequests = (stats.enhancedReasoningRequests ?? 0) + 1
-    countThinking()
-  }
-  if (reasoningStatusActive) {
-    try { await hooks.onLlmStatus?.(input.playerIndex, true) } catch { /* 状态气泡不影响决策 */ }
-  }
   try {
-    const output = await requestLlmDecision({
-      config, messages: prompt, candidateIds: ids,
-      reasoning: useReasoning,
-      deadlineMs: useReasoning ? reasoning.config.deadlineMs : undefined,
-      onReasoningProgress,
-    })
+    const output = await requestPreparedDecision({config,decision:built.request,messages:prompt,
+      seat:input.playerIndex,stats,reasoning,onStatus:(active,text)=>hooks.onLlmStatus?.(input.playerIndex,active,text)})
     const candidate = built.request.candidates.find((item) => item.id === output.choice)
     if (!candidate) {
       stats.fallbacks += 1
@@ -223,10 +165,6 @@ async function decideCanonical(
     stats.fallbacks += 1
     await notifyFallback()
     return built.fallbackAction
-  } finally {
-    if (reasoningStatusActive) {
-      try { await hooks.onLlmStatus?.(input.playerIndex, false) } catch { /* 状态气泡不影响决策 */ }
-    }
   }
 }
 

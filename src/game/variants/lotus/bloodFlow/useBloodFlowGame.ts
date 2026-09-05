@@ -60,7 +60,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const continuation = shallowRef<import('./types').BloodFlowTableState['continuation']>()
   const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
   const actionBubbles = shallowRef<Record<number, {text:string;id:number;persistent:boolean}>>({})
-  const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade'})
+  const thinkingBubbles = shallowRef<Record<number, {text:string;id:number;persistent:boolean}>>({})
+  const thinkingOwners = new Map<number,string>()
+  const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade',
+    metadata:()=>({roundIndex:state.round.value,dealerIndex:state.dealer.value}),
+    onStatus:(absoluteSeat,active,text,requestId)=>{
+      if(!bloodFlowReactionsAllowed(options.getThemeName?.()??'jade'))return
+      const seat=(absoluteSeat-(view.value?.seat??0)+4)%4
+      if(active){thinkingOwners.set(seat,requestId);thinkingBubbles.value={...thinkingBubbles.value,[seat]:{text:text??'思考中',id:++bubbleSerial,persistent:false}}}
+      else if(thinkingOwners.get(seat)===requestId){thinkingOwners.delete(seat);const next={...thinkingBubbles.value};delete next[seat];thinkingBubbles.value=next}
+    }})
   const actionSpoken=new Set<string>(),actionSpeechControllers=new Set<AbortController>()
   const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
   let speechChain = Promise.resolve(), bubbleSerial = 0
@@ -301,6 +310,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   const matchLifecycle = createMatchLifecycle({ state, clearTimers: clear, startGame })
   function returnToLobby() {
+    decisions.resetReasoning()
     opening.cancel()
     // The shared cleanup removes players, unmounting the old HUD/3D table.
     // The next lobby start must mount a fresh table and receive its ready event.
@@ -354,7 +364,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     speechControllers.forEach(c => c.abort()); speechControllers.clear()
     roundBubbles.value = {}; speechChain = Promise.resolve()
   }
-  function cancelActionSpeech(){actionSpeechControllers.forEach(c=>c.abort());actionSpeechControllers.clear();actionBubbles.value={}}
+  function cancelActionSpeech(){actionSpeechControllers.forEach(c=>c.abort());actionSpeechControllers.clear();actionBubbles.value={};thinkingOwners.clear();thinkingBubbles.value={}}
   async function presentActionSpeech(line:BloodFlowActionSpeech):Promise<void>{
     const current=view.value,theme=options.getThemeName?.()??'jade'
     if(!current||theme!==line.theme||!bloodFlowReactionsAllowed(theme)||actionSpoken.has(line.id)||!actionSpeechMatches(line,current))return
@@ -465,7 +475,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
     bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value,
       discardWaitScores: Object.fromEntries((handHints.value?.discards ?? []).map(item => [item.discard, item.waits])),
-      presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:actionBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
+      presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:{...actionBubbles.value,...thinkingBubbles.value}, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,

@@ -30,11 +30,11 @@ const RULE_NAMES: Record<RuleCode, string> = {
   'lotus-legacy': '莲花麻将',
 }
 
-function systemPrompt(style: string, ruleCode: RuleCode): string {
+export function buildDecisionSystemPrompt(style: string, rules: { name:string; speechAllowed?:boolean }): string {
   return [
-    `你是${RULE_NAMES[ruleCode]}牌桌上的牌友，风格：${style}。`,
+    `你是${rules.name}牌桌上的牌友，风格：${style}。`,
     '你的任务只有一件事：从候选动作列表中选择一个编号。',
-    '每次都提供一句非空且 ≤16 字的牌桌台词。',
+    rules.speechAllowed === false ? '本次 message 必须为空；不生成胡牌评价或付款者反应。' : '每次都提供一句非空且 ≤16 字的牌桌台词。',
     STYLE_SPEECH_GUIDE[style] ?? STYLE_SPEECH_GUIDE.稳健,
     'message 可以是情绪、闲聊、吹嘘或烟雾弹，不要求解释 choice，也不要求公开真实意图。',
     'message 不得提及、暗示或概括你的暗手牌名、数量、组合、向听或听口；只能说不含私牌信息的桌面短句。',
@@ -77,7 +77,7 @@ function meldText(meld: DecisionRequest['state']['melds'][number]): string {
   return `${label}：${meld.tiles.join('、')}`
 }
 
-function candidateLine(candidate: Candidate, ruleCode: RuleCode): string {
+export function candidateLine(candidate: Candidate, ruleCode: string): string {
   const features = candidate.features
   const parts: string[] = []
   if (features.shanten !== 'n/a') parts.push(`向听：${features.shanten}`)
@@ -94,7 +94,7 @@ function candidateLine(candidate: Candidate, ruleCode: RuleCode): string {
   if (features.specialPattern && features.specialPattern !== 'n/a' && features.specialPattern !== 'none') {
     parts.push(`特殊牌型：${features.specialPattern}`)
   }
-  if (ruleCode === 'lotus-legacy' && features.safety && features.safety !== 'unknown' && features.safety !== 'n/a') {
+  if (ruleCode !== 'lotus-classic' && features.safety && features.safety !== 'unknown' && features.safety !== 'n/a') {
     parts.push(`安全度：${features.safety}`)
   }
   if (features.efficiency !== 'unknown' && features.efficiency !== 'n/a') parts.push(`牌效：${features.efficiency}`)
@@ -152,7 +152,7 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
     'choice 必须是上面列出的编号；message 必须非空、≤16 字，且只能说牌桌内的话。',
   ].join('\n')
 
-  return { system: systemPrompt(style, request.ruleCode), user }
+  return { system: buildDecisionSystemPrompt(style, {name: RULE_NAMES[request.ruleCode]}), user }
 }
 
 /** 语义重试：把上次错误与精确合法 ID 列表追加进 prompt（§7.2 第 4 条）。 */

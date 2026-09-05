@@ -1,3 +1,4 @@
+import { LLM_WIN_LINES, LLM_LOSS_LINES, LLM_DRAW_LINES } from './winLines'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bloodFlowDecisionBudget, bloodFlowDecisionPrompt, createBloodFlowDecisions, createBloodFlowReactions } from './bloodFlowRuntime'
 import { BloodFlowEngine } from '../variants/lotus/bloodFlow/engine'
@@ -63,7 +64,8 @@ describe('E08 decision and reaction isolation', () => {
     const service = createBloodFlowDecisions({ provider: () => provider, request, waits: async () => [] })
     const input = view()
     const pending = service.decide(input, () => true)
-    await vi.advanceTimersByTimeAsync(4500)
+    expect(bloodFlowDecisionBudget(provider,input,0)).toBe(40_000)
+    await vi.advanceTimersByTimeAsync(40_000)
     expect(await pending).toBeNull()
     expect((request.mock.calls[0] as any)[0].signal.aborted).toBe(true)
     resolve({ choice: 'A0', message: '' }); await Promise.resolve()
@@ -75,16 +77,17 @@ describe('E08 decision and reaction isolation', () => {
   for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {
     it(`${theme}: no in-round reaction and only approved themes generate one line per configured seat`, async () => {
       const request = vi.fn(async () => ({ choice: 'COMMENT', message: '下局继续努力' })), emit = vi.fn(async () => {})
-      const runner = createBloodFlowReactions({ provider: seat => seat > 0 ? provider : null, theme: () => theme, current: () => true, request, emit })
+      const runner = createBloodFlowReactions({ provider: seat => seat > 0 ? provider : null, theme: () => theme, current: () => true, emit })
       const input = view()
       await runner.run(input)
       expect(request).not.toHaveBeenCalled()
       input.public = { ...input.public, status: 'settled', roundResult: simulateRound(1).result }
       await runner.run(input); await runner.run(input)
       const enabled = theme === 'llm' || theme === 'llmAnime'
-      expect(request).toHaveBeenCalledTimes(enabled ? 3 : 0)
+      expect(request).not.toHaveBeenCalled()
       expect(emit.mock.calls.map((args: any) => args[0].seat)).toEqual(enabled ? [1, 2, 3] : [])
-      for (const call of request.mock.calls as any) expect(call[0].messages.user).not.toContain('hand')
+      const originalLines = [...Object.values(LLM_WIN_LINES).flatMap(styles => styles.稳健), ...LLM_LOSS_LINES.稳健, ...LLM_DRAW_LINES.稳健]
+      for (const call of emit.mock.calls as any) expect(originalLines).toContain(call[0].text)
     })
   }
   it('theme/round cancellation rejects late commentary without cancelling a valid decision', async () => {
@@ -94,14 +97,14 @@ describe('E08 decision and reaction isolation', () => {
     const pending = decisions.decide(view(), () => true)
     await Promise.resolve(); await Promise.resolve()
     let theme = 'llm'
-    const emit = vi.fn()
-    const reactions = createBloodFlowReactions({ provider: () => provider, current: () => true, theme: () => theme, emit,
-      request: () => new Promise(resolve => { finishReaction = resolve }) })
+    const emit = vi.fn(() => new Promise<void>(resolve => { finishReaction = resolve }))
+    const reactions = createBloodFlowReactions({ provider: () => provider, current: () => true, theme: () => theme, emit })
     const ended = view(); ended.public = { ...ended.public, status: 'settled', roundResult: simulateRound(1).result }
     const run = reactions.run(ended)
-    theme = 'jade'; reactions.cancel(); finishReaction({ choice: 'COMMENT', message: '迟到感言' })
+    theme = 'jade'; reactions.cancel(); finishReaction(undefined)
     await run
-    expect(emit).not.toHaveBeenCalled()
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect((emit.mock.calls[0] as any)[1].aborted).toBe(true)
     expect(decisionSignal.aborted).toBe(false)
     finishDecision({ choice: 'A1', message: '' })
     expect(await pending).toEqual({ kind: 'pass' })

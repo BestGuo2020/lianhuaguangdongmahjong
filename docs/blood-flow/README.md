@@ -17,7 +17,7 @@
 | 文档 | 用途 |
 |---|---|
 | [演出与结算细则](design/presentation.md) | E10～E16 的详细要求和通过条件；不重复维护阶段进度 |
-| [通用交互检查](design/common-behavior-audit.md) | 7ca6dbb 前后的问题定位快照；当前修复状态见任务表 |
+| [通用能力与交互检查](design/common-behavior-audit.md) | 公共能力/override 边界、渐进抽取顺序；后半保留历史定位，当前进度只见任务表 |
 | [AI 复用职责](design/ai-reuse.md) | 原 AI 策略核心、血流动作适配、权威引擎各自负责什么 |
 | [参考视频分析](references/impact-video.md) | 主参考 `843049425-1-208.mp4`：自摸、放枪、多响、盖楼与局末；上一段保留为字效补充 |
 

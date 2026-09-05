@@ -1,4 +1,8 @@
-import type { Candidate, DecisionRequest, RuleCode } from './schema'
+import type { Candidate, DecisionRequest, StateSnapshotV1 } from './schema'
+
+/** Only public decision facts needed by the shared reasoning policy. */
+export type ReasoningDecision = Pick<DecisionRequest, 'candidates'> & { ruleCode:string;
+  state:Pick<StateSnapshotV1, 'roundIndex'|'wallCount'|'snapshots'|'turnOrigin'|'earlyRound'> }
 
 export interface ConditionalReasoningConfig {
   enabled: boolean
@@ -49,7 +53,7 @@ function band(value: unknown, high: number, medium: number, low = 0): number {
 }
 
 /** 将候选已有的牌效、安全和即时收益压到同一 0～100 尺度，仅用于判断“是否难选”。 */
-export function candidateDecisionScore(candidate: Candidate, ruleCode: RuleCode): number {
+export function candidateDecisionScore(candidate: Candidate, ruleCode: string): number {
   const features = candidate.features
   let score = 50
   if (typeof features.shanten === 'number') score -= features.shanten * 14
@@ -64,7 +68,7 @@ export function candidateDecisionScore(candidate: Candidate, ruleCode: RuleCode)
   return score
 }
 
-export function candidateScoreGap(request: DecisionRequest): number {
+export function candidateScoreGap(request: ReasoningDecision): number {
   const scores = request.candidates
     .map((candidate) => candidateDecisionScore(candidate, request.ruleCode))
     .sort((a, b) => b - a)
@@ -95,7 +99,7 @@ function featureSignature(candidate: Candidate): string {
 
 function hasDistinctContender(
   candidates: Candidate[],
-  ruleCode: RuleCode,
+  ruleCode: string,
   maxGap: number,
 ): boolean {
   const ranked = candidates
@@ -110,7 +114,7 @@ function hasDistinctContender(
 }
 
 /** 完全同质的候选只是确定性并列，不是值得增加延迟的疑难选择。 */
-export function hasMeaningfulCloseChoice(request: DecisionRequest, maxGap: number): boolean {
+export function hasMeaningfulCloseChoice(request: ReasoningDecision, maxGap: number): boolean {
   return hasDistinctContender(request.candidates, request.ruleCode, maxGap)
 }
 
@@ -118,7 +122,7 @@ export function hasMeaningfulCloseChoice(request: DecisionRequest, maxGap: numbe
  * AI 自己的暗手可精确判断：多个不同听牌方案，或碰/杠可能破坏听牌时，
  * 即使在前两巡也属于强触发。唯一听牌解与完全同质听口交给确定性引擎。
  */
-export function hasReadyDecisionTradeoff(request: DecisionRequest, maxGap: number): boolean {
+export function hasReadyDecisionTradeoff(request: ReasoningDecision, maxGap: number): boolean {
   const readyCandidates = request.candidates.filter((candidate) => candidate.features.ready === true)
   const mayBreakReady = request.candidates.some((candidate) => (
     candidate.features.risks.some((risk) => risk.includes('破坏听牌'))
@@ -137,7 +141,7 @@ function suitOf(tile: string): string | null {
 }
 
 /** 公开信息威胁值：副露为主，叠加染手集中度、后段与短牌河异常。 */
-export function estimateOpponentThreat(request: DecisionRequest): number {
+export function estimateOpponentThreat(request: ReasoningDecision): number {
   if (request.ruleCode === 'lotus-classic') return 0
   const opponents = [request.state.snapshots.upper, request.state.snapshots.opposite, request.state.snapshots.lower]
   return Math.max(0, ...opponents.map((view) => {
@@ -154,7 +158,7 @@ export function estimateOpponentThreat(request: DecisionRequest): number {
   }))
 }
 
-export function estimateScoreSwing(request: DecisionRequest): number {
+export function estimateScoreSwing(request: ReasoningDecision): number {
   return request.candidates.reduce((largest, candidate) => {
     const value = candidate.features.scoreDelta ?? 0
     return Math.max(largest, value)
@@ -162,7 +166,7 @@ export function estimateScoreSwing(request: DecisionRequest): number {
 }
 
 export function evaluateReasoningTriggers(
-  request: DecisionRequest,
+  request: ReasoningDecision,
   config: ConditionalReasoningConfig = DEFAULT_CONDITIONAL_REASONING,
   random: () => number = Math.random,
 ): ReasoningTriggerResult {
@@ -196,7 +200,7 @@ export class ConditionalReasoningCoordinator {
     private readonly random: () => number = Math.random,
   ) {}
 
-  admit(request: DecisionRequest, seat: number, remainingBudgetMs: number): ReasoningTriggerResult {
+  admit(request: ReasoningDecision, seat: number, remainingBudgetMs: number): ReasoningTriggerResult {
     if (this.lastRoundIndex !== null && request.state.roundIndex < this.lastRoundIndex) this.reset()
     this.lastRoundIndex = request.state.roundIndex
     const result = evaluateReasoningTriggers(request, this.config, this.random)
