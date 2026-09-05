@@ -12,7 +12,7 @@ const ROOM_CODE_LENGTH = 6
 
 export interface RoomConfig {
   mode: 'east' | 'hanchan'
-  rulesetId: 'lotus-classic' | 'lotus-legacy'
+  rulesetId: 'lotus-classic' | 'lotus-legacy' | 'lotus-blood-flow'
   capacity: number
   tableThemeName?: TableThemeName
 }

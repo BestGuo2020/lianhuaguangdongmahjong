@@ -156,7 +156,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
         state.isHost.value = true
         state.mySeat.value = 0
         const mode = meta?.mode === 'east' || meta?.mode === 'hanchan' ? meta.mode : 'east'
-        const ruleset = meta?.rulesetId === 'lotus-classic' || meta?.rulesetId === 'lotus-legacy'
+        const ruleset = meta?.rulesetId === 'lotus-classic' || meta?.rulesetId === 'lotus-legacy' || meta?.rulesetId === 'lotus-blood-flow'
           ? meta.rulesetId
           : 'lotus-classic'
         state.matchType.value = mode
@@ -201,7 +201,7 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
       state.isHost.value = false
       if (meta) {
         if (meta.mode === 'east' || meta.mode === 'hanchan') state.matchType.value = meta.mode
-        if (meta.rulesetId === 'lotus-classic' || meta.rulesetId === 'lotus-legacy') state.rulesetId.value = meta.rulesetId
+        if (meta.rulesetId === 'lotus-classic' || meta.rulesetId === 'lotus-legacy' || meta.rulesetId === 'lotus-blood-flow') state.rulesetId.value = meta.rulesetId
         if (isTableThemeName(meta.tableThemeName as string)) state.tableThemeName.value = meta.tableThemeName as TableThemeName
       }
       clientLobby = createClientLobby({

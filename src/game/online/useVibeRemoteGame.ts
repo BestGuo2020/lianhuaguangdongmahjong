@@ -21,6 +21,8 @@ import type { ServerMessage, SettlementSyncRequest } from './protocol/messages'
 import { decodeServerMessage } from './protocol/decoder'
 import { createRemoteSessionStore, generateGuestId } from './session/remoteSessionStore'
 import { createVibeRoomSession } from './vibe/vibeRoomSession'
+import { createBloodFlowRoom } from './vibe/bloodFlowRoom'
+import { decodeBloodFlowPacket } from '../variants/lotus/bloodFlow/network/protocol'
 import { getMockPeerId } from './vibe/mockVibeHub'
 import { createMatchStatsRecorder } from './vibe/matchStatsRecorder'
 import { updatePlayerStats } from './vibe/vibeStats'
@@ -337,6 +339,18 @@ export function useVibeRemoteGame({
     enableAIForSeat(seat: number, options?: { requireRecoveryExpired?: boolean }): boolean
   } | null>(null)
   let handleRoundShuffleStart: (room: VibeHubSDK.Room, message: ShuffleStartMessage, fromPeerId: string) => void = () => {}
+  const bloodFlowRoom = createBloodFlowRoom({ playSound, playSoundAndWait, getThemeName: getTableThemeName, animeFixedTts,
+    getSeat: () => mySeat.value, getMode: () => matchType.value, getIsHost: () => isHost.value,
+    getVerifiedBindings: () => new Map(lobbySeats.value.map(s => [s.peerId, s.seat])),
+    getPlayerProfile: seat => {
+      const human = lobbySeats.value.find(s => s.seat === seat)
+      if (human) return { name: human.nickname, avatar: human.avatar, characterId: human.characterId ?? (seat === 0 ? getCharacterId() : undefined), playerKind: 'human', isLlm: false }
+      const ai = plannedAiSeats.value.find(s => s.seat === seat)
+      return ai ? { name: ai.nickname, avatar: ai.avatar, playerKind: 'llm', isLlm: true } : { playerKind: 'bot', isLlm: false }
+    },
+    leave: () => { void roomSession.leaveRoom().then(() => clearSavedSession()) },
+    onError: message => { sessionError.value = message },
+  })
   // 刷新/手动重进不会再次收到大厅 lobby_start；保留一个独立的客户端洗牌处理器，
   // 让已经进入对局的新 Room 也能接收房主重放的 round_shuffle_start。
   let resumedShuffleRoom: VibeHubSDK.Room | null = null
@@ -428,6 +442,12 @@ export function useVibeRemoteGame({
               console.warn('[client] 后续局承诺洗牌未完成:', error)
             }
           })
+      }
+      if (rulesetId.value === 'lotus-blood-flow') {
+        hostGame.value?.stop(); hostGame.value = null
+        phase.value = 'playing'
+        bloodFlowRoom.attach(room, openingPromise, seatByPeer)
+        return
       }
       if (!isHost.value) {
         // 客户端：开局由房主广播的 round_start/state_snapshot 驱动。
@@ -775,6 +795,10 @@ export function useVibeRemoteGame({
       })
     },
     onClosed: () => {
+      if (rulesetId.value === 'lotus-blood-flow') {
+        bloodFlowRoom.interrupt('房主已关闭房间，保留最后已确认流水')
+        return
+      }
       // 房主主动离开/解散房间（lobby_closed）：
       // - 大厅：提示「房主已关闭房间」并离开（不再干等「网络断开，正在重连」）；
       // - 对局中：只标记权威不可用并尝试恢复，不得在客户端本地伪造最终排名。
@@ -789,6 +813,11 @@ export function useVibeRemoteGame({
         void leaveRoom()
       }
     },
+  })
+
+  watch([roomId, mySeat, rulesetId, lobbySeats], () => {
+    const active = roomSession.getRoom()
+    if (rulesetId.value === 'lotus-blood-flow' && active && mySeat.value >= 0) bloodFlowRoom.attach(active)
   })
 
   // ── 传输层：join 后由 vibeRoomTransport 绑定一次 ──
@@ -1736,6 +1765,7 @@ export function useVibeRemoteGame({
   }
 
   function requestAuthorityRecovery(reason: string) {
+    if (rulesetId.value === 'lotus-blood-flow') { bloodFlowRoom.recover(); return }
     if (isHost.value || state.matchFinished.value) return
     state.sessionStatus.value = 'reconnecting'
     transientEventPresenter.announce('房主连接中断，正在恢复牌局', 'gold')
@@ -1750,6 +1780,7 @@ export function useVibeRemoteGame({
     hostGoneBoundRoom = room
     room.onPeer((event) => {
       if (hostGoneBoundRoom !== room) return
+      if (rulesetId.value === 'lotus-blood-flow') return // dedicated flow preserves its confirmed ledger
       if (event.type === 'error') return
       if (event.type === 'relay') {
         if (event.active) {
@@ -1810,6 +1841,15 @@ export function useVibeRemoteGame({
     // 远端动作、continue、洗牌承诺分别由 hostGameRunner 的专用监听器处理。
     if (isHost.value && fromPeerId) return
     const room = roomSession.getRoom()
+    if (rulesetId.value === 'lotus-blood-flow') {
+      const packet = decodeBloodFlowPacket(raw)
+      if (packet && room && packet.roomId === room.roomId && (!fromPeerId || acceptPinnedHostMessage(room, fromPeerId, packet.kind))) {
+        clearHostGoneTimer()
+        // Private views are consumed by bloodFlowRoom; old single-win timelines never see them.
+        if ('authorityEpoch' in packet) requestCoordinator.setAuthorityEpoch(packet.authorityEpoch)
+        return
+      }
+    }
     if (isShuffleStartMessage(raw)) {
       if (room && fromPeerId) handleRoundShuffleStart(room, raw, fromPeerId)
       return
@@ -2044,22 +2084,25 @@ export function useVibeRemoteGame({
   }
   const remoteActions = {
     ...roomSession,
-    createRoom: (mode: MatchType, capacity: number, rulesetId: 'lotus-classic' | 'lotus-legacy' = 'lotus-classic') => (
+    createRoom: (mode: MatchType, capacity: number, rulesetId: 'lotus-classic' | 'lotus-legacy' | 'lotus-blood-flow' = 'lotus-classic') => (
       roomSession.createRoom(mode, capacity, rulesetId, getTableThemeName())
     ),
     configureAiSeats,
     configureTableTheme,
     async leaveRoom() {
+      bloodFlowRoom.stop()
       await roomSession.leaveRoom()
       clearSavedSession()
     },
     async closeRoom() {
+      bloodFlowRoom.stop()
       await roomSession.closeRoom()
       clearSavedSession()
     },
   }
 
   function cleanup() {
+    bloodFlowRoom.stop()
     hostGame.value?.stop()
     closeConnection()
     clearTimers()
@@ -2068,6 +2111,7 @@ export function useVibeRemoteGame({
   if (instance) onBeforeUnmount(cleanup)
 
   return defineGamePort({
+    bloodFlowPort: bloodFlowRoom.port,
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, aiSeats: plannedAiSeats, roomTimeLimit, waitingNextRound, rulesetId,
