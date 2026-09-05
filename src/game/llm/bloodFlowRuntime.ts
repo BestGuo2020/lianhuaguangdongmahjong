@@ -120,6 +120,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
     },
     cancelStale() { for (const job of jobs.values()) if (!job.current()) job.controller.abort() },
     observe(view:BloodFlowSeatView){const lines=speech.observe(view);stats.messages+=lines.length;return lines},
+    prepareDiscard(view:BloodFlowSeatView,action:BloodFlowAction){const line=speech.takeDiscard(view,action);if(line)stats.messages++;return line},
     cancelSpeech(){speech.reset()},
     resetReasoning(){reasoning.reset()},
     cancel() { for (const job of jobs.values()) job.controller.abort(); jobs.clear();speech.reset() },

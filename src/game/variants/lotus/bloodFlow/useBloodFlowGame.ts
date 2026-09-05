@@ -30,6 +30,8 @@ import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsA
 import { getLocalTtsClient } from '../../../llm/localTtsClient'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 import {actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
+import type {BloodFlowDiscardSpeech} from '../../../llm/bloodFlowSpeech'
+import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -71,6 +73,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       else if(thinkingOwners.get(seat)===requestId){thinkingOwners.delete(seat);const next={...thinkingBubbles.value};delete next[seat];thinkingBubbles.value=next}
     }})
   const actionSpoken=new Set<string>(),actionSpeechControllers=new Set<AbortController>()
+  const pendingDiscardSpeech=new Map<AbortController,()=>boolean>()
   const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
   let speechChain = Promise.resolve(), bubbleSerial = 0
   const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
@@ -121,6 +124,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
     view.value = next
+    for(const [controller,current] of pendingDiscardSpeech)if(!current())controller.abort()
     decisions.cancelStale()
     const toLocal = (seat: number) => (seat - next.seat + 4) % 4
     const seeds = [options.humanPlayerSeed, ...(options.aiPlayerSeeds ?? [])]
@@ -242,10 +246,17 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (!active || pendingBots.has(key)) return
     pendingBots.add(key)
     const current = () => epoch === generation && view.value?.window?.id === windowId && !!view.value?.waitingSeats.includes(seat)
+      && Date.now() < view.value.window.deadlineAt
     try {
       const own = await active.request<BloodFlowSeatView>({ kind: 'view', seat })
       if (!current() || own.window?.id !== windowId) return
       const action = await decisions.decide(own, current)
+      if (!current()) return
+      if(action?.kind==='discard'){
+        const line=decisions.prepareDiscard(own,action)
+        if(line)await presentDiscardSpeech(line,current)
+      }
+      // Audio may have waited across a deadline, leave, or authority refresh.
       if (!current()) return
       const next = await active.request<BloodFlowSeatView>(action ? { kind: 'command', command: {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
@@ -364,7 +375,30 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     speechControllers.forEach(c => c.abort()); speechControllers.clear()
     roundBubbles.value = {}; speechChain = Promise.resolve()
   }
-  function cancelActionSpeech(){actionSpeechControllers.forEach(c=>c.abort());actionSpeechControllers.clear();actionBubbles.value={};thinkingOwners.clear();thinkingBubbles.value={}}
+  function cancelActionSpeech(){actionSpeechControllers.forEach(c=>c.abort());actionSpeechControllers.clear();pendingDiscardSpeech.clear();actionBubbles.value={};thinkingOwners.clear();thinkingBubbles.value={}}
+  async function presentDiscardSpeech(line:BloodFlowDiscardSpeech,current:()=>boolean):Promise<void>{
+    if(!current()||actionSpoken.has(line.id))return
+    actionSpoken.add(line.id)
+    const controller=new AbortController(),epoch=generation,seat=(line.seat-(view.value?.seat??0)+4)%4
+    actionSpeechControllers.add(controller);pendingDiscardSpeech.set(controller,current)
+    const alive=()=>epoch===generation&&view.value?.roundId===line.roundId&&!view.value.public.roundResult
+      &&options.getThemeName?.()===line.theme&&!controller.signal.aborted
+    const showBubble=()=>{
+      if(!alive())return
+      const id=++bubbleSerial
+      actionBubbles.value={...actionBubbles.value,[seat]:{text:line.text,id,persistent:false}}
+      later(()=>{if(actionBubbles.value[seat]?.id===id){const copy={...actionBubbles.value};delete copy[seat];actionBubbles.value=copy}},5000)
+    }
+    let played=false
+    try{played=await playDecisionSpeech({seat,text:line.text,voiceKey:line.voiceKey,style:line.style,priority:'normal',
+      signal:controller.signal,isCurrent:alive,showBubble})}
+    finally{
+      pendingDiscardSpeech.delete(controller)
+      // Keep successful playback cancellable through its second half, until
+      // round/leave cleanup. The set is bounded by this round's action lines.
+      if(!played)actionSpeechControllers.delete(controller)
+    }
+  }
   async function presentActionSpeech(line:BloodFlowActionSpeech):Promise<void>{
     const current=view.value,theme=options.getThemeName?.()??'jade'
     if(!current||theme!==line.theme||!bloodFlowReactionsAllowed(theme)||actionSpoken.has(line.id)||!actionSpeechMatches(line,current))return

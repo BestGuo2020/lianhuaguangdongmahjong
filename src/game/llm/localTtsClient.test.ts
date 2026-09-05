@@ -18,6 +18,20 @@ afterEach(() => {
 })
 
 describe('LocalTtsClient', () => {
+  it('leaving during synthesis does not negatively cache the same line for a new game',async()=>{
+    const player=vi.fn(async()=>true)
+    registerLlmAudioPlayer(player)
+    const fetcher=vi.fn()
+      .mockImplementationOnce((_url,init)=>new Promise(resolve=>init.signal.addEventListener('abort',()=>resolve({ok:false}),{once:true})))
+      .mockResolvedValue({ok:true,json:async()=>({audioUrl:`/api/local-tts/audio/${'a'.repeat(64)}.mp3`})})
+    const client=new LocalTtsClient('',fetcher),controller=new AbortController()
+    const first=client.speak(0,'先稳住。','deepseek','稳健','normal',{signal:controller.signal})
+    controller.abort()
+    expect(await first).toBe(false)
+    expect(await client.speak(0,'先稳住。','deepseek','稳健')).toBe(true)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(player).toHaveBeenCalledOnce()
+  })
   it('按模型自动映射网关白名单音色，也允许预置显式覆盖', () => {
     expect(resolveLocalTtsVoiceKey(preset())).toBe('deepseek')
     const mappings = [

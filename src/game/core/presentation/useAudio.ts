@@ -225,7 +225,7 @@ export function useAudio() {
     const resolve = item.resolveMidpoint
     if (!resolve) return
     item.resolveMidpoint = undefined
-    item.removeAbortListener?.()
+    if (!played) item.removeAbortListener?.()
     resolve(played)
   }
 
@@ -271,6 +271,7 @@ export function useAudio() {
       if (finished) return
       finished = true
       clearPlaybackTimers()
+      item.removeAbortListener?.()
       settleLlmMidpoint(item, played)
       if (activeLlmAudio !== audio) return
       activeLlmAudio = null

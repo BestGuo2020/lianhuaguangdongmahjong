@@ -105,6 +105,7 @@ export class LocalTtsClient {
     } finally {
       if (this.inflight.get(key) === request) this.inflight.delete(key)
     }
+    if (hooks.signal?.aborted || hooks.isCurrent?.() === false) return false
     if (!url) {
       this.negativeUntil.set(key, Date.now() + 30_000)
       return false

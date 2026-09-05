@@ -6,6 +6,15 @@ import {seededRandom} from '../variants/lotus/bloodFlow/simulation'
 import type {LlmProviderPreset} from './config'
 const provider={id:'p',name:'p',apiKey:'private',baseUrl:'https://example.test',model:'m',style:'稳健',timeoutMs:40000} as LlmProviderPreset
 function view(){const v=bloodFlowSeatView(new BloodFlowEngine({authorityEpoch:'e',roundId:'r',random:seededRandom(23),now:()=>0}),0);v.window!.deadlineAt=Infinity;v.ownScore=null;v.ownActions=[{kind:'discard',index:0},{kind:'discard',index:1}];return v}
+it('takes a discard line once before submission without replaying it on confirmation',()=>{
+  const speech=createBloodFlowActionSpeech(()=> 'llm',()=>0),before=view(),action={kind:'discard' as const,index:0}
+  speech.plan('pre',before,action,provider,'先试试这边。','llm')
+  expect(speech.takeDiscard(before,{kind:'discard',index:1})).toBeNull()
+  expect(speech.takeDiscard(before,action)).toMatchObject({id:'pre',seat:0,text:'先试试这边。'})
+  expect(speech.takeDiscard(before,action)).toBeNull()
+  const after=structuredClone(before);after.version++;after.lastDiscardAction={id:'d',kind:'discard',seat:0,tile:before.players[0].hand[0]}
+  expect(speech.observe(after)).toEqual([])
+})
 it('waits for the selected discard, filters Hu/private claims, and emits only once',()=>{
   const speech=createBloodFlowActionSpeech(()=> 'llm',()=>0),before=view(),action={kind:'discard' as const,index:0}
   speech.plan('one',before,action,provider,'我胡了，我手里有清一色','llm')
