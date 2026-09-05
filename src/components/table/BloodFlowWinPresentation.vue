@@ -73,16 +73,16 @@ const animeEvent=(seat:number):TableActionEvent=>{
           <BloodFlowImpactTitle :text="mainPattern(item.record)?.label??'胡牌'" :theme="themeName" />
         </div>
       </template>
-      <div v-if="cue.seats.length&&(phase==='score'||phase==='exit')" class="blood-flow-winner-cards">
-        <article v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-card" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat"
-          :data-payment-seat="item.seat" :data-payment-amount="cue.deltas[item.seat]" :aria-label="`${name(item.seat)}，${sourceLabel(item.record.score.source)}，${cue.merged?'合计':''}${signed(cue.deltas[item.seat])}`">
-          <strong>{{ cue.merged?'最近：':'' }}{{ mainPattern(item.record)?.label??'胡牌' }}</strong>
-          <span>{{ item.record.score.finalMultiplier }}倍<template v-if="item.record.score.hardWin"> · 硬胡</template> · {{ sourceLabel(item.record.score.source) }} <b :class="{negative:cue.deltas[item.seat]<0}">{{ cue.merged?'合计 ':'' }}{{ signed(cue.deltas[item.seat]) }}</b></span>
-        </article>
+      <div v-if="cue.seats.length&&(phase==='score'||phase==='exit')" class="blood-flow-winner-payments">
+        <div v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-payment" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat"
+          :data-payment-seat="item.seat" :data-payment-amount="cue.deltas[item.seat]" :aria-label="`${name(item.seat)}，${cue.merged?'合计':''}${signed(cue.deltas[item.seat])}`">
+          <span v-if="cue.merged">合计</span>
+          <b :class="{negative:cue.deltas[item.seat]<0}">{{ signed(cue.deltas[item.seat]) }}</b>
+        </div>
       </div>
       <template v-if="phase==='score'||phase==='exit'">
         <div v-for="{amount,seat} in payerFeedback" :key="seat" class="blood-flow-seat-feedback"
-          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
+          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0,'win-payment':cue.kind==='win'}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
           <b>{{ signed(amount) }}</b><span v-if="cue.kind==='kong'||cue.merged">{{ cue.kind==='kong'?cue.title:'合计' }}</span>
         </div>
       </template>
@@ -103,11 +103,12 @@ const animeEvent=(seat:number):TableActionEvent=>{
 [data-theme="happyMahjong"] .blood-flow-central::before { background:conic-gradient(from 15deg,transparent 0 10%,#fbd34477 12% 15%,transparent 17% 30%,#78ceff66 32% 35%,transparent 37% 55%,#ff859677 57% 60%,transparent 62%); clip-path:polygon(8% 12%,80% 0,100% 65%,80% 95%,0 80%); }
 [data-theme="llm"] .blood-flow-central::before { inset:20% -8%; border-block:1px solid #6eeaff99; background:repeating-linear-gradient(0deg,#67dce814 0 1px,transparent 1px 5px),linear-gradient(90deg,transparent,#123241cc,transparent); }
 [data-theme="llmAnime"] .blood-flow-central::before { background:linear-gradient(135deg,transparent 12%,#fd8db344 15% 17%,transparent 20% 60%,#dab5ef66 63% 66%,transparent 70%); transform:skewX(-15deg); }
-.blood-flow-winner-card { position:absolute; transform:translateX(-50%); display:grid; justify-items:center; gap:3px; max-width:min(290px,36vw); padding:7px 12px; border:1px solid color-mix(in srgb,var(--win-color) 60%,transparent); border-radius:8px; background:var(--theme-panel,#122c25); text-align:center; }
-.blood-flow-winner-card strong { font-size:19px; color:var(--theme-text,#fff2d9); white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
-.blood-flow-winner-card span { display:flex; align-items:baseline; gap:4px; white-space:nowrap; font-size:11px; }
-.blood-flow-winner-card b { font-size:26px; line-height:1; color:var(--theme-positive,#7bddad); font-variant-numeric:tabular-nums; }
-.blood-flow-winner-card b.negative { color:var(--theme-negative,#ffae9f); }
+.blood-flow-winner-payment { position:absolute; transform:translateX(-50%); display:flex; align-items:baseline; gap:5px; color:var(--theme-positive,#7bddad); white-space:nowrap; }
+.blood-flow-winner-payment b { font-size:clamp(26px,3vw,38px); line-height:1.15; font-variant-numeric:tabular-nums; }
+.blood-flow-winner-payment span { font-size:12px; }
+.blood-flow-winner-payment b.negative { color:var(--theme-negative,#ffae9f); }
+.blood-flow-winner-payment,.blood-flow-seat-feedback.win-payment { text-shadow:0 2px 3px #000b; paint-order:stroke fill; -webkit-text-stroke:1px #14231da8; }
+.blood-flow-seat-feedback.win-payment { border:0; background:none; }
 .winner-0 { left:50%; bottom:19%; }.winner-1 { left:77%; top:32%; }.winner-2 { left:50%; top:12%; }.winner-3 { left:23%; top:32%; }
 .blood-flow-seat-feedback { position:absolute; display:grid; justify-items:center; padding:6px 12px; border-radius:8px; background:var(--theme-panel,#122c25); color:var(--theme-positive,#7bddad); border:1px solid color-mix(in srgb,var(--win-color) 50%,transparent); }
 .blood-flow-seat-feedback.negative { color:var(--theme-negative,#ffae9f); }
@@ -121,10 +122,8 @@ const animeEvent=(seat:number):TableActionEvent=>{
 .compact :deep(.anime-action-cue) { width:76px; height:60px; --action-art-scale:1.55; }
 .compact :deep(.anime-action-copy strong) { font-size:28px; -webkit-text-stroke:3px #2d241c; }
 .compact .stage-main .blood-flow-central { width:clamp(170px,30vw,265px); }
-.compact .blood-flow-winner-card { padding:4px 6px; max-width:37%; }
-.compact .blood-flow-winner-card strong { font-size:14px; }
-.compact .blood-flow-winner-card span { font-size:9px; gap:2px; }
-.compact .blood-flow-winner-card b { font-size:20px; }
+.compact .blood-flow-winner-payment b { font-size:26px; }
+.compact .blood-flow-winner-payment span { font-size:10px; }
 .compact .winner-0 { bottom:22%; }.compact .winner-1 { left:76%; top:55%; }.compact .winner-2 { left:44%; top:8%; }.compact .winner-3 { left:24%; top:55%; }
 .compact .blood-flow-seat-feedback { padding:3px 7px; }
 .compact .blood-flow-seat-feedback b { font-size:20px; }

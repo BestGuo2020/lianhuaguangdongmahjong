@@ -6,10 +6,13 @@ test('three winners retain their own patterns and the payer shows the whole paym
   await expect(page.locator('.table-loading')).toHaveCount(0,{timeout:30_000})
   await page.evaluate(()=>(window as any).__appendBloodFlowMultiWin())
   await expect(page.locator('.blood-flow-source')).toContainText('三响')
+  await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='readable')
+  for(const [seat,pattern] of [[1,'清一色'],[2,'大三元'],[3,'十三幺']]){
+    await expect(page.locator(`[data-title-seat="${seat}"]`)).toContainText(String(pattern))
+  }
   await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='score')
-  for(const [seat,pattern,amount] of [[1,'清一色',80],[2,'大三元',160],[3,'十三幺',320]]){
-    const card=page.locator(`[data-winner-seat="${seat}"]`)
-    await expect(card).toContainText(String(pattern));await expect(card).toContainText(`+${amount}`)
+  for(const [seat,amount] of [[1,80],[2,160],[3,320]]){
+    await expect(page.locator(`[data-winner-seat="${seat}"]`)).toHaveText(`+${amount}`)
   }
   await expect(page.locator('[data-payment-seat="0"]')).toBeVisible()
   expect(await page.locator('[data-payment-seat]').evaluateAll(es=>es.sort((a,b)=>Number(a.getAttribute('data-payment-seat'))-Number(b.getAttribute('data-payment-seat'))).map(e=>Number(e.getAttribute('data-payment-amount'))))).toEqual([-560,80,160,320])

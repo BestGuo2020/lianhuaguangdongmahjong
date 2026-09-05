@@ -24,8 +24,8 @@ for(const [width,height] of [[1280,720],[844,390],[568,320]]) test.describe(`${w
       if(scene!=='multi') expect(titles[0].y+titles[0].h/2).toBeGreaterThan(height*.58)
       await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='score')
       await page.screenshot({path:`${dir}/${prefix}-${scene}-payment.png`})
-      const sizes=await page.locator('.blood-flow-winner-card').evaluateAll(es=>es.map(el=>({scroll:el.scrollWidth,width:el.clientWidth,lines:el.children.length})))
-      for(const size of sizes){expect(size.scroll).toBeLessThanOrEqual(size.width);expect(size.lines).toBe(2)}
+      const sizes=await page.locator('.blood-flow-winner-payment').evaluateAll(es=>es.map(el=>({scroll:el.scrollWidth,width:el.clientWidth,lines:el.children.length})))
+      for(const size of sizes){expect(size.scroll).toBeLessThanOrEqual(size.width);expect(size.lines).toBe(1)}
       await expect(page.locator('.blood-flow-cue')).toHaveCount(0)
     }
     await page.getByRole('button',{name:'可胡画面',exact:true}).click()
