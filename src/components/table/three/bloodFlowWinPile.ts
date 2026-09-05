@@ -28,7 +28,7 @@ export interface WinPileTile {
 
 /** Display references only. No tile accounting or game transitions may read these tiles. */
 export function bloodFlowWinPiles(batches: readonly WinBatch[], localSeat = 0, compact = false) {
-  const perLevel = compact ? 3 : 4, levels = compact ? 2 : 3
+  const perLevel = compact ? 3 : 4
   const grouped = Array.from({ length: 4 }, () => [] as { record: WinRecord; tile: TileType; sourceEventId: string }[])
   const seen = new Set<string>()
   for (const batch of batches) for (const record of batch.winners) {
@@ -39,13 +39,12 @@ export function bloodFlowWinPiles(batches: readonly WinBatch[], localSeat = 0, c
   }
   return grouped.map((records, relativeSeat) => {
     const { origin, along } = bloodFlowPileAnchor(relativeSeat, compact)
-    const visible = records.slice(-perLevel * levels)
-    const tiles: WinPileTile[] = visible.map((item, index) => {
+    const tiles: WinPileTile[] = records.map((item, index) => {
       const column = index % perLevel, level = Math.floor(index / perLevel)
       return { ...item, column, level, x: origin.x + along[0] * column * .73,
         y: origin.y + level * .46, z: origin.z + along[1] * column * .73, rotation: origin.rotation }
     })
     return { relativeSeat, absoluteSeat: (relativeSeat + localSeat) % 4, count: records.length,
-      overflow: Math.max(0, records.length - tiles.length), tiles }
+      levels: Math.ceil(records.length / perLevel), overflow: 0, tiles }
   })
 }

@@ -27,6 +27,7 @@ import { createTableTilePresenter } from './table/three/tableTilePresenter'
 import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
 import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
+import { createBloodFlowWinEffects } from './table/three/bloodFlowWinEffects'
 
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], localSeat: 0, currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
@@ -54,6 +55,7 @@ let destroyed = false
 let lastPileAnchors = ''
 let dynamicGroups = []
 let winEffectPresenter: ReturnType<typeof createWinEffectPresenter> | null = null
+let bloodFlowWinEffects: ReturnType<typeof createBloodFlowWinEffects> | null = null
 let dicePresenter: ReturnType<typeof createDicePresenter> | null = null
 let perfHud: ReturnType<typeof createPerfHud> | null = null
 const staticResources = []
@@ -303,6 +305,8 @@ function render(time = 0) {
     const diceActive = dicePresenter?.animate(time) ?? false
     const tilesActive = tableTiles.animate(time, scratchVector)
     const winFrame = winEffectPresenter?.animate(time)
+    const bloodFlowActive = bloodFlowWinEffects?.animate(time) ?? false
+    if (props.bloodFlowBatches && canvas.value) canvas.value.dataset.bloodFlowEffects = String(bloodFlowWinEffects?.activeCount ?? 0)
     if (winFrame) {
       // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，
       // 不把 llmAnime 的主题基础曝光瞬间拉回旧值。
@@ -334,7 +338,7 @@ function render(time = 0) {
     if (outlineEffect) outlineEffect.render(scene, camera)
     else renderer.render(scene, camera)
     renderedFrames += 1
-    keepGoing = diceActive || tilesActive || Boolean(winFrame) || dirty
+    keepGoing = diceActive || tilesActive || Boolean(winFrame) || bloodFlowActive || dirty
   } finally {
     rendering = false
   }
@@ -470,6 +474,7 @@ onMounted(async () => {
     })
   }
   tileInstances = createTileInstanceRenderer({
+    capacity: props.bloodFlowBatches ? 512 : undefined,
     scene,
     ownDynamic,
     dynamicGroups,
@@ -503,7 +508,7 @@ onMounted(async () => {
     addWinEffect: () => winEffectPresenter?.addWinEffect(),
     addWinningDisplayTile: () => winEffectPresenter?.addWinningDisplayTile(),
   })
-  winEffectPresenter = createWinEffectPresenter({
+  const winEffectOptions = {
     scene,
     camera,
     props,
@@ -515,7 +520,10 @@ onMounted(async () => {
     meldTransform: tableTiles.meldTransform,
     alignMeldBottom: tableTiles.alignMeldBottom,
     sourceTileRotationOffset: tableTiles.sourceTileRotationOffset,
-  })
+  }
+  winEffectPresenter = createWinEffectPresenter(winEffectOptions)
+  bloodFlowWinEffects = createBloodFlowWinEffects(winEffectOptions)
+  bloodFlowWinEffects.sync()
   dicePresenter = createDicePresenter({
     scene,
     own,
@@ -590,11 +598,14 @@ watch(
     props.wallBreakIndex,
     props.bloodFlowBatches?.map(b => b.batchId).join(','),
     props.bloodFlowCompact,
+    props.bloodFlowPresentationKey,
+    props.localSeat,
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
   // 销毁并重建整套 InstancedMesh 与 GPU buffer。
   () => {
     tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' })
+    bloodFlowWinEffects?.sync()
     invalidate()
   },
 )
@@ -628,6 +639,7 @@ onBeforeUnmount(() => {
   perfHud?.destroy()
   perfHud = null
   resizeObserver?.disconnect()
+  bloodFlowWinEffects?.dispose()
   if (scene) clearDynamicScene()
   staticResources.forEach((resource) => resource.dispose?.())
   renderer?.dispose()

@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { TileType } from '../../../game/core/contracts/types'
 
 interface TileInstanceRendererOptions {
+  capacity?: number
   scene: THREE.Scene
   ownDynamic<T>(resource: T): T
   dynamicGroups: THREE.Object3D[]
@@ -18,7 +19,6 @@ interface TileInstanceRendererOptions {
   contactShadowY?: number
 }
 
-const INSTANCE_CAPACITY = 260
 const TILE_BASE_OFFSET = new THREE.Matrix4().makeTranslation(0, -.06, 0)
 const TILE_CAP_OFFSET = new THREE.Matrix4().makeTranslation(0, .13, 0)
 export const CONTACT_SHADOW_QUAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
@@ -42,6 +42,7 @@ export function makeContactShadowTexture() {
 }
 
 export function createTileInstanceRenderer(options: TileInstanceRendererOptions) {
+  const INSTANCE_CAPACITY = options.capacity ?? 260
   let baseMesh: THREE.InstancedMesh | null = null
   let backCapMesh: THREE.InstancedMesh | null = null
   let atlasCapMesh: THREE.InstancedMesh | null = null
@@ -181,6 +182,7 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
   }
 
   function add(position: THREE.Vector3, quaternion: THREE.Quaternion, face: TileType | null, scale = 1, initialPosition: THREE.Vector3 | null = null, initialScale: number | null = null) {
+    if (instanceCount >= INSTANCE_CAPACITY) throw new Error('Tile instance capacity exceeded')
     const baseIndex = instanceCount++
     const joker = Boolean(face && options.isJoker?.(face))
     const wildcard = Boolean(face && !joker && options.isWildcard?.(face))

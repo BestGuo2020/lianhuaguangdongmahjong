@@ -31,7 +31,9 @@ interface WinEffectAnimation {
   reducedMotion: boolean
 }
 
-interface WinEffectPresenterOptions {
+export interface WinEffectPresenterOptions {
+  winLayout?: (playerIndex: number) => { x: number; y: number; z: number; rotation: number }
+  showWinningTile?: boolean
   scene: THREE.Scene
   camera: THREE.Camera
   props: Readonly<ResolvedTableProps>
@@ -49,10 +51,11 @@ export function createWinEffectPresenter(options: WinEffectPresenterOptions) {
   const { scene, camera, props, dynamicGroups, own, ownDynamic, makeFaceTile } = options
   const { meldTransform, alignMeldBottom, sourceTileRotationOffset } = options
   const TILE_LAYER_Z = options.tileLayerZ
+  const effectLayout = options.winLayout ?? winDisplayLayout
   let winEffectAnimation: WinEffectAnimation | null = null
 
 function winEffectAnchor(playerIndex) {
-  const layout = winDisplayLayout(playerIndex)
+  const layout = effectLayout(playerIndex)
   return new THREE.Vector3(layout.x, layout.y, layout.z)
 }
 
@@ -383,11 +386,11 @@ function addWinEffect() {
 
   // 胡牌牌：飞入 + 落地弹跳。四红中时 4 张红中已在花杠区，不单独飞牌（避免多一张红中）。
   const isFourRed = isFourRedWin()
-  const winningTile = isFourRed ? null : makeFaceTile(props.winEffect.tile)
+  const winningTile = isFourRed || options.showWinningTile === false ? null : makeFaceTile(props.winEffect.tile)
   const robbedKongSource = robbedKongSourceTransform(props.winEffect)
   const startPosition = robbedKongSource?.position
     ?? anchor.clone().addScaledVector(outward, 1.08).setY(anchor.y)
-  const seatRotation = winDisplayLayout(props.winEffect.winnerIndex).rotation
+  const seatRotation = effectLayout(props.winEffect.winnerIndex).rotation
   const startRotation = robbedKongSource?.rotation ?? seatRotation
   if (winningTile) {
     winningTile.position.copy(startPosition)
