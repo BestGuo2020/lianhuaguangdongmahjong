@@ -270,6 +270,10 @@ const hoveredWaits = computed(() => hoveredDiscard.value
   ? props.userTingOptions.find((option) => option.discard === hoveredDiscard.value) ?? null
   : null)
 const activeWaits = computed(() => hoveredWaits.value || props.userDiscardWaits || (!props.isUserTurn ? props.userCurrentWaits : null))
+const bloodFlowWaitTiles = computed(() => (activeWaits.value?.tiles ?? []).map(item => {
+  const score = props.bloodFlow?.waits.find(wait => wait.tile === item.tile)
+  return { ...item, multiplier: (score?.selfDraw ?? score?.discard)?.finalMultiplier ?? null }
+}))
 // 托管开关：仅多人联机模式显示；结算/亮相/回大厅等阶段隐藏，其余对局时段（含他人回合）常驻可切换。
 const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
   && !['lobby', 'win-effect', 'revealing', 'settled', 'finished'].includes(props.phase))
@@ -662,11 +666,16 @@ function onAvatarError(entry: GamePlayer) {
       ><b>托管</b></button>
       <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     </div>
-    <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
-      <div v-if="bloodFlow" class="blood-flow-waits">
-        <span v-for="wait in bloodFlow.waits" :key="wait.tile">{{ tileName(wait.tile) }}：自摸 {{ wait.selfDraw?.paymentPerPayer ?? '—' }} / 点炮 {{ wait.discard?.paymentPerPayer ?? '—' }} 分（单家）</span>
+    <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
+      <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ gridTemplateColumns: `repeat(${Math.min(4, bloodFlowWaitTiles.length) || 1}, minmax(0, 1fr))` }">
+        <div v-for="item in bloodFlowWaitTiles" :key="item.tile" class="blood-flow-wait-tile" :class="{ exhausted: item.remaining === 0 }"
+          :aria-label="`${tileName(item.tile)}，自摸预估${item.multiplier ?? '未知'}倍，剩余${item.remaining}张`">
+          <MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
+          <span class="wait-multiplier">{{ item.multiplier ?? '—' }}倍</span>
+          <span class="wait-remaining">{{ item.remaining }}张</span>
+        </div>
       </div>
-      <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
+      <template v-else-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
 
@@ -694,7 +703,18 @@ function onAvatarError(entry: GamePlayer) {
 .game-table-hud { display: contents; }
 .blood-flow-preview { display: grid; gap: 2px; max-width: min(320px, 40vw); padding: 6px 9px; border: 1px solid var(--theme-accent, #cfb97a); border-radius: 8px; background: rgba(12, 22, 24, .94); color: #fff5dc; font-size: 12px; }
 .blood-flow-preview small { color: #c9d5d6; font-size: 10px; }
-.blood-flow-waits { display: grid; gap: 3px; max-height: 110px; overflow: auto; font-size: 11px; }
+.blood-flow-waiting-tip { max-height: min(320px, 55vh); align-items: flex-start; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+.blood-flow-wait-grid { display: grid; gap: 12px 14px; }
+.blood-flow-wait-tile { display: grid; justify-items: center; align-content: start; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.blood-flow-wait-tile .mahjong-tile.small { --tile-width: 44px; margin-bottom: 4px; }
+.wait-multiplier { color: var(--theme-accent); font-weight: 800; }
+.wait-remaining { color: var(--theme-text); }
+.blood-flow-wait-tile.exhausted { opacity: .5; }
+@media (max-width: 900px), (max-height: 500px) {
+  .blood-flow-wait-grid { gap: 8px 10px; }
+  .blood-flow-wait-tile { font-size: 11px; }
+  .blood-flow-wait-tile .mahjong-tile.small { --tile-width: 30px; margin-bottom: 2px; }
+}
 .blood-flow-pile-badge { position: absolute; z-index: 35; display: grid; gap: 2px; padding: 5px 8px; border-radius: 8px; border: 1px solid #d2c69a80; background: #142424dc; color: #fff2d9; cursor: pointer; min-width: 62px; min-height: 32px; font-size: 12px; }
 .blood-flow-pile-badge small { opacity: .7; font-size: 10px; }
 .blood-flow-pile-badge { transform: translate(-50%, -50%); }
