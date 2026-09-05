@@ -27,6 +27,20 @@ function discardEast(engine: BloodFlowEngine) {
 }
 
 describe('E03 authority conservation and continuous rounds', () => {
+  it('settles three different conditional large hands from one source with exact payer totals', () => {
+    const engine = scenario([
+      ['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'red'],
+      ['m1', 'm1', 'm1', 'm9', 'm9', 'm9', 'p1', 'p1', 'p1', 'p9', 'p9', 'p9', 'red'],
+      ['east', 'east', 'east', 'south', 'south', 'south', 'west', 'west', 'west', 'north', 'north', 'north', 'red'],
+      ['s2', 's2', 's2', 's4', 's4', 's4', 's6', 's6', 's6', 's8', 's8', 's8', 'red'],
+    ])
+    engine.submit(engine.command(0, { kind: 'discard', index: 13 }))
+    for (const seat of [1, 2, 3] as const) expect(engine.submit(engine.command(seat, { kind: 'win' }))).toBe(true)
+    expect(engine.archives).toHaveLength(1)
+    expect(engine.players.map(p => p.score)).toEqual([1000, 2220, 2600, 2180])
+    expect(engine.seats.map(s => s.winCount)).toEqual([0, 1, 1, 1])
+    engine.assertConservation()
+  })
   it('opens the next action at the authority win beat and starts its deadline then', () => {
     const setup = scenario([[...waiting, 'east'], null, null, null])
     let now = 0
