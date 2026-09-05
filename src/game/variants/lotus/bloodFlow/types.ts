@@ -173,6 +173,7 @@ export interface BloodFlowPublicState {
 }
 
 export interface BloodFlowTableState extends BloodFlowPublicState {
+  readonly sourceEvent?: SourceTileEvent
   readonly continuation?: { readonly ready:boolean; readonly readySeats:readonly Seat[]; readonly requiredSeats:readonly Seat[] }
   readonly presentationKey?: string
   readonly roundBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>

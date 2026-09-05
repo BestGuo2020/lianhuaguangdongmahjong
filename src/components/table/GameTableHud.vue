@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import AnimeActionCue from './AnimeActionCue.vue'
@@ -117,11 +117,15 @@ pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
 const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
-const presentationDirector=new BloodFlowPresentationDirector()
+const presentationDirector=new BloodFlowPresentationDirector(import.meta.env.DEV?Number(new URLSearchParams(window.location.search).get('motionScale'))||1:1)
+const tableHudElement=ref<HTMLElement|null>(null), ownDrawScreen=shallowRef<{sourceId:string;x:number;y:number}|null>(null)
+const bloodFlowHidden=shallowRef<readonly string[]>([])
 const bloodFlowCue=shallowRef<BloodFlowCue|null>(null), presentationNow=ref(0), presentationBusy=ref(false)
 let presentationFrame=0
 function advancePresentation(now:number){
   presentationFrame=0;presentationNow.value=now;bloodFlowCue.value=presentationDirector.tick(now);presentationBusy.value=presentationDirector.busy
+  const hidden=presentationDirector.hiddenRecordIds(now)
+  if(hidden.join('|')!==bloodFlowHidden.value.join('|'))bloodFlowHidden.value=hidden
   if(presentationBusy.value)presentationFrame=requestAnimationFrame(advancePresentation)
 }
 watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?.presentationKey,props.bloodFlow?.roundId,props.themeName],()=>{
@@ -130,6 +134,14 @@ watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?
   advancePresentation(performance.now())
 },{immediate:true})
 onBeforeUnmount(()=>{cancelAnimationFrame(presentationFrame);presentationDirector.reset()})
+watch(()=>[props.bloodFlow?.sourceEvent?.id,props.user.drawnTileIndex,props.user.hand.length],async()=>{
+  await nextTick()
+  const source=props.bloodFlow?.sourceEvent
+  const tile=tableHudElement.value?.querySelector('.hand-tile-slot.drawn'),canvas=tableHudElement.value?.querySelector('canvas')
+  if(!source||source.kind!=='draw'||source.seat!==props.user.seat||!tile||!canvas){ownDrawScreen.value=null;return}
+  const b=tile.getBoundingClientRect(),c=canvas.getBoundingClientRect()
+  if(c.width&&c.height)ownDrawScreen.value={sourceId:source.id,x:(b.x+b.width/2-c.x)/c.width,y:(b.y+b.height/2-c.y)/c.height}
+},{immediate:true,flush:'post'})
 
 function handleTableReady() {
   tableLoadRetry.succeed()
@@ -405,6 +417,7 @@ function onAvatarError(entry: GamePlayer) {
 
 <template>
   <div
+    ref="tableHudElement"
     class="game-table-hud"
     :class="{ 'blood-flow-table': Boolean(bloodFlow) }"
     :data-table-theme="themeName"
@@ -449,6 +462,9 @@ function onAvatarError(entry: GamePlayer) {
       :blood-flow-compact="compactPiles"
       :blood-flow-presentation-key="bloodFlow?.presentationKey"
       :blood-flow-cue="bloodFlowCue"
+      :blood-flow-hidden-records="bloodFlowHidden"
+      :blood-flow-source-event="bloodFlow?.sourceEvent"
+      :blood-flow-own-draw="ownDrawScreen"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
       @pile-anchors="pileAnchors = $event"

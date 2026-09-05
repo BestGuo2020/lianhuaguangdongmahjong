@@ -322,6 +322,10 @@ function render(time = 0) {
     camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
     if (props.bloodFlowBatches) {
       camera.updateMatrixWorld()
+      if(import.meta.env.DEV&&canvas.value)canvas.value.dataset.bloodFlowFlights=JSON.stringify(tableTiles.flightDebug().map(f=>{
+        const p=new THREE.Vector3(f.source.x,f.source.y,f.source.z).project(camera)
+        return {...f,sourceScreen:{x:(p.x+1)/2,y:(1-p.y)/2}}
+      }))
       const anchors = [0, 1, 2, 3].map(seat => {
         const { badge } = bloodFlowPileAnchor(seat, props.bloodFlowCompact)
         const point = new THREE.Vector3(badge.x, badge.y, badge.z + TILE_LAYER_Z).project(camera)
@@ -492,6 +496,7 @@ onMounted(async () => {
     contactShadowY: animeTable ? 0.075 : undefined,
   })
   tableTiles = createTableTilePresenter({
+    projectOwnDraw:point=>{camera.updateMatrixWorld();const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(point.x*2-1,1-point.y*2),camera);return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-.56),new THREE.Vector3())},
     props,
     scene,
     dynamicGroups,
@@ -602,6 +607,11 @@ watch(
     props.bloodFlowCompact,
     props.bloodFlowPresentationKey,
     props.bloodFlowCue?.id,
+    props.bloodFlowHiddenRecords?.join('|'),
+    props.bloodFlowSourceEvent?.id,
+    props.bloodFlowOwnDraw?.sourceId,
+    props.bloodFlowOwnDraw?.x,
+    props.bloodFlowOwnDraw?.y,
     props.localSeat,
   ),
   // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms

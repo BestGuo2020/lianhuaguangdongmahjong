@@ -9,6 +9,10 @@ import type { TableActionEvent, TileType } from '../../../game/core/contracts/ty
 import type { TileInstanceRenderer } from './tileInstanceRenderer'
 import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
 import { bloodFlowWinPiles } from './bloodFlowWinPile'
+import { prefersReducedMotion } from '../../../game/core/presentation/winEffect'
+import type { SourceTileEvent } from '../../../game/variants/lotus/bloodFlow/types'
+import type { BloodFlowCue } from '../../../game/variants/lotus/bloodFlow/presentation'
+import { sampleBloodFlowFlight, type FlightPose } from './bloodFlowTileFlight'
 import type { createStaticTableScene } from './staticTableScene'
 
 type TableScene = Pick<ReturnType<typeof createStaticTableScene>,
@@ -36,6 +40,7 @@ interface MeldTween extends InstanceTween {
 }
 
 interface TableTilePresenterOptions {
+  projectOwnDraw?(point:{x:number;y:number}):THREE.Vector3|null
   props: Readonly<ResolvedTableProps>
   scene: THREE.Scene
   dynamicGroups: THREE.Object3D[]
@@ -68,6 +73,9 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const dealTweens: DealTween[] = []
   const meldTweens: MeldTween[] = []
   const discardTweens: DealTween[] = []
+  const sourceTransforms=new Map<string,FlightPose>(),drawnTransforms=new Map<number,FlightPose>(),addedTransforms=new Map<string,FlightPose>()
+  let sourceEpoch=''
+  const flights:{recordId:string;sourceId:string;kind:SourceTileEvent['kind'];level:number;column:number;source:FlightPose;target:FlightPose;cue:BloodFlowCue;instance:ReturnType<TileInstanceRenderer['add']>;current:FlightPose}[]=[]
   let animatedDiscardId = -1
   let animatedTableActionId = -1
   let pendingTableActionAnimation: TableActionEvent | null = null
@@ -188,6 +196,7 @@ function addConcealedHand(playerIndex) {
       }
     }
     const pos = new THREE.Vector3(x, tileY, z + TILE_LAYER_Z)
+    if(index===drawnTileIndex)drawnTransforms.set(playerIndex,{x:pos.x,y:pos.y,z:pos.z,rotation:rotationY,tilt:props.revealHands?0:-Math.PI/2})
     // 暗手为背面朝玩家的立牌：makeHiddenTile 内部 body 绕 X 转 -90°，合批时折进实例矩阵。
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
@@ -248,6 +257,9 @@ function addDiscards(playerIndex) {
     const y = highlighted ? .48 : .28
     // 牌河保持原位（不与手牌一起向本家偏移）
     const pos = new THREE.Vector3(transform.x, y, transform.z + PLAY_AREA_OFFSET_Z)
+    const source=props.bloodFlowSourceEvent
+    if(highlighted&&source?.kind==='discard'&&(source.seat-(props.localSeat??0)+4)%4===playerIndex&&source.tile===tileName)
+      sourceTransforms.set(source.id,{x:pos.x,y:pos.y,z:pos.z,rotation:transform.rotation})
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
     // 最新一张弃牌：从手牌方向飞向牌河（带弧度 + 落地微弹），其余牌直接放置。
     const isNewDiscard = highlighted && props.lastDiscard?.id !== animatedDiscardId
@@ -373,6 +385,10 @@ function addMelds(playerIndex) {
       }
       trackOffset += tileSpan
     })
+    if(meld.type==='peng'&&sourcePlacement){
+      const offset=addedKongTileOffset(playerIndex,TILE_GAP_OFFSET)
+      addedTransforms.set(`${playerIndex}/${meld.tile}`,{x:sourcePlacement.x+offset.x,y:.28,z:sourcePlacement.z+offset.z+TILE_LAYER_Z,rotation:sourcePlacement.rotation})
+    }
     if (meld.added && sourcePlacement) {
       // 补杠牌与原横牌同样横摆，平放在它靠牌桌中心的一侧，形成 T/L 形。
       const addedOffset = addedKongTileOffset(playerIndex, TILE_GAP_OFFSET)
@@ -559,9 +575,29 @@ function addHorses() {
   })
 }
 
+function sourcePose(source:SourceTileEvent):FlightPose {
+  const cached=sourceTransforms.get(source.id)
+  if(cached)return cached
+  const seat=(source.seat-(props.localSeat??0)+4)%4
+  if(source.kind==='added-kong'){
+    const added=addedTransforms.get(`${seat}/${source.tile}`)
+    if(added)return {...added}
+  }
+  if(source.kind==='discard'){
+    const t=discardTransform(seat,props.players[seat]?.discards.length??0)
+    return {x:t.x,y:.28,z:t.z+PLAY_AREA_OFFSET_Z,rotation:t.rotation}
+  }
+  const drawn=drawnTransforms.get(seat)
+  if(seat!==0&&drawn)return {...drawn}
+  const p=discardSourcePos(seat)
+  return {x:seat===0?5.8:p.x,y:p.y,z:p.z,rotation:seat*Math.PI/2,tilt:seat===0?0:-Math.PI/2}
+}
 function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolean } = {}) {
   if (!scene || !props.players.length || !scene.userData.tileImages) return
   const reuse = reuseInstances && tileInstances.canReuse()
+  const epoch=`${props.bloodFlowPresentationKey}/${props.localSeat}`
+  if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear()}
+  drawnTransforms.clear();addedTransforms.clear();flights.length=0
   if (!reuse) clearDynamicScene()
   dealTweens.length = 0
   meldTweens.length = 0
@@ -577,11 +613,28 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   }
   addWall()
   addHorses()
+  const liveSource=props.bloodFlowSourceEvent
+  if(liveSource){
+    const own=props.bloodFlowOwnDraw
+    const projected=own?.sourceId===liveSource.id?options.projectOwnDraw?.(own):null
+    if(projected)sourceTransforms.set(liveSource.id,{x:projected.x,y:projected.y,z:projected.z,rotation:0})
+    else if(!sourceTransforms.has(liveSource.id))sourceTransforms.set(liveSource.id,sourcePose(liveSource))
+  }
+  const hidden=new Set(props.bloodFlowHiddenRecords??[]),cue=props.bloodFlowCue
+  for(const batch of props.bloodFlowBatches??[])if(!sourceTransforms.has(batch.source.id))sourceTransforms.set(batch.source.id,sourcePose(batch.source))
   // Pile tiles are public display references, independent from wall/discard accounting.
   // Rebuilds place current records directly; historical wins never replay here.
   for (const pile of bloodFlowWinPiles(props.bloodFlowBatches ?? [], props.localSeat ?? 0, props.bloodFlowCompact ?? false)) {
-    for (const tile of pile.tiles) addTableTile(new THREE.Vector3(tile.x, tile.y, tile.z + TILE_LAYER_Z),
-      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, tile.rotation, 0)), tile.tile)
+    for (const tile of pile.tiles) {
+      const target={x:tile.x,y:tile.y,z:tile.z+TILE_LAYER_Z,rotation:tile.rotation}
+      const flight=cue?.flights.find(f=>f.record.id===tile.record.id)
+      if(hidden.has(tile.record.id)){
+        if(!cue||!flight)continue
+        const source=sourcePose(flight.source),current=sampleBloodFlowFlight(source,target,cue,performance.now(),prefersReducedMotion())
+        const instance=addTableTile(new THREE.Vector3(current.x,current.y,current.z),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,current.rotation,0)),tile.tile)
+        flights.push({recordId:tile.record.id,sourceId:flight.source.id,kind:flight.source.kind,level:tile.level,column:tile.column,source,target,cue,instance,current})
+      }else addTableTile(new THREE.Vector3(target.x,target.y,target.z),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,tile.rotation,0)),tile.tile)
+    }
   }
   finishTableInstances()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
@@ -591,6 +644,11 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
 }
 
   function animate(time: number, scratchVector: THREE.Vector3) {
+    for(const flight of flights){
+      const p=sampleBloodFlowFlight(flight.source,flight.target,flight.cue,time,prefersReducedMotion());flight.current=p
+      const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,p.rotation,0)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(p.tilt??0,0,0)))
+      tileInstances.set(flight.instance.baseIndex,flight.instance.capMesh,flight.instance.capIndex,scratchVector.set(p.x,p.y,p.z),q,1)
+    }
     const keepDeal = dealTweens.filter((tween) => {
       const progress = Math.min(1, (time - tween.startedAt) / tween.duration)
       const eased = 1 - (1 - progress) ** 3
@@ -620,8 +678,9 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
       return progress < 1
     })
     discardTweens.splice(0, discardTweens.length, ...keepDiscard)
-    return dealTweens.length + meldTweens.length + discardTweens.length > 0
+    return dealTweens.length + meldTweens.length + discardTweens.length + flights.length > 0
   }
 
-  return { rebuild: rebuildTableTiles, animate, meldTransform, alignMeldBottom, sourceTileRotationOffset }
+  return { rebuild: rebuildTableTiles, animate, meldTransform, alignMeldBottom, sourceTileRotationOffset,
+    flightDebug:()=>flights.map(f=>({recordId:f.recordId,sourceId:f.sourceId,kind:f.kind,level:f.level,column:f.column,source:f.source,target:f.target,current:f.current})) }
 }
