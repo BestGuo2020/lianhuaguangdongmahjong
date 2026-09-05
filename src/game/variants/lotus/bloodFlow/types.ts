@@ -171,3 +171,8 @@ export interface BloodFlowPublicState {
   readonly batches: readonly WinBatch[]
   readonly roundResult: BloodFlowRoundResult | null
 }
+
+export interface BloodFlowTableState extends BloodFlowPublicState {
+  readonly preview: PublicWinScore | null
+  readonly waits: readonly { tile: TileType; selfDraw: PublicWinScore | null; discard: PublicWinScore | null }[]
+}

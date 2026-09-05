@@ -43,6 +43,7 @@ export class BloodFlowEngine {
   readonly archives: SourceTileEvent[] = []
   readonly ledger: BloodFlowLedgerEntry[] = []
   readonly actions: TableActionEvent[] = []
+  readonly discardActions: SourceTileEvent[] = []
   readonly privateEvidence = new Map<string, WinEvaluation>()
   window: EngineWindow | null = null
   result: BloodFlowRoundResult | null = null
@@ -195,6 +196,7 @@ export class BloodFlowEngine {
     if (!this.seats[seat].locked) player.hand = sortTilesWithJokers(player.hand, this.jokers)
     this.drawSource = null
     const source = this.source('discard', seat, tile)
+    this.discardActions.push(source)
     const opening = this.firstDiscard && seat === this.dealer && this.openingBonus ? 'earth' : null
     this.firstDiscard = false
     this.openWinClaims(source, 'discard', opening)
@@ -338,6 +340,7 @@ export class BloodFlowEngine {
       seats: structuredClone(this.seats), batches: this.ledger.flatMap(e => e.kind === 'win' ? [structuredClone(e.batch)] : []),
       roundResult: this.result ? structuredClone(this.result) : null }
   }
+  currentScore(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!.score) : null }
   assertConservation() {
     const physical = [...this.wall, ...this.flipTiles, ...this.archives.map(a => a.tile),
       ...this.players.flatMap(p => [...p.hand, ...p.discards, ...p.melds.flatMap(m => m.tiles)]),

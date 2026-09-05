@@ -9,6 +9,7 @@ import { tileName } from '../../game/core/rules/tiles'
 import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
+import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
@@ -63,7 +64,8 @@ interface Props {
   autoPlayEnabled?: boolean
   /** 当前是否已开启托管（联机自动出牌/过牌） */
   autoPlay?: boolean
-  rulesetId?: 'lotus-classic' | 'lotus-legacy'
+  rulesetId?: 'lotus-classic' | 'lotus-legacy' | 'lotus-blood-flow'
+  bloodFlow?: BloodFlowTableState | null
   secondDice?: [number, number]
   /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
   jokerTiles?: TileType[]
@@ -299,7 +301,7 @@ function finishTileGesture(index: number, event: PointerEvent) {
     lastTouchTap = { index: -1, time: 0 }
     hoveredDiscard.value = null
     waitsOpen.value = false
-    emit('discard', index)
+    if (!props.bloodFlow?.seats[0].locked || index === props.user.drawnTileIndex) emit('discard', index)
   }
 }
 
@@ -309,6 +311,7 @@ function cancelTileGesture(event: PointerEvent) {
 
 function handleTileActivation(index: number, event?: PointerEvent) {
   if (!props.isUserTurn) return
+  if (props.bloodFlow?.seats[0].locked && index !== props.user.drawnTileIndex) return
   const now = performance.now()
   if (now < suppressTileClickUntil) return
   const isTouch = event?.pointerType === 'touch' || event?.pointerType === 'pen' || !usesFinePointer()
@@ -440,7 +443,7 @@ function onAvatarError(entry: GamePlayer) {
           <i class="flip-chevron" aria-hidden="true"></i>
         </div>
         <div class="flip-indicator-body">
-          <div v-if="rulesetId === 'lotus-legacy' && secondDice" class="second-dice-note">
+          <div v-if="rulesetId !== 'lotus-classic' && secondDice" class="second-dice-note">
             二骰 {{ secondDice[0] }} + {{ secondDice[1] }}
           </div>
           <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="精牌替代说明">
@@ -529,12 +532,17 @@ function onAvatarError(entry: GamePlayer) {
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[0].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+      <div v-if="bloodFlow?.preview && userCanHu" class="blood-flow-preview" role="status">
+        <b>{{ bloodFlow.preview.items.map(item => item.label).join(' · ') }}<template v-if="bloodFlow.preview.hardWin"> · 硬胡</template></b>
+        <span>{{ bloodFlow.preview.finalMultiplier }}倍 · 每家应付 {{ bloodFlow.preview.paymentPerPayer }}分</span>
+        <small>{{ bloodFlow.seats[0].locked ? '手牌已锁定，可继续胡牌' : '首次胡牌后锁手，不再换张或吃碰杠' }}</small>
+      </div>
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
         <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
           <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
@@ -566,6 +574,7 @@ function onAvatarError(entry: GamePlayer) {
           <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
           <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
           <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+          <button v-if="bloodFlow && userCanHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
       </div>
       <button
@@ -577,6 +586,9 @@ function onAvatarError(entry: GamePlayer) {
       <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip">
+      <div v-if="bloodFlow" class="blood-flow-waits">
+        <span v-for="wait in bloodFlow.waits" :key="wait.tile">{{ tileName(wait.tile) }}：自摸 {{ wait.selfDraw?.paymentPerPayer ?? '—' }} / 点炮 {{ wait.discard?.paymentPerPayer ?? '—' }} 分（单家）</span>
+      </div>
       <template v-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
@@ -603,6 +615,9 @@ function onAvatarError(entry: GamePlayer) {
 
 <style scoped>
 .game-table-hud { display: contents; }
+.blood-flow-preview { display: grid; gap: 2px; max-width: min(320px, 40vw); padding: 6px 9px; border: 1px solid var(--theme-accent, #cfb97a); border-radius: 8px; background: rgba(12, 22, 24, .94); color: #fff5dc; font-size: 12px; }
+.blood-flow-preview small { color: #c9d5d6; font-size: 10px; }
+.blood-flow-waits { display: grid; gap: 3px; max-height: 110px; overflow: auto; font-size: 11px; }
 
 /* 莲花麻将翻精指示牌（桌面右上角；桌面端始终完整显示） */
 .flip-indicator {
