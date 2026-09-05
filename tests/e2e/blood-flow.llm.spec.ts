@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
   test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
-    let decisions = 0, reactions = 0, tts = 0
+    let decisions = 0, reactions = 0, tts = 0, protectedDecisions = 0
     const unsafeSpeech: string[] = []
     await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
@@ -20,6 +20,14 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
         if (!ended) unsafeSpeech.push('reaction before round ended')
       } else {
         decisions++
+        const protectedTiles = [...payload.jokerTiles, '白板']
+        if (!payload.locked && payload.hand.some((t: string) => protectedTiles.includes(t))
+          && payload.hand.some((t: string) => !protectedTiles.includes(t))) {
+          protectedDecisions++
+          for (const candidate of payload.candidates) if (candidate.label.startsWith('打出')) {
+            expect(protectedTiles).not.toContain(candidate.label.slice(2))
+          }
+        }
         if (payload.publicPlayers?.some((p: any) => 'hand' in p) || JSON.stringify(payload).includes('not-a-real-key')) unsafeSpeech.push('private payload')
       }
       if (!available) { await route.fulfill({ status: 503, body: 'offline' }); return }
@@ -40,6 +48,7 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
     }, theme)
     await expect.poll(() => page.evaluate(() => (window as any).__bfLlmPort.phase.value), { timeout: 120_000, intervals: [1000] }).toBe('settled')
     expect(decisions).toBeGreaterThan(0)
+    expect(protectedDecisions).toBeGreaterThan(0)
     if (theme === 'jade') { expect(reactions).toBe(0); expect(tts).toBe(0) }
     else await expect.poll(() => reactions, { timeout: 20_000 }).toBe(3)
     if (theme === 'llm') {

@@ -179,6 +179,9 @@ export class BloodFlowAuthority {
       if (this.current.public.status !== 'playing') { await this.releaseOpening(); await this.maybeAdvance(); return }
       if (this.current.window && this.now() < this.current.window.opensAt) return
       if (this.current.window && this.current.window.id !== this.publishedOpenWindow) await this.publish()
+      if (this.current.window && this.now() >= this.current.window.deadlineAt) {
+        await this.options.backend.expire(this.current.window.id); await this.publish(); return
+      }
       const bots = this.current.waitingSeats.filter(s => this.aiSeats.has(s) || this.autoSeats.has(s) || ![...this.bindings.values()].includes(s))
       if (bots.length && this.current.window) {
         const windowId = this.current.window.id
@@ -191,13 +194,14 @@ export class BloodFlowAuthority {
         }))
         for (const choice of choices) {
           if (!choice.current()) continue
+          if (this.current.window && this.now() >= this.current.window.deadlineAt) {
+            await this.options.backend.expire(this.current.window.id); await this.publish(); break
+          }
           if (choice.action && choice.own.window) await this.options.backend.command({ authorityEpoch: choice.own.authorityEpoch,
             roundId: choice.own.roundId, windowId, stateVersion: choice.own.window.version, seat: choice.seat, action: choice.action })
           else await this.options.backend.bot(choice.seat, windowId)
           await this.publish()
         }
-      } else if (this.current.window && this.now() >= this.current.window.deadlineAt) {
-        await this.options.backend.expire(this.current.window.id); await this.publish()
       }
     }).catch(() => { this.interrupt() })
     return this.chain

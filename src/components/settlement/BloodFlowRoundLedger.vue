@@ -46,6 +46,7 @@ const result = computed(() => props.state.roundResult)
           </details>
         </div>
         <footer v-if="result">
+          <button type="button" @click="$emit('close')">查看牌桌</button>
           <button v-if="!matchFinished" type="button" class="ledger-primary" @click="$emit('nextRound')">继续下一局</button>
           <strong v-else>本场已完成</strong>
           <button type="button" @click="$emit('returnToLobby')">返回大厅</button>
@@ -59,6 +60,7 @@ const result = computed(() => props.state.roundResult)
 .blood-flow-ledger-backdrop { position: fixed; inset: 0; z-index: 180; display: grid; place-items: center; padding: 12px; background: rgba(0,0,0,.65); container-type: size; }
 .blood-flow-ledger { width: min(700px, 96vw); max-height: 92dvh; display: flex; flex-direction: column; border: 1px solid var(--theme-border, #8a947c); border-radius: 16px; background: var(--theme-panel, #142424); color: var(--theme-text, #fff2d9); box-shadow: 0 20px 80px #0008; }
 header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 18px; flex-shrink: 0; }
+footer { flex-wrap: wrap; }
 header { border-bottom: 1px solid #ffffff20; }
 header small { opacity: .65; font-size: 11px; }
 h2 { margin: 3px 0 0; font-size: 22px; }

@@ -8,8 +8,36 @@ import type { RuleSet } from '../../core/rules/ruleset'
 import { hasReadyDiscard, projectKongBloom } from './kongProjection'
 import { compareHandProgress, evaluateHandProgress, type HandProgress } from '../../shared/ai/handProgress'
 
-function wildcardSet(jokers: TileType[]) {
+function wildcardSet(jokers: readonly TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
+}
+
+/** Shared automation candidate policy, also used by blood-flow and deadline fallbacks. */
+export function lotusDiscardCandidates(hand: readonly TileType[], jokers: readonly TileType[], allowedIndices: readonly number[] = hand.map((_, i) => i)) {
+  const protectedTiles = wildcardSet(jokers)
+  const candidates = [...new Set(allowedIndices)].filter(i => Number.isInteger(i) && i >= 0 && i < hand.length)
+    .map(index => ({ index, tile: hand[index] }))
+  const ordinary = candidates.filter(({ tile }) => !protectedTiles.has(tile))
+  return ordinary.length ? ordinary : candidates
+}
+
+/** The original low-cost shape score; full decisions add ready-hand/progress quality below. */
+function discardShapeScore(hand: readonly TileType[], tile: TileType) {
+  const same = hand.filter(t => t === tile).length - 1
+  const suited = /^([mps])([1-9])$/.exec(tile)
+  let neighbors = 0
+  if (suited) {
+    const rank = Number(suited[2])
+    neighbors += hand.includes(`${suited[1]}${rank - 1}` as TileType) ? 1 : 0
+    neighbors += hand.includes(`${suited[1]}${rank + 1}` as TileType) ? 1 : 0
+  }
+  return same * 4 + neighbors * 2 + (suited ? 0 : 6)
+}
+
+/** Bounded common fallback: preserve jokers using the same candidates and score as the normal AI. */
+export function chooseFallbackDiscardIndex(hand: readonly TileType[], jokers: readonly TileType[], allowedIndices?: readonly number[]) {
+  return lotusDiscardCandidates(hand, jokers, allowedIndices)
+    .sort((a, b) => discardShapeScore(hand, a.tile) - discardShapeScore(hand, b.tile) || a.index - b.index)[0]?.index ?? -1
 }
 
 const waitingCache = new Map<string, TileType[]>()
@@ -312,11 +340,7 @@ function bestDiscardAfterClaim(
   wallCount?: number,
 ) {
   if (!hand.length) return null
-  const jokerSet = wildcardSet(jokers)
-  const hasNatural = hand.some((tile) => !jokerSet.has(tile))
-  const candidates = hand
-    .map((tile, index) => ({ tile, index }))
-    .filter(({ tile }) => !hasNatural || !jokerSet.has(tile))
+  const candidates = lotusDiscardCandidates(hand, jokers)
     .map(({ tile, index }) => {
       const afterDiscard = hand.filter((_, candidateIndex) => candidateIndex !== index)
       return {
@@ -515,21 +539,9 @@ export function chooseDiscardIndex(
   random: () => number = Math.random,
   options: DiscardOptions = {},
 ): number {
-  const jokerSet = wildcardSet(jokers)
-  const candidates = hand.some((tile) => !jokerSet.has(tile))
-    ? hand.map((tile, index) => ({ tile, index })).filter(({ tile }) => !jokerSet.has(tile))
-    : hand.map((tile, index) => ({ tile, index }))
+  const candidates = lotusDiscardCandidates(hand, jokers)
   const preliminary = candidates.map(({ tile, index }) => {
-    const same = matchingCount(hand, tile) - 1
-    const suited = /^([mps])([1-9])$/.exec(tile)
-    let neighbors = 0
-    if (suited) {
-      const rank = Number(suited[2])
-      neighbors += hand.includes(`${suited[1]}${rank - 1}` as TileType) ? 1 : 0
-      neighbors += hand.includes(`${suited[1]}${rank + 1}` as TileType) ? 1 : 0
-    }
-    const honor = suited ? 0 : 6
-    const score = same * 4 + neighbors * 2 + honor + random()
+    const score = discardShapeScore(hand, tile) + random()
     const quality = options.exposedMelds == null
       ? null
       : discardQuality(

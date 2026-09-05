@@ -36,6 +36,18 @@ async function start(r: ReturnType<typeof room>) {
   r.flush()
 }
 describe('E06 four-endpoint authority and recovery', () => {
+  it('expires an overdue AI turn instead of repeatedly submitting rejected bot decisions', async () => {
+    const r = room(); await start(r)
+    r.host.aiSeats.add(0)
+    const id = r.backend.engine.window!.id
+    const bot = vi.spyOn(r.backend, 'bot')
+    r.time(r.backend.engine.window!.deadlineAt)
+    await r.host.tick()
+    expect(bot).not.toHaveBeenCalled()
+    expect(r.backend.engine.window?.id).not.toBe(id)
+    expect([...r.backend.engine.jokers,'white']).not.toContain(r.backend.engine.discardActions.at(-1)?.tile)
+    r.backend.engine.assertConservation()
+  })
   it('refuses unknown versions and refuses start before every human has a compatible client', async () => {
     const r = room()
     await r.host.receive({ kind: 'blood_flow_hello', roomId: 'room', ruleVersion: 'old' }, 'p1')
@@ -81,7 +93,7 @@ describe('E06 four-endpoint authority and recovery', () => {
     r.flush()
     expect(r.replicas[1].view).toEqual(replay)
     expect(r.settled).toHaveBeenCalledTimes(1)
-  })
+  }, 20_000) // Full four-replica round plus common AI; independent from a single decision's deadline.
   it('waits out Relay recovery grace and pauses all moves during host interruption', async () => {
     const r = room(); await start(r)
     r.host.peerDisconnected('p1'); r.time(11_999); await r.host.tick()

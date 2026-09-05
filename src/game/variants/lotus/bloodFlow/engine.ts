@@ -11,6 +11,7 @@ import { acceptWindowDecision, windowComplete } from './claimWindow'
 import { assertZeroSum } from './ledger'
 import { resolveWinBatch } from './winBatch'
 import { summarizeRound } from './roundLifecycle'
+import { chooseFallbackDiscardIndex } from '../lotusAi'
 
 export interface BloodFlowEngineOptions {
   authorityEpoch: string
@@ -161,7 +162,8 @@ export class BloodFlowEngine {
     if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
       window.decisions[seat] = window.kind === 'turn'
-        ? window.options[seat].filter(a => a.kind === 'discard').at(-1)!
+        ? { kind: 'discard', index: this.seats[seat].locked ? this.players[seat].drawnTileIndex
+          : chooseFallbackDiscardIndex(this.players[seat].hand, this.jokers, window.options[seat].filter(a => a.kind === 'discard').map(a => a.index)) }
         : { kind: 'pass' }
     }
     this.resolveWindow()

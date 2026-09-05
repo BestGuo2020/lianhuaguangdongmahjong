@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bloodFlowDecisionBudget, createBloodFlowDecisions, createBloodFlowReactions } from './bloodFlowRuntime'
+import { bloodFlowDecisionBudget, bloodFlowDecisionPrompt, createBloodFlowDecisions, createBloodFlowReactions } from './bloodFlowRuntime'
 import { BloodFlowEngine } from '../variants/lotus/bloodFlow/engine'
 import { bloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { seededRandom, simulateRound } from '../variants/lotus/bloodFlow/simulation'
@@ -17,6 +17,20 @@ function view() {
 afterEach(() => vi.useRealTimers())
 
 describe('E08 decision and reaction isolation', () => {
+  it('excludes protected discards from model candidates and rejects a removed choice', async () => {
+    const input = view()
+    input.players[0].hand=['m1','p9','red','green','white']; input.jokers=['red','green']
+    input.ownActions=input.players[0].hand.map((_,index)=>({kind:'discard',index})); input.ownScore=null
+    const original=structuredClone(input.ownActions)
+    const built=bloodFlowDecisionPrompt(input,[],'test')
+    expect(built.candidates.map(c=>c.action)).toEqual([{kind:'discard',index:0},{kind:'discard',index:1}])
+    expect(JSON.parse(built.messages.user).discardPolicy).toContain('保护精牌和白板')
+    const request=vi.fn(async()=>({choice:'A4',message:''}))
+    const service=createBloodFlowDecisions({provider:()=>provider,waits:async()=>[],request})
+    expect(await service.decide(input,()=>true)).toBeNull()
+    expect(service.stats.invalidActions).toBe(1)
+    expect(input.ownActions).toEqual(original)
+  })
   it('first win offers win/pass, ignores model speech and deduplicates a request', async () => {
     const request = vi.fn(async () => ({ choice: 'A1', message: 'mandatory important 发言不得播出' }))
     const service = createBloodFlowDecisions({ provider: () => provider, request, waits: async () => [] })

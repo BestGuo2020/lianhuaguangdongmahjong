@@ -27,6 +27,18 @@ function discardEast(engine: BloodFlowEngine) {
 }
 
 describe('E03 authority conservation and continuous rounds', () => {
+  it('protects a drawn joker on timeout while leaving manual joker discards legal', () => {
+    const hand: TileType[] = ['m1','m2','m4','m5','m7','m8','p1','p4','p7','s1','s4','s7','north','red']
+    const timed = scenario([hand,null,null,null])
+    timed.expire(15_000)
+    expect(timed.discardActions.at(-1)?.tile).not.toBe('red')
+    expect(timed.players[0].hand).toContain('red')
+    timed.assertConservation()
+    const manual = scenario([hand,null,null,null])
+    expect(manual.submit(manual.command(0,{kind:'discard',index:13}))).toBe(true)
+    expect(manual.discardActions.at(-1)?.tile).toBe('red')
+    manual.assertConservation()
+  })
   it('settles three different conditional large hands from one source with exact payer totals', () => {
     const engine = scenario([
       ['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'red'],
