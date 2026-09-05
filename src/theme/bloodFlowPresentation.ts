@@ -20,13 +20,19 @@ export function bloodFlowImpactProfile(theme:TableThemeName,tier:WinTier,compact
 const clamp=(v:number)=>Math.max(0,Math.min(1,v))
 export function bloodFlowTitleMotion(cue:BloodFlowCue,now:number,theme:TableThemeName,reduced=false){
   const e=Math.max(0,now-cue.startedAt),m=cue.phaseMarks,p=bloodFlowImpactProfile(theme,cue.tier,cue.compact,reduced)
-  if(reduced)return {scale:1,rotation:0,y:0,opacity:e<m.exit?1:clamp((cue.duration-e)/(cue.duration-m.exit)),dimming:0}
-  const points=[{at:0,scale:.45,y:26,rotation:p.angle,opacity:0},{at:m.impact*.6,scale:1.06,y:0,rotation:p.angle*.35,opacity:1},
-    {at:m.impact,scale:p.overshoot,y:-5,rotation:-p.angle*.2,opacity:1},{at:m.readable*.86,scale:.96,y:2,rotation:0,opacity:1},
-    {at:m.readable,scale:1,y:0,rotation:0,opacity:1},{at:m.exit,scale:1,y:0,rotation:0,opacity:1},{at:cue.duration,scale:.9,y:-13,rotation:p.angle*.12,opacity:0}]
+  const launch=Math.max(0,m.impact-130)
+  if(reduced)return {scale:1,rotation:0,y:0,tilt:0,opacity:e<launch?0:e<m.score?1:0,dimming:0}
+  const points=[{at:0,scale:.65,y:22,rotation:p.angle,tilt:-32,opacity:0},
+    {at:launch,scale:.65,y:22,rotation:p.angle,tilt:-32,opacity:0},
+    {at:m.impact,scale:p.overshoot,y:-5,rotation:-p.angle*.2,tilt:12,opacity:1},
+    {at:m.impact+(m.readable-m.impact)*.65,scale:.96,y:2,rotation:-1,tilt:-4,opacity:1},
+    {at:m.readable,scale:1,y:0,rotation:0,tilt:0,opacity:1},
+    {at:m.score-100,scale:1,y:0,rotation:0,tilt:0,opacity:1},
+    {at:m.score,scale:.96,y:-6,rotation:0,tilt:0,opacity:0},
+    {at:cue.duration,scale:.96,y:-6,rotation:0,tilt:0,opacity:0}]
   let a=points[0],b=points.at(-1)!
   for(let i=1;i<points.length;i++)if(e<=points[i].at){a=points[i-1];b=points[i];break}
   const t=clamp((e-a.at)/Math.max(1,b.at-a.at)),ease=t*t*(3-2*t)
-  const mix=(k:'scale'|'y'|'rotation'|'opacity')=>a[k]+(b[k]-a[k])*ease
-  return {scale:mix('scale'),y:mix('y'),rotation:mix('rotation'),opacity:mix('opacity'),dimming:p.dimming*clamp(e/m.impact)*clamp((m.score-e)/Math.max(1,m.score-m.readable))}
+  const mix=(k:'scale'|'y'|'rotation'|'tilt'|'opacity')=>a[k]+(b[k]-a[k])*ease
+  return {scale:mix('scale'),y:mix('y'),rotation:mix('rotation'),tilt:mix('tilt'),opacity:mix('opacity'),dimming:p.dimming*clamp(e/m.impact)*clamp((m.score-e)/Math.max(1,m.score-m.readable))}
 }

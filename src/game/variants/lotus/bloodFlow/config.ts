@@ -65,7 +65,7 @@ export const BLOOD_FLOW_TIMING = Object.freeze({
 export function bloodFlowWinTiming(tier: number) {
   if (tier >= 2) {
     const duration = tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs
-    return { duration, phaseMarks: { focus: 0, impact: 760, readable: 1080, score: 1550, exit: duration - 250 } }
+    return { duration, phaseMarks: { focus: 0, impact: 880, readable: 1100, score: 1750, exit: duration - 200 } }
   }
   return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { focus: 0, impact: 600, readable: 850, score: 1250, exit: 1650 } }
 }

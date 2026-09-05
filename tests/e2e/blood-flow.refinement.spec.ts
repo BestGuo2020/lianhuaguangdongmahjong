@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 
 const dir = 'work/blood-flow-refinement'
+test.use({ video: {mode:'on',size:{width:1280,height:720}} })
 test('records the four default information states for visual review', async ({ page }) => {
   await mkdir(dir, { recursive: true })
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=0&theme=llmAnime&controls=1&hudStates=1')
@@ -39,4 +40,10 @@ test('records representative high win at normal speed', async ({ page }) => {
   }
   await writeFile(`${dir}/single-high-times.json`,JSON.stringify(times))
   await expect(page.locator('.blood-flow-cue')).toHaveCount(0)
+  await page.getByRole('button',{name:'普通点炮',exact:true}).click()
+  await page.waitForTimeout(950)
+  await page.screenshot({path:`${dir}/ordinary-baseline.png`})
+  await expect(page.locator('.blood-flow-cue')).toHaveCount(0, {timeout:5000})
+  await page.close()
+  await page.video()!.saveAs(`${dir}/single-high-normal.webm`)
 })
