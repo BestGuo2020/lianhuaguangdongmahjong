@@ -1,5 +1,15 @@
 # 血流实施验收记录
 
+## E04 单机与规则 AI（2026-09-05）
+
+新增 `useBloodFlowGame` 端口、后台 engineWorker、独立听牌 Worker、seatView 脱敏边界和可见输入规则 AI。继续复用现有两骰/翻精/发牌动画；记录真实第 53 张发牌作为庄家第十四张，开局胡改由新窗口询问。AI 不读取对手暗手或墙序，支持首胡拒绝阈值（默认接受），锁手仅有合法动作；错误弃牌选择确定性回退。局末 nextRound 轮庄并完成 4/8 局，普通胡不亮全桌。
+
+只在开发服务 URL `?bloodFlow=1` 开放单机规则选择；两个生产开关仍 false。切到 WS 会重置为旧规则，roomApi 明确拒绝发送新键。未知规则 ID 不再静默显示为旧玩法。首胡提示包含实际番型/倍率/付款与锁手说明，听牌提示独立展示自摸和点炮单家金额；同批多响的公共剩余量只计一次 source。新增底分标签参数，血流为 10，旧模式仍 100。本地取消人工倒计时的既有设置保留。
+
+真实 Chromium：`E2E_REUSE_ONLY=1 E2E_PORT=4184 node node_modules/@playwright/test/cli.js test tests/e2e/blood-flow.local.spec.ts --workers=1`，3 passed，约 57.9 秒。包含正常大厅开关与 WS 隔离、实际 Vue 端口和 Worker 固定种子东风场/半庄场，经 nextRound 完成 4/8 局，总分 8000；补验底分标签的 opt-in 用例 1 passed。测试服务仅前端，未启动/修改 Python 服务；没有把这些结果当作 P2P 通过。
+
+`pnpm test` 退出 0：3313 passed、6 skipped（master 当前配置会发现工作树中的测试，因此该数不是新增测试数）。`pnpm build` 退出 0，生成独立 worker 与 engineWorker 包；仅既有 chunk 体积提示。后续小范围标签修改的 `pnpm typecheck` 退出 0。原 75 个动作音基线仍通过；新模式完整演出/声音门禁继续在 E07/E08 验证。
+
 ## E03 状态机实施记录（2026-09-05）
 
 新增共享 `bloodFlow/engine.ts`，配合 state/claimWindow/winBatch/ledger/roundLifecycle。采用独立权威引擎复用既有两骰翻精/墙尾摸牌、吃牌与 E02 评分纯逻辑；不改造旧 single-win 终局副作用。E04/E06 通过新端口适配，计划内原 lotusTurnOrchestrator/lotusSettlement 等旧流程继续保留。

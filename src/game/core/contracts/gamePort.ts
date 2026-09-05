@@ -7,6 +7,8 @@ import type {
   WinPresentation,
 } from './types'
 
+import type { BloodFlowTableState } from '../../variants/lotus/bloodFlow/types'
+
 export interface RefLike<T> {
   value: T
 }
@@ -126,6 +128,7 @@ export interface WaitInfo {
 }
 
 export interface GameCapabilities {
+  bloodFlow?: BloodFlowTableState | null
   chi?: { choose(optionIndex: number): void }
   windKong?: { available: boolean; execute(): void }
   lotusTable?: {

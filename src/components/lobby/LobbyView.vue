@@ -5,6 +5,7 @@ import GameSettingsSummary from './GameSettingsSummary.vue'
 import LobbyDialog from './LobbyDialog.vue'
 import MatchTypePicker from './MatchTypePicker.vue'
 import RuleVariantPicker from './RuleVariantPicker.vue'
+import { bloodFlowEnabled } from '../../game/variants/lotus/bloodFlow/availability'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
@@ -329,7 +330,7 @@ function toggleWakuDemoAuth() {
       />
 
       <MatchTypePicker v-else-if="dialog === 'match'" :model-value="selectedMatch" @close="closePicker" @confirm="selectMatch" />
-      <RuleVariantPicker v-else :model-value="selectedRule" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
+      <RuleVariantPicker v-else :model-value="selectedRule" :allow-blood-flow="gameMode === 'local' && bloodFlowEnabled('local')" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
 
   </section>

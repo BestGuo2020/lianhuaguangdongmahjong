@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { RULE_VARIANTS, type RuleVariant } from '../../game/core/rules/ruleVariants'
+import { RULE_VARIANTS, BLOOD_FLOW_RULE, type RuleVariant } from '../../game/core/rules/ruleVariants'
 
-const props = defineProps<{ modelValue: RuleVariant }>()
+const props = defineProps<{ modelValue: RuleVariant; allowBloodFlow?: boolean }>()
 const emit = defineEmits<{ close: []; confirm: [value: RuleVariant]; viewRules: [] }>()
 const pending = ref(props.modelValue)
 </script>
@@ -10,7 +10,7 @@ const pending = ref(props.modelValue)
 <template>
   <div class="picker-options rule-picker-options">
     <button
-      v-for="option in RULE_VARIANTS"
+      v-for="option in allowBloodFlow ? [...RULE_VARIANTS, BLOOD_FLOW_RULE] : RULE_VARIANTS"
       :key="option.id"
       type="button"
       data-action-role="secondary"

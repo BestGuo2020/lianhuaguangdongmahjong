@@ -11,6 +11,9 @@ import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
+import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGame'
+import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
+import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
@@ -214,6 +217,14 @@ const remoteGame = useRemoteGame({
   playLlmAudio,
 })
 
+const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
+  countdownEnabled: false,
+  getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
+  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
+watch(gameMode, (mode) => {
+  if (mode === 'remote' && selectedRule.value === 'lotus-blood-flow') selectedRule.value = DEFAULT_RULE_VARIANT
+})
+
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
 const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
@@ -225,7 +236,7 @@ watch(() => remoteGame.rulesetId.value, (value) => {
 // local 槽按所选玩法解析到「莲花广麻」或「莲花麻将」本地引擎。
 const game = createActiveGamePort(
   gameMode,
-  () => usesLotusLocalEngine.value ? lotusGame : localGame,
+  () => selectedRule.value === 'lotus-blood-flow' ? bloodFlowGame : usesLotusLocalEngine.value ? lotusGame : localGame,
   remoteGame,
 )
 
@@ -306,6 +317,7 @@ const disclaimerGate = useDisclaimerGate(playerId)
 const wakuAuth = useWakuDemoAuth()
 
 function startGameWithAudio() {
+  if (selectedRule.value === 'lotus-blood-flow' && (gameMode.value !== 'local' || !bloodFlowEnabled('local'))) return
   llmOpen.value = false
   resetTableReady()
   startBgm()
@@ -447,6 +459,7 @@ function changeTableTheme(theme: TableThemeName) {
         :match-name="matchName"
         :round-label="roundLabel"
         :honba="honba"
+        :base-score="selectedRule === 'lotus-blood-flow' ? BLOOD_FLOW_CONFIG.basePoints : undefined"
         :room-id="roomId"
         :signal-quality="signalQuality"
         :signal-warning-threshold="1"
@@ -501,7 +514,8 @@ function changeTableTheme(theme: TableThemeName) {
         :wildcard-tiles="wildcardTiles"
         :theme-name="tableThemeName"
         :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
-        :second-dice="gameMode === 'remote' ? remoteSecondDice : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
+        :blood-flow="capabilities.bloodFlow"
+        :second-dice="gameMode === 'remote' ? remoteSecondDice : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
         :flip-tile="flipTile"
         :wall-break-index="wallBreakIndex"
         :flip-stack="flipStack"

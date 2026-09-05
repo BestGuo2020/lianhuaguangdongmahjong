@@ -32,6 +32,8 @@ interface LotusOpeningOptions {
   playerSeeds?: Array<PlayerSeed>
   /** 本家座位 0 的展示形象。 */
   humanPlayerSeed?: PlayerSeed
+  /** Continuous modes must offer the opening win through their own claim window. */
+  automaticOpeningWin?: boolean
 }
 
 export function createLotusOpening(options: LotusOpeningOptions) {
@@ -170,7 +172,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 天胡：庄家起手 14 张即满足胡牌条件
     const dealerIndex = state.dealer.value
     const dealer = state.players[dealerIndex]
-    if (ruleset.win.isWinningHand(dealer.hand, 0, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value })) {
+    if (options.automaticOpeningWin !== false && ruleset.win.isWinningHand(dealer.hand, 0, { jokers: state.jokerTiles.value, jokerSubstitutes: state.wildcardTiles.value })) {
       return options.endGame(dealerIndex, {
         tianhu: true,
         selfDraw: true,

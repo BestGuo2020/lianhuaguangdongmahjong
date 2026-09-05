@@ -3,11 +3,20 @@ import { computed } from 'vue'
 import { BASE_SCORE } from '../game/core/rules/rules'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
 import type { RuleVariant } from '../game/core/rules/ruleVariants'
+import { BLOOD_FLOW_CONFIG } from '../game/variants/lotus/bloodFlow/config'
 
 const props = defineProps<{ open: boolean; variant?: RuleVariant }>()
 defineEmits(['close'])
 
 const rules = computed(() => {
+  if (props.variant === 'lotus-blood-flow') return [
+    ['血流到底', '首胡后锁定暗手和副露，可继续胡牌；摸牌不胡时只能摸切。牌墙耗尽且最后响应完成才结束本局。'],
+    ['翻精与硬胡', '两次掷骰、双精、白板受限替代。每次胡按完整副露和胡牌张重新判型；完全按真实牌面成立为硬胡 ×2。'],
+    ['收付规则', '底分 10，起始 2000。点炮与抢补杠由来源玩家付，自摸由其他三家付，已胡也付；允许负分和多响。'],
+    ['组合与封顶', '同一合法分解按 1 + 各番型(倍数−1) 相加；包含项不重复加分。普通点炮 ×1、自摸 ×2、抢补杠 ×2、杠后自摸 ×4，再计硬胡，单家最终 64 倍封顶。'],
+    ['番型目录', Object.values(BLOOD_FLOW_CONFIG.patterns).map(p => `${p.label} ${p.weight}倍`).join('、')],
+    ['杠与场制', '直杠来源付 10；补杠其他三家各付 10；暗杠/风杠各付 20。东风 4 局、半庄 8 局，局末轮庄，无庄家倍率或买马。'],
+  ]
   if (props.variant === 'lotus-legacy') {
     return [
       ['多端兼容', '电脑端：鼠标单击出牌、移动端：手机双击出牌或上滑出牌'],
@@ -34,8 +43,8 @@ const rules = computed(() => {
   ]
 })
 
-const panelTitle = computed(() => props.variant === 'lotus-legacy' ? '莲花麻将玩法' : '莲花广麻玩法')
-const baseNote = computed(() => props.variant === 'lotus-legacy'
+const panelTitle = computed(() => props.variant === 'lotus-blood-flow' ? '莲花麻将·血流玩法' : props.variant === 'lotus-legacy' ? '莲花麻将玩法' : '莲花广麻玩法')
+const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? '底分 10 · 单家每次最多 640 分 · 牌墙耗尽结束本局' : props.variant === 'lotus-legacy'
   ? `基础单位 ${BASE_SCORE} 分 · 番数×底分，按身份收付`
   : `基础分 ${BASE_SCORE} 分 · 总分 = 底分 × 倍数 + 中马数 × 底分`)
 </script>
