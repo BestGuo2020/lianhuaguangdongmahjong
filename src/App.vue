@@ -11,6 +11,9 @@ import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
+import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGame'
+import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
+import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createAnimeFixedTtsExecutor } from './game/llm/animeFixedTtsExecutor'
@@ -169,6 +172,9 @@ const lotusGame = useLotusGame({
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: lotusAnimeFixedTts,
 })
+const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
+  getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts, countdownEnabled: false,
+  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
 const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
@@ -183,7 +189,7 @@ const vibeRemoteGame = useVibeRemoteGame({
 const singlePlayerOnly = computed(() => false)
 const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
 watch(() => vibeRemoteGame.rulesetId.value, (value) => {
-  if (value === 'lotus-classic' || value === 'lotus-legacy') selectedRule.value = value
+  if (value === 'lotus-classic' || value === 'lotus-legacy' || value === 'lotus-blood-flow') selectedRule.value = value
 })
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
@@ -191,8 +197,8 @@ watch(() => vibeRemoteGame.rulesetId.value, (value) => {
 // vibeRemoteGame 的快照驱动表现层（房主自视快照/事件在 useVibeRemoteGame 内本地喂入）。
 const game = createActiveGamePort(
   gameMode,
-  () => usesLotusLocalEngine.value ? lotusGame : localGame,
-  () => vibeRemoteGame,
+  () => selectedRule.value === 'lotus-blood-flow' ? bloodFlowGame : usesLotusLocalEngine.value ? lotusGame : localGame,
+  () => vibeRemoteGame.rulesetId.value === 'lotus-blood-flow' ? vibeRemoteGame.bloodFlowPort : vibeRemoteGame,
 )
 
 const {
@@ -264,6 +270,7 @@ const roomMeta = ref(null)
 const disclaimerGate = useDisclaimerGate(playerId)
 
 function startGameWithAudio() {
+  if (selectedRule.value === 'lotus-blood-flow' && !bloodFlowEnabled('local')) return
   llmOpen.value = false
   resetTableReady()
   startBgm()
@@ -419,6 +426,7 @@ const themeLockReason = computed(() => (
         :match-name="matchName"
         :round-label="roundLabel"
         :honba="honba"
+          :base-score="selectedRule === 'lotus-blood-flow' ? BLOOD_FLOW_CONFIG.basePoints : undefined"
         :room-id="roomId"
         :signal-quality="signalQuality"
         :sound-on="soundOn"
@@ -472,7 +480,8 @@ const themeLockReason = computed(() => (
           :joker-tiles="jokerTiles"
           :wildcard-tiles="wildcardTiles"
           :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
-          :second-dice="gameMode === 'remote' ? remoteSecondDice : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
+          :blood-flow="capabilities.bloodFlow"
+          :second-dice="gameMode === 'remote' ? (capabilities.bloodFlow ? vibeRemoteGame.bloodFlowPort.secondDice.value ?? undefined : remoteSecondDice) : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
           :flip-stack="flipStack"
@@ -489,6 +498,8 @@ const themeLockReason = computed(() => (
           @wind-kong="userWindKong"
           @toggle-auto-play="toggleAutoPlay"
           @ready="handleTableReady"
+          @next-round="nextRound"
+          @return-to-lobby="returnToLobby"
         />
 
         <LobbyView
@@ -530,7 +541,7 @@ const themeLockReason = computed(() => (
           @open-rules="rulesOpen = true"
         />
 
-        <SettlementOverlay
+        <SettlementOverlay v-if="!capabilities.bloodFlow"
           v-model:result-visible="resultVisible"
           :result="result"
           :match-finished="matchFinished"
