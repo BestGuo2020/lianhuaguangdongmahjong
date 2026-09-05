@@ -26,6 +26,7 @@ import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
 import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
+import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
 
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], localSeat: 0, currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
@@ -39,6 +40,7 @@ const props = withDefaults(defineProps<TableProps>(), {
 const emit = defineEmits<{
   ready: []
   loadError: [message: string]
+  pileAnchors: [anchors: { left: number; top: number }[]]
 }>()
 
 const canvas = ref(null)
@@ -49,6 +51,7 @@ let camera
 let resizeObserver
 let animationFrame
 let destroyed = false
+let lastPileAnchors = ''
 let dynamicGroups = []
 let winEffectPresenter: ReturnType<typeof createWinEffectPresenter> | null = null
 let dicePresenter: ReturnType<typeof createDicePresenter> | null = null
@@ -311,6 +314,16 @@ function render(time = 0) {
     const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
     camera.position.set(...cameraPosition)
     camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
+    if (props.bloodFlowBatches) {
+      camera.updateMatrixWorld()
+      const anchors = [0, 1, 2, 3].map(seat => {
+        const { badge } = bloodFlowPileAnchor(seat, props.bloodFlowCompact)
+        const point = new THREE.Vector3(badge.x, badge.y, badge.z + TILE_LAYER_Z).project(camera)
+        return { left: Number(((point.x + 1) * 50).toFixed(3)), top: Number(((1 - point.y) * 50).toFixed(3)) }
+      })
+      const key = JSON.stringify(anchors)
+      if (key !== lastPileAnchors) { lastPileAnchors = key; emit('pileAnchors', anchors) }
+    }
     if (cameraLabEnabled && canvas.value) {
       const canvasElement = canvas.value as HTMLCanvasElement
       canvasElement.dataset.cameraPosition = cameraPosition
