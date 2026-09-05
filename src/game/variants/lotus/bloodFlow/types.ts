@@ -173,6 +173,7 @@ export interface BloodFlowPublicState {
 }
 
 export interface BloodFlowTableState extends BloodFlowPublicState {
+  readonly kongEvents?: readonly KongLedgerEntry[]
   readonly sourceEvent?: SourceTileEvent
   readonly continuation?: { readonly ready:boolean; readonly readySeats:readonly Seat[]; readonly requiredSeats:readonly Seat[] }
   readonly presentationKey?: string

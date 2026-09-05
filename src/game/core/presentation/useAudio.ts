@@ -51,6 +51,10 @@ export interface AudioControls {
 }
 
 const AUDIO_CONTROLS_KEY: InjectionKey<AudioControls> = Symbol('audio-controls')
+type EffectPlayer=(name:string,volume?:number)=>HTMLAudioElement|null
+const EFFECT_PLAYER_KEY:InjectionKey<EffectPlayer>=Symbol('effect-player')
+/** Shared UI effects use the existing player and its sound/effects mute controls. */
+export function useEffectPlayer(){return getCurrentInstance()?inject(EFFECT_PLAYER_KEY,null):null}
 
 export function useAudioControls(): AudioControls {
   const controls = inject(AUDIO_CONTROLS_KEY, null)
@@ -113,6 +117,7 @@ export function useAudio() {
   // App 根组件在 setup 中初始化音频；子组件直接注入控制状态，避免两条联机分支
   // 各自维护一套声音 props/事件接线。
   if (getCurrentInstance()) provide(AUDIO_CONTROLS_KEY, controls)
+  if (getCurrentInstance()) provide(EFFECT_PLAYER_KEY, playEffect)
   const bgmStarted = ref(false)
   const activeEffects = new Set<EffectAudio>()
   const effectTemplates = new Map<string, HTMLAudioElement>()
@@ -169,6 +174,7 @@ export function useAudio() {
       : new Audio(`${AUDIO_BASE}${name}`)) as EffectAudio
     audio.preload = 'auto'
     audio.volume = volume
+    if(audio.dataset)audio.dataset.effectName=name
     activeEffects.add(audio)
     let finished = false
     const release = () => {

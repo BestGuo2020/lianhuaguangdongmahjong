@@ -306,7 +306,8 @@ function render(time = 0) {
     const diceActive = dicePresenter?.animate(time) ?? false
     const tilesActive = tableTiles.animate(time, scratchVector)
     const winFrame = winEffectPresenter?.animate(time)
-    const bloodFlowActive = bloodFlowWinEffects?.animate(time) ?? false
+    const bloodFlowFrame = bloodFlowWinEffects?.animate(time)
+    const bloodFlowActive = bloodFlowFrame?.active ?? false
     if (props.bloodFlowBatches && canvas.value) canvas.value.dataset.bloodFlowEffects = String(bloodFlowWinEffects?.activeCount ?? 0)
     if(props.bloodFlowBatches&&canvas.value){canvas.value.dataset.bloodFlowCue=props.bloodFlowCue?.id??'';canvas.value.dataset.bloodFlowCueStart=String(props.bloodFlowCue?.startedAt??'');canvas.value.dataset.bloodFlowPhase=props.bloodFlowCue?cuePhase(props.bloodFlowCue,time):''}
     if (winFrame) {
@@ -316,6 +317,7 @@ function render(time = 0) {
       cameraShakeX = winFrame.shakeX
       cameraShakeZ = winFrame.shakeZ
     }
+    if(bloodFlowFrame&&!winFrame){exposure+=bloodFlowFrame.exposureDelta;cameraShakeX=bloodFlowFrame.shakeX;cameraShakeZ=bloodFlowFrame.shakeZ}
     renderer.toneMappingExposure = exposure
     const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
     camera.position.set(...cameraPosition)

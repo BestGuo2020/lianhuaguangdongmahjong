@@ -31,6 +31,7 @@ export class BloodFlowReplica {
       this.epoch = message.authorityEpoch
       this.round = message.round; this.snapshotSequence = message.sequence; this.sequence = message.sequence
       this.view = structuredClone(message.view)
+      this.view.kongEvents=structuredClone(message.kongEvents??message.view.kongEvents??[])
       for (const batch of this.view.public.batches) this.seenBatches.add(batch.batchId)
       if (this.view.public.roundResult) this.completedRounds.add(this.view.roundId)
       this.error = ''

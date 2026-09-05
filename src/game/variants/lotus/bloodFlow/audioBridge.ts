@@ -21,7 +21,11 @@ export function createBloodFlowAudioBridge(options: {
         void options.fixed.executeAction({ eventId: id, seat: event.actorIndex as AnimeSeat,
           characterId: options.player(event.actorIndex)?.characterId, action: event.type }).then(result => {
           if (epoch === options.epoch() && theme === options.theme() && result.fallbackAudioFile) options.play(result.fallbackAudioFile)
-        }).catch(() => {})
+        }).catch(() => {
+          if(epoch!==options.epoch()||theme!==options.theme())return
+          const file=animeFallbackAudioForAction(event.type)
+          if(file)options.play(file)
+        })
       } else {
         const file = animeFallbackAudioForAction(event.type)
         if (file) options.play(file)

@@ -42,7 +42,7 @@ export function decideBloodFlowAction(view: BloodFlowSeatView, minimumFirstPayme
     } catch { return fallback() }
   }
   const pass = moves.find(a => a.kind === 'pass') ?? null
-  if (view.window?.kind !== 'meld') return pass
+  if (view.window?.source.kind !== 'discard') return pass
   try {
     const source = view.window.source
     const decision = decideClaim({ ...context, tile: source.tile, from: source.seat,

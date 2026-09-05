@@ -47,6 +47,17 @@ it('the single viewer director owns cue time and restores history without replay
   expect(director.tick(120+cue.duration)).toBeNull()
   director.sync([event],'restored',2000);expect(director.tick(2000)).toBeNull();expect(director.busy).toBe(false)
 })
+it('orders kong receipts with win batches and never replays the same receipt',()=>{
+  const director=new BloodFlowPresentationDirector(),win=batch(3)
+  const kong={kind:'kong' as const,id:'k2',authorityEpoch:'test',roundId:'1',sequence:2,actor:1 as const,kongKind:'concealed' as const,sourceSeat:null,
+    deltas:[-20,60,-20,-20] as const,scoresAfter:[1980,2060,1980,1980] as const}
+  director.sync([],'r',0);director.sync([win],'r',100,[kong])
+  const cue=director.tick(100)!
+  expect(cue.kind).toBe('kong');expect(cue.deltas).toEqual(kong.deltas);expect(cue.flights).toEqual([])
+  director.sync([win],'r',200,[kong]);expect(director.tick(800)?.id).toBe(win.batchId)
+  expect(director.tick(3000)).toBeNull()
+  director.sync([win],'restore',4000,[kong]);expect(director.tick(4000)).toBeNull()
+})
 it('grades by base pattern weight, permits an upgrade and coalesces only visual backlog', () => {
   expect(winTier(batch(1, ['pinghu']).winners[0])).toBe(0)
   const queue = new BloodFlowPresentationQueue()

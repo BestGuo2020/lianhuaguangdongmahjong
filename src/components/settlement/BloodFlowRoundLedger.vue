@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GamePlayer } from '../../game/core/contracts/types'
-import type { BloodFlowPublicState } from '../../game/variants/lotus/bloodFlow/types'
+import type { BloodFlowPublicState, BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
 import { tileName } from '../../game/core/rules/tiles'
 import BloodFlowWinCard from '../table/BloodFlowWinCard.vue'
 import type { TableThemeName } from '../table/three/tableTheme'
 import { themePresentationByName, themePresentationCssVariables } from '../../theme/themePresentation'
 
-const props = defineProps<{ open: boolean; state: BloodFlowPublicState; players: GamePlayer[]; localSeat?: number; filterSeat?: number | null; matchFinished?: boolean; themeName?: TableThemeName; embedded?:boolean }>()
+const props = defineProps<{ open: boolean; state: BloodFlowPublicState & Pick<BloodFlowTableState,'kongEvents'>; players: GamePlayer[]; localSeat?: number; filterSeat?: number | null; matchFinished?: boolean; themeName?: TableThemeName; embedded?:boolean }>()
 defineEmits<{ close: []; nextRound: []; returnToLobby: [] }>()
 const name = (seat: number) => props.players[(seat - (props.localSeat ?? 0) + 4) % 4]?.name ?? `玩家${seat + 1}`
 const wins = computed(() => props.state.batches.flatMap(batch => batch.winners
@@ -39,8 +39,8 @@ const result = computed(() => props.state.roundResult)
             <BloodFlowWinCard :score="record.score" :amount="record.deltas[record.winner]" />
             <p class="record-payments">{{ record.deltas.map((n, seat) => n ? `${name(seat)} ${n > 0 ? '+' : ''}${n}` : '').filter(Boolean).join(' · ') }}</p>
           </article>
-          <details v-if="result"><summary>杠分明细</summary>
-            <p v-for="entry in result.ledger.filter(e => e.kind === 'kong')" :key="entry.id">
+          <details v-if="result||state.kongEvents?.length"><summary>杠分明细</summary>
+            <p v-for="entry in (result?.ledger.filter(e => e.kind === 'kong')??state.kongEvents??[])" :key="entry.id">
               {{ name(entry.actor) }} · {{ ({ discard: '直杠', added: '补杠', concealed: '暗杠', wind: '风杠' })[entry.kongKind] }} · {{ entry.deltas.join(' / ') }}
             </p>
           </details>

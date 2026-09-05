@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { GamePlayer, Meld, TileType } from '../../../core/contracts/types'
 import { createWall } from '../../../core/rules/tiles'
 import { BloodFlowEngine } from './engine'
-import type { BloodFlowOpeningState } from './state'
+import type { BloodFlowAction, BloodFlowOpeningState } from './state'
 import { SEATS } from './state'
+import { bloodFlowSeatView } from './seatView'
 
 const waiting: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'm4', 'm5', 'm6', 'east']
 function scenario(hands: (TileType[] | null)[], melds: Meld[][] = [[], [], [], []], emptyWall = false, next?: TileType) {
@@ -26,7 +27,103 @@ function discardEast(engine: BloodFlowEngine) {
   expect(engine.submit(engine.command(0, { kind: 'discard', index: engine.players[0].hand.indexOf('east') }))).toBe(true)
 }
 
+const claimHand: TileType[] = ['m3', 'm4', 'm5', 'm5', 'm5', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'east']
+const discarder: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', 's9', 'north', 'west', 'south', 'p4', 'm5']
+function discardFive(engine: BloodFlowEngine) {
+  expect(engine.submit(engine.command(0, { kind: 'discard', index: engine.players[0].hand.indexOf('m5') }))).toBe(true)
+}
+function passRemaining(engine: BloodFlowEngine, windowId: string) {
+  for (const seat of SEATS) if (engine.window?.id === windowId && engine.window.options[seat].length && !engine.window.decisions[seat]) {
+    expect(engine.submit(engine.command(seat, { kind: 'pass' }))).toBe(true)
+  }
+}
+
+describe('shared discard response choices', () => {
+  it.each<BloodFlowAction>([{ kind: 'peng' }, { kind: 'gang' }, { kind: 'chi', tiles: ['m3', 'm4', 'm5'] }])(
+    'allows $kind directly alongside hu in one window', action => {
+      const engine = scenario([discarder, claimHand, null, null])
+      discardFive(engine)
+      const window = engine.window!
+      expect(bloodFlowSeatView(engine, 1).ownActions).toEqual(expect.arrayContaining([
+        { kind: 'win' }, { kind: 'peng' }, { kind: 'gang' }, { kind: 'chi', tiles: ['m3', 'm4', 'm5'] }, { kind: 'pass' },
+      ]))
+      expect(engine.submit(engine.command(1, action))).toBe(true)
+      passRemaining(engine, window.id)
+      expect(engine.players[1].melds[0].type).toBe(action.kind)
+      expect(engine.players[0].discards).not.toContain('m5')
+      expect(engine.currentPlayer).toBe(1)
+      expect(engine.window!.kind).toBe('turn')
+      expect(engine.archives).toHaveLength(0)
+      engine.assertConservation()
+    },
+  )
+  it('passing once skips every offered claim on that discard', () => {
+    const engine = scenario([discarder, claimHand, null, null])
+    discardFive(engine)
+    const window = engine.window!
+    passRemaining(engine, window.id)
+    expect(engine.window!.kind).toBe('turn')
+    expect(engine.players[1].melds).toHaveLength(0)
+    expect(engine.players[0].discards).toContain('m5')
+    engine.assertConservation()
+  })
+  it('waits for another hu decision and gives it priority over an already selected peng', () => {
+    const otherWait: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm6', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'south', 'south']
+    const engine = scenario([discarder, claimHand, otherWait, null])
+    discardFive(engine)
+    const window = engine.window!
+    expect(engine.submit(engine.command(1, { kind: 'peng' }))).toBe(true)
+    expect(engine.window!.id).toBe(window.id)
+    expect(engine.players[1].melds).toHaveLength(0)
+    expect(engine.submit(engine.command(2, { kind: 'win' }))).toBe(true)
+    passRemaining(engine, window.id)
+    expect(engine.players[1].melds).toHaveLength(0)
+    expect(engine.seats[2].winCount).toBe(1)
+    expect(engine.archives).toHaveLength(1)
+    engine.assertConservation()
+  })
+  it('includes a nonwinning peng claimant while another seat is deciding hu', () => {
+    const otherWait: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm6', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'south', 'south']
+    const pengHand = [...claimHand]; pengHand[4] = 'north'
+    const engine = scenario([discarder, pengHand, otherWait, null])
+    discardFive(engine)
+    const window = engine.window!
+    expect(window.options[1]).toContainEqual({ kind: 'peng' })
+    expect(window.options[1]).not.toContainEqual({ kind: 'win' })
+    expect(window.options[2]).toContainEqual({ kind: 'win' })
+    expect(engine.submit(engine.command(1, { kind: 'peng' }))).toBe(true)
+    passRemaining(engine, window.id)
+    expect(engine.players[1].melds[0].type).toBe('peng')
+    expect(engine.window!.kind).toBe('turn')
+    engine.assertConservation()
+  })
+  it.each(['locked', 'last-discard'] as const)('offers only hu/pass for %s', kind => {
+    const engine = scenario([discarder, claimHand, null, null], undefined, kind === 'last-discard')
+    if (kind === 'locked') engine.seats[1] = { ...engine.seats[1], locked: true }
+    discardFive(engine)
+    expect(engine.window!.options[1]).toEqual([{ kind: 'win' }, { kind: 'pass' }])
+    passRemaining(engine, engine.window!.id)
+    if (kind === 'last-discard') expect(engine.result).not.toBeNull()
+    engine.assertConservation()
+  })
+})
+
 describe('E03 authority conservation and continuous rounds', () => {
+  it.each([14, 11, 8, 5, 2])('keeps the marked draw at the right edge of a %i-tile turn after a sorted opening', (count) => {
+    const melds: Meld[] = Array.from({ length: (14 - count) / 3 }, (_, i) => ({
+      type: 'peng', tile: `p${i + 1}` as TileType, tiles: Array(3).fill(`p${i + 1}`) as TileType[], from: 1,
+    }))
+    const hand = (['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 's1', 's2', 's3', 's4', 's5'] as TileType[]).slice(0, count)
+    const base = scenario([hand, null, null, null], [melds, [], [], []])
+    const opening = structuredClone(base.options.opening!)
+    opening.dealerDrawnIndex = 0 // Sorting has placed the actual extra tile at the left edge.
+    const engine = new BloodFlowEngine({ ...base.options, opening })
+    const player = engine.players[0]
+    expect(player.hand).toEqual([...hand.slice(1), hand[0]])
+    expect(player.drawnTileIndex).toBe(count - 1)
+    expect(engine.window!.source.tile).toBe(hand[0])
+    engine.assertConservation()
+  })
   it('protects a drawn joker on timeout while leaving manual joker discards legal', () => {
     const hand: TileType[] = ['m1','m2','m4','m5','m7','m8','p1','p4','p7','s1','s4','s7','north','red']
     const timed = scenario([hand,null,null,null])
@@ -115,6 +212,7 @@ describe('E03 authority conservation and continuous rounds', () => {
     const engine = scenario([hand0, [...common, 'm4', 'm4'], [...common, 'p4', 'p4'], [...common, 's4', 's4']],
       [[{ type: 'peng', tile: 'east', tiles: ['east', 'east', 'east'], from: 1 }], [], [], []])
     engine.submit(engine.command(0, { kind: 'added-kong', meldIndex: 0 }))
+    for (const seat of [1, 2, 3] as const) expect(engine.window!.options[seat]).toEqual([{ kind: 'win' }, { kind: 'pass' }])
     engine.assertConservation()
     expect(engine.players[0].melds[0].type).toBe('peng')
     for (const seat of [1, 2, 3] as const) engine.submit(engine.command(seat, { kind: 'win' }))

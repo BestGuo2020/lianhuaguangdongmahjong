@@ -121,7 +121,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       ? next.currentPlayer === next.seat ? 'discard' : 'thinking' : moves.length ? 'prompt' : 'checking'
     state.userDrewThisTurn.value = Boolean(w?.kind === 'turn' && next.currentPlayer === next.seat && next.public.status === 'playing')
     state.actionPrompt.value = w && w.kind !== 'turn' && moves.length ? {
-      type: moves.some(a => a.kind === 'win') ? w.source.kind === 'added-kong' ? 'rob' : 'hu' : 'response',
+      type: w.source.kind === 'added-kong' ? 'rob' : 'response',
       from: toLocal(w.source.seat), tile: w.source.tile, canHu: moves.some(a => a.kind === 'win'),
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: moves.flatMap(a => a.kind === 'chi' ? [{ tiles: a.tiles, kind: 'sequence' as const }] : []),
@@ -381,7 +381,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
