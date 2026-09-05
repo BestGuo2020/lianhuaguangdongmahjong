@@ -22,6 +22,18 @@
 
 连续帧：[点炮胡](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/discard-win.jpg) · [自摸](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/self-draw.jpg) · [高番文字](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/title-impact.jpg) · [本家放枪](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/discard-loss.jpg) · [多响六帧](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/multi-summary.jpg) · [局末](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/ending.jpg)。
 
+### 首胡与后续操作：补充核对
+
+用户指出首胡后可能不需要逐次点击，本轮重新检查了按钮与鼠标的连续画面：
+
+- **1:04.8～1:05.8 首胡**：显示“胡 / 过”，鼠标移到“胡”附近并进入胡牌演出。
+- **1:15.4～1:16.3 后续自摸**：只短暂显示单独的“胡”，可见鼠标始终停在按钮外，随后仍进入自摸演出。画面支持“首胡后存在无需逐次鼠标确认的续胡”这一判断。
+- **1:59.1～1:59.6、6:06 附近**：后续仍可见“胡”按钮，鼠标有移到按钮上的动作；玩家可能主动确认或提前触发。不能据此把整段概括为“后续从不显示按钮 / 从不手动点击”。
+
+证据：[首胡输入](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/first-hu-input.jpg) · [后续未见鼠标点击的片段及末张对照](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/auto-hu-evidence.jpg) · [后续鼠标移到胡按钮](D:/vueprojects/lianhua_guangma/work/video-reference-843049425/repeat-input-close.jpg)。视频没有键盘 / 点击事件日志及设置页面，不能仅凭这些画面确认具体自动触发机制、默认开关或是否允许关闭。
+
+这是此前表现分析漏掉的交互重点：**是否需要用户作选择，与演出播放多快是两个问题。** 本项目如采用首胡后的自动续行，应单独明确人类玩家的自动胡 / 摸切、过胡和控制权语义，正常动作仍按可读节奏播放；不能直接把整局切到高速 autoplay。本次补充只记录观察与候选方向，不将该自动行为擅自写入已确定规则或修改实现。
+
 ### 对本项目的直接启发
 
 1. **先确认动作，再突出牌型，最后交代收付。** 角色负责“谁做了什么”，主番字负责“这次胡了什么”，数字负责“结果怎样”；三者通过阶段交接承担不同任务。

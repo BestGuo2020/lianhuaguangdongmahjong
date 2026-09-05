@@ -49,6 +49,8 @@ const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
 const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;from:number;id:number}|null>(null)
 const hudState = shallowRef<Record<string, unknown>>({})
+// Compare the exact HUD with ordinary rules, without running an unrelated AI turn.
+;(window as any).__setCommonPresentation = (value: Record<string, unknown>) => { hudState.value = value }
 const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
 function showHudState(state: 'waiting'|'selection'|'preview') {
   const waits = waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score}))
@@ -164,6 +166,7 @@ createApp({setup(){
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
   isUserTurn: !liveState.value.roundResult && !query.has('controls'), userCanHu: !liveState.value.roundResult && !query.has('controls'),
   ...hudState.value,
+  ...(query.has('common') ? {bloodFlow:null,rulesetId:'lotus-legacy'} : {}),
   onNextRound: () => { navigation.nextRoundCalls++ },
   onReturnToLobby: () => { navigation.returnToLobbyCalls++ },
 })]), ...(query.has('controls') ? [h('nav', {style:'position:fixed;left:2px;top:2px;z-index:100;display:flex;gap:3px'}, [

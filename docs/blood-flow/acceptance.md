@@ -250,3 +250,24 @@ node node_modules/@playwright/test/cli.js test tests/e2e/blood-flow.claim-action
 ## 本次文档整理校验
 
 2026-09-05：13 份原文档 / 补丁已迁移，4 个常用旧入口保留跳转；新目录含 16 份 Markdown 与原补丁。118 个本地链接及锚点检查通过，E00～E16 任务条目、16 个番型定义、历史实验表格和原补丁均保留。两个报告生成脚本仅调整 Markdown 输出路径；没有改变模拟逻辑或实验数字。文档差异空白检查通过，未重跑游戏测试。
+
+## 2026-09-06 公共表现收拢：包 1 基线核对
+
+基线：master `806d1de`；开始时仅 README、rules、tasks、presentation、impact-video 五份方案文档有未提交改动，全部保留。本轮不操作 vibehub、P2P、后端。检查先使用 CodeGraph，再定位具体调用。
+
+实际查看优先视频的四张全片概览，以及 discard-win、title-impact、self-draw、discard-loss、multi-summary、ending 连续帧（`work/video-reference-843049425/`）。覆盖 1:04～1:09.5、1:16.5～1:19.8、1:58～2:03.5、5:44.5～5:47、5:49.5～5:54、6:06～6:27；点炮收付尾段与 1:10 续行另补核。观察：来源落定和操作先出现，角色/胡字确认赢家，角色退去后主番冲入回弹，最后逐席金额；两响共享来源提示后分席角色和主番，局末先完成末张再亮牌。不采用视频的资产、舞蹈、经济系统和牌规。此处为视觉查看，未实听。
+
+| 能力 | 基线入口、资源及生命周期 | 复用判断 |
+|---|---|---|
+| 普通动作 | HUD 的主题模板 + themeEventPresentation；llmAnime 使用 AnimeActionCue 的角色动作图、头像回退；原 Transition/CSS 控制出入，无声音调用 | 待将模板原样提取，普通调用保留 |
+| 血流动作 | BloodFlowWinPresentation 由同一 cue 映射每赢家，角色已有 progress 接口；非二次元另写 blood-flow-action；HUD 按模式过滤所有胡 | cue 映射为必要适配；独立动作字及角色装配消除，明确批次拥有胡事件 |
+| 光柱/粒子 | bloodFlowWinEffects 管理多个 createWinEffectPresenter，使用原主题默认资源；cue 改变/到期 dispose；镜头选一次最强反馈 | 已共用，保留 806d1de 默认光效及 reduced-motion |
+| 飞牌 | 原 presenter smoothstep 插值/缩放；血流 sampleBloodFlowFlight 独立插值/弧线；tableTilePresenter 保存真实来源，director 隐藏记录直到 readable | 来源、楼位、隐藏/交接必要；运动归公共能力，普通默认采样须不变 |
+| 时钟/销毁 | 唯一 director，DOM/3D 共用 cue；换局/主题清队列，恢复历史只摆楼牌；实例重建重新采样同一时刻 | 已共用，不另开队列 |
+| 终局 | 血流胡仅新增批次，原终局 winEffect/revealHands/result 不由表现回调赋值；末张结束才进入结算 | 严禁把公共显示接到普通终局动作 |
+
+冻结普通 1900ms、大番 2300ms、顶级 2600ms 为本轮起始参数，不声称为最终最优。对照录制脚本：`work/blood-flow-common-before.mjs`，产物 `work/blood-flow-common/before/`，五主题均为 1280×720。原版通过正常大厅进入并使用已有动作/胡牌实验入口，血流通过现有展示夹具；这是可重复表现输入，不是规则实玩证据。录制与视觉复核结果待下方追加。
+
+包 1 结论：完成代码及视觉基线核对。五主题各一份普通/血流原速 WebM；jade、llmAnime 另补 `*-stable-original.webm` 固定 HUD 对照（首次大厅录制存在开局干扰，不能作为每个动作的完整证据）。实际检查动作、飞行及落定连续画面 `jade-blood-sequence.jpg`、`anime-original-sequence.jpg` 和固定阶段 PNG；原版 jade 有主题几何底饰与“胡”，血流仅简化“点炮胡”；二次元资源相同但装配入口不同。补抽原视频 1:07～1:10.1 和 5:47～5:48.6，确认两家金额后续行，见 `work/blood-flow-common/reference-*.jpg`。采用原模板和角色，不重做番型字。
+
+回归：`E2E_REUSE_ONLY=1 E2E_PORT=4186` 下 effects + flights **14/14 通过**；`pnpm typecheck` 通过。只启动 Vite。原速录像已保存，视觉判断基于连续抽帧，不虚称用户已认可或声音已实听。进入包 2。
