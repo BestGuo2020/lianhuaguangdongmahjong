@@ -30,7 +30,7 @@ E02～E05、E07、E08 已实现并通过本地自动化验收。E06 的权威协
 
 [千局报告](lotus-blood-flow-simulation.md)使用实际 TypeScript 引擎，提交 `757dabc`，种子 1～1000，耗时约 56 秒。1000 局全部结束，3772 条胡牌记录中 807 次独立首次成牌、2965 次锁手后重复胡；硬胡占 10.39%，随机样本没有封顶，不能据此推断稀有大牌不存在。
 
-本次只测一种合法动作压力策略（有胡即胡、随机合法弃牌、首个副露），没有做规则 AI 与 LLM 胜率/平衡比较。报告列明首胡墙长、分差、命令数和番型频次；没有沿用旧 Python 数值作为新规则证明。
+千局主样本使用合法动作压力策略（有胡即胡、随机合法弃牌、首个副露）。另已完成[三策略分布](lotus-blood-flow-strategies.md)：相同种子 1～100，随机压力、生产规则 AI、首胡至少 40 分的规则 AI 各 100 局，约 213 秒全部通过。三者首次成牌分别为 83/359/146 次，平均首胡剩余墙长 30.17/60.61/34.08；重复胡、硬胡/封顶、分差、命令数和番型频次均独立记录。这是四席自我对局分布，未测策略对抗胜率、真实 LLM 强度或长期平衡；没有沿用旧 Python 数值。
 
 另有条件大牌三响：同一张红中同时完成混幺九/四暗刻、大四喜/字一色/四暗刻、混一色/四暗刻，分别支付 220/600/180 分，终局前余额为 `[1000, 2220, 2600, 2180]`，物理源牌只入档一次。黄金输入另覆盖十三幺自然硬胡点炮 320 分、自摸单家 640 分及封顶边界。条件样本不混入随机发生率。
 
@@ -45,10 +45,11 @@ E02～E05、E07、E08 已实现并通过本地自动化验收。E06 的权威协
 | P2P GPU E2E | 3 passed（约 2.9 分钟）。SDK 形状的两真人两 AI 适配器完成东风场；实际两页面大厅、主题锁定和刷新恢复；两页面模型用例确认客机请求数 0、只有房主生成两 AI 决策和两句局末感言，双方账本一致 |
 | 布局与演出 E2E | 五主题十连胡/恢复；五主题 × 568×320、844×390、1280×720、1920×1080，高低画质，按钮/手牌边界及演出与预览卡交叠断言；小横屏已修正紧凑反馈布局 |
 | 1000 局 | `node node_modules/vitest/vitest.mjs run --dir scripts blood-flow.sim.test.ts`：1 passed，实际 1000 局逐动作守恒、无停滞 |
+| 三策略分布 | `node node_modules/vitest/vitest.mjs run --dir scripts blood-flow.strategies.test.ts`：1 passed，每策略 100 局，共 300 次运行；随机组与千局主样本的前 100 个种子重复，不声称 1300 个独立种子 |
 | 条件状态机 | `engine.test.ts`：7 passed，含三种不同大牌三响、末墙、抢杠、天胡、锁手与权威节拍 |
 | mock 房主发现 | 11 passed；相同 peer 刷新仍回传 welcome，暂定房主允许首次可信元数据校正，已锁定房主不随迟到声明迁移 |
 
-浏览器为 Chromium 151.0.7922.34，Windows ANGLE / Direct3D11 / Intel Arc 130T 硬件 GPU。按用户要求修改两分支 Playwright headless 配置，保留 P2P 其他配置；19 项 master E2E 在 GPU 下全部通过，五主题 × 四尺寸全部断言非软件渲染。具体样本见[渲染测量](lotus-blood-flow-rendering.md)。采集 requestAnimationFrame 间隔，包含主线程调度，不是 GPU draw-call 时间；不作长期帧率保证。此前 SwiftShader 压力结果单列，不用于硬件性能结论。
+浏览器为 Chromium 151.0.7922.34，Windows ANGLE / Direct3D11 / Intel Arc 130T 硬件 GPU。按用户要求修改两分支 Playwright headless 配置，保留 P2P 其他配置；19 项 master E2E、3 项 P2P 联机 E2E 及同步后的 5 项 P2P 主题尺寸 E2E 在 GPU 下全部通过，五主题 × 四尺寸全部断言非软件渲染。具体样本见[渲染测量](lotus-blood-flow-rendering.md)。采集 requestAnimationFrame 间隔，包含主线程调度，不是 GPU draw-call 时间；不作长期帧率保证。此前 SwiftShader 压力结果单列，不用于硬件性能结论。
 
 修正 master 的 Vitest `test.dir` 为 `src`，避免把 P2P 工作树和 pnpm 缓存内的复制测试重复计数。因此早期 3000+ 测试记录不作为最终数量。没有删除业务测试或守恒断言；P2P 始终使用自己的配置。共享小屏规则改用容器查询以通过既有 responsiveCssContract。
 
@@ -67,10 +68,10 @@ E02～E05、E07、E08 已实现并通过本地自动化验收。E06 的权威协
 | `757dabc` | E09 浏览器与模拟驱动 |
 | `c456a8d` | 千局结果、条件三响、默认单机入口 |
 
-P2P 独有提交：`1e25060`（SDK 适配）、`0ec0a5a`（三处授权接线）、`2c95228`（会话恢复）、`0425f2b`（房主模型和感言）。共享代码已按 `pnpm sync:vibehub` 同步，集成测试基线为 master `c456a8d` / vibehub `51288eb`；最终布局与文档的后续提交在 Git 历史中列明。
+P2P 独有提交：`1e25060`（SDK 适配）、`0ec0a5a`（三处授权接线）、`2c95228`（会话恢复）、`0425f2b`（房主模型和感言）。共享代码已按 `pnpm sync:vibehub` 同步，集成测试基线为 master `c456a8d` / vibehub `51288eb`；硬件 GPU 与最终紧凑布局提交为 master `b0ae8f3`，P2P GPU 配置为 `b134652`，对应同步 `de60587`；其后仅增加策略验收驱动与报告，不改变生产规则。
 
 同步前已审查 ahead 警告：此次列出的 CSS、配置、模拟和用例差异来自 master 新提交，未发现需反向移植的 P2P 共享修复。受保护 P2P 文件由 keep 保留，不将其合并进 master。
 
 构建目录：master 的 `dist/` 与 `work/vibehub-theme11v/dist/`，可本地预览；未部署。回退先将 `BLOOD_FLOW_AVAILABILITY.local` 关闭并同步，P2P 生产开关当前已关闭；进行中房间保持规则版本，不降级成旧模式。必要时按上述提交反向回退接线，保留旧玩法和音频资源。
 
-尚未验收：真实 VibeHub 云端/WebRTC 与公网 Relay、真实账号统计写入、真实模型/音色体验、其他目标硬件性能以及多策略平衡。DEV 明确走 BroadcastChannel mock，生产域与登录环境缺失；没有伪造 Origin、绕过来源校验或自动发布来替代这些检查。
+尚未验收：真实 VibeHub 云端/WebRTC 与公网 Relay、真实账号统计写入、真实模型/音色体验、其他目标硬件性能及长期对抗平衡。DEV 明确走 BroadcastChannel mock，生产域与登录环境缺失；没有伪造 Origin、绕过来源校验或自动发布来替代这些检查。
