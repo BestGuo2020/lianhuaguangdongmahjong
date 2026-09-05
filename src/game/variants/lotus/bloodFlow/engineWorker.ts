@@ -12,6 +12,7 @@ export type EngineWorkerRequest = { id: number } & (
   | { kind: 'bot'; seat: Seat; windowId: string }
   | { kind: 'expire'; windowId: string }
   | { kind: 'view'; seat: Seat }
+  | { kind: 'pause' | 'resume' }
   | { kind: 'waits'; seat: Seat; discardIndex: number | null; windowId: string }
 )
 let engine: BloodFlowEngine | null = null
@@ -26,6 +27,8 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
       if (action) engine.submit(engine.command(data.seat, action))
     }
     if (data.kind === 'expire') engine.expire(Date.now(), data.windowId)
+    if (data.kind === 'pause') engine.pause()
+    if (data.kind === 'resume') engine.resume()
     if (data.kind === 'waits') {
       if (engine.window?.id !== data.windowId) result = []
       else {
