@@ -1,5 +1,5 @@
 import type { BloodFlowEngine } from './engine'
-import type { Seat } from './types'
+import type { Seat, KongLedgerEntry } from './types'
 import { SEATS } from './state'
 
 /** The only authority projection accepted by UI or decision code. No wall order,
@@ -9,7 +9,9 @@ export function bloodFlowSeatView(engine: BloodFlowEngine, seat: Seat) {
   const players = engine.players.map((p, s) => ({ ...structuredClone(p),
     hand: seat === s || engine.result ? [...p.hand] : [], concealedTileCount: p.hand.length }))
   const window = engine.window
+  const payments:{kongEvents?:readonly KongLedgerEntry[]}={kongEvents:engine.ledger.filter((entry):entry is KongLedgerEntry=>entry.kind==='kong').map(entry=>structuredClone(entry))}
   return {
+    ...payments,
     authorityEpoch: engine.options.authorityEpoch, roundId: engine.options.roundId, version: engine.version, seat,
     players, currentPlayer: engine.currentPlayer, wallCount: engine.wall.length, headDrawn: engine.headDrawn,
     flipTile: engine.flipTiles[0], jokers: [...engine.jokers], flipStack: engine.flipStack,

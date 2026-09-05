@@ -1,5 +1,5 @@
 import { BloodFlowPresentationQueue, type BloodFlowCue } from './presentation'
-import type { WinBatch } from './types'
+import type { WinBatch, KongLedgerEntry } from './types'
 /** One director per viewer; both DOM and Three.js consume its exact cue and epoch. */
 export class BloodFlowPresentationDirector {
   constructor(private readonly durationScale=1){}
@@ -7,9 +7,10 @@ export class BloodFlowPresentationDirector {
   private initialized=false
   private key=''
   active:BloodFlowCue|null=null
-  sync(batches:readonly WinBatch[],key:string,now:number){
-    if(!this.initialized||key!==this.key){this.initialized=true;this.key=key;this.active=null;this.queue.reset(batches);return}
-    for(const batch of batches)this.queue.enqueue(batch,now)
+  sync(batches:readonly WinBatch[],key:string,now:number,kongs:readonly KongLedgerEntry[]=[]){
+    if(!this.initialized||key!==this.key){this.initialized=true;this.key=key;this.active=null;this.queue.reset(batches,kongs);return}
+    const events=[...batches.map(batch=>({sequence:batch.sequence,batch,kong:null})),...kongs.map(kong=>({sequence:kong.sequence,kong,batch:null}))].sort((a,b)=>a.sequence-b.sequence)
+    for(const event of events)if(event.batch)this.queue.enqueue(event.batch,now);else this.queue.enqueueKong(event.kong!,now)
   }
   tick(now:number){
     if(this.active&&now>=this.active.startedAt+this.active.duration)this.active=null

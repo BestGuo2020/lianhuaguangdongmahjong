@@ -89,16 +89,21 @@ let serial = batches.length, restore = 0
 }
 ;(window as any).__restoreBloodFlow = () => { liveState.value = { ...liveState.value, presentationKey: `restore-${++restore}` } }
 ;(window as any).__appendBloodFlowMultiWin = () => {
-  const id = `multi-${++serial}`, winScore = scorePatterns(['all-green'], true, 'discard')
-  const source = { id: `${id}-tile`, seat: 0 as Seat, tile: 's2' as TileType, kind: 'discard' as const }
-  const winners = ([1, 2, 3] as Seat[]).map(winner => ({ id: `${id}-${winner}`, batchId: id, winner,
+  const id = `multi-${++serial}`
+  const source = { id: `${id}-tile`, seat: 0 as Seat, tile: 'm1' as TileType, kind: 'discard' as const }
+  const winners = ([1, 2, 3] as Seat[]).map(winner => {const winScore=scorePatterns([(['pure-suit','big-three-dragons','thirteenOrphans'] as const)[winner-1]],true,'discard');return ({ id: `${id}-${winner}`, batchId: id, winner,
     ordinal: liveState.value.seats[winner].winCount + 1, sourceEventId: source.id, score: winScore,
-    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === 0 ? -winScore.paymentPerPayer : 0) }))
+    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === 0 ? -winScore.paymentPerPayer : 0) })})
   const batch: WinBatch = { authorityEpoch: 'fixture', sequence: serial, roundId: 'fixture-round', ruleVersion: 'lotus-blood-flow-v1',
     batchId: id, windowId: id, source, winners, deltas: vector(s => winners.reduce((n,w) => n + w.deltas[s], 0)),
     scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:1} }
   liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
     ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
+}
+;(window as any).__appendBloodFlowKong = (actor:Seat=0) => {
+  const event={kind:'kong' as const,authorityEpoch:'fixture',roundId:liveState.value.roundId,sequence:++serial,id:`kong-${serial}`,actor,kongKind:'concealed' as const,sourceSeat:null,
+    deltas:vector(s=>s===actor?60:-20),scoresAfter:[2000,2000,2000,2000] as [number,number,number,number]}
+  liveState.value={...liveState.value,kongEvents:[...(liveState.value.kongEvents??[]),event]}
 }
 ;(window as any).__playBloodFlowScenario = async (kind:'draw'|'discard'|'added-kong'='draw',seat:Seat=0,winners:Seat[]=[seat]) => {
   const id=`scenario-${++serial}`,source={id:`${id}-source`,kind,seat,tile:'s2' as TileType},relative=(seat-viewer+4)%4

@@ -3,7 +3,7 @@ import { TILE_TYPES } from '../../../../core/rules/tiles'
 import { BLOOD_FLOW_CONFIG } from '../config'
 import type { BloodFlowSeatView } from '../seatView'
 import type { EngineCommand } from '../state'
-import type { Seat, WinBatch } from '../types'
+import type { Seat, WinBatch, KongLedgerEntry } from '../types'
 import type { BloodFlowReaction } from '../../../../llm/bloodFlowRuntime'
 import { LLM_TTS_VOICE_OPTIONS } from '../../../../llm/config'
 
@@ -16,6 +16,7 @@ export interface AuthorityEnvelope extends BloodFlowEnvelope {
   sequence: number
   round: number
   continuation?: { readySeats: Seat[]; requiredSeats: Seat[] }
+  kongEvents?: readonly KongLedgerEntry[]
 }
 export interface NetworkOpening { firstDice: [number, number]; secondDice: [number, number] }
 export type BloodFlowPacket =
@@ -85,13 +86,14 @@ export function isWinBatch(v: unknown): v is WinBatch {
 
 export function isSeatView(v: unknown): v is BloodFlowSeatView {
   if (!object(v) || !only(v, ['authorityEpoch', 'roundId', 'version', 'seat', 'players', 'currentPlayer', 'wallCount', 'headDrawn',
-    'flipTile', 'jokers', 'flipStack', 'flipSeat', 'wallBreakIndex', 'window', 'ownActions', 'ownScore', 'waitingSeats', 'public', 'actionEvents', 'lastDiscardAction'])) return false
+    'flipTile', 'jokers', 'flipStack', 'flipSeat', 'wallBreakIndex', 'window', 'ownActions', 'ownScore', 'waitingSeats', 'public', 'actionEvents', 'lastDiscardAction','kongEvents'])) return false
   if (!text(v.authorityEpoch) || !text(v.roundId) || !int(v.version) || !seat(v.seat) || !seat(v.currentPlayer)
     || !int(v.wallCount) || v.wallCount < 0 || v.wallCount > 134 || !int(v.headDrawn) || !TILE_TYPES.includes(v.flipTile)
     || !tiles(v.jokers, 2) || !Array.isArray(v.players) || v.players.length !== 4 || !object(v.public)) return false
   if (!only(v.public, ['ruleVersion', 'roundId', 'status', 'seats', 'batches', 'roundResult']) || v.public.ruleVersion !== BLOOD_FLOW_CONFIG.version
     || v.public.roundId !== v.roundId || !['playing', 'paused', 'interrupted', 'settled'].includes(v.public.status)
     || !Array.isArray(v.public.batches) || v.public.batches.length > 136 || !v.public.batches.every(isWinBatch)) return false
+  if(v.kongEvents!==undefined&&!isKongEvents(v.kongEvents,v.authorityEpoch,v.roundId))return false
   if (!Array.isArray(v.public.seats) || v.public.seats.length !== 4 || !v.public.seats.every((s: any) => object(s)
     && only(s, ['winCount', 'locked', 'firstWinSequence', 'recordIds']) && int(s.winCount) && s.winCount >= 0
     && typeof s.locked === 'boolean' && (s.firstWinSequence === null || int(s.firstWinSequence)) && Array.isArray(s.recordIds) && s.recordIds.every(text))) return false
@@ -137,6 +139,12 @@ function isAction(v: unknown) {
   if (v.kind === 'concealed-kong') return only(v, ['kind', 'tile']) && TILE_TYPES.includes(v.tile)
   return v.kind === 'chi' && only(v, ['kind', 'tiles']) && tiles(v.tiles, 3) && v.tiles.length === 3
 }
+function isKongEvents(events:unknown,epoch:string,roundId:string){
+  return Array.isArray(events)&&events.length<=136&&new Set(events.map(e=>e?.id)).size===events.length&&events.every(e=>object(e)
+    &&only(e,['kind','authorityEpoch','roundId','sequence','id','actor','kongKind','sourceSeat','deltas','scoresAfter'])
+    &&e.kind==='kong'&&e.authorityEpoch===epoch&&e.roundId===roundId&&text(e.id)&&int(e.sequence)&&seat(e.actor)
+    &&['discard','added','concealed','wind'].includes(e.kongKind)&&(e.sourceSeat===null||seat(e.sourceSeat))&&zeroSum(e.deltas)&&vector(e.scoresAfter))
+}
 
 export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (!object(value) || !text(value.roomId) || typeof value.ruleVersion !== 'string') return null
@@ -160,6 +168,7 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (!text(value.authorityEpoch) || !int(value.sequence) || value.sequence < 1 || !int(value.round) || value.round < 1 || value.round > 8) return null
   if (value.kind === 'win_batch') return isWinBatch(value.batch) && value.batch.authorityEpoch === value.authorityEpoch ? value as BloodFlowPacket : null
   if (value.kind === 'blood_flow_snapshot' || value.kind === 'round_settled') {
+    if(value.kongEvents!==undefined&&!isKongEvents(value.kongEvents,value.authorityEpoch,value.view?.roundId))return null
     if (value.continuation !== undefined && (!object(value.continuation) || !only(value.continuation,['readySeats','requiredSeats'])
       || !['readySeats','requiredSeats'].every(k=>Array.isArray(value.continuation[k])&&value.continuation[k].length<=4
         &&value.continuation[k].every(seat)&&new Set(value.continuation[k]).size===value.continuation[k].length)

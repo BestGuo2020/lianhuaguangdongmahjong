@@ -381,7 +381,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,

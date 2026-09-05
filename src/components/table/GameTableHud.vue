@@ -128,8 +128,8 @@ function advancePresentation(now:number){
   if(hidden.join('|')!==bloodFlowHidden.value.join('|'))bloodFlowHidden.value=hidden
   if(presentationBusy.value)presentationFrame=requestAnimationFrame(advancePresentation)
 }
-watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?.presentationKey,props.bloodFlow?.roundId,props.themeName],()=>{
-  presentationDirector.sync(props.bloodFlow?.batches??[],`${props.themeName}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`,performance.now())
+watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?.kongEvents?.map(k=>k.id).join('|'),props.bloodFlow?.presentationKey,props.bloodFlow?.roundId,props.themeName],()=>{
+  presentationDirector.sync(props.bloodFlow?.batches??[],`${props.themeName}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`,performance.now(),props.bloodFlow?.kongEvents)
   if(presentationFrame)cancelAnimationFrame(presentationFrame)
   advancePresentation(performance.now())
 },{immediate:true})
@@ -199,7 +199,7 @@ const presentedLlmBubbles = computed(() => props.bloodFlow
       3: { id: -103, text: '这一张先打掉。', persistent: true },
     }
   : props.llmBubbles)
-const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.scoreFlowEvent ?? (scoreFlowLabEnabled
+const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.bloodFlow?null:props.scoreFlowEvent ?? (scoreFlowLabEnabled
   ? { id: -1, deltas: [{ playerIndex: 0, amount: 800 }, { playerIndex: 1, amount: -800 }] }
   : null))
 const waitsOpen = ref(false)

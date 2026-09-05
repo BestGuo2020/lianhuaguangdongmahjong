@@ -36,6 +36,20 @@ async function start(r: ReturnType<typeof room>) {
   r.flush()
 }
 describe('E06 four-endpoint authority and recovery', () => {
+  it('projects committed kong receipts in an optional envelope without changing the legacy seat view shape',async()=>{
+    const r=room();await start(r)
+    const e=r.backend.engine
+    const receipt={kind:'kong' as const,id:'round-1/kong/1',authorityEpoch:'epoch',roundId:e.options.roundId,sequence:1,actor:0 as const,kongKind:'concealed' as const,sourceSeat:null,
+      deltas:[60,-20,-20,-20] as const,scoresAfter:[2060,1980,1980,1980] as const}
+    e.ledger.push(receipt);e.players.forEach((p,i)=>{p.score=receipt.scoresAfter[i]})
+    await r.host.receive({...r.replicas[0].hello(),kind:'blood_flow_auto',authorityEpoch:'epoch',enabled:true},'p0')
+    const messages=r.flush()
+    const frame=messages.find(m=>m.peer==='p0'&&m.packet.kind==='blood_flow_snapshot')!.packet as Extract<BloodFlowPacket,{kind:'blood_flow_snapshot'}>
+    expect(frame.kongEvents).toEqual([receipt]);expect(frame.view).not.toHaveProperty('kongEvents')
+    expect(r.replicas[2].view?.kongEvents).toEqual([receipt])
+    const bad=structuredClone(frame);bad.kongEvents=[{...receipt,deltas:[60,-20,-20,0]}]
+    expect(decodeBloodFlowPacket(bad)).toBeNull()
+  })
   it('expires an overdue AI turn instead of repeatedly submitting rejected bot decisions', async () => {
     const r = room(); await start(r)
     r.host.aiSeats.add(0)

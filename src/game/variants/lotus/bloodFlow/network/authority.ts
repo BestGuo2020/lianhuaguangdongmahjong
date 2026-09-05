@@ -131,10 +131,12 @@ export class BloodFlowAuthority {
   private async sendSnapshot(peer: string) {
     const seat = this.bindings.get(peer)
     if (seat === undefined || !this.compatible.has(peer)) return
-    const view = await this.options.backend.view(seat)
+    const projected = await this.options.backend.view(seat)
+    // Additional public receipts travel in the envelope; older v1 view decoders keep their shape.
+    const {kongEvents,...view}=projected
     const requiredSeats=[...this.bindings.values()].filter(s=>!this.aiSeats.has(s))
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
-      mode: this.options.mode, dealer: this.dealer, view,
+      mode: this.options.mode, dealer: this.dealer, view, ...(kongEvents?.length?{kongEvents}:{}),
       ...(view.public.roundResult?{continuation:{requiredSeats,readySeats:requiredSeats.filter(s=>this.confirmed.has(s))}}:{}) }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
       : { ...base, kind: 'blood_flow_snapshot', autoPlay: this.autoSeats.has(seat), ...(this.openingGate ? { opening: this.openingData! } : {}) })
