@@ -75,6 +75,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   let hintKey = '', hintBusy = false
   let ring: TileType[] = [], dealerTile: TileType | null = null
   let remoteOpeningId = '', countdownTicket = 0
+  let warnedCountdownWindow = ''
   const completedRemoteOpenings = new Set<string>()
   let pendingRemote: { view: BloodFlowSeatView; meta: RemoteViewMeta } | null = null
   const timers = new Set<ReturnType<typeof setTimeout>>()
@@ -92,6 +93,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     generation++; busy = false
     presentationSerial.value++
     remoteOpeningId = ''; countdownTicket++
+    warnedCountdownWindow = ''
     completedRemoteOpenings.clear(); pendingRemote = null
     timers.forEach(clearTimeout); timers.clear()
     waiters.forEach(resolve => resolve()); waiters.clear()
@@ -171,6 +173,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (ticket !== countdownTicket) return
       state.turnSeconds.value = w && Date.now() >= w.opensAt && moves.length && options.countdownEnabled !== false && Number.isFinite(w.deadlineAt)
         ? Math.max(0, Math.ceil((w.deadlineAt - Date.now()) / 1000)) : 0
+      if (w && state.turnSeconds.value > 0 && state.turnSeconds.value <= 3 && warnedCountdownWindow !== w.id) {
+        warnedCountdownWindow = w.id
+        sound('didu.ogg')
+      }
       if (state.turnSeconds.value > 0) later(updateCountdown, 1000)
     }
     updateCountdown()

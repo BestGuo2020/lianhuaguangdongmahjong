@@ -62,6 +62,15 @@ test('records source, winners and payments without mixing their seats', async ({
   ]
   for (const scene of scenarios) {
     await page.evaluate(async s=>{
+      // Sample inside the browser: taking a readable-frame screenshot can
+      // outlast the short payment phase, particularly while recording video.
+      ;(window as any).__scenePayments = null
+      const samplePayments=()=>{
+        const nodes=[...document.querySelectorAll('[data-payment-seat]')]
+        if(nodes.length) (window as any).__scenePayments=nodes.map(e=>({seat:Number(e.getAttribute('data-payment-seat')),amount:Number(e.getAttribute('data-payment-amount'))}))
+        else requestAnimationFrame(samplePayments)
+      }
+      requestAnimationFrame(samplePayments)
       if(s.kind==='multi') (window as any).__appendBloodFlowMultiWin(s.winners,s.source)
       else await (window as any).__playBloodFlowScenario(s.kind,s.source,s.winners,[s.pattern],true)
     },scene)
@@ -80,11 +89,13 @@ test('records source, winners and payments without mixing their seats', async ({
       const ratio=await page.locator('[data-title-seat="0"]').evaluate(el=>{const r=el.getBoundingClientRect();return (r.y+r.height/2)/innerHeight})
       expect(ratio).toBeGreaterThan(.66)
     }
-    await expect(page.locator('.blood-flow-winner-payment')).toHaveCount(scene.winners.length)
-    const payments=await page.locator('[data-payment-seat]').evaluateAll(es=>es.map(e=>({seat:Number(e.getAttribute('data-payment-seat')),amount:Number(e.getAttribute('data-payment-amount'))})))
+    await page.waitForFunction(()=>(window as any).__scenePayments !== null)
+    const payments=await page.evaluate(()=>(window as any).__scenePayments as {seat:number;amount:number}[])
+    for(const winner of scene.winners) expect(payments.find(p=>p.seat===winner)?.amount).toBeGreaterThan(0)
     expect(new Set(payments.map(p=>p.seat)).size).toBe(payments.length)
     expect(payments.reduce((n,p)=>n+p.amount,0)).toBe(0)
-    await page.screenshot({path:`${dir}/${scene.name}-payment.png`})
+    await writeFile(`${dir}/${scene.name}-payments.json`,JSON.stringify(payments))
+    if(await page.locator('[data-payment-seat]').count()) await page.screenshot({path:`${dir}/${scene.name}-payment.png`})
     await expect(page.locator('.blood-flow-cue')).toHaveCount(0)
   }
   await page.close()

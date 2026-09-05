@@ -32,7 +32,7 @@ const commands: EngineCommand[] = []
 const sounds: string[] = []
 const meta = { round: 1, dealer: 0, mode: 'east' as const }
 createApp({ setup() {
-  const game = useBloodFlowGame({ countdownEnabled: false, playSound: name => sounds.push(name), externalAuthority: {
+  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), externalAuthority: {
     send(command) {
       commands.push(command)
       if (!engine.submit(command)) throw new Error('HUD submitted an unavailable action')
@@ -55,6 +55,11 @@ createApp({ setup() {
     if (changed) void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
   }, 25)
   ;(window as any).__refreshClaimView = () => game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
+  ;(window as any).__setClaimCountdown = (seconds:number, opensIn=0) => {
+    engine.window!.opensAt=Date.now()+opensIn
+    engine.window!.deadlineAt=Date.now()+seconds*1000
+    return game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
+  }
   ;(window as any).__claimEvidence = () => ({commands, sounds, selectedIndex:game.selectedIndex.value, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
     window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards})
   const keys = ['players','user','phase','wall','wallHeadDrawn','wallCount','currentPlayer','selectedIndex','turnSeconds','lastDiscard',

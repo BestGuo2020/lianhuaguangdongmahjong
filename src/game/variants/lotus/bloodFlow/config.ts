@@ -67,5 +67,5 @@ export function bloodFlowWinTiming(tier: number) {
     const duration = tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs
     return { duration, phaseMarks: { focus: 0, impact: 880, readable: 1100, score: 1750, exit: duration - 200 } }
   }
-  return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { focus: 0, impact: 600, readable: 850, score: 1250, exit: 1650 } }
+  return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { focus: 0, impact: 720, readable: 900, score: 1500, exit: 1700 } }
 }

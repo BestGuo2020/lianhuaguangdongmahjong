@@ -25,7 +25,7 @@ function titleStyleFor(seat:number,text:string,main=false){
   const unit=main?(props.compact?52:110):props.cue.tier>=2?(props.compact?36:66):(props.compact?30:54)
   return {left:`${left}%`,...anchor,width:`min(${(text.length*.92+.4)*unit}px,${main?65:34}vw)`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) perspective(650px) rotateY(${m.tilt}deg) rotateX(${m.tilt*.3}deg) scale(${1+(m.scale-1)*.55}) rotate(${m.rotation}deg)`}
 }
-const sourceEnd=computed(()=>(props.cue?.phaseMarks.impact??0)*.36)
+const sourceEnd=computed(()=>(props.cue?.phaseMarks.impact??0)*.25)
 function portraitProgress(index:number){
   if(!props.cue)return 0
   const start=sourceEnd.value-40+index*55,end=props.cue.phaseMarks.impact-140
