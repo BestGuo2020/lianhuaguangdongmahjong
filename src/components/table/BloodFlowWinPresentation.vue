@@ -16,7 +16,7 @@ const stage=computed(()=>!props.cue?'seat':props.cue.seats.length>1||props.cue.m
 const titleStyle=computed(()=>{
   const m=motion.value;if(!m||!props.cue)return {}
   const relative=(props.cue.seats[0]?.seat-props.localSeat+4)%4
-  const left=stage.value==='seat'?[50,77,50,23][relative]:50,top=props.compact?10:stage.value==='seat'?[46,26,12,26][relative]:30
+  const left=stage.value==='seat'?[50,77,50,23][relative]:50,top=props.compact?10:stage.value==='seat'?[54,26,12,26][relative]:23
   return {left:`${left}%`,top:`${top}%`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) scale(${m.scale}) rotate(${m.rotation}deg)`}
 })
 const portraitProgress=computed(()=>props.cue?Math.min(1,Math.max(0,(props.now-props.cue.startedAt)/props.cue.phaseMarks.readable)):0)
@@ -37,8 +37,8 @@ const animeEvent=(seat:number):TableActionEvent=>{
         <AnimeActionCue v-for="item in cue.seats" :key="item.seat" :event="animeEvent(item.seat)" :player="players[(item.seat-localSeat+4)%4]"
           :position="['bottom','right','top','left'][(item.seat-localSeat+4)%4]" :progress="portraitProgress" hide-copy />
       </template>
-      <div v-if="cue.kind==='win'&&((!compact&&stage!=='seat')||phase==='focus'||phase==='impact')" class="blood-flow-central" :style="titleStyle"><small>{{ ['胡牌','中番','大番','顶级番型'][cue.tier] }}</small><strong>{{ cue.title }}</strong></div>
-      <div v-if="cue.seats.length&&phase!=='focus'&&phase!=='impact'" class="blood-flow-winner-cards">
+      <div v-if="cue.kind==='win'&&(phase==='focus'||phase==='impact'||phase==='readable')" class="blood-flow-central" :style="titleStyle"><small>{{ ['胡牌','中番','大番','顶级番型'][cue.tier] }}</small><strong>{{ cue.title }}</strong></div>
+      <div v-if="cue.seats.length&&(phase==='score'||phase==='exit')" class="blood-flow-winner-cards">
         <article v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-card" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat">
           <small>{{ name(item.seat) }} · {{ sourceLabel(item.record.score.source) }}</small>
           <strong>{{ cue.merged?'最近：':'' }}{{ mainPattern(item.record)?.label??'胡牌' }}</strong>
@@ -92,7 +92,7 @@ const animeEvent=(seat:number):TableActionEvent=>{
 .blood-flow-central::before {content:'';position:absolute;inset:-12% -25%;z-index:-1;background:radial-gradient(ellipse,color-mix(in srgb,var(--win-color) 25%,transparent),transparent 70%)}
 .blood-flow-central strong {color:var(--win-color);font-weight:1000;paint-order:stroke fill;-webkit-text-stroke:1px #13211e}
 .stage-main .blood-flow-central strong {font-size:clamp(30px,4.5vw,68px)}.stage-seat .blood-flow-central strong {font-size:clamp(20px,2.5vw,36px)}
-.tier-0 .blood-flow-central strong {font-size:22px}.tier-0 .blood-flow-central small {display:none}
+.tier-0 .blood-flow-central strong {font-size:clamp(24px,3vw,34px)}.tier-0 .blood-flow-central small {display:none}
 [data-theme="rosewood"] .blood-flow-central::before {inset:4% -10%;border-block:2px solid #d39765;background:linear-gradient(90deg,transparent,#452016e8 25%,#452016e8 75%,transparent);transform:skewX(-8deg)}
 [data-theme="happyMahjong"] .blood-flow-central strong {color:#ffe174;-webkit-text-stroke:3px #345882;text-shadow:4px 5px 0 #243d5b}
 [data-theme="happyMahjong"] .blood-flow-central::before {background:conic-gradient(from 15deg,transparent 0 10%,#fbd34488 12% 15%,transparent 17% 30%,#78ceff88 32% 35%,transparent 37% 55%,#ff859688 57% 60%,transparent 62%);clip-path:polygon(8% 12%,80% 0,100% 65%,80% 95%,0 80%)}

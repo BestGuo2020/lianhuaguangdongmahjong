@@ -11,8 +11,11 @@ for(const count of [12,24,40])test(`new win flies to its persistent level after 
   expect(first.level).toBe(count/4);expect(first.column).toBe(0)
   expect(first.target.y).toBeCloseTo(.31+count/4*.46)
   expect(first.source).not.toEqual(first.target)
-  await page.waitForTimeout(150)
+  // The source now remains visible before takeoff; wait for actual flight,
+  // including this fixture's 4x slow-motion scale, instead of the old 60ms hop.
+  await expect.poll(async()=>(await flights())[0]?.current.progress??0,{timeout:2000}).toBeGreaterThan(0)
   const next=(await flights())[0]
+  expect(next.current.progress).toBeLessThan(1)
   expect(next.current).not.toEqual(first.current)
   await page.screenshot({path:`test-results/blood-flow-flight-${count+1}.png`})
   await expect.poll(async()=>(await flights()).length,{timeout:5000}).toBe(0)

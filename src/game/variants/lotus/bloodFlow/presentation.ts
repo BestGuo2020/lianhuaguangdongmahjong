@@ -1,4 +1,4 @@
-import { BLOOD_FLOW_TIMING } from './config'
+import { BLOOD_FLOW_TIMING, bloodFlowWinTiming } from './config'
 import type { Seat, SeatVector, SourceTileEvent, WinBatch, WinRecord, KongLedgerEntry } from './types'
 import type { TableThemeName } from '../../../../components/table/three/tableTheme'
 
@@ -56,8 +56,8 @@ export class BloodFlowPresentationQueue {
     const tier=winTier(strongest.record)
     const full=!merged&&seats.some(s=>winTier(s.record)>=2&&now-(this.fullBySeatPattern.get(`${s.seat}/${mainPattern(s.record)?.id}`)??-Infinity)>=BLOOD_FLOW_TIMING.fullEffectCooldownMs)
     if(full)for(const s of seats)if(winTier(s.record)>=2)this.fullBySeatPattern.set(`${s.seat}/${mainPattern(s.record)?.id}`,now)
-    const duration=full?(tier===3?1600:1400):750
-    const phaseMarks=full?{focus:0,impact:180,readable:350,score:650,exit:duration-240}:{focus:0,impact:100,readable:240,score:350,exit:580}
+    // Compact controls intensity, never removes the time needed to read a win.
+    const { duration, phaseMarks } = bloodFlowWinTiming(tier)
     const deltas=[0,0,0,0] as [number,number,number,number]
     for(const {batch} of taken)for(let s=0;s<4;s++)deltas[s]+=batch.deltas[s]
     const multi=taken.length===1&&seats.length>1

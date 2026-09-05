@@ -152,7 +152,12 @@ createApp({setup(){
   ...props, players:livePlayers.value,user:livePlayers.value[0],lastDiscard:liveLastDiscard.value,bloodFlow: liveState.value, tableActionEvent: liveAction.value,
   phase: liveState.value.roundResult ? 'settled' : props.phase,
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
-  isUserTurn: !liveState.value.roundResult, userCanHu: !liveState.value.roundResult,
+  isUserTurn: !liveState.value.roundResult && !query.has('controls'), userCanHu: !liveState.value.roundResult && !query.has('controls'),
   onNextRound: () => { navigation.nextRoundCalls++ },
   onReturnToLobby: () => { navigation.returnToLobbyCalls++ },
-})])]) }}).mount('#app')
+})]), ...(query.has('controls') ? [h('nav', {style:'position:fixed;left:2px;top:2px;z-index:100;display:flex;gap:3px'}, [
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('draw',0,[0],['pinghu'],false)}, '普通自摸'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('discard',1,[0],['pinghu'],false)}, '普通点炮'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('draw',0,[0],['all-green'],true)}, '高番自摸'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__appendBloodFlowMultiWin()}, '三响'),
+])] : [])]) }}).mount('#app')

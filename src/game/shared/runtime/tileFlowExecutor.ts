@@ -1,6 +1,7 @@
 import type { GamePhase, LastDiscard, RefLike } from '../../core/contracts/gamePort'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
-import { sortTiles, tileAudioFile } from '../../core/rules/tiles'
+import { sortTiles } from '../../core/rules/tiles'
+import { playDiscardName } from './discardAudio'
 import type { FollowDealerTracker } from './followDealer'
 import { isLocalLlmSeat } from '../../core/presentation/localLlmVoiceRegistry'
 
@@ -102,23 +103,7 @@ export function createTileFlowExecutor(options: TileFlowOptions) {
       options.getTurnFlow().routeDiscard(playerIndex, tile)
       return
     }
-    state.lastDiscardSound.value = new Promise<void>((resolve) => {
-      // 牌名音效原本通过 later 延迟 80ms；这里使用独立计时器，避免点炮结算
-      // 清理回合定时器时把“正在报牌”的音效一起取消。
-      globalThis.setTimeout(() => {
-        try {
-          const playback = options.playSoundAndWait?.(tileAudioFile(tile))
-          if (playback) {
-            void playback.then(resolve, resolve)
-            return
-          }
-          options.playSound(tileAudioFile(tile))
-        } catch {
-          // 音频资源异常不应阻塞牌局结算。
-        }
-        resolve()
-      }, 80)
-    })
+    state.lastDiscardSound.value = playDiscardName(tile, options)
     state.phase.value = 'checking'
     options.stopCountdown()
     // 跟庄：出牌已落定，先做跟庄检测（可能触发庄家给付），再进入响应编排。

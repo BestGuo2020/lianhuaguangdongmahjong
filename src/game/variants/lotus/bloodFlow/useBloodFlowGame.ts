@@ -7,7 +7,8 @@ import { createLotusOpening } from '../lotusOpening'
 import { buildRingWall } from '../lotusWall'
 import { createCommonGameSelectors } from '../../../shared/selectors/gameSelectors'
 import { MATCH_NAMES } from '../../../core/local/localGameConfig'
-import { tileAudioFile, tileName } from '../../../core/rules/tiles'
+import { tileName } from '../../../core/rules/tiles'
+import { playDiscardName } from '../../../shared/runtime/discardAudio'
 import { createLocalTransientEventPresenter } from '../../../core/local/localTransientEventPresenter'
 import { resolveAnimeAudioPolicy } from '../../../core/presentation/animeAudioPolicy'
 import { isLocalLlmSeat } from '../../../core/presentation/localLlmVoiceRegistry'
@@ -69,6 +70,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
   let generation = 0, busy = false, heardAction = 0, heardDiscard = '', seenWindow = ''
+  let waitQuerySerial = 0
   let ring: TileType[] = [], dealerTile: TileType | null = null
   let remoteOpeningId = '', countdownTicket = 0
   const completedRemoteOpenings = new Set<string>()
@@ -118,7 +120,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     state.wallHeadDrawn.value = next.headDrawn; state.currentPlayer.value = toLocal(next.currentPlayer)
     state.flipTile.value = next.flipTile; state.jokerTiles.value = next.jokers
     state.flipStack.value = next.flipStack; state.flipSeat.value = next.flipSeat; state.wallBreakIndex.value = next.wallBreakIndex
-    state.selectedIndex.value = -1
+    if (!previous || previous.window?.id !== next.window?.id
+      || previous.players[next.seat].hand.join() !== next.players[next.seat].hand.join()) state.selectedIndex.value = -1
     const w = next.window, moves = next.ownActions
     state.phase.value = next.public.roundResult ? 'settled' : next.public.status !== 'playing' ? 'checking'
       : w && Date.now() < w.opensAt ? 'drawing' : w?.kind === 'turn'
@@ -137,7 +140,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       sound('dapai.mp3', 0.8)
       const route = resolveAnimeAudioPolicy({ themeName: options.getThemeName?.(), playerKind: player.playerKind, isLlm: player.isLlm })
       const llmSeat = options.externalAuthority ? player.playerKind === 'llm' || player.isLlm : isLocalLlmSeat(d.seat)
-      if (!llmSeat && route.discard.tileName !== 'suppress') later(() => sound(tileAudioFile(d.tile)), 80)
+      const epoch = generation
+      state.lastDiscardSound.value = !llmSeat && route.discard.tileName !== 'suppress'
+        ? playDiscardName(d.tile, { playSound: sound, playSoundAndWait: options.playSoundAndWait,
+          current: () => epoch === generation }) : Promise.resolve()
     }
     for (const action of next.actionEvents) if (action.id > heardAction) {
       heardAction = action.id
@@ -154,12 +160,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (!options.externalAuthority) void reactions.run(next)
     }
     if (w?.id !== seenWindow) { seenWindow = w?.id ?? ''; waitScores.value = []; if (next.ownActions.length) void refreshWaits() }
-    if (previous && w?.kind === 'turn' && w.source.id !== previous.window?.source.id
+    if (previous && (next.transition?.kind === 'draw' && next.transition.id !== previous.transition?.id
+      || w?.kind === 'turn' && w.source.id !== previous.window?.source.id && previous.transition?.kind !== 'draw')
       && next.players[next.currentPlayer].drawnTileIndex >= 0) sound('give.mp3', .7)
     const ticket = ++countdownTicket
     const updateCountdown = () => {
       if (ticket !== countdownTicket) return
-      state.turnSeconds.value = w && moves.length && options.countdownEnabled !== false && Number.isFinite(w.deadlineAt)
+      state.turnSeconds.value = w && Date.now() >= w.opensAt && moves.length && options.countdownEnabled !== false && Number.isFinite(w.deadlineAt)
         ? Math.max(0, Math.ceil((w.deadlineAt - Date.now()) / 1000)) : 0
       if (state.turnSeconds.value > 0) later(updateCountdown, 1000)
     }
@@ -185,6 +192,20 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function schedule() {
     if (options.externalAuthority) return
     const current = view.value, w = current?.window
+    if (current?.transition && current.public.status === 'playing') {
+      const stage = current.transition
+      later(() => {
+        const advance = () => { if (view.value?.transition?.id === stage.id) void request({ kind: 'advance', transitionId: stage.id }) }
+        // Reuse the actual tile-name completion, bounded for unavailable audio/TTS.
+        if (stage.kind === 'discard') {
+          let done = false
+          const once = () => { if (!done) { done = true; advance() } }
+          void state.lastDiscardSound.value?.then(once, once)
+          later(once, 1500)
+        } else advance()
+      }, Math.max(0, stage.readyAt - Date.now()))
+      return
+    }
     if (!current || !w || current.public.status !== 'playing') return
     if (Date.now() < w.opensAt) {
       later(() => { if (view.value?.window?.id === w.id) void request({ kind: 'view', seat: 0 }) }, w.opensAt - Date.now())
@@ -222,7 +243,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   function send(action: BloodFlowAction) {
     const current = view.value, w = current?.window
-    if (!current || !w) return
+    if (!current || !w || !current.ownActions.some(move => JSON.stringify(move) === JSON.stringify(action))) return
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
     if (options.externalAuthority) options.externalAuthority.send(command)
@@ -243,6 +264,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     await request({ kind: 'start', options: { authorityEpoch: `local-${generation}`, roundId: `round-${state.round.value}`,
       dealer: state.dealer.value as 0 | 1 | 2 | 3, opening,
       winBeatMs: options.paceMs === 0 ? 0 : undefined,
+      paced: options.paceMs !== 0,
       decisionMs: options.countdownEnabled === false ? Infinity : undefined } })
   }
   const opening = createLotusOpening({ state, automaticOpeningWin: false, clearTimers: () => {},
@@ -278,6 +300,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     return { discard: null, tiles, any: tiles.length === 34, remaining: tiles.reduce((n, t) => n + t.remaining, 0) }
   })
   async function refreshWaits() {
+    const query = ++waitQuerySerial
     const current = view.value, w = current?.window, active = hintWorker, epoch = generation
     if (!active || !current || !w) return
     const player = current.players[current.seat], hand = player.hand
@@ -288,7 +311,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const concealed = [...hand]
       if (index !== null) concealed.splice(index, 1)
       const waits = await active.waits({ concealed, melds: player.melds, jokers: current.jokers })
-      if (epoch === generation && view.value?.window?.id === w.id) waitScores.value = waits
+      if (query === waitQuerySerial && epoch === generation && view.value?.window?.id === w.id) waitScores.value = waits
     } catch { /* closed worker has no current hint to publish */ }
   }
   function cancelReactionSpeech() {
@@ -411,9 +434,17 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     userCanHu: computed(() => moves.value.some(a => a.kind === 'win')),
     userKongs: computed(() => moves.value.flatMap(a => a.kind === 'concealed-kong' ? [a.tile]
       : a.kind === 'added-kong' ? [state.players[0].melds[a.meldIndex].tile] : [])),
-    userCurrentWaits: currentWaitInfo, userDiscardWaits: currentWaitInfo, userTingOptions: computed(() => []),
+    userCurrentWaits: currentWaitInfo,
+    userDiscardWaits: computed(() => state.selectedIndex.value >= 0 && currentWaitInfo.value
+      && moves.value.some(a => a.kind === 'discard' && a.index === state.selectedIndex.value)
+      ? { ...currentWaitInfo.value, discard: state.players[0].hand[state.selectedIndex.value] } : null),
+    userTingOptions: computed(() => []),
     startGame, nextRound, returnToLobby, tileName,
-    selectTile: (index: number) => { state.selectedIndex.value = index }, clearUserSelection: () => { state.selectedIndex.value = -1 },
+    selectTile: (index: number) => {
+      if (!moves.value.some(a => a.kind === 'discard' && a.index === index)) return
+      if (state.selectedIndex.value !== index) sound('click.mp3', .55)
+      state.selectedIndex.value = index
+    }, clearUserSelection: () => { state.selectedIndex.value = -1 },
     userDiscard: (index = state.selectedIndex.value) => send({ kind: 'discard', index }),
     userPass: () => send({ kind: 'pass' }), userHu: () => send({ kind: 'win' }), userPeng: () => send({ kind: 'peng' }),
     userGangFromDiscard: () => send({ kind: 'gang' }), userGang: (tile?: TileType) => {

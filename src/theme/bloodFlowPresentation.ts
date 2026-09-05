@@ -8,10 +8,12 @@ const traits={
   llmAnime:{color:0xff8dbc,sparks:[0xffa4cf,0x83e9ff,0xffefa9],shape:'diamond',font:'"Microsoft YaHei", sans-serif',angle:-7,overshoot:1.8,arc:1.25,bend:.2},
 } as const
 export function bloodFlowImpactProfile(theme:TableThemeName,tier:WinTier,compact=false,reduced=false){
-  const trait=traits[theme],strength=compact?.65:1
-  return {...trait,particleCount:reduced?0:Math.round([5,12,25,40][tier]*strength),particleSpeed:(theme==='llm'?1.2:1)*strength,
-    beamHeight:reduced?0:[0,1.4,4.4,7][tier]*(compact?.55:1),beamRadius:theme==='llm'?.045:theme==='happyMahjong'?.13:.075,
-    intensity:reduced?.4:[.45,.65,.85,1][tier]*strength,starburstScale:[.55,.95,1.6,2.2][tier]*strength,
+  const trait=traits[theme],strength=compact?.85:1
+  // Restore the first visible win baseline (40 sparks / 8.5-unit beam).
+  // Cooldown reduces only the extra high-tier accent, never the ordinary hit.
+  return {...trait,particleCount:reduced?0:40+Math.round([0,8,20,32][tier]*strength),particleSpeed:(theme==='llm'?1.2:1)*strength,
+    beamHeight:reduced?0:8.5+[0,.5,1.5,2.5][tier]*strength,beamRadius:theme==='llm'?.045:theme==='happyMahjong'?.13:.075,
+    intensity:reduced?.4:.75+[0,.07,.17,.25][tier]*strength,starburstScale:1+[0,.3,.7,1.2][tier]*strength,
     cameraStrength:reduced||tier<2?0:(compact?.22:1),dimming:reduced||compact||tier<2?0:tier===3?.36:.2,
     effectVolume:[.28,.4,.58,.72][tier]*(compact?.75:1)}
 }

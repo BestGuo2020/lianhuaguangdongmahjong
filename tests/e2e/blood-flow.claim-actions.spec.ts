@@ -28,6 +28,21 @@ test('reuses the existing picker when hu and multiple chi choices coexist',async
 })
 test.describe('touch layout',()=>{
   test.use({viewport:{width:844,height:390},hasTouch:true})
+  test('paced peng leaves time to arrange, and a repeated view preserves a tap selection',async({page})=>{
+    await page.goto('/tests/e2e/fixtures/blood-flow-claims.html?paced=1')
+    await expect(page.locator('.waiting-tip')).toHaveCount(0)
+    await page.getByRole('button',{name:'碰',exact:true}).tap()
+    const tile=page.locator('.hand-tile-slot .mahjong-tile').first()
+    await expect(tile).toBeDisabled()
+    await expect(tile).toBeEnabled()
+    await expect(page.locator('.hand-tile-slot')).toHaveCount(11)
+    await expect(page.locator('.waiting-tip')).toHaveCount(0)
+    await tile.tap()
+    await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().selectedIndex)).toBe(0)
+    await page.evaluate(()=>(window as any).__refreshClaimView())
+    await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().selectedIndex)).toBe(0)
+    expect(await page.evaluate(()=>(window as any).__claimEvidence().sounds.filter((s:string)=>s==='click.mp3').length)).toBe(1)
+  })
   test('keeps all five choices visible and tappable together',async({page})=>{
     await page.goto('/tests/e2e/fixtures/blood-flow-claims.html')
     for (const text of ['碰','杠','吃','胡','过']) {

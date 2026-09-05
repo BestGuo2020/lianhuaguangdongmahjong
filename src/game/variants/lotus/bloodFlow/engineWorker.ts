@@ -11,6 +11,7 @@ export type EngineWorkerRequest = { id: number } & (
   | { kind: 'command'; command: EngineCommand }
   | { kind: 'bot'; seat: Seat; windowId: string }
   | { kind: 'expire'; windowId: string }
+  | { kind: 'advance'; transitionId: string }
   | { kind: 'view'; seat: Seat }
   | { kind: 'pause' | 'resume' }
   | { kind: 'waits'; seat: Seat; discardIndex: number | null; windowId: string }
@@ -27,6 +28,7 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
       if (action) engine.submit(engine.command(data.seat, action))
     }
     if (data.kind === 'expire') engine.expire(Date.now(), data.windowId)
+    if (data.kind === 'advance') engine.advance(data.transitionId)
     if (data.kind === 'pause') engine.pause()
     if (data.kind === 'resume') engine.resume()
     if (data.kind === 'waits') {

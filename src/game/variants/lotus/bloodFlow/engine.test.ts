@@ -29,6 +29,57 @@ function discardEast(engine: BloodFlowEngine) {
 
 const claimHand: TileType[] = ['m3', 'm4', 'm5', 'm5', 'm5', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'east']
 const discarder: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', 's9', 'north', 'west', 'south', 'p4', 'm5']
+
+describe('normal-speed local action boundaries', () => {
+  it.each<BloodFlowAction>([{kind:'peng'}, {kind:'chi',tiles:['m3','m4','m5']}, {kind:'gang'}])('finishes $kind before opening the next decision', action => {
+    let now = 100
+    const base = scenario([discarder, claimHand, null, null])
+    const engine = new BloodFlowEngine({...base.options, paced:true, now:()=>now})
+    const command = engine.command(0,{kind:'discard',index:13})
+    engine.submit(command)
+    const stage = engine.transition!
+    expect(stage.kind).toBe('discard')
+    expect(engine.window).toBeNull()
+    expect(engine.players[0].discards).toContain('m5')
+    expect(engine.advance(stage.id)).toBe(false)
+    expect(engine.submit(command)).toBe(false)
+    now = stage.readyAt; expect(engine.advance(stage.id)).toBe(true)
+    const claim = engine.window!
+    engine.submit(engine.command(1,action)); passRemaining(engine,claim.id)
+    expect(engine.window).toBeNull()
+    expect(engine.players[1].melds).toHaveLength(1)
+    expect(engine.players[1].drawnTileIndex).toBe(-1)
+    const wallCount = engine.wall.length
+    const groupStage = engine.transition!
+    now = groupStage.readyAt; engine.advance(groupStage.id)
+    expect(engine.advance(groupStage.id)).toBe(false)
+    if (action.kind === 'gang') {
+      expect(engine.wall.length).toBe(wallCount-1)
+      expect(engine.transition?.kind).toBe('draw')
+      expect(engine.window).toBeNull()
+      now = engine.transition!.readyAt; engine.advance(engine.transition!.id)
+    } else expect(engine.wall.length).toBe(wallCount)
+    expect(engine.window?.kind).toBe('turn')
+    expect(engine.window!.deadlineAt-now).toBe(15000)
+    engine.assertConservation()
+  })
+  it('commits a win once, holds the source-to-payment beat, then draws exactly once', () => {
+    let now=0
+    const base=scenario([[...waiting,'east'],null,null,null])
+    const engine=new BloodFlowEngine({...base.options,paced:true,now:()=>now})
+    const command=engine.command(0,{kind:'win'}),wallCount=engine.wall.length
+    engine.submit(command)
+    const stage=engine.transition!,scores=engine.players.map(p=>p.score)
+    expect(stage.kind).toBe('win');expect(stage.readyAt).toBeGreaterThanOrEqual(2000)
+    expect(engine.wall.length).toBe(wallCount);expect(engine.window).toBeNull()
+    expect(engine.submit(command)).toBe(false)
+    now=stage.readyAt;engine.advance(stage.id);engine.advance(stage.id)
+    expect(engine.wall.length).toBe(wallCount-1)
+    expect(engine.players.map(p=>p.score)).toEqual(scores)
+    expect(engine.ledger).toHaveLength(1)
+    expect(engine.transition?.kind).toBe('draw')
+  })
+})
 function discardFive(engine: BloodFlowEngine) {
   expect(engine.submit(engine.command(0, { kind: 'discard', index: engine.players[0].hand.indexOf('m5') }))).toBe(true)
 }

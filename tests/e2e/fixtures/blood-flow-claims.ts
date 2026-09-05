@@ -24,13 +24,15 @@ hands.forEach(hand => hand.forEach(take))
 const players = SEATS.map((seat): GamePlayer => ({ seat, name: `玩家${seat+1}`, avatar: defaultAvatarForSeat(seat), score: 2000,
   hand: hands[seat] ?? pool.splice(0, 13), melds: [], discards: [], redCount: 0, drawnTileIndex: -1 }))
 const engine = new BloodFlowEngine({ authorityEpoch: 'claims-fixture', roundId: 'claims-round', winBeatMs: 0, decisionMs: Infinity,
+  paced: new URLSearchParams(location.search).has('paced'),
   opening: { players, wall: pool, flipTiles, jokers: ['red','green'], headDrawn: 134-pool.length,
     dealerDrawnIndex: 13, flipStack: 0, flipSeat: 0, wallBreakIndex: 2 } })
 engine.submit(engine.command(0, {kind:'discard',index:13}))
 const commands: EngineCommand[] = []
+const sounds: string[] = []
 const meta = { round: 1, dealer: 0, mode: 'east' as const }
 createApp({ setup() {
-  const game = useBloodFlowGame({ countdownEnabled: false, externalAuthority: {
+  const game = useBloodFlowGame({ countdownEnabled: false, playSound: name => sounds.push(name), externalAuthority: {
     send(command) {
       commands.push(command)
       if (!engine.submit(command)) throw new Error('HUD submitted an unavailable action')
@@ -42,7 +44,18 @@ createApp({ setup() {
     }, nextRound() {}, leave() {}, openingDone() {},
   } })
   void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
-  ;(window as any).__claimEvidence = () => ({commands, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
+  if (new URLSearchParams(location.search).has('paced')) window.setInterval(() => {
+    const stage = engine.transition
+    let changed = Boolean(stage && engine.advance(stage.id))
+    if (engine.window && engine.window.kind !== 'turn') for (const seat of SEATS) {
+      if (seat !== 1 && engine.window?.options[seat].length && !engine.window.decisions[seat]) {
+        changed = engine.submit(engine.command(seat, {kind:'pass'})) || changed
+      }
+    }
+    if (changed) void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
+  }, 25)
+  ;(window as any).__refreshClaimView = () => game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
+  ;(window as any).__claimEvidence = () => ({commands, sounds, selectedIndex:game.selectedIndex.value, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
     window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards})
   const keys = ['players','user','phase','wall','wallHeadDrawn','wallCount','currentPlayer','selectedIndex','turnSeconds','lastDiscard',
     'actionPrompt','announcement','tableActionEvent','scoreFlowEvent','result','winEffect','winPresentation','revealHands','matchFinished',
@@ -53,6 +66,7 @@ createApp({ setup() {
       ...Object.fromEntries(keys.map(key => [key, unref(game[key])])), themeName:'jade',rulesetId:'lotus-blood-flow',
       bloodFlow:game.capabilities.value.bloodFlow,jokerTiles:['red','green'],wildcardTiles:['white'],userHasWindKong:false,
       onPeng:game.userPeng,onGangFromDiscard:game.userGangFromDiscard,onHu:game.userHu,onPass:game.userPass,
+      onGang:game.userGang,onSelectTile:game.selectTile,onClearSelection:game.clearUserSelection,onDiscard:game.userDiscard,
       onChi:(index:number)=>game.capabilities.value.chi.choose(index),
     })])])
 } }).mount('#app')
