@@ -49,7 +49,14 @@ export class BloodFlowReplica {
       seats[record.winner] = { winCount: record.ordinal, locked: true, firstWinSequence: previous.firstWinSequence ?? batch.sequence,
         recordIds: [...previous.recordIds, record.id] }
     }
-    this.view = { ...this.view, players: this.view.players.map((p, s) => ({ ...p, score: batch.scoresAfter[s] })),
+    const players = this.view.players.map((p, s) => ({ ...p, hand: [...p.hand], discards: [...p.discards], score: batch.scoresAfter[s] }))
+    const source = players[batch.source.seat]
+    if (batch.source.kind === 'draw') {
+      if (batch.source.seat === this.seat && source.drawnTileIndex >= 0) source.hand.splice(source.drawnTileIndex, 1)
+      source.concealedTileCount = Math.max(0, source.concealedTileCount - 1)
+      source.drawnTileIndex = -1
+    } else if (batch.source.kind === 'discard' && source.discards.at(-1) === batch.source.tile) source.discards.pop()
+    this.view = { ...this.view, players,
       // Actions await the matching private snapshot; no speculative move can leak through.
       ownActions: [], public: { ...this.view.public, seats, batches: [...this.view.public.batches, batch] } }
     return true

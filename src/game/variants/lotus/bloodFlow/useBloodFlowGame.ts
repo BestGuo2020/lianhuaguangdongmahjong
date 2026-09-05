@@ -65,6 +65,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   function clear() {
     generation++; busy = false
+    remoteOpeningId = ''; countdownTicket++
     timers.forEach(clearTimeout); timers.clear()
     waiters.forEach(resolve => resolve()); waiters.clear()
     worker?.close(); worker = null
@@ -257,7 +258,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       heardDiscard = next.lastDiscardAction?.id ?? ''
     }
     apply(next)
-    if (!meta.opening || !changedRound || next.public.status === 'interrupted') return
+    if (!meta.opening || (!changedRound && !meta.replay) || next.public.status === 'interrupted') return
     remoteOpeningId = next.roundId
     const epoch = generation
     const finalPlayers = state.players.map(p => structuredClone(toRaw(p)))

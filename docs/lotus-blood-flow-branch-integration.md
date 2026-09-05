@@ -1,5 +1,9 @@
 # 血流 E00：分支接线与基线
 
+## E06 工作流补充授权
+
+2026-09-05，本任务用户明确回复“授权这三处血流接线”，同意按 `docs/lotus-blood-flow-p2p-protected.patch` 在 P2P 分支的 `src/App.vue`、`src/components/lobby/LobbyView.vue`、`src/game/core/contracts/gamePort.ts` 接入玩法选择、可选能力与共享 UI。仅此三处受保护接线纳入本任务授权；保留 P2P 联机、房主主题同步/客机锁定、开局参数及模型密钥私有边界。没有删 keep 项或引用旧 Phase 11V 授权。本补充取代下文盘点时的“E06 尚未授权”状态记录。
+
 盘点日期：2026-09-05。唯一规则依据：[实施计划](lotus-blood-flow-implementation-plan.md)。本记录不表示 E06 已获接线授权，也不表示新玩法可用。
 
 ## 分支与工作树
