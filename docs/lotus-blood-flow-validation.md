@@ -1,5 +1,13 @@
 # 血流实施验收记录
 
+## E02 评分器实施记录（2026-09-05）
+
+实现 `patterns/{decompose,catalog,evaluate,score}.ts`：完整副露、数顺/风顺/箭顺、七对、独立特殊手；按实例限制外来精牌，白板仅替代精面或自身。自然/替代分解分别计分，最高支付择优，稳定 ID 次序；风杠不冒充普通刻/杠。没有改变旧规则导出或权重。
+
+61 个 E01 黄金输入接入真实评分器并全部通过；新增 7 个边界场景、1 个极端精牌压力和 1 个 Worker 生命周期场景。规则及评分定向命令 `node node_modules/vitest/vitest.mjs run src/game/variants/lotus/patterns src/game/variants/lotus/lotusRules.test.ts` 在 Worker 测试增加前报告 246 passed；Worker 单独 1 passed，`pnpm typecheck` 退出 0。没有截断合法分解。
+
+极端 8 张精牌 + 4 张受限白板搜索约 5～6 秒，结果为清幺九+四暗刻软自摸 46 倍；不能虚称该输入必然封顶。已合并等价精牌资源、按计数缓存失败状态并去除等价部分分解，浏览器提供可取消 Worker 服务，不发布半截结果；E04 装配时必须使用 Worker/后台引擎，不能直接在 UI 线程循环调用同步评分器。该耗时不是帧率指标。无入口开放，E03～E09 尚未通过验收。
+
 规则版本：`lotus-blood-flow-v1`。首批日期：2026-09-05。范围：E00/E01；新模式的单机、P2P 开关均为 false。未发布、未推送远程仓库。
 
 ## 交付内容与阶段边界
