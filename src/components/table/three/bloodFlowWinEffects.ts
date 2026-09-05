@@ -24,13 +24,16 @@ export function createBloodFlowWinEffects(options:WinEffectPresenterOptions){
       const groups:THREE.Object3D[]=[],resources=new Set<{dispose?:()=>void}>()
       const own=<T>(r:T):T=>{resources.add(r as {dispose?:()=>void});return r}
       const duration=cue.duration-cue.phaseMarks.impact
-      const profile=bloodFlowImpactProfile(options.props.themeName??'jade',winTier(feedback.record),cue.compact,prefersReducedMotion())
-      const effect:WinEffect={id:++serial,winnerIndex:seat,tile:tile.tile,duration,reducedMotion:prefersReducedMotion(),robbedKong:false,robbedKongPlayerIndex:-1,robbedKongMeldIndex:-1}
+      const reducedMotion=prefersReducedMotion()
+      const profile=bloodFlowImpactProfile(options.props.themeName??'jade',winTier(feedback.record),cue.compact,reducedMotion)
+      const effect:WinEffect={id:++serial,winnerIndex:seat,tile:tile.tile,duration,reducedMotion,robbedKong:false,robbedKongPlayerIndex:-1,robbedKongMeldIndex:-1}
       let presenter:ReturnType<typeof createWinEffectPresenter>|undefined
       const dispose=()=>{presenter?.reset();groups.forEach(g=>g.removeFromParent());resources.forEach(r=>r.dispose?.());resources.clear()}
       try{
         presenter=createWinEffectPresenter({...options,own,ownDynamic:own,dynamicGroups:groups,props:{...options.props,winEffect:effect},winLayout:()=>tile,showWinningTile:false,
-          startedAt:cue.startedAt+cue.phaseMarks.impact-duration*.15,visual:profile})
+          // All five themes use their ordinary win beam/glow/particle defaults.
+          // Only the existing reduced-motion fallback keeps an optical override.
+          startedAt:cue.startedAt+cue.phaseMarks.impact-duration*.15,visual:reducedMotion?profile:undefined})
         presenter.addWinEffect()
         groups.forEach(g=>{g.name='blood-flow-win-effect';g.userData.recordId=tile.record.id;g.userData.cueId=cue.id})
         active.push({presenter,dispose,cameraStrength:profile.cameraStrength*(seat===0?1:.25)})
