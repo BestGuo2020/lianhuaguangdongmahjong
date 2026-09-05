@@ -76,11 +76,17 @@ export class BloodFlowEngine {
     this.wall = [...opening.wall]; this.flipTiles = [...opening.flipTiles]; this.jokers = [...opening.jokers]
     this.flipStack = opening.flipStack; this.flipSeat = opening.flipSeat; this.wallBreakIndex = opening.wallBreakIndex
     this.headDrawn = opening.headDrawn
-    this.players[this.dealer].drawnTileIndex = opening.dealerDrawnIndex
+    // The shared opening animation sorts the complete hand. Keep the actual
+    // extra tile at the right edge, just like the ordinary drawFor path, rather
+    // than telling the shared renderer to put its draw gap inside the hand.
+    const dealer = this.players[this.dealer]
+    const tile = dealer.hand[opening.dealerDrawnIndex]
+    if (!tile) throw new Error('Opening must identify dealer fourteenth tile')
+    dealer.hand.splice(opening.dealerDrawnIndex, 1)
+    dealer.hand.push(tile)
+    dealer.drawnTileIndex = dealer.hand.length - 1
     this.openingScores = vector(s => this.players[s].score)
     this.assertConservation()
-    const tile = this.players[this.dealer].hand[opening.dealerDrawnIndex]
-    if (!tile) throw new Error('Opening must identify dealer fourteenth tile')
     this.drawSource = this.source('draw', this.dealer, tile)
     this.openTurn()
   }

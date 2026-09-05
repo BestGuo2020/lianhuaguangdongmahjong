@@ -27,6 +27,21 @@ function discardEast(engine: BloodFlowEngine) {
 }
 
 describe('E03 authority conservation and continuous rounds', () => {
+  it.each([14, 11, 8, 5, 2])('keeps the marked draw at the right edge of a %i-tile turn after a sorted opening', (count) => {
+    const melds: Meld[] = Array.from({ length: (14 - count) / 3 }, (_, i) => ({
+      type: 'peng', tile: `p${i + 1}` as TileType, tiles: Array(3).fill(`p${i + 1}`) as TileType[], from: 1,
+    }))
+    const hand = (['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 's1', 's2', 's3', 's4', 's5'] as TileType[]).slice(0, count)
+    const base = scenario([hand, null, null, null], [melds, [], [], []])
+    const opening = structuredClone(base.options.opening!)
+    opening.dealerDrawnIndex = 0 // Sorting has placed the actual extra tile at the left edge.
+    const engine = new BloodFlowEngine({ ...base.options, opening })
+    const player = engine.players[0]
+    expect(player.hand).toEqual([...hand.slice(1), hand[0]])
+    expect(player.drawnTileIndex).toBe(count - 1)
+    expect(engine.window!.source.tile).toBe(hand[0])
+    engine.assertConservation()
+  })
   it('protects a drawn joker on timeout while leaving manual joker discards legal', () => {
     const hand: TileType[] = ['m1','m2','m4','m5','m7','m8','p1','p4','p7','s1','s4','s7','north','red']
     const timed = scenario([hand,null,null,null])

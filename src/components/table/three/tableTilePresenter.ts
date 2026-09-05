@@ -19,6 +19,7 @@ type TableScene = Pick<ReturnType<typeof createStaticTableScene>,
   'makeDimmedHorseTile' | 'makeGoldGlow' | 'makeGoldVerticalGlow'>
 
 interface InstanceTween {
+  motionKey: string
   baseIndex: number
   capIndex: number
   capMesh: THREE.InstancedMesh
@@ -73,6 +74,12 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const dealTweens: DealTween[] = []
   const meldTweens: MeldTween[] = []
   const discardTweens: DealTween[] = []
+  let continuingDeals = new Map<string, DealTween>()
+  let continuingMelds = new Map<string, MeldTween>()
+  let continuingDiscards = new Map<string, DealTween>()
+  let animatedDealSerial = -1
+  let pendingDealAnimation = false
+  let animatedFlipKey: string | null = null
   const sourceTransforms=new Map<string,FlightPose>(),drawnTransforms=new Map<number,FlightPose>(),addedTransforms=new Map<string,FlightPose>()
   let sourceEpoch=''
   const flights:{recordId:string;sourceId:string;kind:SourceTileEvent['kind'];level:number;column:number;source:FlightPose;target:FlightPose;cue:BloodFlowCue;instance:ReturnType<TileInstanceRenderer['add']>;current:FlightPose}[]=[]
@@ -200,19 +207,22 @@ function addConcealedHand(playerIndex) {
     // 暗手为背面朝玩家的立牌：makeHiddenTile 内部 body 绕 X 转 -90°，合批时折进实例矩阵。
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationY, 0))
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
-    if (dealThisHand && index >= animatedFromIndex) {
+    const motionKey = `deal:${props.dealAnimation.serial}:${playerIndex}:${index}`
+    const continuing = continuingDeals.get(motionKey)
+    if (dealThisHand && index >= animatedFromIndex && (pendingDealAnimation || continuing)) {
       // 发牌从牌山 head 槽位（下一张要摸的牌所在处）飞出，而不是从中控台上方。
       const head = wallDrawHeadPos()
-      const origin = new THREE.Vector3(head.x, WALL_DEAL_ORIGIN_Y, head.z)
+      const origin = continuing?.origin ?? new THREE.Vector3(head.x, WALL_DEAL_ORIGIN_Y, head.z)
       const inst = addTableTile(pos, quat, face, 1, origin)
       dealTweens.push({
+        motionKey,
         baseIndex: inst.baseIndex,
         capIndex: inst.capIndex,
         capMesh: inst.capMesh,
         origin,
         target: pos.clone(),
         quat,
-        startedAt: performance.now(),
+        startedAt: continuing?.startedAt ?? performance.now(),
         duration: props.dealAnimation.count === 4 ? 230 : 125,
       })
     } else {
@@ -263,18 +273,21 @@ function addDiscards(playerIndex) {
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
     // 最新一张弃牌：从手牌方向飞向牌河（带弧度 + 落地微弹），其余牌直接放置。
     const isNewDiscard = highlighted && props.lastDiscard?.id !== animatedDiscardId
-    if (isNewDiscard) {
+    const motionKey = `discard:${playerIndex}:${index}:${tileName}:${props.lastDiscard?.id}`
+    const continuing = continuingDiscards.get(motionKey)
+    if (isNewDiscard || continuing) {
       animatedDiscardId = props.lastDiscard?.id
-      const origin = discardSourcePos(playerIndex)
+      const origin = continuing?.origin ?? discardSourcePos(playerIndex)
       const inst = addTableTile(pos, quat, tileName, 1, origin)
       discardTweens.push({
+        motionKey,
         baseIndex: inst.baseIndex,
         capIndex: inst.capIndex,
         capMesh: inst.capMesh,
         origin,
         target: pos.clone(),
         quat,
-        startedAt: performance.now(),
+        startedAt: continuing?.startedAt ?? performance.now(),
         duration: 360,
       })
     } else {
@@ -331,6 +344,7 @@ function addMelds(playerIndex) {
   const melds = props.players[playerIndex]?.melds || []
   let trackOffset = 0
   melds.forEach((meld, meldIndex) => {
+    const motionPrefix = `meld:${playerIndex}:${meldIndex}:${meld.type}:${meld.tiles.join(',')}`
     const animatesThisMeld = pendingTableActionAnimation?.actorIndex === playerIndex
       && pendingTableActionAnimation?.meldIndex === meldIndex
     const laidTiles = meldDisplayTiles(meld)
@@ -366,9 +380,12 @@ function addMelds(playerIndex) {
           rotation: rotationY,
         }
       }
-      if (animatesThisMeld && pendingTableActionAnimation.type !== 'added-gang') {
+      const motionKey = `${motionPrefix}:${tileIndex}`
+      const continuing = continuingMelds.get(motionKey)
+      if (continuing || (animatesThisMeld && pendingTableActionAnimation.type !== 'added-gang')) {
         const inst = addTableTile(pos, quat, face, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
         meldTweens.push({
+          motionKey,
           baseIndex: inst.baseIndex,
           capIndex: inst.capIndex,
           capMesh: inst.capMesh,
@@ -377,7 +394,7 @@ function addMelds(playerIndex) {
           targetY: .28,
           extraY: bodyOffsetY,
           quat,
-          startedAt: performance.now(),
+          startedAt: continuing?.startedAt ?? performance.now(),
           duration: 430,
         })
       } else {
@@ -398,9 +415,12 @@ function addMelds(playerIndex) {
         sourcePlacement.z + addedOffset.z + TILE_LAYER_Z,
       )
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, sourcePlacement.rotation, 0))
-      if (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang') {
+      const motionKey = `${motionPrefix}:added`
+      const continuing = continuingMelds.get(motionKey)
+      if (continuing || (animatesThisMeld && pendingTableActionAnimation.type === 'added-gang')) {
         const inst = addTableTile(pos, quat, meld.tile, 1, new THREE.Vector3(pos.x, pos.y + .72, pos.z), .78)
         meldTweens.push({
+          motionKey,
           baseIndex: inst.baseIndex,
           capIndex: inst.capIndex,
           capMesh: inst.capMesh,
@@ -408,7 +428,7 @@ function addMelds(playerIndex) {
           baseZ: pos.z,
           targetY: pos.y,
           quat,
-          startedAt: performance.now(),
+          startedAt: continuing?.startedAt ?? performance.now(),
           duration: 430,
         })
       } else {
@@ -489,18 +509,22 @@ function addFlipIndicator() {
   // 与牌墙第一层（顶层）平齐。
   const pos = new THREE.Vector3(slot.x, .75, slot.z)
   const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
-  if (props.openingStage === 'flip') {
+  const motionKey = `flip:${flipStack}:${tile}`
+  const continuing = continuingDeals.get(motionKey)
+  if (props.openingStage === 'flip' && (animatedFlipKey !== motionKey || continuing)) {
+    animatedFlipKey = motionKey
     // 从墙内（底层之下）升起，模拟「翻出来」
-    const origin = new THREE.Vector3(slot.x, .1, slot.z)
+    const origin = continuing?.origin ?? new THREE.Vector3(slot.x, .1, slot.z)
     const inst = addTableTile(pos, quat, tile, 1, origin)
     dealTweens.push({
+      motionKey,
       baseIndex: inst.baseIndex,
       capIndex: inst.capIndex,
       capMesh: inst.capMesh,
       origin,
       target: pos.clone(),
       quat,
-      startedAt: performance.now(),
+      startedAt: continuing?.startedAt ?? performance.now(),
       duration: 520,
     })
   } else {
@@ -596,6 +620,18 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   if (!scene || !props.players.length || !scene.userData.tileImages) return
   const reuse = reuseInstances && tileInstances.canReuse()
   const epoch=`${props.bloodFlowPresentationKey}/${props.localSeat}`
+  // Rebind active motions to the newly built instances. Refreshing a snapshot
+  // or a blood-flow overlay must not erase a normal discard/meld mid-flight.
+  const now = performance.now()
+  const retain = sourceEpoch === epoch && !props.revealHands
+  const active = <T extends InstanceTween>(tweens: T[]) => new Map(
+    (retain ? tweens.filter(t => now < t.startedAt + t.duration) : []).map(t => [t.motionKey, t]),
+  )
+  continuingDeals = active(dealTweens)
+  continuingMelds = active(meldTweens)
+  continuingDiscards = active(discardTweens)
+  pendingDealAnimation = props.dealAnimation.serial !== animatedDealSerial
+  if (props.openingStage !== 'flip') animatedFlipKey = null
   if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear()}
   drawnTransforms.clear();addedTransforms.clear();flights.length=0
   if (!reuse) clearDynamicScene()
@@ -637,6 +673,11 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
     }
   }
   finishTableInstances()
+  animatedDealSerial = props.dealAnimation.serial
+  // Sample the original timeline before this rebuilt frame is rendered, so the
+  // tile neither snaps to its destination nor restarts from its origin.
+  animate(now, new THREE.Vector3())
+  continuingDeals.clear(); continuingMelds.clear(); continuingDiscards.clear()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null
   options.addWinEffect()
