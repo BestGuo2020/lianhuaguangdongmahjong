@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
   test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
-    let decisions = 0, reactions = 0, tts = 0, protectedDecisions = 0
+    let decisions = 0, reactions = 0, tts = 0, roundTts=0, protectedDecisions = 0
     const unsafeSpeech: string[] = []
     await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
@@ -33,10 +33,10 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
       if (!available) { await route.fulfill({ status: 503, body: 'offline' }); return }
       const choice = isReaction ? 'COMMENT' : payload.candidates[0].id
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
-        content: JSON.stringify({ choice, message: isReaction ? '这一局结束了，下局再来' : '不得播放的局内自由发言', important: true, mandatory: true }),
+        content: JSON.stringify({ choice, message: isReaction ? '这一局结束了，下局再来' : payload.currentWin?'我胡了，不应播出':'这张先走。', important: true, mandatory: true }),
       } }] }) })
     })
-    await page.route('**/api/local-tts/synthesize', async route => { tts++; await route.fulfill({ status: 503, body: 'tts unavailable' }) })
+    await page.route('**/api/local-tts/synthesize', async route => { tts++;if(String(route.request().postDataJSON().cacheIdentity).includes('/reaction/'))roundTts++;if(route.request().postData()?.includes('不应播出'))unsafeSpeech.push('Hu commentary TTS');await route.fulfill({ status: 503, body: 'tts unavailable' }) })
     await page.goto('/?bloodFlow=1')
     await page.evaluate(async theme => {
       const { useBloodFlowGame } = await import('/src/game/variants/lotus/bloodFlow/useBloodFlowGame.ts')
@@ -52,10 +52,12 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
     if (theme === 'jade') { expect(reactions).toBe(0); expect(tts).toBe(0) }
     else await expect.poll(() => reactions, { timeout: 20_000 }).toBe(3)
     if (theme === 'llm') {
-      await expect.poll(() => tts, { timeout: 20_000 }).toBe(3)
+      await expect.poll(() => roundTts, { timeout: 20_000 }).toBe(3)
+      expect(tts).toBeGreaterThan(3)
       const texts = await page.evaluate(() => Object.values((window as any).__bfLlmPort.capabilities.value.bloodFlow.roundBubbles).map((b: any) => b.text))
       expect(texts).toHaveLength(3)
-      expect(texts).not.toContain('不得播放的局内自由发言')
+      expect(texts).not.toContain('我胡了，不应播出')
+      expect(await page.evaluate(()=>Object.keys((window as any).__bfLlmPort.capabilities.value.bloodFlow.actionBubbles))).toEqual([])
     }
     if (!available) {
       expect(tts).toBe(0)
