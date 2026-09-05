@@ -16,6 +16,8 @@ import BloodFlowWinPresentation from './BloodFlowWinPresentation.vue'
 import { bloodFlowWinPiles } from './three/bloodFlowWinPile'
 import { BloodFlowPresentationDirector } from '../../game/variants/lotus/bloodFlow/presentationDirector'
 import type { BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
+import { bloodFlowImpactProfile } from '../../theme/bloodFlowPresentation'
+import { useEffectPlayer } from '../../game/core/presentation/useAudio'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
@@ -118,6 +120,7 @@ onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
 const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
 const presentationDirector=new BloodFlowPresentationDirector(import.meta.env.DEV?Number(new URLSearchParams(window.location.search).get('motionScale'))||1:1)
+const effectPlayer=useEffectPlayer(),playedImpacts=new Set<string>()
 const tableHudElement=ref<HTMLElement|null>(null), ownDrawScreen=shallowRef<{sourceId:string;x:number;y:number}|null>(null)
 const bloodFlowHidden=shallowRef<readonly string[]>([])
 const bloodFlowCue=shallowRef<BloodFlowCue|null>(null), presentationNow=ref(0), presentationBusy=ref(false)
@@ -126,10 +129,14 @@ function advancePresentation(now:number){
   presentationFrame=0;presentationNow.value=now;bloodFlowCue.value=presentationDirector.tick(now);presentationBusy.value=presentationDirector.busy
   const hidden=presentationDirector.hiddenRecordIds(now)
   if(hidden.join('|')!==bloodFlowHidden.value.join('|'))bloodFlowHidden.value=hidden
+  const cue=bloodFlowCue.value
+  if(cue?.kind==='win'&&now>=cue.startedAt+cue.phaseMarks.impact&&!playedImpacts.has(cue.id)){
+    playedImpacts.add(cue.id);effectPlayer?.('hu_effect_sound.mp3',bloodFlowImpactProfile(props.themeName,cue.tier,cue.compact).effectVolume)
+  }
   if(presentationBusy.value)presentationFrame=requestAnimationFrame(advancePresentation)
 }
 watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?.kongEvents?.map(k=>k.id).join('|'),props.bloodFlow?.presentationKey,props.bloodFlow?.roundId,props.themeName],()=>{
-  presentationDirector.sync(props.bloodFlow?.batches??[],`${props.themeName}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`,performance.now(),props.bloodFlow?.kongEvents)
+  presentationDirector.sync(props.bloodFlow?.batches??[],`${props.themeName}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`,performance.now(),props.bloodFlow?.kongEvents,props.themeName)
   if(presentationFrame)cancelAnimationFrame(presentationFrame)
   advancePresentation(performance.now())
 },{immediate:true})

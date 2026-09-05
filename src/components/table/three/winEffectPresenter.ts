@@ -7,7 +7,7 @@ import type { TileType } from '../../../game/core/contracts/types'
 import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
 
 interface DiamondParticle {
-  mesh: THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshBasicMaterial>
+  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
   direction: THREE.Vector3
   speed: number
   spin: number
@@ -32,6 +32,7 @@ interface WinEffectAnimation {
 }
 
 export interface WinEffectPresenterOptions {
+  visual?: {color:number;sparks:readonly number[];shape:string;particleCount:number;particleSpeed:number;beamHeight:number;beamRadius:number;intensity:number;starburstScale:number}
   winLayout?: (playerIndex: number) => { x: number; y: number; z: number; rotation: number }
   showWinningTile?: boolean
   startedAt?: number
@@ -150,7 +151,10 @@ function getFlareTexture() {
   flareCanvas.height = 64
   const flareContext = flareCanvas.getContext('2d')
   const flareGradient = flareContext.createRadialGradient(32, 32, 0, 32, 32, 31)
-  if (key === 'anime') {
+  if(options.visual){
+    const color=options.visual.color,r=(color>>16)&255,g=(color>>8)&255,b=color&255
+    flareGradient.addColorStop(0,'rgba(255,255,255,1)');flareGradient.addColorStop(.2,`rgba(${r},${g},${b},.95)`);flareGradient.addColorStop(1,`rgba(${r},${g},${b},0)`)
+  } else if (key === 'anime') {
     flareGradient.addColorStop(0, 'rgba(255,255,255,1)')
     flareGradient.addColorStop(.18, 'rgba(255,151,190,.95)')
     flareGradient.addColorStop(.52, 'rgba(108,220,255,.42)')
@@ -206,14 +210,14 @@ function getBeamTexture() {
 // 信标内芯光束（细、亮）
 let beamGeometry: THREE.CylinderGeometry | null = null
 function getBeamGeometry() {
-  if (!beamGeometry) beamGeometry = own(new THREE.CylinderGeometry(.05, .1, 8.5, 12, 1, true))
+  if (!beamGeometry) beamGeometry = own(new THREE.CylinderGeometry(options.visual?.beamRadius??.05,(options.visual?.beamRadius??.05)*2,options.visual?.beamHeight||8.5,12,1,true))
   return beamGeometry
 }
 
 // 信标外层光晕（宽、柔）
 let beamGlowGeometry: THREE.CylinderGeometry | null = null
 function getBeamGlowGeometry() {
-  if (!beamGlowGeometry) beamGlowGeometry = own(new THREE.CylinderGeometry(.16, .26, 7, 12, 1, true))
+  if (!beamGlowGeometry) beamGlowGeometry = own(new THREE.CylinderGeometry((options.visual?.beamRadius??.08)*2,(options.visual?.beamRadius??.08)*3.25,options.visual?Math.max(.1,options.visual.beamHeight*.82):7,12,1,true))
   return beamGlowGeometry
 }
 
@@ -276,9 +280,9 @@ function getStarburstTexture() {
 }
 
 // 金色菱形粒子几何体（八面体 = 立体菱形）。
-let diamondGeometry: THREE.OctahedronGeometry | null = null
+let diamondGeometry: THREE.BufferGeometry | null = null
 function getDiamondGeometry() {
-  if (!diamondGeometry) diamondGeometry = own(new THREE.OctahedronGeometry(.06, 0))
+  if (!diamondGeometry) diamondGeometry = own(options.visual?.shape==='confetti'?new THREE.PlaneGeometry(.14,.23):options.visual?.shape==='square'?new THREE.PlaneGeometry(.12,.12):new THREE.OctahedronGeometry(.06,0))
   return diamondGeometry
 }
 
@@ -295,7 +299,7 @@ function addWinEffect() {
   // 信标式竖直光束：从胡牌牌垂直射向天空（垂直于牌面），带光晕
   const beamMaterial = ownDynamic(new THREE.MeshBasicMaterial({
     map: getBeamTexture(),
-    color: animeEffect ? 0x36dfff : 0xffffff,
+    color: options.visual?.color ?? (animeEffect ? 0x36dfff : 0xffffff),
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
@@ -305,11 +309,12 @@ function addWinEffect() {
   }))
   beamMaterial.userData.outlineParameters = { visible: false }
   const beam = new THREE.Mesh(getBeamGeometry(), beamMaterial)
-  beam.position.set(anchor.x, anchor.y + .25 + 8.5 / 2, anchor.z)
+  beam.position.set(anchor.x, anchor.y + .25 + (options.visual?.beamHeight??8.5) / 2, anchor.z)
+  if(options.visual)beam.visible=options.visual.beamHeight>0
   group.add(beam)
   const beamGlowMaterial = ownDynamic(new THREE.MeshBasicMaterial({
     map: getBeamTexture(),
-    color: animeEffect ? 0xff4f9a : 0xffffff,
+    color: options.visual?.color ?? (animeEffect ? 0xff4f9a : 0xffffff),
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
@@ -319,13 +324,14 @@ function addWinEffect() {
   }))
   beamGlowMaterial.userData.outlineParameters = { visible: false }
   const beamGlow = new THREE.Mesh(getBeamGlowGeometry(), beamGlowMaterial)
-  beamGlow.position.set(anchor.x, anchor.y + .3 + 7 / 2, anchor.z)
+  beamGlow.position.set(anchor.x, anchor.y + .3 + (options.visual?options.visual.beamHeight*.82:7) / 2, anchor.z)
+  if(options.visual)beamGlow.visible=options.visual.beamHeight>0
   group.add(beamGlow)
 
   // 星芒：光束底部向外爆发的光芒（与信标光束叠加）
   const starburstMaterial = ownDynamic(new THREE.SpriteMaterial({
     map: getStarburstTexture(),
-    color: animeEffect ? 0xffffff : 0xffd86e,
+    color: options.visual?.color ?? (animeEffect ? 0xffffff : 0xffd86e),
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
@@ -341,7 +347,7 @@ function addWinEffect() {
   // 金色光晕：落在牌上的强光晕
   const glowMaterial = ownDynamic(new THREE.SpriteMaterial({
     map: getFlareTexture(),
-    color: animeEffect ? 0xffffff : 0xffc23d,
+    color: options.visual?.color ?? (animeEffect ? 0xffffff : 0xffc23d),
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
@@ -364,14 +370,16 @@ function addWinEffect() {
     toneMapped: !animeEffect,
   }))
   diamondMaterial.userData.outlineParameters = { visible: false }
-  const diamonds = Array.from({ length: 40 }, (_, index) => {
-    const y = (index / 40) * 2 - 1
+  const particleCount=options.visual?.particleCount??40
+  const diamonds = Array.from({ length: particleCount }, (_, index) => {
+    const y = (index / particleCount) * 2 - 1
     const radius = Math.sqrt(Math.max(0, 1 - y * y))
     const theta = index * 2.39996
-    const speed = 1.5 + index % 8 * .26
+    const speed = (1.5 + index % 8 * .26)*(options.visual?.particleSpeed??1)
     const diamond = new THREE.Mesh(getDiamondGeometry(), diamondMaterial.clone())
     ownDynamic(diamond.material)
-    if (animeEffect) {
+    if(options.visual){diamond.material.color.set(options.visual.sparks[index%options.visual.sparks.length]);diamond.material.side=THREE.DoubleSide}
+    else if (animeEffect) {
       diamond.material.color.set([0xff9fc2, 0x8fe5ff, 0xffe3a8][index % 3])
     }
     diamond.scale.setScalar(.6 + index % 4 * .22)
@@ -426,12 +434,12 @@ function addWinEffect() {
     const beamIn = THREE.MathUtils.smoothstep(progress, .08, .15)
     const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .55, 1)
     const beamVis = beamIn * beamOut
-    effect.beam.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .92 : .8)
-    effect.beamGlow.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .62 : .32)
+    effect.beam.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .92 : .8)*(options.visual?.intensity??1)
+    effect.beamGlow.material.opacity = beamVis * (props.themeName === 'llmAnime' ? .62 : .32)*(options.visual?.intensity??1)
     const burstIn = THREE.MathUtils.smoothstep(progress, .08, .16)
     const burstOut = 1 - THREE.MathUtils.smoothstep(progress, .3, .42)
     effect.starburst.material.opacity = burstIn * burstOut * .85
-    effect.starburst.scale.setScalar(THREE.MathUtils.lerp(.4, 3, burstIn) * (1 + (1 - burstOut) * .2))
+    effect.starburst.scale.setScalar(THREE.MathUtils.lerp(.4, options.visual?.starburstScale??3, burstIn) * (1 + (1 - burstOut) * .2))
     const glowIn = THREE.MathUtils.smoothstep(progress, .3, .5)
     const glowOut = 1 - THREE.MathUtils.smoothstep(progress, .85, 1)
     effect.glow.material.opacity = glowIn * glowOut * .85

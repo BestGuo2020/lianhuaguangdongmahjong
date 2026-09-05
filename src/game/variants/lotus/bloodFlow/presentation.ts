@@ -1,11 +1,13 @@
 import { BLOOD_FLOW_TIMING } from './config'
 import type { Seat, SeatVector, SourceTileEvent, WinBatch, WinRecord, KongLedgerEntry } from './types'
+import type { TableThemeName } from '../../../../components/table/three/tableTheme'
 
 export type WinTier = 0 | 1 | 2 | 3
 export const winTier = (record: WinRecord): WinTier => { const weight=Math.max(...record.score.items.map(p=>p.weight),1); return weight>=16?3:weight>=8?2:weight>=4?1:0 }
 export const mainPattern = (record: WinRecord) => [...record.score.items].sort((a,b)=>b.weight-a.weight || a.id.localeCompare(b.id))[0]
 export type PresentationPhase='focus'|'impact'|'readable'|'score'|'exit'
 export interface BloodFlowCue {
+  readonly theme?:TableThemeName
   readonly id:string
   readonly kind:'win'|'kong'
   readonly kongEvents:readonly KongLedgerEntry[]

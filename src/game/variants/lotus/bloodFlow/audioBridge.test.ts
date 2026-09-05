@@ -22,3 +22,10 @@ it('late fallback after a theme change cannot play, and unresolved TTS never ret
   await Promise.resolve()
   expect(play).not.toHaveBeenCalled()
 })
+it('an unexpected fixed-voice failure falls back to one existing action clip',async()=>{
+  const play=vi.fn(),bridge=createBloodFlowAudioBridge({theme:()=> 'llmAnime',epoch:()=> 'e',player:()=>({}),play,
+    fixed:{executeAction:async()=>{throw new Error('TTS unavailable')},cancel:()=>{}} as any})
+  const event:TableActionEvent={id:9,actorIndex:0,type:'self-draw',sourceIndex:null,tile:'m1',meldIndex:-1}
+  bridge.present(event);bridge.present(event);await Promise.resolve();await Promise.resolve()
+  expect(play).toHaveBeenCalledExactlyOnceWith('zimo.mp3')
+})
