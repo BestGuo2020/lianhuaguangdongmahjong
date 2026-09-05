@@ -8,6 +8,7 @@ import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
 import type { TileInstanceRenderer } from './tileInstanceRenderer'
 import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
+import { bloodFlowWinPiles } from './bloodFlowWinPile'
 import type { createStaticTableScene } from './staticTableScene'
 
 type TableScene = Pick<ReturnType<typeof createStaticTableScene>,
@@ -576,6 +577,12 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   }
   addWall()
   addHorses()
+  // Pile tiles are public display references, independent from wall/discard accounting.
+  // Rebuilds place current records directly; historical wins never replay here.
+  for (const pile of bloodFlowWinPiles(props.bloodFlowBatches ?? [], props.localSeat ?? 0, props.bloodFlowCompact ?? false)) {
+    for (const tile of pile.tiles) addTableTile(new THREE.Vector3(tile.x, tile.y, tile.z + TILE_LAYER_Z),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, tile.rotation, 0)), tile.tile)
+  }
   finishTableInstances()
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null

@@ -531,6 +531,8 @@ function changeTableTheme(theme: TableThemeName) {
         @wind-kong="userWindKong"
         @toggle-auto-play="toggleAutoPlay"
         @ready="handleTableReady"
+        @next-round="nextRound"
+        @return-to-lobby="returnToLobby"
       />
 
       <LobbyView
@@ -582,6 +584,7 @@ function changeTableTheme(theme: TableThemeName) {
       />
 
       <SettlementOverlay
+        v-if="!capabilities.bloodFlow"
         v-model:result-visible="resultVisible"
         :result="result"
         :match-finished="matchFinished"
