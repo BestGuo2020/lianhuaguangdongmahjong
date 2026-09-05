@@ -15,6 +15,7 @@ export interface AuthorityEnvelope extends BloodFlowEnvelope {
   authorityEpoch: string
   sequence: number
   round: number
+  continuation?: { readySeats: Seat[]; requiredSeats: Seat[] }
 }
 export interface NetworkOpening { firstDice: [number, number]; secondDice: [number, number] }
 export type BloodFlowPacket =
@@ -159,6 +160,10 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (!text(value.authorityEpoch) || !int(value.sequence) || value.sequence < 1 || !int(value.round) || value.round < 1 || value.round > 8) return null
   if (value.kind === 'win_batch') return isWinBatch(value.batch) && value.batch.authorityEpoch === value.authorityEpoch ? value as BloodFlowPacket : null
   if (value.kind === 'blood_flow_snapshot' || value.kind === 'round_settled') {
+    if (value.continuation !== undefined && (!object(value.continuation) || !only(value.continuation,['readySeats','requiredSeats'])
+      || !['readySeats','requiredSeats'].every(k=>Array.isArray(value.continuation[k])&&value.continuation[k].length<=4
+        &&value.continuation[k].every(seat)&&new Set(value.continuation[k]).size===value.continuation[k].length)
+      || !value.continuation.readySeats.every((s:Seat)=>value.continuation.requiredSeats.includes(s)))) return null
     if (value.autoPlay !== undefined && typeof value.autoPlay !== 'boolean') return null
     if (value.opening !== undefined && (!object(value.opening) || !['firstDice', 'secondDice'].every(k => Array.isArray(value.opening[k])
       && value.opening[k].length === 2 && value.opening[k].every((n: unknown) => int(n) && Number(n) >= 1 && Number(n) <= 6)))) return null

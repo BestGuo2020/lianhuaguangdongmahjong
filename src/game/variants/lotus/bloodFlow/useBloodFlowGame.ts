@@ -19,6 +19,7 @@ import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import type { BloodFlowAction, BloodFlowOpeningState } from './state'
 import type { EngineCommand } from './state'
+import type { Seat } from './types'
 import type { NetworkOpening } from './network/protocol'
 import type { evaluateWaits } from '../patterns/evaluate'
 import { createEvaluatorService } from '../patterns/evaluatorService'
@@ -45,7 +46,7 @@ export interface BloodFlowGameOptions {
     openingDone(round: number): void
   }
 }
-type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?: NetworkOpening; replay?: boolean }
+type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?: NetworkOpening; replay?: boolean; continuation?:{readySeats:Seat[];requiredSeats:Seat[]} }
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
@@ -53,6 +54,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const view = shallowRef<BloodFlowSeatView | null>(null)
   const waitScores = shallowRef<ReturnType<typeof evaluateWaits>>([])
   const presentationSerial = shallowRef(0)
+  const continuation = shallowRef<import('./types').BloodFlowTableState['continuation']>()
   const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
   const decisions = createBloodFlowDecisions()
   const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
@@ -79,6 +81,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     return id as unknown as number
   }
   function clear() {
+    continuation.value=undefined
     generation++; busy = false
     presentationSerial.value++
     remoteOpeningId = ''; countdownTicket++
@@ -326,6 +329,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       heardAction = next.actionEvents.at(-1)?.id ?? 0
       heardDiscard = next.lastDiscardAction?.id ?? ''
     }
+    continuation.value=meta.continuation?{...meta.continuation,ready:meta.continuation.readySeats.includes(next.seat)}:undefined
     apply(next)
     if (!meta.opening || completedRemoteOpenings.has(next.roundId) || (!changedRound && !meta.replay) || next.public.status === 'interrupted') return
     remoteOpeningId = next.roundId
@@ -377,7 +381,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       wallBreakIndex: state.wallBreakIndex.value, flipStack: state.flipStack.value },
     chi: { choose: (index: number) => { const chi = moves.value.filter(a => a.kind === 'chi')[index]; if (chi) send(chi) } },
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
-    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value } : null,
+    bloodFlow: view.value ? { ...view.value.public, preview: view.value.ownScore, waits: waitScores.value, presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, continuation:continuation.value } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
