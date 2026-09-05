@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { BloodFlowPresentationQueue, winTier } from './presentation'
+import { BloodFlowPresentationQueue, cuePhase, winTier } from './presentation'
+import { BloodFlowPresentationDirector } from './presentationDirector'
 import { scorePatterns } from '../patterns/score'
 import type { PatternId } from '../patterns/types'
 import type { Seat, WinBatch } from './types'
@@ -19,10 +20,32 @@ it('shows the first top-tier win fully, then ten repeats compactly without repla
     const event = batch(i + 1)
     queue.enqueue(event, i * 500); queue.enqueue(event, i * 500)
     const cue = queue.next(i * 500)!
-    expect(cue.duration).toBe(i === 0 ? 1600 : 400)
+    expect(cue.duration).toBe(i === 0 ? 1600 : 750)
     expect(cue.seats).toHaveLength(1)
     expect(queue.next(i * 500)).toBeNull()
   }
+})
+it('keeps full-effect cooldown by seat and main pattern, and aggregates every included payment',()=>{
+  const queue=new BloodFlowPresentationQueue()
+  queue.enqueue(batch(1),0);expect(queue.next(0)?.compact).toBe(false)
+  queue.enqueue(batch(2,['all-green'],1),200);expect(queue.next(200)?.compact).toBe(false)
+  queue.enqueue(batch(3),300);expect(queue.next(300)?.compact).toBe(true)
+  const merged=Array.from({length:5},(_,i)=>batch(10+i,['mixed-suit'],0))
+  merged.forEach(b=>queue.enqueue(b,500))
+  const cue=queue.next(500)!
+  expect(cue.deltas).toEqual([0,1,2,3].map(s=>merged.reduce((n,b)=>n+b.deltas[s],0)))
+  expect(cue.records).toHaveLength(5);expect(cue.flights).toHaveLength(1);expect(cue.title).toContain('合计')
+})
+it('the single viewer director owns cue time and restores history without replay',()=>{
+  const director=new BloodFlowPresentationDirector(),event=batch(1)
+  director.sync([],'round-1',0);director.sync([event],'round-1',100)
+  const cue=director.tick(120)!
+  expect(cue.startedAt).toBe(120);expect(director.tick(200)).toBe(cue)
+  expect(cuePhase(cue,120+cue.phaseMarks.impact)).toBe('impact')
+  expect(director.hiddenRecordIds(200)).toContain('r1')
+  expect(director.hiddenRecordIds(120+cue.phaseMarks.readable)).toEqual([])
+  expect(director.tick(120+cue.duration)).toBeNull()
+  director.sync([event],'restored',2000);expect(director.tick(2000)).toBeNull();expect(director.busy).toBe(false)
 })
 it('grades by base pattern weight, permits an upgrade and coalesces only visual backlog', () => {
   expect(winTier(batch(1, ['pinghu']).winners[0])).toBe(0)

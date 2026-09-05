@@ -2,11 +2,13 @@ import type { DealAnimation, LastDiscard, OpeningStage, WinEffect } from '../../
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../../../game/core/contracts/types'
 import type { TableThemeName } from './tableTheme'
 import type { WinBatch } from '../../../game/variants/lotus/bloodFlow/types'
+import type { BloodFlowCue } from '../../../game/variants/lotus/bloodFlow/presentation'
 
 export interface TableProps {
   bloodFlowBatches?: readonly WinBatch[]
   bloodFlowCompact?: boolean
   bloodFlowPresentationKey?: string
+  bloodFlowCue?: BloodFlowCue | null
   /** 当前牌桌主题；切换时只重建 3D 牌桌，不刷新页面。 */
   themeName?: TableThemeName
   players?: GamePlayer[]

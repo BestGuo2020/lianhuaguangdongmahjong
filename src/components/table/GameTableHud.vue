@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import AnimeActionCue from './AnimeActionCue.vue'
@@ -14,6 +14,8 @@ import BloodFlowSettlementHost from '../settlement/BloodFlowSettlementHost.vue'
 import BloodFlowWinCard from './BloodFlowWinCard.vue'
 import BloodFlowWinPresentation from './BloodFlowWinPresentation.vue'
 import { bloodFlowWinPiles } from './three/bloodFlowWinPile'
+import { BloodFlowPresentationDirector } from '../../game/variants/lotus/bloodFlow/presentationDirector'
+import type { BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
@@ -115,6 +117,19 @@ pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
 const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
+const presentationDirector=new BloodFlowPresentationDirector()
+const bloodFlowCue=shallowRef<BloodFlowCue|null>(null), presentationNow=ref(0), presentationBusy=ref(false)
+let presentationFrame=0
+function advancePresentation(now:number){
+  presentationFrame=0;presentationNow.value=now;bloodFlowCue.value=presentationDirector.tick(now);presentationBusy.value=presentationDirector.busy
+  if(presentationBusy.value)presentationFrame=requestAnimationFrame(advancePresentation)
+}
+watch(()=>[props.bloodFlow?.batches.map(b=>b.batchId).join('|'),props.bloodFlow?.presentationKey,props.bloodFlow?.roundId,props.themeName],()=>{
+  presentationDirector.sync(props.bloodFlow?.batches??[],`${props.themeName}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`,performance.now())
+  if(presentationFrame)cancelAnimationFrame(presentationFrame)
+  advancePresentation(performance.now())
+},{immediate:true})
+onBeforeUnmount(()=>{cancelAnimationFrame(presentationFrame);presentationDirector.reset()})
 
 function handleTableReady() {
   tableLoadRetry.succeed()
@@ -433,12 +448,13 @@ function onAvatarError(entry: GamePlayer) {
       :blood-flow-batches="bloodFlow?.batches"
       :blood-flow-compact="compactPiles"
       :blood-flow-presentation-key="bloodFlow?.presentationKey"
+      :blood-flow-cue="bloodFlowCue"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
       @pile-anchors="pileAnchors = $event"
     />
     <template v-if="bloodFlow">
-      <BloodFlowWinPresentation :batches="bloodFlow.batches" :restore-key="bloodFlow.presentationKey" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
+      <BloodFlowWinPresentation :cue="bloodFlowCue" :now="presentationNow" :players="players" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
       <button v-for="pile in bloodFlowPiles" :key="pile.absoluteSeat" type="button"
         class="blood-flow-pile-badge" :class="[`pile-seat-${pile.relativeSeat}`, { 'pile-badge-compact': compactPiles }]" :data-pile-seat="pile.absoluteSeat"
         :style="pileAnchors[pile.relativeSeat] ? { left: `${pileAnchors[pile.relativeSeat].left}%`, top: `${pileAnchors[pile.relativeSeat].top}%` } : { visibility: 'hidden' }"

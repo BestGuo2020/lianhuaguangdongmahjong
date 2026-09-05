@@ -34,6 +34,7 @@ interface WinEffectAnimation {
 export interface WinEffectPresenterOptions {
   winLayout?: (playerIndex: number) => { x: number; y: number; z: number; rotation: number }
   showWinningTile?: boolean
+  startedAt?: number
   scene: THREE.Scene
   camera: THREE.Camera
   props: Readonly<ResolvedTableProps>
@@ -402,7 +403,7 @@ function addWinEffect() {
   scene.add(group)
   dynamicGroups.push(group)
   winEffectAnimation = {
-    startedAt: performance.now(), anchor, burstAnchor, outward,
+    startedAt: options.startedAt ?? performance.now(), anchor, burstAnchor, outward,
     beam, beamGlow, starburst, glow, diamonds, winningTile,
     startPosition, startRotation, seatRotation,
     duration: props.winEffect.duration ?? WIN_EFFECT_DURATION,
