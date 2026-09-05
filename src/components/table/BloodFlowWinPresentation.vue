@@ -3,7 +3,7 @@ import { computed, ref, onBeforeUnmount } from 'vue'
 import { cuePhase, mainPattern, type BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
 import type { GamePlayer, TableActionEvent } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
-import AnimeActionCue from './AnimeActionCue.vue'
+import TableActionCue from './TableActionCue.vue'
 import BloodFlowImpactTitle from './BloodFlowImpactTitle.vue'
 import MahjongTile from '../MahjongTile.vue'
 import {bloodFlowImpactProfile,bloodFlowTitleMotion} from '../../theme/bloodFlowPresentation'
@@ -35,7 +35,6 @@ const activeActors=computed(()=>props.cue?.seats.map((item,index)=>({item,progre
 const payerFeedback=computed(()=>props.cue?.deltas.map((amount,seat)=>({amount,seat})).filter(({seat,amount})=>(amount!==0||props.cue?.merged)&&!props.cue?.seats.some(item=>item.seat===seat))??[])
 const signed=(n:number)=>`${n>0?'+':''}${n}`
 const name=(seat:number)=>props.players[(seat-props.localSeat+4)%4]?.name??`玩家${seat+1}`
-const sourceLabel=(source:string)=>({'self-draw':'自摸',discard:'点炮胡','robbed-kong':'抢杠胡','kong-bloom':'杠后自摸'})[source]??'胡牌'
 const sourceText=computed(()=>{
   const cue=props.cue,source=cue?.seats[0]?.source
   if(!cue||!source)return ''
@@ -48,7 +47,7 @@ const sourceStyle=computed(()=>{
   const source=props.cue?.seats[0]?.source,relative=source?(source.seat-props.localSeat+4)%4:0
   return {left:`${(props.compact?[50,74,44,26]:[50,77,50,23])[relative]}%`,...(relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,12,42]:[0,30,12,30])[relative]}%`})}
 })
-const animeEvent=(seat:number):TableActionEvent=>{
+const actionEvent=(seat:number):TableActionEvent=>{
   const item=props.cue!.seats.find(s=>s.seat===seat)!
   return {id:Math.floor(props.cue!.startedAt),type:item.source.kind==='draw'?'self-draw':item.source.kind==='added-kong'?'robbed-kong-win':'discard-win',
     actorIndex:(seat-props.localSeat+4)%4,sourceIndex:item.source.kind==='draw'?null:(item.source.seat-props.localSeat+4)%4,tile:item.source.tile,meldIndex:-1}
@@ -62,11 +61,10 @@ const animeEvent=(seat:number):TableActionEvent=>{
         <MahjongTile v-if="!cue.merged&&cue.seats[0]" :tile="cue.seats[0].source.tile" :theme-name="themeName" small disabled />
         <strong>{{ sourceText }}</strong>
       </div>
-      <template v-for="actor in activeActors" :key="actor.item.seat">
-        <AnimeActionCue v-if="themeName==='llmAnime'" :event="animeEvent(actor.item.seat)" :player="players[(actor.item.seat-localSeat+4)%4]"
-          :data-actor-seat="actor.item.seat" :position="['bottom','right','top','left'][(actor.item.seat-localSeat+4)%4]" :progress="actor.progress" />
-        <div v-else class="blood-flow-action" :class="`winner-${(actor.item.seat-localSeat+4)%4}`" :data-actor-seat="actor.item.seat">{{ sourceLabel(actor.item.record.score.source) }}</div>
-      </template>
+      <TableActionCue v-for="actor in activeActors" :key="actor.item.record.id"
+        :event="actionEvent(actor.item.seat)" :player="players[(actor.item.seat-localSeat+4)%4]"
+        :theme-name="themeName" :data-actor-seat="actor.item.seat" :data-record-id="actor.item.record.id"
+        :position="['bottom','right','top','left'][(actor.item.seat-localSeat+4)%4]" :progress="actor.progress" />
       <template v-if="cue.kind==='win'&&elapsed>=cue.phaseMarks.impact-130&&(phase==='focus'||phase==='impact'||phase==='readable')">
         <div v-for="item in cue.seats" :key="item.seat" class="blood-flow-central" :data-title-seat="item.seat"
           :style="titleStyleFor(item.seat,mainPattern(item.record)?.label??'胡牌',stage==='main')">
@@ -95,7 +93,6 @@ const animeEvent=(seat:number):TableActionEvent=>{
 .blood-flow-dimmer { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 35%,#0004,#000 85%); }
 .blood-flow-source { position:absolute; transform:translateX(-50%); display:flex; align-items:center; gap:9px; padding:5px 11px; border-radius:6px; border-left:3px solid var(--win-color); background:var(--theme-panel,#122c25); font-size:17px; white-space:nowrap; }
 .blood-flow-source :deep(.mahjong-tile.small) { --tile-width:26px; }
-.blood-flow-action { position:absolute; transform:translateX(-50%); color:var(--theme-text); font-size:30px; font-family:'KaiTi',serif; text-shadow:0 2px 3px #000; }
 .blood-flow-central { position:absolute; width:clamp(170px,23vw,330px); isolation:isolate; transform-origin:50% 65%; }
 .stage-main .blood-flow-central { width:clamp(230px,30vw,405px); }
 .blood-flow-central::before { content:''; position:absolute; inset:-12% -25%; z-index:-1; background:radial-gradient(ellipse,color-mix(in srgb,var(--win-color) 22%,transparent),transparent 70%); }
@@ -118,7 +115,6 @@ const animeEvent=(seat:number):TableActionEvent=>{
 .compact .blood-flow-central { width:clamp(140px,25vw,210px); }
 .compact .blood-flow-source { font-size:12px; padding:3px 7px; gap:5px; }
 .compact .blood-flow-source :deep(.mahjong-tile.small) { --tile-width:19px; }
-.compact .blood-flow-action { font-size:22px; }
 .compact :deep(.anime-action-cue) { width:76px; height:60px; --action-art-scale:1.55; }
 .compact :deep(.anime-action-copy strong) { font-size:28px; -webkit-text-stroke:3px #2d241c; }
 .compact .stage-main .blood-flow-central { width:clamp(170px,30vw,265px); }

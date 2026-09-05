@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
-import AnimeActionCue from './AnimeActionCue.vue'
+import TableActionCue from './TableActionCue.vue'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { tileName } from '../../game/core/rules/tiles'
@@ -22,7 +22,6 @@ import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPr
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 import {
   resolveRoundResultPresentation,
-  resolveTableActionPresentation,
   scoreDirection,
 } from '../../theme/themeEventPresentation'
 
@@ -185,15 +184,15 @@ const actionCueLabEvent = computed<TableActionEvent | null>(() => (
     ? { id: actionCueLabId.value, type: actionCueLabType.value, actorIndex: actionCueLabActor.value, sourceIndex: null, tile: 'p5', meldIndex: -1 }
     : null
 ))
-const presentedTableActionEvent = computed(() => {
+// Win batches own every blood-flow winner (including restored/queued records).
+// Ordinary terminal effects own their win event once their timeline starts.
+const tableActionOwner = computed(() => {
   const event = props.tableActionEvent ?? actionCueLabEvent.value
-  if (props.bloodFlow && event && winActionTypes.has(event.type)) return null
-  return event && props.winEffect && winActionTypes.has(event.type) ? null : event
+  if (!event || !winActionTypes.has(event.type)) return 'table'
+  return props.bloodFlow ? 'win-batch' : props.winEffect ? 'terminal-effect' : 'table'
 })
-const presentedAnimeActionEvent = computed(() => presentedTableActionEvent.value)
-const presentedAnimeActionPosition = computed(() => presentedAnimeActionEvent.value
-  ? seatPosition[presentedAnimeActionEvent.value.actorIndex]
-  : 'bottom')
+const presentedTableActionEvent = computed(() => tableActionOwner.value === 'table'
+  ? props.tableActionEvent ?? actionCueLabEvent.value : null)
 const presentedLlmBubbles = computed(() => props.bloodFlow
   ? ['llm','llmAnime'].includes(props.themeName)?props.bloodFlow.roundResult?(settlementVisible.value?undefined:props.bloodFlow.roundBubbles):props.bloodFlow.actionBubbles:undefined
   : bubbleLabEnabled
@@ -260,9 +259,6 @@ const touchStarts = new Map<number, { index: number; x: number; y: number; start
 let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
 
-const tableActionPosition = computed(() => presentedTableActionEvent.value ? seatPosition[presentedTableActionEvent.value.actorIndex] : 'bottom')
-const tableActionPresentation = computed(() => resolveTableActionPresentation(presentedTableActionEvent.value?.type ?? 'peng'))
-const tableActionIsWin = computed(() => tableActionPresentation.value.kind === 'win')
 const roundResultPresentation = computed(() => props.result ? resolveRoundResultPresentation(props.result) : null)
 const userAvatar = computed(() => props.themeName === 'llmAnime'
   ? animeAvatarForPlayer(props.user)
@@ -568,32 +564,9 @@ function onAvatarError(entry: GamePlayer) {
     </PlayerSeat>
 
     <Transition name="table-action" mode="out-in">
-      <AnimeActionCue
-        v-if="presentedAnimeActionEvent && themeName === 'llmAnime'"
-        :key="`anime-${presentedAnimeActionEvent.id}`"
-        :class="[`action-${tableActionPresentation.kind}`, `strength-${tableActionPresentation.strength}`]"
-        :data-action-type="presentedAnimeActionEvent.type"
-        :data-action-kind="tableActionPresentation.kind"
-        :data-action-strength="tableActionPresentation.strength"
-        :event="presentedAnimeActionEvent"
-        :player="players[presentedAnimeActionEvent.actorIndex]"
-        :position="presentedAnimeActionPosition"
-      />
-      <div
-        v-else-if="presentedTableActionEvent"
-        :key="presentedTableActionEvent.id"
-        class="table-action-cue"
-        :class="[
-          `action-from-${tableActionPosition}`,
-          `action-${tableActionPresentation.kind}`,
-          `strength-${tableActionPresentation.strength}`,
-          { gang: tableActionPresentation.kind === 'gang', win: tableActionIsWin },
-        ]"
-        :data-action-type="presentedTableActionEvent.type"
-        :data-action-kind="tableActionPresentation.kind"
-        :data-action-strength="tableActionPresentation.strength"
-        aria-live="polite"
-      ><span>{{ tableActionPresentation.label }}</span></div>
+      <TableActionCue v-if="presentedTableActionEvent" :key="presentedTableActionEvent.id"
+        :event="presentedTableActionEvent" :player="players[presentedTableActionEvent.actorIndex]"
+        :position="seatPosition[presentedTableActionEvent.actorIndex]" :theme-name="themeName" />
     </Transition>
     <Transition name="announce">
       <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone"><span>{{ announcement.text }}</span></div>

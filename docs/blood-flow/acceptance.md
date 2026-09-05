@@ -271,3 +271,13 @@ node node_modules/@playwright/test/cli.js test tests/e2e/blood-flow.claim-action
 包 1 结论：完成代码及视觉基线核对。五主题各一份普通/血流原速 WebM；jade、llmAnime 另补 `*-stable-original.webm` 固定 HUD 对照（首次大厅录制存在开局干扰，不能作为每个动作的完整证据）。实际检查动作、飞行及落定连续画面 `jade-blood-sequence.jpg`、`anime-original-sequence.jpg` 和固定阶段 PNG；原版 jade 有主题几何底饰与“胡”，血流仅简化“点炮胡”；二次元资源相同但装配入口不同。补抽原视频 1:07～1:10.1 和 5:47～5:48.6，确认两家金额后续行，见 `work/blood-flow-common/reference-*.jpg`。采用原模板和角色，不重做番型字。
 
 回归：`E2E_REUSE_ONLY=1 E2E_PORT=4186` 下 effects + flights **14/14 通过**；`pnpm typecheck` 通过。只启动 Vite。原速录像已保存，视觉判断基于连续抽帧，不虚称用户已认可或声音已实听。进入包 2。
+
+## 2026-09-06 公共表现收拢：包 2
+
+基于包 1 `a957f95`：将 HUD 原主题动作模板提取为 `TableActionCue.vue`，双方调用同一模板和 AnimeActionCue（角色、动作图及失败回退保留）。公共组件不播放声音；血流按记录 ID 与 cue 进度传入赢家。HUD 明确 table / win-batch / terminal-effect 的事件归属；批次拥有所有赢家，恢复/积压不从旧单事件补播。删除血流简化动作字与独立角色装配，番型标题及金额展示保留。
+
+飞牌抽取 `winningTileFlight.ts`：原 smoothstep、旋转及缩放默认曲线保持；公共 presenter 支持可选来源/目标姿态、绝对起飞/重拍/落稳时间。血流旧 sampler 只映射 cue 时间，不再计算独立曲线/主题弯曲。来源缓存、抢杠位、实例重建与 director 的 hiddenRecordIds/readable 交接保持；灯光 presenter 仍不再画一张牌，历史牌不飞，不改实体账或终局入口。
+
+回归：公共动作 + effects + flights **16/16 浏览器用例通过**，含三赢家身份/唯一入口、五主题、13/25/41 次跨层、三种来源、历史恢复；运动/原胡牌 **9/9 单测通过**，其中逐 10ms 比较原版默认轨迹、旋转和缩放；类型检查及 diff 空白检查通过。
+
+视觉：`work/blood-flow-common/after/` 保存 jade、llmAnime 普通/血流原速 WebM、draw/discard/added-kong 各 8 帧及实际采样时刻。已查看来源途中、落层光柱和主番连续画面；jade 恢复原主题“胡”装饰，llmAnime 角色使用同一资源，落层未见新旧两张重叠。`anime-action-probe.png` 单次输入确认原自摸立绘/字，连续切换原动作的截图可能仍处于 Transition 退场，不当作缺失。既有普通动作时间线不改。实际视觉检查为连续画面复核，未代替用户认可或声音实听。包 2 完成，节奏可读性进入包 3。
