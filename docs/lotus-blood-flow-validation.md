@@ -1,5 +1,13 @@
 # 血流实施验收记录
 
+## E03 状态机实施记录（2026-09-05）
+
+新增共享 `bloodFlow/engine.ts`，配合 state/claimWindow/winBatch/ledger/roundLifecycle。采用独立权威引擎复用既有两骰翻精/墙尾摸牌、吃牌与 E02 评分纯逻辑；不改造旧 single-win 终局副作用。E04/E06 通过新端口适配，计划内原 lotusTurnOrchestrator/lotusSettlement 等旧流程继续保留。
+
+固定牌验证三响、重复响应、锁手后再自摸、已胡仍付款、末张收齐响应/过/超时、抢补杠三响回退原碰且无杠费、天胡明确第十四张、暗杠/风杠一次收费。另 40 个固定种子整局逐动作检查：136 张实体和四副面子有效张数、零和积分、允许负分、窗口推进上限。`node node_modules/vitest/vitest.mjs run src/game/variants/lotus/bloodFlow/engine.test.ts src/game/variants/lotus/bloodFlow/simulation.test.ts` 退出 0，6 passed，约 1.23 秒。模拟使用合法动作压力策略，不是平衡或 AI 强度结论。
+
+公共流水通过显式对象构造，不含完整分解、精牌分配或暗手；私有评分证据只在权威 Map 中。局末从已提交账本汇总，不重扣历史分，不发送旧 round_settled 或全桌亮牌指令。当前尚无浏览器/P2P 装配，不将引擎测试视为玩法已开放。
+
 ## E02 评分器实施记录（2026-09-05）
 
 实现 `patterns/{decompose,catalog,evaluate,score}.ts`：完整副露、数顺/风顺/箭顺、七对、独立特殊手；按实例限制外来精牌，白板仅替代精面或自身。自然/替代分解分别计分，最高支付择优，稳定 ID 次序；风杠不冒充普通刻/杠。没有改变旧规则导出或权重。
