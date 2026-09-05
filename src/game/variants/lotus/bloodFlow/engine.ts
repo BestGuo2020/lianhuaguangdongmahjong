@@ -189,10 +189,7 @@ export class BloodFlowEngine {
       if (action.kind === 'discard') return this.discard(action.index)
       return this.performKong(action)
     }
-    if (window.kind === 'win') {
-      if (this.pendingKong) return this.completeAddedKong()
-      return this.openMeldClaims(window.source)
-    }
+    if (this.pendingKong) return this.completeAddedKong()
     const claimants = SEATS.filter(s => window.decisions[s] && window.decisions[s]!.kind !== 'pass')
       .sort((a, b) => {
         const rank = (s: Seat) => window.decisions[s]!.kind === 'gang' ? 0 : window.decisions[s]!.kind === 'peng' ? 1 : 2
@@ -219,28 +216,25 @@ export class BloodFlowEngine {
     this.evaluation.clear()
     const options = vector<readonly BloodFlowAction[]>(seat => {
       if (seat === source.seat) return []
-      const win = this.evaluate(seat, source.tile, winSource, opening)
-      if (!win) return []
-      this.evaluation.set(seat, win)
-      return [{ kind: 'win' }, { kind: 'pass' }]
-    })
-    if (options.some(o => o.length)) this.open('win', source, options)
-    else if (this.pendingKong) this.completeAddedKong()
-    else this.openMeldClaims(source)
-  }
-  private openMeldClaims(source: SourceTileEvent) {
-    if (!this.wall.length) return this.finishRound()
-    const options = vector<readonly BloodFlowAction[]>(seat => {
-      if (seat === source.seat || this.seats[seat].locked) return []
-      const hand = this.players[seat].hand, count = hand.filter(t => t === source.tile).length
       const actions: BloodFlowAction[] = []
-      if (count >= 3) actions.push({ kind: 'gang' })
-      if (count >= 2) actions.push({ kind: 'peng' })
-      if (seat === nextSeat(source.seat)) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
+      const win = this.evaluate(seat, source.tile, winSource, opening)
+      if (win) {
+        this.evaluation.set(seat, win)
+        actions.push({ kind: 'win' })
+      }
+      // One discard, one choice per seat. Hu priority is resolved after decisions;
+      // it must not hide peng/gang/chi behind a separate pass-only round.
+      if (source.kind === 'discard' && this.wall.length && !this.seats[seat].locked) {
+        const hand = this.players[seat].hand, count = hand.filter(t => t === source.tile).length
+        if (count >= 3) actions.push({ kind: 'gang' })
+        if (count >= 2) actions.push({ kind: 'peng' })
+        if (seat === nextSeat(source.seat)) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
+      }
       if (actions.length) actions.push({ kind: 'pass' })
       return actions
     })
-    if (options.some(o => o.length)) this.open('meld', source, options)
+    if (options.some(o => o.length)) this.open(this.evaluation.size ? 'win' : 'meld', source, options)
+    else if (this.pendingKong) this.completeAddedKong()
     else this.draw(nextSeat(source.seat))
   }
   private take(hand: TileType[], tile: TileType) {

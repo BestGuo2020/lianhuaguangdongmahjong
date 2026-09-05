@@ -121,7 +121,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       ? next.currentPlayer === next.seat ? 'discard' : 'thinking' : moves.length ? 'prompt' : 'checking'
     state.userDrewThisTurn.value = Boolean(w?.kind === 'turn' && next.currentPlayer === next.seat && next.public.status === 'playing')
     state.actionPrompt.value = w && w.kind !== 'turn' && moves.length ? {
-      type: moves.some(a => a.kind === 'win') ? w.source.kind === 'added-kong' ? 'rob' : 'hu' : 'response',
+      type: w.source.kind === 'added-kong' ? 'rob' : 'response',
       from: toLocal(w.source.seat), tile: w.source.tile, canHu: moves.some(a => a.kind === 'win'),
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: moves.flatMap(a => a.kind === 'chi' ? [{ tiles: a.tiles, kind: 'sequence' as const }] : []),

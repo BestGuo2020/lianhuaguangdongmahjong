@@ -57,6 +57,14 @@ it('uses the common turn decision for kongs and passes the visible round context
   expect(common).toHaveBeenCalledWith(expect.objectContaining({hand:v.players[0].hand, upperLastDiscard:'north',
     earlyRound:true, wallCount:50, jokers:v.jokers}),expect.any(Function))
 })
+it('uses the common claim decision when another seat can hu in the same window', () => {
+  const v=view()
+  v.ownActions=[{kind:'peng'},{kind:'pass'}]
+  v.window={...v.window!,kind:'win',source:{id:'source',kind:'discard',tile:'m4',seat:1}}
+  const common=vi.spyOn(lotusAi,'decideClaim').mockReturnValue({kind:'peng'})
+  expect(decideBloodFlowAction(v)).toEqual({kind:'peng'})
+  expect(common).toHaveBeenCalledWith(expect.objectContaining({canPeng:true,tile:'m4'}))
+})
 it('keeps first-win automated discards protected across actual fixed-seed rounds', () => {
   let guardedDiscards=0
   for(let seed=1;seed<=12;seed++) {
