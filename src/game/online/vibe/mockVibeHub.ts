@@ -395,10 +395,13 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     handleWire(wire: Wire): void {
       if (this.left) return
       if (wire.kind === 'join') {
-        if (wire.peerId === this.peerId || this.members.has(wire.peerId)) return
-        this.members.set(wire.peerId, wire.ts)
+        if (wire.peerId === this.peerId) return
+        const known = this.members.has(wire.peerId)
+        if (!known) this.members.set(wire.peerId, wire.ts)
         this.lastSeen.set(wire.peerId, wire.ts)
-        this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.peerId }))
+        if (!known) this.peerHandlers.forEach((cb) => cb({ type: 'join', id: wire.peerId }))
+        // A refreshed tab reuses its application peer ID. It still needs the pinned host
+        // welcome; silently ignoring a known ID makes that tab elect itself before metadata.
         // 已知房主时由任意已连接窗口帮助新人完成房主发现；只有尚未收到
         // welcome 的最早成员才临时宣布自己。不能让每个窗口按自己的局部成员表
         // 各自重新选主，否则第 4 个窗口在消息乱序时会形成假脑裂。

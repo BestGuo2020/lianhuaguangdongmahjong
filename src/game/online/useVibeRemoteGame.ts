@@ -19,7 +19,8 @@ import { createPlayerSelectors } from '../core/selectors/playerSelectors'
 import type { ServerPlayerDto, ServerSnapshot } from './protocol/dto'
 import type { ServerMessage, SettlementSyncRequest } from './protocol/messages'
 import { decodeServerMessage } from './protocol/decoder'
-import { createRemoteSessionStore, generateGuestId } from './session/remoteSessionStore'
+import { generateGuestId } from './session/remoteSessionStore'
+import { createBloodFlowSessionStore } from './vibe/bloodFlowSessionStore'
 import { createVibeRoomSession } from './vibe/vibeRoomSession'
 import { createBloodFlowRoom } from './vibe/bloodFlowRoom'
 import { decodeBloodFlowPacket } from '../variants/lotus/bloodFlow/network/protocol'
@@ -275,7 +276,7 @@ export function useVibeRemoteGame({
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
   const sessionNamespace = import.meta.env.DEV ? `mock:${getMockPeerId()}` : undefined
-  const sessionStore = createRemoteSessionStore(undefined, { namespace: sessionNamespace })
+  const sessionStore = createBloodFlowSessionStore(undefined, { namespace: sessionNamespace })
   // 首次进入生成并持久化访客身份：playerId 是重进时恢复原座位的稳定索引。
   // selfHost/真实 SDK 每次连接 peerId 都是新的（mock 的 peerId 才按标签页稳定），
   // 不能拿 peerId 当身份；若 playerId 恒为空，房主大厅会把座位记录回退成旧
@@ -446,6 +447,7 @@ export function useVibeRemoteGame({
       if (rulesetId.value === 'lotus-blood-flow') {
         hostGame.value?.stop(); hostGame.value = null
         phase.value = 'playing'
+        transport.open({ signalOnly: isHost.value })
         bloodFlowRoom.attach(room, openingPromise, seatByPeer)
         return
       }
