@@ -10,6 +10,9 @@ import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard,
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
 import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
+import BloodFlowRoundLedger from '../settlement/BloodFlowRoundLedger.vue'
+import BloodFlowWinCard from './BloodFlowWinCard.vue'
+import { bloodFlowWinPiles } from './three/bloodFlowWinPile'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
@@ -97,7 +100,22 @@ const emit = defineEmits<{
   hu: []
   windKong: []
   toggleAutoPlay: []
+  nextRound: []
+  returnToLobby: []
 }>()
+
+const bloodFlowLedgerOpen = ref(false)
+const bloodFlowLedgerSeat = ref<number | null>(null)
+const pileMedia = window.matchMedia('(max-width: 900px), (max-height: 500px)')
+const compactPiles = ref(pileMedia.matches)
+const resizePiles = () => { compactPiles.value = pileMedia.matches }
+pileMedia.addEventListener('change', resizePiles)
+onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
+const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
+watch(() => props.bloodFlow?.roundResult, result => {
+  if (result) { bloodFlowLedgerSeat.value = null; bloodFlowLedgerOpen.value = true }
+}, { immediate: true })
+watch(() => props.bloodFlow?.roundId, () => { if (!props.bloodFlow?.roundResult) bloodFlowLedgerOpen.value = false; bloodFlowLedgerSeat.value = null })
 
 function handleTableReady() {
   tableLoadRetry.succeed()
@@ -301,7 +319,7 @@ function finishTileGesture(index: number, event: PointerEvent) {
     lastTouchTap = { index: -1, time: 0 }
     hoveredDiscard.value = null
     waitsOpen.value = false
-    if (!props.bloodFlow?.seats[0].locked || index === props.user.drawnTileIndex) emit('discard', index)
+    if (!props.bloodFlow?.seats[props.user.seat].locked || index === props.user.drawnTileIndex) emit('discard', index)
   }
 }
 
@@ -311,7 +329,7 @@ function cancelTileGesture(event: PointerEvent) {
 
 function handleTileActivation(index: number, event?: PointerEvent) {
   if (!props.isUserTurn) return
-  if (props.bloodFlow?.seats[0].locked && index !== props.user.drawnTileIndex) return
+  if (props.bloodFlow?.seats[props.user.seat].locked && index !== props.user.drawnTileIndex) return
   const now = performance.now()
   if (now < suppressTileClickUntil) return
   const isTouch = event?.pointerType === 'touch' || event?.pointerType === 'pen' || !usesFinePointer()
@@ -371,6 +389,7 @@ function onAvatarError(entry: GamePlayer) {
 <template>
   <div
     class="game-table-hud"
+    :class="{ 'blood-flow-table': Boolean(bloodFlow) }"
     :data-table-theme="themeName"
     :data-phase="phase"
     :data-opening-stage="openingStage ?? ''"
@@ -409,9 +428,22 @@ function onAvatarError(entry: GamePlayer) {
       :wall-break-index="wallBreakIndex"
       :flip-tile="flipTile"
       :flip-stack="flipStack"
+      :blood-flow-batches="bloodFlow?.batches"
+      :blood-flow-compact="compactPiles"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
     />
+    <template v-if="bloodFlow">
+      <button v-for="pile in bloodFlowPiles" :key="pile.absoluteSeat" type="button"
+        class="blood-flow-pile-badge" :class="`pile-seat-${pile.relativeSeat}`" :data-pile-seat="pile.absoluteSeat"
+        :aria-label="`${players[pile.relativeSeat]?.name}，胡${pile.count}次，查看流水`"
+        @click="bloodFlowLedgerSeat = pile.absoluteSeat; bloodFlowLedgerOpen = true">
+        <b>胡 {{ pile.count }}次</b><small v-if="pile.overflow">+{{ pile.overflow }} 收纳</small>
+      </button>
+      <BloodFlowRoundLedger :open="bloodFlowLedgerOpen" :state="bloodFlow" :players="players" :local-seat="user.seat"
+        :filter-seat="bloodFlowLedgerSeat" :match-finished="matchFinished" @close="bloodFlowLedgerOpen = false"
+        @next-round="bloodFlowLedgerOpen = false; $emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" />
+    </template>
     <Transition name="table-loading">
       <div
         v-if="!tableReady" class="table-loading" :class="{ 'has-error': tableLoadError }"
@@ -532,16 +564,15 @@ function onAvatarError(entry: GamePlayer) {
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
           <span v-if="isUserTurn && tingDiscardTiles.has(tile)" class="ting-arrow" aria-hidden="true"></span>
-          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[0].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
+          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="bloodFlow?.preview && userCanHu" class="blood-flow-preview" role="status">
-        <b>{{ bloodFlow.preview.items.map(item => item.label).join(' · ') }}<template v-if="bloodFlow.preview.hardWin"> · 硬胡</template></b>
-        <span>{{ bloodFlow.preview.finalMultiplier }}倍 · 每家应付 {{ bloodFlow.preview.paymentPerPayer }}分</span>
-        <small>{{ bloodFlow.seats[0].locked ? '手牌已锁定，可继续胡牌' : '首次胡牌后锁手，不再换张或吃碰杠' }}</small>
+        <BloodFlowWinCard :score="bloodFlow.preview" compact />
+        <small>{{ bloodFlow.seats[user.seat].locked ? '手牌已锁定，可继续胡牌' : '首次胡牌后锁手，不再换张或吃碰杠' }}</small>
       </div>
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
         <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :aria-expanded="waitsOpen" @click="waitsOpen = !waitsOpen">
@@ -618,6 +649,22 @@ function onAvatarError(entry: GamePlayer) {
 .blood-flow-preview { display: grid; gap: 2px; max-width: min(320px, 40vw); padding: 6px 9px; border: 1px solid var(--theme-accent, #cfb97a); border-radius: 8px; background: rgba(12, 22, 24, .94); color: #fff5dc; font-size: 12px; }
 .blood-flow-preview small { color: #c9d5d6; font-size: 10px; }
 .blood-flow-waits { display: grid; gap: 3px; max-height: 110px; overflow: auto; font-size: 11px; }
+.blood-flow-pile-badge { position: absolute; z-index: 35; display: grid; gap: 2px; padding: 5px 8px; border-radius: 8px; border: 1px solid #d2c69a80; background: #142424dc; color: #fff2d9; cursor: pointer; min-width: 62px; min-height: 32px; font-size: 12px; }
+.blood-flow-pile-badge small { opacity: .7; font-size: 10px; }
+.pile-seat-0 { left: calc(50% - 240px); bottom: 130px; }
+.pile-seat-1 { right: 15px; top: 62%; }
+.pile-seat-2 { left: calc(50% + 80px); top: 125px; }
+.pile-seat-3 { left: 15px; top: 62%; }
+@media(max-width: 900px), (max-height: 500px) {
+  .blood-flow-pile-badge { font-size: 10px; padding: 3px 5px; min-width: 52px; min-height: 28px; }
+  .pile-seat-0 { left: 20%; bottom: 78px; }
+  .pile-seat-2 { left: 48%; top: 45px; }
+  .pile-seat-1 { right: 100px; top: 28%; }
+  .pile-seat-3 { left: 95px; top: 42%; }
+  .blood-flow-table .hand-rack :deep(.mahjong-tile) { --tile-width: clamp(24px, 5.2vw, 40px); }
+  .blood-flow-table .hand-tile-slot { min-width: 0; }
+  .blood-flow-table .hand-rack:not(.has-melds) { justify-content: flex-end; padding-left: 0; padding-right: 0; }
+}
 
 /* 莲花麻将翻精指示牌（桌面右上角；桌面端始终完整显示） */
 .flip-indicator {
