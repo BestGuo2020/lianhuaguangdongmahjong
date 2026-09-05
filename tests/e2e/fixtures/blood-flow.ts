@@ -42,6 +42,7 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
   rulesetId: 'lotus-blood-flow' as const, bloodFlow, jokerTiles: ['red', 'green'] as TileType[], wildcardTiles: ['white'] as TileType[] }
 const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
+const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;from:number;id:number}|null>(null)
 const liveFinished = shallowRef(false)
 const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
 ;(window as any).__bloodFlowNavigation = navigation
@@ -99,8 +100,30 @@ let serial = batches.length, restore = 0
   liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
     ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
 }
+;(window as any).__playBloodFlowScenario = async (kind:'draw'|'discard'|'added-kong'='draw',seat:Seat=0,winners:Seat[]=[seat]) => {
+  const id=`scenario-${++serial}`,source={id:`${id}-source`,kind,seat,tile:'s2' as TileType},relative=(seat-viewer+4)%4
+  livePlayers.value=livePlayers.value.map((p,i)=>i!==relative?p:{...p,
+    ...(kind==='draw'?{drawnTileIndex:13,concealedTileCount:14,hand:i===0?[...p.hand.slice(0,13),'s2' as TileType]:[]}
+      :kind==='discard'?{discards:[...p.discards,'s2' as TileType],drawnTileIndex:-1}
+      :{melds:[{type:'peng' as const,tile:'s2' as TileType,tiles:['s2','s2','s2'] as TileType[],from:(relative+1)%4}],concealedTileCount:10,drawnTileIndex:-1})})
+  if(kind==='discard')liveLastDiscard.value={tile:'s2',from:relative,id:serial}
+  liveState.value={...liveState.value,sourceEvent:source}
+  await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))
+  if(kind==='draw'&&relative===0){
+    const tile=document.querySelector('.hand-tile-slot.drawn')!.getBoundingClientRect(),canvas=document.querySelector('canvas')!.getBoundingClientRect()
+    ;(window as any).__bloodFlowPreparedScreen={x:(tile.x+tile.width/2-canvas.x)/canvas.width,y:(tile.y+tile.height/2-canvas.y)/canvas.height}
+  }
+  livePlayers.value=livePlayers.value.map((p,i)=>i!==relative?p:kind==='discard'?{...p,discards:p.discards.slice(0,-1)}
+    :kind==='draw'?{...p,hand:i===0?p.hand.slice(0,-1):[],concealedTileCount:13,drawnTileIndex:-1}:p)
+  const winScore=scorePatterns(['all-green'],true,kind==='draw'?'self-draw':kind==='added-kong'?'robbed-kong':'discard')
+  const records=winners.map(winner=>({id:`${id}-${winner}`,batchId:id,winner,ordinal:liveState.value.seats[winner].winCount+1,sourceEventId:source.id,score:winScore,
+    deltas:vector(s=>s===winner?winScore.paymentPerPayer*(kind==='draw'?3:1):kind==='draw'||s===seat?-winScore.paymentPerPayer:0)}))
+  const batch:WinBatch={authorityEpoch:'fixture',sequence:serial,roundId:liveState.value.roundId,ruleVersion:liveState.value.ruleVersion,batchId:id,windowId:id,source,winners:records,
+    deltas:vector(s=>records.reduce((n,r)=>n+r.deltas[s],0)),scoresAfter:[2000,2000,2000,2000],nextAction:{kind:'draw',seat:((seat+1)%4) as Seat}}
+  liveState.value={...liveState.value,sourceEvent:undefined,batches:[...liveState.value.batches,batch],seats:vector(s=>({...liveState.value.seats[s],winCount:liveState.value.seats[s].winCount+(winners.includes(s)?1:0)}))}
+}
 createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
-  ...props, bloodFlow: liveState.value, tableActionEvent: liveAction.value,
+  ...props, players:livePlayers.value,user:livePlayers.value[0],lastDiscard:liveLastDiscard.value,bloodFlow: liveState.value, tableActionEvent: liveAction.value,
   phase: liveState.value.roundResult ? 'settled' : props.phase,
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
   isUserTurn: !liveState.value.roundResult, userCanHu: !liveState.value.roundResult,
