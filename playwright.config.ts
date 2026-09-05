@@ -15,6 +15,8 @@ export default defineConfig({
   reporter: process.env.CI ? 'dot' : 'list',
   use: {
     baseURL,
+    // User-requested hardware GPU headless verification; retain P2P background timing flags.
+    channel: 'chromium',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 720 },
@@ -22,6 +24,7 @@ export default defineConfig({
     // 导致重进页面的开局动画（setTimeout 驱动）停滞。显式禁用后台节流。
     launchOptions: {
       args: [
+        '--enable-gpu',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
