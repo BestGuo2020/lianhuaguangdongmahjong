@@ -11,6 +11,10 @@ import type { HostOpeningData } from '../host/hostGameRunner'
 import { runCommittedShuffle } from '../antiCheat/committedShuffle'
 import { createMatchStatsRecorder } from './matchStatsRecorder'
 import { updatePlayerStats } from './vibeStats'
+import { watch } from 'vue'
+import { createBloodFlowDecisions, createBloodFlowReactions, type BloodFlowReaction } from '../../llm/bloodFlowRuntime'
+import { readLlmSettings, type LlmProviderPreset } from '../../llm/config'
+import type { HostLlmSeatSelection } from './vibeLlm'
 
 interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 'playSoundAndWait' | 'getThemeName' | 'animeFixedTts' | 'paceMs'> {
   getSeat(): number
@@ -21,6 +25,8 @@ interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 
   getPlayerProfile(seat: number): Partial<Pick<GamePlayer, 'name' | 'avatar' | 'characterId' | 'playerKind' | 'isLlm'>>
   leave(): void
   onError(message: string): void
+  getPrivateAiSelections?(): readonly HostLlmSeatSelection[]
+  onAutoPlayChanged?(enabled: boolean): void
 }
 
 export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
@@ -34,12 +40,23 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   const version = BLOOD_FLOW_CONFIG.version
   const completedKey = 'lgm_blood_flow_completed_epochs'
   const completed = new Set<string>()
+  const pendingReactions = new Map<string, BloodFlowReaction>()
+  const provider = (seat: Seat): LlmProviderPreset | null => {
+    if ([...options.getVerifiedBindings().values()].includes(seat)) return null
+    const selected = options.getPrivateAiSelections?.().find(s => s.seat === seat), settings = readLlmSettings()
+    if (!settings.enabled || !selected) return null
+    const preset = settings.presets.find(p => p.id === selected.presetId)
+    return preset?.apiKey.trim() ? { ...preset, style: selected.style } : null
+  }
+  const decisions = createBloodFlowDecisions({ provider })
   try { for (const id of JSON.parse(sessionStorage.getItem(completedKey) ?? '[]')) if (typeof id === 'string') completed.add(id) } catch { /* ephemeral stats */ }
 
   const port = useBloodFlowGame({ ...options, externalAuthority: {
     send: command => transmit({ kind: 'blood_flow_command', roomId: room?.roomId ?? '', ruleVersion: version, command }),
     nextRound: () => {
       if (!latestFrame) return
+      if (authority) reactions.cancel()
+      pendingReactions.clear()
       transmit({ kind: 'blood_flow_continue', roomId: latestFrame.roomId, ruleVersion: version,
         authorityEpoch: latestFrame.authorityEpoch, round: latestFrame.round })
     },
@@ -50,6 +67,23 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     },
     leave: () => { stop(); options.leave() },
   } })
+  const reactions = createBloodFlowReactions({ provider, theme: () => options.getThemeName?.() ?? 'jade',
+    current: view => !!authority && replica?.view?.roundId === view.roundId && !!replica?.view?.public.roundResult,
+    emit: line => {
+      if (!room || !authority) return
+      const message: BloodFlowPacket = { kind: 'blood_flow_reaction', roomId: room.roomId, ruleVersion: version, reaction: line }
+      room.send(message); present(message, hostPeer)
+    },
+  })
+  watch(() => options.getThemeName?.(), () => { reactions.cancel(); pendingReactions.clear() })
+
+  function flushReactions() {
+    if (!replica?.view?.public.roundResult) return
+    for (const [id, line] of pendingReactions) {
+      pendingReactions.delete(id)
+      if (line.roundId === replica.view.roundId && line.authorityEpoch === replica.view.authorityEpoch) void port.presentRoundReaction(line)
+    }
+  }
 
   function transmit(message: BloodFlowPacket) {
     if (!room) return
@@ -63,7 +97,14 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   }
   function present(raw: unknown, from: string) {
     const active = room, current = replica
-    if (!active || !current || !current.receive(raw, from)) return
+    if (!active || !current) return
+    const reaction = decodeBloodFlowPacket(raw)
+    if (reaction?.kind === 'blood_flow_reaction') {
+      if (from !== hostPeer || reaction.roomId !== active.roomId || reaction.reaction.authorityEpoch !== current.view?.authorityEpoch
+        || reaction.reaction.roundId !== current.view?.roundId) return
+      pendingReactions.set(reaction.reaction.id, reaction.reaction); flushReactions(); return
+    }
+    if (!current.receive(raw, from)) return
     lastReceived = Date.now(); goneSince = 0
     const message = decodeBloodFlowPacket(raw)
     if (!message) return
@@ -72,11 +113,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       return
     }
     if (message.kind === 'blood_flow_snapshot' || message.kind === 'round_settled') {
+      if ('autoPlay' in message) options.onAutoPlayChanged?.(message.autoPlay === true)
       const replay = latestFrame === null || port.view.value?.public.status === 'paused'
       latestFrame = message
       if (!current.view) return
       try { sessionStorage.setItem(`blood-flow-view:${active.roomId}:${current.seat}`, JSON.stringify(message)) } catch { /* view remains in memory */ }
       void port.acceptRemoteView(current.view, { ...message, replay }).then(() => {
+        flushReactions()
         if (room !== active || !message.view.public.roundResult || completed.has(message.authorityEpoch)) return
         const result = message.view.public.roundResult, own = current.seat
         stats.noteHandResult({ epoch: message.authorityEpoch, round: message.round, honba: 0,
@@ -111,6 +154,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     if (offline) window.removeEventListener('offline', offline)
     if (online) window.removeEventListener('online', online)
     authority?.stop(); authority = null; room = null; replica = null
+    decisions.cancel(); reactions.cancel(); pendingReactions.clear()
     port.dispose(); port.view.value = null; port.result.value = null; port.phase.value = 'lobby'
     started = false; starting = false; latestFrame = null
   }
@@ -140,6 +184,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       bindings.set(active.peerId, 0)
       authority = new BloodFlowAuthority({ roomId: active.roomId, authorityEpoch: epoch, hostPeer: active.peerId,
         mode: options.getMode(), seatByPeer: bindings, backend: createWorkerAuthorityBackend(),
+        decide: (view, current) => decisions.decide(view, current), cancelDecisions: decisions.cancel,
+        onRoundSettled: view => { void reactions.run(view) },
         send: (peer, message) => {
           if (room !== active || token !== lifecycle) return
           let packet = message
@@ -245,6 +291,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   }
 
   return { port, attach, stop, get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },
+    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
+      ruleVersion: version, authorityEpoch: latestFrame.authorityEpoch, enabled }) },
     interrupt: (reason: string) => { fail(reason); authority?.stop(); if (timer) clearInterval(timer); timer = null },
   }
 }

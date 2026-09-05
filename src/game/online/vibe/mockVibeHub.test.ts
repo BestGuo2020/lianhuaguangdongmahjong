@@ -6,6 +6,17 @@ const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 40))
 
 // Node 的 BroadcastChannel 支持同进程多实例互通，正好用来模拟「同浏览器两个窗口」。
 describe('mockVibeHub 本地假 SDK', () => {
+  it('首次可信元数据可以修正临时自选房主，但不能改写已经确认的房主', async () => {
+    const client = createMockVibeClient({ peerId: 'provisional', settleMs: 10, pingIntervalMs: 0 })
+    const room = await client.room.join('PROVISIONAL') as VibeHubSDK.Room & { adoptHost(peer: string): void }
+    expect(room.isHost).toBe(true)
+    room.adoptHost('actual-host')
+    expect(room.isHost).toBe(false)
+    expect(room.hostId).toBe('actual-host')
+    room.adoptHost('unrelated-peer')
+    expect(room.hostId).toBe('actual-host')
+    room.leave()
+  })
   it('刷新标签页复用 peer ID 时仍收到原房主 welcome，不错误自选房主', async () => {
     const host = createMockVibeClient({ peerId: 'refresh-host', settleMs: 30, pingIntervalMs: 0 })
     const original = createMockVibeClient({ peerId: 'refresh-guest', settleMs: 30, pingIntervalMs: 0 })

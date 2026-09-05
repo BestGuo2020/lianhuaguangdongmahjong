@@ -233,6 +233,7 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     readonly topology: 'host' = 'host'
     isHost = false
     hostId: string | null = null
+    private hostPinned = false
     readonly data: VibeHubSDK.DataStore
     readonly state: VibeHubSDK.StateManager = createMockStateManager()
     readonly sync: VibeHubSDK.SnapshotInterpolator = createMockSync()
@@ -307,6 +308,7 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
     reconnect(): void { /* 本地模拟无需重连 */ }
 
     async announce(metadata?: Record<string, unknown>): Promise<{ ok: true }> {
+      if (this.isHost && this.hostId === this.peerId) this.hostPinned = true
       const meta: VibeHubSDK.RoomMetadata = {
         roomId: this.roomId,
         players: this.members.size,
@@ -368,8 +370,9 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
       if (this.left || !hostPeerId) return
       // 房主身份在本地会话内只允许首次可信发现；SDK/元数据中的后续换主
       // 不能覆盖已经锁定的引擎权威，否则客户端会把无状态的新 peer 当成房主。
-      if (this.hostId && this.hostId !== hostPeerId) return
+      if (this.hostPinned && this.hostId && this.hostId !== hostPeerId) return
       this.hostId = hostPeerId
+      this.hostPinned = true
       this.isHost = hostPeerId === this.peerId
       if (!this.members.has(hostPeerId)) this.members.set(hostPeerId, 0)
     }
@@ -427,9 +430,10 @@ export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.
         }
         // 首个已知房主一旦落地就锁定；迟到或脑裂窗口发来的另一个 welcome
         // 不能覆盖当前会话的权威身份。
-        if (this.hostId == null || !this.members.has(this.hostId)) {
+        if (!this.hostPinned || this.hostId == null || !this.members.has(this.hostId)) {
           this.hostId = wire.hostId
           this.isHost = false
+          this.hostPinned = true
         }
       } else if (wire.kind === 'leave') {
         if (wire.peerId === this.peerId) return

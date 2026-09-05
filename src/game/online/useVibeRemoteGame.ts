@@ -342,6 +342,8 @@ export function useVibeRemoteGame({
   let handleRoundShuffleStart: (room: VibeHubSDK.Room, message: ShuffleStartMessage, fromPeerId: string) => void = () => {}
   const bloodFlowRoom = createBloodFlowRoom({ playSound, playSoundAndWait, getThemeName: getTableThemeName, animeFixedTts,
     getSeat: () => mySeat.value, getMode: () => matchType.value, getIsHost: () => isHost.value,
+    getPrivateAiSelections: () => hostLlmSelections,
+    onAutoPlayChanged: enabled => { autoPlay.value = enabled },
     getVerifiedBindings: () => new Map(lobbySeats.value.map(s => [s.peerId, s.seat])),
     getPlayerProfile: seat => {
       const human = lobbySeats.value.find(s => s.seat === seat)
@@ -445,6 +447,10 @@ export function useVibeRemoteGame({
           })
       }
       if (rulesetId.value === 'lotus-blood-flow') {
+        if (isHost.value) {
+          const resolved = resolveHostLlmSelections(hostLlmSelections, new Set(seatByPeer.values()))
+          hostLlmSelections = resolved.privateSeats; plannedAiSeats.value = resolved.publicSeats
+        }
         hostGame.value?.stop(); hostGame.value = null
         phase.value = 'playing'
         transport.open({ signalOnly: isHost.value })
@@ -1145,7 +1151,7 @@ export function useVibeRemoteGame({
     clearUserSelection,
     userDiscard,
     pickDiscard: autoPickDiscard,
-    toggleAutoPlay,
+    toggleAutoPlay: legacyToggleAutoPlay,
     userPass,
     userPeng,
     userChi,
@@ -1154,6 +1160,10 @@ export function useVibeRemoteGame({
     userWindKong,
     userHu,
   } = remoteActionController
+  const toggleAutoPlay = () => {
+    if (rulesetId.value === 'lotus-blood-flow') bloodFlowRoom.setAutoPlay(!autoPlay.value)
+    else legacyToggleAutoPlay()
+  }
 
   const requestCoordinator = createRequestCoordinator({
     state,
