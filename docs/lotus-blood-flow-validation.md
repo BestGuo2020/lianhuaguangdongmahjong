@@ -1,5 +1,11 @@
 # 血流实施验收记录
 
+## E06 进行中：共享协议与权威协调
+
+新增传输无关 authority/replica/protocol、浏览器 Worker backend；协议包含规则版本、epoch、全局 sequence、round/window/batch 标识。已验证四端实际 TypeScript 引擎一局，批次/快照两种到达顺序、重复动作/重放、私有手牌边界、未知版本拒绝、座位冒充拒绝、12 秒恢复宽限、房主暂停/中断与局末计数一次；`network/network.test.ts` 5 passed，约 1.5 秒，typecheck 退出 0。
+
+新增全员 opening_done 屏障：动画期间权威暂停，全部真人就绪才恢复完整响应截止时间。共享端口支持外部权威视图、座位旋转、两骰/发牌展示及迟到回调取消；不会在客机创建第二套权威引擎。本节还不是 E06 完成：SDK 接线、两真人两 AI、真实网络、重连页面恢复与受保护 UI 补丁尚待后续验证。
+
 ## E05 胡牌楼与公开流水（2026-09-05）
 
 新增 BloodFlowWinCard、BloodFlowRoundLedger、bloodFlowWinPile 并接实际 Three.js 牌桌。桌面每层 4 张/3 层，小屏每层 3 张/2 层，超出显示收纳次数；布局只引用公开 source/record，不参与牌库。完整重建直接放置当前记录，不重播历史动画。主番按基础权重优先展示，包含项说明使用中文名称且不冒充加分。

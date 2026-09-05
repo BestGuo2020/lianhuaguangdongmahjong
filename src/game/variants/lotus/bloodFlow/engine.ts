@@ -52,6 +52,8 @@ export class BloodFlowEngine {
   version = 0
   sequence = 0
   interrupted = false
+  paused = false
+  private remainingDeadline = 0
   private sourceSerial = 0
   private actionSerial = 0
   private evaluation = new Map<Seat, WinEvaluation>()
@@ -144,7 +146,7 @@ export class BloodFlowEngine {
       stateVersion: this.window.version, seat, action }
   }
   submit(command: EngineCommand): boolean {
-    if (this.interrupted || this.result || !this.window || command.authorityEpoch !== this.options.authorityEpoch
+    if (this.paused || this.interrupted || this.result || !this.window || command.authorityEpoch !== this.options.authorityEpoch
       || command.roundId !== this.options.roundId || !acceptWindowDecision(this.window, command, this.now())) return false
     if (windowComplete(this.window)) this.resolveWindow()
     this.assertConservation()
@@ -152,7 +154,7 @@ export class BloodFlowEngine {
   }
   expire(now = this.now(), expectedWindowId = this.window?.id): void {
     const window = this.window
-    if (this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
+    if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
       window.decisions[seat] = window.kind === 'turn'
         ? window.options[seat].filter(a => a.kind === 'discard').at(-1)!
@@ -336,11 +338,21 @@ export class BloodFlowEngine {
   }
   publicState(): BloodFlowPublicState {
     return { ruleVersion: BLOOD_FLOW_CONFIG.version, roundId: this.options.roundId,
-      status: this.interrupted ? 'interrupted' : this.result ? 'settled' : 'playing',
+      status: this.result ? 'settled' : this.interrupted ? 'interrupted' : this.paused ? 'paused' : 'playing',
       seats: structuredClone(this.seats), batches: this.ledger.flatMap(e => e.kind === 'win' ? [structuredClone(e.batch)] : []),
       roundResult: this.result ? structuredClone(this.result) : null }
   }
   currentScore(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!.score) : null }
+  pause() {
+    if (this.paused || this.result) return
+    this.remainingDeadline = Math.max(0, (this.window?.deadlineAt ?? this.now()) - this.now())
+    this.paused = true
+  }
+  resume() {
+    if (!this.paused || this.interrupted) return
+    if (this.window) this.window.deadlineAt = this.now() + this.remainingDeadline
+    this.paused = false
+  }
   assertConservation() {
     const physical = [...this.wall, ...this.flipTiles, ...this.archives.map(a => a.tile),
       ...this.players.flatMap(p => [...p.hand, ...p.discards, ...p.melds.flatMap(m => m.tiles)]),
