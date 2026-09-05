@@ -436,6 +436,7 @@ function onAvatarError(entry: GamePlayer) {
       :flip-stack="flipStack"
       :blood-flow-batches="bloodFlow?.batches"
       :blood-flow-compact="compactPiles"
+      :blood-flow-presentation-key="bloodFlow?.presentationKey"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
       @pile-anchors="pileAnchors = $event"
@@ -447,7 +448,7 @@ function onAvatarError(entry: GamePlayer) {
         :style="pileAnchors[pile.relativeSeat] ? { left: `${pileAnchors[pile.relativeSeat].left}%`, top: `${pileAnchors[pile.relativeSeat].top}%` } : { visibility: 'hidden' }"
         :aria-label="`${players[pile.relativeSeat]?.name}，胡${pile.count}次，查看流水`"
         @click="bloodFlowLedgerSeat = pile.absoluteSeat; bloodFlowLedgerOpen = true">
-        <b>胡 {{ pile.count }}次</b><small v-if="pile.overflow">+{{ pile.overflow }} 收纳</small>
+        <b>胡 {{ pile.count }}次</b><small v-if="pile.levels">{{ pile.levels }}层</small>
       </button>
       <BloodFlowRoundLedger :open="bloodFlowLedgerOpen" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :filter-seat="bloodFlowLedgerSeat" :match-finished="matchFinished" @close="bloodFlowLedgerOpen = false"

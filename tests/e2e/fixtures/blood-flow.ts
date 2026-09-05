@@ -55,4 +55,16 @@ let serial = batches.length, restore = 0
   liveAction.value = { id: serial, type: 'self-draw', actorIndex: 0, sourceIndex: null, tile: 's2', meldIndex: -1 }
 }
 ;(window as any).__restoreBloodFlow = () => { liveState.value = { ...liveState.value, presentationKey: `restore-${++restore}` } }
+;(window as any).__appendBloodFlowMultiWin = () => {
+  const id = `multi-${++serial}`, winScore = scorePatterns(['all-green'], true, 'discard')
+  const source = { id: `${id}-tile`, seat: 0 as Seat, tile: 's2' as TileType, kind: 'discard' as const }
+  const winners = ([1, 2, 3] as Seat[]).map(winner => ({ id: `${id}-${winner}`, batchId: id, winner,
+    ordinal: liveState.value.seats[winner].winCount + 1, sourceEventId: source.id, score: winScore,
+    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === 0 ? -winScore.paymentPerPayer : 0) }))
+  const batch: WinBatch = { authorityEpoch: 'fixture', sequence: serial, roundId: 'fixture-round', ruleVersion: 'lotus-blood-flow-v1',
+    batchId: id, windowId: id, source, winners, deltas: vector(s => winners.reduce((n,w) => n + w.deltas[s], 0)),
+    scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:1} }
+  liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
+    ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
+}
 createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, { ...props, bloodFlow: liveState.value, tableActionEvent: liveAction.value })])]) }).mount('#app')

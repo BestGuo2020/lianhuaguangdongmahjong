@@ -23,14 +23,15 @@ describe('E05 display references and capacities', () => {
       const layout = bloodFlowWinPiles(source, viewer, compact)
       for (const pile of layout) {
         expect(pile.count).toBe(count)
-        expect(pile.tiles).toHaveLength(Math.min(compact ? 6 : 12, count))
+        expect(pile.tiles).toHaveLength(count)
+        expect(pile.levels).toBe(Math.ceil(count / (compact ? 3 : 4)))
         expect(pile.overflow + pile.tiles.length).toBe(count)
         expect(pile.absoluteSeat).toBe((pile.relativeSeat + viewer) % 4)
         for (const tile of pile.tiles) {
           expect(tile.record.winner).toBe(pile.absoluteSeat)
           expect(tile.sourceEventId).toBe(`source-${tile.record.ordinal - 1}-${tile.record.winner}`)
           expect(tile.tile).toBe('m1')
-          expect(tile.level).toBeLessThan(compact ? 2 : 3)
+          expect(tile.level).toBe(Math.floor((tile.record.ordinal - 1) / (compact ? 3 : 4)))
         }
       }
       expect(JSON.stringify(source)).toBe(before)

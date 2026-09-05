@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { createTileInstanceRenderer } from './tileInstanceRenderer'
 
 describe('tileInstanceRenderer', () => {
-  it('marks instance matrices dirty after a tween updates a tile', () => {
+  it.each([260, 512])('updates tile matrices through capacity %i without silently truncating a tower', (capacity) => {
     const scene = new THREE.Scene()
     const dynamicGroups: THREE.Object3D[] = []
     const geometry = new THREE.BoxGeometry(1, 1, 1)
@@ -17,6 +17,7 @@ describe('tileInstanceRenderer', () => {
     scene.userData.tileBottom = material
 
     const renderer = createTileInstanceRenderer({
+      capacity,
       scene,
       dynamicGroups,
       ownDynamic: (resource) => resource,
@@ -48,6 +49,13 @@ describe('tileInstanceRenderer', () => {
 
     expect(baseMesh.instanceMatrix.version).toBeGreaterThan(baseVersion)
     expect(tile.capMesh.instanceMatrix.version).toBeGreaterThan(capVersion)
+    for (let i = 1; i < capacity; i++) renderer.add(new THREE.Vector3(i, 0, 0), new THREE.Quaternion(), null)
+    renderer.finish()
+    expect(baseMesh.count).toBe(capacity)
+    const last = new THREE.Matrix4()
+    baseMesh.getMatrixAt(capacity - 1, last)
+    expect(new THREE.Vector3().setFromMatrixPosition(last).x).toBe(capacity - 1)
+    expect(() => renderer.add(new THREE.Vector3(), new THREE.Quaternion(), null)).toThrow('capacity exceeded')
 
     geometry.dispose()
     atlasGeometry.dispose()

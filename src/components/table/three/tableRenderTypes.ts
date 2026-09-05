@@ -6,6 +6,7 @@ import type { WinBatch } from '../../../game/variants/lotus/bloodFlow/types'
 export interface TableProps {
   bloodFlowBatches?: readonly WinBatch[]
   bloodFlowCompact?: boolean
+  bloodFlowPresentationKey?: string
   /** 当前牌桌主题；切换时只重建 3D 牌桌，不刷新页面。 */
   themeName?: TableThemeName
   players?: GamePlayer[]
