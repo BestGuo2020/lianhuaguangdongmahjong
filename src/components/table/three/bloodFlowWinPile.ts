@@ -1,5 +1,18 @@
 import type { WinBatch, WinRecord } from '../../../game/variants/lotus/bloodFlow/types'
 import type { TileType } from '../../../game/core/contracts/types'
+import { winDisplayLayout } from '../../../game/core/presentation/winEffect'
+
+/** Use the existing single-win bay for each viewer-relative seat. */
+export function bloodFlowPileAnchor(relativeSeat: number, compact = false) {
+  const origin = winDisplayLayout(relativeSeat)
+  const along = [[1, 0], [0, -1], [-1, 0], [0, 1]][relativeSeat]
+  const outward = [[0, 1], [1, 0], [0, -1], [-1, 0]][relativeSeat]
+  const middle = ((compact ? 3 : 4) - 1) * .73 / 2
+  // The compact Hu preview occupies the lower centre: put these two labels outside it.
+  const badgeDistance = compact && (relativeSeat === 0 || relativeSeat === 3) ? 1.15 : relativeSeat === 0 ? -1.85 : -1.15
+  return { origin: { ...origin, x: origin.x - along[0] * middle, z: origin.z - along[1] * middle }, along,
+    badge: { x: origin.x + outward[0] * badgeDistance, y: origin.y, z: origin.z + outward[1] * badgeDistance } }
+}
 
 export interface WinPileTile {
   record: WinRecord
@@ -25,12 +38,12 @@ export function bloodFlowWinPiles(batches: readonly WinBatch[], localSeat = 0, c
     grouped[relative].push({ record, tile: batch.source.tile, sourceEventId: batch.source.id })
   }
   return grouped.map((records, relativeSeat) => {
+    const { origin, along } = bloodFlowPileAnchor(relativeSeat, compact)
     const visible = records.slice(-perLevel * levels)
     const tiles: WinPileTile[] = visible.map((item, index) => {
       const column = index % perLevel, level = Math.floor(index / perLevel)
-      const lateral = -5.9 + column * .73, distance = 5.25
-      const [x, z] = [[lateral, distance], [distance, -lateral], [-lateral, -distance], [-distance, lateral]][relativeSeat]
-      return { ...item, column, level, x, y: .28 + level * .46, z, rotation: relativeSeat * Math.PI / 2 }
+      return { ...item, column, level, x: origin.x + along[0] * column * .73,
+        y: origin.y + level * .46, z: origin.z + along[1] * column * .73, rotation: origin.rotation }
     })
     return { relativeSeat, absoluteSeat: (relativeSeat + localSeat) % 4, count: records.length,
       overflow: Math.max(0, records.length - tiles.length), tiles }

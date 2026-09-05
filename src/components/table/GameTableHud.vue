@@ -106,6 +106,7 @@ const emit = defineEmits<{
 }>()
 
 const bloodFlowLedgerOpen = ref(false)
+const pileAnchors = ref<{ left: number; top: number }[]>([])
 const bloodFlowLedgerSeat = ref<number | null>(null)
 const pileMedia = window.matchMedia('(max-width: 900px), (max-height: 500px)')
 const compactPiles = ref(pileMedia.matches)
@@ -437,11 +438,13 @@ function onAvatarError(entry: GamePlayer) {
       :blood-flow-compact="compactPiles"
       @ready="handleTableReady"
       @load-error="handleTableLoadError"
+      @pile-anchors="pileAnchors = $event"
     />
     <template v-if="bloodFlow">
       <BloodFlowWinPresentation :batches="bloodFlow.batches" :restore-key="bloodFlow.presentationKey" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
       <button v-for="pile in bloodFlowPiles" :key="pile.absoluteSeat" type="button"
-        class="blood-flow-pile-badge" :class="`pile-seat-${pile.relativeSeat}`" :data-pile-seat="pile.absoluteSeat"
+        class="blood-flow-pile-badge" :class="[`pile-seat-${pile.relativeSeat}`, { 'pile-badge-compact': compactPiles }]" :data-pile-seat="pile.absoluteSeat"
+        :style="pileAnchors[pile.relativeSeat] ? { left: `${pileAnchors[pile.relativeSeat].left}%`, top: `${pileAnchors[pile.relativeSeat].top}%` } : { visibility: 'hidden' }"
         :aria-label="`${players[pile.relativeSeat]?.name}，胡${pile.count}次，查看流水`"
         @click="bloodFlowLedgerSeat = pile.absoluteSeat; bloodFlowLedgerOpen = true">
         <b>胡 {{ pile.count }}次</b><small v-if="pile.overflow">+{{ pile.overflow }} 收纳</small>
@@ -657,16 +660,10 @@ function onAvatarError(entry: GamePlayer) {
 .blood-flow-waits { display: grid; gap: 3px; max-height: 110px; overflow: auto; font-size: 11px; }
 .blood-flow-pile-badge { position: absolute; z-index: 35; display: grid; gap: 2px; padding: 5px 8px; border-radius: 8px; border: 1px solid #d2c69a80; background: #142424dc; color: #fff2d9; cursor: pointer; min-width: 62px; min-height: 32px; font-size: 12px; }
 .blood-flow-pile-badge small { opacity: .7; font-size: 10px; }
-.pile-seat-0 { left: calc(50% - 240px); bottom: 130px; }
-.pile-seat-1 { right: 15px; top: 62%; }
-.pile-seat-2 { left: calc(50% + 80px); top: 125px; }
-.pile-seat-3 { left: 15px; top: 62%; }
+.blood-flow-pile-badge { transform: translate(-50%, -50%); }
+.pile-badge-compact.pile-seat-0 { transform: translate(-50%, 2px); display: flex; align-items: center; white-space: nowrap; min-height: 26px; }
 @container (max-width: 900px) or (max-height: 500px) {
   .blood-flow-pile-badge { font-size: 10px; padding: 3px 5px; min-width: 52px; min-height: 28px; }
-  .pile-seat-0 { left: 20%; bottom: 78px; }
-  .pile-seat-2 { left: 48%; top: 45px; }
-  .pile-seat-1 { right: 100px; top: 28%; }
-  .pile-seat-3 { left: 95px; top: 42%; }
   .blood-flow-table .hand-rack :deep(.mahjong-tile) { --tile-width: clamp(24px, 5.2vw, 40px); }
   .blood-flow-table .hand-tile-slot { min-width: 0; }
   .blood-flow-table .hand-rack:not(.has-melds) { justify-content: flex-end; padding-left: 0; padding-right: 0; }

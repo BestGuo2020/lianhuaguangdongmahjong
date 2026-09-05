@@ -30,7 +30,7 @@ for (const [width, height] of [[568, 320], [1280, 720]]) {
         expect(box.left).toBeGreaterThanOrEqual(0); expect(box.right).toBeLessThanOrEqual(width)
         expect(box.top).toBeGreaterThanOrEqual(0); expect(box.bottom).toBeLessThanOrEqual(height)
       }
-      const blockers = await page.locator('.action-bar button, .hand-tile-slot').evaluateAll(elements => elements.map(e => {
+      const blockers = await page.locator('.action-bar button, .hand-tile-slot, .blood-flow-preview').evaluateAll(elements => elements.map(e => {
         const b = e.getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }
       }))
       for (const box of blockers) {
