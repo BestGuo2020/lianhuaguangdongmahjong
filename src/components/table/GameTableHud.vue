@@ -115,10 +115,16 @@ pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
 const bloodFlowPiles = computed(() => bloodFlowWinPiles(props.bloodFlow?.batches ?? [], props.user.seat, compactPiles.value))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
-watch(() => props.bloodFlow?.roundResult, result => {
-  if (result) { bloodFlowLedgerSeat.value = null; bloodFlowLedgerOpen.value = true }
+// Snapshots replace result objects. Only a new round/result should auto-open;
+// refreshing the same settled round must respect the player's table view.
+watch([() => props.bloodFlow?.roundId, () => props.bloodFlow?.roundResult?.roundId], ([, resultRoundId]) => {
+  bloodFlowLedgerSeat.value = null
+  bloodFlowLedgerOpen.value = Boolean(resultRoundId)
 }, { immediate: true })
-watch(() => props.bloodFlow?.roundId, () => { if (!props.bloodFlow?.roundResult) bloodFlowLedgerOpen.value = false; bloodFlowLedgerSeat.value = null })
+function reopenBloodFlowSettlement() {
+  bloodFlowLedgerSeat.value = null
+  bloodFlowLedgerOpen.value = true
+}
 
 function handleTableReady() {
   tableLoadRetry.succeed()
@@ -453,6 +459,8 @@ function onAvatarError(entry: GamePlayer) {
       <BloodFlowRoundLedger :open="bloodFlowLedgerOpen" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :filter-seat="bloodFlowLedgerSeat" :match-finished="matchFinished" @close="bloodFlowLedgerOpen = false"
         @next-round="bloodFlowLedgerOpen = false; $emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" />
+      <button v-if="bloodFlow.roundResult && !bloodFlowLedgerOpen" type="button"
+        class="blood-flow-result-reopen" @click="reopenBloodFlowSettlement">返回结算</button>
     </template>
     <Transition name="table-loading">
       <div
@@ -656,6 +664,7 @@ function onAvatarError(entry: GamePlayer) {
 
 <style scoped>
 .game-table-hud { display: contents; }
+.blood-flow-result-reopen { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(84px, 22dvh); z-index: 80; min-height: 40px; padding: 9px 22px; border: 1px solid var(--theme-border, #8a947c); border-radius: 10px; background: var(--theme-panel, #142424); color: var(--theme-text, #fff2d9); font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 4px 18px #0006; }
 .blood-flow-preview { display: grid; gap: 2px; max-width: min(320px, 40vw); padding: 6px 9px; border: 1px solid var(--theme-accent, #cfb97a); border-radius: 8px; background: rgba(12, 22, 24, .94); color: #fff5dc; font-size: 12px; }
 .blood-flow-preview small { color: #c9d5d6; font-size: 10px; }
 .blood-flow-waits { display: grid; gap: 3px; max-height: 110px; overflow: auto; font-size: 11px; }

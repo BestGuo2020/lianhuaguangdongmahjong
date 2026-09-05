@@ -7,6 +7,7 @@ import { themePresentationByName, themePresentationCssVariables } from '../../..
 import type { TableThemeName } from '../../../src/components/table/three/tableTheme'
 import type { BloodFlowTableState, Seat, WinBatch } from '../../../src/game/variants/lotus/bloodFlow/types'
 import { vector } from '../../../src/game/variants/lotus/bloodFlow/state'
+import { summarizeRound } from '../../../src/game/variants/lotus/bloodFlow/roundLifecycle'
 import type { GamePlayer, TileType } from '../../../src/game/core/contracts/types'
 import { defaultAvatarForSeat } from '../../../src/game/core/presentation/avatar'
 
@@ -41,6 +42,26 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
   rulesetId: 'lotus-blood-flow' as const, bloodFlow, jokerTiles: ['red', 'green'] as TileType[], wildcardTiles: ['white'] as TileType[] }
 const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
+const liveFinished = shallowRef(false)
+const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
+;(window as any).__bloodFlowNavigation = navigation
+;(window as any).__settleBloodFlow = (finished = false) => {
+  const state = liveState.value
+  const opening = vector(() => 2000)
+  const ending = vector(s => 2000 + state.batches.reduce((sum, batch) => sum + batch.deltas[s], 0))
+  liveFinished.value = finished
+  liveState.value = { ...state, status: 'settled', preview: null,
+    roundResult: summarizeRound(state.ruleVersion, state.roundId, opening, ending,
+      vector(s => state.seats[s].winCount), state.batches.map(batch => ({ kind: 'win' as const, batch }))) }
+}
+;(window as any).__refreshBloodFlowResult = () => {
+  // P2P snapshots replace objects without starting another round.
+  liveState.value = JSON.parse(JSON.stringify(liveState.value))
+}
+;(window as any).__nextBloodFlowFixtureRound = () => {
+  liveFinished.value = false
+  liveState.value = { ...bloodFlow, roundId: 'fixture-next-round', roundResult: null, status: 'playing' }
+}
 let serial = batches.length, restore = 0
 ;(window as any).__appendBloodFlowWin = () => {
   const id = `live-${++serial}`, winScore = scorePatterns(['all-green'], true, 'self-draw')
@@ -67,4 +88,11 @@ let serial = batches.length, restore = 0
   liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
     ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
 }
-createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, { ...props, bloodFlow: liveState.value, tableActionEvent: liveAction.value })])]) }).mount('#app')
+createApp({ render: () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
+  ...props, bloodFlow: liveState.value, tableActionEvent: liveAction.value,
+  phase: liveState.value.roundResult ? 'settled' : props.phase,
+  revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
+  isUserTurn: !liveState.value.roundResult, userCanHu: !liveState.value.roundResult,
+  onNextRound: () => { navigation.nextRoundCalls++ },
+  onReturnToLobby: () => { navigation.returnToLobbyCalls++ },
+})])]) }).mount('#app')
