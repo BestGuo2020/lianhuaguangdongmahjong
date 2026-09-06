@@ -316,18 +316,37 @@ const { roomMeta } = useRoomAvailability(gameMode, roomId)
 const disclaimerGate = useDisclaimerGate()
 const wakuAuth = useWakuDemoAuth()
 
-// 联机对战需登录：未登录时改为发起登录，不切换模式。
+// 联机对战需登录：未登录时不跳转、不弹窗，只在大厅登录卡片处显示内联提示；
+// 玩家自行点卡片上的「登录」按钮后，登录成功自动进入联机模式。
+const pendingRemoteLogin = ref(false)
+
 function onGameModeChange(mode: GameMode) {
   if (mode === 'remote' && !wakuAuth.authenticated.value) {
-    wakuAuth.login()
+    pendingRemoteLogin.value = true
+    wakuAuth.error.value = '联机对战需要先登录 WakuDemo 账号'
     return
   }
   gameMode.value = mode
 }
 
-// 联机接口返回 401 AUTH_REQUIRED 时统一引导登录。
+// 登录成功后自动进入联机模式（此前玩家已点过联机对战）。
+watch(() => wakuAuth.authenticated.value, (authenticated) => {
+  if (authenticated && pendingRemoteLogin.value) {
+    pendingRemoteLogin.value = false
+    gameMode.value = 'remote'
+  }
+})
+
+// 玩家改选其他模式时放弃「登录后自动进联机」的等待。
+watch(gameMode, (mode) => {
+  if (mode !== 'remote') pendingRemoteLogin.value = false
+})
+
+// 联机接口返回 401 AUTH_REQUIRED 时提示重新登录（不跳转、不弹窗）。
 function handleAuthRequired() {
-  if (!wakuAuth.authenticated.value) wakuAuth.login()
+  if (!wakuAuth.authenticated.value) {
+    wakuAuth.error.value = '登录已过期，请重新登录 WakuDemo 账号'
+  }
 }
 onMounted(() => window.addEventListener('wakudemo-auth-required', handleAuthRequired))
 onBeforeUnmount(() => window.removeEventListener('wakudemo-auth-required', handleAuthRequired))
