@@ -15,6 +15,8 @@ export class RemoteApiError extends Error {
   }
 }
 
+export const AUTH_REQUIRED_EVENT = 'wakudemo-auth-required'
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
@@ -28,6 +30,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       if (body?.detail?.code) code = body.detail.code
     } catch {
       // 非 JSON 错误体，保留 HTTP 状态码。
+    }
+    if (response.status === 401 && code === 'AUTH_REQUIRED') {
+      // 联机接口要求登录：通知应用层引导登录。
+      window.dispatchEvent(new CustomEvent(AUTH_REQUIRED_EVENT))
     }
     throw new RemoteApiError(code, response.status)
   }

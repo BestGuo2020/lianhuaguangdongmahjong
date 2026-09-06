@@ -1,10 +1,11 @@
-import { ref, type Ref } from 'vue'
+import { ref } from 'vue'
 import { DISCLAIMER_VERSION } from '../../../content/disclaimer'
-import { agreeDisclaimer, getDisclaimerAgreement } from '../api/accountApi'
+import { agreeMyDisclaimer, getMyDisclaimerAgreement } from '../api/accountApi'
 
 const STORAGE_KEY = 'lgm_disclaimer_agreed'
 
-export function useDisclaimerGate(playerId: Ref<string>) {
+/** 联机免责声明：按当前登录身份（wakudemo-<uid>）记录在服务端。 */
+export function useDisclaimerGate() {
   const open = ref(false)
   let pendingAction: (() => void) | null = null
 
@@ -18,17 +19,15 @@ export function useDisclaimerGate(playerId: Ref<string>) {
 
   async function guard(action: () => void) {
     if (hasLocalAgreement()) return action()
-    if (playerId.value) {
-      try {
-        const agreement = await getDisclaimerAgreement(playerId.value)
-        if (agreement.agreed && (agreement.version ?? 0) >= DISCLAIMER_VERSION) {
-          rememberAgreement()
-          action()
-          return
-        }
-      } catch {
-        // 后端不可达时降级为本地确认。
+    try {
+      const agreement = await getMyDisclaimerAgreement()
+      if (agreement.agreed && (agreement.version ?? 0) >= DISCLAIMER_VERSION) {
+        rememberAgreement()
+        action()
+        return
       }
+    } catch {
+      // 未登录或后端不可达时降级为本地确认。
     }
     pendingAction = action
     open.value = true
@@ -36,7 +35,7 @@ export function useDisclaimerGate(playerId: Ref<string>) {
 
   function accept() {
     rememberAgreement()
-    if (playerId.value) void agreeDisclaimer(playerId.value).catch(() => {})
+    void agreeMyDisclaimer().catch(() => {})
     open.value = false
     const action = pendingAction
     pendingAction = null

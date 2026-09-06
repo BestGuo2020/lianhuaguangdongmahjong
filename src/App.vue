@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
 import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
@@ -313,8 +313,24 @@ watch(effectiveLlmEnabled, (enabled) => preferLlmTableTheme(enabled), { immediat
 
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
-const disclaimerGate = useDisclaimerGate(playerId)
+const disclaimerGate = useDisclaimerGate()
 const wakuAuth = useWakuDemoAuth()
+
+// 联机对战需登录：未登录时改为发起登录，不切换模式。
+function onGameModeChange(mode: GameMode) {
+  if (mode === 'remote' && !wakuAuth.authenticated.value) {
+    wakuAuth.login()
+    return
+  }
+  gameMode.value = mode
+}
+
+// 联机接口返回 401 AUTH_REQUIRED 时统一引导登录。
+function handleAuthRequired() {
+  if (!wakuAuth.authenticated.value) wakuAuth.login()
+}
+onMounted(() => window.addEventListener('wakudemo-auth-required', handleAuthRequired))
+onBeforeUnmount(() => window.removeEventListener('wakudemo-auth-required', handleAuthRequired))
 
 function startGameWithAudio() {
   if (selectedRule.value === 'lotus-blood-flow' && (gameMode.value !== 'local' || !bloodFlowEnabled('local'))) return
@@ -537,7 +553,8 @@ function changeTableTheme(theme: TableThemeName) {
 
       <LobbyView
         v-if="showLobby"
-        v-model:game-mode="gameMode"
+        :game-mode="gameMode"
+        @update:game-mode="onGameModeChange"
         v-model:selected-match="selectedMatch"
         v-model:selected-rule="selectedRule"
         v-model:nickname-input="nicknameInput"
