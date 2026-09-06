@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
-import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, meldTrackTransform, concealedMeldClear } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, meldTrackTransform, concealedMeldClear } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
@@ -207,22 +207,8 @@ function addConcealedHand(playerIndex) {
 }
 
 
-function discardTransform(playerIndex, index) {
-  // 四家牌河统一：1-3 行每行 6 张，第 4 行起每行 10 张。
-  // 宽行与窄行左对齐（共用 -2.5 起点），向右延伸，避免中心线跳动；
-  // 因此宽行的前 6 张与前三行的 6 张位置完全一致，只向右多出 4 张。
-  const wideStart = 18   // 前三行 6×3=18 张后进入 10 张/行
-  const isWide = index >= wideStart
-  const columnCount = isWide ? 10 : 6
-  const rowIndex = isWide ? index - wideStart : index
-  const column = rowIndex % columnCount
-  const discardGap = 0.95   // 牌河行间隙
-  const row = isWide ? 3 + Math.floor(rowIndex / columnCount) : Math.floor(rowIndex / columnCount)
-  const lateral = (column - 2.5) * TILE_GAP_OFFSET
-  if (playerIndex === 0) return { x: lateral, z: 2.48 + row * discardGap, rotation: 0 }
-  if (playerIndex === 1) return { x: 2.64 + row * discardGap, z: -lateral, rotation: Math.PI / 2 }
-  if (playerIndex === 2) return { x: -lateral, z: -2.48 - row * discardGap, rotation: Math.PI }
-  return { x: -2.64 - row * discardGap, z: lateral, rotation: -Math.PI / 2 }
+function discardTransform(playerIndex:number, index:number) {
+  return discardTileLayout(playerIndex,index)
 }
 
 // 出牌动画的起点 = 各家手牌位置（牌从手牌方向飞向牌河）。

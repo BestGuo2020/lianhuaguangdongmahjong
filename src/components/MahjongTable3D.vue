@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js'
@@ -22,12 +22,12 @@ import {
 } from './table/three/sceneRenderProfile'
 import { tableThemeByName, type TableTheme } from './table/three/tableTheme'
 import { createTileInstanceRenderer } from './table/three/tileInstanceRenderer'
-import { TABLE_LAYOUT, winRegionFrame } from '../game/core/presentation/tableLayout'
+import { TABLE_LAYOUT } from '../game/core/presentation/tableLayout'
 import { createWinEffectPresenter } from './table/three/winEffectPresenter'
 import { createTableTilePresenter } from './table/three/tableTilePresenter'
 import { tileMarkerFor } from './table/three/tileMarker'
 import type { TableProps } from './table/three/tableRenderTypes'
-import { bloodFlowPileAnchor, bloodFlowWinPiles } from './table/three/bloodFlowWinPile'
+import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
 import { createBloodFlowWinEffects } from './table/three/bloodFlowWinEffects'
 import { cuePhase } from '../game/variants/lotus/bloodFlow/presentation'
 
@@ -67,13 +67,9 @@ let tableTiles: ReturnType<typeof createTableTilePresenter>
 // 中控台与墨玉台面的 Z 中心（桌身中心，保持不变）
 const PLAY_AREA_OFFSET_Z = -1.65
 // 牌层（牌墙/牌河/手牌/副露/骰子）的 Z 中心：单独向本家（+z）偏移，靠近玩家侧
-const winRegionTop = computed(() => Math.max(.31, ...bloodFlowWinPiles(
-  props.bloodFlowBatches ?? [], props.localSeat ?? 0, props.bloodFlowCompact,
-).flatMap(pile => pile.tiles.map(tile => tile.y))))
-function applyTableCamera(position:readonly number[]) {
-  const frame = winRegionFrame(winRegionTop.value)
-  camera.position.set(position[0], position[1] * frame.distance, position[2] * frame.distance)
-  camera.lookAt(0, frame.lookAtY, renderProfile.camera.lookAtZ)
+function applyTableCamera(position: readonly number[]) {
+  camera.position.set(position[0], position[1], position[2])
+  camera.lookAt(0, 0, renderProfile.camera.lookAtZ)
 }
 const TILE_LAYER_Z = -1.0
 const TILE_GAP_OFFSET = TABLE_LAYOUT.tilePitch    // 手牌间隙和加杠偏移量
@@ -325,8 +321,6 @@ function render(time = 0) {
     if(bloodFlowFrame&&!winFrame){exposure+=bloodFlowFrame.exposureDelta;cameraShakeX=bloodFlowFrame.shakeX;cameraShakeZ=bloodFlowFrame.shakeZ}
     renderer.toneMappingExposure = exposure
     const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
-    // Frame the complete public win region, including the highest persistent tile.
-    // This changes only the camera; tile size, layer pitch and anchors remain fixed.
     applyTableCamera(cameraPosition)
     if (props.bloodFlowBatches) {
       camera.updateMatrixWorld()
@@ -344,10 +338,11 @@ function render(time = 0) {
     }
     if (cameraLabEnabled && canvas.value) {
       const canvasElement = canvas.value as HTMLCanvasElement
-      canvasElement.dataset.cameraPosition = cameraPosition
+      canvasElement.dataset.cameraPosition = camera.position.toArray()
         .map((value) => value.toFixed(6))
         .join(',')
       canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
+      canvasElement.dataset.cameraDirection = camera.getWorldDirection(new THREE.Vector3()).toArray().join(',')
     }
     if (outlineEffect) outlineEffect.render(scene, camera)
     else renderer.render(scene, camera)

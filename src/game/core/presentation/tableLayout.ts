@@ -23,7 +23,7 @@ export function windForSeat(playerIndex: number, dealerIndex: number) {
 // All positions are in the tile layer's coordinates (the renderer adds -1 to z).
 // Local right/outward axes are shared by melds, hands and winning tiles.
 export const TABLE_LAYOUT = Object.freeze({ tilePitch: .685, sourcePitch: .965,
-  groupGap: .18, handGap: 1.24, meldRetreat: 1.1, pilePitch: .73, layerHeight: .46 })
+  groupGap: .18, handGap: 1.24, meldRetreat: .47, pilePitch: .73, layerHeight: .46 })
 export function seatTableLayout(seat: number) {
   const index = seat >= 0 && seat < 4 ? seat : 0
   const right = [ {x:1,z:0}, {x:0,z:-1}, {x:-1,z:0}, {x:0,z:1} ][index]
@@ -36,13 +36,13 @@ export function seatTableLayout(seat: number) {
   const near = wallStackSlot(0), far = wallStackSlot(34), side = wallStackSlot(51)
   const layerZ = -1
   const corner = [
-    {x:near.x + 1.76,z:near.z - .03 - layerZ},
-    {x:side.x - 1.08,z:far.z + .43 - layerZ},
-    {x:far.x - .91,z:far.z + .03 - layerZ},
-    {x:-side.x + .03,z:near.z - .18 - layerZ},
+    {x:near.x + .91,z:near.z - 1.43 - layerZ},
+    {x:side.x - 1.08,z:far.z + .38 - layerZ},
+    {x:far.x - .91,z:far.z + 1.38 - layerZ},
+    {x:-side.x + 1.08,z:near.z - .38 - layerZ},
   ][index]
   return { right, outward, meld, win:{...corner,y:.31,rotation},
-    pileAlong:right }
+    pileAlong:{x:-right.x,z:-right.z} }
 }
 export function meldTrackTransform(seat:number, offset:number) {
   const {meld,right}=seatTableLayout(seat)
@@ -58,14 +58,18 @@ export function concealedMeldClear(seat:number, span:number, count:number, pitch
 }
 
 
-/** Keep the full reserved region and arbitrary tower heights in the public camera. */
-export function winRegionFrame(top = .31) {
-  const height = Math.max(0, top - 1.2)
-  return { distance: 1.5 + height * .05, lookAtY: height * .1 }
-}
 export function meldTileSpan(source:boolean) {
   return source ? TABLE_LAYOUT.sourcePitch : TABLE_LAYOUT.tilePitch
 }
 export function meldTileCenter(offset:number, span:number) {
   return offset + (span - TABLE_LAYOUT.tilePitch) / 2
+}
+
+/** Later ten-tile rows remain centred, reserving the four winning corners. */
+export function discardTileLayout(seat:number,index:number) {
+  const wide=index>=18, columns=wide?10:6, slot=wide?index-18:index
+  const row=(wide?3:0)+Math.floor(slot/columns)
+  const lateral=(slot%columns-(columns-1)/2)*TABLE_LAYOUT.tilePitch
+  const depth=(seat%2?2.64:2.48)+row*.95
+  return {...pointFromSeat(seat,lateral,depth),rotation:[0,Math.PI/2,Math.PI,-Math.PI/2][seat]}
 }

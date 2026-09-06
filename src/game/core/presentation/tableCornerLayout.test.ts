@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seatTableLayout, meldTrackTransform, concealedMeldClear, TABLE_LAYOUT, winRegionFrame, addedKongTileOffset, meldTileCenter, meldTileSpan } from './tableLayout'
+import { seatTableLayout, meldTrackTransform, concealedMeldClear, TABLE_LAYOUT, addedKongTileOffset, meldTileCenter, meldTileSpan, discardTileLayout } from './tableLayout'
 import { winDisplayLayout } from './winEffect'
 import { wallStackSlot } from '../rules/wallLayout'
 function bounds(x:number,z:number,rotation:number) {
@@ -55,7 +55,18 @@ describe('public corner bays',()=>{
    }
   }
  })
- it('frames taller towers without a level cap',()=>{
-  expect(winRegionFrame(40).distance).toBeGreaterThan(winRegionFrame(20).distance)
+
+ it('reserves complete corner rows against all four late discard rivers',()=>{
+  for(const seat of [0,1,2,3]) {
+   const region=seatTableLayout(seat)
+   for(let col=0;col<4;col++){
+    const pile=bounds(region.win.x+region.pileAlong.x*col*.73,region.win.z-1+region.pileAlong.z*col*.73,region.win.rotation)
+    for(const other of [0,1,2,3])for(let index=0;index<28;index++) {
+     const discard=discardTileLayout(other,index)
+     expect(overlaps(pile,bounds(discard.x,discard.z-1.65,discard.rotation)),`pile ${seat}/${col}, river ${other}/${index}`).toBe(false)
+    }
+   }
+  }
  })
+
 })
