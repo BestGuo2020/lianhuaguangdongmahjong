@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
-import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, meldTrackTransform, concealedMeldClear } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, meldTrackTransform, concealedMeldClear, concealedSideX } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
@@ -158,7 +158,7 @@ function addConcealedHand(playerIndex) {
       rotationY = props.revealHands
         ? (position === 'left' ? -Math.PI / 2 : Math.PI / 2)
         : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
-      x = position === 'left' ? -9.15 : 9.15
+      x = concealedSideX(position === 'left' ? 3 : 1)
       if (meldClear != null) {
         // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露。
         // 下家（右）摸牌位在右侧（-z 顶端，与无副露时一致）；上家/其他摸牌位在手牌末尾。
@@ -215,9 +215,9 @@ function discardTransform(playerIndex:number, index:number) {
 // 本家为底部 2D 手牌（屏幕底部 → 近桌沿），其余三家为各自立牌手牌中心。
 function discardSourcePos(playerIndex) {
   if (playerIndex === 0) return new THREE.Vector3(0, .56, 8.5)
-  if (playerIndex === 1) return new THREE.Vector3(9.15, .56, -2.15)
+  if (playerIndex === 1) return new THREE.Vector3(concealedSideX(1), .56, -2.15)
   if (playerIndex === 2) return new THREE.Vector3(0, .56, -9.69)
-  return new THREE.Vector3(-9.15, .56, -1.0)
+  return new THREE.Vector3(concealedSideX(3), .56, -1.0)
 }
 
 function addDiscards(playerIndex) {

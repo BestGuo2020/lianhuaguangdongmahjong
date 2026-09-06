@@ -4,7 +4,7 @@ for(const [width,height] of [[1280,720],[844,390],[568,320]]) for(const theme of
  test(`public corners ${width} ${theme}`,async({page})=>{
   test.setTimeout(180000)
   await page.setViewportSize({width,height})
-  const dir=`work/fixed-camera-layout/matrix/${width}-${theme}`;await mkdir(dir,{recursive:true})
+  const dir=`work/outward-corner-layout/matrix/${width}-${theme}`;await mkdir(dir,{recursive:true})
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
   for(const count of [1,4,5,13,25,41]){
    await page.goto(`/tests/e2e/fixtures/blood-flow.html?count=${count}&theme=${theme}&cameraLab=1`)
@@ -26,6 +26,9 @@ for(const [width,height] of [[1280,720],[844,390],[568,320]]) for(const theme of
     for(const control of controls){expect(control.rect.left).toBeGreaterThanOrEqual(0);expect(control.rect.right).toBeLessThanOrEqual(width);expect(control.rect.bottom).toBeLessThanOrEqual(height);expect(control.scroll).toBeLessThanOrEqual(control.width+1)}
     await page.screenshot({path:`${dir}/blood-${count}-melds-${melds}.png`})
    }
+   await page.evaluate(()=>(window as any).__setCornerLayout(1,null,true))
+   await page.waitForTimeout(100)
+   await page.screenshot({path:`${dir}/empty-wall-${count}.png`})
   }
   for(const melds of [0,1,4])for(const seat of [0,1,2,3]){
    await page.evaluate(({melds,seat})=>(window as any).__setCornerLayout(melds,seat),{melds,seat})

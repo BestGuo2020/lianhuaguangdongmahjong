@@ -3570,20 +3570,3 @@ button { font: inherit; }
     transition: none !important;
   }
 }
-/* Public corner control placement. */
-.game-app .turn-action-row {
-  right: auto; left: 51%; transform: translateX(-50%);
-  bottom: calc(var(--safe-bottom) + 16cqh); justify-content: center;
-}
-@container (max-height: 450px) {
-  .game-app .turn-action-row { gap: 4px; flex-wrap: nowrap; max-width: 220px; }
-  .game-app .turn-action-row .action-bar { max-width: 220px; justify-content: center; }
-  .game-app .turn-action-row .blood-flow-preview {
-    position: absolute; left: calc(50vw + 50% - 114px); bottom: 8px;
-    width: 104px; max-width: 104px; padding: 5px;
-  }
-  .game-app .turn-action-row .blood-flow-preview > * { min-width: 0; }
-  .game-app .turn-action-row .blood-flow-preview .win-card-main strong { min-width: 0; }
-  .game-app .turn-action-row .blood-flow-preview .win-card-modifiers { flex-wrap: wrap; }
-  .game-app .turn-action-row .blood-flow-preview .blood-flow-win-card { grid-template-columns: minmax(0, 1fr); }
-}

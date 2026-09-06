@@ -616,7 +616,7 @@ function onAvatarError(entry: GamePlayer) {
       </div>
     </section>
 
-    <div v-if="showTurnRow" class="turn-action-row" :data-meld-count="user.melds.length" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+    <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="bloodFlow?.preview && userCanHu && !presentationBusy" class="blood-flow-preview" role="status">
         <BloodFlowWinCard :key="bloodFlow.sourceEvent?.id" :score="bloodFlow.preview" compact preview />
         <small>{{ bloodFlow.seats[user.seat].locked ? '已锁手 · 可续胡' : firstHuOffer ? '胡后锁手，不再换张/吃碰杠' : '胡后锁手' }}</small>
