@@ -43,9 +43,10 @@ export function useWakuDemoAuth() {
       authenticated.value = session.authenticated
       account.value = session.authenticated ? session.account : null
     } catch {
+      // 主页挂载时的被动检查：失败静默降级为未登录，不打扰玩家。
+      // 只有玩家主动操作（登录/退出/401 引导）失败时才显示错误提示。
       authenticated.value = false
       account.value = null
-      if (!error.value) error.value = '登录状态检查失败，请稍后重试'
     } finally {
       loading.value = false
     }
