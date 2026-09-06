@@ -9,6 +9,19 @@ function bounds(x:number,z:number,rotation:number) {
 }
 function overlaps(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x0<b.x1&&a.x1>b.x0&&a.z0<b.z1&&a.z1>b.z0}
 describe('public corner bays',()=>{
+ for(const seat of [0,1,2,3]) it(`seat ${seat}: wide river rows keep the original L-shaped alignment`,()=>{
+  const lateral=(index:number)=>{
+   const p=discardTileLayout(seat,index)
+   return [p.x,-p.z,-p.x,p.z][seat]
+  }
+  for(let column=0;column<6;column++){
+   expect(lateral(18+column)).toBe(lateral(column))
+   expect(lateral(28+column)).toBe(lateral(column))
+  }
+  expect(lateral(18)).toBeCloseTo(-2.5*TABLE_LAYOUT.tilePitch)
+  expect(lateral(27)).toBeCloseTo(6.5*TABLE_LAYOUT.tilePitch)
+  expect(lateral(27)-lateral(23)).toBeCloseTo(4*TABLE_LAYOUT.tilePitch)
+ })
  for(const seat of [0,1,2,3]) it(`seat ${seat}: whole row clears all live wall slots and uses fixed right corner`,()=>{
   const layout=seatTableLayout(seat)
   expect(winDisplayLayout(seat)).toEqual(layout.win)
