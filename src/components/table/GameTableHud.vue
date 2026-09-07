@@ -617,25 +617,25 @@ function onAvatarError(entry: GamePlayer) {
         </button>
         <template v-if="actionPrompt?.type === 'claim'">
           <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button v-if="!bloodFlow || !actionPrompt.canHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'response'">
-          <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
           <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="!bloodFlow || !actionPrompt.canHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
           <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="!bloodFlow" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'chi'">
           <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else>
           <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>

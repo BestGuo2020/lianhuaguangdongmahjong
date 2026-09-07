@@ -30,8 +30,7 @@ for(const [width,height] of [[1280,720],[844,390],[568,320]]) test.describe(`${w
     }
     await page.getByRole('button',{name:'可胡画面',exact:true}).click()
     await page.screenshot({path:`${dir}/${prefix}-buttons.png`})
-    for(const label of ['胡','碰','杠','吃']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
-    await expect(page.locator('.action-bar').getByRole('button',{name:'过',exact:true})).toHaveCount(0)
+    for(const label of ['胡','碰','杠','吃','过']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
     const actions=await page.locator('.action-bar').evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom}})
     expect(actions.x).toBeGreaterThanOrEqual(0);expect(actions.right).toBeLessThanOrEqual(width);expect(actions.bottom).toBeLessThanOrEqual(height)
     await page.getByRole('button',{name:'选牌画面',exact:true}).click()

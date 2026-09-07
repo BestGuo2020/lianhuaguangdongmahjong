@@ -6,9 +6,8 @@ for (const [label, kind] of [['碰','peng'],['杠','gang'],['吃','chi'],['胡',
     page.on('pageerror', error=>errors.push(error.message))
     await page.goto('/tests/e2e/fixtures/blood-flow-claims.html')
     const actions=page.locator('.action-bar')
-    // 可胡时不再提供“过”：只出现 碰/杠/吃/胡。
-    for (const text of ['碰','杠','吃','胡']) await expect(actions.getByRole('button',{name:text,exact:true})).toBeVisible()
-    await expect(actions.getByRole('button',{name:'过',exact:true})).toHaveCount(0)
+    // 锁手前五种按钮（胡/碰/杠/吃/过）都显示。
+    for (const text of ['碰','杠','吃','胡','过']) await expect(actions.getByRole('button',{name:text,exact:true})).toBeVisible()
     await actions.getByRole('button',{name:label,exact:true}).click()
     // The shared HUD executes a single chi candidate immediately.
     await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().commands.map((c:any)=>c.action.kind))).toEqual([kind])
@@ -19,10 +18,15 @@ for (const [label, kind] of [['碰','peng'],['杠','gang'],['吃','chi'],['胡',
     expect(errors).toEqual([])
   })
 }
-test('an untouched hu window auto-wins after the configured delay', async ({page}) => {
-  await page.goto('/tests/e2e/fixtures/blood-flow-claims.html?autoHuMs=300')
-  await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().commands.map((c:any)=>c.action.kind))).toEqual(['win'])
-  expect((await page.evaluate(()=>(window as any).__claimEvidence())).wins).toBe(1)
+test('a locked hand auto-wins when possible and auto-discards otherwise, never stalling', async ({page}) => {
+  await page.goto('/tests/e2e/fixtures/blood-flow-claims.html?lockedAutoMs=200')
+  await page.getByRole('button',{name:'胡',exact:true}).click()
+  // 锁手后全自动：有胡就胡（自动再胡），没胡打摸张，不允许把能胡的摸张打出去、也不许卡住。
+  await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().wins),{timeout:30000}).toBeGreaterThan(1)
+  const evidence=await page.evaluate(()=>(window as any).__claimEvidence())
+  expect(evidence.commands[0].action.kind).toBe('win')
+  expect(evidence.commands.slice(1).every((c:any)=>c.action.kind==='win'||c.action.kind==='discard')).toBe(true)
+  expect(evidence.lockedDiscards+evidence.wins).toBeGreaterThan(1)
 })
 test('reuses the existing picker when hu and multiple chi choices coexist',async({page})=>{
   await page.goto('/tests/e2e/fixtures/blood-flow-claims.html?multiChi=1')
@@ -83,9 +87,9 @@ test.describe('touch layout',()=>{
     await expect.poll(()=>page.evaluate(()=>(window as any).__claimEvidence().selectedIndex)).toBe(0)
     expect(await page.evaluate(()=>(window as any).__claimEvidence().sounds.filter((s:string)=>s==='click.mp3').length)).toBe(1)
   })
-  test('keeps all four choices visible and tappable together',async({page})=>{
+  test('keeps all five choices visible and tappable together',async({page})=>{
     await page.goto('/tests/e2e/fixtures/blood-flow-claims.html')
-    for (const text of ['碰','杠','吃','胡']) {
+    for (const text of ['碰','杠','吃','胡','过']) {
       const button=page.locator('.action-bar').getByRole('button',{name:text,exact:true})
       await expect(button).toBeInViewport()
       await button.tap({trial:true})

@@ -9,7 +9,7 @@ for(const count of [12,24,40])test(`new win flies to its persistent level after 
   await expect.poll(async()=>(await flights()).length).toBe(1)
   const first=(await flights())[0]
   expect(first.level).toBe(count/4);expect(first.column).toBe(0)
-  expect(first.target.y).toBeCloseTo(.31+count/4*.46)
+  expect(first.target.y).toBeCloseTo(.31+count/4*.47)
   expect(first.source).not.toEqual(first.target)
   // The source now remains visible before takeoff; wait for actual flight,
   // including this fixture's 4x slow-motion scale, instead of the old 60ms hop.
@@ -34,7 +34,9 @@ test('three flight references share one source and land in three distinct towers
   const input=await flights()
   expect(new Set(input.map((f:any)=>f.sourceId)).size).toBe(1)
   expect(new Set(input.map((f:any)=>JSON.stringify(f.target))).size).toBe(3)
-  expect(input.every((f:any)=>f.level===3)).toBe(true)
+  // 12 次/家：本家/下家/对家 4 张/层 → 第 13 次落第 3 层；上家 3 张/层 → 落第 4 层。
+  const bySeat=new Map(input.map((f:any)=>[f.target.x, f.level]))
+  expect(bySeat.get(8)).toBe(3);expect(bySeat.get(-8)).toBe(3);expect(bySeat.get(-6.95)).toBe(4)
   // 一炮多响 intro 顺延起飞；本夹具 4 倍慢放，落定在 intro+readable 之后。
   await expect.poll(async()=>(await flights()).length,{timeout:30_000}).toBe(0)
 })

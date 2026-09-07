@@ -56,9 +56,10 @@ it('orders kong receipts with win batches and never replays the same receipt',()
   const cue=director.tick(100)!
   expect(cue.kind).toBe('kong');expect(cue.deltas).toEqual(kong.deltas);expect(cue.flights).toEqual([])
   director.sync([win],'r',200,[kong]);expect(director.tick(800)?.id).toBe('k2')
-  expect(director.tick(1300)?.id).toBe(win.batchId)
-  expect(director.tick(3400)).not.toBeNull()
-  expect(director.tick(4200)).toBeNull()
+  expect(director.tick(1500)?.id).toBe('k2')
+  expect(director.tick(2100)?.id).toBe(win.batchId)
+  expect(director.tick(4100)).not.toBeNull()
+  expect(director.tick(5100)).toBeNull()
   director.sync([win],'restore',4000,[kong]);expect(director.tick(4000)).toBeNull()
 })
 it('grades by base pattern weight, permits an upgrade and coalesces only visual backlog', () => {

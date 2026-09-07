@@ -53,6 +53,8 @@ const hudState = shallowRef<Record<string, unknown>>({})
 ;(window as any).__setCommonPresentation = (value: Record<string, unknown>) => { hudState.value = value }
 const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
 function showHudState(state: 'waiting'|'selection'|'preview') {
+  // 可胡画面 = 锁手之前的操作画面：解除锁手，保证胡/碰/杠/吃/过五种按钮齐全。
+  liveState.value = { ...liveState.value, seats: vector(s => ({ ...liveState.value.seats[s], locked: false })) }
   const waits = waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score}))
   liveState.value = { ...liveState.value, waits, discardWaitScores:{m1:waits} }
   hudState.value = { flipTile:'red',secondDice:[2,4], userCurrentWaits:waitInfo,
@@ -180,6 +182,8 @@ createApp({setup(){
 ])] : [])]) }}).mount('#app')
 // Shared layout stress input; the same players are used in ordinary and continuous-win modes.
 ;(window as any).__setCornerLayout = (meldCount:number, winner:number|null=null, emptyWall=false) => {
+  // 布局压力态 = 锁手之前的操作画面：解除锁手，保证胡/碰/杠/吃/过五种按钮齐全。
+  liveState.value={...liveState.value,seats:vector(s=>({...liveState.value.seats[s],locked:false}))}
   const layoutPlayers:GamePlayer[]=[0,1,2,3].map(seat=>({seat,name:['东家','南家','西家','北家'][seat],avatar:defaultAvatarForSeat(seat),score:2000,redCount:0,
     drawnTileIndex:-1,hand:Array(13-meldCount*3).fill('m2'),concealedTileCount:13-meldCount*3,discards:Array(28).fill('p1'),
     melds:Array.from({length:meldCount},(_,i)=>({type:i===0?'gang':'peng',added:i===0,tile:'s2',tiles:Array(i===0?4:3).fill('s2'),from:(seat+1)%4}))}))

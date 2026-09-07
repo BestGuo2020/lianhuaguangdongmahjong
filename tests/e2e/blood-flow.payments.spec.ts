@@ -22,7 +22,8 @@ test('kong receipts create one four-seat score cue and never masquerade as a win
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=0&motionScale=3')
   await expect(page.locator('.table-loading')).toHaveCount(0,{timeout:30_000})
   await page.evaluate(()=>(window as any).__appendBloodFlowKong(3))
-  await expect(page.locator('[data-payment-seat="3"]')).toContainText('暗杠')
+  // 杠收付只显示金额，不再重复杠种标题（多余信息已移除）。
+  await expect(page.locator('[data-payment-seat="3"]')).toContainText('+60')
   expect(await page.locator('[data-payment-seat]').evaluateAll(es=>es.sort((a,b)=>Number(a.getAttribute('data-payment-seat'))-Number(b.getAttribute('data-payment-seat'))).map(e=>Number(e.getAttribute('data-payment-amount'))))).toEqual([-20,-20,-20,60])
   await expect(page.locator('.blood-flow-central')).toHaveCount(0)
   await page.evaluate(()=>(window as any).__restoreBloodFlow())

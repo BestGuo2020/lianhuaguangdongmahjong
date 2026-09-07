@@ -45,8 +45,8 @@ export class BloodFlowPresentationQueue {
     if(!this.pending.length)return null
     if(this.pending[0].kong){
       const kong=this.pending.shift()!.kong!
-      return {id:kong.id,kind:'kong',kongEvents:[kong],startedAt:now,title:({discard:'直杠',added:'补杠',concealed:'暗杠',wind:'风杠'})[kong.kongKind],tier:0,duration:1200,compact:true,merged:false,introMs:0,
-        phaseMarks:{intro:0,focus:0,impact:60,readable:120,score:200,exit:1000},batchIds:[],records:[],flights:[],deltas:kong.deltas,seats:[]}
+      return {id:kong.id,kind:'kong',kongEvents:[kong],startedAt:now,title:({discard:'直杠',added:'补杠',concealed:'暗杠',wind:'风杠'})[kong.kongKind],tier:0,duration:1900,compact:true,merged:false,introMs:0,
+        phaseMarks:{intro:0,focus:0,impact:450,readable:800,score:1000,exit:1650},batchIds:[],records:[],flights:[],deltas:kong.deltas,seats:[]}
     }
     const boundary=this.pending.findIndex(p=>p.kong),count=boundary<0?this.pending.length:boundary
     const merged=count>3 || now-this.pending[0].at>BLOOD_FLOW_TIMING.visualBacklogMs

@@ -11,8 +11,7 @@ test('records the four default information states for visual review', async ({ p
     await page.getByRole('button', {name:label,exact:true}).click()
     await page.screenshot({path:`${dir}/info-${state}.png`})
   }
-  for (const label of ['胡','碰','杠','吃']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
-  await expect(page.locator('.action-bar').getByRole('button',{name:'过',exact:true})).toHaveCount(0)
+  for (const label of ['胡','碰','杠','吃','过']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
   await expect(page.locator('.flip-indicator-body')).toBeHidden()
   await page.getByRole('button',{name:'翻精指示牌',exact:true}).click()
   await expect(page.locator('.flip-indicator-body')).toContainText('二骰 2 + 4')

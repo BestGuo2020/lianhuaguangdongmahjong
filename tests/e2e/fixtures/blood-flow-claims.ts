@@ -32,12 +32,28 @@ const commands: EngineCommand[] = []
 const sounds: string[] = []
 const meta = { round: 1, dealer: 0, mode: 'east' as const }
 createApp({ setup() {
-  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), autoHuMs: new URLSearchParams(location.search).has('autoHuMs') ? Number(new URLSearchParams(location.search).get('autoHuMs')) : 0, externalAuthority: {
+  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), lockedAutoPlayMs: new URLSearchParams(location.search).has('lockedAutoMs') ? Number(new URLSearchParams(location.search).get('lockedAutoMs')) : 0, externalAuthority: {
     send(command) {
       commands.push(command)
       if (!engine.submit(command)) throw new Error('HUD submitted an unavailable action')
       for (const seat of SEATS) if (engine.window?.id === command.windowId && engine.window.options[seat].length && !engine.window.decisions[seat]) {
         engine.submit(engine.command(seat, {kind:'pass'}))
+      }
+      // 替其他座位推进流程：回合窗口打第一张可打牌、吃碰杠胡窗口一律过，直到流程回到本家（seat 1）。
+      let guard = 0
+      while (engine.window && guard++ < 24) {
+        const w = engine.window
+        if (w.kind === 'turn') {
+          if (engine.currentPlayer === 1) break
+          const move = w.options[engine.currentPlayer].find(a => a.kind === 'discard')
+          if (!move || !engine.submit(engine.command(engine.currentPlayer, move))) break
+        } else {
+          const pending = SEATS.filter(s => s !== 1 && w.options[s].length && !w.decisions[s])
+          if (!pending.length) break
+          let changed = false
+          for (const s of pending) changed = engine.submit(engine.command(s, { kind: 'pass' })) || changed
+          if (!changed) break
+        }
       }
       engine.assertConservation()
       void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
@@ -61,7 +77,7 @@ createApp({ setup() {
     return game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
   }
   ;(window as any).__claimEvidence = () => ({commands, sounds, selectedIndex:game.selectedIndex.value, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
-    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards})
+    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards, lockedDiscards:engine.players[1].discards.length})
   const keys = ['players','user','phase','wall','wallHeadDrawn','wallCount','currentPlayer','selectedIndex','turnSeconds','lastDiscard',
     'actionPrompt','announcement','tableActionEvent','scoreFlowEvent','result','winEffect','winPresentation','revealHands','matchFinished',
     'winningPlayerIndex','dealer','isUserTurn','userCanHu','matchName','roundLabel','dealAnimation','openingStage','diceValues',

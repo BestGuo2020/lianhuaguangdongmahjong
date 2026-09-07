@@ -73,7 +73,7 @@ const actionEvent=(seat:number):TableActionEvent=>{
       <template v-if="phase==='score'||phase==='exit'">
         <div v-for="{amount,seat} in payerFeedback" :key="seat" class="blood-flow-seat-feedback"
           :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0,'win-payment':cue.kind==='win'}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
-          <b>{{ signed(amount) }}</b><span v-if="cue.kind==='kong'||cue.merged">{{ cue.kind==='kong'?cue.title:'合计' }}</span>
+          <b>{{ signed(amount) }}</b><span v-if="cue.merged">合计</span>
         </div>
       </template>
     </div>
@@ -100,12 +100,17 @@ const actionEvent=(seat:number):TableActionEvent=>{
 [data-theme="llm"] .blood-flow-central::before { inset:20% -8%; border-block:1px solid #6eeaff99; background:repeating-linear-gradient(0deg,#67dce814 0 1px,transparent 1px 5px),linear-gradient(90deg,transparent,#123241cc,transparent); }
 [data-theme="llmAnime"] .blood-flow-central::before { background:linear-gradient(135deg,transparent 12%,#fd8db344 15% 17%,transparent 20% 60%,#dab5ef66 63% 66%,transparent 70%); transform:skewX(-15deg); }
 .blood-flow-winner-payment { position:absolute; transform:translateX(-50%); display:flex; align-items:baseline; gap:6px; color:var(--theme-positive,#7bddad); white-space:nowrap; }
+.blood-flow-winner-payment,.blood-flow-seat-feedback { animation:payment-in .4s cubic-bezier(.2,1.3,.4,1) backwards; }
 .blood-flow-winner-payment b { font-size:clamp(40px,5.5vw,76px); line-height:1.1; font-variant-numeric:tabular-nums; }
 .blood-flow-winner-payment span { font-size:15px; }
 .blood-flow-winner-payment b.negative { color:var(--theme-negative,#ffae9f); }
 .blood-flow-winner-payment,.blood-flow-seat-feedback.win-payment { text-shadow:0 2px 3px #000b; paint-order:stroke fill; -webkit-text-stroke:1px #14231da8; }
 .blood-flow-seat-feedback.win-payment { border:0; background:none; }
 .winner-0 { left:50%; bottom:19%; }.winner-1 { left:77%; top:32%; }.winner-2 { left:50%; top:12%; }.winner-3 { left:23%; top:32%; }
+@keyframes payment-in {
+  0% { opacity:0; transform:translateX(-50%) scale(.55); }
+  100% { opacity:1; transform:translateX(-50%) scale(1); }
+}
 .blood-flow-seat-feedback { position:absolute; display:grid; justify-items:center; transform:translateX(-50%); padding:6px 12px; border-radius:8px; background:var(--theme-panel,#122c25); color:var(--theme-positive,#7bddad); border:1px solid color-mix(in srgb,var(--win-color) 50%,transparent); }
 .blood-flow-seat-feedback.negative { color:var(--theme-negative,#ffae9f); }
 .blood-flow-seat-feedback b { font-size:clamp(34px,4.6vw,64px); font-variant-numeric:tabular-nums; }

@@ -45,8 +45,8 @@ export interface BloodFlowGameOptions {
   animeFixedTts?: AnimeFixedTtsExecutor
   humanPlayerSeed?: PlayerSeed
   aiPlayerSeeds?: PlayerSeed[]
-  /** 本家可胡时未操作的自动胡牌延迟（默认 1000ms；<=0 关闭）。 */
-  autoHuMs?: number
+  /** 本家胡牌锁手后，回合窗口开放超过该毫秒数自动打掉摸上来的那张（摸打；默认 800ms；<=0 关闭）。 */
+  lockedAutoPlayMs?: number
   /** Explicit test option: authority still uses the actual worker and rules engine. */
   autoplay?: boolean
   paceMs?: number
@@ -104,7 +104,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   })
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
-  let generation = 0, busy = false, heardAction = 0, heardDiscard = '', autoHuWindow = ''
+  let generation = 0, busy = false, heardAction = 0, heardDiscard = '', lockedAutoWindow = ''
   let waitQuerySerial = 0
   let hintKey = '', hintBusy = false
   let ring: TileType[] = [], dealerTile: TileType | null = null
@@ -235,15 +235,22 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: moves.flatMap(a => a.kind === 'chi' ? [{ tiles: a.tiles, kind: 'sequence' as const }] : []),
     } : null
-    // 本家可胡时不再提供“过”：窗口开放超过 autoHuMs 毫秒未操作则自动胡牌（默认 1 秒；<=0 关闭）。
-    if (w && next.public.status === 'playing' && moves.some(a => a.kind === 'win') && !options.autoplay && (options.autoHuMs ?? 1000) > 0 && w.id !== autoHuWindow) {
-      autoHuWindow = w.id
+    // 锁手自动摸打：本家胡牌锁手后全自动——有胡就胡（自摸/点炮都可再胡），
+    // 没胡就把摸上来的那张自动打掉；锁手窗口约 lockedAutoPlayMs 毫秒后执行。
+    if (w && next.public.status === 'playing' && next.public.seats[next.seat].locked && !options.autoplay
+      && (options.lockedAutoPlayMs ?? 800) > 0 && w.id !== lockedAutoWindow) {
+      lockedAutoWindow = w.id
       later(() => {
-        if (autoHuWindow !== w.id) return
+        if (lockedAutoWindow !== w.id) return
         const cur = view.value
         if (!cur || cur.window?.id !== w.id || cur.public.status !== 'playing') return
+        if (!cur.public.seats[cur.seat].locked) return
         if (cur.ownActions.some(a => a.kind === 'win')) send({ kind: 'win' })
-      }, Math.max(0, w.opensAt - Date.now() + (options.autoHuMs ?? 1000)))
+        else if (w.kind === 'turn') {
+          const drawn = cur.players[cur.seat].drawnTileIndex
+          if (drawn >= 0 && cur.ownActions.some(a => a.kind === 'discard' && a.index === drawn)) send({ kind: 'discard', index: drawn })
+        } else if (cur.ownActions.some(a => a.kind === 'pass')) send({ kind: 'pass' })
+      }, Math.max(0, w.opensAt - Date.now() + (options.lockedAutoPlayMs ?? 800)))
     }
     if (next.lastDiscardAction && next.lastDiscardAction.id !== heardDiscard) {
       heardDiscard = next.lastDiscardAction.id
@@ -412,7 +419,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function startGame(mode?: MatchType, startOptions: GameStartOptions & { initialWall?: TileType[]; openingDice?: [number, number]; openingSecondDice?: [number, number] } = {}) {
     if (options.externalAuthority) throw new Error('Only the room authority can start this game')
     clear(); opening.cancel(); options.animeFixedTts?.reset()
-    view.value = null; heardAction = 0; heardDiscard = ''; autoHuWindow = ''
+    view.value = null; heardAction = 0; heardDiscard = ''; lockedAutoWindow = ''
     ring = startOptions.initialWall ? [...startOptions.initialWall] : buildRingWall(); dealerTile = null
     return opening.start(mode, { ...startOptions, initialWall: ring })
   }
