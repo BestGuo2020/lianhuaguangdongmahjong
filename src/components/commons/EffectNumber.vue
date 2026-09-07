@@ -273,7 +273,6 @@ watch(
 )
 
 let disposed = false
-let resizeObserver
 let fontSet
 
 onMounted(() => {
@@ -289,17 +288,10 @@ onMounted(() => {
 
     fontSet.addEventListener('loadingdone', measureText)
   }
-
-  // 处理字形尺寸变化，以及隐藏后重新显示的情况。
-  if (typeof ResizeObserver !== 'undefined' && faceRef.value) {
-    resizeObserver = new ResizeObserver(measureText)
-    resizeObserver.observe(faceRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
   disposed = true
-  resizeObserver?.disconnect()
   fontSet?.removeEventListener('loadingdone', measureText)
 })
 

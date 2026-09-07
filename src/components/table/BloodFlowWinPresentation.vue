@@ -73,7 +73,7 @@ const actionEvent=(seat:number):TableActionEvent=>{
       </div>
       <template v-if="phase==='score'||phase==='exit'">
         <div v-for="{amount,seat} in payerFeedback" :key="seat" class="blood-flow-seat-feedback"
-          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0,'win-payment':cue.kind==='win'}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
+          :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0,'win-payment':cue.kind==='win'||cue.kind==='kong'}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
           <EffectNumber :value="amount" :height="compact?60:114" :show-plus="true" /><span v-if="cue.merged">合计</span>
         </div>
       </template>
