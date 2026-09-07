@@ -20,7 +20,7 @@ function titleStyleFor(seat:number,text:string,main=false){
   // The winner owns the location, at every tier. A local high win must never
   // jump across the table merely to make room for a larger title.
   const left=(props.compact?[50,74,44,26]:[50,78,50,22])[relative]
-  const anchor=relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,8,42]:[0,28,12,28])[relative]}%`}
+  const anchor=relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,8,42]:[0,38,12,38])[relative]}%`}
   const unit=main?(props.compact?52:110):props.cue.tier>=2?(props.compact?36:66):(props.compact?30:54)
   return {left:`${left}%`,...anchor,width:`min(${(text.length*.92+.4)*unit}px,${main?65:34}vw)`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) perspective(650px) rotateY(${m.tilt}deg) rotateX(${m.tilt*.3}deg) scale(${1+(m.scale-1)*.55}) rotate(${m.rotation}deg)`}
 }
@@ -37,7 +37,7 @@ const name=(seat:number)=>props.players[(seat-props.localSeat+4)%4]?.name??`玩�
 const introSource=computed(()=>props.cue?.seats[0]?.source??null)
 const introStyle=computed(()=>{
   const source=introSource.value,relative=source?(source.seat-props.localSeat+4)%4:0
-  return {left:`${(props.compact?[50,74,44,26]:[50,77,50,23])[relative]}%`,...(relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,12,42]:[0,30,12,30])[relative]}%`})}
+  return {left:`${(props.compact?[50,74,44,26]:[50,77,50,23])[relative]}%`,...(relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,12,42]:[0,38,12,38])[relative]}%`})}
 })
 const actionEvent=(seat:number):TableActionEvent=>{
   const item=props.cue!.seats.find(s=>s.seat===seat)!
@@ -106,16 +106,28 @@ const actionEvent=(seat:number):TableActionEvent=>{
 .blood-flow-winner-payment b.negative { color:var(--theme-negative,#ffae9f); }
 .blood-flow-winner-payment,.blood-flow-seat-feedback.win-payment { text-shadow:0 2px 3px #000b; paint-order:stroke fill; -webkit-text-stroke:1px #14231da8; }
 .blood-flow-seat-feedback.win-payment { border:0; background:none; }
-.winner-0 { left:50%; bottom:19%; }.winner-1 { left:77%; top:32%; }.winner-2 { left:50%; top:12%; }.winner-3 { left:23%; top:32%; }
+.winner-0 { left:50%; bottom:19%; }.winner-1 { left:89%; top:39%; }.winner-2 { left:50%; top:12%; }.winner-3 { left:12.5%; top:39%; }
 @keyframes payment-in {
   0% { opacity:0; transform:translateX(-50%) scale(.55); }
   100% { opacity:1; transform:translateX(-50%) scale(1); }
 }
+@keyframes payment-in-right {
+  0% { opacity:0; transform:translateX(-100%) scale(.55); }
+  100% { opacity:1; transform:translateX(-100%) scale(1); }
+}
+@keyframes payment-in-left {
+  0% { opacity:0; transform:scale(.55); }
+  100% { opacity:1; transform:scale(1); }
+}
 .blood-flow-seat-feedback { position:absolute; display:grid; justify-items:center; transform:translateX(-50%); padding:6px 12px; border-radius:8px; background:var(--theme-panel,#122c25); color:var(--theme-positive,#7bddad); border:1px solid color-mix(in srgb,var(--win-color) 50%,transparent); }
+/* 侧家收付按面板锚边（必须写在 .blood-flow-seat-feedback 之后，否则会被同优先级的 transform 覆盖导致动画结束瞬移）：
+   下家右对齐（右缘固定，向左生长），上家左对齐（左缘固定，向右生长）。 */
+.winner-1,.feedback-1 { transform:translateX(-100%); animation-name:payment-in-right; }
+.winner-3,.feedback-3 { transform:none; animation-name:payment-in-left; }
 .blood-flow-seat-feedback.negative { color:var(--theme-negative,#ffae9f); }
 .blood-flow-seat-feedback b { font-size:clamp(34px,4.6vw,64px); font-variant-numeric:tabular-nums; }
 .blood-flow-seat-feedback span { font-size:13px; }
-.feedback-0 { bottom:20%; left:50%; }.feedback-1 { top:34%; left:80%; }.feedback-2 { top:12%; left:50%; }.feedback-3 { top:34%; left:20%; }
+.feedback-0 { bottom:20%; left:50%; }.feedback-1 { top:39%; left:89%; }.feedback-2 { top:12%; left:50%; }.feedback-3 { top:39%; left:12.5%; }
 .compact .blood-flow-central { width:clamp(140px,25vw,210px); }
 .compact .blood-flow-multi-intro { width:clamp(150px,24vw,230px); }
 .compact :deep(.anime-action-cue) { width:76px; height:60px; --action-art-scale:1.55; }

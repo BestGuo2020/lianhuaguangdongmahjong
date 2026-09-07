@@ -58,11 +58,11 @@ function glyphTransform(index: number) {
 
 <style scoped>
 .impact-lettering { display:block; width:100%; overflow:visible; filter:drop-shadow(0 5px 5px #0007); }
-text { font-family:'KaiTi','STKaiti','Noto Serif CJK SC',serif; font-size:104px; font-weight:900; paint-order:stroke fill; stroke-linejoin:round; }
-.lettering-jade text { font-family:'STKaiti','KaiTi',serif; }
-.lettering-rosewood text { font-family:'FangSong','SimSun',serif; font-weight:900; }
-.lettering-happyMahjong text { font-family:'Microsoft YaHei',sans-serif; font-size:98px; font-weight:1000; }
-.lettering-llm text { font-family:'Microsoft YaHei UI',monospace; font-size:94px; font-weight:900; stroke-linejoin:bevel; }
+text { font-family:'Microsoft YaHei','Noto Sans CJK SC','PingFang SC',sans-serif; font-size:98px; font-weight:900; paint-order:stroke fill; stroke-linejoin:round; }
+.lettering-jade text { font-size:96px; letter-spacing:2px; }
+.lettering-rosewood text { font-size:96px; }
+.lettering-happyMahjong text { font-size:98px; font-weight:1000; }
+.lettering-llm text { font-size:94px; stroke-linejoin:bevel; }
 .lettering-llmAnime { filter:drop-shadow(0 3px 1px #160e2380); }
-.lettering-llmAnime text { font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif; font-size:98px; font-weight:900; stroke-linejoin:miter; stroke-miterlimit:2; }
+.lettering-llmAnime text { font-size:98px; stroke-linejoin:miter; stroke-miterlimit:2; }
 </style>

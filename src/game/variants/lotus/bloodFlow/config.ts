@@ -65,9 +65,13 @@ export const BLOOD_FLOW_TIMING = Object.freeze({
 /** Shared by the local continuation and the existing DOM/3D director. */
 export function bloodFlowWinTiming(tier: number) {
   if (tier >= 2) {
-    const duration = tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs
+    const base = tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs
     const impact = tier === 3 ? 1110 : 1000
-    return { duration, phaseMarks: { intro: 0, focus: 0, impact, readable: tier === 3 ? 1390 : 1240, score: duration - 620, exit: duration - 200 } }
+    const readable = tier === 3 ? 1390 : 1240
+    // 收付至少停留 1 秒：score → exit ≥ 1000ms，总时长相应顺延。
+    const score = base - 620
+    return { duration: score + 1200, phaseMarks: { intro: 0, focus: 0, impact, readable, score, exit: score + 1000 } }
   }
-  return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { intro: 0, focus: 0, impact: 870, readable: 1090, score: 1815, exit: 2050 } }
+  const score = 1815
+  return { duration: score + 1200, phaseMarks: { intro: 0, focus: 0, impact: 870, readable: 1090, score, exit: score + 1000 } }
 }

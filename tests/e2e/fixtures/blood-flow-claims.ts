@@ -11,6 +11,7 @@ import type { EngineCommand } from '../../../src/game/variants/lotus/bloodFlow/s
 import { SEATS } from '../../../src/game/variants/lotus/bloodFlow/state'
 import { defaultAvatarForSeat } from '../../../src/game/core/presentation/avatar'
 import { themePresentationByName, themePresentationCssVariables } from '../../../src/theme/themePresentation'
+import type { TableThemeName } from '../../../src/components/table/three/tableTheme'
 
 const pool = createWall()
 const take = (tile: TileType) => { const index = pool.indexOf(tile); if (index < 0) throw new Error(`Missing ${tile}`); return pool.splice(index, 1)[0] }
@@ -82,9 +83,10 @@ createApp({ setup() {
     'actionPrompt','announcement','tableActionEvent','scoreFlowEvent','result','winEffect','winPresentation','revealHands','matchFinished',
     'winningPlayerIndex','dealer','isUserTurn','userCanHu','matchName','roundLabel','dealAnimation','openingStage','diceValues',
     'diceThrowerIndex','userCurrentWaits','userTingOptions','userDiscardWaits','userKongs'] as const
-  return () => h('main', {class:'game-app','data-table-theme':'jade',style:themePresentationCssVariables(themePresentationByName('jade'))},
+  const theme = (new URLSearchParams(location.search).get('theme') ?? 'jade') as TableThemeName
+  return () => h('main', {class:'game-app','data-table-theme':theme,style:themePresentationCssVariables(themePresentationByName(theme))},
     [h('div',{class:'has-three-scene'},[h(GameTableHud,{
-      ...Object.fromEntries(keys.map(key => [key, unref(game[key])])), themeName:'jade',rulesetId:'lotus-blood-flow',
+      ...Object.fromEntries(keys.map(key => [key, unref(game[key])])), themeName:theme,rulesetId:'lotus-blood-flow',
       bloodFlow:game.capabilities.value.bloodFlow,jokerTiles:['red','green'],wildcardTiles:['white'],userHasWindKong:false,
       onPeng:game.userPeng,onGangFromDiscard:game.userGangFromDiscard,onHu:game.userHu,onPass:game.userPass,
       onGang:game.userGang,onSelectTile:game.selectTile,onClearSelection:game.clearUserSelection,onDiscard:game.userDiscard,
