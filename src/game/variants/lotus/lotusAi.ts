@@ -2,11 +2,11 @@
 // 决策与执行分离，可独立单元测试。
 import type { Meld, TileType } from '../../core/contracts/types'
 import { removeMatches } from '../../core/rules/actions'
-import { HONORS } from '../../core/rules/tiles'
 import { canPeng, concealedKongs, isWinningHand, matchingCount, waitingTiles, windKong, type ChiMeld, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { hasReadyDiscard, projectKongBloom } from './kongProjection'
 import { compareHandProgress, evaluateHandProgress, type HandProgress } from '../../shared/ai/handProgress'
+import { sevenPairsPotential, shiSanLanPotential, thirteenOrphansPotential } from './bloodFlow/patternPotentials'
 
 function wildcardSet(jokers: readonly TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
@@ -80,6 +80,10 @@ export interface LotusTurnView {
   /** 剩余牌墙张数（残局节奏用） */
   wallCount?: number
   ruleset?: RuleSet
+  /** 可选：番型潜力收益（点），血流策略注入；不传则行为与经典一致。 */
+  patternBonus?: (hand: TileType[], melds: Meld[]) => number
+  /** 可选：弃牌放炮成本（点），血流策略注入。 */
+  safetyExposure?: (tile: TileType) => number
 }
 
 export interface LotusClaimView {
@@ -98,6 +102,12 @@ export interface LotusClaimView {
   earlyRound?: boolean
   /** 剩余牌墙张数（残局节奏用） */
   wallCount?: number
+  /** 可选：番型潜力收益（点），血流策略注入；不传则行为与经典一致。 */
+  patternBonus?: (hand: TileType[], melds: Meld[]) => number
+  /** 可选：弃牌放炮成本（点），血流策略注入。 */
+  safetyExposure?: (tile: TileType) => number
+  /** 可选：现有副露（供 patternBonus 统计杠/碰）。 */
+  melds?: Meld[]
 }
 
 export interface LotusRobKongView {
@@ -146,6 +156,9 @@ export function decideTurn(view: LotusTurnView, random: () => number = Math.rand
       upperLastDiscard: view.upperLastDiscard,
       earlyRound: view.earlyRound,
       wallCount: view.wallCount,
+      patternBonus: view.patternBonus,
+      safetyExposure: view.safetyExposure,
+      melds: view.melds,
     }),
   }
 }
@@ -183,6 +196,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   // 因此继续保留杠的最高优先级；碰与吃则必须比较动作后的听牌质量。
   if (view.canGang) return { kind: 'gang' }
 
+  const extras: DiscardExtras = { melds: view.melds, patternBonus: view.patternBonus, safetyExposure: view.safetyExposure }
   const baseline = currentHandQuality(
     view.hand,
     view.exposedMelds,
@@ -191,6 +205,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
     view.publicTiles,
     view.upperLastDiscard,
     view.wallCount,
+    extras,
   )
   const candidates: Array<{
     action: Exclude<LotusClaimAction, { kind: 'pass' }>
@@ -208,6 +223,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.publicTiles,
       view.upperLastDiscard,
       view.wallCount,
+      extras,
     )
     if (discard) candidates.push({
       action: { kind: 'peng', discardIndex: discard.index },
@@ -227,6 +243,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.publicTiles,
       view.upperLastDiscard,
       view.wallCount,
+      extras,
     )
     if (discard) candidates.push({ action: { kind: 'chi', meld }, quality: discard.quality })
   }
@@ -265,6 +282,13 @@ interface DiscardQuality {
   progress: HandProgress
 }
 
+/** 可选扩展（血流策略注入；经典调用不传，行为不变）。 */
+interface DiscardExtras {
+  melds?: Meld[]
+  patternBonus?: (hand: TileType[], melds: Meld[]) => number
+  safetyExposure?: (tile: TileType) => number
+}
+
 function emptyQuality(): DiscardQuality {
   return {
     ready: false,
@@ -298,6 +322,7 @@ function currentHandQuality(
   _publicTiles: TileType[] = [],
   _upperLastDiscard?: TileType,
   wallCount?: number,
+  extras: DiscardExtras = {},
 ): DiscardQuality {
   const progress = lotusProgress(hand, exposedMelds, jokers, visibleTiles)
   const waits = progress.waits
@@ -311,7 +336,7 @@ function currentHandQuality(
     specialScore,
     heuristic: 0,
     safetyScore: 0,
-    netScore: attackScore,
+    netScore: attackScore + (extras.patternBonus?.(hand, extras.melds ?? []) ?? 0),
     progress,
   }
 }
@@ -338,6 +363,7 @@ function bestDiscardAfterClaim(
   publicTiles: TileType[] = [],
   upperLastDiscard?: TileType,
   wallCount?: number,
+  extras: DiscardExtras = {},
 ) {
   if (!hand.length) return null
   const candidates = lotusDiscardCandidates(hand, jokers)
@@ -356,6 +382,8 @@ function bestDiscardAfterClaim(
           publicTiles,
           upperLastDiscard,
           wallCount,
+          true,
+          extras,
         ),
       }
     })
@@ -374,6 +402,7 @@ function discardQuality(
   upperLastDiscard?: TileType,
   wallCount?: number,
   includeProgress = true,
+  extras: DiscardExtras = {},
 ): DiscardQuality {
   const waits = aiWaitingTiles(afterDiscard, exposedMelds, jokers)
   const effectiveRemaining = waits.reduce((total, tile) => total + remainingCount(tile, visibleTiles), 0)
@@ -391,7 +420,9 @@ function discardQuality(
     specialScore,
     heuristic: discardHeuristic(afterDiscard, discarded, jokers, earlyRound),
     safetyScore,
-    netScore: attackScore + safetyScore * (lateGame && waits.length ? 4 : 2),
+    netScore: attackScore + safetyScore * (lateGame && waits.length ? 4 : 2)
+      + (extras.patternBonus?.(afterDiscard, extras.melds ?? []) ?? 0)
+      - (extras.safetyExposure?.(discarded) ?? 0),
     progress,
   }
 }
@@ -424,11 +455,6 @@ function remainingCount(tile: TileType, visibleTiles: TileType[]) {
   return Math.max(0, 4 - matchingCount(visibleTiles, tile))
 }
 
-const THIRTEEN_ORPHAN_TERMINALS: TileType[] = [
-  'm1', 'm9', 'p1', 'p9', 's1', 's9',
-  'east', 'south', 'west', 'north', 'red', 'green', 'white',
-]
-
 /** 特殊牌型潜力：十三烂/七星十三烂、十三幺、七对子，取最高方向。 */
 function specialPatternScore(hand: TileType[], exposedMelds: number, jokers: TileType[]) {
   if (exposedMelds > 0) return -20
@@ -438,65 +464,6 @@ function specialPatternScore(hand: TileType[], exposedMelds: number, jokers: Til
     thirteenOrphansPotential(hand, effectiveJokers),
     sevenPairsPotential(hand, effectiveJokers),
   )
-}
-
-/** 十三烂/七星十三烂潜力：缺陷越少、字牌越齐、精牌越多越接近。 */
-function shiSanLanPotential(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = new Set(jokers)
-  const natural = hand.filter((tile) => !jokerSet.has(tile))
-  // 数牌间隔缺陷 + 重复缺陷（与规则判定同口径）
-  let defects = natural.length - new Set(natural).size
-  for (const suit of ['m', 'p', 's']) {
-    const ranks = natural
-      .filter((tile) => tile.length === 2 && tile[0] === suit)
-      .map((tile) => Number(tile[1]))
-      .sort((a, b) => a - b)
-    for (let index = 1; index < ranks.length; index += 1) {
-      if (ranks[index] - ranks[index - 1] < 3) defects += 1
-    }
-  }
-  // 字牌进度：物理持有的字牌种类（精牌可替补缺字）
-  const honorsHeld = HONORS.filter((honor) => natural.includes(honor)).length
-  const jokerCount = hand.length - natural.length
-  const honorShortfall = Math.max(0, 7 - honorsHeld)
-  const jokersAfterHonors = Math.max(0, jokerCount - honorShortfall)
-  const defectsAfterJokers = Math.max(0, defects - jokersAfterHonors)
-  if (defectsAfterJokers > 3) return 0
-  return (4 - defectsAfterJokers) * 4 + honorsHeld + jokerCount
-}
-
-/** 十三幺潜力：13 种幺九/字牌持有进度 + 精牌可替补 + 对子可成。 */
-function thirteenOrphansPotential(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = new Set(jokers)
-  const natural = hand.filter((tile) => !jokerSet.has(tile))
-  const heldKinds = THIRTEEN_ORPHAN_TERMINALS.filter((tile) => natural.includes(tile)).length
-  const jokerCount = hand.length - natural.length
-  const kindsAfterJokers = heldKinds + jokerCount
-  if (kindsAfterJokers < 10) return 0
-  // 成对条件：任一幺九牌物理成对，或剩余精牌可补一对
-  const hasPair = THIRTEEN_ORPHAN_TERMINALS.some((tile) => matchingCount(natural, tile) >= 2)
-  const pairScore = hasPair || jokerCount >= 2 ? 8 : 0
-  return (kindsAfterJokers - 10) * 3 + pairScore
-}
-
-/** 七对子潜力：已有对子数 + 精牌可补单张成对。 */
-function sevenPairsPotential(hand: TileType[], jokers: TileType[]) {
-  const jokerSet = new Set(jokers)
-  const counts = new Map<TileType, number>()
-  let jokerCount = 0
-  hand.forEach((tile) => {
-    if (jokerSet.has(tile)) jokerCount += 1
-    else counts.set(tile, (counts.get(tile) ?? 0) + 1)
-  })
-  let pairs = 0
-  let singles = 0
-  counts.forEach((count) => {
-    pairs += Math.floor(count / 2)
-    singles += count % 2
-  })
-  const nearSeven = pairs + Math.min(singles, jokerCount)
-  if (nearSeven < 5) return 0
-  return nearSeven * 4
 }
 
 function discardHeuristic(hand: TileType[], discarded: TileType, jokers: TileType[], earlyRound: boolean) {
@@ -531,6 +498,12 @@ interface DiscardOptions {
   upperLastDiscard?: TileType
   earlyRound?: boolean
   wallCount?: number
+  /** 可选：番型潜力收益（点），血流策略注入；不传则行为与经典一致。 */
+  patternBonus?: (hand: TileType[], melds: Meld[]) => number
+  /** 可选：弃牌放炮成本（点），血流策略注入。 */
+  safetyExposure?: (tile: TileType) => number
+  /** 可选：现有副露（供 patternBonus 统计杠/碰）。 */
+  melds?: Meld[]
 }
 
 export function chooseDiscardIndex(
@@ -539,6 +512,7 @@ export function chooseDiscardIndex(
   random: () => number = Math.random,
   options: DiscardOptions = {},
 ): number {
+  const extras: DiscardExtras = { melds: options.melds, patternBonus: options.patternBonus, safetyExposure: options.safetyExposure }
   const candidates = lotusDiscardCandidates(hand, jokers)
   const preliminary = candidates.map(({ tile, index }) => {
     const score = discardShapeScore(hand, tile) + random()
@@ -555,6 +529,7 @@ export function chooseDiscardIndex(
         options.upperLastDiscard,
         options.wallCount,
         false,
+        extras,
       )
     return { index, score, quality }
   })
@@ -577,6 +552,8 @@ export function chooseDiscardIndex(
         options.publicTiles ?? [],
         options.upperLastDiscard,
         options.wallCount,
+        true,
+        extras,
       ),
     }
   })

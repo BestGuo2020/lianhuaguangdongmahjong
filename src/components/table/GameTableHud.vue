@@ -278,6 +278,11 @@ function isTingDiscard(index: number, tile: TileType) {
   return props.isUserTurn && tingDiscardTiles.value.has(tile)
     && (!props.bloodFlow?.seats[props.user.seat].locked || index === userDrawnIndex.value)
 }
+/** 自摸窗口的改张建议牌（AI 同源计算；抢杠/点炮窗口 bloodFlow.reformHint 恒为 null）。 */
+function isReformDiscard(index: number, tile: TileType) {
+  const hint = props.bloodFlow?.reformHint
+  return Boolean(hint && tile === hint.discard && !props.bloodFlow?.seats[props.user.seat].locked)
+}
 function toggleWaits() {
   if (waitsOpen.value) { waitsOpen.value = false; return }
   if (!activeWaits.value && props.userTingOptions.length) {
@@ -598,18 +603,25 @@ function onAvatarError(entry: GamePlayer) {
       <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div
           v-for="(tile, index) in displayedUserHand" :key="`${tile}-${index}`" class="hand-tile-slot"
-          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isTingDiscard(index, tile) }"
+          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isTingDiscard(index, tile), 'reform-discard': isReformDiscard(index, tile) }"
           @mouseenter="previewDesktopWaits(tile, index)" @mouseleave="clearDesktopWaits"
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
-          <span v-if="isTingDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
+          <span v-if="isTingDiscard(index, tile) && !isReformDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
+          <span v-if="isReformDiscard(index, tile)" class="ting-arrow reform-arrow" aria-hidden="true"></span>
+          <span v-if="isReformDiscard(index, tile)" class="reform-badge" aria-hidden="true">改</span>
           <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
         </div>
       </div>
     </section>
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+      <div v-if="bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
+        <b>改张</b><span>打出</span><b class="reform-tile">{{ tileName(bloodFlow.reformHint.discard) }}</b>
+        <span v-if="bloodFlow.reformHint.reason === 'any-wait'">→ 癞子单吊·任意听（此后每巡可胡）</span>
+        <span v-else>→ 听口更宽、收益更高</span>
+      </div>
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
         <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
           <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
@@ -686,6 +698,16 @@ function onAvatarError(entry: GamePlayer) {
 
 <style scoped>
 .game-table-hud { display: contents; }
+/* 自摸窗口改张提示（血流）：一行小字，主按钮行之前。 */
+.blood-flow-reform-tip { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid color-mix(in srgb, #4cc9f0 55%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--theme-panel) 88%, transparent); color: var(--theme-text); font-size: 12px; line-height: 1.3; max-width: min(52vw, 460px); }
+.blood-flow-reform-tip b { color: #7adcff; }
+.blood-flow-reform-tip .reform-tile { color: var(--theme-positive, #9be6c6); }
+.hand-tile-slot.reform-discard .ting-arrow.reform-arrow { background: linear-gradient(135deg, #bdf3ff 0 13%, #4cc9f0 42%, #2a9dcc 100%); filter: drop-shadow(0 2px 1px rgba(0, 45, 74, .75)) drop-shadow(0 0 5px rgba(76, 201, 240, .6)); }
+.reform-badge { position: absolute; z-index: 5; top: -16px; right: -4px; min-width: 17px; padding: 0 3px; border-radius: 8px; background: #2a9dcc; color: #eafcff; font-size: 11px; font-weight: 800; line-height: 15px; text-align: center; box-shadow: 0 2px 4px #0008; pointer-events: none; }
+@container (max-width: 900px) or (max-height: 500px) {
+  .blood-flow-reform-tip { font-size: 10px; padding: 3px 7px; max-width: 62vw; }
+  .reform-badge { top: -13px; min-width: 14px; font-size: 9px; line-height: 13px; }
+}
 .blood-flow-waiting-tip { max-height: min(320px, 55vh); align-items: flex-start; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
 .blood-flow-wait-grid { display: grid; gap: 12px 14px; }
 .blood-flow-wait-tile { display: grid; justify-items: center; align-content: start; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }

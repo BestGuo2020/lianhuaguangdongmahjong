@@ -62,6 +62,52 @@ export const BLOOD_FLOW_TIMING = Object.freeze({
   fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
 })
 
+/**
+ * 本地 AI 贪婪 EV 策略参数（见 docs/blood-flow/design/ai-strategy.md）。
+ * 只影响决策，不改变计分、封顶、锁手或胡后自动续行规则。
+ */
+export interface BloodFlowAiConfig {
+  readonly strategy: 'ev' | 'legacy'
+  /** legacy 策略的首次胡单家支付门槛（旧行为保留）。 */
+  readonly minimumFirstPayment: number
+  /** 自摸单次总收入（×2 × 3 家）相对点炮（×1 × 1 家）的连锁期望权重。 */
+  readonly selfDrawWeight: number
+  /** 首胡门槛（单家支付，取合法 10 的倍数档）：早局 / 中局 / 残局。 */
+  readonly firstWinFloorEarly: number
+  readonly firstWinFloorMid: number
+  readonly firstWinFloorLate: number
+  /** 墙余分界：≤ late 为残局，> early 为早局。 */
+  readonly lateGameWallCount: number
+  readonly earlyGameWallCount: number
+  /** 拒胡所需的最小改造潜力（Σ weight×progress²；默认 2 ≈ 一个 4 倍级方向 0.7 接近度）。 */
+  readonly potentialFloor: number
+  /** 改张 EV 需 ≥ 该比例 × 立即胡 EV 才执行 / 提示。 */
+  readonly reformGainRatio: number
+  /** 锁手后连锁期望的展望巡数。 */
+  readonly chainHorizon: number
+  /** 弃牌放炮成本档位（公开 0 张 / 1 张 / ≥2 张）。 */
+  readonly safetyCostNone: number
+  readonly safetyCostOne: number
+  readonly safetyCostSafe: number
+}
+
+export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
+  strategy: 'ev',
+  minimumFirstPayment: 0,
+  selfDrawWeight: 6,
+  firstWinFloorEarly: 40,
+  firstWinFloorMid: 20,
+  firstWinFloorLate: 10,
+  lateGameWallCount: 15,
+  earlyGameWallCount: 40,
+  potentialFloor: 2,
+  reformGainRatio: 1.2,
+  chainHorizon: 8,
+  safetyCostNone: 0.25,
+  safetyCostOne: 0.1,
+  safetyCostSafe: 0,
+})
+
 /** Shared by the local continuation and the existing DOM/3D director. */
 export function bloodFlowWinTiming(tier: number) {
   if (tier >= 2) {

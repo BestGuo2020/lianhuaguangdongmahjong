@@ -181,4 +181,6 @@ export interface BloodFlowTableState extends BloodFlowPublicState {
   readonly actionBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
   readonly waits: readonly { tile: TileType; selfDraw: PublicWinScore | null; discard: PublicWinScore | null }[]
   readonly discardWaitScores?: Partial<Record<TileType, BloodFlowTableState['waits']>>
+  /** 自摸窗口改张提示（仅血流；抢杠/点炮窗口恒为 null）。 */
+  readonly reformHint?: { readonly discard: TileType; readonly reason: 'any-wait' | 'better'; readonly gain: number } | null
 }

@@ -21,9 +21,27 @@ const hands: TileType[][] = [
   ['m3','m4','m5','m5','m5','p1','p2','p3','s1','s2','s3','east','east'],
 ]
 if(new URLSearchParams(location.search).has('multiChi')) hands[1]=['m3','m4','m5','m5','m5','m6','m7','p1','p2','p3','east','east','east']
+// 改张场景：本家 4 副面子 + 单张 s7，牌墙首张为精牌 → 摸到精牌自摸窗口，可改张为单吊任意听。
+if(new URLSearchParams(location.search).has('reform')) {
+  hands[1]=['m1','m1','m1','m2','m3','m4','m5','m5','m5','p1','p1','p1','s7']
+}
 hands.forEach(hand => hand.forEach(take))
 const players = SEATS.map((seat): GamePlayer => ({ seat, name: `玩家${seat+1}`, avatar: defaultAvatarForSeat(seat), score: 2000,
   hand: hands[seat] ?? pool.splice(0, 13), melds: [], discards: [], redCount: 0, drawnTileIndex: -1 }))
+// 改张场景：别家暗手取完后，把绿发挪到牌墙首张（本家上手后摸到的第一张）。
+if(new URLSearchParams(location.search).has('reform')) {
+  let greenIndex = pool.indexOf('green')
+  if (greenIndex < 0) {
+    // 绿发都被别家暗手拿走时，从暗手与墙尾对调一张，保持 136 张守恒。
+    const holder = hands[2]?.includes('green') ? 2 : hands[3]?.includes('green') ? 3 : -1
+    if (holder < 0) throw new Error('reform fixture needs a green joker')
+    const fromIndex = hands[holder].indexOf('green')
+    hands[holder][fromIndex] = pool[pool.length - 1]
+    pool[pool.length - 1] = 'green'
+    greenIndex = pool.length - 1
+  }
+  pool.unshift(pool.splice(greenIndex, 1)[0])
+}
 const engine = new BloodFlowEngine({ authorityEpoch: 'claims-fixture', roundId: 'claims-round', winBeatMs: 0, decisionMs: Infinity,
   paced: new URLSearchParams(location.search).has('paced'),
   opening: { players, wall: pool, flipTiles, jokers: ['red','green'], headDrawn: 134-pool.length,
@@ -78,7 +96,8 @@ createApp({ setup() {
     return game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
   }
   ;(window as any).__claimEvidence = () => ({commands, sounds, selectedIndex:game.selectedIndex.value, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
-    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards, lockedDiscards:engine.players[1].discards.length})
+    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards, lockedDiscards:engine.players[1].discards.length,
+    ownActions:engine.window?.options[1], hand:engine.players[1].hand, jokers:engine.jokers, ownScore:engine.currentScore(1)?.score})
   const keys = ['players','user','phase','wall','wallHeadDrawn','wallCount','currentPlayer','selectedIndex','turnSeconds','lastDiscard',
     'actionPrompt','announcement','tableActionEvent','scoreFlowEvent','result','winEffect','winPresentation','revealHands','matchFinished',
     'winningPlayerIndex','dealer','isUserTurn','userCanHu','matchName','roundLabel','dealAnimation','openingStage','diceValues',

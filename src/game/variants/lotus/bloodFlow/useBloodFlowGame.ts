@@ -19,9 +19,10 @@ import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from './config'
 import { createBloodFlowWorkerClient } from './workerClient'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
+import { computeReformHint } from './reformHint'
 import type { BloodFlowAction, BloodFlowOpeningState } from './state'
 import type { EngineCommand } from './state'
-import type { Seat, WinBatch } from './types'
+import type { BloodFlowTableState, Seat, WinBatch } from './types'
 import type { NetworkOpening } from './network/protocol'
 import type { HandWaitHints, WaitScores } from '../patterns/handWaits'
 import { createEvaluatorService } from '../patterns/evaluatorService'
@@ -461,6 +462,25 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const discard = userDiscardWaits.value?.discard
     return (discard ? handHints.value?.discards.find(item => item.discard === discard)?.waits : handHints.value?.current) ?? []
   })
+  // 自摸窗口改张提示：与 AI 策略同源计算；抢杠/点炮窗口（window.kind 非 turn 或来源非摸牌）恒为 null。
+  const reformHint = computed<BloodFlowTableState['reformHint']>(() => {
+    const current = view.value
+    const window = current?.window
+    if (!current || !window || window.kind !== 'turn' || window.source.kind !== 'draw') return null
+    if (!moves.value.some(action => action.kind === 'win')) return null
+    if (current.public.seats[current.seat].locked) return null
+    if (!handHints.value || !current.ownScore) return null
+    const drawnTileIndex = current.players[current.seat].drawnTileIndex
+    if (drawnTileIndex < 0) return null
+    return computeReformHint({
+      hand: current.players[current.seat].hand,
+      drawnTileIndex,
+      wallCount: current.wallCount,
+      visible: visibleTiles(current),
+      ownScore: current.ownScore,
+      hints: handHints.value,
+    })
+  })
   async function refreshWaits() {
     const current = view.value
     if (!hintWorker || !current || current.public.status !== 'playing' || options.autoplay) return
@@ -632,6 +652,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     windKong: { available: moves.value.some(a => a.kind === 'wind-kong'), execute: () => send({ kind: 'wind-kong' }) },
     bloodFlow: view.value ? { ...view.value.public, waits: waitScores.value,
       discardWaitScores: Object.fromEntries((handHints.value?.discards ?? []).map(item => [item.discard, item.waits])),
+      reformHint: reformHint.value,
       presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:{...actionBubbles.value,...thinkingBubbles.value}, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)

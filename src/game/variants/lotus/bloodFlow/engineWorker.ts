@@ -3,7 +3,8 @@ import type { BloodFlowEngineOptions } from './engine'
 import type { EngineCommand } from './state'
 import type { Seat } from './types'
 import { bloodFlowSeatView } from './seatView'
-import { decideBloodFlowAction } from './ai'
+import { decideBloodFlowAction, decideBloodFlowActionEv } from './ai'
+import { BLOOD_FLOW_AI } from './config'
 import { evaluateWaits } from '../patterns/evaluate'
 
 export type EngineWorkerRequest = { id: number } & (
@@ -24,7 +25,10 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     let result: unknown
     if (data.kind === 'command') engine.submit(data.command)
     if (data.kind === 'bot' && engine.window?.id === data.windowId) {
-      const action = decideBloodFlowAction(bloodFlowSeatView(engine, data.seat))
+      const view = bloodFlowSeatView(engine, data.seat)
+      const action = BLOOD_FLOW_AI.strategy === 'legacy'
+        ? decideBloodFlowAction(view, BLOOD_FLOW_AI.minimumFirstPayment)
+        : decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
       if (action) engine.submit(engine.command(data.seat, action))
     }
     if (data.kind === 'expire') engine.expire(Date.now(), data.windowId)
