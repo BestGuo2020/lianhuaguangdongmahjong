@@ -5,6 +5,7 @@ import type { GamePlayer, TableActionEvent } from '../../game/core/contracts/typ
 import type { TableThemeName } from './three/tableTheme'
 import TableActionCue from './TableActionCue.vue'
 import BloodFlowImpactTitle from './BloodFlowImpactTitle.vue'
+import EffectNumber from '../commons/EffectNumber.vue'
 import {bloodFlowImpactProfile,bloodFlowTitleMotion} from '../../theme/bloodFlowPresentation'
 const props=defineProps<{cue:BloodFlowCue|null;now:number;themeName:TableThemeName;localSeat:number;players:GamePlayer[];compact?:boolean}>()
 const phase=computed(()=>props.cue?cuePhase(props.cue,props.now):'exit')
@@ -19,7 +20,7 @@ function titleStyleFor(seat:number,text:string,main=false){
   const relative=(seat-props.localSeat+4)%4
   // The winner owns the location, at every tier. A local high win must never
   // jump across the table merely to make room for a larger title.
-  const left=(props.compact?[50,74,44,26]:[50,78,50,22])[relative]
+  const left=(props.compact?[50,74,50,26]:[50,78,50,22])[relative]
   const anchor=relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,8,42]:[0,38,12,38])[relative]}%`}
   const unit=main?(props.compact?52:110):props.cue.tier>=2?(props.compact?36:66):(props.compact?30:54)
   return {left:`${left}%`,...anchor,width:`min(${(text.length*.92+.4)*unit}px,${main?65:34}vw)`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) perspective(650px) rotateY(${m.tilt}deg) rotateX(${m.tilt*.3}deg) scale(${1+(m.scale-1)*.55}) rotate(${m.rotation}deg)`}
@@ -67,13 +68,13 @@ const actionEvent=(seat:number):TableActionEvent=>{
         <div v-for="item in cue.seats" :key="item.seat" class="blood-flow-winner-payment" :class="`winner-${(item.seat-localSeat+4)%4}`" :data-winner-seat="item.seat"
           :data-payment-seat="item.seat" :data-payment-amount="cue.deltas[item.seat]" :aria-label="`${name(item.seat)}，${cue.merged?'合计':''}${signed(cue.deltas[item.seat])}`">
           <span v-if="cue.merged">合计</span>
-          <b :class="{negative:cue.deltas[item.seat]<0}">{{ signed(cue.deltas[item.seat]) }}</b>
+          <EffectNumber :value="cue.deltas[item.seat]" :height="compact?60:114" :show-plus="true" />
         </div>
       </div>
       <template v-if="phase==='score'||phase==='exit'">
         <div v-for="{amount,seat} in payerFeedback" :key="seat" class="blood-flow-seat-feedback"
           :class="[`feedback-${(seat-localSeat+4)%4}`,{negative:amount<0,'win-payment':cue.kind==='win'}]" :data-payment-seat="seat" :data-payment-amount="amount" :aria-label="`${name(seat)}，${cue.merged?'合计':''}${signed(amount)}`">
-          <b>{{ signed(amount) }}</b><span v-if="cue.merged">合计</span>
+          <EffectNumber :value="amount" :height="compact?60:114" :show-plus="true" /><span v-if="cue.merged">合计</span>
         </div>
       </template>
     </div>
@@ -133,11 +134,39 @@ const actionEvent=(seat:number):TableActionEvent=>{
 .compact :deep(.anime-action-cue) { width:76px; height:60px; --action-art-scale:1.55; }
 .compact :deep(.anime-action-copy strong) { font-size:28px; -webkit-text-stroke:3px #2d241c; }
 .compact .stage-main .blood-flow-central { width:clamp(170px,30vw,265px); }
-.compact .blood-flow-winner-payment b { font-size:32px; }
-.compact .blood-flow-winner-payment span { font-size:12px; }
-.compact .winner-0 { bottom:22%; }.compact .winner-1 { left:76%; top:55%; }.compact .winner-2 { left:44%; top:8%; }.compact .winner-3 { left:24%; top:55%; }
 .compact .blood-flow-seat-feedback { padding:3px 7px; }
-.compact .blood-flow-seat-feedback b { font-size:26px; }
-.compact .feedback-0 { bottom:22%; }.compact .feedback-2 { top:10%; left:44%; }
-.compact .feedback-1,.compact .feedback-3 { top:55%; }
+/* 移动端紧凑：收付复用 HUD 的座位锚定变量（与面板/动作 cue 同一套锚点） */
+.compact .winner-0,.compact .feedback-0 {
+  bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap));
+  left: 50%;
+  transform: translate(-50%, 0);
+  animation-name: payment-in-compact-center;
+}
+.compact .winner-1,.compact .feedback-1 {
+  top: var(--side-seat-anchor);
+  left: auto;
+  right: calc(var(--safe-right) + var(--seat-card-width) + var(--hud-gap));
+  transform: translate(0, -50%);
+  animation-name: payment-in-compact-side;
+}
+.compact .winner-3,.compact .feedback-3 {
+  top: var(--side-seat-anchor);
+  left: calc(var(--safe-left) + var(--seat-card-width) + var(--hud-gap));
+  transform: translate(0, -50%);
+  animation-name: payment-in-compact-side;
+}
+.compact .winner-2,.compact .feedback-2 {
+  top: 10%;
+  left: 50%;
+  transform: translate(-50%, 0);
+  animation-name: payment-in-compact-center;
+}
+@keyframes payment-in-compact-side {
+  0% { opacity: 0; transform: translate(0, -50%) scale(.55); }
+  100% { opacity: 1; transform: translate(0, -50%) scale(1); }
+}
+@keyframes payment-in-compact-center {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(.55); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
 </style>

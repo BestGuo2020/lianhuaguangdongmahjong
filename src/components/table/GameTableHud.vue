@@ -709,7 +709,7 @@ function onAvatarError(entry: GamePlayer) {
   .win-count-right { top: auto; bottom: 4px; }
   .blood-flow-table .hand-rack :deep(.mahjong-tile) { --tile-width: clamp(24px, 5.2vw, 40px); }
   .blood-flow-table .hand-tile-slot { min-width: 0; }
-  .blood-flow-table .hand-rack:not(.has-melds) { justify-content: flex-end; padding-left: 0; padding-right: 0; }
+  .blood-flow-table .hand-rack:not(.has-melds) { justify-content: center; padding-left: 0; padding-right: 0; }
 }
 
 /* 莲花麻将翻精指示牌（桌面右上角；桌面端始终完整显示） */

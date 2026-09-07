@@ -12,7 +12,7 @@ test('three winners retain their own patterns and the payer shows the whole paym
   }
   await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='score')
   for(const [seat,amount] of [[1,80],[2,160],[3,320]]){
-    await expect(page.locator(`[data-winner-seat="${seat}"]`)).toHaveText(`+${amount}`)
+    await expect(page.locator(`[data-winner-seat="${seat}"]`)).toHaveAttribute('data-payment-amount',String(amount))
   }
   await expect(page.locator('[data-payment-seat="0"]')).toBeVisible()
   expect(await page.locator('[data-payment-seat]').evaluateAll(es=>es.sort((a,b)=>Number(a.getAttribute('data-payment-seat'))-Number(b.getAttribute('data-payment-seat'))).map(e=>Number(e.getAttribute('data-payment-amount'))))).toEqual([-560,80,160,320])
@@ -23,7 +23,7 @@ test('kong receipts create one four-seat score cue and never masquerade as a win
   await expect(page.locator('.table-loading')).toHaveCount(0,{timeout:30_000})
   await page.evaluate(()=>(window as any).__appendBloodFlowKong(3))
   // 杠收付只显示金额，不再重复杠种标题（多余信息已移除）。
-  await expect(page.locator('[data-payment-seat="3"]')).toContainText('+60')
+  await expect(page.locator('[data-payment-seat="3"]')).toHaveAttribute('data-payment-amount','60')
   expect(await page.locator('[data-payment-seat]').evaluateAll(es=>es.sort((a,b)=>Number(a.getAttribute('data-payment-seat'))-Number(b.getAttribute('data-payment-seat'))).map(e=>Number(e.getAttribute('data-payment-amount'))))).toEqual([-20,-20,-20,60])
   await expect(page.locator('.blood-flow-central')).toHaveCount(0)
   await page.evaluate(()=>(window as any).__restoreBloodFlow())
