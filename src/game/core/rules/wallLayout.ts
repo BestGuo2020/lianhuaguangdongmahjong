@@ -19,11 +19,13 @@ const STACK_SPACING = 0.68               // 墩沿墙方向的间距（牌宽，
 
 // 环几何（内移环：在牌河外侧、各家手牌/副露内侧）。
 // 近侧墙 z、远侧墙 z、侧墙 x；半长 = 17 墩占位的一半。
-// 四家牌山整体再向牌河方向（环中心）前移半个麻将牌 = 牌长 0.94 的一半 0.47。
-const WALL_INWARD_SHIFT = 0.47
-const NEAR_Z = 5.2 - WALL_INWARD_SHIFT   // 4.73
-const FAR_Z = -8.5 + WALL_INWARD_SHIFT   // -8.03
-const SIDE_X = 7.9 - WALL_INWARD_SHIFT   // 7.43
+// 四条墙内侧边线的延长线围成正方形（边长 12.96，中心 z=-1.65）：
+// 侧墙内边 x=±6.48、近墙内边 z=4.83、远墙内边 z=-8.13。
+// 墙位由满长升牌槽（12.5）四角不重叠反推：四角留约半张牌的小缺口（x 0.53 / z 0.70），
+// 与真实麻将机一致（墙头接近相靠、仅容半张牌的角缝）。
+const NEAR_Z = 5.17
+const FAR_Z = -8.47
+const SIDE_X = 6.82
 const SEGMENT_HALF = (STACKS_PER_SIDE - 1) * STACK_SPACING / 2  // 5.44
 const SIDE_CENTER_Z = (NEAR_Z + FAR_Z) / 2                      // -1.65（桌中心）
 

@@ -353,9 +353,12 @@ export class BloodFlowEngine {
     const nextAction = batch.nextAction
     if (this.options.paced) {
       const tier = Math.max(...batch.winners.map(winTier))
+      // 一炮多响在常规演出前还有 1.5s 的“一炮多响”字动画，衔接节奏一并计入。
+      const multiIntroMs = batch.source.kind === 'discard' && batch.winners.length > 1
+        ? BLOOD_FLOW_TIMING.multiWinIntroMs : 0
       // The authority owns continuation. No render/audio completion mutates rules.
       // A short handoff margin lets the displayed batch finish before the next draw.
-      this.after('win', bloodFlowWinTiming(tier).duration + 100, () => {
+      this.after('win', bloodFlowWinTiming(tier).duration + multiIntroMs + 100, () => {
         if (nextAction.kind === 'finish-round') this.finishRound()
         else this.draw(nextAction.seat)
       })

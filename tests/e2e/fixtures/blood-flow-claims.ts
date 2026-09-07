@@ -32,7 +32,7 @@ const commands: EngineCommand[] = []
 const sounds: string[] = []
 const meta = { round: 1, dealer: 0, mode: 'east' as const }
 createApp({ setup() {
-  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), externalAuthority: {
+  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), autoHuMs: new URLSearchParams(location.search).has('autoHuMs') ? Number(new URLSearchParams(location.search).get('autoHuMs')) : 0, externalAuthority: {
     send(command) {
       commands.push(command)
       if (!engine.submit(command)) throw new Error('HUD submitted an unavailable action')

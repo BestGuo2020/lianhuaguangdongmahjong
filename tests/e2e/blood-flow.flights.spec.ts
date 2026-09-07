@@ -35,7 +35,8 @@ test('three flight references share one source and land in three distinct towers
   expect(new Set(input.map((f:any)=>f.sourceId)).size).toBe(1)
   expect(new Set(input.map((f:any)=>JSON.stringify(f.target))).size).toBe(3)
   expect(input.every((f:any)=>f.level===3)).toBe(true)
-  await expect.poll(async()=>(await flights()).length,{timeout:5000}).toBe(0)
+  // 一炮多响 intro 顺延起飞；本夹具 4 倍慢放，落定在 intro+readable 之后。
+  await expect.poll(async()=>(await flights()).length,{timeout:30_000}).toBe(0)
 })
 for(const kind of ['draw','discard','added-kong'] as const)test(`${kind} uses its source region before landing`,async({page})=>{
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=12&motionScale=4')

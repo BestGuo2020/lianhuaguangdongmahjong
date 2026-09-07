@@ -11,20 +11,16 @@ test('records the four default information states for visual review', async ({ p
     await page.getByRole('button', {name:label,exact:true}).click()
     await page.screenshot({path:`${dir}/info-${state}.png`})
   }
-  await expect(page.locator('.blood-flow-preview')).toContainText('预计 +600')
-  for (const label of ['胡','碰','杠','吃','过']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
+  for (const label of ['胡','碰','杠','吃']) await expect(page.locator('.action-bar').getByRole('button',{name:label,exact:true})).toBeVisible()
+  await expect(page.locator('.action-bar').getByRole('button',{name:'过',exact:true})).toHaveCount(0)
   await expect(page.locator('.flip-indicator-body')).toBeHidden()
   await page.getByRole('button',{name:'翻精指示牌',exact:true}).click()
   await expect(page.locator('.flip-indicator-body')).toContainText('二骰 2 + 4')
   await page.getByRole('button',{name:'翻精指示牌',exact:true}).click()
-  await page.getByText('查看预计详情',{exact:true}).click()
-  await expect(page.locator('.blood-flow-preview')).toContainText('预计每位付款者 200分，共 3位')
-  await page.getByText('查看预计详情',{exact:true}).click()
   await page.getByRole('button',{name:'高番自摸',exact:true}).click()
   await expect(page.locator('.blood-flow-winner-payment')).toBeVisible()
   await page.screenshot({path:`${dir}/info-payment.png`})
   await expect(page.locator('[data-payment-seat="0"]:visible')).toHaveCount(1)
-  await expect(page.locator('.blood-flow-preview')).toHaveCount(0)
 })
 
 test('records representative high win at normal speed', async ({ page }) => {
@@ -74,15 +70,15 @@ test('records source, winners and payments without mixing their seats', async ({
       if(s.kind==='multi') (window as any).__appendBloodFlowMultiWin(s.winners,s.source)
       else await (window as any).__playBloodFlowScenario(s.kind,s.source,s.winners,[s.pattern],true)
     },scene)
-    await expect(page.locator('.blood-flow-source')).toHaveCount(1)
-    await expect(page.locator('.blood-flow-source')).toHaveAttribute('data-source-seat',String(scene.source))
+    if(scene.kind==='multi'){
+      await expect(page.locator('.blood-flow-multi-intro')).toContainText('一炮多响')
+    }
     await page.screenshot({path:`${dir}/${scene.name}-source.png`})
     await page.waitForFunction(count=>document.querySelectorAll('[data-actor-seat]').length===count,scene.winners.length)
     expect(await page.locator('[data-actor-seat]').evaluateAll(es=>es.map(el=>Number(el.getAttribute('data-actor-seat'))).sort())).toEqual([...scene.winners].sort())
     await page.screenshot({path:`${dir}/${scene.name}-actors.png`})
     await expect(page.locator('[data-title-seat]')).toHaveCount(scene.winners.length)
     await expect(page.locator('[data-actor-seat]')).toHaveCount(0)
-    await expect(page.locator('.blood-flow-source')).toHaveCount(0)
     await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='readable')
     await page.screenshot({path:`${dir}/${scene.name}-titles.png`})
     if(scene.winners.includes(0)) {

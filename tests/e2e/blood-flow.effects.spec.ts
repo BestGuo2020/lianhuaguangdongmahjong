@@ -38,7 +38,8 @@ test('three winners have separate 3D effects that survive subsequent table rebui
   await expect(page.locator('canvas.mahjong-scene')).toHaveAttribute('data-blood-flow-effects', '3')
   await page.waitForTimeout(350)
   await page.screenshot({ path: 'test-results/blood-flow-three-win-effects.png' })
-  await expect(page.locator('canvas.mahjong-scene')).toHaveAttribute('data-blood-flow-effects', '0', { timeout: 6000 })
+  // 一炮多响 intro 顺延光效，且后续普通胡 cue 排在多响 cue 之后才过期。
+  await expect(page.locator('canvas.mahjong-scene')).toHaveAttribute('data-blood-flow-effects', '0', { timeout: 20_000 })
 })
 test('effect resource failure leaves the table usable and the next effect can recover', async ({ page }) => {
   const errors: string[] = []

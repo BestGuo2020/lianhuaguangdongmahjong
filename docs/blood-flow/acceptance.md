@@ -1,6 +1,71 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-06。本页维护已有证据和待取得的证据；最新补修为五主题恢复非血流原胡牌光效。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-06。本页维护已有证据和待取得的证据；最新补修为「桌面布局重排」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-06：桌面布局重排
+
+按用户五张参考图 + 逐条代数校对重排（详见 tasks.md 同节，最终口径经用户逐条确认）：
+
+- 牌墙四条墙都动、内侧延长线围成正方形（边长 12.96：侧墙 ±6.82、近墙 5.17、远墙 -8.47）；满长升牌槽（12.5）四角互不重叠，四角缝隙约半张到一张牌；
+- 四角胡牌位与各家升牌槽"左右关系"（同高度带、槽外侧）：本家近槽右端外从左往右、下家右槽外侧从下往上、对家远槽左端外从右往左、上家近槽左端外从右往左（3 张/层、列距 0.945）；朝向（三条=箭头）各指对面；层距 0.47 紧贴像牌山；
+- 副露：本家沿近墙右端横排、下家右上角竖排、对家远墙外侧靠远缘（z -10.67，附牌朝墙侧）、上家左下角竖排（左移 0.34）；手牌离墙三家统一 1.21（对家 z -10.53、上下家 x ±9.05）；
+- 相机：默认 FOV 45°（落点 z 0.4）、llmAnime 40°（落点 -0.2），机位不动；血流胡牌相机完全静止（去位移/震动，保留曝光脉冲），非血流震屏保留。
+
+**检查记录：**
+
+- 全量单测 `vitest run src`：**1172 通过 / 2 跳过**；`pnpm build` 通过。布局契约（tableCornerLayout 23 项 / wallLayout / tableLiftSlots / winEffect / bloodFlowWinPile 64 项等）全绿：四角整层不压活牌墙/升牌口/副露及补杠附牌/晚局牌河/侧家亮手/绒布，同层相邻盖楼牌互不重叠（真实牌尺寸校验）。
+- 用户目视核对通过：四角盖楼方向（dir-2 不满层截图）、四家副露位置、手牌离墙距离、牌墙四角缝隙。
+- 未验证：真实对局观感、联机对战（待用户实机验收）；P2P、vibehub 后置（**本分支不执行 `pnpm sync:vibehub`**）。
+
+## 2026-09-06：视觉与按钮回退
+
+按用户要求回退/调整（详见 tasks.md 同节）：llmAnime 恢复米色气泡与原始尺寸/位置（保留移动端避让）；已听按钮改回非血流版本（所有主题）；可胡时无「过」按钮 + 超过 1 秒自动胡牌（`autoHuMs` 默认 1000ms，托管/<=0 关闭）。
+
+**检查记录：**
+
+- 全量单测 `vitest run src`：**1171 通过 / 2 跳过**；`pnpm typecheck` 与 `pnpm build` 通过。
+- 血流 e2e（`E2E_REUSE_ONLY=1`，chromium + `--enable-gpu`）：本轮跑满全部 20 个 spec，**全部通过**（claim-actions 更新为四按钮 + 无「过」+ 新增自动胡牌用例 `?autoHuMs=300`；refinement/refinement-layout 更新为四按钮断言；其余 76 例全过；个别首测冷启动超时复跑即过）。
+- 视觉：截图 `work/bubble-beige-check.png` 采样确认气泡为米色（#f0e8d8/#f8f0e0）。
+- 未验证：真实对局中的自动胡牌手感、米色气泡观感（待用户实机/联机验收）；P2P、vibehub 后置。
+
+## 2026-09-06：语音闸门与赢家发声
+
+上一批「一炮多响与减负」交付后按用户进一步反馈调整，未提交（工作区交付）。范围：master 前端单机；后端、计分、P2P、vibehub 后置。
+
+**内容（详见 tasks.md 同节）：**
+
+1. **飞牌与语音并行（最终口径）**：撤销挂起式闸门（它冻结演出与引擎、拖慢整局）；赢家台词在模型做出胡牌决定瞬间定稿并预合成，胡牌时刻语音即开播，与飞牌/主番/收付完全并行；引擎不等待语音。多响起飞点按 focus 相对计算（不早于特效字结束）。
+2. **赢家用自己的台词与 TTS（所有主题）**：胡牌窗口请求模型自己的短台词（`takeWinLine`，含预合成 `urlPromise`），llmAnime 用角色固定台词，其余主题大模型赢家说自己的台词（对齐非血流），非大模型赢家播 hu/zimo mp3。
+3. **llmAnime 吃碰杠**：气泡保留，固定台词与模型台词谁先到谁播 TTS；**llm 主题吃碰杠播模型台词 TTS、不走本地 mp3**（用户后续纠正），模型气泡保留；其他主题保持原动作音。
+4. **杠收付**：杠 cue 700→1200ms，四家杠分可见。
+5. **收付字号与位置**：放大（赢家 40–76px、付款者 34–64px）并居中到各自席位方向，颜色维持主题。
+
+**检查记录：**
+
+- 全量单测 `vitest run src`：**107 文件通过 / 1171 通过 / 2 跳过**；`pnpm typecheck` 与 `pnpm build` 通过。
+- 血流 e2e 全量（`E2E_REUSE_ONLY=1`，chromium 完整通道 + `--enable-gpu`，GPU 校验 5 主题通过，预热 fixture 后单 worker 顺序执行）：**117/117 通过（14.3 分钟）**，零失败。llm.spec 已按新口径更新：jade/llm 主题大模型赢家有自己的台词 TTS（winTts>0），不再断言"jade 不说话/胡不新增台词"。
+- 未验证：语音与飞牌并行的真实听觉观感（待用户连同联机对战实玩验收）；真实 P2P、vibehub 同步后置。
+
+## 2026-09-06：一炮多响与减负
+
+按用户截图与说明（参考欢乐麻将红中血流一炮多响提示）实施，改动未提交（工作区交付）。范围：master 前端单机；不开发后端、不改计分/封顶/锁手，vibehub 与 P2P 继续后置。
+
+**内容：**
+
+1. 恢复 llmAnime gemini 角色名「双子星姬」（撤销占位符提交 `ad2d369` 的无依据改名），`animeCharacters.ts`、测试与计划文档三处一致。
+2. 删除「已听」旁可胡预览卡：`GameTableHud` 移除 `blood-flow-preview` 块与样式、`BloodFlowWinCard` 导入及 `firstHuOffer`/`huOfferSeen`；`BloodFlowTableState.preview` 字段与 `useBloodFlowGame` 装配一并删除；e2e 夹具与 refinement/validation 断言同步更新。
+3. 思考气泡恢复性格开场台词并防闪烁：血流条件深思开场（无安全进度文本时）按座位性格生成 `reasoningStatusSpeech` 台词（话痨「等等，让我好好想想。」等）并并行 TTS；同一 requestId 复用同一气泡 id，进度文字原地替换，不再逐块重建节点。`bloodFlowRuntime` 的 `onStatus` 透传 style/voiceKey；`bloodFlowCommonDecision.test.ts` 固定契约。
+4. 出场节奏：普通胡 1900→2300、大番 2300→2600、顶级 2600→2900ms；本地引擎 `after('win')` 衔接同步。
+5. 删除来源横幅：点炮/自摸/抢杠/多响均不再显示「左家点炮」等横幅；出场动作保持原有。
+6. 一炮多响：一个弃牌批次≥2家胡时，点炮者方位显示各主题字效「一炮多响」1.5 秒（cue 新增 intro 阶段，各阶段顺延 1500ms，3D 飞牌/光柱/主番/收付随之等待）；intro 结束后所有赢家语音同一拍播放：llmAnime 固定胡牌台词、llm 主题按性格 win 短台词（`decisionSpeech`），其他主题同时 hu.mp3；`llmAudioBus` 新增组播通道，`useAudio` 组播元素独立于串行总线，静音/失败降级，llmAnime 合成失败回落 hu.mp3。
+
+**检查记录：**
+
+- 全量单测 `vitest run src`：**107 文件通过 / 1168 通过 / 2 跳过**（含新增组播、resolveAudioUrl、presentation intro 用例）；`pnpm typecheck` 与 `pnpm build` 通过。
+- 血流 e2e 全量 20 个 spec 逐一运行（`E2E_REUSE_ONLY=1`，chromium 完整通道 + `--enable-gpu`，GPU 校验 5 主题通过）：**129 通过**；`blood-flow.local.spec.ts` 的「cannot enter a WS room」用例因联机登录闸门在无后端会话时跳转外部 WakuDemo 登录页而失败，与本批改动无关（`App.vue` `onGameModeChange` 未登录即 `wakuAuth.login()` 重定向），需后端与登录会话环境复测。
+- 关键用例：payments/refinement（来源横幅断言改为 `blood-flow-multi-intro` 含「一炮多响」）、effects/flights（多响 intro 顺延后 14/14）、settlement 矩阵与导航、tts-midpoint、audio（三响三份动作声一次冲击）全部通过。
+- 视觉：`work/blood-flow-refinement/three-winners-source.png` 已目视核对——llmAnime 紫粉主题大字「一炮多响」位于点炮者（本家）方位，旧「·三响」小横幅已消失；分席动作/主番/收付顺序保持。
+- 未验证：本批新增多响语音未人耳实听；真实 P2P、整局实玩、vibehub 同步后置。
 
 ## 2026-09-06：全部五主题恢复非血流原光效
 

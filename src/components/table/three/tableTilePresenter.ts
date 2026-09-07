@@ -151,8 +151,8 @@ function addConcealedHand(playerIndex) {
         x = (index - (arrangedTotal - 1) / 2) * gap
       }
       // 对家固定使用远端后场，避免中后局牌河向后扩展时覆盖暗牌。
-      // 对家手牌整体向后（远离本家）移一个牌深（0.94）。
-      z = -8.69
+      // 对家手牌离远墙 1.21（与上家/下家手牌离墙距离一致）；副露在手牌前方（墙侧），副露时手牌变短、x 向不重叠。
+      z = -9.53
       rotationY = props.revealHands ? Math.PI : 0
     } else {
       rotationY = props.revealHands
@@ -216,7 +216,7 @@ function discardTransform(playerIndex:number, index:number) {
 function discardSourcePos(playerIndex) {
   if (playerIndex === 0) return new THREE.Vector3(0, .56, 8.5)
   if (playerIndex === 1) return new THREE.Vector3(concealedSideX(1), .56, -2.15)
-  if (playerIndex === 2) return new THREE.Vector3(0, .56, -9.69)
+  if (playerIndex === 2) return new THREE.Vector3(0, .56, -10.7)
   return new THREE.Vector3(concealedSideX(3), .56, -1.0)
 }
 

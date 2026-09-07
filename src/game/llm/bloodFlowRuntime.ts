@@ -3,7 +3,8 @@ import { reactive } from 'vue'
 import { requestLlmDecision, type LlmDecisionOptions } from './client'
 import { readLlmSettings, presetForSeat, styleForSeat, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
 import type { LlmControllerStats } from './llmController'
-import { resolveLocalTtsVoiceKey } from './localTtsClient'
+import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
+import { resolveDecisionSpeech } from './decisionSpeech'
 import type { BloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { visibleTiles } from '../variants/lotus/bloodFlow/seatView'
 import type { BloodFlowAction } from '../variants/lotus/bloodFlow/state'
@@ -67,14 +68,24 @@ async function loadWaits(view: BloodFlowSeatView, signal: AbortSignal): Promise<
   finally { signal.removeEventListener('abort', abort); worker.cancel() }
 }
 
-export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string)=>void } = {}) {
+export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void } = {}) {
   const stats = reactive<LlmControllerStats>({ requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 })
   const jobs = new Map<string, { promise: Promise<BloodFlowAction | null>; controller: AbortController; current: () => boolean }>()
   const reasoning = new ConditionalReasoningCoordinator()
+  // 胡牌窗口里模型给出的自己的台词；批次提交后由赢家语音使用（所有主题一致）。
+  // 合成在模型返回胡牌决定的瞬间就开始，胡牌时刻语音即可开播（不与演出抢时间）。
+  const winLines = new Map<string, { text: string; style: LlmStyle; voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; urlPromise?: Promise<string | null> }>()
+  let winSequence = 0
   let serial = 0
   const speech=createBloodFlowActionSpeech(options.theme??(()=> 'jade'),options.now)
   return {
     stats,
+    /** 取走某胡牌窗口内该座位模型自己的台词（一次）；没有则回退程序台词。 */
+    takeWinLine(windowId: string, seat: number) {
+      const key = `${windowId}/${seat}`, line = winLines.get(key)
+      winLines.delete(key)
+      return line ?? null
+    },
     decide(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null> {
       if (!view.window || !view.ownActions.length || view.public.status !== 'playing' || view.public.roundResult) return Promise.resolve(null)
       const actions = bloodFlowAiActions(view)
@@ -96,19 +107,28 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
       const task = (async () => {
         const waits = await (options.waits ?? loadWaits)(view, controller.signal)
         if (controller.signal.aborted || !isCurrent()) return null
-        const built = bloodFlowDecisionPrompt(view, waits, requestId,bloodFlowReactionsAllowed(requestedTheme)&&!view.ownScore&&!view.ownActions.some(a=>a.kind==='win')?provider.style:undefined,options.metadata?.(),provider.style)
+        const built = bloodFlowDecisionPrompt(view, waits, requestId, provider.style, options.metadata?.(), provider.style)
         const remaining=Number.isFinite(budget)?Math.max(0,budget-(now()-startedAt)):Infinity
         if(remaining<=0||controller.signal.aborted||!isCurrent())return null
         attempted = true
+        const voiceKey=resolveLocalTtsVoiceKey(provider)
         const response = await requestPreparedDecision({config:provider,decision:built.request,messages:built.messages,
           seat:view.seat,stats,reasoning,signal:controller.signal,budgetMs:remaining,
           remainingAuthorityMs:(view.window!.deadlineAt-now()-250),request:options.request,
-          onStatus:(active,text)=>{if(requestedTheme===(options.theme?.()??'jade')&&(!active||isCurrent()))options.onStatus?.(view.seat,active,text,requestId)}})
+          onStatus:(active,text)=>{if(requestedTheme===(options.theme?.()??'jade')&&(!active||isCurrent()))options.onStatus?.(view.seat,active,text,requestId,provider.style,voiceKey)}})
         if (controller.signal.aborted || !isCurrent()) return null
         const selected = built.candidates.find(c => c.id === response.choice)
         if (!selected) stats.invalidActions++
         // Presentation remains pending until a subsequent authority view confirms the action.
-        if(selected)speech.plan(requestId,view,selected.action,provider,response.message,requestedTheme)
+        if(selected){
+          speech.plan(requestId,view,selected.action,provider,response.message,requestedTheme)
+          // 胡牌窗口：台词立即定稿并预合成，批次提交后赢家用它发声（非血流同行为）。
+          if(selected.action.kind==='win'){
+            const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,winSequence++)
+            const urlPromise=getLocalTtsClient().resolveAudioUrl(text,voiceKey,provider.style).catch(()=>null)
+            winLines.set(`${view.window!.id}/${view.seat}`,{text,style:provider.style,voiceKey,urlPromise})
+          }
+        }
         return selected?.action ?? null
       })().catch(() => null)
       const promise = Promise.race([task, cancelled]).then(result => {
@@ -123,7 +143,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
     prepareDiscard(view:BloodFlowSeatView,action:BloodFlowAction){const line=speech.takeDiscard(view,action);if(line)stats.messages++;return line},
     cancelSpeech(){speech.reset()},
     resetReasoning(){reasoning.reset()},
-    cancel() { for (const job of jobs.values()) job.controller.abort(); jobs.clear();speech.reset() },
+    cancel() { for (const job of jobs.values()) job.controller.abort(); jobs.clear();speech.reset();winLines.clear() },
   }
 }
 

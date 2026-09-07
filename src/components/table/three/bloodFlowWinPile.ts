@@ -1,4 +1,4 @@
-import { seatTableLayout, TABLE_LAYOUT } from '../../../game/core/presentation/tableLayout'
+import { seatTableLayout, TABLE_LAYOUT, pilePitch, pileColumnsPerLevel } from '../../../game/core/presentation/tableLayout'
 import type { WinBatch, WinRecord } from '../../../game/variants/lotus/bloodFlow/types'
 import type { TileType } from '../../../game/core/contracts/types'
 import { winDisplayLayout } from '../../../game/core/presentation/winEffect'
@@ -29,7 +29,6 @@ export interface WinPileTile {
 
 /** Display references only. No tile accounting or game transitions may read these tiles. */
 export function bloodFlowWinPiles(batches: readonly WinBatch[], localSeat = 0, compact = false) {
-  const perLevel = compact ? 3 : 4
   const grouped = Array.from({ length: 4 }, () => [] as { record: WinRecord; tile: TileType; sourceEventId: string }[])
   const seen = new Set<string>()
   for (const batch of batches) for (const record of batch.winners) {
@@ -40,10 +39,12 @@ export function bloodFlowWinPiles(batches: readonly WinBatch[], localSeat = 0, c
   }
   return grouped.map((records, relativeSeat) => {
     const { origin, along } = bloodFlowPileAnchor(relativeSeat, compact)
+    const perLevel = pileColumnsPerLevel(relativeSeat, compact)
+    const pitch = pilePitch(relativeSeat)
     const tiles: WinPileTile[] = records.map((item, index) => {
       const column = index % perLevel, level = Math.floor(index / perLevel)
-      return { ...item, column, level, x: origin.x + along[0] * column * TABLE_LAYOUT.pilePitch,
-        y: origin.y + level * TABLE_LAYOUT.layerHeight, z: origin.z + along[1] * column * TABLE_LAYOUT.pilePitch, rotation: origin.rotation }
+      return { ...item, column, level, x: origin.x + along[0] * column * pitch,
+        y: origin.y + level * TABLE_LAYOUT.layerHeight, z: origin.z + along[1] * column * pitch, rotation: origin.rotation }
     })
     return { relativeSeat, absoluteSeat: (relativeSeat + localSeat) % 4, count: records.length,
       levels: Math.ceil(records.length / perLevel), overflow: 0, tiles }

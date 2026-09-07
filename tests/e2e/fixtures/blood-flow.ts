@@ -36,7 +36,7 @@ const players: GamePlayer[] = [0, 1, 2, 3].map(relative => ({ seat: (relative + 
   hand: relative === 0 ? ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'm4', 'm5', 'm6', 'east', 'east'] : [] }))
 const bloodFlow: BloodFlowTableState = { ruleVersion: 'lotus-blood-flow-v1', roundId: 'fixture-round', status: 'playing', batches,
   seats: vector(s => ({ winCount: count, locked: count > 0, firstWinSequence: 1, recordIds: batches.flatMap(b => b.winners.filter(w => w.winner === s).map(w => w.id)) })),
-  roundResult: null, preview: score, waits: [] }
+  roundResult: null, waits: [] }
 const props = { themeName: theme, players, user: players[0], phase: 'discard' as const, wall: Array(30).fill('east') as TileType[],
   wallHeadDrawn: 60, wallCount: 30, currentPlayer: 0, selectedIndex: -1, turnSeconds: 0, lastDiscard: null,
   actionPrompt: null, announcement: null, tableActionEvent: null, scoreFlowEvent: null, result: null,
@@ -54,7 +54,7 @@ const hudState = shallowRef<Record<string, unknown>>({})
 const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
 function showHudState(state: 'waiting'|'selection'|'preview') {
   const waits = waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score}))
-  liveState.value = { ...liveState.value, preview: score, waits, discardWaitScores:{m1:waits} }
+  liveState.value = { ...liveState.value, waits, discardWaitScores:{m1:waits} }
   hudState.value = { flipTile:'red',secondDice:[2,4], userCurrentWaits:waitInfo,
     userDiscardWaits:state==='selection'?waitInfo:null,selectedIndex:state==='selection'?0:-1,
     isUserTurn:state==='selection',userCanHu:state==='preview',
@@ -68,7 +68,7 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
   const opening = vector(() => 2000)
   const ending = vector(s => 2000 + state.batches.reduce((sum, batch) => sum + batch.deltas[s], 0))
   liveFinished.value = finished
-  liveState.value = { ...state, status: 'settled', preview: null,
+  liveState.value = { ...state, status: 'settled',
     roundResult: summarizeRound(state.ruleVersion, state.roundId, opening, ending,
       vector(s => state.seats[s].winCount), state.batches.map(batch => ({ kind: 'win' as const, batch }))) }
 }
@@ -83,7 +83,7 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
     deltas,scoresAfter:[1500,2700,2300,1500],nextAction:{kind:'finish-round',reason:'wall-exhausted'},
     winners:[{id:`${id}-record`,batchId:id,winner:2,ordinal:1,sourceEventId:source.id,score,deltas}]}
   liveFinished.value=true
-  liveState.value={...state,status:'settled',preview:null,batches:[batch],seats:vector(s=>({...state.seats[s],winCount:s===2?1:0})),
+  liveState.value={...state,status:'settled',batches:[batch],seats:vector(s=>({...state.seats[s],winCount:s===2?1:0})),
     roundResult:summarizeRound(state.ruleVersion,state.roundId,[1700,2900,1700,1700],[1500,2700,2300,1500],[0,0,1,0],[{kind:'win',batch}])}
 }
 ;(window as any).__setBloodFlowContinuation = (ready:boolean, readySeats:Seat[]=[]) => { liveState.value={...liveState.value,continuation:{ready,readySeats,requiredSeats:[0,1]}} }

@@ -318,7 +318,8 @@ function render(time = 0) {
       cameraShakeX = winFrame.shakeX
       cameraShakeZ = winFrame.shakeZ
     }
-    if(bloodFlowFrame&&!winFrame){exposure+=bloodFlowFrame.exposureDelta;cameraShakeX=bloodFlowFrame.shakeX;cameraShakeZ=bloodFlowFrame.shakeZ}
+    // 血流胡牌时相机完全静止：只保留曝光脉冲，不再施加任何位移/震动。
+    if(bloodFlowFrame&&!winFrame){exposure+=bloodFlowFrame.exposureDelta}
     renderer.toneMappingExposure = exposure
     const cameraPosition = tableCameraPosition(renderProfile, cameraShakeX, cameraShakeZ)
     applyTableCamera(cameraPosition)

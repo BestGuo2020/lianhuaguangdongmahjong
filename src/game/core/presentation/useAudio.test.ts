@@ -1,7 +1,7 @@
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUDIO_PREFERENCES_STORAGE_KEY, useAudio } from './useAudio'
-import { dispatchLocalLlmAudio, resetLlmAudioBusForTests } from './llmAudioBus'
+import { dispatchLocalLlmAudio, playLlmAudioGroup, resetLlmAudioBusForTests } from './llmAudioBus'
 
 class MockAudio {
   static instances: MockAudio[] = []
@@ -64,6 +64,25 @@ afterEach(() => {
 })
 
 describe('useAudio LLM voice ducking', () => {
+  it('一炮多响组播：多条语音同时创建互不打断，全部结束后 resolve，静音时直接拒绝', async () => {
+    const audio = useAudio()
+    const before = MockAudio.instances.length
+    const done = playLlmAudioGroup([
+      { url: `/api/local-tts/audio/${'a'.repeat(64)}.mp3`, seat: 1 },
+      { url: `/api/local-tts/audio/${'b'.repeat(64)}.mp3`, seat: 2 },
+    ])
+    const group = MockAudio.instances.slice(before)
+    expect(group).toHaveLength(2)
+    expect(group.every(a => (a.play as ReturnType<typeof vi.fn>).mock.calls.length === 1)).toBe(true)
+    // 两条并发各自结束，不互相取消
+    group[0].emit('ended')
+    expect(group[1].pause).not.toHaveBeenCalled()
+    group[1].emit('ended')
+    expect(await done).toBe(true)
+    audio.effectsOn.value = false
+    expect(await playLlmAudioGroup([{ url: `/api/local-tts/audio/${'c'.repeat(64)}.mp3`, seat: 3 }])).toBe(false)
+  })
+
   it('cancels only the requested utterance and keeps another queued seat playable', async () => {
     const audio = useAudio(), abort = new AbortController()
     const firstUrl = `/api/local-tts/audio/${'e'.repeat(64)}.mp3`, secondUrl = `/api/local-tts/audio/${'f'.repeat(64)}.mp3`

@@ -4,6 +4,7 @@ import type { WinBatch } from '../../../game/variants/lotus/bloodFlow/types'
 import { bloodFlowWinPiles } from './bloodFlowWinPile'
 import { SEATS, vector } from '../../../game/variants/lotus/bloodFlow/state'
 import { scorePatterns } from '../../../game/variants/lotus/patterns/score'
+import { pileColumnsPerLevel } from '../../../game/core/presentation/tableLayout'
 
 function batches(count: number): WinBatch[] {
   return Array.from({ length: count }, (_, ordinal) => SEATS.map((winner): WinBatch => {
@@ -23,22 +24,23 @@ describe('E05 display references and capacities', () => {
       const source = batches(count), before = JSON.stringify(source)
       const layout = bloodFlowWinPiles(source, viewer, compact)
       for (const pile of layout) {
+        const perLevel = pileColumnsPerLevel(pile.relativeSeat, compact)
         expect(pile.count).toBe(count)
         if(count) {
           const anchor=winDisplayLayout(pile.relativeSeat),first=pile.tiles[0]
           expect({x:first.x,y:first.y,z:first.z,rotation:first.rotation}).toEqual(anchor)
-          const next=pile.tiles[compact?3:4]
-          if(next) { expect(next.x).toBe(first.x);expect(next.z).toBe(first.z);expect(next.y-first.y).toBeCloseTo(.46) }
+          const next=pile.tiles[perLevel]
+          if(next) { expect(next.x).toBe(first.x);expect(next.z).toBe(first.z);expect(next.y-first.y).toBeCloseTo(.47) }
         }
         expect(pile.tiles).toHaveLength(count)
-        expect(pile.levels).toBe(Math.ceil(count / (compact ? 3 : 4)))
+        expect(pile.levels).toBe(Math.ceil(count / perLevel))
         expect(pile.overflow + pile.tiles.length).toBe(count)
         expect(pile.absoluteSeat).toBe((pile.relativeSeat + viewer) % 4)
         for (const tile of pile.tiles) {
           expect(tile.record.winner).toBe(pile.absoluteSeat)
           expect(tile.sourceEventId).toBe(`source-${tile.record.ordinal - 1}-${tile.record.winner}`)
           expect(tile.tile).toBe('m1')
-          expect(tile.level).toBe(Math.floor((tile.record.ordinal - 1) / (compact ? 3 : 4)))
+          expect(tile.level).toBe(Math.floor((tile.record.ordinal - 1) / perLevel))
         }
       }
       expect(JSON.stringify(source)).toBe(before)

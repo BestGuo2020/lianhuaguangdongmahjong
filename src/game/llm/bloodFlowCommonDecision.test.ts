@@ -54,6 +54,10 @@ it('shares conditional thinking, safe progress, seat quotas and short-window sup
   expect(calls[0].config.timeoutMs).toBe(40_000)
   expect(service.stats.enhancedReasoningRequests).toBe(2)
   expect(status.mock.calls.some(c=>String(c[2]).startsWith('思考中 · 正在'))).toBe(true)
+  const firstActive=status.mock.calls.find(c=>c[1]===true)
+  expect(firstActive?.[2]).toBeUndefined()
+  expect(firstActive?.[4]).toBe('话痨')
+  expect(typeof firstActive?.[5]).toBe('string')
   expect(status.mock.calls.at(-1)?.[1]).toBe(false)
   v.window!.id='short';v.window!.deadlineAt=2000
   await service.decide(v,()=>true)
@@ -71,6 +75,19 @@ it('feature preparation consumes time without accidentally disabling the configu
   expect(calls[0].config.timeoutMs).toBe(39950)
   expect(calls[0].deadlineMs).toBe(39950)
 })
+it('keeps the model own win line for the committed batch and clears on cancel', async () => {
+  const request = vi.fn(async (o: any) => ({ choice: o.candidateIds[0], message: '这把拿下！' }))
+  const service = createBloodFlowDecisions({ provider: () => provider, waits: async () => [], request, now: () => 0 })
+  const v = input()
+  v.ownActions = [{ kind: 'win' }, { kind: 'pass' }]
+  expect(await service.decide(v, () => true)).toEqual({ kind: 'win' })
+  const line = service.takeWinLine(v.window!.id, 0)
+  expect(line?.text).toBe('这把拿下!')
+  expect(line?.style).toBe('话痨')
+  expect(typeof line?.voiceKey).toBe('string')
+  expect(service.takeWinLine(v.window!.id, 0)).toBeNull()
+})
+
 it('cancellation clears thinking even when a provider never settles its promise',async()=>{
   const status=vi.fn(),request=vi.fn((o:any)=>{o.onReasoningProgress();return new Promise<any>(()=>{})})
   const service=createBloodFlowDecisions({provider:()=>provider,waits:async()=>[],request,theme:()=> 'llm',onStatus:status})

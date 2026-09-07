@@ -27,6 +27,14 @@ export type LlmAudioPlayer = (
   hooks?: LlmAudioPlaybackHooks,
 ) => void | boolean | Promise<void | boolean>
 
+/** 一炮多响：多位赢家语音必须同时开始，绕过单条串行总线。 */
+export interface LlmAudioGroupItem {
+  url: string
+  seat: number
+}
+/** 全部条目自然结束（或失败）时 resolve。 */
+export type LlmAudioGroupPlayer = (items: LlmAudioGroupItem[]) => Promise<void> | void
+
 const LOCAL_LLM_AUDIO_EVENT = 'lianhua:local-llm-audio'
 const LOCAL_AUDIO_PATH_RE = /^\/api\/local-tts\/audio\/[0-9a-f]{64}\.mp3$/
 
@@ -40,6 +48,8 @@ interface LocalLlmAudioDetail {
 let player: LlmAudioPlayer | null = null
 let playerEnabled: (() => boolean) | null = null
 let cancelPlayback: (() => void) | null = null
+let groupPlayer: LlmAudioGroupPlayer | null = null
+let groupEnabled: (() => boolean) | null = null
 
 export function registerLlmAudioPlayer(
   next: LlmAudioPlayer,
@@ -137,8 +147,39 @@ export function subscribeLocalLlmAudio(next: LlmAudioPlayer): () => void {
   return () => window.removeEventListener(LOCAL_LLM_AUDIO_EVENT, listener)
 }
 
+export function registerLlmAudioGroupPlayer(
+  next: LlmAudioGroupPlayer,
+  isEnabled: () => boolean = () => true,
+): () => void {
+  groupPlayer = next
+  groupEnabled = isEnabled
+  return () => {
+    if (groupPlayer === next) {
+      groupPlayer = null
+      groupEnabled = null
+    }
+  }
+}
+
+/**
+ * 同时播放一组语音（一炮多响/胡牌赢家台词）。每个条目独立出声，互不打断；
+ * 静音、音效关闭或未注册时返回 false，调用方静默降级。返回的 Promise 在全部
+ * 条目播完（或失败）后 resolve，供表现层等待语音完成再飞牌盖楼。
+ */
+export function playLlmAudioGroup(items: LlmAudioGroupItem[]): Promise<boolean> {
+  if (!items.length || !groupPlayer || !groupEnabled?.()) return Promise.resolve(false)
+  try {
+    const result = groupPlayer(items)
+    return result instanceof Promise ? result.then(() => true) : Promise.resolve(true)
+  } catch {
+    return Promise.resolve(false)
+  }
+}
+
 export function resetLlmAudioBusForTests(): void {
   player = null
   playerEnabled = null
   cancelPlayback = null
+  groupPlayer = null
+  groupEnabled = null
 }

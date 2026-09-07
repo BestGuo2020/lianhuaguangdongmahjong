@@ -5,7 +5,6 @@ import type { GamePlayer, TableActionEvent } from '../../game/core/contracts/typ
 import type { TableThemeName } from './three/tableTheme'
 import TableActionCue from './TableActionCue.vue'
 import BloodFlowImpactTitle from './BloodFlowImpactTitle.vue'
-import MahjongTile from '../MahjongTile.vue'
 import {bloodFlowImpactProfile,bloodFlowTitleMotion} from '../../theme/bloodFlowPresentation'
 const props=defineProps<{cue:BloodFlowCue|null;now:number;themeName:TableThemeName;localSeat:number;players:GamePlayer[];compact?:boolean}>()
 const phase=computed(()=>props.cue?cuePhase(props.cue,props.now):'exit')
@@ -25,7 +24,7 @@ function titleStyleFor(seat:number,text:string,main=false){
   const unit=main?(props.compact?52:110):props.cue.tier>=2?(props.compact?36:66):(props.compact?30:54)
   return {left:`${left}%`,...anchor,width:`min(${(text.length*.92+.4)*unit}px,${main?65:34}vw)`,fontFamily:profile.value.font,opacity:m.opacity,transform:`translate(-50%,${m.y}px) perspective(650px) rotateY(${m.tilt}deg) rotateX(${m.tilt*.3}deg) scale(${1+(m.scale-1)*.55}) rotate(${m.rotation}deg)`}
 }
-const sourceEnd=computed(()=>(props.cue?.phaseMarks.impact??0)*.25)
+const sourceEnd=computed(()=>{const m=props.cue?.phaseMarks;return m?(m.focus+(m.impact-m.focus)*.25):0})
 function portraitProgress(index:number){
   if(!props.cue)return 0
   const start=sourceEnd.value-40+index*55,end=props.cue.phaseMarks.impact-140
@@ -35,16 +34,9 @@ const activeActors=computed(()=>props.cue?.seats.map((item,index)=>({item,progre
 const payerFeedback=computed(()=>props.cue?.deltas.map((amount,seat)=>({amount,seat})).filter(({seat,amount})=>(amount!==0||props.cue?.merged)&&!props.cue?.seats.some(item=>item.seat===seat))??[])
 const signed=(n:number)=>`${n>0?'+':''}${n}`
 const name=(seat:number)=>props.players[(seat-props.localSeat+4)%4]?.name??`玩家${seat+1}`
-const sourceText=computed(()=>{
-  const cue=props.cue,source=cue?.seats[0]?.source
-  if(!cue||!source)return ''
-  if(cue.merged)return cue.title
-  const relative=(source.seat-props.localSeat+4)%4
-  const who=['本家','右家','对家','左家'][relative]
-  return `${who}${source.kind==='draw'?'自摸':source.kind==='added-kong'?'被抢杠':'点炮'}${cue.seats.length>1?` · ${cue.title}`:''}`
-})
-const sourceStyle=computed(()=>{
-  const source=props.cue?.seats[0]?.source,relative=source?(source.seat-props.localSeat+4)%4:0
+const introSource=computed(()=>props.cue?.seats[0]?.source??null)
+const introStyle=computed(()=>{
+  const source=introSource.value,relative=source?(source.seat-props.localSeat+4)%4:0
   return {left:`${(props.compact?[50,74,44,26]:[50,77,50,23])[relative]}%`,...(relative===0?{bottom:props.compact?'22%':'19%'}:{top:`${(props.compact?[0,42,12,42]:[0,30,12,30])[relative]}%`})}
 })
 const actionEvent=(seat:number):TableActionEvent=>{
@@ -57,9 +49,9 @@ const actionEvent=(seat:number):TableActionEvent=>{
   <div class="blood-flow-presentation" :data-theme="themeName" :class="{compact}" aria-live="polite">
     <div v-if="cue" :key="cue.id" class="blood-flow-cue" :class="[`tier-${cue.tier}`,`stage-${stage}`,{brief:cue.compact}]" :data-cue-id="cue.id" :data-cue-start="cue.startedAt" :data-phase="phase">
       <div v-if="cue.kind==='win'&&(stage==='main'||stage==='multi')" class="blood-flow-dimmer" :style="{opacity:motion?.dimming??0}" aria-hidden="true"></div>
-      <div v-if="cue.kind==='win'&&elapsed<sourceEnd" class="blood-flow-source" :style="sourceStyle" :data-source-seat="cue.merged?undefined:cue.seats[0]?.source.seat">
-        <MahjongTile v-if="!cue.merged&&cue.seats[0]" :tile="cue.seats[0].source.tile" :theme-name="themeName" small disabled />
-        <strong>{{ sourceText }}</strong>
+      <!-- 一炮多响：点炮者方位 1.5s 特效字；期间飞牌、动作、主番与收付全部等待。 -->
+      <div v-if="cue.kind==='win'&&phase==='intro'" class="blood-flow-multi-intro" :class="{reduced}" :style="introStyle" :data-multi-intro="1">
+        <BloodFlowImpactTitle text="一炮多响" :theme="themeName" />
       </div>
       <TableActionCue v-for="actor in activeActors" :key="actor.item.record.id"
         :event="actionEvent(actor.item.seat)" :player="players[(actor.item.seat-localSeat+4)%4]"
@@ -91,8 +83,15 @@ const actionEvent=(seat:number):TableActionEvent=>{
 .blood-flow-presentation { position:absolute; inset:0; z-index:42; pointer-events:none; color:var(--theme-text,#fff2d9); }
 .blood-flow-cue { position:absolute; inset:0; --win-color:var(--theme-accent,#e4c17a); }
 .blood-flow-dimmer { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 35%,#0004,#000 85%); }
-.blood-flow-source { position:absolute; transform:translateX(-50%); display:flex; align-items:center; gap:9px; padding:5px 11px; border-radius:6px; border-left:3px solid var(--win-color); background:var(--theme-panel,#122c25); font-size:17px; white-space:nowrap; }
-.blood-flow-source :deep(.mahjong-tile.small) { --tile-width:26px; }
+.blood-flow-multi-intro { position:absolute; transform:translateX(-50%); width:clamp(200px,26vw,340px); isolation:isolate; animation:multi-intro-pop 1.5s cubic-bezier(.2,1.4,.35,1) both; }
+.blood-flow-multi-intro.reduced { animation:none; }
+@keyframes multi-intro-pop {
+  0% { opacity:0; transform:translateX(-50%) scale(.55) rotate(-4deg); }
+  18% { opacity:1; transform:translateX(-50%) scale(1.12) rotate(1.5deg); }
+  30% { transform:translateX(-50%) scale(.98) rotate(0); }
+  78% { opacity:1; transform:translateX(-50%) scale(1); }
+  100% { opacity:0; transform:translateX(-50%) scale(1.04); }
+}
 .blood-flow-central { position:absolute; width:clamp(170px,23vw,330px); isolation:isolate; transform-origin:50% 65%; }
 .stage-main .blood-flow-central { width:clamp(230px,30vw,405px); }
 .blood-flow-central::before { content:''; position:absolute; inset:-12% -25%; z-index:-1; background:radial-gradient(ellipse,color-mix(in srgb,var(--win-color) 22%,transparent),transparent 70%); }
@@ -100,29 +99,28 @@ const actionEvent=(seat:number):TableActionEvent=>{
 [data-theme="happyMahjong"] .blood-flow-central::before { background:conic-gradient(from 15deg,transparent 0 10%,#fbd34477 12% 15%,transparent 17% 30%,#78ceff66 32% 35%,transparent 37% 55%,#ff859677 57% 60%,transparent 62%); clip-path:polygon(8% 12%,80% 0,100% 65%,80% 95%,0 80%); }
 [data-theme="llm"] .blood-flow-central::before { inset:20% -8%; border-block:1px solid #6eeaff99; background:repeating-linear-gradient(0deg,#67dce814 0 1px,transparent 1px 5px),linear-gradient(90deg,transparent,#123241cc,transparent); }
 [data-theme="llmAnime"] .blood-flow-central::before { background:linear-gradient(135deg,transparent 12%,#fd8db344 15% 17%,transparent 20% 60%,#dab5ef66 63% 66%,transparent 70%); transform:skewX(-15deg); }
-.blood-flow-winner-payment { position:absolute; transform:translateX(-50%); display:flex; align-items:baseline; gap:5px; color:var(--theme-positive,#7bddad); white-space:nowrap; }
-.blood-flow-winner-payment b { font-size:clamp(26px,3vw,38px); line-height:1.15; font-variant-numeric:tabular-nums; }
-.blood-flow-winner-payment span { font-size:12px; }
+.blood-flow-winner-payment { position:absolute; transform:translateX(-50%); display:flex; align-items:baseline; gap:6px; color:var(--theme-positive,#7bddad); white-space:nowrap; }
+.blood-flow-winner-payment b { font-size:clamp(40px,5.5vw,76px); line-height:1.1; font-variant-numeric:tabular-nums; }
+.blood-flow-winner-payment span { font-size:15px; }
 .blood-flow-winner-payment b.negative { color:var(--theme-negative,#ffae9f); }
 .blood-flow-winner-payment,.blood-flow-seat-feedback.win-payment { text-shadow:0 2px 3px #000b; paint-order:stroke fill; -webkit-text-stroke:1px #14231da8; }
 .blood-flow-seat-feedback.win-payment { border:0; background:none; }
 .winner-0 { left:50%; bottom:19%; }.winner-1 { left:77%; top:32%; }.winner-2 { left:50%; top:12%; }.winner-3 { left:23%; top:32%; }
-.blood-flow-seat-feedback { position:absolute; display:grid; justify-items:center; padding:6px 12px; border-radius:8px; background:var(--theme-panel,#122c25); color:var(--theme-positive,#7bddad); border:1px solid color-mix(in srgb,var(--win-color) 50%,transparent); }
+.blood-flow-seat-feedback { position:absolute; display:grid; justify-items:center; transform:translateX(-50%); padding:6px 12px; border-radius:8px; background:var(--theme-panel,#122c25); color:var(--theme-positive,#7bddad); border:1px solid color-mix(in srgb,var(--win-color) 50%,transparent); }
 .blood-flow-seat-feedback.negative { color:var(--theme-negative,#ffae9f); }
-.blood-flow-seat-feedback b { font-size:clamp(20px,2.6vw,34px); font-variant-numeric:tabular-nums; }
-.blood-flow-seat-feedback span { font-size:10px; }
-.feedback-0 { bottom:19%; left:45%; }.feedback-1 { top:38%; right:14%; }.feedback-2 { top:12%; left:45%; }.feedback-3 { top:38%; left:14%; }
+.blood-flow-seat-feedback b { font-size:clamp(34px,4.6vw,64px); font-variant-numeric:tabular-nums; }
+.blood-flow-seat-feedback span { font-size:13px; }
+.feedback-0 { bottom:20%; left:50%; }.feedback-1 { top:34%; left:80%; }.feedback-2 { top:12%; left:50%; }.feedback-3 { top:34%; left:20%; }
 .compact .blood-flow-central { width:clamp(140px,25vw,210px); }
-.compact .blood-flow-source { font-size:12px; padding:3px 7px; gap:5px; }
-.compact .blood-flow-source :deep(.mahjong-tile.small) { --tile-width:19px; }
+.compact .blood-flow-multi-intro { width:clamp(150px,24vw,230px); }
 .compact :deep(.anime-action-cue) { width:76px; height:60px; --action-art-scale:1.55; }
 .compact :deep(.anime-action-copy strong) { font-size:28px; -webkit-text-stroke:3px #2d241c; }
 .compact .stage-main .blood-flow-central { width:clamp(170px,30vw,265px); }
-.compact .blood-flow-winner-payment b { font-size:26px; }
-.compact .blood-flow-winner-payment span { font-size:10px; }
+.compact .blood-flow-winner-payment b { font-size:32px; }
+.compact .blood-flow-winner-payment span { font-size:12px; }
 .compact .winner-0 { bottom:22%; }.compact .winner-1 { left:76%; top:55%; }.compact .winner-2 { left:44%; top:8%; }.compact .winner-3 { left:24%; top:55%; }
 .compact .blood-flow-seat-feedback { padding:3px 7px; }
-.compact .blood-flow-seat-feedback b { font-size:20px; }
-.compact .feedback-0 { bottom:22%; }.compact .feedback-2 { top:10%; left:39%; }
+.compact .blood-flow-seat-feedback b { font-size:26px; }
+.compact .feedback-0 { bottom:22%; }.compact .feedback-2 { top:10%; left:44%; }
 .compact .feedback-1,.compact .feedback-3 { top:55%; }
 </style>

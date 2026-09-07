@@ -58,14 +58,16 @@ export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: true, p2p: false }
 
 export const BLOOD_FLOW_TIMING = Object.freeze({
   winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 25_000, recoveryGraceMs: 12_000,
-  compactWinMs: 1900, largeWinMs: 2300, topWinMs: 2600, fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
+  compactWinMs: 2300, largeWinMs: 2600, topWinMs: 2900, multiWinIntroMs: 1500,
+  fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
 })
 
 /** Shared by the local continuation and the existing DOM/3D director. */
 export function bloodFlowWinTiming(tier: number) {
   if (tier >= 2) {
     const duration = tier === 3 ? BLOOD_FLOW_TIMING.topWinMs : BLOOD_FLOW_TIMING.largeWinMs
-    return { duration, phaseMarks: { focus: 0, impact: 880, readable: 1100, score: 1750, exit: duration - 200 } }
+    const impact = tier === 3 ? 1110 : 1000
+    return { duration, phaseMarks: { intro: 0, focus: 0, impact, readable: tier === 3 ? 1390 : 1240, score: duration - 620, exit: duration - 200 } }
   }
-  return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { focus: 0, impact: 720, readable: 900, score: 1500, exit: 1700 } }
+  return { duration: BLOOD_FLOW_TIMING.compactWinMs, phaseMarks: { intro: 0, focus: 0, impact: 870, readable: 1090, score: 1815, exit: 2050 } }
 }

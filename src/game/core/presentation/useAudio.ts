@@ -2,7 +2,9 @@ import { getCurrentInstance, inject, onBeforeUnmount, onMounted, provide, ref, w
 import type { InjectionKey, Ref } from 'vue'
 import {
   registerLlmAudioPlayer,
+  registerLlmAudioGroupPlayer,
   subscribeLocalLlmAudio,
+  type LlmAudioGroupItem,
   type LlmAudioPlaybackHooks,
 } from './llmAudioBus'
 import type { LlmSpeechPriority } from '../../llm/speechPolicy'
@@ -125,6 +127,8 @@ export function useAudio() {
   const llmAudioQueue: LlmAudioItem[] = []
   let activeLlmAudio: HTMLAudioElement | null = null
   let activeLlmItem: LlmAudioItem | null = null
+  /** 一炮多响并发组：独立于单条串行总线的多个同时播放元素。 */
+  const groupAudios = new Set<HTMLAudioElement>()
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
   let audioContext: AudioContext | null = null
@@ -393,12 +397,38 @@ export function useAudio() {
     })
   }
 
+  /** 一炮多响：多位赢家的语音在同一拍开始，彼此不打断、不进串行队列。全部结束后 resolve。 */
+  async function playConcurrentLlmAudio(items: LlmAudioGroupItem[]): Promise<void> {
+    if (!soundOn.value || !effectsOn.value || !items.length) return
+    if (!groupAudios.size) setBgmDucked(true)
+    const endings: Promise<void>[] = []
+    for (const { url } of items) {
+      if (!url) continue
+      const audio = new Audio(url)
+      groupAudios.add(audio)
+      audio.volume = 1
+      const release = () => {
+        if (!groupAudios.delete(audio)) return
+        if (!groupAudios.size && !activeLlmAudio) setBgmDucked(false)
+      }
+      endings.push(new Promise<void>((resolve) => {
+        const settle = () => { release(); resolve() }
+        audio.addEventListener('ended', settle, { once: true })
+        audio.addEventListener('error', settle, { once: true })
+      }))
+      audio.play().catch(() => release())
+    }
+    await Promise.all(endings)
+  }
+
   function stopLlmAudio() {
     llmAudioQueue.splice(0, llmAudioQueue.length).forEach((item) => settleLlmMidpoint(item, false))
     activeLlmItem?.cancel?.()
     if (activeLlmAudio) activeLlmAudio.pause()
     activeLlmAudio = null
     activeLlmItem = null
+    groupAudios.forEach((audio) => { audio.pause(); audio.currentTime = 0 })
+    groupAudios.clear()
     setBgmDucked(false)
   }
 
@@ -407,6 +437,10 @@ export function useAudio() {
     playLocalLlmAudioUntilMidpoint,
     () => soundOn.value && effectsOn.value,
     stopLlmAudio,
+  )
+  const unregisterLlmAudioGroupPlayer = registerLlmAudioGroupPlayer(
+    playConcurrentLlmAudio,
+    () => soundOn.value && effectsOn.value,
   )
   const unsubscribeLocalLlmAudio = subscribeLocalLlmAudio(playLlmAudio)
 
@@ -538,6 +572,7 @@ export function useAudio() {
 
   onBeforeUnmount(() => {
     unregisterLlmAudioPlayer()
+    unregisterLlmAudioGroupPlayer()
     unsubscribeLocalLlmAudio()
     removeBgmPrimeListeners()
     if (bgmWebAudio) {

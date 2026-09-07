@@ -5,7 +5,7 @@ const roundLines=new Set([...Object.values(LLM_WIN_LINES).flatMap(s=>s.稳健),.
 test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
   test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
-    let decisions = 0, reactions = 0, tts = 0, roundTts=0, protectedDecisions = 0
+    let decisions = 0, reactions = 0, tts = 0, roundTts = 0, winTts = 0, protectedDecisions = 0
     const unsafeSpeech: string[] = []
     await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
@@ -35,10 +35,16 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
       if (!available) { await route.fulfill({ status: 503, body: 'offline' }); return }
       const choice = isReaction ? 'COMMENT' : payload.candidates[0].id
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
-        content: JSON.stringify({ choice, message: isReaction ? '这一局结束了，下局再来' : payload.currentWin?'我胡了，不应播出':'这张先走。', important: true, mandatory: true }),
+        content: JSON.stringify({ choice, message: isReaction ? '这一局结束了，下局再来' : payload.currentWin ? '这把稳了。' : '这张先走。', important: true, mandatory: true }),
       } }] }) })
     })
-    await page.route('**/api/local-tts/synthesize', async route => { tts++;if(roundLines.has(route.request().postDataJSON().text))roundTts++;if(route.request().postData()?.includes('不应播出'))unsafeSpeech.push('Hu commentary TTS');await route.fulfill({ status: 503, body: 'tts unavailable' }) })
+    await page.route('**/api/local-tts/synthesize', async route => {
+      const body = route.request().postDataJSON()
+      tts++
+      if (roundLines.has(body.text)) roundTts++
+      if (body.text === '这把稳了。') winTts++
+      await route.fulfill({ status: 503, body: 'tts unavailable' })
+    })
     await page.goto('/?bloodFlow=1')
     await page.evaluate(async theme => {
       const { useBloodFlowGame } = await import('/src/game/variants/lotus/bloodFlow/useBloodFlowGame.ts')
@@ -51,15 +57,16 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
     await expect.poll(() => page.evaluate(() => (window as any).__bfLlmPort.phase.value), { timeout: 120_000, intervals: [1000] }).toBe('settled')
     expect(decisions).toBeGreaterThan(0)
     expect(protectedDecisions).toBeGreaterThan(0)
-    if (theme === 'jade') { expect(reactions).toBe(0); expect(tts).toBe(0) }
+    // 大模型赢家在所有主题都用自己的台词 TTS（对齐非血流，含 jade）；
+    // llmAnime 走角色固定台词（文本不在 winTts 计数内），模型不可用时回退原逻辑。
+    if (available && theme !== 'llmAnime') expect(winTts).toBeGreaterThan(0)
     expect(reactions).toBe(0) // Round lines come from the original library, never COMMENT requests.
     if (theme !== 'jade') {
       await expect.poll(() => roundTts, { timeout: 20_000 }).toBeGreaterThan(0)
       const texts = await page.evaluate(() => Object.values((window as any).__bfLlmPort.capabilities.value.bloodFlow.roundBubbles).map((b: any) => b.text))
       expect(texts).toHaveLength(3)
-      for(const text of texts)expect(roundLines.has(String(text).normalize('NFKC'))).toBe(true)
-      expect(texts).not.toContain('我胡了，不应播出')
-      expect(await page.evaluate(()=>Object.keys((window as any).__bfLlmPort.capabilities.value.bloodFlow.actionBubbles))).toEqual([])
+      for (const text of texts) expect(roundLines.has(String(text).normalize('NFKC'))).toBe(true)
+      expect(await page.evaluate(() => Object.keys((window as any).__bfLlmPort.capabilities.value.bloodFlow.actionBubbles))).toEqual([])
     }
     if (!available) {
       // Model failures still allow the original fixed round lines and TTS fallback.

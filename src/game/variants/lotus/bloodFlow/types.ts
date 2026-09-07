@@ -179,7 +179,6 @@ export interface BloodFlowTableState extends BloodFlowPublicState {
   readonly presentationKey?: string
   readonly roundBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
   readonly actionBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
-  readonly preview: PublicWinScore | null
   readonly waits: readonly { tile: TileType; selfDraw: PublicWinScore | null; discard: PublicWinScore | null }[]
   readonly discardWaitScores?: Partial<Record<TileType, BloodFlowTableState['waits']>>
 }

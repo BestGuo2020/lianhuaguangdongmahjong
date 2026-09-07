@@ -64,6 +64,22 @@ describe('LocalTtsClient', () => {
     expect(resolveLocalTtsBaseUrl()).toBe('https://www.bestguo.top:58000')
   })
 
+  it('resolveAudioUrl 只合成不播放，供一炮多响组播取地址', async () => {
+    const player = vi.fn(async () => true)
+    registerLlmAudioPlayer(player)
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ audioUrl: `/api/local-tts/audio/${'b'.repeat(64)}.mp3` }) })
+    const client = new LocalTtsClient('', fetcher)
+    // 并发解析同一句（多个赢家同时准备）合并为一次合成，且不进入播放总线。
+    const [first, second] = await Promise.all([
+      client.resolveAudioUrl('胡。', 'deepseek', '稳健'),
+      client.resolveAudioUrl('胡。', 'deepseek', '稳健'),
+    ])
+    expect(first).toBe(`/api/local-tts/audio/${'b'.repeat(64)}.mp3`)
+    expect(second).toBe(first)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(player).not.toHaveBeenCalled()
+  })
+
   it('合并相同合成请求，并把每个座位的音频交给共享播放总线', async () => {
     const key = 'a'.repeat(64)
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({

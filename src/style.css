@@ -2049,28 +2049,6 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .start-cue strong { color: #2d2923; font-family: "Yu Gothic", "Microsoft YaHei", sans-serif; font-size: clamp(34px, 4.4vw, 62px); text-shadow: 3px 3px 0 #e9c7b6; }
 .game-app[data-table-theme="llmAnime"] .start-cue i { background: #bd5b48; box-shadow: none; }
 
-/* 漫画气泡：白纸 + 墨线 + 朝向座位的白色尾巴。 */
-.game-app[data-table-theme="llmAnime"] .llm-bubble {
-  border: 2px solid #2d2923;
-  border-radius: 18px 18px 18px 6px;
-  background: #fffaf0;
-  color: #2d2923;
-  box-shadow: 3px 4px 0 color-mix(in srgb, var(--anime-accent, #bd5b48) 38%, transparent);
-  font-weight: 700;
-  text-shadow: none;
-}
-.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble { border-radius: 18px 18px 6px 18px; }
-.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble { border-radius: 6px 18px 18px 18px; }
-.game-app[data-table-theme="llmAnime"] .user-llm-bubble { border-radius: 18px 18px 18px 6px; }
-.game-app[data-table-theme="llmAnime"] .seat-left .llm-bubble::after,
-.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble::after,
-.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble::after,
-.game-app[data-table-theme="llmAnime"] .user-llm-bubble::after { border-color: transparent; }
-.game-app[data-table-theme="llmAnime"] .seat-left .llm-bubble::after { border-right-color: #2d2923; }
-.game-app[data-table-theme="llmAnime"] .seat-right .llm-bubble::after { border-left-color: #2d2923; }
-.game-app[data-table-theme="llmAnime"] .seat-top .llm-bubble::after { border-bottom-color: #2d2923; }
-.game-app[data-table-theme="llmAnime"] .user-llm-bubble::after { border-right-color: #2d2923; }
-
 /* 广播题签：短、平、像漫画分镜里的旁白条。 */
 .game-app[data-table-theme="llmAnime"] .announcement {
   border: 2px solid #2d2923;
@@ -2236,17 +2214,9 @@ button { font: inherit; }
   --controls-bottom: calc(var(--safe-bottom) + var(--hand-zone-height) + var(--hud-gap));
   --announcement-width: auto;
   --announcement-padding: 4px 37px;
-  --bubble-max-width: min(280px, calc(34 * var(--game-cqw)));
-  --bubble-min-width: 0px;
-  --bubble-padding: 7px 12px;
 }
 
 .announcement { width: var(--announcement-width); padding: var(--announcement-padding); }
-.llm-bubble {
-  min-width: var(--bubble-min-width);
-  max-width: var(--bubble-max-width);
-  padding: var(--bubble-padding);
-}
 .has-three-scene .seat-top { top: max(5%, var(--top-seat-anchor)); }
 
 .user-area {
@@ -2276,11 +2246,6 @@ button { font: inherit; }
 .result-reopen {
   min-width: var(--control-hit-target);
   min-height: var(--control-hit-target);
-}
-
-.llm-bubble {
-  max-width: min(280px, calc(34 * var(--game-cqw)));
-  overflow-wrap: anywhere;
 }
 
 /* 手牌随牌桌（高向）缩放：牌桌屏幕宽 ∝ 容器高，手牌也用 cqh 保持比例，
@@ -3552,7 +3517,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut:hover { background: var(--theme-panel-elevated); border-color: var(--theme-accent); }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: var(--theme-text-muted); }
 .game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button, .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-text); }
-.game-app[data-table-theme="llmAnime"] :is(.kong-picker-card, .llm-bubble) {
+.game-app[data-table-theme="llmAnime"] .kong-picker-card {
   --theme-text: #2d2923;
   --theme-text-muted: #6f6255;
   --theme-panel: #fff8ec;

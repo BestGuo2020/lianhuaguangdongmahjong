@@ -3,6 +3,7 @@ import { wallStackSlot } from '../rules/wallLayout'
 export const TABLE_TILE_WIDTH = .68
 export const TABLE_TILE_LENGTH = .94
 export const LIFT_SLOT_WIDTH_SCALE = 1.6
+// 槽口长边比牌山总长多一个麻将长度（保留满长槽）；四角不重叠由牌墙位置保证（墙随槽外移）。
 export const LIFT_SLOT_EXTRA_TILE_LENGTHS = 1
 
 export type LiftSlotSide = 'near' | 'far' | 'left' | 'right'

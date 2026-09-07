@@ -5,7 +5,7 @@ test('three winners retain their own patterns and the payer shows the whole paym
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=12&motionScale=3')
   await expect(page.locator('.table-loading')).toHaveCount(0,{timeout:30_000})
   await page.evaluate(()=>(window as any).__appendBloodFlowMultiWin())
-  await expect(page.locator('.blood-flow-source')).toContainText('三响')
+  await expect(page.locator('.blood-flow-multi-intro')).toContainText('一炮多响')
   await page.waitForFunction(()=>document.querySelector('.blood-flow-cue')?.getAttribute('data-phase')==='readable')
   for(const [seat,pattern] of [[1,'清一色'],[2,'大三元'],[3,'十三幺']]){
     await expect(page.locator(`[data-title-seat="${seat}"]`)).toContainText(String(pattern))

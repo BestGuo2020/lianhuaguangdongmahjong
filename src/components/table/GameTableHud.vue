@@ -11,7 +11,6 @@ import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresent
 import type { TableThemeName } from './three/tableTheme'
 import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
 import BloodFlowSettlementHost from '../settlement/BloodFlowSettlementHost.vue'
-import BloodFlowWinCard from './BloodFlowWinCard.vue'
 import BloodFlowWinPresentation from './BloodFlowWinPresentation.vue'
 import { BloodFlowPresentationDirector } from '../../game/variants/lotus/bloodFlow/presentationDirector'
 import type { BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
@@ -247,12 +246,6 @@ onBeforeUnmount(() => {
 })
 // 移动端翻精指示牌折叠为小徽章，点击展开二骰/精牌说明（桌面端始终完整显示）。
 const flipOpen = ref(false)
-const firstHuOffer = ref(true)
-const huOfferSeen = ref(false)
-watch(() => props.bloodFlow?.roundId, () => { huOfferSeen.value = false; firstHuOffer.value = true })
-watch(() => Boolean(props.bloodFlow?.preview && props.userCanHu), (available, previous) => {
-  if (available && !previous) { firstHuOffer.value = !huOfferSeen.value; huOfferSeen.value = true }
-}, { immediate: true })
 // 每局翻精牌变化时复位折叠状态，避免跨局残留展开。
 watch(() => props.flipTile, () => { flipOpen.value = false })
 const touchStarts = new Map<number, { index: number; x: number; y: number; startedAt: number }>()
@@ -617,14 +610,9 @@ function onAvatarError(entry: GamePlayer) {
     </section>
 
     <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
-      <div v-if="bloodFlow?.preview && userCanHu && !presentationBusy" class="blood-flow-preview" role="status">
-        <BloodFlowWinCard :key="bloodFlow.sourceEvent?.id" :score="bloodFlow.preview" compact preview />
-        <small>{{ bloodFlow.seats[user.seat].locked ? '已锁手 · 可续胡' : firstHuOffer ? '胡后锁手，不再换张/吃碰杠' : '胡后锁手' }}</small>
-      </div>
       <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
         <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
-          <b v-if="bloodFlow" class="blood-flow-ting-label">{{ userCurrentWaits ? '已听' : '可听' }}</b>
-          <template v-else-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
+          <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
           <img v-else class="action-icon" :src="`${imageBase}tips.png`" alt="" />
         </button>
         <template v-if="actionPrompt?.type === 'claim'">
@@ -632,18 +620,18 @@ function onAvatarError(entry: GamePlayer) {
           <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
           <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
           <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow || !actionPrompt.canHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'response'">
           <button v-if="actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
           <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
           <button v-if="actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
           <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow || !actionPrompt.canHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
           <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          <button v-if="!bloodFlow" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
         <template v-else-if="actionPrompt?.type === 'chi'">
           <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
@@ -653,7 +641,6 @@ function onAvatarError(entry: GamePlayer) {
           <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
           <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
           <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="bloodFlow && userCanHu" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
         </template>
       </div>
       <button
@@ -699,8 +686,6 @@ function onAvatarError(entry: GamePlayer) {
 
 <style scoped>
 .game-table-hud { display: contents; }
-.blood-flow-preview { display: grid; gap: 2px; max-width: min(320px, 40vw); padding: 6px 9px; border: 1px solid var(--theme-accent, #cfb97a); border-radius: 8px; background: rgba(12, 22, 24, .94); color: #fff5dc; font-size: 12px; }
-.blood-flow-preview small { color: #c9d5d6; font-size: 10px; }
 .blood-flow-waiting-tip { max-height: min(320px, 55vh); align-items: flex-start; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
 .blood-flow-wait-grid { display: grid; gap: 12px 14px; }
 .blood-flow-wait-tile { display: grid; justify-items: center; align-content: start; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
@@ -708,7 +693,6 @@ function onAvatarError(entry: GamePlayer) {
 .wait-multiplier { color: var(--theme-accent); font-weight: 800; }
 .wait-remaining { color: var(--theme-text); }
 .blood-flow-wait-tile.exhausted { opacity: .5; }
-.waiting-action .blood-flow-ting-label { font-size: 18px; color: var(--theme-accent); white-space: nowrap; }
 @container (max-width: 900px) or (max-height: 500px) {
   .blood-flow-wait-grid { gap: 8px 10px; }
   .blood-flow-wait-tile { font-size: 11px; }

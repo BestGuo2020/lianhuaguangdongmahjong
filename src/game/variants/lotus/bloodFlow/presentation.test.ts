@@ -20,7 +20,7 @@ it('shows the first top-tier win fully, then ten repeats compactly without repla
     const event = batch(i + 1)
     queue.enqueue(event, i * 500); queue.enqueue(event, i * 500)
     const cue = queue.next(i * 500)!
-    expect(cue.duration).toBe(2600)
+    expect(cue.duration).toBe(2900)
     expect(cue.compact).toBe(i !== 0)
     expect(cue.seats).toHaveLength(1)
     expect(queue.next(i * 500)).toBeNull()
@@ -55,17 +55,19 @@ it('orders kong receipts with win batches and never replays the same receipt',()
   director.sync([],'r',0);director.sync([win],'r',100,[kong])
   const cue=director.tick(100)!
   expect(cue.kind).toBe('kong');expect(cue.deltas).toEqual(kong.deltas);expect(cue.flights).toEqual([])
-  director.sync([win],'r',200,[kong]);expect(director.tick(800)?.id).toBe(win.batchId)
-  expect(director.tick(3400)).toBeNull()
+  director.sync([win],'r',200,[kong]);expect(director.tick(800)?.id).toBe('k2')
+  expect(director.tick(1300)?.id).toBe(win.batchId)
+  expect(director.tick(3400)).not.toBeNull()
+  expect(director.tick(4200)).toBeNull()
   director.sync([win],'restore',4000,[kong]);expect(director.tick(4000)).toBeNull()
 })
 it('grades by base pattern weight, permits an upgrade and coalesces only visual backlog', () => {
   expect(winTier(batch(1, ['pinghu']).winners[0])).toBe(0)
   const queue = new BloodFlowPresentationQueue()
   queue.enqueue(batch(1, ['all-honors']), 0)
-  expect(queue.next(0)?.duration).toBe(2300)
+  expect(queue.next(0)?.duration).toBe(2600)
   queue.enqueue(batch(2), 500)
-  expect(queue.next(500)?.duration).toBe(2600)
+  expect(queue.next(500)?.duration).toBe(2900)
   const business = Array.from({ length: 20 }, (_, i) => batch(i + 3, ['mixed-suit'], (i % 4) as Seat))
   const before = JSON.stringify(business)
   business.forEach(b => queue.enqueue(b, 1000))
@@ -77,4 +79,22 @@ it('grades by base pattern weight, permits an upgrade and coalesces only visual 
   queue.reset(business)
   business.forEach(b => queue.enqueue(b, 10_000))
   expect(queue.next(10_000)).toBeNull()
+})
+it('一炮多响：先给 1.5s 特效字 intro，其余阶段整体顺延', () => {
+  const discard = batch(1, ['pinghu'], 1)
+  const multi: WinBatch = { ...discard, batchId: 'multi', windowId: 'multi-w',
+    source: { ...discard.source, kind: 'discard' },
+    winners: [discard.winners[0], { ...discard.winners[0], id: 'r2', winner: 2 as Seat }],
+    nextAction: { kind: 'draw', seat: 2 } }
+  const queue = new BloodFlowPresentationQueue()
+  queue.enqueue(multi, 0)
+  const cue = queue.next(0)!
+  expect(cue.introMs).toBe(1500)
+  expect(cue.seats).toHaveLength(2)
+  expect(cue.duration).toBe(2300 + 1500)
+  expect(cue.phaseMarks.impact).toBe(1500 + 870)
+  expect(cuePhase(cue, 0)).toBe('intro')
+  expect(cuePhase(cue, 1499)).toBe('intro')
+  expect(cuePhase(cue, 1500)).toBe('focus')
+  expect(cuePhase(cue, 1500 + 870)).toBe('impact')
 })

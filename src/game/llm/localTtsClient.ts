@@ -124,6 +124,36 @@ export class LocalTtsClient {
     cancelLocalLlmAudioPlayback()
   }
 
+  /**
+   * 只合成不播放：一炮多响等并发场景预先解析音频地址，到点后用组播通道同时播放。
+   * 复用与 speak 相同的归一化、缓存键与负缓存语义。
+   */
+  async resolveAudioUrl(
+    text: string,
+    voiceKey: string,
+    style: LlmStyle,
+    cacheIdentity?: string,
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    const normalized = normalizeText(text)
+    if (!normalized || signal?.aborted) return null
+    if (!canPlayLocalLlmAudio()) return null
+    const key = JSON.stringify([normalized, voiceKey, style, cacheIdentity ?? ''])
+    if ((this.negativeUntil.get(key) ?? 0) > Date.now()) return null
+    let request = this.inflight.get(key)
+    if (!request) {
+      request = this.synthesize(normalized, voiceKey, style, cacheIdentity, signal)
+      this.inflight.set(key, request)
+    }
+    try {
+      const url = await request
+      if (!url) this.negativeUntil.set(key, Date.now() + 30_000)
+      return url
+    } finally {
+      if (this.inflight.get(key) === request) this.inflight.delete(key)
+    }
+  }
+
   private async synthesize(
     text: string,
     voiceKey: string,
