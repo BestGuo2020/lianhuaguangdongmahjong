@@ -45,6 +45,32 @@ it('feeds bf_snapshot views with meta and ignores malformed payloads', () => {
   expect(views).toHaveLength(1)
 })
 
+it('passes opening dice through to the view meta for the opening animation', () => {
+  const views: Array<{ meta: { opening?: unknown } }> = []
+  const authority = createBloodFlowWsAuthority({
+    transport: { send: () => true },
+    onView: (_view, meta) => views.push({ meta }),
+  })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0,
+    opening: { firstDice: [3, 5], secondDice: [1, 6] } })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0,
+    opening: { firstDice: [3], secondDice: [1, 6] } })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0 })
+  expect(views[0].meta.opening).toEqual({ firstDice: [3, 5], secondDice: [1, 6] })
+  expect(views[1].meta.opening).toBeUndefined()
+  expect(views[2].meta.opening).toBeUndefined()
+})
+
+it('sends opening_done acknowledgements for the ready barrier', () => {
+  const sent: Record<string, unknown>[] = []
+  const authority = createBloodFlowWsAuthority({
+    transport: { send: (message) => { sent.push(message); return true } },
+    onView: () => {},
+  })
+  authority.openingDone(2)
+  expect(sent).toEqual([{ kind: 'opening_done', round: 2 }])
+})
+
 it('sends engine commands as authoritative action messages', () => {
   const sent: Record<string, unknown>[] = []
   const authority = createBloodFlowWsAuthority({

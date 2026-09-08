@@ -8,11 +8,18 @@ import type { EngineCommand } from '../state'
 import type { BloodFlowSeatView } from '../seatView'
 import type { Seat } from '../types'
 
+export interface BloodFlowWsOpening {
+  firstDice: [number, number]
+  secondDice: [number, number]
+}
+
 export interface BloodFlowWsMeta {
   round: number
   mode: MatchType
   dealer: number
   matchFinished?: boolean
+  /** 每局首份快照携带的骰点：驱动联机开局动画（掷骰/翻精/发牌）。 */
+  opening?: BloodFlowWsOpening
 }
 
 export interface BloodFlowWsTransport {
@@ -53,6 +60,16 @@ function isBloodFlowView(value: unknown): value is BloodFlowSeatView {
     && typeof view.public === 'object' && view.public !== null
 }
 
+function isOpening(value: unknown): value is BloodFlowWsOpening {
+  if (typeof value !== 'object' || value === null) return false
+  const opening = value as { firstDice?: unknown; secondDice?: unknown }
+  return isDicePair(opening.firstDice) && isDicePair(opening.secondDice)
+}
+
+function isDicePair(value: unknown): value is [number, number] {
+  return Array.isArray(value) && value.length === 2 && value.every((n) => Number.isInteger(n))
+}
+
 export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions): BloodFlowWsAuthority {
   let closed = false
   return {
@@ -64,7 +81,7 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
         return
       }
       if (kind !== 'bf_snapshot') return
-      const payload = message as { view?: unknown; round?: unknown; mode?: unknown; dealer?: unknown; matchFinished?: unknown }
+      const payload = message as { view?: unknown; round?: unknown; mode?: unknown; dealer?: unknown; matchFinished?: unknown; opening?: unknown }
       if (!isBloodFlowView(payload.view)) return
       const round = Number.isInteger(payload.round) ? Number(payload.round) : 0
       const mode: MatchType = payload.mode === 'hanchan' ? 'hanchan' : 'east'
@@ -72,6 +89,7 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
         ? Number(payload.dealer) as Seat : 0
       options.onView(payload.view, {
         round, mode, dealer, matchFinished: payload.matchFinished === true,
+        ...(isOpening(payload.opening) ? { opening: payload.opening } : {}),
       })
     },
     send(command) {
@@ -84,7 +102,7 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
     },
     nextRound() { /* 后端 v1 无续局消息 */ },
     leave() { /* 由房间生命周期管理 */ },
-    openingDone() { /* 后端 v1 无开局动画数据，快照直达对局视图 */ },
+    openingDone(round) { options.transport.send({ kind: 'opening_done', round }) },
     close() { closed = true },
   }
 }

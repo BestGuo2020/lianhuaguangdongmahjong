@@ -120,9 +120,10 @@ describe('useBloodFlowRemoteGame', () => {
       rulesetId: 'lotus-blood-flow', nickname: '乙', rejoinCode: 'C2' })
     expect(module.mySeat.value).toBe(1)
     expect(module.nickname.value).toBe('乙')
-    capture.onMessage!({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0 })
+    capture.onMessage!({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0,
+      opening: { firstDice: [3, 5], secondDice: [1, 6] } })
     await vi.waitFor(() => {
-      expect(module.phase.value).not.toBe('lobby')
+      expect(module.phase.value).toBe('dealing')
     })
     vi.unstubAllGlobals()
   })

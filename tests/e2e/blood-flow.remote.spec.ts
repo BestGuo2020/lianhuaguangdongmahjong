@@ -99,6 +99,15 @@ test('two real clients run a blood-flow WS room through the released UI path', a
     // 双方应用真实消费了权威快照：血流牌桌 HUD 出现、手牌 ≥13 张（庄家 14）。
     await expect(pageA.locator('.game-table-hud')).toBeVisible({ timeout: 30_000 })
     await expect(pageB.locator('.game-table-hud')).toBeVisible({ timeout: 30_000 })
+    // 联机开局动画：两端播完掷骰/翻精/发牌后回执 opening_done，服务端屏障才放行。
+    await expect.poll(
+      () => sentA.filter((m) => m.kind === 'opening_done').length,
+      { timeout: 40_000, message: 'client A never acknowledged the opening animation' },
+    ).toBeGreaterThan(0)
+    await expect.poll(
+      () => sentB.filter((m) => m.kind === 'opening_done').length,
+      { timeout: 40_000, message: 'client B never acknowledged the opening animation' },
+    ).toBeGreaterThan(0)
     await expect.poll(() => pageA.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
     await expect.poll(() => pageB.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
     await expect(pageA.locator('.base-score-badge')).toContainText('底分10')

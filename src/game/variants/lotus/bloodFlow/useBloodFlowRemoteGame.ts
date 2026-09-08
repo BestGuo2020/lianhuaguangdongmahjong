@@ -65,7 +65,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
       send: (command) => authority.send(command),
       nextRound: () => { /* 后端 v1 无续局消息：结算 UI 由 roundResult 驱动 */ },
       leave: () => { /* 离开由房间生命周期管理 */ },
-      openingDone: () => { /* 后端 v1 无开局动画数据 */ },
+      openingDone: (round) => authority.openingDone(round),
     },
   })
 
