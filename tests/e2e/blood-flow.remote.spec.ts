@@ -121,6 +121,13 @@ test('two real clients run a blood-flow WS room through the released UI path', a
       { timeout: 20_000, message: 'client A never sent an authoritative action' },
     ).toBeGreaterThan(0)
 
+    // 局内过场：弃牌流水随快照下发（前端据此播弃牌音效、牌名播报与牌河高亮）。
+    await expect.poll(
+      () => messagesA.some((m) => m.kind === 'bf_snapshot'
+        && (m.view as { lastDiscardAction?: unknown } | undefined)?.lastDiscardAction),
+      { timeout: 20_000, message: 'client A never received a discard action' },
+    ).toBe(true)
+
     // 服务器继续推进：B 的快照流持续到达（以 HUD 存续与无页面错误为准）。
     await expect(pageB.locator('.game-table-hud')).toBeVisible({ timeout: 20_000 })
     expect(errorsA).toEqual([])
