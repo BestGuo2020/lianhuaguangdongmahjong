@@ -19,7 +19,7 @@
 | 暗杠/补杠/乱风杠后 `afterKongSettle` | 600 | `afterKongSettle` | ✅ |
 | 抢杠前 `beforeRobKong` | 650 | `beforeRobKong` | ✅ |
 | 抢杠之间 `betweenRobKongs` | 450 | —（血流多响一次性结算，无逐家抢杠） | — |
-| 吃碰后跳过摸牌 `skipDrawPengDelay` | 350 | —（血流碰/吃后直接出牌，无此流程） | — |
+| 吃碰后跳过摸牌 `skipDrawPengDelay` | 350 | —（经典引擎 `begin_turn` 默认摸牌，碰/吃需 `skip_draw=True` 跳过；350ms 是人类碰后到出牌窗口的停顿。血流碰/吃不摸牌、杠才 `draw(tail)`；人类碰后真人自选牌、AI 碰后有 650 思考，无需独立档位） | — |
 | 红中花杠后 `redKongDraw` | 600 | —（血流无红中杠） | — |
 | 开局表现等待 `openingDelay(Start)` | 6400 | 客户端开局动画 + `opening_done` 就绪屏障 | ✅ |
 | 回合超时 `turn_timeout` | 12000 | `BLOOD_FLOW_TIMING.remoteDecisionMs` | ✅ |
