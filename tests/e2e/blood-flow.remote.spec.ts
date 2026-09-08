@@ -120,7 +120,7 @@ test('two real clients run a blood-flow WS room through the released UI path', a
     await expect(pageA.locator('.turn-timer')).toBeVisible({ timeout: 30_000 })
     const turnSeconds = Number((await pageA.locator('.turn-timer span').textContent())?.trim())
     expect(turnSeconds).toBeGreaterThan(0)
-    expect(turnSeconds).toBeLessThanOrEqual(25)  // 联机决策窗口对齐 remoteDecisionMs
+    expect(turnSeconds).toBeLessThanOrEqual(12)  // 联机决策窗口对齐经典 turn_timeout=12s
 
     // 轮到庄家（A）时打出一张：动作经 WS 上行（action 帧小、可直接解析）。
     const tilesA = pageA.locator('.hand-tile-slot .mahjong-tile')
