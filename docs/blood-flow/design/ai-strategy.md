@@ -102,3 +102,16 @@ chainFactor = min(1, chainHorizon / max(1, wallCount / 4))
 - 全量 `pnpm test`、`pnpm build`；
 - 血流关键 e2e（claim-actions / payments / local）；
 - 规则零改动断言：计分、封顶、锁手、胡后续行的既有回归全绿。
+
+## LLM 决策接入（2026-09-08 追加）
+
+血流 LLM 座位沿用既有决策链路（preparedDecision / 条件深思 / 预算与窗口校验 / 赢家台词预合成）。本次接入：
+
+- **候选注入同源 EV 特征（`features.ev`）**：win 候选带立即总收、锁手连锁、首胡门槛阶段与拒胡理由；自摸窗口每个弃牌候选带改张 EV（含单吊任意听标记与潜力方向）；抢杠窗口胡/过两值；过候选带发育期望。计算复用本地策略的同一份 `bloodFlowEvContext`，单一事实来源，模型不自行算分。
+- **默认推荐 = 本地贪婪决策**：`engineSuggestion` 改用 `decideBloodFlowActionEv`（原为 legacy 见胡就胡）。
+- **模型权限：可覆盖、要理由**（用户定稿）：system 文案明确模型可覆盖建议以表现性格与判断，覆盖时 message 必须简述理由；reasoning 走条件深思气泡。采纳时可留空短句。
+- **改张候选只在自摸窗口注入**，与玩家提示口径一致；抢杠/点炮窗口不注入改张。
+- **不新增请求频率与台词通道**：每窗口仍一次请求；拒胡/改张落地走普通弃牌台词；抢杠过无台词；EV 特征本地同步计算、不占用模型请求预算。
+- **开关**：`BLOOD_FLOW_AI.llmEvFeatures`（默认 true）；关闭回退旧提示词与 legacy 默认推荐。
+
+验收：新增 `bloodFlowEvFeatures.test.ts` 5 项；真实 DeepSeek 固定输入四条（改张任意听、早局拒胡、抢杠过、抢杠胡）全部选择合法且覆盖建议时给出理由，见验收页。

@@ -93,6 +93,13 @@ E00～E09 的原清单保存在[首版计划](archive/implementation-v1.md)。E1
 
 G04 的完整三类提示、G05 提醒音及 G08 模型外围按影响本轮体验的实际缺口补齐，不扩大为新 AI 策略工程。G06、vibehub 同步及 P2P 测试继续后置，本阶段暂不运行 `pnpm sync:vibehub`。
 
+## 血流 LLM EV 特征接入（2026-09-08 第七轮，已完成）
+
+在第六轮本地 EV 策略基础上接入 LLM 决策链路（范围与口径见[策略设计的 LLM 接入节](design/ai-strategy.md#llm-决策接入2026-09-08-追加)）：
+
+- 候选注入同源 EV 特征（`features.ev`，由 `bloodFlowEvContext` 单一来源计算）；`engineSuggestion` 改用 `decideBloodFlowActionEv`；模型权限按用户定稿为**可覆盖、要理由**（覆盖时 message 必须简述理由，reasoning 走条件深思气泡）；改张候选只在自摸窗口注入；不新增请求频率与台词通道；`llmEvFeatures` 配置开关（默认开，关闭回退旧提示词）。
+- 检查记录：新增 `bloodFlowEvFeatures.test.ts` 5 项；全量单测与构建见验收页；真实 DeepSeek（`deepseek-v4-flash`，activeId 供应商）固定输入四条——摸精改张单吊任意听（选改张）、早局低番拒胡（选过并给理由「这牌还有得打，先看看风头。」）、低番抢杠过（「这牌不急，再看看。」）、抢杠收益可观胡（「这杠抢得值，先落袋为安。」）——全部选择合法、台词带性格。证据见验收页「2026-09-08 血流 LLM EV 特征接入」。
+
 ## 一炮多响与减负（2026-09-06 后续演出调整）
 
 按用户截图与说明（参考欢乐麻将红中血流一炮多响的提示方式）实施，覆盖所有主题：

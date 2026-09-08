@@ -5,8 +5,11 @@ import type { BloodFlowAction } from './state'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import type { BloodFlowAiConfig } from './config'
-import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
-import { chainEvEst, patternPotentialEv, patternPotentialTotal, waitingTilesCached } from './patternPotentials'
+import { BLOOD_FLOW_AI } from './config'
+import { patternPotentialEv } from './patternPotentials'
+import { bloodFlowEvContext } from './evContext'
+
+export { bloodFlowEvContext, firstWinFloor } from './evContext'
 
 /** Only adapt blood-flow legal/locked actions. Tile strategy belongs to lotusAi. */
 export function bloodFlowAiActions(view: BloodFlowSeatView): readonly BloodFlowAction[] {
@@ -60,12 +63,8 @@ export function decideBloodFlowAction(view: BloodFlowSeatView, minimumFirstPayme
 }
 
 // ── 贪婪 EV 策略（docs/blood-flow/design/ai-strategy.md） ──
-
-function firstWinFloor(wallCount: number, config: BloodFlowAiConfig) {
-  if (wallCount <= config.lateGameWallCount) return config.firstWinFloorLate
-  if (wallCount > config.earlyGameWallCount) return config.firstWinFloorEarly
-  return config.firstWinFloorMid
-}
+// EV 上下文（胡/连锁/门槛/潜力/改张/抢杠两值）由 evContext 统一计算，
+// 本地决策与 LLM 候选特征共用同一份结果。
 
 /** 放炮成本：牌河公开张数档位 × 按 4 倍级单家支付（40 点）估算的暴露。 */
 function safetyExposureFor(config: BloodFlowAiConfig, visible: readonly TileType[]) {
@@ -81,23 +80,6 @@ interface EvExtras {
   patternBonus: (hand: TileType[], melds: Meld[]) => number
   safetyExposure: (tile: TileType) => number
   melds: Meld[]
-}
-
-/** 自摸窗口的改张候选：弃别的牌保留摸牌，且弃后仍听牌，取连锁期望最大者。 */
-function bestReformDiscard(
-  moves: readonly BloodFlowAction[], hand: readonly TileType[], drawnIndex: number,
-  melds: readonly Readonly<Meld>[], jokers: readonly TileType[], visible: readonly TileType[],
-  wallCount: number, winEv: number, config: BloodFlowAiConfig,
-): BloodFlowAction | null {
-  let best: { action: BloodFlowAction; ev: number } | null = null
-  for (const discard of moves) {
-    if (discard.kind !== 'discard' || discard.index === drawnIndex) continue
-    const after = hand.filter((_, index) => index !== discard.index)
-    if (!waitingTilesCached(after, melds.length, jokers).length) continue
-    const ev = chainEvEst(after, melds, jokers, visible, wallCount)
-    if (!best || ev > best.ev) best = { action: discard, ev }
-  }
-  return best && best.ev >= winEv * config.reformGainRatio ? best.action : null
 }
 
 /**
@@ -157,20 +139,16 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   }
 
   if (win) {
-    const score = view.ownScore
-    const payers = score && (score.source === 'self-draw' || score.source === 'kong-bloom') ? 3 : 1
-    const immediateTotal = (score?.paymentPerPayer ?? 0) * payers
-    const drawnIndex = player.drawnTileIndex
-    const lockedHand = view.window?.kind === 'turn' && drawnIndex >= 0
-      ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
-    const winEv = immediateTotal + chainEvEst(lockedHand, melds, jokers, visible, wallCount)
+    const ev = bloodFlowEvContext(view, config)
 
     // 自摸窗口：改张优先于门槛，再决定胡或继续发育。
-    if (view.window?.kind === 'turn' && view.window.source.kind === 'draw' && drawnIndex >= 0) {
-      const reform = bestReformDiscard(moves, hand, drawnIndex, melds, jokers, visible, wallCount, winEv, config)
-      if (reform) return reform
-      const belowFloor = Boolean(score && score.paymentPerPayer < firstWinFloor(wallCount, config))
-      if (belowFloor && patternPotentialTotal(lockedHand, melds, jokers) >= config.potentialFloor) {
+    if (view.window?.kind === 'turn' && view.window.source.kind === 'draw' && player.drawnTileIndex >= 0) {
+      const best = ev.reformCandidates.find(candidate => discards.some(d => d.index === candidate.index))
+      if (best && best.ev >= ev.winEv * config.reformGainRatio) {
+        return discards.find(d => d.index === best.index) ?? win
+      }
+      const belowFloor = Boolean(view.ownScore && view.ownScore.paymentPerPayer < ev.floor)
+      if (belowFloor && ev.potentialTotal >= config.potentialFloor) {
         return decideDiscard() ?? (moves.find(a => a.kind === 'pass') ?? win)
       }
       return win
@@ -178,15 +156,13 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
 
     // 抢杠窗口：胡 / 过的贪婪比较（无改张、无吃碰杠替代用途）。
     if (view.window?.kind !== 'turn' && view.window.source.kind === 'added-kong') {
-      const kongFee = BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.kongPayments.added
-      const passEv = -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount)
-        + patternPotentialEv(hand, melds, jokers, wallCount)
-      return winEv >= passEv ? win : (moves.find(a => a.kind === 'pass') ?? win)
+      const rob = ev.robEv
+      return rob && rob.winEv >= rob.passEv ? win : (moves.find(a => a.kind === 'pass') ?? win)
     }
 
     // 点炮窗口：低于首胡门槛且手牌有潜力 → 不胡，交给常规吃碰杠比较；否则胡。
-    if (score && score.paymentPerPayer < firstWinFloor(wallCount, config)
-      && patternPotentialTotal(hand, melds, jokers) >= config.potentialFloor) {
+    if (view.ownScore && view.ownScore.paymentPerPayer < ev.floor
+      && ev.potentialTotal >= config.potentialFloor) {
       return decideClaimTurn() ?? (moves.find(a => a.kind === 'pass') ?? win)
     }
     return win

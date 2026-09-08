@@ -89,6 +89,8 @@ export interface BloodFlowAiConfig {
   readonly safetyCostNone: number
   readonly safetyCostOne: number
   readonly safetyCostSafe: number
+  /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
+  readonly llmEvFeatures: boolean
 }
 
 export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
@@ -106,6 +108,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
   safetyCostNone: 0.25,
   safetyCostOne: 0.1,
   safetyCostSafe: 0,
+  llmEvFeatures: true,
 })
 
 /** Shared by the local continuation and the existing DOM/3D director. */

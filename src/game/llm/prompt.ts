@@ -99,6 +99,23 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
   }
   if (features.efficiency !== 'unknown' && features.efficiency !== 'n/a') parts.push(`牌效：${features.efficiency}`)
   if (features.scoreDeltaBand && features.scoreDeltaBand !== 'n/a') parts.push(`收益：${features.scoreDeltaBand}`)
+  if (features.ev?.win) {
+    const win = features.ev.win
+    parts.push(`期望：立即${win.immediateTotal}+连锁${win.lockedChain}`)
+    if (win.declinedReason) {
+      const stage = win.floorStage === 'early' ? '早局' : win.floorStage === 'late' ? '残局' : '中局'
+      parts.push(`低于${stage}首胡门槛${win.floor}，潜力：${win.declinedReason}`)
+    }
+  }
+  if (features.ev?.reform) {
+    const reform = features.ev.reform
+    parts.push(reform.anyWait
+      ? `改张：连锁${reform.chain}（单吊任意听）`
+      : `改张：连锁${reform.chain}（${reform.waitCount}听口）`)
+    if (reform.patterns.length) parts.push(`方向：${reform.patterns.join('、')}`)
+  }
+  if (features.ev?.rob) parts.push(`抢杠期望：胡${features.ev.rob.winEv} vs 过${features.ev.rob.passEv}`)
+  if (features.ev?.developEv !== undefined) parts.push(`过：发育期望${features.ev.developEv}`)
   if (features.risks.length) parts.push(`注意：${features.risks.join('；')}`)
   return `${candidate.id} ${candidate.label}${parts.length ? ` ｜ ${parts.join('｜')}` : ''}`
 }
