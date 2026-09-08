@@ -45,7 +45,7 @@ test('restarts from the lobby after leaving an unfinished east match', async ({p
   await expect(tiles).toHaveCount(13)
   expect(errors).toEqual([])
 })
-test('blood-flow is available locally and cannot enter a WS room', async ({ page }) => {
+test('blood-flow is available locally and in WS rooms', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto('/')
@@ -55,7 +55,8 @@ test('blood-flow is available locally and cannot enter a WS room', async ({ page
   await page.getByRole('button', { name: '确定', exact: true }).click()
   await expect(page.locator('.start-button')).toContainText('莲花麻将·血流')
   await page.getByRole('radio', { name: /联机对战/ }).click()
-  await expect(page.locator('.remote-lobby')).not.toContainText('莲花麻将·血流')
+  // WS 放行后：联机大厅保留血流玩法选择（不再回退默认规则）。
+  await expect(page.locator('.remote-lobby')).toContainText('莲花麻将·血流')
   await page.getByRole('radio', { name: /单机对战/ }).click()
   await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
   await page.getByRole('button', { name: /莲花麻将·血流/ }).click()

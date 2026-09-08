@@ -21,6 +21,7 @@ import { createActiveGamePort, type GameMode } from './game/core/contracts/activ
 import type { GamePort } from './game/core/contracts/gamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import type { StoredSession } from './game/online/session/remoteSessionStore'
+import { getRoom } from './game/online/api/roomApi'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useWakuDemoAuth } from './game/online/session/useWakuDemoAuth'
@@ -332,7 +333,15 @@ const configureTableTheme = (theme: TableThemeName) => activeRemote.value.config
 const remoteActions = {
   createRoom: (mode: MatchType, capacity: number, rulesetId?: RuleVariant, llmEnabled?: boolean) =>
     activeRemote.value.remoteActions.createRoom(mode, capacity, rulesetId, llmEnabled),
-  joinRoom: (code: string) => activeRemote.value.remoteActions.joinRoom(code),
+  joinRoom: async (code: string) => {
+    // 联机槽按目标房间玩法路由：血流房间必须走血流模块（先查房间元数据再入房）。
+    const info = await getRoom(code).catch(() => null)
+    if (info?.rulesetId === 'lotus-blood-flow') {
+      selectedRule.value = 'lotus-blood-flow'
+      activeRemote.value.nickname.value = nickname.value  // 切槽后携带已填昵称
+    }
+    await activeRemote.value.remoteActions.joinRoom(code)
+  },
   toggleReady: () => activeRemote.value.remoteActions.toggleReady(),
   startMatch: (llmSeats?: Parameters<typeof activeRemote.value.remoteActions.startMatch>[0]) =>
     activeRemote.value.remoteActions.startMatch(llmSeats as never),

@@ -15,7 +15,7 @@ import {
   startRoom, updateCharacter, type LlmSeatRequest, type RoomSeatState,
 } from '../../../online/api/roomApi'
 import { createRoomSocketTransport } from '../../../online/transport/roomSocket'
-import { createRemoteSessionStore, type StoredSession } from '../../../online/session/remoteSessionStore'
+import { createRemoteSessionStore, generateGuestId, type StoredSession } from '../../../online/session/remoteSessionStore'
 
 const remoteSessionStore = createRemoteSessionStore()
 import type { BloodFlowGameOptions } from './useBloodFlowGame'
@@ -39,7 +39,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const roomId = ref('')
   const mySeat = ref(-1)
   const nickname = ref('')
-  const playerId = ref('')
+  const playerId = ref(remoteSessionStore.loadGuestId() || generateGuestId())
+  remoteSessionStore.saveGuestId(playerId.value)
   const rejoinCode = ref('')
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
@@ -115,6 +116,19 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     if (info.status === 'finished') sessionStatus.value = 'lobby'
   }
 
+  // 大厅座位状态轮询（对齐经典房间 1.5s）：ready/加入变化无服务端推送。
+  let pollTimer: number | null = null
+  function startLobbyPolling() {
+    stopLobbyPolling()
+    pollTimer = globalThis.setInterval(() => {
+      if (roomId.value && inner.phase.value === 'lobby') void refreshRoom()
+    }, 1500) as unknown as number
+  }
+  function stopLobbyPolling() {
+    if (pollTimer != null) globalThis.clearInterval(pollTimer)
+    pollTimer = null
+  }
+
   async function createRoom(mode: MatchType, capacity: number, _rulesetId?: RuleVariant, llm?: boolean) {
     const info = await createRoomApi(mode, capacity, playerId.value, 'lotus-blood-flow', llm)
     roomId.value = info.roomId
@@ -122,6 +136,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     await joinRoom(roomId.value)
     await refreshRoom()
     sessionStatus.value = 'lobby'
+    startLobbyPolling()
   }
 
   async function joinRoom(code: string) {
@@ -133,6 +148,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     saveSession()
     await refreshRoom()
     sessionStatus.value = 'lobby'
+    socket.open()  // 入房即连：非房主也能收到开局后的权威快照
+    startLobbyPolling()
   }
 
   async function toggleReady() {
@@ -162,10 +179,12 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     playerId.value = session.playerId
     await refreshRoom()
     sessionStatus.value = 'lobby'
+    startLobbyPolling()
     socket.open()
   }
 
   async function leaveRoom() {
+    stopLobbyPolling()
     socket.close()
     if (roomId.value && mySeat.value >= 0) {
       try { await leaveRoomApi(roomId.value, mySeat.value, rejoinCode.value) } catch { /* 已解散等 */ }

@@ -90,7 +90,7 @@ describe('useBloodFlowRemoteGame', () => {
     })
     const module = makeModule()
     await module.remoteActions.createRoom('east', 4)
-    expect(api.createRoom).toHaveBeenCalledWith('east', 4, '', 'lotus-blood-flow', undefined)
+    expect(api.createRoom).toHaveBeenCalledWith('east', 4, expect.any(String), 'lotus-blood-flow', undefined)
     expect(module.roomId.value).toBe('R1')
     expect(module.mySeat.value).toBe(0)
     expect(module.isCreator.value).toBe(true)
