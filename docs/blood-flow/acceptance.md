@@ -1,6 +1,15 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端 LLM 席位请求循环 + 固定输入四条真实验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流联机 WS 开关放行 + 双客户端实玩 e2e 通过」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-08：血流联机 WS 开关放行与双客户端实玩 e2e
+
+- **开关放行**：`BLOOD_FLOW_AVAILABILITY = { local: true, ws: true, p2p: false }`；`availability.ts` 增 `ws` 面；房间 API 删除血流拒绝、会话恢复/规则选择放行；大厅 `RuleVariantPicker` 联机模式下可选血流；移除「切联机即回退默认规则」的旧守卫。
+- **联机槽实现**：新增 `useBloodFlowRemoteGame`（REST 房间生命周期 + guestId 身份 + 入房即连 + 大厅 1.5s 轮询 + `bf_snapshot` → `acceptRemoteView`）；`createActiveGamePort` 支持函数式远程槽；App.vue 按「目标房间玩法」路由联机槽（加入血流房间自动切血流模块并携带昵称）。
+- **关键修复**：后端快照 `deadlineAt: Infinity` 不是合法 JSON（Python 解析器可容错所以 pytest 全绿，浏览器不行）——收敛为 0；后端全量 pytest **571 通过**（房间测试加长决策窗口消除慢机竞态 flake）。
+- **e2e 实测**：新增 `tests/e2e/blood-flow.remote.spec.ts`（真实双浏览器上下文 + 真实后端）：登录（开发旁路）→ 联机 → 选血流 → 建房/加入 → 双方准备 → 开局 → 双端牌桌 HUD 与手牌渲染 → 庄家动作经 WS 上行 → 服务器推进、零页面错误，**1 passed（45.3s）**。本地 spec 同步更新（联机大厅应含血流入口）。
+- 前端全量 `pnpm test` **1207 通过 / 2 跳过**；typecheck/build 通过。开发可经 `VITE_API_TARGET` 把 dev 代理指向其他后端端口。
+- 未验证：真实多用户网络环境（本机双浏览器已覆盖协议路径）、断线重连 UI 表现；vibehub/P2P 继续后置。
 
 ## 2026-09-08：血流后端 LLM 席位请求循环与固定输入验收
 
