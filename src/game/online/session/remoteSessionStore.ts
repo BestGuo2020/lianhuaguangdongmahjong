@@ -78,7 +78,8 @@ export function createRemoteSessionStore(
         if (!session.roomId || !session.rejoinCode) return null
         if (session.mode !== 'east' && session.mode !== 'hanchan') return null
         const rulesetId = session.rulesetId ?? 'lotus-classic'
-        if (rulesetId !== 'lotus-classic' && rulesetId !== 'lotus-legacy') return null
+        if (rulesetId !== 'lotus-classic' && rulesetId !== 'lotus-legacy'
+          && rulesetId !== 'lotus-blood-flow') return null
         return {
           roomId: session.roomId,
           rejoinCode: session.rejoinCode,

@@ -25,14 +25,17 @@ export type ActiveGamePort = {
 /**
  * 在本地和远程 GamePort 之间建立稳定的响应式视图。
  * 状态始终读取当前模式，动作在调用瞬间委托，切换模式无需重新解构 UI 依赖。
- * localGame 为解析函数：可按所选玩法（莲花广麻/莲花麻将）切换本地引擎。
+ * localGame 为解析函数：可按所选玩法（莲花广麻/莲花麻将）切换本地引擎；
+ * remoteGame 可为函数：联机槽按所选玩法切换（经典 WS / 血流 WS）。
  */
 export function createActiveGamePort(
   mode: RefLike<GameMode>,
   localGame: () => GamePort,
-  remoteGame: GamePort,
+  remoteGame: GamePort | (() => GamePort),
 ): ActiveGamePort {
-  const active = () => (mode.value === 'remote' ? remoteGame : localGame())
+  const active = () => (mode.value === 'remote'
+    ? (typeof remoteGame === 'function' ? remoteGame() : remoteGame)
+    : localGame())
 
   const state = <K extends RefStateKey>(key: K): ComputedRef<RefValue<GamePort[K]>> => (
     computed(() => active()[key].value) as ComputedRef<RefValue<GamePort[K]>>

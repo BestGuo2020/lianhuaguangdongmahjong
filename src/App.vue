@@ -12,12 +12,15 @@ import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
 import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGame'
+import { useBloodFlowRemoteGame } from './game/variants/lotus/bloodFlow/useBloodFlowRemoteGame'
 import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
 import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
+import type { GamePort } from './game/core/contracts/gamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
+import type { StoredSession } from './game/online/session/remoteSessionStore'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useWakuDemoAuth } from './game/online/session/useWakuDemoAuth'
@@ -221,15 +224,21 @@ const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait
   countdownEnabled: false,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
   humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
-watch(gameMode, (mode) => {
-  if (mode === 'remote' && selectedRule.value === 'lotus-blood-flow') selectedRule.value = DEFAULT_RULE_VARIANT
-})
+const bloodFlowRemoteGame = useBloodFlowRemoteGame({ playSound: playEffect,
+  playSoundAndWait: playEffectAndWait,
+  getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts })
+// 联机槽按玩法切换：血流走血流 WS 权威，其余走经典联机协议。
+const activeRemote = computed(() => (
+  gameMode.value === 'remote' && selectedRule.value === 'lotus-blood-flow'
+    ? bloodFlowRemoteGame
+    : remoteGame
+))
 
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
 const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
-watch(() => remoteGame.rulesetId.value, (value) => {
-  if (value === 'lotus-classic' || value === 'lotus-legacy') selectedRule.value = value
+watch(() => activeRemote.value.rulesetId.value, (value) => {
+  if (value === 'lotus-classic' || value === 'lotus-legacy' || value === 'lotus-blood-flow') selectedRule.value = value
 })
 
 // 类型安全的模式桥：共享状态与动作由 GamePort 显式约束，调试/房间扩展能力不混入 UI 契约。
@@ -237,7 +246,7 @@ watch(() => remoteGame.rulesetId.value, (value) => {
 const game = createActiveGamePort(
   gameMode,
   () => selectedRule.value === 'lotus-blood-flow' ? bloodFlowGame : usesLotusLocalEngine.value ? lotusGame : localGame,
-  remoteGame,
+  () => activeRemote.value as GamePort,
 )
 
 const {
@@ -265,8 +274,10 @@ const jokerTiles = computed<TileType[]>(() => {
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
-const remoteRulesetId = computed(() => remoteGame.rulesetId.value)
-const remoteSecondDice = computed(() => remoteGame.secondDice.value)
+const remoteRulesetId = computed(() => activeRemote.value.rulesetId.value)
+const remoteSecondDice = computed<[number, number] | undefined>(() => (
+  (activeRemote.value as unknown as { secondDice?: { value?: [number, number] | undefined } }).secondDice?.value
+))
 // 单机莲花麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
 const lotusSecondDice = computed<[number, number] | undefined>(() => lotusGame.secondDice.value ?? undefined)
 
@@ -288,13 +299,48 @@ const debugPreviewDraw = () => {
   localGame.debugPreviewDraw()
 }
 
-// ── 联机模式状态（远程房间 / WS 连接）──────────────────
-const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isCreator, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, storedSession, signalQuality,
-  llmEnabled, effectiveLlmEnabled, llmAvailable,
-  autoPlay: remoteAutoPlay, toggleAutoPlay,
-  roomTableThemeName, configureTableTheme,
-} = remoteGame
+// ── 联机模式状态（远程房间 / WS 连接）──
+// 血流联机房间走自己的会话：以下代理在联机槽切换时读取/写入对应模块的真实 ref。
+const proxyRef = <T,>(name: 'sessionStatus' | 'sessionError' | 'roomId' | 'mySeat' | 'nickname'
+  | 'playerId' | 'isCreator' | 'roomSeats' | 'roomTimeLimit' | 'storedSession'
+  | 'llmEnabled' | 'effectiveLlmEnabled' | 'llmAvailable' | 'autoPlay'
+  | 'roomTableThemeName') => computed<T>({
+  get: () => activeRemote.value[name].value as T,
+  set: (value: T) => { (activeRemote.value[name] as { value: T }).value = value },
+})
+const sessionStatus = proxyRef<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'lobby' | 'error' | string>('sessionStatus')
+const sessionError = proxyRef<string>('sessionError')
+const roomId = proxyRef<string>('roomId')
+const mySeat = proxyRef<number>('mySeat')
+const nickname = proxyRef<string>('nickname')
+const playerId = proxyRef<string>('playerId')
+const isCreator = proxyRef<boolean>('isCreator')
+const roomSeats = proxyRef<Array<{ seat: number; nickname: string; ready: boolean; connected: boolean; characterId?: string } | null>>('roomSeats')
+const roomTimeLimit = proxyRef<number>('roomTimeLimit')
+const storedSession = proxyRef<StoredSession | null>('storedSession')
+const llmEnabled = proxyRef<boolean>('llmEnabled')
+const effectiveLlmEnabled = proxyRef<boolean>('effectiveLlmEnabled')
+const llmAvailable = proxyRef<boolean>('llmAvailable')
+const remoteAutoPlay = proxyRef<boolean>('autoPlay')
+const roomTableThemeName = proxyRef<TableThemeName>('roomTableThemeName')
+const wsStatus = computed(() => activeRemote.value.wsStatus.value)
+const signalQuality = computed(() => activeRemote.value.signalQuality.value)
+const waitingNextRound = computed(() => activeRemote.value.waitingNextRound.value)
+const toggleAutoPlay = () => activeRemote.value.toggleAutoPlay()
+const configureTableTheme = (theme: TableThemeName) => activeRemote.value.configureTableTheme(theme)
+// 动作委托：调用瞬间路由到当前联机槽（经典或血流）。
+const remoteActions = {
+  createRoom: (mode: MatchType, capacity: number, rulesetId?: RuleVariant, llmEnabled?: boolean) =>
+    activeRemote.value.remoteActions.createRoom(mode, capacity, rulesetId, llmEnabled),
+  joinRoom: (code: string) => activeRemote.value.remoteActions.joinRoom(code),
+  toggleReady: () => activeRemote.value.remoteActions.toggleReady(),
+  startMatch: (llmSeats?: Parameters<typeof activeRemote.value.remoteActions.startMatch>[0]) =>
+    activeRemote.value.remoteActions.startMatch(llmSeats as never),
+  leaveRoom: () => activeRemote.value.remoteActions.leaveRoom(),
+  closeRoom: () => activeRemote.value.remoteActions.closeRoom(),
+  resumeSession: () => activeRemote.value.remoteActions.resumeSession(),
+  updateCharacter: (characterId: string) => activeRemote.value.remoteActions.updateCharacter(characterId),
+}
 
 // 房主改主题 → 全房间同步；非房主只读（本地 tableThemeName 随房间主题）。
 watch(roomTableThemeName, (theme) => {
@@ -352,7 +398,7 @@ onMounted(() => window.addEventListener('wakudemo-auth-required', handleAuthRequ
 onBeforeUnmount(() => window.removeEventListener('wakudemo-auth-required', handleAuthRequired))
 
 function startGameWithAudio() {
-  if (selectedRule.value === 'lotus-blood-flow' && (gameMode.value !== 'local' || !bloodFlowEnabled('local'))) return
+  if (selectedRule.value === 'lotus-blood-flow' && !bloodFlowEnabled(gameMode.value === 'local' ? 'local' : 'ws')) return
   llmOpen.value = false
   resetTableReady()
   startBgm()
@@ -459,7 +505,7 @@ function changeTableTheme(theme: TableThemeName) {
     if (!isCreator.value) return
     tableThemeName.value = theme
     configureTableTheme(theme)
-    remoteGame.updatePresentationAudioMode()
+    activeRemote.value.updatePresentationAudioMode()
     return
   }
   tableThemeName.value = theme

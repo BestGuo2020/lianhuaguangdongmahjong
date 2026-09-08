@@ -93,7 +93,6 @@ export interface RoomMeta {
 
 export function createRoom(mode: MatchType, capacity: number, playerId?: string,
   rulesetId: RuleVariant = 'lotus-classic', llmEnabled?: boolean): Promise<RoomInfo> {
-  if (rulesetId === 'lotus-blood-flow') return Promise.reject(new Error('血流玩法尚不支持 WebSocket 房间'))
   return request<RoomInfo>('/api/rooms', {
     method: 'POST',
     body: JSON.stringify({
