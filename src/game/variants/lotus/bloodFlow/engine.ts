@@ -392,6 +392,8 @@ export class BloodFlowEngine {
       roundResult: this.result ? structuredClone(this.result) : null }
   }
   currentScore(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!.score) : null }
+  /** 当前窗口某席的完整评估（权威私有；仅供测试/对拍观察，不进入公共快照）。 */
+  windowEvaluation(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!) : null }
   windowIsOpen() { return !!this.window && !this.paused && !this.interrupted && this.now() >= this.window.opensAt }
   pause() {
     if (this.paused || this.result) return
