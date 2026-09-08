@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
 const capture = vi.hoisted(() => ({
   onMessage: null as null | ((message: unknown) => void),
   open: vi.fn(), close: vi.fn(),
+  sent: [] as Record<string, unknown>[],
 }))
 vi.mock('../../../online/api/roomApi', () => api)
 vi.mock('../../../online/transport/roomSocket', () => ({
@@ -16,7 +17,7 @@ vi.mock('../../../online/transport/roomSocket', () => ({
     return {
       status: { value: 'idle' },
       signalQuality: { value: 0 },
-      send: vi.fn(() => true),
+      send: (message: Record<string, unknown>) => { capture.sent.push(message); return true },
       open: () => { capture.open() },
       close: () => { capture.close() },
       confirmSession: vi.fn(),
@@ -71,6 +72,14 @@ describe('useBloodFlowRemoteGame', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capture.onMessage = null
+    capture.sent.length = 0
+    // 远端视图会建评估 Worker；node 环境用空壳替代。
+    vi.stubGlobal('Worker', class {
+      postMessage() {}
+      terminate() {}
+      addEventListener() {}
+      removeEventListener() {}
+    })
   })
 
   it('starts in an idle lobby with no seat', () => {
@@ -108,12 +117,6 @@ describe('useBloodFlowRemoteGame', () => {
   })
 
   it('routes rejoin_ok and bf_snapshot into the authority port', async () => {
-    vi.stubGlobal('Worker', class {
-      postMessage() {}
-      terminate() {}
-      addEventListener() {}
-      removeEventListener() {}
-    })
     const module = makeModule()
     expect(capture.onMessage).not.toBeNull()
     capture.onMessage!({ kind: 'rejoin_ok', seat: 1, rejoin: true, roomId: 'R1', mode: 'east',
@@ -125,6 +128,15 @@ describe('useBloodFlowRemoteGame', () => {
     await vi.waitFor(() => {
       expect(module.phase.value).toBe('dealing')
     })
-    vi.unstubAllGlobals()
+  })
+
+  it('confirms the next round over WS and clears waiting on the new round', () => {
+    const module = makeModule()
+    capture.onMessage!({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0 })
+    module.nextRound()
+    expect(capture.sent).toContainEqual({ kind: 'continue', round: 0 })
+    expect(module.waitingNextRound.value).toBe(true)
+    capture.onMessage!({ kind: 'bf_snapshot', view: VIEW, round: 1, mode: 'east', dealer: 1 })
+    expect(module.waitingNextRound.value).toBe(false)
   })
 })

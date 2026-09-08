@@ -71,6 +71,17 @@ it('sends opening_done acknowledgements for the ready barrier', () => {
   expect(sent).toEqual([{ kind: 'opening_done', round: 2 }])
 })
 
+it('sends continue for the inter-round barrier using the latest round', () => {
+  const sent: Record<string, unknown>[] = []
+  const authority = createBloodFlowWsAuthority({
+    transport: { send: (message) => { sent.push(message); return true } },
+    onView: () => {},
+  })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 2, mode: 'east', dealer: 0 })
+  authority.continueRound()
+  expect(sent).toEqual([{ kind: 'continue', round: 2 }])
+})
+
 it('sends engine commands as authoritative action messages', () => {
   const sent: Record<string, unknown>[] = []
   const authority = createBloodFlowWsAuthority({

@@ -3,7 +3,7 @@
 // 复用 useBloodFlowGame（externalAuthority 端口）+ 后端血流房间协议（bf_snapshot）。
 // 大厅生命周期对齐 useRemoteGame 的表层形状（sessionStatus/roomId/mySeat/…），
 // 但快照与动作走血流自己的 authority，不复用经典 state_snapshot 协议。
-// v1 边界：后端无续局消息（nextRound 为 no-op）、无观战、断线重连经 rejoin_ok 恢复座位。
+// v1 边界：无观战；断线重连经 rejoin_ok 恢复座位（重连不重播开局动画）。
 import { computed, ref } from 'vue'
 import type { MatchType } from '../../../core/contracts/types'
 import type { TableThemeName } from '../../../../theme/themeIdentity'
@@ -54,6 +54,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const autoPlay = ref(false)
   const waitingNextRound = ref(false)
   const signalQuality = ref(0)
+  let seenRound = -1
 
   // ── 底层对局端口：externalAuthority 桥接到 WS。 ──
   const inner = useBloodFlowGame({
@@ -63,7 +64,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     animeFixedTts: options.animeFixedTts,
     externalAuthority: {
       send: (command) => authority.send(command),
-      nextRound: () => { /* 后端 v1 无续局消息：结算 UI 由 roundResult 驱动 */ },
+      nextRound: () => confirmNextRound(),
       leave: () => { /* 离开由房间生命周期管理 */ },
       openingDone: (round) => authority.openingDone(round),
     },
@@ -87,7 +88,12 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   })
   const authority = createBloodFlowWsAuthority({
     transport: socket,
-    onView: (view, meta) => { void inner.acceptRemoteView(view, meta) },
+    onView: (view, meta) => {
+      // 新一局开始（局号前进）或整场结束 → 解除「等待其他玩家」态。
+      if (meta.round > seenRound || meta.matchFinished) waitingNextRound.value = false
+      seenRound = meta.round
+      void inner.acceptRemoteView(view, meta)
+    },
     onError: (code) => {
       if (code === 'AUTH_REQUIRED') window.dispatchEvent(new Event('wakudemo-auth-required'))
       else sessionError.value = code
@@ -197,6 +203,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     isCreator.value = false
     roomSeats.value = []
     sessionStatus.value = 'idle'
+    waitingNextRound.value = false
+    seenRound = -1
     inner.dispose()
   }
 
@@ -217,6 +225,13 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   function updatePresentationAudioMode() { /* 血流 v1 无按座位观众音频模式 */ }
 
+  /** 结算页确认「下一局」：回执局间屏障（后端等所有在线真人确认后开新局）。 */
+  function confirmNextRound() {
+    if (inner.matchFinished.value) return
+    authority.continueRound()
+    waitingNextRound.value = true
+  }
+
   async function updateCharacterRemote(characterId: string) {
     if (mySeat.value >= 0 && roomId.value) {
       await updateCharacter(roomId.value, mySeat.value, rejoinCode.value, characterId)
@@ -230,9 +245,9 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   return {
     ...inner,
-    // 远程开局/续局走 REST 房间生命周期；本地引擎不自行开桌/续局。
+    // 远程开局/续局走 REST 房间生命周期；本地引擎不自行开桌。
     startGame: () => { /* 远程开局由 remoteActions.startMatch（REST）驱动 */ },
-    nextRound: () => { /* 后端 v1 无续局消息 */ },
+    nextRound: () => confirmNextRound(),
     returnToLobby: () => { void leaveRoom() },
     rulesetId,
     sessionStatus,

@@ -37,11 +37,11 @@ export interface BloodFlowWsAuthority {
   feed(message: unknown): void
   /** externalAuthority.send：把权威命令发给后端。 */
   send(command: EngineCommand): boolean
-  /** externalAuthority.nextRound：后端 v1 无续局消息，结算 UI 自行推进（no-op）。 */
-  nextRound(): void
+  /** externalAuthority.nextRound：确认进入下一局（局间屏障回执）。 */
+  continueRound(): void
   /** externalAuthority.leave：后端 v1 无离开消息（no-op，由房间生命周期管理）。 */
   leave(): void
-  /** externalAuthority.openingDone：后端 v1 快照无开局动画数据，直接进入对局视图（no-op）。 */
+  /** externalAuthority.openingDone：开局动画播完回执（就绪屏障）。 */
   openingDone(round: number): void
   close(): void
 }
@@ -72,6 +72,7 @@ function isDicePair(value: unknown): value is [number, number] {
 
 export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions): BloodFlowWsAuthority {
   let closed = false
+  let lastRound = 0
   return {
     feed(message) {
       if (closed || typeof message !== 'object' || message === null) return
@@ -84,6 +85,7 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
       const payload = message as { view?: unknown; round?: unknown; mode?: unknown; dealer?: unknown; matchFinished?: unknown; opening?: unknown }
       if (!isBloodFlowView(payload.view)) return
       const round = Number.isInteger(payload.round) ? Number(payload.round) : 0
+      lastRound = round
       const mode: MatchType = payload.mode === 'hanchan' ? 'hanchan' : 'east'
       const dealer = Number.isInteger(payload.dealer) && SEATS.includes(Number(payload.dealer) as Seat)
         ? Number(payload.dealer) as Seat : 0
@@ -100,7 +102,7 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
         action: command.action,
       })
     },
-    nextRound() { /* 后端 v1 无续局消息 */ },
+    continueRound() { options.transport.send({ kind: 'continue', round: lastRound }) },
     leave() { /* 由房间生命周期管理 */ },
     openingDone(round) { options.transport.send({ kind: 'opening_done', round }) },
     close() { closed = true },
