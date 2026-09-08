@@ -1,6 +1,14 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端联机真实双客户端 WS 冒烟通过」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端 LLM 席位请求循环 + 固定输入四条真实验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-08：血流后端 LLM 席位请求循环与固定输入验收
+
+- **房间接真实 LLM 席位**：`BloodFlowRoomSession._resolve_llm_seats`（服务端 `LLM_PROVIDER_*` 注册表 / REST llmSeats → `LlmServerConfig`）+ `_llm_action`（`build_blood_flow_candidates` + `build_blood_flow_prompt`（含 EV 特征与"可覆盖、要理由"system）→ `request_llm_decision` → 选择映射回动作）；**非法选择/超时/任何异常回退 EV 策略**，不阻塞对局。窗口内多个 LLM 席位并行请求。
+- 测试：`test_blood_flow_llm.py` 8 项（含提示词 system/user 结构、EV 注入改张标记、LLM 选择"过"覆盖 EV 建议、请求失败回退 EV 胡牌）。
+- **固定输入四条真实验收**（`scripts/llm_blood_flow_fixed.py`，用前端 `tmp/test-api-key.json` 的 activeId=DeepSeek，key 不回显；结果落 `backend/work/`（忽略））：①摸精改张单吊任意听 → 打 7 条「单吊任意听，路宽好走。」；②早局低番高潜力 → **覆盖建议选过**「这牌有潜力，先不急着胡。」；③低番抢杠距大番一张 → 过「这牌还有大番，先不急着胡」；④抢杠收益可观 → 胡「抢杠机会难得，收了」。**四条全部合法**。
+- 回归：后端 pytest **570 通过**（test_snapshot 一例并发时序 flake 单独复跑通过，与前次同因）。生产服务端 LLM 供应商需配置 `LLM_PROVIDER_*` 环境变量（本机开发未配置，固定输入脚本用前端 key 文件跑通）。
+- 未验证：真实联机对局中 LLM 席位整局表现、多供应商并发；vibehub/P2P 继续后置。
 
 ## 2026-09-08：血流后端联机真实双客户端 WS 冒烟
 
