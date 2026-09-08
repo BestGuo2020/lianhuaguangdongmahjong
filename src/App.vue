@@ -337,8 +337,12 @@ const remoteActions = {
     // 联机槽按目标房间玩法路由：血流房间必须走血流模块（先查房间元数据再入房）。
     const info = await getRoom(code).catch(() => null)
     if (info?.rulesetId === 'lotus-blood-flow') {
+      // 必须在切槽前取昵称：切槽后读的是血流模块自己的（尚未填写的）空值。
+      const carriedNickname = nickname.value
+      const carriedPlayerId = playerId.value
       selectedRule.value = 'lotus-blood-flow'
-      activeRemote.value.nickname.value = nickname.value  // 切槽后携带已填昵称
+      if (carriedNickname) activeRemote.value.nickname.value = carriedNickname
+      if (carriedPlayerId) activeRemote.value.playerId.value = carriedPlayerId
     }
     await activeRemote.value.remoteActions.joinRoom(code)
   },

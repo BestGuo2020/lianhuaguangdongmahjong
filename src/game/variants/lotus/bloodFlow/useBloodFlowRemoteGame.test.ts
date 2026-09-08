@@ -128,6 +128,9 @@ describe('useBloodFlowRemoteGame', () => {
     await vi.waitFor(() => {
       expect(module.phase.value).toBe('dealing')
     })
+    // 快照未带头像时在映射阶段补座位默认头像：避免 <img> 报错回退造成每次快照头像闪烁。
+    expect(module.players[1].avatar).toMatch(/avatars\/ah-lok\.svg$/)
+    expect(module.players[2].avatar).toMatch(/avatars\/shisan\.svg$/)
   })
 
   it('confirms the next round over WS and clears waiting on the new round', () => {

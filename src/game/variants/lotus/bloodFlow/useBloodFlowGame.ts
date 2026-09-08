@@ -12,6 +12,7 @@ import { tileName } from '../../../core/rules/tiles'
 import { playDiscardName } from '../../../shared/runtime/discardAudio'
 import { createLocalTransientEventPresenter } from '../../../core/local/localTransientEventPresenter'
 import { resolveAnimeAudioPolicy } from '../../../core/presentation/animeAudioPolicy'
+import { defaultAvatarForSeat } from '../../../core/presentation/avatar'
 import { isLocalLlmSeat } from '../../../core/presentation/localLlmVoiceRegistry'
 import type { AnimeFixedTtsExecutor } from '../../../llm/animeFixedTtsExecutor'
 import type { PlayerSeed } from '../../../shared/runtime/localOpening'
@@ -215,7 +216,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const seeds = [options.humanPlayerSeed, ...(options.aiPlayerSeeds ?? [])]
     state.players.splice(0, state.players.length, ...next.players.map((_, i) => {
       const p = next.players[(next.seat + i) % 4], seed = options.externalAuthority ? undefined : seeds[i]
-      return { ...p, name: seed?.name ?? p.name, avatar: seed?.avatar ?? p.avatar,
+      // 头像兜底在映射时解析：避免 <img> 报错→回退在每次快照重绘时造成头像闪烁。
+      return { ...p, name: seed?.name ?? p.name,
+        avatar: seed?.avatar || p.avatar || defaultAvatarForSeat(i),
         characterId: seed?.characterId ?? p.characterId, playerKind: seed?.playerKind ?? p.playerKind ?? (i === 0 ? 'human' as const : 'bot' as const) }
     }))
     // Only public count placeholders reach the renderer; the actual wall stays in worker.

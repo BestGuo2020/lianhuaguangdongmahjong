@@ -111,6 +111,16 @@ test('two real clients run a blood-flow WS room through the released UI path', a
     await expect.poll(() => pageA.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
     await expect.poll(() => pageB.locator('.hand-tile-slot').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(13)
     await expect(pageA.locator('.base-score-badge')).toContainText('底分10')
+    // 局号对玩家 1-based：东1局（不是东0局）。
+    await expect(pageA.locator('.round-info')).toContainText('东1局')
+    // 玩家资料来自房间座位：本家显示昵称，对手也显示对方昵称（而非引擎占位「玩家N」）。
+    await expect(pageA.locator('.user-identity .player-info strong')).toHaveText('血流甲')
+    await expect(pageA.locator('.player-info strong').filter({ hasText: '血流乙' })).toHaveCount(1)
+    // 真人回合读秒：服务端下发墙钟截止时间，前端显示剩余秒数。
+    await expect(pageA.locator('.turn-timer')).toBeVisible({ timeout: 30_000 })
+    const turnSeconds = Number((await pageA.locator('.turn-timer span').textContent())?.trim())
+    expect(turnSeconds).toBeGreaterThan(0)
+    expect(turnSeconds).toBeLessThanOrEqual(25)  // 联机决策窗口对齐 remoteDecisionMs
 
     // 轮到庄家（A）时打出一张：动作经 WS 上行（action 帧小、可直接解析）。
     const tilesA = pageA.locator('.hand-tile-slot .mahjong-tile')
