@@ -1,6 +1,16 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端联机 M1–M4 完成、M5 收口」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端联机真实双客户端 WS 冒烟通过」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-08：血流后端联机真实双客户端 WS 冒烟
+
+本地开发免登录（`WAKUDEMO_LOGIN_BYPASS`），直接实测：新增 `backend/tests/test_blood_flow_ws.py`（真实 uvicorn + websockets 双客户端打完整东风场，与 test_ws.py 同托管方式）与 `backend/scripts/smoke_blood_flow.py`（独立可执行冒烟）。
+
+- 流程：REST 建血流房间 → 双客户端（不同身份 Cookie）join/ready → WS 凭 rejoin_code 重进 → REST 开局 → 自动打完整场（空座 EV 代打）。
+- 结果：**墙尽结算、快照 389 / 动作 102、分数守恒 8000、无错误消息**；EV 代打座位单局 36 胡（真实对局中策略生效）。
+- 过程中修复：快照深序列化（`batches` 与 `roundResult.ledger` 里的 `PublicWinScore` 会杀死 WS 发送任务）；房间会话补齐 REST 契约（`status/creator_seat/lifetime/llm_*`、`join_or_rejoin` 三元返回、异步 `start`）；`game_ws` 对血流房间改发 `bf_snapshot`。
+- 顺带修复 `scripts/smoke_lotus_legacy.py` 在登录改造后的双身份占座问题（playerId 区分）。
+- 回归：后端 pytest **567 通过**。前端 `ws/authority.ts` 的协议契约与本快照完全同形（此前 3 项单测）。
 
 ## 2026-09-08：血流后端联机 M1–M4（M5 收口）
 
