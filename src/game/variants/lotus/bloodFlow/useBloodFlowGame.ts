@@ -1,6 +1,7 @@
 import { computed, getCurrentInstance, onBeforeUnmount, shallowRef, toRaw, watch } from 'vue'
 import { defineGamePort } from '../../../core/contracts/gamePort'
 import type { GameStartOptions, WaitInfo } from '../../../core/contracts/gamePort'
+import type { Announcement } from '../../../core/contracts/gamePort'
 import type { MatchType, TableActionEvent, TileType } from '../../../core/contracts/types'
 import { createLotusGameState } from '../lotusState'
 import { createLotusOpening } from '../lotusOpening'
@@ -239,6 +240,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: moves.flatMap(a => a.kind === 'chi' ? [{ tiles: a.tiles, kind: 'sequence' as const }] : []),
     } : null
+    // 服务端公告（抢杠胡等）一次性展示。
+    state.announcement.value = (next as BloodFlowSeatView & { announcement?: Announcement | null }).announcement ?? null
     // 锁手自动摸打：本家胡牌锁手后全自动——有胡就胡（自摸/点炮都可再胡），
     // 没胡就把摸上来的那张自动打掉；锁手窗口约 lockedAutoPlayMs 毫秒后执行。
     if (w && next.public.status === 'playing' && next.public.seats[next.seat].locked && !options.autoplay

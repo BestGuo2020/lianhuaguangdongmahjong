@@ -35,7 +35,7 @@
 | 摸牌音 `give.mp3` | 前端 `apply()` 窗口源变化 | ✅ |
 | 弃牌音 `dapai.mp3` | 前端 `apply()` `lastDiscardAction` | ✅ |
 | 杠音 `gang.mp3` / 胡音 `hu/zimo` | 前端 `scheduleWinVoices`/动作表现 | ✅ |
-| `announcement`（公告） | 血流无公告（翻精/流局由前端 cue 表现） | — |
+| `announcement`（公告） | 抢杠胡红字公告随快照下发（翻精/流局仍由前端 cue 表现） | ✅ |
 | `round_result` / `match_finished` / `continue_prompt` | 快照 `roundResult` / `matchFinished` + `continue` 回执 | ✅ |
 | 局末感言 / AI 动作台词 | 服务端 LLM 台词未下发（唯一已知差异） | ❌ |
 
