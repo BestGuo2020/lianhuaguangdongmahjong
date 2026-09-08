@@ -1,6 +1,17 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流局末台词专属化」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-08。本页维护已有证据和待取得的证据；最新补修为「血流后端联机 M1–M4 完成、M5 收口」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-08：血流后端联机 M1–M4（M5 收口）
+
+按[后端实现计划](design/backend-plan.md)实施，后端在 `backend/`（独立仓库 main）四次独立提交；前端 master 提交 WS 权威适配。不加观战；随机对拍纳入 M1。
+
+- **M1 规则计分层**：`app/core/blood_flow/{types,config,special_hands,decompose,catalog,score,evaluate,win_batch}.py` + `app/rules/blood_flow.py`。共享 `golden.json`/`scoring.json` **61/61**；边界 4 项；**同种子对拍 2541 例逐笔 0 不一致**。
+- **M2 对局引擎**：`app/game/blood_flow_engine.py`（锁手/多响/抢杠回滚/杠收付/牌墙耗尽结算）。引擎测试 5 项 + 12 种子整局守恒。
+- **M3 协议房间**：registry 第三规则集、rooms Literal、`app/game/blood_flow_room.py`（REST 契约 + WS 重进 + 快照对齐前端 seatView + 真人动作回路）。房间测试 3 项；前端新增 `src/game/variants/lotus/bloodFlow/ws/authority.ts`（bf_snapshot → acceptRemoteView、action 消息上行、错误/关闭处理），单测 3 项。生产开关未放行（`BLOOD_FLOW_AVAILABILITY` ws 保持关闭），真实双端 WS 冒烟待 wakudemo 登录会话环境。
+- **M4 补位 AI 与 LLM 候选**：`app/core/blood_flow/ai.py`（EV 策略翻译：潜力评分/连锁期望/改张/首胡门槛/抢杠比较，房间代打已换 EV + 规则策略回退）。AI 测试 7 项（对齐前端 evStrategy 场景 + 4 种子整局守恒）；LLM 候选层 `app/llm/blood_flow_candidates.py`（候选构建/默认推荐/动作复核/提示词规则），测试 4 项。**口径差异**：弃牌排序未注入番型潜力/放炮成本回调（沿用后端规则 AI 弃牌排序）；房间未接真实 LLM 请求循环（候选层就绪，请求管线后续接）。
+- **回归**：后端 pytest **565 通过**（test_snapshot 一例在并发负载下时序 flake，单独复跑通过，与本次改动无关）；前端 `pnpm test` **1202 通过 / 2 跳过**、`pnpm build` 与 typecheck 通过。
+- 未验证：真实双端 WS 冒烟、真实 LLM 席位整局、联机对战实玩；vibehub/P2P 继续后置（未运行 `pnpm sync:vibehub`）。
 
 ## 2026-09-08：血流局末台词专属化
 

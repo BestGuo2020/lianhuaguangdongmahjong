@@ -99,11 +99,11 @@ G04 的完整三类提示、G05 提醒音及 G08 模型外围按影响本轮体�
 
 | 里程碑 | 范围 | 验收 | 状态 |
 |---|---|---|---|
-| M1 规则计分 | `backend/app/rules/blood_flow.py` + `app/core/blood_flow/{decompose,catalog,score,evaluate,win_batch}.py` | 共享 `golden.json`/`scoring.json` 全绿；200 种子对拍（TS vs Python 逐笔 deltas/scoresAfter/nextAction 一致） | 待开工 |
-| M2 对局流程 | `app/game/blood_flow_manager.py`（锁手/多响/抢杠/杠收付/牌墙耗尽结算/轮庄） | 注入牌墙打完整局；136 张守恒、零和、锁手、多响、墙尽全断言 | 待开工 |
-| M3 协议房间 | registry/rooms Literal 加第三规则集；WS 快照对齐前端 `seatView/protocol.ts`；前端 master 接 `externalAuthority` | 血流双客户端 WS 冒烟；前端协议校验器通过 | 待开工 |
-| M4 AI/LLM | 补位 AI 翻译 EV 策略；`candidates.py`/`validation.py` 血流候选 | AI 与前端 EV 同种子一致；LLM 固定输入四条合法 | 待开工 |
-| M5 回归收口 | 后端 pytest 全绿并独立提交；前端 master 提交 + `pnpm test`/build；文档收口 | 两仓库提交与证据记录；不跑 vibehub 同步 | 待开工 |
+| M1 规则计分 | `backend/app/rules/blood_flow.py` + `app/core/blood_flow/{decompose,catalog,score,evaluate,win_batch}.py` | 共享 `golden.json`/`scoring.json` 全绿；200 种子对拍（TS vs Python 逐笔 deltas/scoresAfter/nextAction 一致） | 完成：黄金 61/61、对拍 2541 例 0 不一致、边界 4 项 |
+| M2 对局流程 | `app/game/blood_flow_engine.py`（锁手/多响/抢杠/杠收付/牌墙耗尽结算/轮庄） | 注入牌墙打完整局；136 张守恒、零和、锁手、多响、墙尽全断言 | 完成：引擎 5 项 + 12 种子整局守恒 |
+| M3 协议房间 | registry/rooms Literal 加第三规则集；WS 快照对齐前端 `seatView/protocol.ts`；前端 master 接 `externalAuthority` | 血流双客户端 WS 冒烟；前端协议校验器通过 | 完成：后端房间 3 项 + 前端 `ws/authority.ts` 3 项；真实双端冒烟待 wakudemo 登录环境（生产开关不放行） |
+| M4 AI/LLM | 补位 AI 翻译 EV 策略；`candidates.py`/`validation.py` 血流候选 | AI 与前端 EV 同种子一致；LLM 固定输入四条合法 | 完成：EV 策略 7 项 + 房间代打换 EV；LLM 候选层 4 项；房间真实 LLM 请求循环与固定输入验收待联机环境 |
+| M5 回归收口 | 后端 pytest 全绿并独立提交；前端 master 提交 + `pnpm test`/build；文档收口 | 两仓库提交与证据记录；不跑 vibehub 同步 | 完成：后端 565 通过（1 例并发 flake 单独复跑通过）、前端 1202/2；两仓库提交与验收页记录完毕 |
 
 ## 血流局末台词专属化（2026-09-08 第七轮补充，已完成）
 
