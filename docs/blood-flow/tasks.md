@@ -93,6 +93,18 @@ E00～E09 的原清单保存在[首版计划](archive/implementation-v1.md)。E1
 
 G04 的完整三类提示、G05 提醒音及 G08 模型外围按影响本轮体验的实际缺口补齐，不扩大为新 AI 策略工程。G06、vibehub 同步及 P2P 测试继续后置，本阶段暂不运行 `pnpm sync:vibehub`。
 
+## 血流后端联机实现（2026-09-08 计划定稿，待开工）
+
+用户三决策：**M1～M4 一起做**、**随机对拍纳入 M1 验收**、**不加观战**（沿用 4 人 + AI 补位与现有重连）。后端权威，前端 TS 引擎为唯一规格源；vibehub / P2P 继续后置。详细文件清单、验收与风险见[后端实现计划](design/backend-plan.md)。
+
+| 里程碑 | 范围 | 验收 | 状态 |
+|---|---|---|---|
+| M1 规则计分 | `backend/app/rules/blood_flow.py` + `app/core/blood_flow/{decompose,catalog,score,evaluate,win_batch}.py` | 共享 `golden.json`/`scoring.json` 全绿；200 种子对拍（TS vs Python 逐笔 deltas/scoresAfter/nextAction 一致） | 待开工 |
+| M2 对局流程 | `app/game/blood_flow_manager.py`（锁手/多响/抢杠/杠收付/牌墙耗尽结算/轮庄） | 注入牌墙打完整局；136 张守恒、零和、锁手、多响、墙尽全断言 | 待开工 |
+| M3 协议房间 | registry/rooms Literal 加第三规则集；WS 快照对齐前端 `seatView/protocol.ts`；前端 master 接 `externalAuthority` | 血流双客户端 WS 冒烟；前端协议校验器通过 | 待开工 |
+| M4 AI/LLM | 补位 AI 翻译 EV 策略；`candidates.py`/`validation.py` 血流候选 | AI 与前端 EV 同种子一致；LLM 固定输入四条合法 | 待开工 |
+| M5 回归收口 | 后端 pytest 全绿并独立提交；前端 master 提交 + `pnpm test`/build；文档收口 | 两仓库提交与证据记录；不跑 vibehub 同步 | 待开工 |
+
 ## 血流局末台词专属化（2026-09-08 第七轮补充，已完成）
 
 按用户要求：血流局末感言输家台词改为只自我评价、不评价别人；赢家台词不再复用公共库，按最后一次真实胡来源（自摸/点炮/抢杠）用血流专属台词；荒庄沿用共享库；非血流玩法零改动。新增 `bloodFlowRoundLines.ts`（输家 4 性格 × 3 条 + 赢家 3 胡法 × 4 性格 × 3 条），`createBloodFlowReactions` 取用 `bloodFlowRoundReactionLine`。测试 5 项：唯一性/字数上限、不含指代他人字眼、轮换循环、荒庄委托共享库一致、赢家文案与共享库同型不同文。证据见验收页「2026-09-08 血流局末台词专属化」。
