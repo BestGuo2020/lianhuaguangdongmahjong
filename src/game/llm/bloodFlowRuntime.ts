@@ -1,4 +1,5 @@
-import { llmRoundReactionLine, type LlmRoundReaction } from './winLines'
+import type { LlmRoundReaction } from './winLines'
+import { bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { reactive } from 'vue'
 import { requestLlmDecision, type LlmDecisionOptions } from './client'
 import { readLlmSettings, presetForSeat, styleForSeat, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
@@ -186,7 +187,7 @@ export function createBloodFlowReactions(options: {
                 : record.score.source === 'discard' ? 'discard-win' : 'self-draw' }
               : { outcome: 'loss' }
           const sequence = sequences.get(seat) ?? 0
-          const text = llmRoundReactionLine(reaction, provider.style, sequence + seat)
+          const text = bloodFlowRoundReactionLine(reaction, provider.style, sequence + seat)
           sequences.set(seat, sequence + 1)
           if (!current() || controller.signal.aborted) return
           await options.emit({ id: `${key}/reaction/${seat}`, authorityEpoch: view.authorityEpoch, roundId: view.roundId,

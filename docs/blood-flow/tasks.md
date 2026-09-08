@@ -93,6 +93,10 @@ E00～E09 的原清单保存在[首版计划](archive/implementation-v1.md)。E1
 
 G04 的完整三类提示、G05 提醒音及 G08 模型外围按影响本轮体验的实际缺口补齐，不扩大为新 AI 策略工程。G06、vibehub 同步及 P2P 测试继续后置，本阶段暂不运行 `pnpm sync:vibehub`。
 
+## 血流局末输家台词自我评价（2026-09-08 第七轮补充，已完成）
+
+按用户要求：血流局末感言输家台词改为只自我评价、不评价别人；赢家/荒庄台词与非血流玩法零改动。新增 `bloodFlowRoundLines.ts`（血流专属输家台词，四性格 × 3 条，第一人称），`createBloodFlowReactions` 取用 `bloodFlowRoundReactionLine`。测试 3 项：三条唯一 ≤18 字、不含指代他人字眼、win/draw 委托共享库逐条一致。证据见验收页「2026-09-08 血流局末输家台词自我评价」。
+
 ## 血流 LLM EV 特征接入（2026-09-08 第七轮，已完成）
 
 在第六轮本地 EV 策略基础上接入 LLM 决策链路（范围与口径见[策略设计的 LLM 接入节](design/ai-strategy.md#llm-决策接入2026-09-08-追加)）：
