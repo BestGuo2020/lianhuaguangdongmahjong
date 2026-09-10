@@ -38,6 +38,17 @@
   `src/game/variants/lotus/lotusGame.ts`（P2P 权威边界/无头房主扩展）
 - `index.html`、`vite.config.ts`、`playwright.config.ts`、`src/content/disclaimer.ts`
 
+## WS 专属（master-only）文件：vibehub 上必须删除
+
+`$masterOnly`（脚本内数组）里的路径在 vibehub 上不存在，同步时会被 `git rm`；**新增 WS 专属文件后必须同步维护这个数组**，否则 master 新增的文件会以「staged add」进入 vibehub，而它 import 的 WS 模块已被删除 → vibehub 构建/测试直接挂。
+
+- `src/game/online/api/**`（REST 房间/账号/审核接口）
+- `src/game/online/session/remoteRoomLifecycle.{ts,test.ts}`、`session/useRoomAvailability.ts`、`session/useWakuDemoAuth.ts`
+- `src/game/online/transport/roomSocket.{ts,test.ts}`、`src/game/online/useRemoteGame.{ts,test.ts}`
+- `src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`）：血流 **WS** 联机入口，import 了上面这些 WS 模块；vibehub 的 P2P 血流走自己的 `src/game/online/vibe/bloodFlowRoom.ts`
+- `tests/e2e/remote-lotus-legacy.smoke.spec.ts`
+- 例外：`src/game/variants/lotus/bloodFlow/ws/authority.ts`（+test）**跟随 master**、不要排除 —— `useBloodFlowGame.ts` 里有 `import type { ... } from './ws/authority'`，删掉会破坏 vibehub 的类型检查。
+
 ## 注意
 
 - 必须从 master 工作树运行；**master 和已签出 vibehub 的目标工作树都必须干净**。脏工作区直接中止，不自动 stash、清理文件或移除工作树。
