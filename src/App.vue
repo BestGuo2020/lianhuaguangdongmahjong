@@ -457,8 +457,10 @@ watch(() => wakuAuth.account.value?.displayName, (displayName) => {
 }, { immediate: true })
 
 const statsOpen = ref(false)
-/** 退出本场（房间面板入口）：座位保留、本场由 AI 代打，回主大厅可再「继续对局」回来。 */
+/** 退出本场（房间面板入口）：座位保留、本场由 AI 代打，回主大厅可再「继续对局」回来。
+ *  单机下没有座位/重进码概念，若被触发则按「返回大厅」处理，避免按钮点了没反应。 */
 function leaveMatchFromPanel() {
+  if (gameMode.value !== 'remote') { returnToLobby(); return }
   if (!window.confirm('退出本场？本场将由 AI 代打（座位与重进码保留），你可以在大厅用「继续对局」回到原座位。')) return
   void remoteActions.leaveMatch()
 }
@@ -623,6 +625,7 @@ function changeTableTheme(theme: TableThemeName) {
         :theme-name="tableThemeName"
         :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
         :blood-flow="capabilities.bloodFlow"
+        :online="gameMode === 'remote'"
         :second-dice="gameMode === 'remote' ? remoteSecondDice : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
         :flip-tile="flipTile"
         :wall-break-index="wallBreakIndex"
