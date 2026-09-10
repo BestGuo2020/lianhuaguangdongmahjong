@@ -122,11 +122,29 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 ## 5. 验收清单（vibehub）—— 2026-09-10 同步后实测结果
 
 - [x] `pnpm typecheck` 通过（首轮因 keep 目录泄漏的 `useRemoteContinueCountdown.test.ts` 失败 → 已纳入 `$masterOnly`，改后通过）
-- [x] `pnpm test` 全绿（首轮 1 文件 4 用例失败，同因；改后 1389 passed / 2 skipped，`config.test.ts` 的 availability 断言随 `p2p` 放行更新）
+- [x] `pnpm test` 全绿（首轮 1 文件 4 用例失败，同因；最终 1390 passed / 2 skipped）
 - [ ] 本地大厅流程手测：建房 / 加入 / 准备 / 开始 / 离开 / 关闭（P2P 路径）
 - [x] **血流 P2P 已放行**（`BLOOD_FLOW_AVAILABILITY.p2p === true`，本批刻意打开，用于线上整场验收）
 - [ ] §2-A 移植：按上面的执行决定**不做**（vibehub AGENTS 禁止手改 keep 文件），保留待决策
-- [x] `git log vibehub..master` 清空（同步后 vibehub `0acbab7`；本次文档提交后再同步一次）
+- [x] `git log vibehub..master` 清空（最终 vibehub `b769810`）
+
+## 6. 线上整场验收结果（2026-09-10，部署 `vibehubcli update --slug B5AJupT1`）
+
+两账号取自 `tmp/online_test`（账号1/账号2 分别作房主与客机），规则「莲花麻将·血流」、东风场、2 真人 + 2 机器人，各打满一场（东1～东4）：
+
+| 场景 | 房间 | 耗时 | 结果 |
+|---|---|---|---|
+| 2 真人 + 2 **普通机器人** | `Q4C645` | 4.2 分钟 | ✅ 双端逐局结算一致、终局排名一致、总分 8000 守恒（玩家4 3550 / 玩家3 1550 / 客人 1480 / 房主 1420） |
+| 2 真人 + 2 **大模型机器人** | `9HUUY2` | 6.3 分钟 | ✅ 同上（大肥鱼 4000 / 大肥鱼 1730 / 客人 1470 / 房主 800） |
+
+用例在 vibehub 分支（仅存在于 vibehub，不被同步覆盖）：`tests/e2e/online-two-accounts-two-east-matches.spec.ts` 末尾的「线上两账号完成莲花麻将·血流东风场」两条测试；取证落盘在 `tmp/bf-online-evidence/`（双端截图 + stall 诊断 JSON）。部署产物与已验证提交一致（重新发布时「跳过 234 个未变化文件 / 需要上传 0 个文件」）。
+
+验收过程中修掉的 P2P 问题（vibehub `07150c2` / `9dbc445` / `ce46cdb` + master `72fc54f`）：
+
+1. **大帧静默发送失败**：SDK 单包超限时可靠发送链只打一条 `[VibeHub] 联机消息加密失败: 消息未发送`；血流的结算帧是全场最大的一帧 → 客机收不到 → 判「房主无法恢复」整场中断。修法：`sendChunked`（净化 + 4KB 分片）并覆盖**所有** P2P 发送路径（含血流 authority 的定向发送）。
+2. **分片只在一侧重组**：血流房间直接订阅 SDK 的 `room.onMessage`（不经传输层），分片包在那里被当未知包丢弃 → 「客机计数在涨、视图却没有 `roundResult`」。修法：把重组抽成模块级幂等函数 `unwrapChunk`，传输层与房间两侧共用。
+3. **房主 peer 被冻结**：`hostPeer` 在 attach 时取一次、replica 又把它冻结在构造时 → 对端 id 变化后客机把所有帧判成「非房主」拒收。修法：按实时 `hostId` 解析并同步给 replica（master `72fc54f` + vibehub `9dbc445`）。
+4. **收帧停滞不自愈**：客机原先只在视图 paused 时重握手 → 改为停滞 3s 即主动重握手请求权威快照。
 
 ---
 
