@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { LLM_WIN_LINES, LLM_LOSS_LINES, LLM_DRAW_LINES } from '../../src/game/llm/winLines'
-const roundLines=new Set([...Object.values(LLM_WIN_LINES).flatMap(s=>s.稳健),...LLM_LOSS_LINES.稳健,...LLM_DRAW_LINES.稳健].map(t=>t.normalize('NFKC')))
+import { LLM_DRAW_LINES } from '../../src/game/llm/winLines'
+import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES } from '../../src/game/llm/bloodFlowRoundLines'
+// 血流自 2026-09-08 起赢家/输家用血流专属台词库（荒庄仍用共享库），期望集合必须跟着改——
+// 此前这里只取共享 winLines，导致「局末台词 TTS > 0」永远匹配不到（断言过期，非产品问题）。
+const roundLines=new Set([...Object.values(BLOOD_FLOW_WIN_LINES).flatMap(s=>s.稳健),...BLOOD_FLOW_LOSS_LINES.稳健,...LLM_DRAW_LINES.稳健].map(t=>t.normalize('NFKC')))
 
 test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
