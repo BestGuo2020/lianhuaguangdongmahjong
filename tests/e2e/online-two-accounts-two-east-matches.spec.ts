@@ -2930,6 +2930,9 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
         if (tx) consoleKinds[index].set(`tx:${tx[1]}`, (consoleKinds[index].get(`tx:${tx[1]}`) ?? 0) + 1)
         // 逐条 rx 诊断日志量极大（数百条），会把有意义的失败日志挤出环形缓冲 → 只计数不存文本。
         if (rx) return
+        // 收帧停滞警告每 3s 一条不同秒数，同样会把关键日志挤出缓冲 → 只计数。
+        const stalled = /客机收帧停滞/.test(raw)
+        if (stalled) { const n = (consoleKinds[index].get('stalledWarnings') ?? 0) + 1; consoleKinds[index].set('stalledWarnings', n); return }
         const line = `[${message.type()}] ${raw.slice(0, 200)}`
         // 重复行折叠：卡死时 fail 警告会刷屏，把早期关键日志挤掉；这里计数而不重复占位。
         const repeats = (consoleRepeats[index].get(line) ?? 0) + 1

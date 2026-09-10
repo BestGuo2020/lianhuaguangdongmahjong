@@ -14,7 +14,7 @@ export class BloodFlowReplica {
   readonly seenBatches = new Set<string>()
   readonly completedRounds = new Set<string>()
   error = ''
-  constructor(readonly roomId: string, readonly hostPeer: string, readonly seat: Seat,
+  constructor(readonly roomId: string, public hostPeer: string, readonly seat: Seat,
     readonly requestSync: () => void = () => {}) {}
 
   receive(raw: unknown, fromPeer: string): boolean {
