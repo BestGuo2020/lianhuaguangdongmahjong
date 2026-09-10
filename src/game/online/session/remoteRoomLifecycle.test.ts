@@ -16,6 +16,7 @@ function createHarness(savedSession: StoredSession | null = null) {
     isCreator: ref(false),
     roomSeats: ref([]),
     roomTimeLimit: ref(null),
+    roomStatus: ref('lobby'),
     llmEnabled: ref(false),
     effectiveLlmEnabled: ref(false),
     llmAvailable: ref(false),

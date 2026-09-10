@@ -31,6 +31,8 @@ interface Props {
   sessionStatus: string
   sessionError: string
   roomTimeLimit: number | null
+  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌。 */
+  roomStatus?: string
   roomSeats: Array<RoomSeatState | null>
   /** 房主请求的空座 AI 补位是否使用大模型 */
   llmEnabled: boolean
@@ -72,6 +74,8 @@ const emit = defineEmits<{
   startRemote: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leaveRoom: []
   closeRoom: []
+  /** 退出本场：回主大厅但保留座位（可重新进原座位）。 */
+  leaveMatch: []
   openStats: []
   openRules: []
   wakuLogin: []
@@ -230,6 +234,7 @@ function toggleWakuDemoAuth() {
             v-if="roomId"
             :room-id="roomId"
             :room-time-limit="roomTimeLimit"
+            :room-status="roomStatus"
             :room-seats="roomSeats"
             :llm-enabled="llmEnabled"
             :effective-llm-enabled="effectiveLlmEnabled"
@@ -252,6 +257,8 @@ function toggleWakuDemoAuth() {
             @start="$emit('startRemote', $event)"
             @leave="$emit('leaveRoom')"
             @close="$emit('closeRoom')"
+            @resume="$emit('resumeSession')"
+            @leave-match="$emit('leaveMatch')"
             @open-character="dialog = 'character'"
             @update:character-id="$emit('update:animeCharacterId', $event)"
           />

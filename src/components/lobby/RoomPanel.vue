@@ -13,6 +13,8 @@ import type {
 interface Props {
   roomId: string
   roomTimeLimit: number | null
+  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家在牌桌上「暂离」。 */
+  roomStatus?: string
   roomSeats: Array<RoomSeatState | null>
   mySeat: number
   isCreator: boolean
@@ -46,9 +48,13 @@ const emit = defineEmits<{
   start: [payload: { llmSeats: Array<LlmSeatRequest> }]
   leave: []
   close: []
+  resume: []
+  leaveMatch: []
   openCharacter: []
   'update:characterId': [value: CharacterId]
 }>()
+/** 本场进行中且本家在房间面板 ⇒ 本家已「暂离」牌桌（座位保留，服务端 AI 代打）。 */
+const awayFromTable = computed(() => props.roomStatus === 'playing' && props.mySeat >= 0)
 const currentCharacter = computed(() => resolveAnimeCharacter(props.characterId))
 const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.characterId))
 
@@ -110,7 +116,7 @@ function startPayload() {
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
     <p v-if="roomTimeLimit" class="room-limit-note">
-      房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将解散房间。
+      房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将顺延房主，全员离开或房主关闭才会解散。
     </p>
     <button
       v-if="tableThemeName === 'llmAnime'"
@@ -164,7 +170,15 @@ function startPayload() {
         <b v-else>等待加入…</b>
       </div>
     </div>
-    <div class="room-owner-actions">
+    <!-- 暂离状态：本场进行中，本家已离开牌桌（座位保留、服务端 AI 代打），可一键回桌。 -->
+    <p v-if="awayFromTable" class="room-away-note" role="status">本场进行中 · 你在暂离（AI 代打中，座位与重进码保留）</p>
+    <div v-if="awayFromTable" class="room-owner-actions">
+      <button class="start-button room-start" data-action-role="primary" @click="$emit('resume')">
+        <b>回到牌桌</b><span>恢复原座位，继续本场</span>
+      </button>
+      <button class="text-button" data-action-role="light" @click="$emit('leaveMatch')">退出本场（回主大厅，可再回来）</button>
+    </div>
+    <div v-else class="room-owner-actions">
       <button v-if="mySeat >= 0" class="secondary" data-action-role="primary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button
         v-if="isCreator"
@@ -182,6 +196,17 @@ function startPayload() {
 </template>
 
 <style scoped>
+.room-away-note {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #e6c482) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-accent, #e6c482) 10%, transparent);
+  color: var(--theme-text, #fff2d9);
+  font-size: 12px;
+  text-align: center;
+}
+
 .room-llm-note {
   display: flex;
   align-items: center;

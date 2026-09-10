@@ -226,7 +226,8 @@ const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
   humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
 const bloodFlowRemoteGame = useBloodFlowRemoteGame({ playSound: playEffect,
-  playSoundAndWait: playEffectAndWait,
+  playSoundAndWait: playEffectAndWait, playLlmAudio,
+  getCharacterId: () => animeCharacterId.value,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts })
 // 联机槽按玩法切换：血流走血流 WS 权威，其余走经典联机协议。
 const activeRemote = computed(() => (
@@ -303,7 +304,7 @@ const debugPreviewDraw = () => {
 // ── 联机模式状态（远程房间 / WS 连接）──
 // 血流联机房间走自己的会话：以下代理在联机槽切换时读取/写入对应模块的真实 ref。
 const proxyRef = <T,>(name: 'sessionStatus' | 'sessionError' | 'roomId' | 'mySeat' | 'nickname'
-  | 'playerId' | 'isCreator' | 'roomSeats' | 'roomTimeLimit' | 'storedSession'
+  | 'playerId' | 'isCreator' | 'roomSeats' | 'roomTimeLimit' | 'roomStatus' | 'storedSession'
   | 'llmEnabled' | 'effectiveLlmEnabled' | 'llmAvailable' | 'autoPlay'
   | 'roomTableThemeName') => computed<T>({
   get: () => activeRemote.value[name].value as T,
@@ -318,6 +319,8 @@ const playerId = proxyRef<string>('playerId')
 const isCreator = proxyRef<boolean>('isCreator')
 const roomSeats = proxyRef<Array<{ seat: number; nickname: string; ready: boolean; connected: boolean; characterId?: string } | null>>('roomSeats')
 const roomTimeLimit = proxyRef<number>('roomTimeLimit')
+/** 服务端房间状态：blood flow 暂离时房间面板据此显示「本场进行中 · 回到牌桌」。 */
+const roomStatus = proxyRef<'lobby' | 'playing' | 'finished' | 'error' | 'closed' | string>('roomStatus')
 const storedSession = proxyRef<StoredSession | null>('storedSession')
 const llmEnabled = proxyRef<boolean>('llmEnabled')
 const effectiveLlmEnabled = proxyRef<boolean>('effectiveLlmEnabled')
@@ -351,6 +354,9 @@ const remoteActions = {
     activeRemote.value.remoteActions.startMatch(llmSeats as never),
   leaveRoom: () => activeRemote.value.remoteActions.leaveRoom(),
   closeRoom: () => activeRemote.value.remoteActions.closeRoom(),
+  // 暂离（返回大厅）：保留座位与会话，只断开牌桌连接；退出本场：回主大厅但座位仍保留可重进。
+  stepOutToLobby: () => activeRemote.value.remoteActions.stepOutToLobby(),
+  leaveMatch: () => activeRemote.value.remoteActions.leaveMatch(),
   resumeSession: () => activeRemote.value.remoteActions.resumeSession(),
   updateCharacter: (characterId: string) => activeRemote.value.remoteActions.updateCharacter(characterId),
 }
@@ -451,6 +457,11 @@ watch(() => wakuAuth.account.value?.displayName, (displayName) => {
 }, { immediate: true })
 
 const statsOpen = ref(false)
+/** 退出本场（房间面板入口）：座位保留、本场由 AI 代打，回主大厅可再「继续对局」回来。 */
+function leaveMatchFromPanel() {
+  if (!window.confirm('退出本场？本场将由 AI 代打（座位与重进码保留），你可以在大厅用「继续对局」回到原座位。')) return
+  void remoteActions.leaveMatch()
+}
 const showLobby = computed(() => (
   phase.value === 'lobby'
   || (gameMode.value === 'remote' && Boolean(roomId.value) && players.value.length === 0)
@@ -501,6 +512,9 @@ const continueCountdown = useRemoteContinueCountdown({
   matchFinished,
   waitingNextRound,
   continueRound: nextRound,
+  // 血流自带结算面板倒计时（锚点是局末演出播完），关掉这一份经典倒计时：
+  // 它在血流下不显示，却会在结算快照到达后 10s 静默回执，表现为「倒计时没到 0 就进下一局」。
+  enabled: computed(() => !capabilities.value.bloodFlow),
 })
 
 // 联机房间内主题切换锁定：非房主始终锁定；房主开局后也锁定（大厅阶段可改）。
@@ -627,6 +641,7 @@ function changeTableTheme(theme: TableThemeName) {
         @ready="handleTableReady"
         @next-round="nextRound"
         @return-to-lobby="returnToLobby"
+        @leave-match="leaveMatchFromPanel"
       />
 
       <LobbyView
@@ -646,6 +661,7 @@ function changeTableTheme(theme: TableThemeName) {
         :session-status="sessionStatus"
         :session-error="sessionError"
         :room-time-limit="roomTimeLimit"
+        :room-status="roomStatus"
         :room-seats="roomSeats"
         :llm-enabled="llmEnabled"
         :effective-llm-enabled="effectiveLlmEnabled"
@@ -672,6 +688,7 @@ function changeTableTheme(theme: TableThemeName) {
         @start-remote="(payload: { llmSeats?: Array<{ seat: number; providerId: string }> }) => startRemoteMatch(payload?.llmSeats)"
         @leave-room="leaveRoom"
         @close-room="closeRoom"
+        @leave-match="leaveMatchFromPanel"
         @open-stats="statsOpen = true"
         @open-rules="rulesOpen = true"
         @waku-login="wakuAuth.login"

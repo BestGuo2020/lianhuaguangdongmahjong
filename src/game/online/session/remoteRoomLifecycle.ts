@@ -30,6 +30,8 @@ export interface RemoteRoomState {
   isCreator: Ref<boolean>
   roomSeats: Ref<Array<RoomSeatState | null>>
   roomTimeLimit: Ref<number | null>
+  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
+  roomStatus: Ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>
   /** 房主请求的空座 AI 补位是否使用大模型（llmEnabled） */
   llmEnabled: Ref<boolean>
   /** 实际生效（请求 && 服务端配置齐全） */
@@ -136,6 +138,7 @@ export function createRemoteRoomLifecycle({
       state.isCreator.value = state.creatorSeat.value != null
         && state.mySeat.value === state.creatorSeat.value
       state.roomTimeLimit.value = info.timeLimitSeconds ?? null
+      state.roomStatus.value = info.status
       state.llmEnabled.value = info.llmEnabled === true
       state.effectiveLlmEnabled.value = info.effectiveLlmEnabled === true
       state.llmAvailable.value = info.llmAvailable === true
@@ -160,6 +163,7 @@ export function createRemoteRoomLifecycle({
     state.sessionStatus.value = 'idle'
     state.phase.value = 'lobby'
     state.roomSeats.value = []
+    state.roomStatus.value = 'lobby'
     state.llmEnabled.value = false
     state.effectiveLlmEnabled.value = false
     state.llmAvailable.value = false
@@ -289,6 +293,43 @@ export function createRemoteRoomLifecycle({
     resetGame()
   }
 
+  /**
+   * 暂离（牌桌「返回大厅」）：**不退出房间**——保留座位、重进码与会话，只停止轮询并断开
+   * 连接（服务端按断线 AI 托管、且不再计入待决策与结算屏障），本机停在房间面板；
+   * 面板据此显示「本场进行中 · 你在暂离」并可「回到牌桌」（重连恢复原座位）。
+   */
+  function stepOutToLobby() {
+    stopPolling()
+    closeConnection()
+    resetGame()
+    state.phase.value = 'lobby'
+    state.matchFinished.value = false
+    state.sessionStatus.value = 'connected'
+    void refreshRoom()
+    startPolling()
+  }
+
+  /**
+   * 退出本场：回主大厅，**保留座位与会话**（不 REST leave）——座位交服务端 AI 打完本场，
+   * 大厅显示「继续对局（房间 X）」，可随时重进原座位（走 WS 重进握手）。
+   */
+  function leaveMatch() {
+    stopPolling()
+    closeConnection()
+    resetGame()
+    state.phase.value = 'lobby'
+    state.matchFinished.value = false
+    state.sessionStatus.value = 'idle'
+    state.roomId.value = ''
+    state.rejoinCode.value = ''
+    state.mySeat.value = -1
+    state.creatorSeat.value = null
+    state.isCreator.value = false
+    state.roomSeats.value = []
+    state.roomStatus.value = 'lobby'
+    // storedSession（含 rejoinCode）保留：大厅据它显示「继续对局」，重进即恢复原座位。
+  }
+
   async function closeRemoteRoom() {
     if (!state.roomId.value || state.mySeat.value < 0 || !state.rejoinCode.value) return
     try {
@@ -312,6 +353,8 @@ export function createRemoteRoomLifecycle({
     startMatch,
     leaveRoom: leaveRemoteRoom,
     closeRoom: closeRemoteRoom,
+    stepOutToLobby,
+    leaveMatch,
     resumeSession,
     refreshRoom,
     clearSession,
