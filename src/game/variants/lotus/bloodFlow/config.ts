@@ -53,8 +53,8 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   extraPayments: Object.freeze([]) as readonly [],
 })
 
-/** Local acceptance passed; WS rooms live behind real two-client smoke; P2P still requires real SDK acceptance. */
-export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: true, ws: true, p2p: false })
+/** 本地 / WS / P2P 三面均放行：P2P 于 2026-09-10 打开，用于线上双真人 + 机器人（普通 / 大模型）整场验收。 */
+export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: true, ws: true, p2p: true })
 
 export const BLOOD_FLOW_TIMING = Object.freeze({
   // remoteDecisionMs 与后端 BLOOD_FLOW_TIMING.remoteDecisionMs 对齐（12s = 经典房间回合超时），
