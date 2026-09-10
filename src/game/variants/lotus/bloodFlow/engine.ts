@@ -163,9 +163,16 @@ export class BloodFlowEngine {
     if (this.drawSource && !this.selfPassed) {
       const win = this.evaluate(seat, this.drawSource.tile, this.kongBloom ? 'kong-bloom' : 'self-draw',
         this.openingBonus && this.firstDiscard && seat === this.dealer ? 'heaven' : null)
-      if (win) { this.evaluation.set(seat, win); moves.push({ kind: 'win' }, { kind: 'pass' }) }
+      if (win) {
+        this.evaluation.set(seat, win)
+        moves.push({ kind: 'win' })
+        // 锁手后不得过胡（用户确认）：自摸窗口也不给「过」，只能胡或打掉摸牌。
+        if (!this.seats[seat].locked) moves.push({ kind: 'pass' })
+      }
     }
-    if (!this.seats[seat].locked && this.wall.length) {
+    // 开杠（暗杠/风杠/补杠）只在「本手来自摸牌」时提供：碰/吃之后的这一手必须先出牌，
+    // 与经典玩法的 userDrewThisTurn 门控同口径（此前碰完就能立刻开杠，用户报为错误）。
+    if (this.drawSource && !this.seats[seat].locked && this.wall.length) {
       for (const tile of concealedKongs(player.hand, this.jokers)) moves.push({ kind: 'concealed-kong', tile })
       if (windKong(player.hand, this.jokers)) moves.push({ kind: 'wind-kong' })
       player.melds.forEach((m, meldIndex) => { if (m.type === 'peng' && player.hand.includes(m.tile)) moves.push({ kind: 'added-kong', meldIndex }) })
@@ -190,10 +197,12 @@ export class BloodFlowEngine {
     const window = this.window
     if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
-      window.decisions[seat] = window.kind === 'turn'
+      // 锁手座位的胡是唯一选项（不得过胡）：超时兜底也必须走胡，否则等于「过」。
+      const forcedWin = this.seats[seat].locked ? window.options[seat].find(a => a.kind === 'win') : undefined
+      window.decisions[seat] = forcedWin ?? (window.kind === 'turn'
         ? { kind: 'discard', index: this.seats[seat].locked ? this.players[seat].drawnTileIndex
           : chooseFallbackDiscardIndex(this.players[seat].hand, this.jokers, window.options[seat].filter(a => a.kind === 'discard').map(a => a.index)) }
-        : { kind: 'pass' }
+        : { kind: 'pass' })
     }
     this.resolveWindow()
     this.assertConservation()
@@ -253,7 +262,8 @@ export class BloodFlowEngine {
         if (count >= 2) actions.push({ kind: 'peng' })
         if (seat === nextSeat(source.seat)) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
       }
-      if (actions.length) actions.push({ kind: 'pass' })
+      // 锁手后不得过胡：已胡过的座位仍可点炮/抢杠继续胡，但「过」不再是选项（用户确认）。
+      if (actions.length && !(this.seats[seat].locked && win)) actions.push({ kind: 'pass' })
       return actions
     })
     if (options.some(o => o.length)) this.open(this.evaluation.size ? 'win' : 'meld', source, options)
