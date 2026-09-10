@@ -48,10 +48,10 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 | 文件 | 本批改动 | vibehub 影响 |
 |---|---|---|
-| `src/game/variants/lotus/bloodFlow/engine.ts`（+`engine.test.ts`） | 锁手座位不再进入弃牌/抢杠响应窗口（但仍可点炮/抢杠胡、不得过胡）；开杠只在本手来自摸牌时提供；超时兜底锁手必胡 | 单机血流立即生效；P2P 血流关闭中，联机路径不生效 |
+| `src/game/variants/lotus/bloodFlow/engine.ts`（+`engine.test.ts`） | 锁手座位仍可点炮/抢杠胡但不得过胡；开杠只在本手来自摸牌时提供；超时兜底锁手必胡 | 单机与 P2P 血流立即生效（P2P 面已放行） |
 | `.../useBloodFlowGame.ts` | 提交闩锁（单窗口单次提交）、模型原话气泡/音频、`roundSpeechBusy` 感言闸门、亮牌闸门、`playLlmAudio` 选项、`voiceFor` | 同上（单机立即生效） |
 | `.../ws/authority.ts`（+test） | `llm_message` / `llm_audio` 路由；`continuation` / `setAuto` | vibehub 新增 `ws/` 目录，保留即可（见 §0-1） |
-| `.../types.ts`、`config.ts`、`network/protocol.ts` | `roundSpeechBusy` 字段；玩家白名单加 `style`/`voiceKey` | 直接同步 |
+| `.../types.ts`、`config.ts`、`network/protocol.ts` | `roundSpeechBusy` 字段；玩家白名单加 `style`/`voiceKey`；**`BLOOD_FLOW_AVAILABILITY.p2p` 由 false 改为 true**（2026-09-10：线上双真人 + 机器人整场验收前提） | 直接同步；vibehub 在线血流规则选择随 `p2p` 放行 |
 | `src/components/table/GameTableHud.vue` | 亮牌按演出闸门延后；新增 `leaveMatch` emit | vibehub 的 `App.vue` 不监听 `leaveMatch` → 无害 no-op |
 | `src/components/settlement/BloodFlowSettlementHost.vue` | 按钮语义（返回房间/返回大厅=暂离/退出本场）+ 感言门控倒计时 | 同上（P2P 未接线；关闭中无影响） |
 | `src/game/llm/bloodFlowRuntime.ts`（+test） | `remoteVoiceIdentity`、`createBloodFlowReactions({voice})` | 直接同步 |
@@ -67,16 +67,18 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 ### 2-A 可直接按小改动移植（结构一致）
 
 > **2026-09-10 实测核对（同步后逐项验证）**：vibehub 的 P2P 协议与 host 层与 WS 不同，表内各项的「是否真需要」按下表最后一列为准。
+>
+> **执行决定（2026-09-10）**：vibehub 工作树的 `AGENTS.md` 明确规定「**不要**手动在 vibehub 上改这些联机层 keep 文件」，且 master 无法承载 vibehub 的专属结构 —— 因此 §2-A 各项**一律不在 vibehub 上手工改**，保留为待决策事项。它们都属于**经典 P2P 表现/协议**细节，与本次「血流 P2P 整场验收」无关，不阻塞部署。
 
 | master 文件 | 改动内容 | vibehub 现状 | 动作 |
 |---|---|---|---|
 | `online/orchestration/requestCoordinator.ts` | 庄家开局首回合（`turnOrigin === 'opening'`）视作「已摸牌」→ 可天胡/可风杠 | 同名保留版有 `skipDraw`，**但没有 `turnOrigin`** | **待定**：vibehub 的 P2P 协议里不存在该字段（`git grep turnOrigin` 仅命中 `core/local/*` 与 `llm/*`）。要真生效需 host 侧（`host/lotusRemotePlayerController.ts` 构造 turn_request 时带上 `localTurnOrchestrator` 已有的 turnOrigin）+ 协议 + 客机三处一起改，属**新功能移植**，与本次血流验收无关 → 单独一批 |
 | `online/protocol/messages.ts` | `turn_request.ctx` 增加 `turnOrigin?: string` | 同上 | 同上（随 turnOrigin 一批） |
 | `online/protocol/decoder.ts` | 校验 `isOptional(raw.ctx.turnOrigin, isString)` | 同上 | 同上 |
-| `online/state/remoteGameState.ts` | 新增 `lastDiscardSound`（点炮胡要等牌名播报播完） | 保留版无该 ref，但 **`core/local/localGameState.ts` 与 `shared/runtime/tileFlowExecutor.ts` 在 vibehub 上已有 `lastDiscardSound`** | **本批执行**：给保留版 state 补 `lastDiscardSound`，由 `snapshotReconciler` 产出，`presentation/settlementTimeline` 消费 |
-| `online/orchestration/remoteActionController.ts` | 出牌后立刻清 `turnCanHu` / `turnCanWindKong` | 保留版已在 `requestCoordinator` 的弃牌/过牌/回合切换处清（L119-120、L149-150） | **无需动作**（已具备等价行为），需人工确认一处：弃牌后是否立即清（master 是在 `remoteActionController.applyDiscard` 清） |
-| `online/orchestration/snapshotReconciler.ts` | `applyLastDiscard` 里产出 `lastDiscardSound` promise（`later` + `playSoundAndWait`） | 同名保留版已有 `applyLastDiscard` + `tileAudioFile`，无 promise | **本批执行**（随 state 一起） |
-| `online/presentation/settlementTimeline.ts` | 点炮胡等牌名播报播完再起胡音效 + 点炮牌补回牌河 | 结构不同（`effectKey/settleIfReady/beginEffect` 队列版）；`shared/settlement/settlementTimeline.ts` 已有 `lastDiscardSound?` 可选入参 | **最小版**：在 `beginEffect` 前 `await state.lastDiscardSound`；补回牌河逻辑后置 |
+| `online/state/remoteGameState.ts` | 新增 `lastDiscardSound`（点炮胡要等牌名播报播完） | 保留版无该 ref，但 **`core/local/localGameState.ts` 与 `shared/runtime/tileFlowExecutor.ts` 在 vibehub 上已有 `lastDiscardSound`** | **待决策**：需手改 vibehub 保留文件（state + reconciler + settlementTimeline 三处，见下面两行） |
+| `online/orchestration/remoteActionController.ts` | 出牌后立刻清 `turnCanHu` / `turnCanWindKong` | 保留版已在 `requestCoordinator` 的弃牌/过牌/回合切换处清（L119-120、L149-150） | **无需动作**（已具备等价行为） |
+| `online/orchestration/snapshotReconciler.ts` | `applyLastDiscard` 里产出 `lastDiscardSound` promise（`later` + `playSoundAndWait`） | 同名保留版已有 `applyLastDiscard` + `tileAudioFile`，无 promise；`useVibeRemoteGame` 已有 `playSoundAndWait` 选项可直传 | **待决策**（随 state 一起） |
+| `online/presentation/settlementTimeline.ts` | 点炮胡等牌名播报播完再起胡音效 + 点炮牌补回牌河 | 结构不同（`effectKey/settleIfReady/beginEffect` 队列版），`beginEffect` 直接落 `win-effect`；`shared/settlement/settlementTimeline.ts` 已有 `lastDiscardSound?` 可选入参 | **待决策**：最小版＝`beginEffect` 里先 `await state.lastDiscardSound` 再落 `win-effect`；补回牌河逻辑后置 |
 | `online/presentation/settlementTimeline.test.ts`、`useRemoteGame.test.ts` 对应用例 | 同上 | vibehub 有自己的测试文件 | 按 vibehub 测试风格补 1-2 个用例 |
 
 ### 2-B 不需要移植（master-only，vibehub 无对应）
@@ -106,25 +108,25 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 ---
 
-## 4. 同步操作步骤（建议顺序）
+## 4. 同步操作步骤（2026-09-10 已执行）
 
-1. 在 master 提交本批改动（同步脚本要求 master 工作区干净）。
-2. ~~先改同步脚本~~ **已完成**：`$masterOnly` 已加入 `bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`），并同步更新了 `docs/branch-sync-workflow.md` 的 WS 专属清单。
-3. 运行 `pnpm sync:vibehub`（脚本会自动先跑 `check-vibehub-ahead.ps1` 列出 vibehub 领先的共享文件）。
-4. 切到 vibehub 工作区：`pnpm typecheck`、`pnpm test`。
-5. 按 §2-A 手工移植共享修复（每项配一个 vitest 用例），再次 `pnpm typecheck` + `pnpm test`。
-6. §3 的 P2P 语义改动**建议单独一批**，先出设计再改代码。
+1. ✅ 在 master 提交本批改动（8 笔：血流规则 / 联机协议与表现 / 血流联机 / 房间生命周期 / 同步工作流 / p2p 放行 / 同步脚本 / 清单核对；后端 3 笔另提交）。
+2. ✅ `$masterOnly` 已加入 `bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`）与 `online/presentation/useRemoteContinueCountdown.test.ts`（keep 目录内 master 新增文件的泄漏修复），并同步更新 `docs/branch-sync-workflow.md`。
+3. ✅ `pnpm sync:vibehub` ×3（`d513270` → `52fdeaf` → `0acbab7`）：master-only 全部删除、keep 文件保持 vibehub 版、P2P 在制品完好；同步前把 vibehub 的未提交在制品以 WIP 提交保住（补丁备份 `work/vibehub-theme11v/tmp/vibehub-wip-*.patch`）。
+4. ✅ vibehub 工作树 `pnpm typecheck` + `pnpm test`（见 §5 实测结果）。
+5. ⏸ §2-A 手工移植：按执行决定不做（保留待决策）。
+6. ⏭ §3 P2P 语义改动（暂离/退出本场在 P2P 上的对应）：单独一批，未开始。
 
 ---
 
-## 5. 验收清单（vibehub）
+## 5. 验收清单（vibehub）—— 2026-09-10 同步后实测结果
 
-- [ ] `pnpm typecheck` 通过（重点：`useBloodFlowGame.ts` 对 `./ws/authority` 的 `import type`）
-- [ ] `pnpm test` 全绿（若 §0-1 未处理，`useBloodFlowRemoteGame.test.ts` 会因 master-only 模块缺失而失败）
+- [x] `pnpm typecheck` 通过（首轮因 keep 目录泄漏的 `useRemoteContinueCountdown.test.ts` 失败 → 已纳入 `$masterOnly`，改后通过）
+- [x] `pnpm test` 全绿（首轮 1 文件 4 用例失败，同因；改后 1389 passed / 2 skipped，`config.test.ts` 的 availability 断言随 `p2p` 放行更新）
 - [ ] 本地大厅流程手测：建房 / 加入 / 准备 / 开始 / 离开 / 关闭（P2P 路径）
-- [ ] 血流 P2P 仍为关闭（`BLOOD_FLOW_AVAILABILITY.p2p === false`）
-- [ ] 若移植 §2-A：`useVibeRemoteGame.test.ts`、`orchestration/userCanHu.test.ts` 等相关用例通过
-- [ ] 若本次为多提交同步：确认 `git log vibehub..master` 清空
+- [x] **血流 P2P 已放行**（`BLOOD_FLOW_AVAILABILITY.p2p === true`，本批刻意打开，用于线上整场验收）
+- [ ] §2-A 移植：按上面的执行决定**不做**（vibehub AGENTS 禁止手改 keep 文件），保留待决策
+- [x] `git log vibehub..master` 清空（同步后 vibehub `0acbab7`；本次文档提交后再同步一次）
 
 ---
 
