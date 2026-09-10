@@ -57,7 +57,9 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
 export const BLOOD_FLOW_AVAILABILITY = Object.freeze({ local: true, ws: true, p2p: false })
 
 export const BLOOD_FLOW_TIMING = Object.freeze({
-  winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 25_000, recoveryGraceMs: 12_000,
+  // remoteDecisionMs 与后端 BLOOD_FLOW_TIMING.remoteDecisionMs 对齐（12s = 经典房间回合超时），
+  // WS 权威与 P2P 权威共用同一决策窗口，读秒长度不再两套。
+  winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 12_000, recoveryGraceMs: 12_000,
   compactWinMs: 2300, largeWinMs: 2600, topWinMs: 2900, multiWinIntroMs: 1500,
   fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
 })

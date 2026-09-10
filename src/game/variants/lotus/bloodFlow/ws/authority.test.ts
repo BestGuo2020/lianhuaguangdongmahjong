@@ -61,6 +61,20 @@ it('passes opening dice through to the view meta for the opening animation', () 
   expect(views[2].meta.opening).toBeUndefined()
 })
 
+it('passes the settled continuation counter through to the view meta', () => {
+  const metas: Array<Record<string, unknown>> = []
+  const authority = createBloodFlowWsAuthority({
+    transport: { send: () => true },
+    onView: (_view, meta) => metas.push(meta as unknown as Record<string, unknown>),
+  })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0,
+    continuation: { readySeats: [0, 2], requiredSeats: [0, 1, 2, 3] } })
+  authority.feed({ kind: 'bf_snapshot', view: VIEW, round: 0, mode: 'east', dealer: 0,
+    continuation: { readySeats: [9], requiredSeats: [0] } })
+  expect(metas[0].continuation).toEqual({ readySeats: [0, 2], requiredSeats: [0, 1, 2, 3] })
+  expect(metas[1].continuation).toBeUndefined()
+})
+
 it('sends opening_done acknowledgements for the ready barrier', () => {
   const sent: Record<string, unknown>[] = []
   const authority = createBloodFlowWsAuthority({
@@ -110,4 +124,35 @@ it('reports backend error codes and silences after close', () => {
   authority.close()
   authority.feed({ kind: 'error', code: 'INVALID_ACTION' })
   expect(errors).toEqual(['STALE_ACTION'])
+})
+
+it('routes server model speech and TTS audio, ignoring malformed payloads', () => {
+  const speech: unknown[] = []
+  const audio: unknown[] = []
+  const authority = createBloodFlowWsAuthority({
+    transport: { send: () => true },
+    onView: () => {},
+    onSpeech: (message) => speech.push(message),
+    onAudio: (message) => audio.push(message),
+  })
+  authority.feed({ kind: 'llm_message', id: 7, seat: 1, text: '这张先走。', priority: 'normal',
+    purpose: 'commentary', speechSource: 'model-message' })
+  authority.feed({ kind: 'llm_message', id: 8, seat: 2, text: '胡了。', priority: 'important',
+    purpose: 'action', speechSource: 'model-message', actionKind: 'win' })
+  // 非法载荷：缺 id / 座位越界 / 空文本 / 缺音频地址。
+  authority.feed({ kind: 'llm_message', seat: 1, text: 'x' })
+  authority.feed({ kind: 'llm_message', id: 9, seat: 9, text: 'x' })
+  authority.feed({ kind: 'llm_message', id: 10, seat: 1, text: '' })
+  authority.feed({ kind: 'llm_audio', messageId: 11, seat: 1, audioUrl: '/api/local-tts/audio/a.mp3',
+    priority: 'important', purpose: 'action', speechSource: 'model-message' })
+  authority.feed({ kind: 'llm_audio', messageId: 12, seat: 1 })
+
+  expect(speech).toEqual([
+    { id: 7, seat: 1, text: '这张先走。', priority: 'normal', purpose: 'commentary',
+      speechSource: 'model-message' },
+    { id: 8, seat: 2, text: '胡了。', priority: 'important', purpose: 'action',
+      speechSource: 'model-message', actionKind: 'win' },
+  ])
+  expect(audio).toEqual([{ messageId: 11, seat: 1, audioUrl: '/api/local-tts/audio/a.mp3',
+    priority: 'important', purpose: 'action', speechSource: 'model-message' }])
 })

@@ -2,7 +2,7 @@ import type { LlmRoundReaction } from './winLines'
 import { bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { reactive } from 'vue'
 import { requestLlmDecision, type LlmDecisionOptions } from './client'
-import { readLlmSettings, presetForSeat, styleForSeat, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
+import { readLlmSettings, presetForSeat, styleForSeat, LLM_TTS_VOICE_OPTIONS, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
 import type { LlmControllerStats } from './llmController'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
 import { resolveDecisionSpeech } from './decisionSpeech'
@@ -30,6 +30,21 @@ export function localBloodFlowProvider(seat: Seat): LlmProviderPreset | null {
     : presetForSeat(settings, seat) ?? settings.presets[0]
   if (!preset?.apiKey.trim() || !preset.baseUrl.trim() || !preset.model.trim()) return null
   return { ...preset, style: seat === 0 ? preset.style : styleForSeat(settings, seat) ?? preset.style }
+}
+
+const REMOTE_STYLES: readonly LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
+type ConcreteVoiceKey = Exclude<LlmTtsVoiceKey, 'auto'>
+const REMOTE_VOICE_KEYS: readonly string[] = LLM_TTS_VOICE_OPTIONS
+  .map(option => option.value).filter(value => value !== 'auto')
+
+/** 联机座位语音身份（服务端供应商推导，随快照下发）→ 本机 TTS 音色键与策略。
+ *  缺失/非法值一律回退策略默认音色，绝不静默沿用本机单机 LLM 设置。 */
+export function remoteVoiceIdentity(player: { style?: string; voiceKey?: string }):
+{ voiceKey: ConcreteVoiceKey; style: LlmStyle } {
+  const style = REMOTE_STYLES.includes(player.style as LlmStyle) ? player.style as LlmStyle : '稳健'
+  const voiceKey = REMOTE_VOICE_KEYS.includes(player.voiceKey ?? '')
+    ? player.voiceKey as ConcreteVoiceKey : 'default'
+  return { voiceKey, style }
 }
 export function bloodFlowDecisionBudget(provider: LlmProviderPreset, view: BloodFlowSeatView, now: number) {
   return configuredDecisionBudget(provider, (view.window?.deadlineAt ?? now) - now - 250)
@@ -156,6 +171,8 @@ export interface BloodFlowReaction {
 export const bloodFlowReactionsAllowed = (theme: string) => theme === 'llm' || theme === 'llmAnime'
 export function createBloodFlowReactions(options: {
   provider?: BloodFlowProviderLookup
+  /** 联机：座位语音身份（房间快照下发）；返回 null 表示该座位不出声。 */
+  voice?: (seat: Seat) => { voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; style: LlmStyle } | null
   theme(): string
   current(view: BloodFlowSeatView): boolean
   emit(line: BloodFlowReaction, signal: AbortSignal): void | Promise<void>
@@ -174,8 +191,13 @@ export function createBloodFlowReactions(options: {
       const current = () => epoch === generation && options.theme() === theme && bloodFlowReactionsAllowed(options.theme()) && options.current(view)
       for (const seat of [0, 1, 2, 3] as Seat[]) {
         if (!current()) return
-        const provider = (options.provider ?? localBloodFlowProvider)(seat)
-        if (!provider) continue
+        const voice = options.voice
+          ? options.voice(seat)
+          : (() => {
+            const provider = (options.provider ?? localBloodFlowProvider)(seat)
+            return provider ? { voiceKey: resolveLocalTtsVoiceKey(provider), style: provider.style } : null
+          })()
+        if (!voice) continue
         const controller = new AbortController(); controllers.add(controller)
         try {
           const record = view.public.batches.flatMap(batch => batch.winners).filter(win => win.winner === seat).at(-1)
@@ -187,11 +209,11 @@ export function createBloodFlowReactions(options: {
                 : record.score.source === 'discard' ? 'discard-win' : 'self-draw' }
               : { outcome: 'loss' }
           const sequence = sequences.get(seat) ?? 0
-          const text = bloodFlowRoundReactionLine(reaction, provider.style, sequence + seat)
+          const text = bloodFlowRoundReactionLine(reaction, voice.style, sequence + seat)
           sequences.set(seat, sequence + 1)
           if (!current() || controller.signal.aborted) return
           await options.emit({ id: `${key}/reaction/${seat}`, authorityEpoch: view.authorityEpoch, roundId: view.roundId,
-            seat, text, voiceKey: resolveLocalTtsVoiceKey(provider), style: provider.style, theme: theme as 'llm' | 'llmAnime' }, controller.signal)
+            seat, text, voiceKey: voice.voiceKey, style: voice.style, theme: theme as 'llm' | 'llmAnime' }, controller.signal)
         } catch { /* one failed playback never blocks later seats or the next round */ }
         finally { controllers.delete(controller) }
       }

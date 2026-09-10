@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { GamePlayer } from '../../game/core/contracts/types'
 import type { BloodFlowTableState } from '../../game/variants/lotus/bloodFlow/types'
 import type { TableThemeName } from '../table/three/tableTheme'
@@ -8,21 +8,49 @@ import BloodFlowRoundLedger from './BloodFlowRoundLedger.vue'
 import BloodFlowRoundSummary from './BloodFlowRoundSummary.vue'
 import BloodFlowFinalRanking from './BloodFlowFinalRanking.vue'
 const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;roundLabel?:string;presentationBusy?:boolean}>()
-const emit=defineEmits<{nextRound:[];returnToLobby:[];visibleChange:[visible:boolean]}>()
+const emit=defineEmits<{nextRound:[];returnToLobby:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
 type View='table'|'round'|'final'|'details'
 const view=ref<View>('table'), detailsReturn=ref<View>('table'), filterSeat=ref<number|null>(null), requested=ref(false)
 const restored=ref(false), opened=new Set<string>()
 const result=computed(()=>props.state.roundResult)
 const bubbles=computed(()=>['llm','llmAnime'].includes(props.themeName)?props.state.roundBubbles:undefined)
 const pending=computed(()=>requested.value||props.state.continuation?.ready)
+// 结算面板与局间倒计时的统一闸门：局末胡/杠 cue 播完 **且** 局末感言播完（用户要求：
+// 感言没说完不弹面板、不开始倒计时）。
+const presentationPending=computed(()=>Boolean(props.presentationBusy)||Boolean(props.state.roundSpeechBusy))
 const summary=()=>props.matchFinished?'final' as const:'round' as const
 function showSummary() { if(!result.value)return; view.value=summary(); filterSeat.value=null; restored.value=opened.has(result.value.roundId); opened.add(result.value.roundId) }
 function showDetails(seat:number|null=null) { detailsReturn.value=view.value==='table'?'table':view.value==='final'?'final':'round'; filterSeat.value=seat; view.value='details'; restored.value=true }
 function showTable() { view.value='table' }
 function next() { if(pending.value||!result.value||props.matchFinished)return; requested.value=true; emit('nextRound') }
 function retry() { if(!result.value||props.state.continuation?.ready)return; emit('nextRound') }
+/** 「退出本场」：保留座位（可重进原座位），本场由服务端 AI 代打；二次确认后回主大厅。 */
+function confirmLeaveMatch() {
+  if (!window.confirm('退出本场？本场将由 AI 代打（座位与重进码保留），你可以在大厅用「继续对局」回到原座位。')) return
+  emit('leaveMatch')
+}
+// 局间倒计时（参照经典联机 useRemoteContinueCountdown 的 10s 自动回执，但锚点不同）：
+// 血流结算面板被局末演出（胡/杠 cue + 局末感言）门控，倒计时从「面板可打开」起完整走 10s；
+// 经典从结算状态到达起算（不被演出门控）。服务端兜底 45s > 演出尾巴 + 感言 + 10s，不会中途抢跑。
+const CONTINUE_COUNTDOWN_SECONDS=10
+const countdown=ref(0)
+let countdownTimer:number|null=null
+function stopCountdown(){if(countdownTimer!=null){window.clearInterval(countdownTimer);countdownTimer=null}countdown.value=0}
+function startCountdown(){
+  stopCountdown()
+  countdown.value=CONTINUE_COUNTDOWN_SECONDS
+  countdownTimer=window.setInterval(()=>{countdown.value-=1;if(countdown.value<=0){stopCountdown();next()}},1000)
+}
+watch([()=>result.value?.roundId,()=>presentationPending.value,()=>pending.value,()=>props.matchFinished,()=>props.state.continuation],([id,busy])=>{
+  const active=Boolean(id)&&!busy&&Boolean(props.state.continuation)&&!props.matchFinished&&!pending.value
+  // presentationBusy 由 rAF 更新、比 result 晚一帧：结算到达瞬间的短暂 busy 翻转会打断倒计时，
+  // 因此允许同一局重新启动完整 10s（不加轮次闩锁），保证倒计时走完后才自动回执。
+  if(active){if(countdownTimer==null)startCountdown()}
+  else stopCountdown()
+},{immediate:true})
+onBeforeUnmount(stopCountdown)
 watch(()=>props.state.roundId,()=>{view.value='table';requested.value=false;filterSeat.value=null;restored.value=false})
-watch([()=>result.value?.roundId,()=>props.presentationBusy],([id,busy])=>{if(id&&!busy&&!opened.has(id))showSummary()},{immediate:true})
+watch([()=>result.value?.roundId,()=>presentationPending.value],([id,busy])=>{if(id&&!busy&&!opened.has(id))showSummary()},{immediate:true})
 watch(()=>props.state.status,status=>{if(status==='interrupted')requested.value=false})
 watch(view,v=>emit('visibleChange',v!=='table'),{immediate:true})
 defineExpose({showSummary,showDetails,showTable})
@@ -45,9 +73,12 @@ defineExpose({showSummary,showDetails,showTable})
         <button v-if="view!=='details'" type="button" @click="showDetails()">查看流水</button>
         <button v-if="view==='final'" type="button" @click="view='round'">最后一局结果</button>
         <button v-if="view==='round'&&matchFinished" type="button" @click="view='final'">最终排名</button>
-        <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局' }}</button>
+        <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局'+(countdown>0?' ('+countdown+')':'') }}</button>
         <button v-if="requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
-        <button v-if="result" type="button" @click="$emit('returnToLobby')">返回大厅</button>
+        <!-- 返回大厅 = 暂离：不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」。 -->
+        <button v-if="result" type="button" :title="matchFinished?'回房间大厅（房间保留，准备态保留，可直接再开一场）':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">{{ matchFinished?'返回房间':'返回大厅' }}</button>
+        <!-- 退出本场：回主大厅，座位保留（可重进原座位），需二次确认。 -->
+        <button v-if="result&&!matchFinished" type="button" class="bf-quiet" @click="confirmLeaveMatch">退出本场</button>
       </footer>
     </section>
   </div></Teleport>

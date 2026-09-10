@@ -158,6 +158,7 @@ export interface BloodFlowRoundResult {
   readonly winNet: SeatVector<number>
   readonly kongNet: SeatVector<number>
   readonly winCounts: SeatVector<number>
+  /** 名次 1 基（1 = 第一名）；联机由后端 summarize_round 下发，口径与单机一致。 */
   readonly ranks: SeatVector<number>
   readonly ledger: readonly BloodFlowLedgerEntry[]
 }
@@ -179,6 +180,8 @@ export interface BloodFlowTableState extends BloodFlowPublicState {
   readonly presentationKey?: string
   readonly roundBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
   readonly actionBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
+  /** 局末感言播报中：结算面板与局间倒计时要等它播完再开始（2026-09-10 用户要求）。 */
+  readonly roundSpeechBusy?: boolean
   readonly waits: readonly { tile: TileType; selfDraw: PublicWinScore | null; discard: PublicWinScore | null }[]
   readonly discardWaitScores?: Partial<Record<TileType, BloodFlowTableState['waits']>>
   /** 自摸窗口改张提示（仅血流；抢杠/点炮窗口恒为 null）。 */

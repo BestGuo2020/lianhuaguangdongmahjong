@@ -117,7 +117,7 @@ export function isSeatView(v: unknown): v is BloodFlowSeatView {
         || !zeroSum(entry.deltas) || !vector(entry.scoresAfter)) return false
     }
   }
-  if (!v.players.every((p: any, s: number) => object(p) && only(p, ['name', 'avatar', 'isLlm', 'characterId', 'playerKind', 'score', 'seat', 'hand', 'concealedTileCount', 'discards', 'melds', 'redCount', 'drawnTileIndex'])
+  if (!v.players.every((p: any, s: number) => object(p) && only(p, ['name', 'avatar', 'isLlm', 'characterId', 'playerKind', 'style', 'voiceKey', 'score', 'seat', 'hand', 'concealedTileCount', 'discards', 'melds', 'redCount', 'drawnTileIndex'])
     && seat(p.seat) && p.seat === s && typeof p.name === 'string'
     && int(p.score) && tiles(p.hand, 14) && tiles(p.discards, 136) && int(p.concealedTileCount)
     && (settled || s === v.seat || p.hand.length === 0) && Array.isArray(p.melds)

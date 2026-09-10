@@ -104,6 +104,7 @@ const emit = defineEmits<{
   toggleAutoPlay: []
   nextRound: []
   returnToLobby: []
+  leaveMatch: []
 }>()
 
 const settlementHost = ref<InstanceType<typeof BloodFlowSettlementHost>|null>(null)
@@ -119,6 +120,10 @@ const effectPlayer=useEffectPlayer(),playedImpacts=new Set<string>()
 const tableHudElement=ref<HTMLElement|null>(null), ownDrawScreen=shallowRef<{sourceId:string;x:number;y:number}|null>(null)
 const bloodFlowHidden=shallowRef<readonly string[]>([])
 const bloodFlowCue=shallowRef<BloodFlowCue|null>(null), presentationNow=ref(0), presentationBusy=ref(false)
+// 血流：结算快照与最后一批胡/杠 cue 同帧到达，若直接跟随 revealHands，手牌会在胡牌演出
+// 开始前就全部亮出（服务端在 engine.result 时下发三家手牌）。这里按演出闸门延后亮牌，
+// 与经典结算时间线「特效播完 → 亮牌」同口径；非血流玩法不受影响。
+const tableRevealHands=computed(()=>props.bloodFlow?props.revealHands&&!presentationBusy.value:props.revealHands)
 let presentationFrame=0
 function advancePresentation(now:number){
   presentationFrame=0;presentationNow.value=now;bloodFlowCue.value=presentationDirector.tick(now);presentationBusy.value=presentationDirector.busy
@@ -460,7 +465,7 @@ function onAvatarError(entry: GamePlayer) {
     :data-table-seats="tableSeatsData"
     :data-concealed-counts="tableConcealedData"
     :data-revealed-face-counts="tableFaceCountsData"
-    :data-reveal-hands="revealHands ? 1 : 0"
+    :data-reveal-hands="tableRevealHands ? 1 : 0"
     :data-match-finished="matchFinished ? 1 : 0"
     :data-round-result-kind="roundResultPresentation?.kind ?? ''"
     :data-round-result-strength="roundResultPresentation?.strength ?? ''"
@@ -473,7 +478,7 @@ function onAvatarError(entry: GamePlayer) {
       :theme-name="themeName"
       :players="players" :local-seat="user.seat" :current-player="currentPlayer" :last-discard="lastDiscard"
       :wall="wall" :wall-head-drawn="wallHeadDrawn" :wall-count="wallCount"
-      :horses="result?.horses" :reveal-hands="revealHands" :winner-index="winningPlayerIndex"
+      :horses="result?.horses" :reveal-hands="tableRevealHands" :winner-index="winningPlayerIndex"
       :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles"
       :win-effect="winEffect" :win-presentation="winPresentation" :deal-animation="dealAnimation"
       :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer" :dice-thrower-index="diceThrowerIndex"
@@ -496,7 +501,7 @@ function onAvatarError(entry: GamePlayer) {
       <BloodFlowSettlementHost ref="settlementHost" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :presentation-busy="presentationBusy"
         :match-finished="matchFinished" :round-label="roundLabel" @visible-change="settlementVisible=$event"
-        @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" />
+        @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" @leave-match="$emit('leaveMatch')" />
     </template>
     <Transition name="table-loading">
       <div

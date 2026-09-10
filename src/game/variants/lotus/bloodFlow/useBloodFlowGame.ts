@@ -1,7 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, shallowRef, toRaw, watch } from 'vue'
 import { defineGamePort } from '../../../core/contracts/gamePort'
 import type { GameStartOptions, WaitInfo } from '../../../core/contracts/gamePort'
-import type { Announcement } from '../../../core/contracts/gamePort'
 import type { MatchType, TableActionEvent, TileType } from '../../../core/contracts/types'
 import { createLotusGameState } from '../lotusState'
 import { createLotusOpening } from '../lotusOpening'
@@ -29,14 +28,17 @@ import type { NetworkOpening } from './network/protocol'
 import type { HandWaitHints, WaitScores } from '../patterns/handWaits'
 import { createEvaluatorService } from '../patterns/evaluatorService'
 import { createBloodFlowAudioBridge } from './audioBridge'
-import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
+import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, remoteVoiceIdentity, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
+import type { LlmStyle, LlmTtsVoiceKey } from '../../../llm/config'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from '../../../llm/localTtsClient'
 import { playLlmAudioGroup } from '../../../core/presentation/llmAudioBus'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 import { createAnimeFixedTtsRequest } from '../../../llm/animeFixedTts'
 import { animeVoiceKeyForTableAction } from '../../../llm/animeFixedTtsExecutor'
 import { decisionSpeech } from '../../../llm/decisionSpeech'
-import {actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
+import { actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
+import { shouldSuppressLegacyAnimeSpeech } from '../../../core/presentation/animeAudioPolicy'
+import type { BloodFlowWsAudio, BloodFlowWsSpeech } from './ws/authority'
 import type {BloodFlowDiscardSpeech} from '../../../llm/bloodFlowSpeech'
 import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
 import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
@@ -44,6 +46,8 @@ import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  /** 服务端 TTS 音频通道（联机模型原话）：与经典联机共用同一条 llm 音频队列。 */
+  playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
   getThemeName?: () => string
   animeFixedTts?: AnimeFixedTtsExecutor
   humanPlayerSeed?: PlayerSeed
@@ -73,6 +77,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const roundBubbles = shallowRef<Record<number, { text: string; id: number; persistent: boolean }>>({})
   const actionBubbles = shallowRef<Record<number, {text:string;id:number;persistent:boolean}>>({})
   const thinkingBubbles = shallowRef<Record<number, {text:string;id:number;persistent:boolean}>>({})
+  /** 局末感言播报中：结算面板与局间倒计时要等它播完（用户要求）。 */
+  const roundSpeechBusy = shallowRef(false)
   const thinkingOwners = new Map<number,string>()
   const thinkingIds = new Map<string,number>()
   const thinkingSequences = new Map<number,number>()
@@ -99,15 +105,23 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }})
   const actionSpoken=new Set<string>(),actionSpeechControllers=new Set<AbortController>()
   const pendingDiscardSpeech=new Map<AbortController,()=>boolean>()
+  /** 联机座位语音身份（服务端供应商下发）：seat → {voiceKey, style}，每次快照刷新。 */
+  const remoteVoices=new Map<number, {voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; style: LlmStyle}>()
+  /** 已呈现的服务端模型原话 id（llm_message 去重）。 */
+  const remoteModelMessages=new Set<number>()
   const pendingBots = new Set<string>(), spoken = new Set<string>(), speechControllers = new Set<AbortController>()
   let speechChain = Promise.resolve(), bubbleSerial = 0
   const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
     current: current => view.value?.authorityEpoch === current.authorityEpoch && view.value?.roundId === current.roundId && !!view.value?.public.roundResult,
     emit: (line, signal) => presentRoundReaction(line, signal),
+    // 联机局末感言仍用模板台词，但音色取房间供应商身份（不读本机单机 LLM 设置）。
+    voice: seat => (options.externalAuthority ? remoteSeatVoice(seat) : null),
   })
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
   let generation = 0, busy = false, heardAction = 0, heardDiscard = '', lockedAutoWindow = ''
+  /** 已提交决策的窗口 id：本窗口内不再接受第二次提交，也不显示可操作按钮（响应式，供 UI 门控）。 */
+  const submittedWindowId = shallowRef('')
   let waitQuerySerial = 0
   let hintKey = '', hintBusy = false
   let ring: TileType[] = [], dealerTile: TileType | null = null
@@ -125,6 +139,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     timers.add(id)
     return id as unknown as number
   }
+  /**
+   * 锁手自动摸打的观察窗口。
+   * 单机：窗口开放时刻 + 观察窗（与改动前逐字一致，不受联机修复影响）。
+   * 联机：快照的 opensAt 恒为 0（窗口已开放），直接等观察窗，避免 0ms 立即打掉。
+   */
+  function lockedAutoPlayDelay(window: { opensAt: number }) {
+    const observe = options.lockedAutoPlayMs ?? 800
+    const opensIn = window.opensAt - Date.now()
+    return options.externalAuthority ? Math.max(0, opensIn) + observe : Math.max(0, opensIn + observe)
+  }
   function clear() {
     continuation.value=undefined
     generation++; busy = false
@@ -140,6 +164,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     actionAudio.reset()
     decisions.cancel(); pendingBots.clear(); reactions.cancel(); cancelReactionSpeech(); spoken.clear()
     cancelActionSpeech();actionSpoken.clear();seenWinBatches.clear();fixedVoiceEvents.clear()
+    remoteVoices.clear(); remoteModelMessages.clear()
+    roundSpeechBusy.value = false
+    submittedWindowId.value=''
   }
   const actionAudio = createBloodFlowAudioBridge({ epoch: () => `blood-flow:${generation}`, theme: () => options.getThemeName?.() ?? 'jade',
     player: index => state.players[index], fixed: options.animeFixedTts, play: sound })
@@ -188,12 +215,19 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       let sequence = 0
       for (const record of batch.winners) {
         const player = state.players[toLocal(record.winner)]
-        const provider = player && (player.playerKind === 'llm' || player.isLlm) ? localBloodFlowProvider(record.winner) : null
-        tasks.push(provider ? (async () => {
+        const isLlmWinner = Boolean(player && (player.playerKind === 'llm' || player.isLlm))
+        if (options.externalAuthority && isLlmWinner) {
+          // 联机 LLM 赢家：台词与音频由服务端下发（llm_message/llm_audio），客户端不再播
+          // hu/zimo 效果音——对齐经典「模型人声替代效果音」，避免两路声音叠加。
+          continue
+        }
+        // 单机：本机 LLM 台词（预合成）+ 本机 TTS；其余赢家播 hu/zimo 效果音。
+        const voice = isLlmWinner ? voiceFor(record.winner) : null
+        tasks.push(voice ? (async () => {
           // 台词与合成在模型做出胡牌决定的瞬间已完成（预合成），这里直接取用开播。
           const own = decisions.takeWinLine(batch.windowId, record.winner)
-          const style = own?.style ?? provider.style
-          const voiceKey = own?.voiceKey ?? resolveLocalTtsVoiceKey(provider)
+          const style = own?.style ?? voice.style
+          const voiceKey = own?.voiceKey ?? voice.voiceKey
           const text = own?.text ?? decisionSpeech({ kind: 'win' }, style, sequence++)
           const url = own?.urlPromise ? await own.urlPromise : await getLocalTtsClient().resolveAudioUrl(text, voiceKey, style)
           if (url) await playLlmAudioGroup([{ url, seat: record.winner }])
@@ -211,6 +245,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
     view.value = next
+    // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
+    if (next.window?.id !== submittedWindowId.value) submittedWindowId.value = ''
     for(const [controller,current] of pendingDiscardSpeech)if(!current())controller.abort()
     decisions.cancelStale()
     const toLocal = (seat: number) => (seat - next.seat + 4) % 4
@@ -222,6 +258,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         avatar: seed?.avatar || p.avatar || defaultAvatarForSeat(i),
         characterId: seed?.characterId ?? p.characterId, playerKind: seed?.playerKind ?? p.playerKind ?? (i === 0 ? 'human' as const : 'bot' as const) }
     }))
+    // 联机 LLM 座位语音身份：按权威座位号记录快照下发的供应商音色/策略
+    // （本机单机 LLM 设置与房间无关，不能用来给联机座位配音）。
+    remoteVoices.clear()
+    if (options.externalAuthority) for (const p of next.players) {
+      const identity = p as typeof p & { style?: string; voiceKey?: string }
+      if (identity.voiceKey) remoteVoices.set(p.seat, remoteVoiceIdentity(identity))
+    }
     // Only public count placeholders reach the renderer; the actual wall stays in worker.
     state.wall.value = Array(next.wallCount).fill('east')
     state.wallHeadDrawn.value = next.headDrawn; state.currentPlayer.value = toLocal(next.currentPlayer)
@@ -240,10 +283,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: moves.flatMap(a => a.kind === 'chi' ? [{ tiles: a.tiles, kind: 'sequence' as const }] : []),
     } : null
-    // 服务端公告（抢杠胡等）一次性展示。
-    state.announcement.value = (next as BloodFlowSeatView & { announcement?: Announcement | null }).announcement ?? null
-    // 锁手自动摸打：本家胡牌锁手后全自动——有胡就胡（自摸/点炮都可再胡），
-    // 没胡就把摸上来的那张自动打掉；锁手窗口约 lockedAutoPlayMs 毫秒后执行。
+    // 血流不设服务端公告（单机与联机一致；抢杠胡红字公告是经典玩法专属，2026-09-09 用户确认移除）。
+    // 本地开局公告（翻精/开牌）由 transient.announce 自己的 1.5s 定时清除。
+    // 锁手自动摸打：本家胡牌锁手后全自动——只处理自己摸的牌（自摸可再胡 / 摸切），
+    // 别人打出的牌不再进入响应窗口，因此这里不会有弃牌响应分支；窗口约 lockedAutoPlayMs 毫秒后执行。
     if (w && next.public.status === 'playing' && next.public.seats[next.seat].locked && !options.autoplay
       && (options.lockedAutoPlayMs ?? 800) > 0 && w.id !== lockedAutoWindow) {
       lockedAutoWindow = w.id
@@ -257,7 +300,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           const drawn = cur.players[cur.seat].drawnTileIndex
           if (drawn >= 0 && cur.ownActions.some(a => a.kind === 'discard' && a.index === drawn)) send({ kind: 'discard', index: drawn })
         } else if (cur.ownActions.some(a => a.kind === 'pass')) send({ kind: 'pass' })
-      }, Math.max(0, w.opensAt - Date.now() + (options.lockedAutoPlayMs ?? 800)))
+      }, lockedAutoPlayDelay(w))
     }
     if (next.lastDiscardAction && next.lastDiscardAction.id !== heardDiscard) {
       heardDiscard = next.lastDiscardAction.id
@@ -285,6 +328,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       transient.showTableAction(action.type, toLocal(action.actorIndex), action.sourceIndex === null ? null : toLocal(action.sourceIndex), action.tile, action.meldIndex)
     }
     if (pendingWin) scheduleWinVoices(pendingWin, next, multiWin ? BLOOD_FLOW_TIMING.multiWinIntroMs : 0)
+    // 联机 LLM 台词由服务端下发（llm_message/llm_audio，模型原话 + 服务端 TTS），
+    // 客户端不再按快照拼模板台词——避免与服务端原话重复出声。
     if(!options.externalAuthority)for(const line of decisions.observe(next))void presentActionSpeech(line)
     if (next.public.roundResult) {
       cancelActionSpeech()
@@ -293,7 +338,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       state.result.value = { winner: '本局结束', draw: result.winCounts.every(n => n === 0), roundLabel: common.roundLabel.value,
         scoreChanges: state.players.map((p, i) => ({ playerIndex: i, name: p.name, avatar: p.avatar, delta: result.endingScores[p.seat] - result.openingScores[p.seat], score: p.score })) }
       state.matchFinished.value = state.round.value >= BLOOD_FLOW_CONFIG.rounds[state.matchType.value]
-      if (!options.externalAuthority) void reactions.run(next)
+      // 局末感言为本地模板台词（不发模型请求），联机与单机都播，避免联机结算没有台词。
+      // roundSpeechBusy 让结算面板与局间倒计时等感言播完（用户要求，2026-09-10）。
+      const speech = reactions.run(next)
+      roundSpeechBusy.value = true
+      void speech.finally(() => { roundSpeechBusy.value = false })
     }
     void refreshWaits()
     if (previous && (next.transition?.kind === 'draw' && next.transition.id !== previous.transition?.id
@@ -391,6 +440,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function send(action: BloodFlowAction) {
     const current = view.value, w = current?.window
     if (!current || !w || !current.ownActions.some(move => JSON.stringify(move) === JSON.stringify(action))) return
+    // 本窗口已提交过决策：等权威快照推进（同一窗口只能提交一次，重复提交必被服务端拒绝）。
+    // 联机下窗口推进后客户端会因演出停顿最多 3.5s 看不到新窗口，连点会打出 STALE_ACTION。
+    if (submittedWindowId.value === w.id) return
+    submittedWindowId.value = w.id
+    state.actionPrompt.value = null
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
     if (options.externalAuthority) options.externalAuthority.send(command)
@@ -448,7 +502,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     options.externalAuthority?.leave()
   }
 
-  const moves = computed(() => view.value?.ownActions ?? [])
+  // 本窗口已提交决策后 ownActions 视为空：按钮与提示立即收起，等权威快照推进（防连点）。
+  const moves = computed(() => view.value?.window?.id === submittedWindowId.value
+    ? [] : view.value?.ownActions ?? [])
   const hintsVisible = computed(() => view.value?.public.status === 'playing' && view.value.transition?.kind !== 'win')
   function makeWaitInfo(scores: WaitScores, discard: TileType | null = null): WaitInfo | null {
     if (!view.value || !hintsVisible.value || !scores.length) return null
@@ -536,6 +592,60 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if(!played)actionSpeechControllers.delete(controller)
     }
   }
+  /** 本机 LLM 预置读取（无 localStorage 环境/隐私模式下静默降级为无音色）。 */
+  function speechProvider(seat: Seat) {
+    try { return localBloodFlowProvider(seat) } catch { return null }
+  }
+  /** 联机座位语音身份：按权威座位号查快照下发的供应商音色/策略（非 LLM 座位返回 null）。 */
+  function remoteSeatVoice(seat: Seat): { voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; style: LlmStyle } | null {
+    const current = view.value
+    if (!current) return null
+    const player = state.players[(seat - current.seat + 4) % 4]
+    if (!player || !(player.playerKind === 'llm' || player.isLlm)) return null
+    return remoteVoices.get(seat) ?? { voiceKey: 'default', style: '稳健' }
+  }
+  /** 座位语音身份：联机用房间快照下发的供应商身份（音色/策略），单机用本机 LLM 设置。 */
+  function voiceFor(seat: Seat): { voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; style: LlmStyle } | null {
+    if (options.externalAuthority) return remoteSeatVoice(seat)
+    const provider = speechProvider(seat)
+    return provider ? { voiceKey: resolveLocalTtsVoiceKey(provider), style: provider.style } : null
+  }
+  /** 联机模型原话（服务端 llm_message）：直接落牌桌气泡——内容来自模型，不再是客户端模板。
+   *  llmAnime 主题走角色固定台词（与经典联机同口径抑制模型动作/赛后语音）。 */
+  function presentRemoteModelSpeech(message: BloodFlowWsSpeech): void {
+    const theme = options.getThemeName?.() ?? 'jade'
+    if (!bloodFlowReactionsAllowed(theme)) return
+    if (shouldSuppressLegacyAnimeSpeech(theme, message)) return
+    if (remoteModelMessages.has(message.id)) return
+    remoteModelMessages.add(message.id)
+    const current = view.value
+    if (!current) return
+    const seat = (message.seat - current.seat + 4) % 4
+    const id = ++bubbleSerial
+    if (message.purpose === 'round-reaction') {
+      roundBubbles.value = { ...roundBubbles.value, [seat]: { text: message.text, id, persistent: true } }
+      return
+    }
+    actionBubbles.value = { ...actionBubbles.value, [seat]: { text: message.text, id, persistent: false } }
+    later(() => {
+      if (actionBubbles.value[seat]?.id === id) {
+        const copy = { ...actionBubbles.value }
+        delete copy[seat]
+        actionBubbles.value = copy
+      }
+    }, 5000)
+  }
+  /** 服务端 TTS 音频（llm_audio）：与经典联机同一条 llm 音频队列（messageId 去重）。 */
+  function playRemoteModelAudio(url: string, message: BloodFlowWsAudio): void {
+    if (!url || !options.externalAuthority) return
+    if (shouldSuppressLegacyAnimeSpeech(options.getThemeName?.() ?? 'jade', message)) return
+    const current = view.value
+    if (!current) return
+    const seat = (message.seat - current.seat + 4) % 4
+    try {
+      options.playLlmAudio?.(url, seat, message.messageId, message.priority)
+    } catch { /* 音频失败不影响对局 */ }
+  }
   async function presentActionSpeech(line:BloodFlowActionSpeech):Promise<void>{
     const current=view.value,theme=options.getThemeName?.()??'jade'
     if(!current||theme!==line.theme||!bloodFlowReactionsAllowed(theme)||actionSpoken.has(line.id)||!actionSpeechMatches(line,current))return
@@ -618,16 +728,24 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     state.wall.value = Array(136).fill('east'); state.wallHeadDrawn.value = 0
     state.flipStack.value = null; state.flipTile.value = null; state.jokerTiles.value = []
     state.players.forEach(p => { p.hand = []; p.concealedTileCount = 0; p.drawnTileIndex = -1 })
-    sound('game_start.mp3'); await wait(1250); if (epoch !== generation) return
+    // 开局节奏逐项对齐经典联机 openingTimeline.ts（用户指定基准）：
+    // game_start 等播完且至少 1250ms；骰子音不阻塞、骰子阶段 1900ms（动画 1050 + 渲染余量）。
+    await Promise.all([safeSoundAndWait('game_start.mp3'), wait(1250)]); if (epoch !== generation) return
     state.diceThrowerIndex.value = state.dealer.value
     state.firstDice.value = meta.opening.firstDice; state.diceValues.value = meta.opening.firstDice
-    state.openingStage.value = 'dice'; sound('dice.mp3'); await wait(1600); if (epoch !== generation) return
+    state.openingStage.value = 'dice'
+    void safeSoundAndWait('dice.mp3')
+    await wait(1900); if (epoch !== generation) return
     state.flipStack.value = next.flipStack; state.flipTile.value = next.flipTile; state.jokerTiles.value = next.jokers
     state.wall.value = Array(134).fill('east'); state.openingStage.value = 'flip'
+    // 翻精红字公告（经典联机同款：客户端在翻精阶段用中文牌名播报）。
+    if (next.flipTile) transient.announce(`翻精 ${tileName(next.flipTile)}`)
     await wait(1200); if (epoch !== generation) return
     state.diceThrowerIndex.value = (next.flipSeat - next.seat + 4) % 4
     state.secondDice.value = meta.opening.secondDice; state.diceValues.value = meta.opening.secondDice
-    state.openingStage.value = 'dice'; sound('dice.mp3'); await wait(1600); if (epoch !== generation) return
+    state.openingStage.value = 'dice'
+    void safeSoundAndWait('dice.mp3')
+    await wait(1900); if (epoch !== generation) return
     state.openingStage.value = 'deal'
     let dealt = 0
     const order = [0, 1, 2, 3].map(n => (state.dealer.value + n) % 4)
@@ -638,14 +756,20 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       dealt += count
       state.wall.value = Array(134 - dealt).fill('east'); state.wallHeadDrawn.value = dealt
       state.dealAnimation.value = { playerIndex: seat, count, serial: state.dealAnimation.value.serial + 1 }
-      if (count === 4) sound('deal.mp3', .72)
+      // 经典联机每批都播 deal.mp3；4 张批 260ms、其余批（含庄家跳牌 2 张）150ms。
+      sound('deal.mp3', .72)
       await wait(count === 4 ? 260 : 150)
     }
     for (let batch = 0; batch < 3; batch++) for (const seat of order) { await deal(seat, 4); if (epoch !== generation) return }
-    for (const seat of order) { await deal(seat, seat === state.dealer.value ? 2 : 1); if (epoch !== generation) return }
+    await deal(state.dealer.value, 2); if (epoch !== generation) return
+    for (const seat of order.filter(n => n !== state.dealer.value)) { await deal(seat, 1); if (epoch !== generation) return }
     remoteOpeningId = ''; state.openingStage.value = null
     completedRemoteOpenings.add(next.roundId)
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: state.dealAnimation.value.serial + 1 }
+    // 开牌后 650ms 停顿再放行首回合（经典联机同款）；「开牌」红字公告在动画结束后
+    // 才展示——经典联机的服务端公告在动画期间被丢弃、随动画结束后的快照呈现。
+    await wait(650); if (epoch !== generation) return
+    transient.announce(`${common.roundLabel.value} · 开牌`)
     const buffered = pendingRemote; pendingRemote = null
     if (buffered) await acceptRemoteView(buffered.view, buffered.meta)
     else apply(next)
@@ -659,7 +783,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     bloodFlow: view.value ? { ...view.value.public, waits: waitScores.value,
       discardWaitScores: Object.fromEntries((handHints.value?.discards ?? []).map(item => [item.discard, item.waits])),
       reformHint: reformHint.value,
-      presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:{...actionBubbles.value,...thinkingBubbles.value}, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents } : null,
+      presentationKey: String(presentationSerial.value), roundBubbles: roundBubbles.value, actionBubbles:{...actionBubbles.value,...thinkingBubbles.value}, continuation:continuation.value, sourceEvent:view.value.window?.source, kongEvents:view.value.kongEvents, roundSpeechBusy: roundSpeechBusy.value } : null,
   }))
   if (getCurrentInstance()) onBeforeUnmount(returnToLobby)
   return defineGamePort({ ...state, ...common, capabilities,
@@ -669,6 +793,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     userCurrentWaits: currentWaitInfo,
     userDiscardWaits, userTingOptions,
     startGame, nextRound, returnToLobby, tileName,
+    presentRemoteModelSpeech, playRemoteModelAudio,
     selectTile: (index: number) => {
       if (!moves.value.some(a => a.kind === 'discard' && a.index === index)) return
       if (state.selectedIndex.value !== index) sound('click.mp3', .55)

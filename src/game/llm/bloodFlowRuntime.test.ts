@@ -1,6 +1,6 @@
 import { LLM_WIN_LINES, LLM_LOSS_LINES, LLM_DRAW_LINES } from './winLines'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bloodFlowDecisionBudget, bloodFlowDecisionPrompt, createBloodFlowDecisions, createBloodFlowReactions } from './bloodFlowRuntime'
+import { bloodFlowDecisionBudget, bloodFlowDecisionPrompt, createBloodFlowDecisions, createBloodFlowReactions, remoteVoiceIdentity } from './bloodFlowRuntime'
 import { BloodFlowEngine } from '../variants/lotus/bloodFlow/engine'
 import { bloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { seededRandom, simulateRound } from '../variants/lotus/bloodFlow/simulation'
@@ -108,5 +108,17 @@ describe('E08 decision and reaction isolation', () => {
     expect(decisionSignal.aborted).toBe(false)
     finishDecision({ choice: 'A1', message: '' })
     expect(await pending).toEqual({ kind: 'pass' })
+  })
+})
+
+describe('联机座位语音身份（服务端供应商下发）', () => {
+  it('按快照的 style/voiceKey 取用；非法或缺失一律回退策略默认音色', () => {
+    expect(remoteVoiceIdentity({ style: '高冷', voiceKey: 'qwen' })).toEqual({ voiceKey: 'qwen', style: '高冷' })
+    expect(remoteVoiceIdentity({ style: '激进', voiceKey: 'gpt' })).toEqual({ voiceKey: 'gpt', style: '激进' })
+    // 'auto' 不是运行时音色键；未知键/未知策略回退默认。
+    expect(remoteVoiceIdentity({ voiceKey: 'auto' })).toEqual({ voiceKey: 'default', style: '稳健' })
+    expect(remoteVoiceIdentity({ style: '暴躁', voiceKey: 'not-a-voice' }))
+      .toEqual({ voiceKey: 'default', style: '稳健' })
+    expect(remoteVoiceIdentity({})).toEqual({ voiceKey: 'default', style: '稳健' })
   })
 })
