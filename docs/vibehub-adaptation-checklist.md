@@ -146,6 +146,26 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 3. **房主 peer 被冻结**：`hostPeer` 在 attach 时取一次、replica 又把它冻结在构造时 → 对端 id 变化后客机把所有帧判成「非房主」拒收。修法：按实时 `hostId` 解析并同步给 replica（master `72fc54f` + vibehub `9dbc445`）。
 4. **收帧停滞不自愈**：客机原先只在视图 paused 时重握手 → 改为停滞 3s 即主动重握手请求权威快照。
 
+## 7. 联机验收策略（2026-09-10 决定：本地 mock 不再承担联机断言）
+
+本地 `mockVibeHub` **不具备 VibeHub SDK 的真实环境**，因此只保留**确定性逻辑/流程**覆盖，联机行为一律线上验收：
+
+| 保留在本地（mock/单测） | 移到线上（部署后双账号 spec） |
+|---|---|
+| 承诺洗牌 + 权威 worker 整场：`tests/e2e/blood-flow.room.spec.ts` ✅ 36s | 房间面板/roster、准备与开局、断线与恢复 |
+| 大厅/主题/刷新恢复：`tests/e2e/blood-flow.lobby.spec.ts` ✅ 42s | 传输（单包上限、分片、中继切换、peer id 漂移） |
+| 协议与 replica 纯逻辑：`src/game/variants/lotus/bloodFlow/network/network.test.ts` ✅ 7 项 | 结算同步与局间屏障、失联判定与自愈 |
+| 单机（含 LLM）：`blood-flow.local.spec.ts`、`blood-flow.llm.spec.ts` ✅ | ——（单机与分支无关，本地即可） |
+
+依据（本轮线上实测，四类缺陷本地**全部无法复现**）：
+
+1. **单包超限静默发送失败**——mock 进程内投递，无大小上限、无加密步骤；
+2. **分片在直连 SDK 的订阅者处被丢弃**——mock 不分片，投递原对象；
+3. **对端 peer id 漂移导致 replica 全量拒收**——mock 的 peer id 恒定（`mockPeer`）；
+4. **收帧饥饿 → 判房主失联 → 整场中断**——mock 无 WebRTC/中继抖动、无丢帧。
+
+另：`blood-flow.llm-host.spec.ts`（mock 版 P2P LLM 宿主）已标 `test.fixme`：其断言依赖 SDK 下发的 roster/昵称（`RoomPanel` 取 `humanAt(...).nickname`）与 LLM 座位选择器，mock 不实现，原理上不可能通过；等价覆盖由线上「2 真人 + 2 大模型机器人」整场承担（房间 9HUUY2 ✅）。
+
 ---
 
 ## 附：本批 master 改动 → vibehub 归属一览
