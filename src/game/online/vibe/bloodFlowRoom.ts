@@ -10,6 +10,10 @@ import type { Seat } from '../../variants/lotus/bloodFlow/types'
 import type { HostOpeningData } from '../host/hostGameRunner'
 import { runCommittedShuffle } from '../antiCheat/committedShuffle'
 import { createMatchStatsRecorder } from './matchStatsRecorder'
+import { sendChunked } from '../transport/vibeRoomTransport'
+
+/** 线上验收诊断开关：`?bfdiag=1` 时打印血流 P2P 收帧/失败的关键路径（默认静默）。 */
+const BF_DIAG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('bfdiag')
 import { updatePlayerStats } from './vibeStats'
 import { watch } from 'vue'
 import { createBloodFlowDecisions, createBloodFlowReactions, type BloodFlowReaction } from '../../llm/bloodFlowRuntime'
@@ -75,7 +79,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     emit: line => {
       if (!room || !authority) return
       const message: BloodFlowPacket = { kind: 'blood_flow_reaction', roomId: room.roomId, ruleVersion: version, reaction: line }
-      room.send(message); present(message, hostPeer)
+      sendChunked(room, message); present(message, hostPeer)
     },
   })
   watch(() => options.getThemeName?.(), () => { reactions.cancel(); pendingReactions.clear();pendingActionSpeech.clear();decisions.cancelSpeech() })
@@ -96,12 +100,35 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     }
   }
 
+  /**
+   * 房主 peer 实时解析：`hostPeer` 只在 attach 时取一次（`active.hostId`），对端 id 一旦变化
+   * （SDK 修复连接 / 中继切换 / 重新入房），客机的 hello/回执会发往旧 id、主机的帧也会被判成
+   * 「非房主」丢弃——实测表现为：主机侧 `[VibeHub] 联机消息加密失败: 消息未发送` 连续刷屏、
+   * 客机再也收不到帧却仍能显示旧视图，最后判「房主无法恢复」整场中断（2026-09-10 线上验收）。
+   */
+  function liveHostPeer(): string {
+    const active = room
+    if (!active) return hostPeer
+    const resolved = options.getIsHost() ? active.peerId : (active.hostId ?? '')
+    if (!resolved) return hostPeer
+    if (resolved !== hostPeer) {
+      if (BF_DIAG) console.warn(`[bf-diag] 房主 peer 变更 ${hostPeer || '(空)'} → ${resolved}`)
+      hostPeer = resolved
+    }
+    return hostPeer
+  }
+
+  function isFromHost(from: string): boolean {
+    return from === liveHostPeer()
+  }
+
   function transmit(message: BloodFlowPacket) {
     if (!room) return
     if (authority) void authority.receive(message, room.peerId)
-    else try { room.send(message, hostPeer) } catch { /* periodic sync retries while disconnected */ }
+    else try { sendChunked(room, message, liveHostPeer()) } catch { /* periodic sync retries while disconnected */ }
   }
   function fail(message: string) {
+    if (BF_DIAG) console.warn(`[bf-diag] fail: ${message}`)
     options.onError(message)
     replica?.interrupt()
     if (replica?.view && latestFrame) void port.acceptRemoteView(replica.view, { ...latestFrame, replay: true })
@@ -112,15 +139,28 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     const reaction = decodeBloodFlowPacket(raw)
     if(reaction?.kind==='blood_flow_action_speech'){
       const line=reaction.speech
-      if(from!==hostPeer||reaction.roomId!==active.roomId||line.authorityEpoch!==current.view?.authorityEpoch||line.roundId!==current.view?.roundId)return
+      if(!isFromHost(from)||reaction.roomId!==active.roomId||line.authorityEpoch!==current.view?.authorityEpoch||line.roundId!==current.view?.roundId)return
       pendingActionSpeech.set(line.id,{line,receivedAt:Date.now()});flushActionSpeech();return
     }
     if (reaction?.kind === 'blood_flow_reaction') {
-      if (from !== hostPeer || reaction.roomId !== active.roomId || reaction.reaction.authorityEpoch !== current.view?.authorityEpoch
+      if (!isFromHost(from) || reaction.roomId !== active.roomId || reaction.reaction.authorityEpoch !== current.view?.authorityEpoch
         || reaction.reaction.roundId !== current.view?.roundId) return
       pendingReactions.set(reaction.reaction.id, reaction.reaction); flushReactions(); return
     }
-    if (!current.receive(raw, from)) return
+    if (!current.receive(raw, from)) {
+      if (BF_DIAG) {
+        const probe = decodeBloodFlowPacket(raw)
+        const seq = probe && 'sequence' in probe ? (probe as { sequence: number }).sequence : null
+        const result = probe && 'view' in probe
+          ? Boolean((probe as { view?: { public?: { roundResult?: unknown } } }).view?.public?.roundResult) : null
+        if (probe && (probe.kind === 'round_settled' || probe.kind === 'blood_flow_snapshot')) {
+          console.warn(`[bf-diag] replica 拒收 kind=${probe.kind} round=${probe.round} seq=${seq} `
+            + `携带结算=${result} 已应用round=${current.round} replicaSeq=${current.sequence} `
+            + `已应用结算=${Boolean(current.view?.public.roundResult)}`)
+        }
+      }
+      return
+    }
     lastReceived = Date.now(); goneSince = 0
     const message = decodeBloodFlowPacket(raw)
     if (!message) return
@@ -134,7 +174,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       latestFrame = message
       if (!current.view) return
       if(authority)for(const line of decisions.observe(current.view)){
-        active.send({kind:'blood_flow_action_speech',roomId:active.roomId,ruleVersion:version,speech:line} satisfies BloodFlowPacket)
+        sendChunked(active, {kind:'blood_flow_action_speech',roomId:active.roomId,ruleVersion:version,speech:line} satisfies BloodFlowPacket)
         pendingActionSpeech.set(line.id,{line,receivedAt:Date.now()})
       }
       try { sessionStorage.setItem(`blood-flow-view:${active.roomId}:${current.seat}`, JSON.stringify(message)) } catch { /* view remains in memory */ }
@@ -152,7 +192,11 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
           try { sessionStorage.setItem(completedKey, JSON.stringify([...completed].slice(-20))) } catch { /* at-most-once in this session */ }
           void stats.flushMatch(message.authorityEpoch)
         }
-      }).catch(() => fail('牌桌展示恢复失败，已保留确认流水'))
+      }).catch((error) => {
+        if (BF_DIAG) console.warn(`[bf-diag] acceptRemoteView 失败 round=${message.round} `
+          + `result=${Boolean(message.view.public.roundResult)} err=${String(error).slice(0, 200)}`)
+        fail('牌桌展示恢复失败，已保留确认流水')
+      })
     } else if (message.kind === 'win_batch' && current.view && latestFrame) {
       void port.acceptRemoteView(current.view, { round: latestFrame.round, dealer: latestFrame.dealer, mode: latestFrame.mode })
     }
@@ -214,7 +258,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
             ...message, view: { ...message.view, players: message.view.players.map(p => ({ ...p, ...options.getPlayerProfile(p.seat) })) },
           }
           if (peer === active.peerId) present(packet, hostPeer)
-          else active.send(packet, peer)
+          else sendChunked(active, packet, peer)
         },
         prepareOpening: async round => {
           if (round === 1) {
@@ -227,7 +271,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
             const roundId = `${epoch}/shuffle/${round}/${attempt}`
             const packet = { type: 'blood_flow_shuffle', roomId: active.roomId, ruleVersion: version, authorityEpoch: epoch,
               round, roundId, participants: [...participants].map(([peerId, s]) => ({ peerId, seat: s })) }
-            active.send(packet)
+            sendChunked(active, packet)
             let missing: number[] = []
             try {
               const prepared = await shuffle(active, roundId, epoch, participants, seats => { missing = seats })
@@ -249,7 +293,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
     active.onMessage((raw, from) => {
       if (room !== active || token !== lifecycle) return
-      if (!authority && from === hostPeer && typeof raw === 'object' && raw !== null && (raw as any).type === 'blood_flow_shuffle') {
+      if (!authority && isFromHost(from) && typeof raw === 'object' && raw !== null && (raw as any).type === 'blood_flow_shuffle') {
         const m = raw as any
         if (m.roomId !== active.roomId || m.ruleVersion !== version || m.authorityEpoch !== latestFrame?.authorityEpoch
           || !Number.isInteger(m.round) || m.round !== (latestFrame?.round ?? 0) + 1 || typeof m.roundId !== 'string' || shuffleIds.has(m.roundId)
@@ -272,7 +316,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         if (event.type === 'leave' || event.type === 'reconnecting') authority.peerDisconnected(event.id)
         return
       }
-      if (event.id !== hostPeer) return
+      if (event.id !== liveHostPeer()) return
       if (event.type === 'leave' || event.type === 'reconnecting') {
         goneSince ||= Date.now(); replica?.pause()
         if (replica?.view && latestFrame) void port.acceptRemoteView(replica.view, { ...latestFrame, opening: undefined, replay: true })
@@ -304,6 +348,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         }
       } else {
         if ((!replica?.view || replica.view.public.status === 'paused') && Date.now() - lastHello >= 1000) { lastHello = Date.now(); transmit(replica!.hello()) }
+        // 客机：收帧停滞就主动重握手——`hello` 会触发主机立刻重发权威快照。此前只在视图
+        // paused 时重握手：一旦漏掉终局帧（大帧静默发送失败/中继切换），客机既不请求重发
+        // 又等不到新帧，40s+30s 后判「房主无法恢复」把整场打断（2026-09-10 线上验收实测）。
+        else if (Date.now() - lastReceived > 3_000 && Date.now() - lastHello >= 3_000) {
+          lastHello = Date.now(); transmit(replica!.hello())
+          if (BF_DIAG) console.warn(`[bf-diag] 客机收帧停滞 ${Math.round((Date.now() - lastReceived) / 1000)}s，已重握手请求权威快照`)
+        }
         if (replica?.view && !replica.view.public.roundResult && Date.now() - lastReceived > 40_000) goneSince ||= Date.now()
         if (goneSince && Date.now() - goneSince > 30_000) fail('房主无法恢复，对局中断，保留最后确认流水')
       }

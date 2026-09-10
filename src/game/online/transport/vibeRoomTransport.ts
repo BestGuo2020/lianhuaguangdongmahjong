@@ -39,6 +39,127 @@ function scorePeer(peer: VibeHubSDK.PeerInfo): number {
   return 3
 }
 
+/**
+ * 大包分片：VibeHub SDK 对单条消息的大小有隐含上限，超限时它的可靠发送链会静默失败
+ * （只打一条 `[VibeHub] 联机消息加密失败: 消息未发送` 警告）。血流结算帧是全场最大的一帧，
+ * 实测正是它发不出去 → 客机长期收不到帧 → 判「房主无法恢复」中断整场（2026-09-10 线上验收）。
+ * 这里在应用层把超限消息切成若干块发送，接收端按 index 重组（字节级拼接后再解码，
+ * 避免多字节字符被切在块边界上损坏）。
+ */
+const CHUNK_KIND = '__chunk'
+/** 阈值取偏小值：SDK 在「直连中断、走中继」时单包上限比直连小得多，超限会静默失败。 */
+const CHUNK_LIMIT_BYTES = 4_000
+const CHUNK_ASSEMBLY_TTL_MS = 15_000
+const TRANSPORT_DIAG = typeof location !== 'undefined'
+  && new URLSearchParams(location.search).has('bfdiag')
+
+interface ChunkMail {
+  kind: typeof CHUNK_KIND
+  id: string
+  index: number
+  total: number
+  data: string
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index])
+  return btoa(binary)
+}
+
+function fromBase64(text: string): Uint8Array {
+  const binary = atob(text)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes
+}
+
+function chunkEnvelope(text: string): ChunkMail[] {
+  const bytes = new TextEncoder().encode(text)
+  if (bytes.length <= CHUNK_LIMIT_BYTES) return []
+  const total = Math.ceil(bytes.length / CHUNK_LIMIT_BYTES)
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const parts: ChunkMail[] = []
+  for (let index = 0; index < total; index += 1) {
+    parts.push({
+      kind: CHUNK_KIND, id, index, total,
+      data: toBase64(bytes.subarray(index * CHUNK_LIMIT_BYTES, (index + 1) * CHUNK_LIMIT_BYTES)),
+    })
+  }
+  return parts
+}
+
+function describeUnserializable(root: unknown): string {
+  const seen = new WeakSet<object>()
+  const walk = (value: unknown, path: string, depth: number): string | null => {
+    if (depth > 6) return null
+    if (typeof value === 'bigint') return `BigInt@${path}`
+    if (typeof value === 'symbol') return `Symbol@${path}`
+    if (!value || typeof value !== 'object') return null
+    if (seen.has(value as object)) return `Circular@${path}`
+    seen.add(value as object)
+    if (Array.isArray(value)) {
+      for (let index = 0; index < Math.min(value.length, 40); index += 1) {
+        const hit = walk(value[index], `${path}[${index}]`, depth + 1)
+        if (hit) return hit
+      }
+      return null
+    }
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const hit = walk(child, `${path}.${key}`, depth + 1)
+      if (hit) return hit
+    }
+    return null
+  }
+  return walk(root, '$', 0) ?? '(未定位：可能是 getter 抛错或代理陷阱)'
+}
+
+/**
+ * 发送前净化：SDK 的可靠发送链是异步的（`_reliableSendChain`），加密/序列化失败只会被它自己
+ * 吞成一条 `[VibeHub] 联机消息加密失败: 消息未发送` 警告，应用侧看不到是哪条消息挂了。
+ * Vue 响应式代理、函数、undefined 与循环引用都会让这一步失败。
+ */
+function sanitizeForWire(message: object): Record<string, unknown> | null {
+  try {
+    const text = JSON.stringify(message)
+    if (text === undefined) {
+      console.warn(`[transport] 消息顶层不可序列化，已跳过发送 kind=${String((message as { kind?: unknown }).kind)}`)
+      return null
+    }
+    return JSON.parse(text) as Record<string, unknown>
+  } catch (error) {
+    console.warn(`[transport] 消息无法序列化，已跳过发送 kind=${String((message as { kind?: unknown }).kind)} `
+      + `err=${String(error).slice(0, 160)} at=${describeUnserializable(message)}`)
+    return null
+  }
+}
+
+/**
+ * 所有 P2P 业务发送的统一出口：净化 + 超限分片。
+ * 注意：血流房间的 authority 定向发送（结算帧最常从这里发出）此前直接 `room.send(packet, peer)`，
+ * 绕过了分片层 → 终局帧静默丢失 → 客机判「房主无法恢复」整场中断（2026-09-10 线上验收实测）。
+ */
+export function sendChunked(room: VibeHubSDK.Room, message: object, to?: string): boolean {
+  const wire = sanitizeForWire(message)
+  if (!wire) return false
+  const text = JSON.stringify(wire)
+  const bytes = new TextEncoder().encode(text).length
+  const parts = chunkEnvelope(text)
+  if (parts.length) {
+    if (TRANSPORT_DIAG) {
+      console.log(`[transport] 大包分片 kind=${String(wire.kind)} bytes=${bytes} chunks=${parts.length} to=${to ?? 'all'}`)
+    }
+    for (const part of parts) { if (to) room.send(part, to); else room.send(part) }
+    return true
+  }
+  if (TRANSPORT_DIAG && bytes > 2_000) {
+    console.log(`[transport] 发送 kind=${String(wire.kind)} bytes=${bytes} to=${to ?? 'all'}`)
+  }
+  if (to) room.send(wire, to)
+  else room.send(wire)
+  return true
+}
+
 export function createVibeRoomTransport({
   getRoom, onMessage, onHostConnectionLost,
 }: VibeRoomTransportOptions) {
@@ -73,13 +194,49 @@ export function createVibeRoomTransport({
     }
   }
 
-  function markHostInbound(room: VibeHubSDK.Room, fromPeerId?: string) {
-    if (room.peerId === room.hostId || !fromPeerId || fromPeerId !== room.hostId) return
+  function markHostInbound(room: VibeHubSDK.Room, fromPeerId?: string) {    if (room.peerId === room.hostId || !fromPeerId || fromPeerId !== room.hostId) return
     clearReconnectingConfirm()
     clearHostRecovery()
     hostRecoveryEscalated = false
     status.value = 'connected'
     updateSignalQuality()
+  }
+
+  /** 分片重组缓冲：宿主大帧（结算帧最常超限）按 id 收集，集齐后还原为原消息。 */
+  const assemblies = new Map<string, { total: number; parts: Map<number, Uint8Array>; at: number }>()
+
+  function reassembleChunk(chunk: ChunkMail): unknown | null {
+    const entry = assemblies.get(chunk.id)
+      ?? { total: chunk.total, parts: new Map<number, Uint8Array>(), at: Date.now() }
+    if (!assemblies.has(chunk.id)) assemblies.set(chunk.id, entry)
+    entry.parts.set(chunk.index, fromBase64(chunk.data))
+    entry.at = Date.now()
+    // 丢块保护：任何一块没到就不要永久驻留内存（SDK 可靠通道下极少发生）。
+    for (const [id, item] of assemblies) {
+      if (Date.now() - item.at > CHUNK_ASSEMBLY_TTL_MS) assemblies.delete(id)
+    }
+    if (entry.parts.size < entry.total) return null
+    assemblies.delete(chunk.id)
+    const parts: Uint8Array[] = []
+    let length = 0
+    for (let index = 0; index < entry.total; index += 1) {
+      const part = entry.parts.get(index)
+      if (!part) return null
+      parts.push(part)
+      length += part.length
+    }
+    const joined = new Uint8Array(length)
+    let offset = 0
+    for (const part of parts) {
+      joined.set(part, offset)
+      offset += part.length
+    }
+    try {
+      return JSON.parse(new TextDecoder().decode(joined)) as unknown
+    } catch (error) {
+      console.warn(`[transport] 分片重组失败 id=${chunk.id}: ${String(error).slice(0, 120)}`)
+      return null
+    }
   }
 
   function bind(room: VibeHubSDK.Room, signalOnly: boolean) {
@@ -94,18 +251,26 @@ export function createVibeRoomTransport({
       markHostInbound(room, fromPeerId)
       // 收到房主消息即可证明当前可靠通道可用。
       clearReconnectingConfirm()
+      // 大包分片：先重组，未集齐时不进业务层（分片不参与 kind 诊断/信号判定之外的逻辑）。
+      let payload = message
+      const chunk = message as Partial<ChunkMail> | null
+      if (chunk && chunk.kind === CHUNK_KIND && typeof chunk.data === 'string') {
+        const reassembled = reassembleChunk(chunk as ChunkMail)
+        if (reassembled === null) return
+        payload = reassembled
+      }
       // 诊断：只记录消息类型与来源方向，不记录牌面/内容/凭据。用于判定
       // 「房主已发出、客户端 SDK 未投递」与「客户端收到但被业务门禁丢弃」。
       if (!signalOnly) {
-        const candidate = message as { kind?: unknown; type?: unknown }
+        const candidate = payload as { kind?: unknown; type?: unknown }
         const kind = typeof candidate.kind === 'string' ? candidate.kind
           : typeof candidate.type === 'string' ? candidate.type
-            : `raw:${typeof message}`
+            : `raw:${typeof payload}`
         const from = fromPeerId == null ? 'local' : fromPeerId === room.hostId ? 'host' : 'other'
         console.log(`[diag] transport-rx kind=${kind} from=${from} room=${room.roomId}`)
       }
       if (signalOnly) return // 房主：不转发业务消息（避免收到自己广播的回环）
-      onMessage(message, fromPeerId)
+      onMessage(payload, fromPeerId)
     })
     room.onPeer((event) => {
       if (boundRoom !== room || generation !== bindingGeneration) return
@@ -194,61 +359,11 @@ export function createVibeRoomTransport({
     // SDK 自动重连，无需像 WebSocket 那样显式重置重连计数；占位对齐 roomSocket 接口。
   }
 
-  /**
-   * 发送前把消息净化成纯 JSON 值：SDK 的可靠发送链是异步的（`_reliableSendChain`），
-   * 加密/序列化失败只会被它自己吞成一条 `[VibeHub] 联机消息加密失败: 消息未发送` 警告，
-   * 应用侧看不到、也拿不到是哪条消息挂了。Vue 响应式代理、函数、undefined 与循环引用都会
-   * 让这一步失败（表现：主机一直广播、客机永远收不到那条能推进流程的消息）。
-   * 这里先自行序列化一次：成功就发纯对象（等价于 SDK 本来的 JSON 语义，但提前失败可见），
-   * 失败则报出具体路径并放弃该次发送（SDK 侧本来也发不出去），避免无声卡死。
-   */
-  function describeUnserializable(root: unknown): string {
-    const seen = new WeakSet<object>()
-    const walk = (value: unknown, path: string, depth: number): string | null => {
-      if (depth > 6) return null
-      if (typeof value === 'bigint') return `BigInt@${path}`
-      if (typeof value === 'symbol') return `Symbol@${path}`
-      if (!value || typeof value !== 'object') return null
-      if (seen.has(value as object)) return `Circular@${path}`
-      seen.add(value as object)
-      if (Array.isArray(value)) {
-        for (let index = 0; index < Math.min(value.length, 40); index += 1) {
-          const hit = walk(value[index], `${path}[${index}]`, depth + 1)
-          if (hit) return hit
-        }
-        return null
-      }
-      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        const hit = walk(child, `${path}.${key}`, depth + 1)
-        if (hit) return hit
-      }
-      return null
-    }
-    return walk(root, '$', 0) ?? '(未定位：可能是 getter 抛错或代理陷阱)'
-  }
-
-  function sanitizeForWire(message: Record<string, unknown>): Record<string, unknown> | null {
-    try {
-      const text = JSON.stringify(message)
-      if (text === undefined) {
-        console.warn(`[transport] 消息顶层不可序列化，已跳过发送 kind=${String(message.kind)}`)
-        return null
-      }
-      return JSON.parse(text) as Record<string, unknown>
-    } catch (error) {
-      console.warn(`[transport] 消息无法序列化，已跳过发送 kind=${String(message.kind)} `
-        + `err=${String(error).slice(0, 160)} at=${describeUnserializable(message)}`)
-      return null
-    }
-  }
-
   function send(message: Record<string, unknown>): boolean {
     const room = getRoom()
     if (!room) return false
-    const wire = sanitizeForWire(message)
-    if (!wire) return false
     try {
-      room.send(wire)
+      sendChunked(room, message)
       updateSignalQuality()
       return true
     } catch (error) {

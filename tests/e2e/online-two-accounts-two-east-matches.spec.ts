@@ -2907,6 +2907,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
   const observed: [string[], string[]] = [[], []]
   const consoleLogs: [string[], string[]] = [[], []]
   const consoleKinds: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
+  const consoleRepeats: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
   const roundScores: Array<{ round: string; seats: Array<{ name: string; amount: number }> }> = []
   let roomCode = ''
   try {
@@ -2920,15 +2921,22 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
         if (!/vibehub\.js/.test(error.stack ?? '')) applicationErrors.push(error.message)
       })
       page.on('console', (message) => {
-        const text = `[${message.type()}] ${message.text().slice(0, 200)}`
-        consoleLogs[index].push(text)
-        if (consoleLogs[index].length > 400) consoleLogs[index].shift()
+        const raw = message.text()
         // 包类型计数：主机是否发出、客机是否收到 round_settled（血流的结算包），
         // 是「客人没有 roundResult ⇒ 结算面板永不出现 ⇒ 不回执 ⇒ 主机死等」的关键判据。
-        const rx = /transport-rx kind=(\S+)/.exec(message.text())
+        const rx = /transport-rx kind=(\S+)/.exec(raw)
         if (rx) consoleKinds[index].set(rx[1], (consoleKinds[index].get(rx[1]) ?? 0) + 1)
-        const tx = /transport-tx kind=(\S+)/.exec(message.text())
+        const tx = /transport-tx kind=(\S+)/.exec(raw)
         if (tx) consoleKinds[index].set(`tx:${tx[1]}`, (consoleKinds[index].get(`tx:${tx[1]}`) ?? 0) + 1)
+        // 逐条 rx 诊断日志量极大（数百条），会把有意义的失败日志挤出环形缓冲 → 只计数不存文本。
+        if (rx) return
+        const line = `[${message.type()}] ${raw.slice(0, 200)}`
+        // 重复行折叠：卡死时 fail 警告会刷屏，把早期关键日志挤掉；这里计数而不重复占位。
+        const repeats = (consoleRepeats[index].get(line) ?? 0) + 1
+        consoleRepeats[index].set(line, repeats)
+        if (repeats > 1) return
+        consoleLogs[index].push(line)
+        if (consoleLogs[index].length > 400) consoleLogs[index].shift()
       })
     }
     for (const page of pages) await expect(page.locator('.lobby-layout')).toBeVisible()
@@ -2982,6 +2990,8 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
       const evidence = JSON.stringify({
         label, roomCode, reason, hand: lastHand, states, kinds, applicationErrors,
         hostLogs: consoleLogs[0].slice(-40), clientLogs: consoleLogs[1].slice(-40),
+        repeatCounts: consoleRepeats.map((map) => Object.fromEntries(
+          [...map.entries()].filter(([, count]) => count > 1).sort((a, b) => b[1] - a[1]).slice(0, 6))),
       }, null, 2)
       console.log(`[BF-ONLINE] ${label} 诊断：${reason}\n房主 ${JSON.stringify(states[0])}\n客人 ${JSON.stringify(states[1])}`
         + `\n房主包型 ${JSON.stringify(kinds[0])}\n客人包型 ${JSON.stringify(kinds[1])}`
