@@ -160,6 +160,61 @@ export function sendChunked(room: VibeHubSDK.Room, message: object, to?: string)
   return true
 }
 
+/** 分片重组缓冲（模块级）：传输层与血流房间**都**直接订阅 SDK 的 room.onMessage，
+ *  两侧都必须能拿到重组结果，因此缓冲与结果缓存放在模块作用域。 */
+const assemblies = new Map<string, { total: number; parts: Map<number, Uint8Array>; at: number }>()
+const completedChunks = new Map<string, { value: unknown; at: number }>()
+
+/**
+ * 幂等拆包：非分片消息原样返回；分片未集齐返回 null；集齐（或已被另一侧重组过）返回重组结果。
+ * 两个订阅者（传输层、血流房间）先后调用都能拿到同一个对象。
+ */
+export function unwrapChunk(message: unknown): unknown | null {
+  const chunk = message as Partial<ChunkMail> | null
+  if (!chunk || chunk.kind !== CHUNK_KIND || typeof chunk.data !== 'string'
+    || typeof chunk.id !== 'string' || !Number.isInteger(chunk.index) || !Number.isInteger(chunk.total)) {
+    return message
+  }
+  const cached = completedChunks.get(chunk.id)
+  if (cached) return cached.value
+  const entry = assemblies.get(chunk.id)
+    ?? { total: chunk.total, parts: new Map<number, Uint8Array>(), at: Date.now() }
+  if (!assemblies.has(chunk.id)) assemblies.set(chunk.id, entry)
+  entry.parts.set(chunk.index, fromBase64(chunk.data))
+  entry.at = Date.now()
+  const now = Date.now()
+  for (const [id, item] of assemblies) {
+    if (now - item.at > CHUNK_ASSEMBLY_TTL_MS) assemblies.delete(id)
+  }
+  for (const [id, item] of completedChunks) {
+    if (now - item.at > CHUNK_ASSEMBLY_TTL_MS) completedChunks.delete(id)
+  }
+  if (entry.parts.size < entry.total) return null
+  assemblies.delete(chunk.id)
+  const parts: Uint8Array[] = []
+  let length = 0
+  for (let index = 0; index < entry.total; index += 1) {
+    const part = entry.parts.get(index)
+    if (!part) return null
+    parts.push(part)
+    length += part.length
+  }
+  const joined = new Uint8Array(length)
+  let offset = 0
+  for (const part of parts) {
+    joined.set(part, offset)
+    offset += part.length
+  }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(joined)) as unknown
+    completedChunks.set(chunk.id, { value, at: Date.now() })
+    return value
+  } catch (error) {
+    console.warn(`[transport] 分片重组失败 id=${chunk.id}: ${String(error).slice(0, 120)}`)
+    return null
+  }
+}
+
 export function createVibeRoomTransport({
   getRoom, onMessage, onHostConnectionLost,
 }: VibeRoomTransportOptions) {
@@ -202,42 +257,6 @@ export function createVibeRoomTransport({
     updateSignalQuality()
   }
 
-  /** 分片重组缓冲：宿主大帧（结算帧最常超限）按 id 收集，集齐后还原为原消息。 */
-  const assemblies = new Map<string, { total: number; parts: Map<number, Uint8Array>; at: number }>()
-
-  function reassembleChunk(chunk: ChunkMail): unknown | null {
-    const entry = assemblies.get(chunk.id)
-      ?? { total: chunk.total, parts: new Map<number, Uint8Array>(), at: Date.now() }
-    if (!assemblies.has(chunk.id)) assemblies.set(chunk.id, entry)
-    entry.parts.set(chunk.index, fromBase64(chunk.data))
-    entry.at = Date.now()
-    // 丢块保护：任何一块没到就不要永久驻留内存（SDK 可靠通道下极少发生）。
-    for (const [id, item] of assemblies) {
-      if (Date.now() - item.at > CHUNK_ASSEMBLY_TTL_MS) assemblies.delete(id)
-    }
-    if (entry.parts.size < entry.total) return null
-    assemblies.delete(chunk.id)
-    const parts: Uint8Array[] = []
-    let length = 0
-    for (let index = 0; index < entry.total; index += 1) {
-      const part = entry.parts.get(index)
-      if (!part) return null
-      parts.push(part)
-      length += part.length
-    }
-    const joined = new Uint8Array(length)
-    let offset = 0
-    for (const part of parts) {
-      joined.set(part, offset)
-      offset += part.length
-    }
-    try {
-      return JSON.parse(new TextDecoder().decode(joined)) as unknown
-    } catch (error) {
-      console.warn(`[transport] 分片重组失败 id=${chunk.id}: ${String(error).slice(0, 120)}`)
-      return null
-    }
-  }
 
   function bind(room: VibeHubSDK.Room, signalOnly: boolean) {
     if (boundRoom === room) return
@@ -252,13 +271,8 @@ export function createVibeRoomTransport({
       // 收到房主消息即可证明当前可靠通道可用。
       clearReconnectingConfirm()
       // 大包分片：先重组，未集齐时不进业务层（分片不参与 kind 诊断/信号判定之外的逻辑）。
-      let payload = message
-      const chunk = message as Partial<ChunkMail> | null
-      if (chunk && chunk.kind === CHUNK_KIND && typeof chunk.data === 'string') {
-        const reassembled = reassembleChunk(chunk as ChunkMail)
-        if (reassembled === null) return
-        payload = reassembled
-      }
+      const payload = unwrapChunk(message)
+      if (payload === null) return
       // 诊断：只记录消息类型与来源方向，不记录牌面/内容/凭据。用于判定
       // 「房主已发出、客户端 SDK 未投递」与「客户端收到但被业务门禁丢弃」。
       if (!signalOnly) {

@@ -41,7 +41,9 @@ test('only the room host requests AI decisions and round-end reactions; both vie
   await client.getByPlaceholder('输入 6 位房间码').fill(code.trim())
   await client.getByRole('button', { name: '确认加入', exact: true }).click(); await accept(client)
   await expect(client.getByRole('button', { name: '准备 / 取消准备', exact: true })).toBeVisible({ timeout: 25_000 })
-  await expect(host.locator('.room-seat')).toContainText(['模型房主', '模型客人', '', ''], { timeout: 15_000 })
+  // 面板改版后座位单元文本包含座位号与准备态（如「1模型房主未准备」）：只断言名字出现。
+  await expect(host.locator('.room-seat').filter({ hasText: '模型房主' })).toHaveCount(1, { timeout: 15_000 })
+  await expect(host.locator('.room-seat').filter({ hasText: '模型客人' })).toHaveCount(1, { timeout: 15_000 })
   const picks = host.getByTestId('room-llm-pick')
   await expect(picks).toHaveCount(2)
   await picks.nth(0).selectOption({ index: 1 }); await picks.nth(1).selectOption({ index: 1 })

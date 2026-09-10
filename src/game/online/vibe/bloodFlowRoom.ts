@@ -10,7 +10,7 @@ import type { Seat } from '../../variants/lotus/bloodFlow/types'
 import type { HostOpeningData } from '../host/hostGameRunner'
 import { runCommittedShuffle } from '../antiCheat/committedShuffle'
 import { createMatchStatsRecorder } from './matchStatsRecorder'
-import { sendChunked } from '../transport/vibeRoomTransport'
+import { sendChunked, unwrapChunk } from '../transport/vibeRoomTransport'
 
 /** 线上验收诊断开关：`?bfdiag=1` 时打印血流 P2P 收帧/失败的关键路径（默认静默）。 */
 const BF_DIAG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('bfdiag')
@@ -114,6 +114,9 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     if (resolved !== hostPeer) {
       if (BF_DIAG) console.warn(`[bf-diag] 房主 peer 变更 ${hostPeer || '(空)'} → ${resolved}`)
       hostPeer = resolved
+      // replica 用它拒收非房主消息，必须同步更新：否则对端 id 一变，客机会「收到帧但全部拒收」
+      // ——实测表现为 HUD 停在 checking、结算面板永不出现，随后判「房主无法恢复」整场中断。
+      if (replica) replica.hostPeer = resolved
     }
     return hostPeer
   }
@@ -293,8 +296,14 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
     active.onMessage((raw, from) => {
       if (room !== active || token !== lifecycle) return
-      if (!authority && isFromHost(from) && typeof raw === 'object' && raw !== null && (raw as any).type === 'blood_flow_shuffle') {
-        const m = raw as any
+      // 本房间直接订阅 SDK 的 room.onMessage（不经传输层），因此必须自己拆大包分片：
+      // 否则被分片的结算帧在这里会被当成未知包丢弃 —— 线上实测「主机一直发、客机计数收到、
+      // 但视图永远没有 roundResult、结算面板不出现」（场景 B 帧更大更早触发分片）。
+      const unwrapped = unwrapChunk(raw)
+      if (unwrapped === null) return
+      const raw2 = unwrapped
+      if (!authority && isFromHost(from) && typeof raw2 === 'object' && raw2 !== null && (raw2 as any).type === 'blood_flow_shuffle') {
+        const m = raw2 as any
         if (m.roomId !== active.roomId || m.ruleVersion !== version || m.authorityEpoch !== latestFrame?.authorityEpoch
           || !Number.isInteger(m.round) || m.round !== (latestFrame?.round ?? 0) + 1 || typeof m.roundId !== 'string' || shuffleIds.has(m.roundId)
           || !Array.isArray(m.participants)) return
@@ -307,8 +316,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         if (bindings.get(hostPeer) !== 0 || bindings.get(active.peerId) !== options.getSeat()) return
         shuffleIds.add(m.roundId)
         void shuffle(active, m.roundId, m.authorityEpoch, bindings).catch(() => { /* host retries or sends interruption */ })
-      } else if (authority) void authority.receive(raw, from)
-      else present(raw, from)
+      } else if (authority) void authority.receive(raw2, from)
+      else present(raw2, from)
     })
     active.onPeer(event => {
       if (room !== active || token !== lifecycle || event.type === 'error') return
