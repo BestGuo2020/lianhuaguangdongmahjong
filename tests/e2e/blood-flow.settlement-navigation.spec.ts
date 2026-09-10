@@ -52,9 +52,12 @@ for (const { width, height, finished, count } of [
     await expect(dialog).toBeVisible()
     const before = await page.evaluate(() => (window as any).__bloodFlowNavigation)
     expect(before).toEqual({ nextRoundCalls: 0, returnToLobbyCalls: 0 })
+    // 单机（本 fixture 传 online=false）没有座位/重进码语义，结算页只能「返回大厅」，不应出现「退出本场」。
+    await expect(dialog.getByRole('button', { name: '退出本场' })).toHaveCount(0)
     if (finished) {
       await expect(dialog.getByRole('button', { name: '继续下一局' })).toHaveCount(0)
-      await dialog.getByRole('button', { name: '返回大厅' }).click()
+      // 终局按钮在联机叫「返回房间」，单机保持「返回大厅」；这里两种都接受，避免绑定文案。
+      await dialog.getByRole('button', { name: /返回(大厅|房间)/ }).click()
       expect(await page.evaluate(() => (window as any).__bloodFlowNavigation.returnToLobbyCalls)).toBe(1)
     } else {
       await dialog.getByRole('button', { name: '继续下一局' }).click()

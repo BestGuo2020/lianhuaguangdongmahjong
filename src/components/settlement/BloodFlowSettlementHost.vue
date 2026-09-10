@@ -7,7 +7,7 @@ import { themePresentationByName, themePresentationCssVariables } from '../../th
 import BloodFlowRoundLedger from './BloodFlowRoundLedger.vue'
 import BloodFlowRoundSummary from './BloodFlowRoundSummary.vue'
 import BloodFlowFinalRanking from './BloodFlowFinalRanking.vue'
-const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;roundLabel?:string;presentationBusy?:boolean}>()
+const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;roundLabel?:string;presentationBusy?:boolean;online?:boolean}>()
 const emit=defineEmits<{nextRound:[];returnToLobby:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
 type View='table'|'round'|'final'|'details'
 const view=ref<View>('table'), detailsReturn=ref<View>('table'), filterSeat=ref<number|null>(null), requested=ref(false)
@@ -17,6 +17,9 @@ const bubbles=computed(()=>['llm','llmAnime'].includes(props.themeName)?props.st
 const pending=computed(()=>requested.value||props.state.continuation?.ready)
 // 结算面板与局间倒计时的统一闸门：局末胡/杠 cue 播完 **且** 局末感言播完（用户要求：
 // 感言没说完不弹面板、不开始倒计时）。
+/** 联机（房间）语义：undefined 视为联机（保持既有行为），单机显式传 false。
+ *  单机没有座位/重进码/托管概念，「退出本场」与「返回大厅」是同一件事 → 只留后者，且文案按模式区分。 */
+const online = computed(() => props.online !== false)
 const presentationPending=computed(()=>Boolean(props.presentationBusy)||Boolean(props.state.roundSpeechBusy))
 const summary=()=>props.matchFinished?'final' as const:'round' as const
 function showSummary() { if(!result.value)return; view.value=summary(); filterSeat.value=null; restored.value=opened.has(result.value.roundId); opened.add(result.value.roundId) }
@@ -75,10 +78,11 @@ defineExpose({showSummary,showDetails,showTable})
         <button v-if="view==='round'&&matchFinished" type="button" @click="view='final'">最终排名</button>
         <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局'+(countdown>0?' ('+countdown+')':'') }}</button>
         <button v-if="requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
-        <!-- 返回大厅 = 暂离：不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」。 -->
-        <button v-if="result" type="button" :title="matchFinished?'回房间大厅（房间保留，准备态保留，可直接再开一场）':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">{{ matchFinished?'返回房间':'返回大厅' }}</button>
-        <!-- 退出本场：回主大厅，座位保留（可重进原座位），需二次确认。 -->
-        <button v-if="result&&!matchFinished" type="button" class="bf-quiet" @click="confirmLeaveMatch">退出本场</button>
+        <!-- 返回大厅：联机=暂离（不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」）；
+             单机=结束本场对局回大厅（单机没有座位/重进码，两者本就是同一件事）。 -->
+        <button v-if="result" type="button" :title="!online?'结束本场对局并返回大厅':matchFinished?'回房间大厅（房间保留，准备态保留，可直接再开一场）':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">{{ matchFinished?'返回房间':'返回大厅' }}</button>
+        <!-- 退出本场：仅联机有意义（回主大厅，座位保留可重进原座位），需二次确认；单机隐藏。 -->
+        <button v-if="result&&!matchFinished&&online" type="button" class="bf-quiet" @click="confirmLeaveMatch">退出本场</button>
       </footer>
     </section>
   </div></Teleport>

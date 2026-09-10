@@ -44,7 +44,9 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
   dealer: 0, isUserTurn: true, userCanHu: true, matchName: '东风场', roundLabel: '东一局',
   dealAnimation: { playerIndex: -1, count: 0, serial: 0 }, openingStage: null, diceValues: [1, 2], diceThrowerIndex: 0,
   userCurrentWaits: null, userTingOptions: [], userDiscardWaits: null, userKongs: [], userHasWindKong: false,
-  rulesetId: 'lotus-blood-flow' as const, bloodFlow, jokerTiles: ['red', 'green'] as TileType[], wildcardTiles: ['white'] as TileType[] }
+  rulesetId: 'lotus-blood-flow' as const, bloodFlow, jokerTiles: ['red', 'green'] as TileType[], wildcardTiles: ['white'] as TileType[],
+  // 本 fixture 代表单机（本机对局）呈现：结算页不应出现只对房间有意义的「退出本场」。
+  online: false }
 const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
 const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;from:number;id:number}|null>(null)

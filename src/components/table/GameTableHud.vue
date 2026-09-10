@@ -71,6 +71,8 @@ interface Props {
   autoPlay?: boolean
   rulesetId?: 'lotus-classic' | 'lotus-legacy' | 'lotus-blood-flow'
   bloodFlow?: BloodFlowTableState | null
+  /** 联机（房间）对局：结算页的「退出本场」与暂离文案只在这种模式下有意义。 */
+  online?: boolean
   secondDice?: [number, number]
   /** 本局癞子集合（莲花麻将翻精），未传按白板癞子处理 */
   jokerTiles?: TileType[]
@@ -499,7 +501,7 @@ function onAvatarError(entry: GamePlayer) {
     <template v-if="bloodFlow">
       <BloodFlowWinPresentation :cue="bloodFlowCue" :now="presentationNow" :players="players" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
       <BloodFlowSettlementHost ref="settlementHost" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
-        :presentation-busy="presentationBusy"
+        :presentation-busy="presentationBusy" :online="online === true"
         :match-finished="matchFinished" :round-label="roundLabel" @visible-change="settlementVisible=$event"
         @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" @leave-match="$emit('leaveMatch')" />
     </template>
