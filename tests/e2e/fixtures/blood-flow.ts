@@ -36,7 +36,7 @@ const players: GamePlayer[] = [0, 1, 2, 3].map(relative => ({ seat: (relative + 
   hand: relative === 0 ? ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'm4', 'm5', 'm6', 'east', 'east'] : [] }))
 const bloodFlow: BloodFlowTableState = { ruleVersion: 'lotus-blood-flow-v1', roundId: 'fixture-round', status: 'playing', batches,
   seats: vector(s => ({ winCount: count, locked: count > 0, firstWinSequence: 1, recordIds: batches.flatMap(b => b.winners.filter(w => w.winner === s).map(w => w.id)) })),
-  roundResult: null, preview: score, waits: [] }
+  roundResult: null, waits: [] }
 const props = { themeName: theme, players, user: players[0], phase: 'discard' as const, wall: Array(30).fill('east') as TileType[],
   wallHeadDrawn: 60, wallCount: 30, currentPlayer: 0, selectedIndex: -1, turnSeconds: 0, lastDiscard: null,
   actionPrompt: null, announcement: null, tableActionEvent: null, scoreFlowEvent: null, result: null,
@@ -48,6 +48,20 @@ const props = { themeName: theme, players, user: players[0], phase: 'discard' as
 const css = themePresentationCssVariables(themePresentationByName(theme))
 const liveState = shallowRef(bloodFlow), liveAction = shallowRef(null)
 const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;from:number;id:number}|null>(null)
+const hudState = shallowRef<Record<string, unknown>>({})
+// Compare the exact HUD with ordinary rules, without running an unrelated AI turn.
+;(window as any).__setCommonPresentation = (value: Record<string, unknown>) => { hudState.value = value }
+const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
+function showHudState(state: 'waiting'|'selection'|'preview') {
+  // 可胡画面 = 锁手之前的操作画面：解除锁手，保证胡/碰/杠/吃/过五种按钮齐全。
+  liveState.value = { ...liveState.value, seats: vector(s => ({ ...liveState.value.seats[s], locked: false })) }
+  const waits = waitInfo.tiles.map(item=>({tile:item.tile as TileType,selfDraw:score,discard:score}))
+  liveState.value = { ...liveState.value, waits, discardWaitScores:{m1:waits} }
+  hudState.value = { flipTile:'red',secondDice:[2,4], userCurrentWaits:waitInfo,
+    userDiscardWaits:state==='selection'?waitInfo:null,selectedIndex:state==='selection'?0:-1,
+    isUserTurn:state==='selection',userCanHu:state==='preview',
+    actionPrompt:state==='preview'?{type:'claim',canHu:true,canPeng:true,canGang:true,chiOptions:[{tiles:['m1','m2','m3']}]}:null }
+}
 const liveFinished = shallowRef(false)
 const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
 ;(window as any).__bloodFlowNavigation = navigation
@@ -56,7 +70,7 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
   const opening = vector(() => 2000)
   const ending = vector(s => 2000 + state.batches.reduce((sum, batch) => sum + batch.deltas[s], 0))
   liveFinished.value = finished
-  liveState.value = { ...state, status: 'settled', preview: null,
+  liveState.value = { ...state, status: 'settled',
     roundResult: summarizeRound(state.ruleVersion, state.roundId, opening, ending,
       vector(s => state.seats[s].winCount), state.batches.map(batch => ({ kind: 'win' as const, batch }))) }
 }
@@ -71,7 +85,7 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
     deltas,scoresAfter:[1500,2700,2300,1500],nextAction:{kind:'finish-round',reason:'wall-exhausted'},
     winners:[{id:`${id}-record`,batchId:id,winner:2,ordinal:1,sourceEventId:source.id,score,deltas}]}
   liveFinished.value=true
-  liveState.value={...state,status:'settled',preview:null,batches:[batch],seats:vector(s=>({...state.seats[s],winCount:s===2?1:0})),
+  liveState.value={...state,status:'settled',batches:[batch],seats:vector(s=>({...state.seats[s],winCount:s===2?1:0})),
     roundResult:summarizeRound(state.ruleVersion,state.roundId,[1700,2900,1700,1700],[1500,2700,2300,1500],[0,0,1,0],[{kind:'win',batch}])}
 }
 ;(window as any).__setBloodFlowContinuation = (ready:boolean, readySeats:Seat[]=[]) => { liveState.value={...liveState.value,continuation:{ready,readySeats,requiredSeats:[0,1]}} }
@@ -101,17 +115,17 @@ function announceBatch(batch:WinBatch){for(const record of batch.winners)actionA
   announceBatch(batch)
 }
 ;(window as any).__restoreBloodFlow = () => { liveState.value = { ...liveState.value, presentationKey: `restore-${++restore}` } }
-;(window as any).__appendBloodFlowMultiWin = () => {
+;(window as any).__appendBloodFlowMultiWin = (winnerSeats:Seat[]=[1,2,3], sourceSeat:Seat=0) => {
   const id = `multi-${++serial}`
-  const source = { id: `${id}-tile`, seat: 0 as Seat, tile: 'm1' as TileType, kind: 'discard' as const }
-  const winners = ([1, 2, 3] as Seat[]).map(winner => {const winScore=scorePatterns([(['pure-suit','big-three-dragons','thirteenOrphans'] as const)[winner-1]],true,'discard');return ({ id: `${id}-${winner}`, batchId: id, winner,
+  const source = { id: `${id}-tile`, seat: sourceSeat, tile: 'm1' as TileType, kind: 'discard' as const }
+  const winners = winnerSeats.map((winner,index) => {const winScore=scorePatterns([(['pure-suit','big-three-dragons','thirteenOrphans'] as const)[index]],true,'discard');return ({ id: `${id}-${winner}`, batchId: id, winner,
     ordinal: liveState.value.seats[winner].winCount + 1, sourceEventId: source.id, score: winScore,
-    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === 0 ? -winScore.paymentPerPayer : 0) })})
+    deltas: vector(s => s === winner ? winScore.paymentPerPayer : s === sourceSeat ? -winScore.paymentPerPayer : 0) })})
   const batch: WinBatch = { authorityEpoch: 'fixture', sequence: serial, roundId: 'fixture-round', ruleVersion: 'lotus-blood-flow-v1',
     batchId: id, windowId: id, source, winners, deltas: vector(s => winners.reduce((n,w) => n + w.deltas[s], 0)),
-    scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:1} }
+    scoresAfter: [2000,2000,2000,2000], nextAction: {kind:'draw',seat:((sourceSeat+1)%4) as Seat} }
   liveState.value = { ...liveState.value, batches: [...liveState.value.batches, batch], seats: vector(s => ({
-    ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (s === 0 ? 0 : 1) })) }
+    ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (winnerSeats.includes(s) ? 1 : 0) })) }
   announceBatch(batch)
 }
 ;(window as any).__appendBloodFlowKong = (actor:Seat=0) => {
@@ -148,11 +162,34 @@ createApp({setup(){
     const fixed=query.has('fixedTts')?{cancel:()=>{},executeAction:async({action}:any)=>{(window as any).__bfFixedCalls++;if(query.get('fixedTts')==='fail')throw new Error('fixture TTS unavailable');const file=animeFallbackAudioForAction(action);if(file)audio.playEffect(file);return {fallbackAudioFile:null}}}:undefined
     actionAudio=createBloodFlowAudioBridge({theme:()=>theme,epoch:()=>liveState.value.roundId,player:i=>livePlayers.value[i],play:audio.playEffect,fixed:fixed as any})
   }
-  return () => h('main', { class: 'game-app', 'data-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
+  return () => h('main', { class: 'game-app', 'data-theme': theme, 'data-table-theme': theme, style: css }, [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
   ...props, players:livePlayers.value,user:livePlayers.value[0],lastDiscard:liveLastDiscard.value,bloodFlow: liveState.value, tableActionEvent: liveAction.value,
   phase: liveState.value.roundResult ? 'settled' : props.phase,
   revealHands: Boolean(liveState.value.roundResult), matchFinished: liveFinished.value,
-  isUserTurn: !liveState.value.roundResult, userCanHu: !liveState.value.roundResult,
+  isUserTurn: !liveState.value.roundResult && !query.has('controls'), userCanHu: !liveState.value.roundResult && !query.has('controls'),
+  ...hudState.value,
+  ...(query.has('common') ? {bloodFlow:null,rulesetId:'lotus-legacy'} : {}),
   onNextRound: () => { navigation.nextRoundCalls++ },
   onReturnToLobby: () => { navigation.returnToLobbyCalls++ },
-})])]) }}).mount('#app')
+})]), ...(query.has('controls') ? [h('nav', {style:'position:fixed;left:2px;top:2px;z-index:100;display:flex;gap:3px'}, [
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('draw',0,[0],['pinghu'],false)}, '普通自摸'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('discard',1,[0],['pinghu'],false)}, '普通点炮'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__playBloodFlowScenario('draw',0,[0],['all-green'],true)}, '高番自摸'),
+  h('button', {style:'font-size:10px;padding:2px',onClick:()=> (window as any).__appendBloodFlowMultiWin()}, '三响'),
+  ...(query.has('hudStates') ? (['waiting','selection','preview'] as const).map((state,index)=>h('button', {
+    style:'font-size:10px;padding:2px',onClick:()=>showHudState(state),
+  }, ['等待画面','选牌画面','可胡画面'][index])) : []),
+])] : [])]) }}).mount('#app')
+// Shared layout stress input; the same players are used in ordinary and continuous-win modes.
+;(window as any).__setCornerLayout = (meldCount:number, winner:number|null=null, emptyWall=false) => {
+  // 布局压力态 = 锁手之前的操作画面：解除锁手，保证胡/碰/杠/吃/过五种按钮齐全。
+  liveState.value={...liveState.value,seats:vector(s=>({...liveState.value.seats[s],locked:false}))}
+  const layoutPlayers:GamePlayer[]=[0,1,2,3].map(seat=>({seat,name:['东家','南家','西家','北家'][seat],avatar:defaultAvatarForSeat(seat),score:2000,redCount:0,
+    drawnTileIndex:-1,hand:Array(13-meldCount*3).fill('m2'),concealedTileCount:13-meldCount*3,discards:Array(28).fill('p1'),
+    melds:Array.from({length:meldCount},(_,i)=>({type:i===0?'gang':'peng',added:i===0,tile:'s2',tiles:Array(i===0?4:3).fill('s2'),from:(seat+1)%4}))}))
+  hudState.value={players:layoutPlayers,user:layoutPlayers[0],isUserTurn:winner===null,userCanHu:winner===null,
+    actionPrompt:winner===null?{type:'claim',canHu:true,canPeng:true,canGang:true,chiOptions:[]}:null,
+    ...(winner===null?{}:{bloodFlow:null,rulesetId:'lotus-legacy',revealHands:true,
+      winPresentation:{winnerIndex:winner,tile:'m5',discardWin:true,robbedKong:false,sourceIndex:-1}}),
+    ...(emptyWall?{wall:[],wallCount:0,wallHeadDrawn:136,revealHands:true,isUserTurn:false,userCanHu:false,actionPrompt:null}:{})}
+}

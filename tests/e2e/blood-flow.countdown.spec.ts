@@ -1,0 +1,21 @@
+import {expect,test} from '@playwright/test'
+test('countdown warns once per available window and never before it opens',async({page})=>{
+  await page.goto('/tests/e2e/fixtures/blood-flow-claims.html?countdown=1')
+  await expect(page.locator('.action-bar')).toBeVisible()
+  await page.evaluate(()=>(window as any).__setClaimCountdown(3,1000))
+  await expect(page.locator('.turn-timer')).toHaveCount(0)
+  expect(await page.evaluate(()=>(window as any).__claimEvidence().sounds.filter((s:string)=>s==='didu.ogg'))).toEqual([])
+  await page.evaluate(()=>(window as any).__setClaimCountdown(3))
+  await expect(page.locator('.turn-timer')).toContainText('3')
+  await page.evaluate(async()=>{for(let i=0;i<3;i++)await (window as any).__refreshClaimView()})
+  expect(await page.evaluate(()=>(window as any).__claimEvidence().sounds.filter((s:string)=>s==='didu.ogg'))).toEqual(['didu.ogg'])
+  await page.evaluate(()=>(window as any).__setClaimCountdown(0))
+  await expect(page.locator('.turn-timer')).toHaveCount(0)
+})
+test('the default untimed game remains silent',async({page})=>{
+  await page.goto('/tests/e2e/fixtures/blood-flow-claims.html')
+  await expect(page.locator('.action-bar')).toBeVisible()
+  await page.evaluate(()=>(window as any).__setClaimCountdown(3))
+  await expect(page.locator('.turn-timer')).toHaveCount(0)
+  expect(await page.evaluate(()=>(window as any).__claimEvidence().sounds.filter((s:string)=>s==='didu.ogg'))).toEqual([])
+})

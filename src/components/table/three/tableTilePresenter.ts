@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
-import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, meldTrackTransform, concealedMeldClear, concealedSideX } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
@@ -54,8 +54,6 @@ interface TableTilePresenterOptions {
   playAreaOffsetZ: number
   tileGapOffset: number
   pointGapOffset: number
-  meldHandGap: number
-  meldUpMove: number
   wallDealOriginY: number
   addWinEffect(): void
   addWinningDisplayTile(): void
@@ -68,8 +66,6 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const PLAY_AREA_OFFSET_Z = options.playAreaOffsetZ
   const TILE_GAP_OFFSET = options.tileGapOffset
   const POINT_GAP_OFFSET = options.pointGapOffset
-  const MELD_HAND_GAP = options.meldHandGap
-  const MELD_UP_MOVE = options.meldUpMove
   const WALL_DEAL_ORIGIN_Y = options.wallDealOriginY
   const dealTweens: DealTween[] = []
   const meldTweens: MeldTween[] = []
@@ -81,6 +77,7 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   let pendingDealAnimation = false
   let animatedFlipKey: string | null = null
   const sourceTransforms=new Map<string,FlightPose>(),drawnTransforms=new Map<number,FlightPose>(),addedTransforms=new Map<string,FlightPose>()
+  const ownDrawScreens = new Map<string,{x:number;y:number}>()
   let sourceEpoch=''
   const flights:{recordId:string;sourceId:string;kind:SourceTileEvent['kind'];level:number;column:number;source:FlightPose;target:FlightPose;cue:BloodFlowCue;instance:ReturnType<TileInstanceRenderer['add']>;current:FlightPose}[]=[]
   let animatedDiscardId = -1
@@ -124,38 +121,16 @@ function addConcealedHand(playerIndex) {
     const laidTiles = meldDisplayTiles(meld)
     const sourceTileIndex = meldSourceTileIndex({ ...meld, tiles: laidTiles }, playerIndex)
     const meldSpan = laidTiles.reduce(
-      (width, _, tileIndex) => width + (tileIndex === sourceTileIndex ? 1.025 : gap),
+      (width, _, tileIndex) => width + (tileIndex === sourceTileIndex ? POINT_GAP_OFFSET : gap),
       0,
     )
-    return span + meldSpan + (meldIndex > 0 ? .18 : 0)
+    return span + meldSpan + (meldIndex > 0 ? TABLE_LAYOUT.groupGap : 0)
   }, 0)
   const animatedFromIndex = Math.max(0, total - (props.dealAnimation.count || 0))
   const dealThisHand = props.dealAnimation.playerIndex === playerIndex
   // 副露带逼近手牌（半个牌宽内）→ 手牌让位到副露带外侧；否则手牌保持居中。
   // 对家/左右三家统一此规则（本家不在此函数内处理）。meldClear = 手牌 index 0 的让位起点。
-  const tileHalf = .34
-  let meldClear = null
-  if (melds.length) {
-    if (position === 'top') {
-      const handNear = -(arrangedTotal - 1) / 2 * gap
-      if (-9 + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -9 + exposedSpan + MELD_HAND_GAP
-      }
-    } else if (position === 'right') {
-      // 下家副露逼近时手牌让位：meldClear 以副露实际轨道（-6.1 - MELD_UP_MOVE）为基准，
-      // 使手牌与副露间距 = MELD_HAND_GAP（与上家/对家一致），避免副露上移后让位过多留出大缝。
-      const handNear = -(arrangedTotal - 1) / 2 * gap
-      if (-6.1 - MELD_UP_MOVE + exposedSpan + tileHalf >= handNear - tileHalf) {
-        meldClear = -6.1 - MELD_UP_MOVE + exposedSpan + MELD_HAND_GAP
-      }
-    } else if (position === 'left') {
-      const handNear = (arrangedTotal - 1) / 2 * gap
-      if (6.1 - exposedSpan - tileHalf <= handNear + tileHalf) {
-        // 副露在左家手牌上端：手牌整体下移，index 0 起点 = 副露下缘下方 - 手牌跨度
-        meldClear = 6.1 - exposedSpan - MELD_HAND_GAP - (arrangedTotal - 1) * gap
-      }
-    }
-  }
+  const meldClear = melds.length ? concealedMeldClear(playerIndex, exposedSpan, arrangedTotal, gap) : null
 
   for (let index = 0; index < total; index += 1) {
     const faceIndex = reverseRevealedFaces ? total - 1 - index : index
@@ -176,14 +151,14 @@ function addConcealedHand(playerIndex) {
         x = (index - (arrangedTotal - 1) / 2) * gap
       }
       // 对家固定使用远端后场，避免中后局牌河向后扩展时覆盖暗牌。
-      // 对家手牌整体向后（远离本家）移一个牌深（0.94）。
-      z = -8.69
+      // 对家手牌离远墙 1.21（与上家/下家手牌离墙距离一致）；副露在手牌前方（墙侧），副露时手牌变短、x 向不重叠。
+      z = -9.53
       rotationY = props.revealHands ? Math.PI : 0
     } else {
       rotationY = props.revealHands
         ? (position === 'left' ? -Math.PI / 2 : Math.PI / 2)
         : (position === 'left' ? Math.PI / 2 : -Math.PI / 2)
-      x = position === 'left' ? -9.15 : 9.15
+      x = concealedSideX(position === 'left' ? 3 : 1)
       if (meldClear != null) {
         // 副露逼近手牌：手牌沿排布轴让位到副露带外侧，避开副露。
         // 下家（右）摸牌位在右侧（-z 顶端，与无副露时一致）；上家/其他摸牌位在手牌末尾。
@@ -232,31 +207,17 @@ function addConcealedHand(playerIndex) {
 }
 
 
-function discardTransform(playerIndex, index) {
-  // 四家牌河统一：1-3 行每行 6 张，第 4 行起每行 10 张。
-  // 宽行与窄行左对齐（共用 -2.5 起点），向右延伸，避免中心线跳动；
-  // 因此宽行的前 6 张与前三行的 6 张位置完全一致，只向右多出 4 张。
-  const wideStart = 18   // 前三行 6×3=18 张后进入 10 张/行
-  const isWide = index >= wideStart
-  const columnCount = isWide ? 10 : 6
-  const rowIndex = isWide ? index - wideStart : index
-  const column = rowIndex % columnCount
-  const discardGap = 0.95   // 牌河行间隙
-  const row = isWide ? 3 + Math.floor(rowIndex / columnCount) : Math.floor(rowIndex / columnCount)
-  const lateral = (column - 2.5) * TILE_GAP_OFFSET
-  if (playerIndex === 0) return { x: lateral, z: 2.48 + row * discardGap, rotation: 0 }
-  if (playerIndex === 1) return { x: 2.64 + row * discardGap, z: -lateral, rotation: Math.PI / 2 }
-  if (playerIndex === 2) return { x: -lateral, z: -2.48 - row * discardGap, rotation: Math.PI }
-  return { x: -2.64 - row * discardGap, z: lateral, rotation: -Math.PI / 2 }
+function discardTransform(playerIndex:number, index:number) {
+  return discardTileLayout(playerIndex,index)
 }
 
 // 出牌动画的起点 = 各家手牌位置（牌从手牌方向飞向牌河）。
 // 本家为底部 2D 手牌（屏幕底部 → 近桌沿），其余三家为各自立牌手牌中心。
 function discardSourcePos(playerIndex) {
   if (playerIndex === 0) return new THREE.Vector3(0, .56, 8.5)
-  if (playerIndex === 1) return new THREE.Vector3(9.15, .56, -2.15)
-  if (playerIndex === 2) return new THREE.Vector3(0, .56, -9.69)
-  return new THREE.Vector3(-9.15, .56, -1.0)
+  if (playerIndex === 1) return new THREE.Vector3(concealedSideX(1), .56, -2.15)
+  if (playerIndex === 2) return new THREE.Vector3(0, .56, -10.7)
+  return new THREE.Vector3(concealedSideX(3), .56, -1.0)
 }
 
 function addDiscards(playerIndex) {
@@ -309,14 +270,7 @@ function addDiscards(playerIndex) {
 }
 
 function meldTransform(playerIndex: number, trackOffset: number): TableTransform {
-  // 和参考界面一致：每家只有一条副露带，从玩家右手端连续排向手牌。
-  // 本家副露整体下移一个牌深（0.94），与牌河拉开距离。
-  // 下家（右）副露往右移、上家（左）副露往左移各一个牌宽（0.68），远离中间牌河/副露区。
-  if (playerIndex === 0) return { x: 9 - trackOffset, z: 6.79, rotation: 0 }
-  if (playerIndex === 1) return { x: 8.9, z: -6.1 - MELD_UP_MOVE + trackOffset, rotation: Math.PI / 2 }
-  // 对家副露随手牌一起向后（远离本家）移一个牌深（0.94）。
-  if (playerIndex === 2) return { x: -9 + trackOffset, z: -8.29, rotation: Math.PI }
-  return { x: -8.9, z: 6.1 - trackOffset, rotation: -Math.PI / 2 }
+  return meldTrackTransform(playerIndex, trackOffset)
 }
 
 function alignMeldBottom(transform: TableTransform, playerIndex: number, rotated: boolean): TableTransform {
@@ -359,7 +313,7 @@ function addMelds(playerIndex) {
       const pointsToSource = tileIndex === sourceTileIndex
       const face = concealed ? null : tileName
       const tileSpan = pointsToSource ? POINT_GAP_OFFSET : TILE_GAP_OFFSET
-      const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const centerOffset = meldTileCenter(trackOffset, tileSpan)
       const sourceRot = pointsToSource ? sourceTileRotationOffset(relativeSource) : 0
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
@@ -435,7 +389,7 @@ function addMelds(playerIndex) {
         addTableTile(pos, quat, meld.tile)
       }
     }
-    trackOffset += .18
+    trackOffset += TABLE_LAYOUT.groupGap
   })
 }
 
@@ -600,6 +554,11 @@ function addHorses() {
 }
 
 function sourcePose(source:SourceTileEvent):FlightPose {
+  // A new level can widen the public camera after the DOM draw tile was sampled.
+  // Reproject its screen origin with that same camera before starting the shared flight.
+  const screen = ownDrawScreens.get(source.id)
+  const projected = screen ? options.projectOwnDraw?.(screen) : null
+  if(projected) return {x:projected.x,y:projected.y,z:projected.z,rotation:0}
   const cached=sourceTransforms.get(source.id)
   if(cached)return cached
   const seat=(source.seat-(props.localSeat??0)+4)%4
@@ -632,7 +591,7 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   continuingDiscards = active(discardTweens)
   pendingDealAnimation = props.dealAnimation.serial !== animatedDealSerial
   if (props.openingStage !== 'flip') animatedFlipKey = null
-  if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear()}
+  if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear();ownDrawScreens.clear()}
   drawnTransforms.clear();addedTransforms.clear();flights.length=0
   if (!reuse) clearDynamicScene()
   dealTweens.length = 0
@@ -652,6 +611,7 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   const liveSource=props.bloodFlowSourceEvent
   if(liveSource){
     const own=props.bloodFlowOwnDraw
+    if(own?.sourceId===liveSource.id) ownDrawScreens.set(liveSource.id,{x:own.x,y:own.y})
     const projected=own?.sourceId===liveSource.id?options.projectOwnDraw?.(own):null
     if(projected)sourceTransforms.set(liveSource.id,{x:projected.x,y:projected.y,z:projected.z,rotation:0})
     else if(!sourceTransforms.has(liveSource.id))sourceTransforms.set(liveSource.id,sourcePose(liveSource))

@@ -33,7 +33,7 @@ if (!blood) {
   view.players[0].hand = [...sorted]
   view.players[0].drawnTileIndex = -1
 }
-const bloodFlow = blood ? { ...view.public, preview: null, waits: [] } : null
+const bloodFlow = blood ? { ...view.public, waits: [] } : null
 const props = { themeName: 'jade' as const, players: view.players, user: view.players[0], phase: 'discard' as const,
   wall: Array(view.wallCount).fill('east') as TileType[], wallHeadDrawn: view.headDrawn, wallCount: view.wallCount,
   currentPlayer: 0, selectedIndex: -1, turnSeconds: 0, lastDiscard: null, actionPrompt: null, announcement: null,

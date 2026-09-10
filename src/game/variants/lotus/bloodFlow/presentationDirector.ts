@@ -19,7 +19,7 @@ export class BloodFlowPresentationDirector {
     if(this.active&&now>=this.active.startedAt+this.active.duration)this.active=null
     if(!this.active){
       const next=this.queue.next(now),scale=Math.max(1,Math.min(8,this.durationScale))
-      this.active=next?{...next,theme:this.theme,duration:next.duration*scale,phaseMarks:{focus:0,impact:next.phaseMarks.impact*scale,readable:next.phaseMarks.readable*scale,score:next.phaseMarks.score*scale,exit:next.phaseMarks.exit*scale}}:null
+      this.active=next?{...next,theme:this.theme,duration:next.duration*scale,phaseMarks:{intro:0,focus:next.phaseMarks.focus*scale,impact:next.phaseMarks.impact*scale,readable:next.phaseMarks.readable*scale,score:next.phaseMarks.score*scale,exit:next.phaseMarks.exit*scale}}:null
     }
     return this.active
   }

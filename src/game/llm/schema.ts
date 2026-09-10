@@ -28,6 +28,22 @@ export interface CandidateFeatures {
   /** 条件深思触发器使用的规则引擎即时收益；Prompt 仍只展示档位。 */
   scoreDelta?: number
   risks: string[]
+  /**
+   * 血流 EV 策略注入（llmEvFeatures 开启时）：本地期望收益模型对候选的依据。
+   * 只是决策参考，真实计分以 currentWin 为准；模型覆盖默认建议时 message 须给理由。
+   */
+  ev?: {
+    win?: {
+      immediateTotal: number
+      lockedChain: number
+      floor: number
+      floorStage: 'early' | 'mid' | 'late'
+      declinedReason?: string
+    }
+    reform?: { chain: number; anyWait: boolean; waitCount: number; patterns: string[] }
+    rob?: { winEv: number; passEv: number }
+    developEv?: number
+  }
 }
 
 /** 规范动作：内部牌面/索引，不直接等同 WS 报文（§6.4） */

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<style>
+html,body{margin:0;background:#24232d}body{height:480px;display:grid;place-items:center}#sample{width:620px}
+</style>
+<div id="sample"></div>
+<script type="module">
+import {createApp,h} from 'vue'
+import Title from '/src/components/table/BloodFlowImpactTitle.vue'
+createApp({render:()=>h(Title,{text:new URLSearchParams(location.search).get('text')||'大三元',theme:'llmAnime'})}).mount('#sample')
+</script>
+</html>

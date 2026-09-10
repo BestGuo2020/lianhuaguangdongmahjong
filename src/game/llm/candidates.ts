@@ -24,6 +24,7 @@ export interface DecisionInput {
   hand: TileType[]
   melds: Meld[]
   exposedMelds: number
+  scoreDeltaForAction?: (action: CanonicalAction) => number | null
   kongBloom?: boolean
   skipDraw?: boolean
   // claim 专属：
@@ -158,17 +159,18 @@ function qualityOf(input: DecisionInput, after: TileType[], exposedMelds = input
   }
 }
 
-function featuresOf(
+export function unknownCandidateFeatures(efficiency: Candidate['features']['efficiency'] = 'unknown'): Candidate['features'] {
+  return { shanten:'n/a', ukeire:'n/a', effectiveTiles:'n/a', ready:'unknown', waits:'n/a',
+    effectiveRemaining:'n/a', specialPattern:'n/a', safety:'unknown', efficiency, risks:[] }
+}
+
+export function buildCandidateFeatures(
   input: DecisionInput,
   action: CanonicalAction,
   efficiency: '优' | '中' | '差' | 'unknown',
 ): Candidate['features'] {
   const id = action.kind === 'discard' ? action.handIndex : action.kind === 'added-kong' ? action.meldIndex : -1
-  const base: Candidate['features'] = {
-    shanten: 'n/a', ukeire: 'n/a', effectiveTiles: 'n/a',
-    ready: 'unknown', waits: 'n/a', effectiveRemaining: 'n/a',
-    specialPattern: 'n/a', safety: 'unknown', efficiency, risks: [],
-  }
+  const base = unknownCandidateFeatures(efficiency)
   // discard / peng / chi 后的听口
   if (action.kind === 'discard') {
     const after = input.hand.filter((_, index) => index !== id)
@@ -286,6 +288,7 @@ function pengWouldDiscardClaimedTile(input: DecisionInput): boolean {
 
 /** 杠分（即时收益）档位：在克隆分数上应用规则集杠分，delta>0 按档位。 */
 function scoreDeltaValue(input: DecisionInput, action: CanonicalAction): number | null {
+  if (input.scoreDeltaForAction) return input.scoreDeltaForAction(action)
   const playerIndex = input.playerIndex
   const scores = input.scores
   if (!scores || scores[playerIndex] == null) return null
@@ -333,7 +336,7 @@ function relativeSource(playerIndex: number, from: number | undefined): '上家'
   return distance === 3 ? '上家' : distance === 2 ? '对家' : distance === 1 ? '下家' : null
 }
 
-function snapshotOf(input: DecisionInput): StateSnapshotV1 {
+export function buildPublicDecisionSnapshot(input: DecisionInput): StateSnapshotV1 {
   const peers = input.peers ?? []
   const rel = (offset: number) => {
     const index = ((input.playerIndex + offset) % 4 + 4) % 4
@@ -393,7 +396,7 @@ export function buildDecisionRequest(input: DecisionInput): BuiltRequest {
       stateVersion: input.stateVersion ?? '',
       ruleCode: input.ruleCode,
       decision: input.decision,
-      state: snapshotOf(input),
+      state: buildPublicDecisionSnapshot(input),
       candidates,
       engineSuggestion: suggestionId,
     } satisfies DecisionRequest,
@@ -452,7 +455,7 @@ function turnCandidates(input: DecisionInput): Candidate[] {
   const bands = bandedEfficiency(discardScores.map((d) => ({ index: d.index, heuristic: d.heuristic })), 'discard')
   candidates.forEach((candidate, index) => {
     if (candidate.action.kind !== 'discard') return
-    candidate.features = featuresOf(input, candidate.action, bands.get(index) ?? '中')
+    candidate.features = buildCandidateFeatures(input, candidate.action, bands.get(index) ?? '中')
   })
   return candidates
 }
@@ -461,21 +464,21 @@ function claimCandidates(input: DecisionInput): Candidate[] {
   const candidates: Candidate[] = []
   const canGang = input.canGang ?? false
   const canPeng = input.canPeng ?? false
-  candidates.push({ id: 'Z', label: '过', action: { kind: 'pass' }, features: featuresOf(input, { kind: 'pass' }, 'unknown'), legalityKey: 'pass' })
+  candidates.push({ id: 'Z', label: '过', action: { kind: 'pass' }, features: buildCandidateFeatures(input, { kind: 'pass' }, 'unknown'), legalityKey: 'pass' })
   if (canGang) {
-    candidates.push({ id: 'G', label: `大明杠${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'gang' }, features: featuresOf(input, { kind: 'gang' }, '中'), legalityKey: 'gang' })
+    candidates.push({ id: 'G', label: `大明杠${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'gang' }, features: buildCandidateFeatures(input, { kind: 'gang' }, '中'), legalityKey: 'gang' })
   }
   // 若碰后最佳动作是把手中第 3 张同牌原样打回，大明杠在本规则下严格占优：
   // 最终结构不差，并额外获得杠分与尾牌补摸。不要把这个劣质碰候选交给 LLM。
   if (canPeng && !(canGang && pengWouldDiscardClaimedTile(input))) {
-    candidates.push({ id: 'P', label: `碰${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'peng' }, features: featuresOf(input, { kind: 'peng' }, '中'), legalityKey: 'peng' })
+    candidates.push({ id: 'P', label: `碰${input.tile ? tileName(input.tile) : ''}`, action: { kind: 'peng' }, features: buildCandidateFeatures(input, { kind: 'peng' }, '中'), legalityKey: 'peng' })
   }
   ;(input.chiOptions ?? []).forEach((meld, optionIndex) => {
     candidates.push({
       id: `C${optionIndex + 1}`,
       label: `吃${meld.tiles.map(tileName).join('+')}`,
       action: { kind: 'chi', optionIndex },
-      features: featuresOf(input, { kind: 'chi', optionIndex }, '中'),
+      features: buildCandidateFeatures(input, { kind: 'chi', optionIndex }, '中'),
       legalityKey: `chi:${optionIndex}`,
     })
   })
@@ -489,7 +492,7 @@ function candidateOf(input: DecisionInput, spec: {
     id: spec.id,
     label: spec.label,
     action: spec.action,
-    features: featuresOf(input, spec.action, '中'),
+    features: buildCandidateFeatures(input, spec.action, '中'),
     legalityKey: legalityKeyOf(spec.action),
   }
 }

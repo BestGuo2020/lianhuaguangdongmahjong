@@ -1,7 +1,51 @@
 import { expect, test } from '@playwright/test'
 
 test.setTimeout(180_000)
-test('blood-flow is available locally and cannot enter a WS room', async ({ page }) => {
+test('restarts from the lobby after leaving an unfinished east match', async ({page}) => {
+  // Finish the first round from a valid last-turn state. Opening and re-entry
+  // still use the real App/worker, and all 136 physical tiles remain accounted for.
+  await page.addInitScript(() => {
+    const OriginalWorker = window.Worker
+    let prepared = false
+    window.Worker = class extends OriginalWorker {
+      postMessage(message: any, transfer?: any) {
+        if (!prepared && message.kind === 'start' && message.options?.opening) {
+          prepared = true
+          const opening = message.options.opening
+          opening.players[0].discards.push(...opening.wall.splice(0))
+        }
+        super.postMessage(message, transfer ?? [])
+      }
+    } as typeof Worker
+  })
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/')
+  await page.getByRole('button', {name:/玩法 莲花广麻/}).click()
+  await page.getByRole('button', {name:/莲花麻将·血流/}).click()
+  await page.getByRole('button', {name:'确定',exact:true}).click()
+  await page.locator('.start-button').click()
+  const tiles = page.locator('.hand-tile-slot .mahjong-tile')
+  await expect(tiles.last()).toBeEnabled({timeout:30000})
+  await tiles.last().click()
+  const summary = page.getByRole('dialog', {name:'血流本局结算'})
+  await expect(summary).toBeVisible({timeout:15000})
+  await expect(summary).toContainText('东1局')
+  await summary.getByRole('button', {name:'返回大厅',exact:true}).click()
+  await expect(page.locator('.start-button')).toBeVisible()
+  // A retained HUD cannot emit another ready event after the App resets it.
+  await expect(page.locator('canvas.mahjong-scene')).toHaveCount(0)
+  await page.screenshot({path:'work/blood-flow-playability/restart-lobby.png'})
+  await page.locator('.start-button').click()
+  await expect(tiles).toHaveCount(14,{timeout:30000})
+  await expect(tiles.last()).toBeEnabled({timeout:10000})
+  await expect(page.locator('.round-info')).toContainText('东1局')
+  await page.screenshot({path:'work/blood-flow-playability/restarted-east-one.png'})
+  await tiles.last().click()
+  await expect(tiles).toHaveCount(13)
+  expect(errors).toEqual([])
+})
+test('blood-flow is available locally and in WS rooms', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto('/')
@@ -11,7 +55,8 @@ test('blood-flow is available locally and cannot enter a WS room', async ({ page
   await page.getByRole('button', { name: '确定', exact: true }).click()
   await expect(page.locator('.start-button')).toContainText('莲花麻将·血流')
   await page.getByRole('radio', { name: /联机对战/ }).click()
-  await expect(page.locator('.remote-lobby')).not.toContainText('莲花麻将·血流')
+  // WS 放行后：联机大厅保留血流玩法选择（不再回退默认规则）。
+  await expect(page.locator('.remote-lobby')).toContainText('莲花麻将·血流')
   await page.getByRole('radio', { name: /单机对战/ }).click()
   await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
   await page.getByRole('button', { name: /莲花麻将·血流/ }).click()

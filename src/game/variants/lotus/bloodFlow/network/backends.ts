@@ -1,7 +1,8 @@
 import { BloodFlowEngine } from '../engine'
 import { bloodFlowSeatView } from '../seatView'
 import type { BloodFlowSeatView } from '../seatView'
-import { decideBloodFlowAction } from '../ai'
+import { decideBloodFlowAction, decideBloodFlowActionEv } from '../ai'
+import { BLOOD_FLOW_AI } from '../config'
 import { createBloodFlowWorkerClient } from '../workerClient'
 import type { BloodFlowAuthorityBackend } from './authority'
 
@@ -16,7 +17,10 @@ export function createDirectAuthorityBackend(now: () => number = Date.now, testT
     command: async command => { get().submit(command) },
     bot: async (seat, windowId) => {
       if (get().window?.id !== windowId) return
-      const action = decideBloodFlowAction(bloodFlowSeatView(get(), seat))
+      const view = bloodFlowSeatView(get(), seat)
+      const action = BLOOD_FLOW_AI.strategy === 'legacy'
+        ? decideBloodFlowAction(view, BLOOD_FLOW_AI.minimumFirstPayment)
+        : decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
       if (action) get().submit(get().command(seat, action))
     },
     expire: async id => { get().expire(now(), id) },

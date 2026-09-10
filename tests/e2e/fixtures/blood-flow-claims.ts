@@ -11,6 +11,7 @@ import type { EngineCommand } from '../../../src/game/variants/lotus/bloodFlow/s
 import { SEATS } from '../../../src/game/variants/lotus/bloodFlow/state'
 import { defaultAvatarForSeat } from '../../../src/game/core/presentation/avatar'
 import { themePresentationByName, themePresentationCssVariables } from '../../../src/theme/themePresentation'
+import type { TableThemeName } from '../../../src/components/table/three/tableTheme'
 
 const pool = createWall()
 const take = (tile: TileType) => { const index = pool.indexOf(tile); if (index < 0) throw new Error(`Missing ${tile}`); return pool.splice(index, 1)[0] }
@@ -20,39 +21,94 @@ const hands: TileType[][] = [
   ['m3','m4','m5','m5','m5','p1','p2','p3','s1','s2','s3','east','east'],
 ]
 if(new URLSearchParams(location.search).has('multiChi')) hands[1]=['m3','m4','m5','m5','m5','m6','m7','p1','p2','p3','east','east','east']
+// 改张场景：本家 4 副面子 + 单张 s7，牌墙首张为精牌 → 摸到精牌自摸窗口，可改张为单吊任意听。
+if(new URLSearchParams(location.search).has('reform')) {
+  hands[1]=['m1','m1','m1','m2','m3','m4','m5','m5','m5','p1','p1','p1','s7']
+}
 hands.forEach(hand => hand.forEach(take))
 const players = SEATS.map((seat): GamePlayer => ({ seat, name: `玩家${seat+1}`, avatar: defaultAvatarForSeat(seat), score: 2000,
   hand: hands[seat] ?? pool.splice(0, 13), melds: [], discards: [], redCount: 0, drawnTileIndex: -1 }))
+// 改张场景：别家暗手取完后，把绿发挪到牌墙首张（本家上手后摸到的第一张）。
+if(new URLSearchParams(location.search).has('reform')) {
+  let greenIndex = pool.indexOf('green')
+  if (greenIndex < 0) {
+    // 绿发都被别家暗手拿走时，从暗手与墙尾对调一张，保持 136 张守恒。
+    const holder = hands[2]?.includes('green') ? 2 : hands[3]?.includes('green') ? 3 : -1
+    if (holder < 0) throw new Error('reform fixture needs a green joker')
+    const fromIndex = hands[holder].indexOf('green')
+    hands[holder][fromIndex] = pool[pool.length - 1]
+    pool[pool.length - 1] = 'green'
+    greenIndex = pool.length - 1
+  }
+  pool.unshift(pool.splice(greenIndex, 1)[0])
+}
 const engine = new BloodFlowEngine({ authorityEpoch: 'claims-fixture', roundId: 'claims-round', winBeatMs: 0, decisionMs: Infinity,
+  paced: new URLSearchParams(location.search).has('paced'),
   opening: { players, wall: pool, flipTiles, jokers: ['red','green'], headDrawn: 134-pool.length,
     dealerDrawnIndex: 13, flipStack: 0, flipSeat: 0, wallBreakIndex: 2 } })
 engine.submit(engine.command(0, {kind:'discard',index:13}))
 const commands: EngineCommand[] = []
+const sounds: string[] = []
 const meta = { round: 1, dealer: 0, mode: 'east' as const }
 createApp({ setup() {
-  const game = useBloodFlowGame({ countdownEnabled: false, externalAuthority: {
+  const game = useBloodFlowGame({ countdownEnabled: new URLSearchParams(location.search).has('countdown'), playSound: name => sounds.push(name), lockedAutoPlayMs: new URLSearchParams(location.search).has('lockedAutoMs') ? Number(new URLSearchParams(location.search).get('lockedAutoMs')) : 0, externalAuthority: {
     send(command) {
       commands.push(command)
       if (!engine.submit(command)) throw new Error('HUD submitted an unavailable action')
       for (const seat of SEATS) if (engine.window?.id === command.windowId && engine.window.options[seat].length && !engine.window.decisions[seat]) {
         engine.submit(engine.command(seat, {kind:'pass'}))
       }
+      // 替其他座位推进流程：回合窗口打第一张可打牌、吃碰杠胡窗口一律过，直到流程回到本家（seat 1）。
+      let guard = 0
+      while (engine.window && guard++ < 24) {
+        const w = engine.window
+        if (w.kind === 'turn') {
+          if (engine.currentPlayer === 1) break
+          const move = w.options[engine.currentPlayer].find(a => a.kind === 'discard')
+          if (!move || !engine.submit(engine.command(engine.currentPlayer, move))) break
+        } else {
+          const pending = SEATS.filter(s => s !== 1 && w.options[s].length && !w.decisions[s])
+          if (!pending.length) break
+          let changed = false
+          for (const s of pending) changed = engine.submit(engine.command(s, { kind: 'pass' })) || changed
+          if (!changed) break
+        }
+      }
       engine.assertConservation()
       void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
     }, nextRound() {}, leave() {}, openingDone() {},
   } })
   void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
-  ;(window as any).__claimEvidence = () => ({commands, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
-    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards})
+  if (new URLSearchParams(location.search).has('paced')) window.setInterval(() => {
+    const stage = engine.transition
+    let changed = Boolean(stage && engine.advance(stage.id))
+    if (engine.window && engine.window.kind !== 'turn') for (const seat of SEATS) {
+      if (seat !== 1 && engine.window?.options[seat].length && !engine.window.decisions[seat]) {
+        changed = engine.submit(engine.command(seat, {kind:'pass'})) || changed
+      }
+    }
+    if (changed) void game.acceptRemoteView(bloodFlowSeatView(engine, 1), meta)
+  }, 25)
+  ;(window as any).__refreshClaimView = () => game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
+  ;(window as any).__setClaimCountdown = (seconds:number, opensIn=0) => {
+    engine.window!.opensAt=Date.now()+opensIn
+    engine.window!.deadlineAt=Date.now()+seconds*1000
+    return game.acceptRemoteView(bloodFlowSeatView(engine,1),meta)
+  }
+  ;(window as any).__claimEvidence = () => ({commands, sounds, selectedIndex:game.selectedIndex.value, melds:engine.players[1].melds, wins:engine.seats[1].winCount,
+    window:engine.window?.kind, source:engine.window?.source, discards:engine.players[0].discards, lockedDiscards:engine.players[1].discards.length,
+    ownActions:engine.window?.options[1], hand:engine.players[1].hand, jokers:engine.jokers, ownScore:engine.currentScore(1)?.score})
   const keys = ['players','user','phase','wall','wallHeadDrawn','wallCount','currentPlayer','selectedIndex','turnSeconds','lastDiscard',
     'actionPrompt','announcement','tableActionEvent','scoreFlowEvent','result','winEffect','winPresentation','revealHands','matchFinished',
     'winningPlayerIndex','dealer','isUserTurn','userCanHu','matchName','roundLabel','dealAnimation','openingStage','diceValues',
     'diceThrowerIndex','userCurrentWaits','userTingOptions','userDiscardWaits','userKongs'] as const
-  return () => h('main', {class:'game-app','data-table-theme':'jade',style:themePresentationCssVariables(themePresentationByName('jade'))},
+  const theme = (new URLSearchParams(location.search).get('theme') ?? 'jade') as TableThemeName
+  return () => h('main', {class:'game-app','data-table-theme':theme,style:themePresentationCssVariables(themePresentationByName(theme))},
     [h('div',{class:'has-three-scene'},[h(GameTableHud,{
-      ...Object.fromEntries(keys.map(key => [key, unref(game[key])])), themeName:'jade',rulesetId:'lotus-blood-flow',
+      ...Object.fromEntries(keys.map(key => [key, unref(game[key])])), themeName:theme,rulesetId:'lotus-blood-flow',
       bloodFlow:game.capabilities.value.bloodFlow,jokerTiles:['red','green'],wildcardTiles:['white'],userHasWindKong:false,
       onPeng:game.userPeng,onGangFromDiscard:game.userGangFromDiscard,onHu:game.userHu,onPass:game.userPass,
+      onGang:game.userGang,onSelectTile:game.selectTile,onClearSelection:game.clearUserSelection,onDiscard:game.userDiscard,
       onChi:(index:number)=>game.capabilities.value.chi.choose(index),
     })])])
 } }).mount('#app')

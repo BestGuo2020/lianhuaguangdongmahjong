@@ -29,12 +29,119 @@ function discardEast(engine: BloodFlowEngine) {
 
 const claimHand: TileType[] = ['m3', 'm4', 'm5', 'm5', 'm5', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'east']
 const discarder: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', 's9', 'north', 'west', 'south', 'p4', 'm5']
+/** 不参与 m5/east 响应的普通手牌（用于隔离被测座位）。 */
+const noClaim: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'south', 'west', 'north']
+
+describe('锁手与杠的时机（2026-09-10 用户报错）', () => {
+  it('锁手后仍可点炮继续胡，但不能过胡（胡是唯一选项）', () => {
+    const hand0: TileType[] = ['m7', 'm8', 'm9', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'p7', 'p8', 's7', 's8', 'east']
+    const index = (engine: BloodFlowEngine) => engine.players[0].hand.indexOf('east')
+    // 未锁手：同一窗口同时给「胡」与「过」——锁手之前允许过胡（用户确认）。
+    const open = scenario([hand0, waiting, noClaim, noClaim])
+    open.submit(open.command(0, { kind: 'discard', index: index(open) }))
+    expect(open.window!.options[1]).toEqual([{ kind: 'win' }, { kind: 'pass' }])
+
+    // 已锁手：点炮胡照给（任意听依然能在弃牌上胡），但不给「过」。
+    const locked = scenario([hand0, waiting, noClaim, noClaim])
+    locked.seats[1] = { ...locked.seats[1], locked: true }
+    locked.submit(locked.command(0, { kind: 'discard', index: index(locked) }))
+    expect(locked.window!.options[1]).toEqual([{ kind: 'win' }])
+  })
+
+  it('锁手后自摸窗口也不给「过」：只能胡或打掉摸牌', () => {
+    // 座位 1 锁手且听 east；庄家打牌后下家摸到 east → 自摸窗口。
+    const engine = scenario([discarder, waiting, noClaim, noClaim], undefined, false, 'east')
+    engine.seats[1] = { ...engine.seats[1], locked: true }
+    expect(engine.submit(engine.command(0, { kind: 'discard', index: 13 }))).toBe(true)
+    const window = engine.window!
+    expect(window.kind).toBe('turn')
+    const kinds = window.options[1].map(a => a.kind)
+    expect(kinds).toContain('win')
+    expect(kinds).not.toContain('pass')
+    expect(kinds.filter(kind => kind === 'discard')).toHaveLength(1)   // 只能打摸上来的那张
+  })
+
+  it('碰/吃之后的这一手只能出牌，不能立刻开杠（对齐经典 userDrewThisTurn 门控）', () => {
+    const engine = scenario([discarder, claimHand, noClaim, noClaim])
+    engine.submit(engine.command(0, { kind: 'discard', index: 13 }))   // 打出 m5（claimHand 有 3 张）
+    const claim = engine.window!
+    expect(claim.options[1].some(a => a.kind === 'peng')).toBe(true)
+    engine.submit(engine.command(1, { kind: 'peng' }))
+    const turn = engine.window!
+    expect(turn.kind).toBe('turn')
+    // 碰后手里还剩 1 张 m5（老规则会给补杠）：本手没摸牌 → 只能出牌。
+    const kinds = turn.options[1].map(a => a.kind)
+    expect(kinds.length).toBeGreaterThan(0)
+    expect(kinds.every(kind => kind === 'discard')).toBe(true)
+  })
+
+  it('摸牌后的这一手仍然提供开杠（门控只针对「非摸牌」回合）', () => {
+    const kongHand: TileType[] = ['m5', 'm5', 'm5', 'm5', 'p1', 'p2', 'p3', 's1', 's2', 's3', 's7', 's8', 's9', 'east']
+    const engine = scenario([kongHand, noClaim, noClaim, noClaim])
+    // 庄家开局首回合视作已摸牌（跳牌）：暗杠候选保留。
+    expect(engine.window!.options[0].some(a => a.kind === 'concealed-kong' && a.tile === 'm5')).toBe(true)
+  })
+})
+
+describe('normal-speed local action boundaries', () => {
+  it.each<BloodFlowAction>([{kind:'peng'}, {kind:'chi',tiles:['m3','m4','m5']}, {kind:'gang'}])('finishes $kind before opening the next decision', action => {
+    let now = 100
+    const base = scenario([discarder, claimHand, null, null])
+    const engine = new BloodFlowEngine({...base.options, paced:true, now:()=>now})
+    const command = engine.command(0,{kind:'discard',index:13})
+    engine.submit(command)
+    const stage = engine.transition!
+    expect(stage.kind).toBe('discard')
+    expect(engine.window).toBeNull()
+    expect(engine.players[0].discards).toContain('m5')
+    expect(engine.advance(stage.id)).toBe(false)
+    expect(engine.submit(command)).toBe(false)
+    now = stage.readyAt; expect(engine.advance(stage.id)).toBe(true)
+    const claim = engine.window!
+    engine.submit(engine.command(1,action)); passRemaining(engine,claim.id)
+    expect(engine.window).toBeNull()
+    expect(engine.players[1].melds).toHaveLength(1)
+    expect(engine.players[1].drawnTileIndex).toBe(-1)
+    const wallCount = engine.wall.length
+    const groupStage = engine.transition!
+    now = groupStage.readyAt; engine.advance(groupStage.id)
+    expect(engine.advance(groupStage.id)).toBe(false)
+    if (action.kind === 'gang') {
+      expect(engine.wall.length).toBe(wallCount-1)
+      expect(engine.transition?.kind).toBe('draw')
+      expect(engine.window).toBeNull()
+      now = engine.transition!.readyAt; engine.advance(engine.transition!.id)
+    } else expect(engine.wall.length).toBe(wallCount)
+    expect(engine.window?.kind).toBe('turn')
+    expect(engine.window!.deadlineAt-now).toBe(15000)
+    engine.assertConservation()
+  })
+  it('commits a win once, holds the source-to-payment beat, then draws exactly once', () => {
+    let now=0
+    const base=scenario([[...waiting,'east'],null,null,null])
+    const engine=new BloodFlowEngine({...base.options,paced:true,now:()=>now})
+    const command=engine.command(0,{kind:'win'}),wallCount=engine.wall.length
+    engine.submit(command)
+    const stage=engine.transition!,scores=engine.players.map(p=>p.score)
+    expect(stage.kind).toBe('win');expect(stage.readyAt).toBeGreaterThanOrEqual(2000)
+    expect(engine.wall.length).toBe(wallCount);expect(engine.window).toBeNull()
+    expect(engine.submit(command)).toBe(false)
+    now=stage.readyAt;engine.advance(stage.id);engine.advance(stage.id)
+    expect(engine.wall.length).toBe(wallCount-1)
+    expect(engine.players.map(p=>p.score)).toEqual(scores)
+    expect(engine.ledger).toHaveLength(1)
+    expect(engine.transition?.kind).toBe('draw')
+  })
+})
 function discardFive(engine: BloodFlowEngine) {
   expect(engine.submit(engine.command(0, { kind: 'discard', index: engine.players[0].hand.indexOf('m5') }))).toBe(true)
 }
 function passRemaining(engine: BloodFlowEngine, windowId: string) {
   for (const seat of SEATS) if (engine.window?.id === windowId && engine.window.options[seat].length && !engine.window.decisions[seat]) {
-    expect(engine.submit(engine.command(seat, { kind: 'pass' }))).toBe(true)
+    // 锁手座位没有「过」：按规则提交它唯一的「胡」。
+    const forced = engine.seats[seat].locked
+      ? engine.window.options[seat].find(a => a.kind === 'win') : undefined
+    expect(engine.submit(engine.command(seat, forced ?? { kind: 'pass' }))).toBe(true)
   }
 }
 
@@ -97,13 +204,20 @@ describe('shared discard response choices', () => {
     expect(engine.window!.kind).toBe('turn')
     engine.assertConservation()
   })
-  it.each(['locked', 'last-discard'] as const)('offers only hu/pass for %s', kind => {
-    const engine = scenario([discarder, claimHand, null, null], undefined, kind === 'last-discard')
-    if (kind === 'locked') engine.seats[1] = { ...engine.seats[1], locked: true }
+  it('offers only hu/pass for a last-discard claim', kind => {
+    const engine = scenario([discarder, claimHand, null, null], undefined, true)
     discardFive(engine)
     expect(engine.window!.options[1]).toEqual([{ kind: 'win' }, { kind: 'pass' }])
     passRemaining(engine, engine.window!.id)
-    if (kind === 'last-discard') expect(engine.result).not.toBeNull()
+    expect(engine.result).not.toBeNull()
+    engine.assertConservation()
+  })
+  it('锁手座位在弃牌响应窗口里只有「胡」（不得过胡）', () => {
+    const engine = scenario([discarder, claimHand, null, null])
+    engine.seats[1] = { ...engine.seats[1], locked: true }
+    discardFive(engine)
+    expect(engine.window!.options[1]).toEqual([{ kind: 'win' }])
+    passRemaining(engine, engine.window!.id)
     engine.assertConservation()
   })
 })

@@ -16,7 +16,7 @@ describe('llmAnime Three.js 渲染配置', () => {
     expect(tableSceneRenderProfile('llmAnime')).toBe(LLM_ANIME_SCENE_PROFILE)
     expect(tableSceneRenderProfile('llm')).toBe(DEFAULT_TABLE_SCENE_PROFILE)
     expect(LLM_ANIME_SCENE_PROFILE.camera.fov).toBeGreaterThanOrEqual(28)
-    expect(LLM_ANIME_SCENE_PROFILE.camera.fov).toBeLessThanOrEqual(34)
+    expect(LLM_ANIME_SCENE_PROFILE.camera.fov).toBeLessThanOrEqual(42)
     expect(LLM_ANIME_SCENE_PROFILE.camera.positionY).toBeGreaterThan(DEFAULT_TABLE_SCENE_PROFILE.camera.positionY)
     expect(LLM_ANIME_SCENE_PROFILE.camera.positionZ).toBeGreaterThan(DEFAULT_TABLE_SCENE_PROFILE.camera.positionZ)
     expect(LLM_ANIME_SCENE_PROFILE.toneMapping).toBe(THREE.NeutralToneMapping)

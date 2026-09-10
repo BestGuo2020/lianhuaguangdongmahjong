@@ -14,6 +14,7 @@ export interface BloodFlowActionSpeech {
   eventKind:'discard'|'action';eventId:string;actionType:string;text:string;style:LlmStyle
   voiceKey:Exclude<LlmTtsVoiceKey,'auto'>;theme:'llm'|'llmAnime'
 }
+export type BloodFlowDiscardSpeech = Omit<BloodFlowActionSpeech,'stateVersion'|'eventKind'|'eventId'|'actionType'>
 const allowed=(theme:string):theme is BloodFlowActionSpeech['theme']=>theme==='llm'||theme==='llmAnime'
 const actionEventType=(action:BloodFlowAction):TableActionEvent['type']|null=>action.kind==='peng'?'peng':action.kind==='chi'?'chi':action.kind==='gang'?'discard-gang'
   :action.kind==='added-kong'?'added-gang':action.kind==='concealed-kong'?'concealed-gang':action.kind==='wind-kong'?'wind-kong':null
@@ -22,12 +23,38 @@ export function actionSpeechMatches(line:BloodFlowActionSpeech,view:BloodFlowSea
   return line.eventKind==='discard'?view.lastDiscardAction?.id===line.eventId&&view.lastDiscardAction.seat===line.seat
     :view.actionEvents.some(e=>String(e.id)===line.eventId&&e.actorIndex===line.seat&&e.type===line.actionType)
 }
-/** Store only a proposed line; emit nothing until a public action proves that choice executed. */
+/** Discard intent may be taken once for the pre-submit audio gate; claims still require public confirmation. */
 export function createBloodFlowActionSpeech(theme:()=>string,now:()=>number=Date.now){
   const policy=new LlmSpeechPolicy(now)
   const pending=new Map<string,{before:BloodFlowSeatView;action:BloodFlowAction;message:string;style:LlmStyle;voiceKey:Exclude<LlmTtsVoiceKey,'auto'>;theme:BloodFlowActionSpeech['theme']}>()
   let sequence=0
+  function textFor(p:NonNullable<ReturnType<typeof pending.get>>,after:BloodFlowSeatView){
+    const b=p.before,seat=b.seat
+    const canonical:CanonicalAction=p.action.kind==='discard'?{kind:'discard',handIndex:p.action.index}:p.action.kind==='chi'?{kind:'chi',optionIndex:0}:p.action
+    const discarded=p.action.kind==='discard'?tileName(b.players[seat].hand[p.action.index]):undefined
+    // Ordinary action lines cannot turn into Hu commentary or unsupported dealer claims.
+    const message=/胡|自摸|赢了|输了|封顶|庄家|本庄/.test(p.message)?'':p.message
+    const last=b.lastDiscardAction,relative=last?(last.seat-seat+4)%4:0
+    const text=resolveDecisionSpeech(message,canonical,p.style,++sequence,{discardedTile:discarded,
+      currentDiscard:last&&relative?{from:({1:'下家',2:'对家',3:'上家'} as const)[relative as 1|2|3],tile:tileName(last.tile)}:null,
+      concealedTiles:b.players[seat].hand.map(tileName),publicMeldTypes:{上家:after.players[(seat+3)%4].melds.map(m=>m.type),对家:after.players[(seat+2)%4].melds.map(m=>m.type),下家:after.players[(seat+1)%4].melds.map(m=>m.type)}})
+    return text
+  }
   return {
+    takeDiscard(before:BloodFlowSeatView,action:BloodFlowAction):BloodFlowDiscardSpeech|null {
+      if(action.kind!=='discard'||before.window?.kind!=='turn'||before.public.status!=='playing')return null
+      for(const [id,p] of pending){
+        if(p.before.authorityEpoch!==before.authorityEpoch||p.before.roundId!==before.roundId||p.before.window?.id!==before.window.id
+          ||p.before.seat!==before.seat||JSON.stringify(p.action)!==JSON.stringify(action))continue
+        pending.delete(id)
+        if(theme()!==p.theme||now()>=before.window.deadlineAt)return null
+        if(!policy.admit({seat:before.seat,style:p.style,priority:'normal'}))return null
+        const text=textFor(p,before)
+        return text?{id,authorityEpoch:before.authorityEpoch,roundId:before.roundId,seat:before.seat,text,
+          style:p.style,voiceKey:p.voiceKey,theme:p.theme}:null
+      }
+      return null
+    },
     plan(id:string,before:BloodFlowSeatView,action:BloodFlowAction,provider:LlmProviderPreset,message:string|undefined,requestedTheme:string){
       if(!allowed(requestedTheme)||theme()!==requestedTheme||before.ownScore||before.ownActions.some(a=>a.kind==='win')||before.public.seats[before.seat].locked||action.kind==='win'||action.kind==='pass')return
       pending.set(id,{before,action,message:message??'',style:provider.style,voiceKey:resolveLocalTtsVoiceKey(provider),theme:requestedTheme})
@@ -55,14 +82,7 @@ export function createBloodFlowActionSpeech(theme:()=>string,now:()=>number=Date
         }
         pending.delete(id)
         if(!policy.admit({seat,style:p.style,priority:eventKind==='discard'?'normal':'important'}))continue
-        const canonical:CanonicalAction=p.action.kind==='discard'?{kind:'discard',handIndex:p.action.index}:p.action.kind==='chi'?{kind:'chi',optionIndex:0}:p.action
-        const discarded=p.action.kind==='discard'?tileName(b.players[seat].hand[p.action.index]):undefined
-        // Ordinary action lines cannot turn into Hu commentary or unsupported dealer claims.
-        const message=/胡|自摸|赢了|输了|封顶|庄家|本庄/.test(p.message)?'':p.message
-        const last=b.lastDiscardAction,relative=last?(last.seat-seat+4)%4:0
-        const text=resolveDecisionSpeech(message,canonical,p.style,++sequence,{discardedTile:discarded,
-          currentDiscard:last&&relative?{from:({1:'下家',2:'对家',3:'上家'} as const)[relative as 1|2|3],tile:tileName(last.tile)}:null,
-          concealedTiles:b.players[seat].hand.map(tileName),publicMeldTypes:{上家:after.players[(seat+3)%4].melds.map(m=>m.type),对家:after.players[(seat+2)%4].melds.map(m=>m.type),下家:after.players[(seat+1)%4].melds.map(m=>m.type)}})
+        const text=textFor(p,after)
         if(text)lines.push({id,authorityEpoch:b.authorityEpoch,roundId:b.roundId,seat,stateVersion:after.version,eventKind,eventId,actionType,text,style:p.style,voiceKey:p.voiceKey,theme:p.theme})
       }
       return lines

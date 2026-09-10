@@ -49,7 +49,7 @@ export interface TableSceneRenderProfile {
 
 /** 原牌桌渲染参数；非 llmAnime 主题继续使用，避免主题改造影响旧画面。 */
 export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
-  camera: { fov: 39, positionY: 17.2, positionZ: 11.8, lookAtZ: -.25 },
+  camera: { fov: 45, positionY: 17.2, positionZ: 11.8, lookAtZ: .4 },
   toneMapping: THREE.ACESFilmicToneMapping,
   exposure: .92,
   fog: true,
@@ -76,7 +76,7 @@ export const DEFAULT_TABLE_SCENE_PROFILE: TableSceneRenderProfile = {
  * 覆盖树脂牌边缘的清漆高光。
  */
 export const LLM_ANIME_SCENE_PROFILE: TableSceneRenderProfile = {
-  camera: { fov: 34, positionY: 20.8, positionZ: 14, lookAtZ: -.65 },
+  camera: { fov: 40, positionY: 20.8, positionZ: 14, lookAtZ: -.2 },
   toneMapping: THREE.NeutralToneMapping,
   exposure: 1,
   fog: false,

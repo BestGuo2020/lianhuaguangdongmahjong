@@ -3,7 +3,8 @@ import {bloodFlowImpactProfile,bloodFlowTitleMotion} from './bloodFlowPresentati
 import type {BloodFlowCue} from '../game/variants/lotus/bloodFlow/presentation'
 it('distinguishes physical effect tiers and keeps shared time marks readable',()=>{
   const ordinary=bloodFlowImpactProfile('jade',0),top=bloodFlowImpactProfile('jade',3)
-  expect(ordinary.beamHeight).toBe(0);expect(top.beamHeight).toBeGreaterThan(ordinary.beamHeight)
+  expect(ordinary.beamHeight).toBeGreaterThan(0);expect(top.beamHeight).toBeGreaterThan(ordinary.beamHeight)
+  expect(bloodFlowImpactProfile('jade',0,true).particleCount).toBeGreaterThanOrEqual(40)
   expect(top.particleCount).toBeGreaterThan(ordinary.particleCount)
   expect(bloodFlowImpactProfile('happyMahjong',3).shape).not.toBe(bloodFlowImpactProfile('jade',3).shape)
   expect(bloodFlowImpactProfile('llm',3).font).not.toBe(bloodFlowImpactProfile('rosewood',3).font)

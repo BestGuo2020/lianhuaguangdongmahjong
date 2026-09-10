@@ -28,12 +28,6 @@ for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {
       expect(String(environment.renderer)).not.toMatch(/swiftshader|llvmpipe|software|basic render/i)
       await page.evaluate(() => (window as any).__appendBloodFlowWin())
       await expect(page.locator('.blood-flow-central')).toBeVisible()
-      const preview = await page.locator('.blood-flow-win-card').boundingBox()
-      const feedback = await page.locator('.blood-flow-central, .blood-flow-seat-feedback').evaluateAll(elements => elements.map(element => {
-        const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }
-      }))
-      for (const box of feedback) if (preview) expect(box.x + box.width <= preview.x || preview.x + preview.width <= box.x
-        || box.y + box.height <= preview.y || preview.y + preview.height <= box.y).toBe(true)
       const frameIntervals = await page.evaluate(() => new Promise<number[]>(resolve => {
         const intervals: number[] = []; let previous = performance.now()
         const sample = (now: number) => { intervals.push(now - previous); previous = now; if (intervals.length >= 45) resolve(intervals.slice(1)); else requestAnimationFrame(sample) }

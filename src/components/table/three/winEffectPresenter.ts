@@ -1,10 +1,11 @@
 import * as THREE from 'three'
-import { addedKongTileOffset } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileSpan, meldTileCenter } from '../../../game/core/presentation/tableLayout'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
 import { WIN_EFFECT_DURATION, winDisplayLayout } from '../../../game/core/presentation/winEffect'
 import type { WinEffect } from '../../../game/core/contracts/gamePort'
 import type { TileType } from '../../../game/core/contracts/types'
 import type { ResolvedTableProps, TableTransform } from './tableRenderTypes'
+import { sampleWinningTileFlight, type FlightPose, type WinningTileFlightTiming } from './winningTileFlight'
 
 interface DiamondParticle {
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
@@ -32,6 +33,7 @@ interface WinEffectAnimation {
 }
 
 export interface WinEffectPresenterOptions {
+  tileFlight?: { source:FlightPose; target:FlightPose; timing:WinningTileFlightTiming }
   visual?: {color:number;sparks:readonly number[];shape:string;particleCount:number;particleSpeed:number;beamHeight:number;beamRadius:number;intensity:number;starburstScale:number}
   winLayout?: (playerIndex: number) => { x: number; y: number; z: number; rotation: number }
   showWinningTile?: boolean
@@ -53,7 +55,7 @@ export function createWinEffectPresenter(options: WinEffectPresenterOptions) {
   const { scene, camera, props, dynamicGroups, own, ownDynamic, makeFaceTile } = options
   const { meldTransform, alignMeldBottom, sourceTileRotationOffset } = options
   const TILE_LAYER_Z = options.tileLayerZ
-  const effectLayout = options.winLayout ?? winDisplayLayout
+  const effectLayout = options.winLayout ?? (options.tileFlight ? () => options.tileFlight!.target : winDisplayLayout)
   let winEffectAnimation: WinEffectAnimation | null = null
 
 function winEffectAnchor(playerIndex) {
@@ -106,8 +108,8 @@ function robbedKongSourceTransform(effect: WinEffect) {
     let sourcePlacement: TableTransform | null = null
     laidTiles.forEach((_, tileIndex) => {
       const pointsToSource = tileIndex === sourceTileIndex
-      const tileSpan = pointsToSource ? 1.025 : .725
-      const centerOffset = trackOffset + (tileSpan - .725) / 2
+      const tileSpan = meldTileSpan(pointsToSource)
+      const centerOffset = meldTileCenter(trackOffset, tileSpan)
       const sourceRot = pointsToSource ? sourceTileRotationOffset(relativeSource) : 0
       const transform = alignMeldBottom(
         meldTransform(playerIndex, centerOffset),
@@ -124,7 +126,7 @@ function robbedKongSourceTransform(effect: WinEffect) {
       trackOffset += tileSpan
     })
     if (meldIndex === effect.robbedKongMeldIndex && sourcePlacement) {
-      const offset = addedKongTileOffset(playerIndex)
+      const offset = addedKongTileOffset(playerIndex, TABLE_LAYOUT.tilePitch)
       return {
         position: new THREE.Vector3(
           sourcePlacement.x + offset.x,
@@ -134,7 +136,7 @@ function robbedKongSourceTransform(effect: WinEffect) {
         rotation: sourcePlacement.rotation,
       }
     }
-    trackOffset += .18
+    trackOffset += TABLE_LAYOUT.groupGap
   }
   return null
 }
@@ -397,10 +399,10 @@ function addWinEffect() {
   const isFourRed = isFourRedWin()
   const winningTile = isFourRed || options.showWinningTile === false ? null : makeFaceTile(props.winEffect.tile)
   const robbedKongSource = robbedKongSourceTransform(props.winEffect)
-  const startPosition = robbedKongSource?.position
+  const startPosition = (options.tileFlight ? new THREE.Vector3(options.tileFlight.source.x, options.tileFlight.source.y, options.tileFlight.source.z) : null) ?? robbedKongSource?.position
     ?? anchor.clone().addScaledVector(outward, 1.08).setY(anchor.y)
   const seatRotation = effectLayout(props.winEffect.winnerIndex).rotation
-  const startRotation = robbedKongSource?.rotation ?? seatRotation
+  const startRotation = options.tileFlight?.source.rotation ?? robbedKongSource?.rotation ?? seatRotation
   if (winningTile) {
     winningTile.position.copy(startPosition)
     winningTile.rotation.y = startRotation
@@ -424,12 +426,16 @@ function addWinEffect() {
     const effect = winEffectAnimation
     const progress = Math.max(0, Math.min(1, (time - effect.startedAt) / effect.duration))
     if (progress >= 1) return null
-    const approach = effect.reducedMotion ? 1 : THREE.MathUtils.smoothstep(progress, .02, .15)
     if (effect.winningTile) {
-      effect.winningTile.position.lerpVectors(effect.startPosition, effect.anchor, approach)
-      effect.winningTile.rotation.set(0, THREE.MathUtils.lerp(effect.startRotation, effect.seatRotation, approach), 0)
-      const pop = Math.sin(Math.min(1, approach) * Math.PI) * .28
-      effect.winningTile.scale.setScalar(THREE.MathUtils.lerp(.7, 1, approach) + pop)
+      const external=options.tileFlight
+      const pose=sampleWinningTileFlight(
+        external?.source??{...effect.startPosition,rotation:effect.startRotation},
+        external?.target??{...effect.anchor,rotation:effect.seatRotation},
+        external?.timing??{takeoffAt:effect.startedAt+effect.duration*.02,
+          impactAt:effect.startedAt+effect.duration*.15,landedAt:effect.startedAt+effect.duration*.15},time,effect.reducedMotion)
+      effect.winningTile.position.set(pose.x,pose.y,pose.z)
+      effect.winningTile.rotation.set(pose.tilt,pose.rotation,0)
+      effect.winningTile.scale.setScalar(pose.scale)
     }
     const beamIn = THREE.MathUtils.smoothstep(progress, .08, .15)
     const beamOut = 1 - THREE.MathUtils.smoothstep(progress, .55, 1)

@@ -1,3 +1,4 @@
+import { seatTableLayout } from './tableLayout'
 import type { TileType, WinPresentation } from '../contracts/types'
 
 export const WIN_EFFECT_DURATION = 2600
@@ -14,12 +15,7 @@ export const REDUCED_WIN_REVEAL_DURATION = 360
 export const REDUCED_WIN_CUE_LEAD_DURATION = 450
 export const REDUCED_WIN_CUE_EXIT_DURATION = 0
 
-export const WIN_DISPLAY_LAYOUTS = Object.freeze([
-  Object.freeze({ x: 3.7, y: 0.31, z: 3.35, rotation: 0 }),
-  Object.freeze({ x: 3.6, y: 0.31, z: -4.25, rotation: Math.PI / 2 }),
-  Object.freeze({ x: -4.5, y: 0.31, z: -4, rotation: Math.PI }),
-  Object.freeze({ x: -3.4, y: 0.31, z: 3.9, rotation: -Math.PI / 2 }),
-])
+export const WIN_DISPLAY_LAYOUTS = Object.freeze([0,1,2,3].map(seat => Object.freeze(seatTableLayout(seat).win)))
 
 export function winDisplayLayout(playerIndex: number) {
   return WIN_DISPLAY_LAYOUTS[playerIndex] ?? WIN_DISPLAY_LAYOUTS[0]

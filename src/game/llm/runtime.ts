@@ -1,3 +1,4 @@
+import { playDecisionSpeech } from './decisionSpeechPlayback'
 // LLM 运行时装配 —— 供 App.vue 在创建本地人机引擎时注入 AI 控制器（座位 1-3）。
 // 决策：读取 v2 配置（readLlmSettings），支持**每个座位使用不同预置与不同风格**（未指定则跟随默认）。
 // 启用且已填 Key 时才返回 LLM 控制器，否则返回 null（引擎沿用默认启发式 AI）。
@@ -110,18 +111,8 @@ function hooksForSeat(
     if (!compact) return
     const roundReaction = meta?.source === 'win'
     const startedAt = Date.now()
-    let bubbleShown = false
-    const showBubble = () => {
-      if (bubbleShown) return
-      bubbleShown = true
-      try { void hooks.onLlmMessage?.(seat, compact, meta) } catch { /* 展示失败不阻塞动作 */ }
-    }
-    // 有声时：playing 事件显示气泡，中点 Promise 放行动作；静音/失败时不走音频并立即显示气泡。
-    await getLocalTtsClient().speak(seat, compact, voiceKey, style, priority, {
-      onStarted: showBubble,
-      waitForCompletion: roundReaction,
-    })
-    if (!bubbleShown) showBubble()
+    await playDecisionSpeech({seat,text:compact,voiceKey,style,priority,
+      showBubble:()=>{void hooks.onLlmMessage?.(seat,compact,meta)},waitForCompletion:roundReaction})
     if (roundReaction) {
       const remaining = MIN_ROUND_REACTION_MS - (Date.now() - startedAt)
       if (remaining > 0) await new Promise<void>((resolve) => globalThis.setTimeout(resolve, remaining))

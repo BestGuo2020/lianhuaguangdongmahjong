@@ -1,6 +1,8 @@
 import type { WinEvaluation, WinEvaluationInput } from '../bloodFlow/types'
 import type { evaluateWaits } from './evaluate'
 import type { EvaluationRequest } from './worker'
+import type { HandWaitHints, HandWaitInput } from './handWaits'
+type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never
 
 /** Browser callers run exhaustive search off the UI thread. Termination cancels pending
  * requests; it never publishes a partial score. Authority decides how to resume a window. */
@@ -23,7 +25,7 @@ export function createEvaluatorService() {
     else item.resolve(data.result)
   }
   worker.onerror = () => cancel(new Error('Evaluation worker failed'))
-  function request<T>(body: Omit<Extract<EvaluationRequest, { kind: 'win' }>, 'id'> | Omit<Extract<EvaluationRequest, { kind: 'waits' }>, 'id'>): Promise<T> {
+  function request<T>(body: WithoutId<EvaluationRequest>): Promise<T> {
     if (stopped) return Promise.reject(new Error('Evaluator stopped'))
     const id = ++serial
     return new Promise<T>((resolve, reject) => {
@@ -34,6 +36,7 @@ export function createEvaluatorService() {
   return {
     evaluate: (input: WinEvaluationInput) => request<WinEvaluation | null>({ kind: 'win', input }),
     waits: (input: Omit<WinEvaluationInput, 'winningTile' | 'source' | 'opening'>) => request<ReturnType<typeof evaluateWaits>>({ kind: 'waits', input }),
+    handWaits: (input: HandWaitInput) => request<HandWaitHints>({ kind: 'hand-waits', input }),
     cancel,
   }
 }

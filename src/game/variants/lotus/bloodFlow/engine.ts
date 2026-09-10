@@ -3,7 +3,8 @@ import { sortTilesWithJokers, TILE_TYPES } from '../../../core/rules/tiles'
 import { canChi, concealedKongs, windKong } from '../lotusRules'
 import { buildRingWall, resolveFlip, resolveOpeningStack, buildDrawOrderWall, wallBreakIndexForOpeningStack, takeLotusTailTile } from '../lotusWall'
 import { evaluateWin } from '../patterns/evaluate'
-import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from './config'
+import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING, bloodFlowWinTiming } from './config'
+import { winTier } from './presentation'
 import type { BloodFlowLedgerEntry, BloodFlowPublicState, BloodFlowRoundResult, Seat, SourceTileEvent, WinEvaluation, WinSource } from './types'
 import { SEATS, vector, nextSeat, newSeatStates } from './state'
 import type { BloodFlowAction, BloodFlowOpeningState, EngineCommand, EngineWindow } from './state'
@@ -12,6 +13,7 @@ import { assertZeroSum } from './ledger'
 import { resolveWinBatch } from './winBatch'
 import { summarizeRound } from './roundLifecycle'
 import { chooseFallbackDiscardIndex } from '../lotusAi'
+import { PACE_MS } from '../../../core/local/localGameConfig'
 
 export interface BloodFlowEngineOptions {
   authorityEpoch: string
@@ -26,6 +28,8 @@ export interface BloodFlowEngineOptions {
   decisionMs?: number
   winBeatMs?: number
   opening?: BloodFlowOpeningState
+  /** Local worker exposes ordinary action boundaries; simulations/P2P stay synchronous. */
+  paced?: boolean
 }
 
 /** Deterministic authority, with no timers, audio, Vue, reveal-hand or old endGame side effects.
@@ -57,6 +61,7 @@ export class BloodFlowEngine {
   paused = false
   private remainingDeadline = 0
   private remainingOpenDelay = 0
+  private remainingTransitionDelay = 0
   private winBeatUntil = 0
   private sourceSerial = 0
   private actionSerial = 0
@@ -67,6 +72,24 @@ export class BloodFlowEngine {
   private firstDiscard = true
   private selfPassed = false
   private kongBloom = false
+  transition: { id: string; kind: 'discard' | 'meld' | 'kong' | 'draw' | 'win'; readyAt: number } | null = null
+  private continuation: (() => void) | null = null
+
+  private after(kind: NonNullable<BloodFlowEngine['transition']>['kind'], delay: number, next: () => void) {
+    if (!this.options.paced) return next()
+    this.window = null
+    this.transition = { id: `${this.options.roundId}/stage/${++this.version}`, kind, readyAt: this.now() + delay }
+    this.continuation = next
+  }
+  advance(id: string) {
+    if (this.paused || this.interrupted || this.result || this.transition?.id !== id || this.now() < this.transition.readyAt) return false
+    const next = this.continuation
+    // Consume before advancing: duplicate/stale timers cannot draw or pay twice.
+    this.transition = null; this.continuation = null
+    next?.()
+    this.assertConservation()
+    return true
+  }
 
   constructor(readonly options: BloodFlowEngineOptions) {
     this.dealer = options.dealer ?? 0
@@ -140,9 +163,16 @@ export class BloodFlowEngine {
     if (this.drawSource && !this.selfPassed) {
       const win = this.evaluate(seat, this.drawSource.tile, this.kongBloom ? 'kong-bloom' : 'self-draw',
         this.openingBonus && this.firstDiscard && seat === this.dealer ? 'heaven' : null)
-      if (win) { this.evaluation.set(seat, win); moves.push({ kind: 'win' }, { kind: 'pass' }) }
+      if (win) {
+        this.evaluation.set(seat, win)
+        moves.push({ kind: 'win' })
+        // 锁手后不得过胡（用户确认）：自摸窗口也不给「过」，只能胡或打掉摸牌。
+        if (!this.seats[seat].locked) moves.push({ kind: 'pass' })
+      }
     }
-    if (!this.seats[seat].locked && this.wall.length) {
+    // 开杠（暗杠/风杠/补杠）只在「本手来自摸牌」时提供：碰/吃之后的这一手必须先出牌，
+    // 与经典玩法的 userDrewThisTurn 门控同口径（此前碰完就能立刻开杠，用户报为错误）。
+    if (this.drawSource && !this.seats[seat].locked && this.wall.length) {
       for (const tile of concealedKongs(player.hand, this.jokers)) moves.push({ kind: 'concealed-kong', tile })
       if (windKong(player.hand, this.jokers)) moves.push({ kind: 'wind-kong' })
       player.melds.forEach((m, meldIndex) => { if (m.type === 'peng' && player.hand.includes(m.tile)) moves.push({ kind: 'added-kong', meldIndex }) })
@@ -167,10 +197,12 @@ export class BloodFlowEngine {
     const window = this.window
     if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
-      window.decisions[seat] = window.kind === 'turn'
+      // 锁手座位的胡是唯一选项（不得过胡）：超时兜底也必须走胡，否则等于「过」。
+      const forcedWin = this.seats[seat].locked ? window.options[seat].find(a => a.kind === 'win') : undefined
+      window.decisions[seat] = forcedWin ?? (window.kind === 'turn'
         ? { kind: 'discard', index: this.seats[seat].locked ? this.players[seat].drawnTileIndex
           : chooseFallbackDiscardIndex(this.players[seat].hand, this.jokers, window.options[seat].filter(a => a.kind === 'discard').map(a => a.index)) }
-        : { kind: 'pass' }
+        : { kind: 'pass' })
     }
     this.resolveWindow()
     this.assertConservation()
@@ -210,7 +242,7 @@ export class BloodFlowEngine {
     this.discardActions.push(source)
     const opening = this.firstDiscard && seat === this.dealer && this.openingBonus ? 'earth' : null
     this.firstDiscard = false
-    this.openWinClaims(source, 'discard', opening)
+    this.after('discard', PACE_MS.afterDiscardToNextTurn, () => this.openWinClaims(source, 'discard', opening))
   }
   private openWinClaims(source: SourceTileEvent, winSource: WinSource, opening: 'earth' | null = null) {
     this.evaluation.clear()
@@ -230,7 +262,8 @@ export class BloodFlowEngine {
         if (count >= 2) actions.push({ kind: 'peng' })
         if (seat === nextSeat(source.seat)) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
       }
-      if (actions.length) actions.push({ kind: 'pass' })
+      // 锁手后不得过胡：已胡过的座位仍可点炮/抢杠继续胡，但「过」不再是选项（用户确认）。
+      if (actions.length && !(this.seats[seat].locked && win)) actions.push({ kind: 'pass' })
       return actions
     })
     if (options.some(o => o.length)) this.open(this.evaluation.size ? 'win' : 'meld', source, options)
@@ -253,8 +286,12 @@ export class BloodFlowEngine {
     this.event(type === 'gang' ? 'discard-gang' : type, seat, source.tile, source.seat, player.melds.length - 1)
     this.openingBonus = false
     this.currentPlayer = seat; this.drawSource = null; this.selfPassed = false; player.drawnTileIndex = -1
-    if (type === 'gang') { this.payKong(seat, 'discard', source.seat); this.draw(seat, true) }
-    else { player.hand = sortTilesWithJokers(player.hand, this.jokers); this.openTurn() }
+    if (type === 'gang') {
+      this.payKong(seat, 'discard', source.seat)
+      this.after('kong', PACE_MS.afterClaimGang, () => this.draw(seat, true))
+    } else this.after('meld', PACE_MS.afterClaimPeng, () => {
+      player.hand = sortTilesWithJokers(player.hand, this.jokers); this.openTurn()
+    })
   }
 
   private performKong(action: BloodFlowAction) {
@@ -266,7 +303,7 @@ export class BloodFlowEngine {
       const source = this.source('added-kong', seat, tile)
       this.pendingKong = { seat, meldIndex: action.meldIndex, source }
       this.drawSource = null
-      return this.openWinClaims(source, 'robbed-kong')
+      return this.after('kong', PACE_MS.beforeRobKong, () => this.openWinClaims(source, 'robbed-kong'))
     }
     const wind = action.kind === 'wind-kong'
     if (!wind && action.kind !== 'concealed-kong') throw new Error('Invalid kong action')
@@ -276,7 +313,8 @@ export class BloodFlowEngine {
     this.event(wind ? 'wind-kong' : 'concealed-gang', seat, tiles[0], null, player.melds.length - 1)
     this.openingBonus = false
     this.payKong(seat, wind ? 'wind' : 'concealed')
-    this.draw(seat, true)
+    player.drawnTileIndex = -1
+    this.after('kong', PACE_MS.afterKongSettle, () => this.draw(seat, true))
   }
   private completeAddedKong() {
     const pending = this.pendingKong!
@@ -286,7 +324,7 @@ export class BloodFlowEngine {
     this.event('added-gang', pending.seat, pending.source.tile, null, pending.meldIndex)
     this.openingBonus = false
     this.payKong(pending.seat, 'added')
-    this.draw(pending.seat, true)
+    this.after('kong', PACE_MS.afterKongSettle, () => this.draw(pending.seat, true))
   }
   private payKong(actor: Seat, kongKind: 'discard' | 'added' | 'concealed' | 'wind', sourceSeat: Seat | null = null) {
     const deltas = vector(() => 0)
@@ -322,9 +360,23 @@ export class BloodFlowEngine {
     this.players.forEach((p, s) => { p.score = batch.scoresAfter[s] })
     this.ledger.push({ kind: 'win', batch })
     this.openingBonus = false; this.drawSource = null
-    this.winBeatUntil = this.now() + (this.options.winBeatMs ?? BLOOD_FLOW_TIMING.winBeatMs)
-    if (batch.nextAction.kind === 'finish-round') this.finishRound()
-    else this.draw(batch.nextAction.seat)
+    const nextAction = batch.nextAction
+    if (this.options.paced) {
+      const tier = Math.max(...batch.winners.map(winTier))
+      // 一炮多响在常规演出前还有 1.5s 的“一炮多响”字动画，衔接节奏一并计入。
+      const multiIntroMs = batch.source.kind === 'discard' && batch.winners.length > 1
+        ? BLOOD_FLOW_TIMING.multiWinIntroMs : 0
+      // The authority owns continuation. No render/audio completion mutates rules.
+      // A short handoff margin lets the displayed batch finish before the next draw.
+      this.after('win', bloodFlowWinTiming(tier).duration + multiIntroMs + 100, () => {
+        if (nextAction.kind === 'finish-round') this.finishRound()
+        else this.draw(nextAction.seat)
+      })
+    } else {
+      this.winBeatUntil = this.now() + (this.options.winBeatMs ?? BLOOD_FLOW_TIMING.winBeatMs)
+      if (nextAction.kind === 'finish-round') this.finishRound()
+      else this.draw(nextAction.seat)
+    }
   }
   private draw(seat: Seat, tail = false) {
     if (!this.wall.length) return this.finishRound()
@@ -335,7 +387,7 @@ export class BloodFlowEngine {
     player.hand.push(tile); player.drawnTileIndex = player.hand.length - 1
     this.currentPlayer = seat; this.kongBloom = tail; this.selfPassed = false
     this.drawSource = this.source('draw', seat, tile)
-    this.openTurn()
+    this.after('draw', PACE_MS.afterDraw, () => this.openTurn())
   }
   private finishRound() {
     if (this.result) return
@@ -350,17 +402,21 @@ export class BloodFlowEngine {
       roundResult: this.result ? structuredClone(this.result) : null }
   }
   currentScore(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!.score) : null }
+  /** 当前窗口某席的完整评估（权威私有；仅供测试/对拍观察，不进入公共快照）。 */
+  windowEvaluation(seat: Seat) { return this.evaluation.has(seat) ? structuredClone(this.evaluation.get(seat)!) : null }
   windowIsOpen() { return !!this.window && !this.paused && !this.interrupted && this.now() >= this.window.opensAt }
   pause() {
     if (this.paused || this.result) return
     this.remainingDeadline = Math.max(0, (this.window?.deadlineAt ?? this.now()) - this.now())
     this.remainingOpenDelay = Math.max(0, (this.window?.opensAt ?? this.now()) - this.now())
+    this.remainingTransitionDelay = Math.max(0, (this.transition?.readyAt ?? this.now()) - this.now())
     this.paused = true
   }
   resume() {
     if (!this.paused || this.interrupted) return
     if (this.window) this.window.deadlineAt = this.now() + this.remainingDeadline
     if (this.window) this.window.opensAt = this.now() + this.remainingOpenDelay
+    if (this.transition) this.transition.readyAt = this.now() + this.remainingTransitionDelay
     this.paused = false
   }
   assertConservation() {

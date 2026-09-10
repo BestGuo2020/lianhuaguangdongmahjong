@@ -45,6 +45,7 @@ const animeStyle = computed(() => props.themeName === 'llmAnime'
         <strong>{{ player.name }}</strong>
         <span>{{ player.score }}</span>
       </div>
+      <slot name="footer" />
       <span v-if="active" class="turn-dot"></span>
       <Transition name="score-flow">
         <strong

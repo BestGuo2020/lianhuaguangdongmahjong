@@ -66,7 +66,7 @@ describe('wall stack ring', () => {
   it('places stack 0 at the near (bottom) right end = draw head', () => {
     const s = wallStackSlot(0)
     expect(s.x).toBeGreaterThan(0)          // 右端
-    expect(s.z).toBeCloseTo(4.73, 5)        // 近侧（已向牌河前移半个牌）
+    expect(s.z).toBeCloseTo(5.17, 5)        // 近侧（正方形环的底边）
     expect(s.rotationY).toBeCloseTo(0, 5)   // 径向：长边沿 z（指向桌中心）
   })
 
@@ -75,10 +75,10 @@ describe('wall stack ring', () => {
     const left = wallStackSlot(17)
     const far = wallStackSlot(34)
     const right = wallStackSlot(51)
-    expect(near.z).toBeCloseTo(4.73, 5)
-    expect(Math.abs(left.x)).toBeCloseTo(7.43, 5)
-    expect(far.z).toBeCloseTo(-8.03, 5)
-    expect(Math.abs(right.x)).toBeCloseTo(7.43, 5)
+    expect(near.z).toBeCloseTo(5.17, 5)
+    expect(Math.abs(left.x)).toBeCloseTo(6.82, 5)
+    expect(far.z).toBeCloseTo(-8.47, 5)
+    expect(Math.abs(right.x)).toBeCloseTo(6.82, 5)
     expect(left.x).toBeLessThan(0)
     expect(right.x).toBeGreaterThan(0)
     // 侧墙径向：长边沿 x（指向桌中心）

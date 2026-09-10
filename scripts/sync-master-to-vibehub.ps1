@@ -115,6 +115,14 @@ try {
     'src/game/online/transport/roomSocket.test.ts'
     'src/game/online/useRemoteGame.ts'
     'src/game/online/useRemoteGame.test.ts'
+    # Blood-flow WS online entry: imports online/api/{httpClient,roomApi} and
+    # transport/roomSocket, all of which are deleted on vibehub by this list.
+    # Keep it out of vibehub or its build/tests break. vibehub's P2P blood flow
+    # lives in src/game/online/vibe/bloodFlowRoom.ts.
+    # Do NOT exclude bloodFlow/ws/authority.ts: useBloodFlowGame.ts has
+    # `import type ... from './ws/authority'`, so vibehub still needs it.
+    'src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts'
+    'src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
 

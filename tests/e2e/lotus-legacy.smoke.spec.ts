@@ -10,7 +10,7 @@ test('莲花麻将（旧版翻精）本地开局并亮出精指示牌', async ({
 
   // 选择「莲花麻将」玩法
   await page.locator('.game-settings button', { hasText: '玩法' }).click()
-  await page.getByRole('button', { name: /莲花麻将/ }).click()
+  await page.getByRole('button', { name: /莲花麻将 翻精/ }).click()
   await page.getByRole('button', { name: '确定' }).click()
 
   // 开始对局

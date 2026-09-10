@@ -6,7 +6,7 @@ test('seat rotation keeps the absolute winner and source in the public ledger', 
     await page.goto(`/tests/e2e/fixtures/blood-flow.html?count=4&viewer=${viewer}`)
     await expect(page.locator('.table-loading')).toHaveCount(0, { timeout: 30_000 })
     const badge = page.locator('[data-pile-seat="2"]')
-    await expect(badge).toHaveClass(new RegExp(`pile-seat-${(2 - viewer + 4) % 4}`))
+    await expect(badge.locator('..').locator('.avatar')).toHaveAttribute('alt', '西家头像')
     await badge.click()
     await expect(page.locator('.ledger-win')).toHaveCount(4)
     await expect(page.locator('.ledger-win').first()).toContainText('西家 · 第4次胡')

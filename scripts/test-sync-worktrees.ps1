@@ -21,6 +21,9 @@ $syncSource = Get-Content -Raw (Join-Path $PSScriptRoot 'sync-master-to-vibehub.
 $keepBlock = [regex]::Match($syncSource, '(?s)\$vibehubKeep = @\((.*?)\n  \)').Groups[1].Value
 $keepPaths = @([regex]::Matches($keepBlock, "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
 Assert ($keepPaths.Count -gt 30) 'Could not read keep contract'
+# master-only path outside online/api (blood-flow WS entry): master adds it, vibehub deletes it,
+# then master modifies it again -> sync must keep the deletion (modify/delete conflict).
+$bloodFlowWsEntry = 'src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts'
 
 function New-Fixture([string]$name, [bool]$linked) {
   $repo = Join-Path $testRoot $name
@@ -37,6 +40,7 @@ function New-Fixture([string]$name, [bool]$linked) {
   Write-Utf8 (Join-Path $repo 'shared.txt') 'base'
   Write-Utf8 (Join-Path $repo '.gitignore') ''
   Write-Utf8 (Join-Path $repo 'src/game/online/api/fixture.ts') 'WS only'
+  Write-Utf8 (Join-Path $repo $bloodFlowWsEntry) 'WS only'
   foreach ($name in @('sync-master-to-vibehub.ps1', 'check-vibehub-ahead.ps1')) {
     Write-Utf8 (Join-Path $repo "scripts/$name") (Get-Content -Raw (Join-Path $PSScriptRoot $name))
   }
@@ -48,6 +52,7 @@ function New-Fixture([string]$name, [bool]$linked) {
     Write-Utf8 (Join-Path $repo $path) 'P2P private'
   }
   Git $repo @('rm', 'src/game/online/api/fixture.ts') | Out-Null
+  Git $repo @('rm', $bloodFlowWsEntry) | Out-Null
   Git $repo @('add', '.') | Out-Null
   Git $repo @('commit', '-m', 'P2P') | Out-Null
   Git $repo @('checkout', 'master') | Out-Null
@@ -55,6 +60,7 @@ function New-Fixture([string]$name, [bool]$linked) {
   # Automatic clean merges of protected paths must also be restored.
   Write-Utf8 (Join-Path $repo 'src/App.vue') 'master updated'
   Write-Utf8 (Join-Path $repo 'src/game/online/api/fixture.ts') 'updated WS only'
+  Write-Utf8 (Join-Path $repo $bloodFlowWsEntry) 'updated WS only'
   Git $repo @('add', '.') | Out-Null
   Git $repo @('commit', '-m', 'shared feature') | Out-Null
   $target = $repo
@@ -94,6 +100,7 @@ foreach ($path in $keepPaths) {
   Assert ((Get-Content -Raw (Join-Path $linked.target $path)) -eq 'P2P private') "Keep changed: $path"
 }
 Assert (-not (Test-Path (Join-Path $linked.target 'src/game/online/api/fixture.ts'))) 'WS file resurrected'
+Assert (-not (Test-Path (Join-Path $linked.target $bloodFlowWsEntry))) 'master-only blood-flow WS entry resurrected'
 $synced = Git $linked.repo @('rev-parse', 'vibehub')
 Run-Sync $linked $true 'idempotent'
 Assert ((Git $linked.repo @('rev-parse', 'vibehub')) -eq $synced) 'No-op sync created a commit'
@@ -102,4 +109,7 @@ $local = New-Fixture 'same-directory' $false
 Run-Sync $local $true 'same-directory'
 Assert ((Git $local.repo @('show', 'vibehub:src/App.vue')) -eq 'P2P private') 'Local keep failed'
 Assert ((Git $local.repo @('show', 'vibehub:shared.txt')) -eq 'shared blood-flow change') 'Local sync failed'
+$resurrected = $true
+try { Git $local.repo @('cat-file', '-e', "vibehub:$bloodFlowWsEntry") | Out-Null } catch { $resurrected = $false }
+Assert (-not $resurrected) 'master-only blood-flow WS entry resurrected (local)'
 Write-Host "PASS: dirty master/target, linked worktree, spaces, keep restoration, WS deletion, no-op, local fallback. Evidence: $testRoot"
