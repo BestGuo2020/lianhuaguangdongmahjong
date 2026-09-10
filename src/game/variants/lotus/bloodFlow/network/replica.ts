@@ -14,7 +14,12 @@ export class BloodFlowReplica {
   readonly seenBatches = new Set<string>()
   readonly completedRounds = new Set<string>()
   error = ''
-  constructor(readonly roomId: string, readonly hostPeer: string, readonly seat: Seat,
+  /**
+   * 房主 peer 需可变：P2P 下对端 id 可能变化（SDK 修复连接/中继切换），replica 若把它冻结在
+   * 构造时，之后所有帧都会被 `receive` 以「非房主」拒收 —— 表现为客机一直收帧但视图永不更新
+   * （2026-09-10 线上验收实测：HUD 停在 checking、结算面板不出现）。
+   */
+  constructor(readonly roomId: string, public hostPeer: string, readonly seat: Seat,
     readonly requestSync: () => void = () => {}) {}
 
   receive(raw: unknown, fromPeer: string): boolean {
