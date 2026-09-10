@@ -481,6 +481,7 @@ const themeLockReason = computed(() => (
           :wildcard-tiles="wildcardTiles"
           :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
           :blood-flow="capabilities.bloodFlow"
+          :online="false"
           :second-dice="gameMode === 'remote' ? (capabilities.bloodFlow ? vibeRemoteGame.bloodFlowPort.secondDice.value ?? undefined : remoteSecondDice) : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
           :flip-tile="flipTile"
           :wall-break-index="wallBreakIndex"
