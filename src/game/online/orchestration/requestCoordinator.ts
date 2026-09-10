@@ -72,7 +72,10 @@ export function createRequestCoordinator({
   function applyNow(message: ServerRequest) {
     if (message.kind === 'turn_request') {
       state.currentPlayer.value = 0
-      state.userDrewThisTurn.value = !message.ctx.skipDraw
+      // 庄家开局首回合（turnOrigin='opening'）：服务端跳摸但庄家已持 14 张，
+      // 视作「已摸牌」——与单机 preDrawn 同口径（天胡可胡、暗杠/风杠可用）。
+      const drawnTurn = !message.ctx.skipDraw || message.ctx.turnOrigin === 'opening'
+      state.userDrewThisTurn.value = drawnTurn
       state.turnCanHu.value = message.ctx.canHu ?? false
       state.turnCanWindKong.value = message.ctx.canWindKong ?? false
       state.actionPrompt.value = null

@@ -388,6 +388,40 @@ describe('useRemoteGame 座位旋转与快照应用', () => {
     expect(mockSocket!.sent).toContain(JSON.stringify({ type: 'claim', action: 'peng' }))
   })
 
+  it('庄家开局首回合视作已摸牌：turnOrigin=opening 时本家可胡（天胡）', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'turn_request',
+      ctx: {
+        hand: SERVER_PLAYERS[2].hand, melds: [], exposedMelds: 0, kongBloom: false,
+        skipDraw: true, afterKong: false, canHu: true, turnOrigin: 'opening',
+      },
+    })
+    // 只有把 opening 回合视作「已摸牌」才会出现胡按钮（否则 userDrewThisTurn=false）。
+    expect(game.userCanHu.value).toBe(true)
+  })
+
+  it('回合能力只在本家回合有效：他人回合不残留可点的「胡」「风杠」', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot())
+    mockSocket!.receive({
+      kind: 'turn_request',
+      ctx: {
+        hand: SERVER_PLAYERS[2].hand, melds: [], exposedMelds: 0, kongBloom: false,
+        skipDraw: false, afterKong: false, canHu: true, canWindKong: true,
+      },
+    })
+    expect(game.userCanHu.value).toBe(true)
+    expect(game.capabilities.value.windKong?.available).toBe(true)
+
+    // 下一份快照把当前玩家换成他人（服务端 3 → 本地 1）：能力必须立刻失效。
+    mockSocket!.receive(makeSnapshot({ currentPlayer: 3 }))
+    expect(game.isUserTurn.value).toBe(false)
+    expect(game.userCanHu.value).toBe(false)
+    expect(game.capabilities.value.windKong?.available).toBe(false)
+  })
+
   it('用户动作发送协议与 useGame 一致', async () => {
     const game = await connectGame()
     mockSocket!.receive(makeSnapshot())
@@ -889,7 +923,11 @@ describe('useRemoteGame 开局序列（对局开始 / 骰子）', () => {
 describe('useRemoteGame 出牌报牌（dapai + 牌名语音）', () => {
   it('新弃牌播报牌音效，同 id 冗余快照不重复播', async () => {
     const sounds: string[] = []
-    const game = await connectGame({ playSound: (name: string) => { sounds.push(name) } })
+    // 牌名播报走「播放并等待」通道（与单机 playDiscardName 一致，点炮胡需要等它播完）。
+    const game = await connectGame({
+      playSound: (name: string) => { sounds.push(name) },
+      playSoundAndWait: async (name: string) => { sounds.push(name) },
+    })
 
     // 首张弃牌（m5）→ 立即 dapai + 80ms 后牌名 5m.mp3
     mockSocket!.receive(makeSnapshot({ phase: 'drawing', currentPlayer: 3, lastDiscard: { tile: 'm5', from: 0, id: 1 } }))
@@ -1067,6 +1105,17 @@ describe('useRemoteGame 匿名身份与会话持久化（Phase 8 P1）', () => {
     // 不再发起重连：定时器已清空，推进时间不会触发新的 connect
     await vi.advanceTimersByTimeAsync(20000)
     expect(game.wsStatus.value).toBe('idle')
+  })
+
+  it('可重试的 rejoin_err（顶号/限速）保留会话：暂离后立刻回桌不会丢「继续对局」入口', async () => {
+    const game = await connectGame()
+    expect(game.storedSession.value).not.toBeNull()
+    mockSocket!.receive({ kind: 'rejoin_err', code: 'ALREADY_CONNECTED' })
+    // 顶号是竞态（服务端还没处理上一次断开）：会话与房间号必须保留，等下一次握手重试。
+    expect(game.storedSession.value?.roomId).toBe('ABC123')
+    expect(window.localStorage.getItem('lgm_session')).toContain('ABC123')
+    expect(game.roomId.value).toBe('ABC123')
+    expect(game.sessionError.value).toBe('ALREADY_CONNECTED')
   })
 
   it('ping/pong 测 RTT 更新信号质量；断开后归零', async () => {

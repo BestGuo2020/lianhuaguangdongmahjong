@@ -195,6 +195,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isOptional(raw.ctx.jokers, (item): item is TileType[] => isArrayOf(item, isTile))
           && isOptional(raw.ctx.canHu, isBoolean)
           && isOptional(raw.ctx.canWindKong, isBoolean)
+          && isOptional(raw.ctx.turnOrigin, isString)
       case 'claim_request':
         return isObject(raw.ctx) && isArrayOf(raw.ctx.hand, isTile)
           && isOptional(raw.ctx.canPeng, isBoolean)

@@ -10,7 +10,7 @@ import {
 
 type SnapshotState = Pick<RemoteGameState,
   | 'phase' | 'players' | 'wall' | 'wallCount' | 'wallHeadDrawn'
-  | 'currentPlayer' | 'selectedIndex' | 'lastDiscard' | 'actionPrompt'
+  | 'currentPlayer' | 'selectedIndex' | 'lastDiscard' | 'lastDiscardSound' | 'actionPrompt'
   | 'announcement' | 'result' | 'winEffect' | 'winPresentation'
   | 'revealHands' | 'winningPlayerIndex' | 'round' | 'dealer' | 'honba'
   | 'matchFinished'
@@ -33,6 +33,8 @@ export interface SnapshotReconcilerOptions {
   clearCountdown(): void
   onFinishedSnapshot(): void
   playSound(name: string, volume?: number): unknown
+  /** 牌名播报的等待通道：点炮胡要等它播完（对齐单机 lastDiscardSound 交接）。 */
+  playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   later(callback: () => void, delay: number): void
   getThemeName?: () => string
 }
@@ -48,6 +50,7 @@ export function createSnapshotReconciler({
   clearCountdown,
   onFinishedSnapshot,
   playSound,
+  playSoundAndWait,
   later,
   getThemeName = () => 'jade',
 }: SnapshotReconcilerOptions) {
@@ -106,7 +109,19 @@ export function createSnapshotReconciler({
     })
     if (policy.discard.tileName === 'suppress' || actor?.isLlm) return
     const audio = tileAudioFile(discard.tile)
-    if (audio) later(() => playSound(audio), 80)
+    if (!audio) return
+    // 牌名播报走本协调器的 later（保持既有调度语义），同时把「播完」变成可等待信号：
+    // 点炮胡据此对齐单机「报牌播完 → DISCARD_WIN_EFFECT_DELAY → 胡音效」。
+    state.lastDiscardSound.value = new Promise<void>((resolve) => {
+      later(() => {
+        try {
+          const playback = playSoundAndWait?.(audio)
+          if (playback) { void playback.then(resolve, resolve); return }
+          playSound(audio)
+        } catch { /* 音频失败不能阻塞结算 */ }
+        resolve()
+      }, 80)
+    })
   }
 
   function applySharedSnapshot(snapshot: ServerSnapshot) {

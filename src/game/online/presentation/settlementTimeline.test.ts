@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REDUCED_WIN_CUE_EXIT_DURATION, REDUCED_WIN_CUE_LEAD_DURATION, REDUCED_WIN_EFFECT_DURATION, REDUCED_WIN_REVEAL_DURATION, WIN_CUE_EXIT_DURATION, WIN_CUE_LEAD_DURATION, WIN_EFFECT_SOUND_DELAY } from '../../core/presentation/winEffect'
 import type { ServerSnapshot } from '../protocol/dto'
 import type { GamePhase } from '../../core/contracts/gamePort'
+import type { GamePlayer } from '../../core/contracts/types'
 import { createSettlementTimeline } from './settlementTimeline'
+import { DISCARD_WIN_EFFECT_DELAY } from '../../shared/settlement/settlementTimeline'
 import { AnimeFixedTtsExecutor } from '../../llm/animeFixedTtsExecutor'
 
 function snapshot(overrides: Partial<ServerSnapshot> = {}): ServerSnapshot {
@@ -24,10 +26,20 @@ function harness(reduced = true, options: {
   themeName?: string
   executor?: AnimeFixedTtsExecutor
   characterIds?: unknown[]
+  lastDiscard?: { tile: string; from: number; id: number } | null
+  lastDiscardSound?: Promise<void> | null
 } = {}) {
   const state = {
     phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
     winPresentation: ref<any>(null), revealHands: ref(false), winningPlayerIndex: ref(-1),
+    players: ([
+      { name: 'P0', avatar: '', score: 1000, seat: 0, hand: [], discards: ['m9'], melds: [], redCount: 0, drawnTileIndex: -1 },
+      { name: 'P1', avatar: '', score: 1000, seat: 1, hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1 },
+      { name: 'P2', avatar: '', score: 1000, seat: 2, hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1 },
+      { name: 'P3', avatar: '', score: 1000, seat: 3, hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1 },
+    ] as GamePlayer[]),
+    lastDiscard: ref<any>(options.lastDiscard ?? null),
+    lastDiscardSound: ref<Promise<void> | null>(options.lastDiscardSound ?? null),
   }
   const sounds: string[] = []
   const timeline = createSettlementTimeline({
@@ -76,6 +88,45 @@ describe('settlementTimeline', () => {
     expect(state.phase.value).toBe('settled')
     expect(state.revealHands.value).toBe(true)
     expect(state.result.value?.draw).toBe(true)
+  })
+
+  it('点炮胡：等牌名播报结束再起胡音效，点炮牌留在牌河直到特效启动', async () => {
+    let resolveAudio: () => void = () => {}
+    const audioDone = new Promise<void>((resolve) => { resolveAudio = resolve })
+    const { state, sounds, timeline } = harness(true, {
+      lastDiscard: { tile: 'm1', from: 0, id: 7 },
+      lastDiscardSound: audioDone,
+    })
+    timeline.start(snapshot({
+      winPresentation: {
+        winnerIndex: 2, tile: 'm1', sourceIndex: -1, robbedKong: false,
+        discardWin: true, robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1,
+      },
+    }))
+
+    // 牌名还在播：胡音效未响，但点炮牌已补回牌河（服务端快照里已移除）。
+    expect(sounds).toEqual([])
+    expect(state.players[0].discards).toContain('m1')
+
+    resolveAudio()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(DISCARD_WIN_EFFECT_DELAY)
+    expect(sounds).toEqual(['hu.mp3'])
+
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_CUE_LEAD_DURATION + REDUCED_WIN_CUE_EXIT_DURATION)
+    expect(state.winEffect.value).toMatchObject({ tile: 'm1' })
+    expect(state.players[0].discards).not.toContain('m1')
+  })
+
+  it('自摸不等牌名播报：立即起胡牌音效，牌河不动', () => {
+    const audioDone = new Promise<void>((resolve) => { resolve() })
+    const { state, sounds, timeline } = harness(true, {
+      lastDiscard: { tile: 'm9', from: 0, id: 7 },
+      lastDiscardSound: audioDone,
+    })
+    timeline.start(snapshot())
+    expect(sounds).toEqual(['zimo.mp3'])
+    expect(state.players[0].discards).toEqual(['m9'])
   })
 
   it('llmAnime 等四家固定发言结束后才打开流局结算', async () => {

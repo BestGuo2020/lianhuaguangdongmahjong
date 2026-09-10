@@ -43,6 +43,8 @@ import { resolveAnimeAudioPolicy, shouldSuppressLegacyAnimeSpeech } from '../cor
 
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+/** 终态重进错误：只有这两种才清本地会话（其余如 ALREADY_CONNECTED / 限速可重试）。 */
+const TERMINAL_REJOIN_ERRORS = new Set(['ROOM_NOT_FOUND', 'REJOIN_CODE_INVALID', 'INVALID_REJOIN_CODE'])
 
 interface UseRemoteGameOptions {
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -74,10 +76,10 @@ export function useRemoteGame({
   })
   const {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, llmEnabled, effectiveLlmEnabled,
+    creatorSeat, isCreator, roomSeats, roomTimeLimit, roomStatus, llmEnabled, effectiveLlmEnabled,
     llmAvailable, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
-    turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
+    turnSeconds, lastDiscard, lastDiscardSound, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,
@@ -128,7 +130,7 @@ export function useRemoteGame({
   const roomLifecycle = createRemoteRoomLifecycle({
     state: {
       sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-      creatorSeat, isCreator, roomSeats, roomTimeLimit, llmEnabled, effectiveLlmEnabled,
+      creatorSeat, isCreator, roomSeats, roomTimeLimit, roomStatus, llmEnabled, effectiveLlmEnabled,
       llmAvailable, rulesetId, storedSession,
       phase, matchType, matchFinished, players,
     },
@@ -144,7 +146,10 @@ export function useRemoteGame({
   const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
 
   const settlementTimeline = createSettlementTimeline({
-    state: { phase, result, winEffect, winPresentation, revealHands, winningPlayerIndex },
+    state: {
+      phase, result, winEffect, winPresentation, revealHands, winningPlayerIndex,
+      players, lastDiscard, lastDiscardSound,
+    },
     mapResult: (value) => mapResult(value),
     mapPresentation: (value) => mapWinPresentation(value),
     toLocalSeat: toLocal,
@@ -182,6 +187,7 @@ export function useRemoteGame({
       animeFixedTts?.cancel()
     },
     playSound,
+    playSoundAndWait,
     later,
     getThemeName,
   })
@@ -219,7 +225,9 @@ export function useRemoteGame({
       .map((meld) => meld.tile)
     return [...new Set([...concealed, ...added])]
   })
-  const remoteUserCanHu = computed(() => (
+  // turnCanHu/turnCanWindKong 只对「本家当前回合」有效：快照不会复位它们，
+  // 必须用 isUserTurn 兜底，否则他人回合仍会残留可点的「胡」「风杠」按钮。
+  const remoteUserCanHu = computed(() => isUserTurn.value && (
     rulesetId.value === 'lotus-legacy' ? turnCanHu.value : (turnCanHu.value || userCanHu.value)
   ))
   const windName = computed(() => (round.value > 4 ? '南' : '东'))
@@ -407,7 +415,9 @@ export function useRemoteGame({
     rejoin_err: (msg) => {
       wsStatus.value = 'closed'
       sessionError.value = msg.code
-      roomLifecycle.clearSession()
+      // 只有「房间没了 / 重进码失效」才算终态；ALREADY_CONNECTED、限速等是可重试竞态
+      // （暂离后立刻点「回到牌桌」就可能撞上），此时必须保留会话，否则「继续对局」入口消失。
+      if (TERMINAL_REJOIN_ERRORS.has(msg.code)) roomLifecycle.clearSession()
     },
     state_snapshot: (msg) => snapshotReconciler.apply(msg),
     table_theme: (msg) => {
@@ -545,7 +555,7 @@ export function useRemoteGame({
   return defineGamePort({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
-    playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, waitingNextRound,
+    playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, roomStatus, waitingNextRound,
     llmEnabled, effectiveLlmEnabled, llmAvailable,
     rulesetId,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
@@ -563,7 +573,7 @@ export function useRemoteGame({
     userKongs: remoteUserKongs,
     capabilities: computed(() => ({
       chi: { choose: userChi },
-      windKong: { available: turnCanWindKong.value, execute: userWindKong },
+      windKong: { available: turnCanWindKong.value && isUserTurn.value, execute: userWindKong },
       lotusTable: {
         flipTile: flipTile.value,
         jokerTiles: jokerTiles.value,

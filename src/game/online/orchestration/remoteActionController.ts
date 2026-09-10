@@ -3,8 +3,9 @@ import { waitingTiles as lotusWaitingTiles } from '../../variants/lotus/lotusRul
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { RemoteGameState } from '../state/remoteGameState'
 
-type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles'>
-
+type ActionState = Pick<RemoteGameState,
+  'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles' | 'turnCanHu' | 'turnCanWindKong'
+>
 export type RemotePlayerActionMessage =
   | { type: 'discard'; handIndex: number }
   | { type: 'pass' }
@@ -52,6 +53,9 @@ export function createRemoteActionController({
     if (!user || !isUserTurn() || index < 0 || index >= user.hand.length) return
     clearCountdown()
     clearUserSelection()
+    // 本家回合已结束：立刻清掉回合内能力，避免快照到达前「胡/风杠」按钮残留可点。
+    state.turnCanHu.value = false
+    state.turnCanWindKong.value = false
     send({ type: 'discard', handIndex: index })
   }
 

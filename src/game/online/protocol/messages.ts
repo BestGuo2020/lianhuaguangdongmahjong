@@ -37,7 +37,7 @@ export interface RoundStartMessage {
 }
 
 export type ServerRequest =
-  | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: ServerMeldDto[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean; jokers?: TileType[]; canHu?: boolean; canWindKong?: boolean } }
+  | { kind: 'turn_request'; ctx: { hand: TileType[]; melds: ServerMeldDto[]; exposedMelds: number; kongBloom: boolean; skipDraw: boolean; afterKong: boolean; jokers?: TileType[]; canHu?: boolean; canWindKong?: boolean; turnOrigin?: string } }
   | { kind: 'claim_request'; ctx: { hand: TileType[]; canPeng?: boolean; canHu?: boolean; canGang: boolean; chiOptions?: Array<{ tiles: TileType[]; kind: 'sequence' | 'wind' | 'dragon' }>; tile: TileType; from: number } }
   | { kind: 'rob_kong_request'; ctx: { tile: TileType; from: number; hand: TileType[]; exposedMelds: number } }
 

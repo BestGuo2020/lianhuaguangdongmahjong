@@ -54,6 +54,21 @@ describe('requestCoordinator', () => {
     })
   })
 
+  it('庄家开局首回合（turnOrigin=opening）视作已摸牌：不播摸牌音、保留胡/杠能力', () => {
+    const { state, playSound, coordinator } = setup()
+    coordinator.apply({
+      kind: 'turn_request',
+      ctx: {
+        hand: ['m1'], melds: [], exposedMelds: 0, kongBloom: false,
+        skipDraw: true, afterKong: false, canHu: true, turnOrigin: 'opening',
+      },
+    })
+
+    expect(state.userDrewThisTurn.value).toBe(true)
+    expect(state.turnCanHu.value).toBe(true)
+    expect(playSound).not.toHaveBeenCalledWith('give.mp3', 0.7)
+  })
+
   it('应用出牌请求并在倒计时到期后打出末张', async () => {
     const { state, actions, playSound, coordinator } = setup()
     coordinator.apply(TURN_REQUEST)
