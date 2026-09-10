@@ -194,11 +194,61 @@ export function createVibeRoomTransport({
     // SDK 自动重连，无需像 WebSocket 那样显式重置重连计数；占位对齐 roomSocket 接口。
   }
 
+  /**
+   * 发送前把消息净化成纯 JSON 值：SDK 的可靠发送链是异步的（`_reliableSendChain`），
+   * 加密/序列化失败只会被它自己吞成一条 `[VibeHub] 联机消息加密失败: 消息未发送` 警告，
+   * 应用侧看不到、也拿不到是哪条消息挂了。Vue 响应式代理、函数、undefined 与循环引用都会
+   * 让这一步失败（表现：主机一直广播、客机永远收不到那条能推进流程的消息）。
+   * 这里先自行序列化一次：成功就发纯对象（等价于 SDK 本来的 JSON 语义，但提前失败可见），
+   * 失败则报出具体路径并放弃该次发送（SDK 侧本来也发不出去），避免无声卡死。
+   */
+  function describeUnserializable(root: unknown): string {
+    const seen = new WeakSet<object>()
+    const walk = (value: unknown, path: string, depth: number): string | null => {
+      if (depth > 6) return null
+      if (typeof value === 'bigint') return `BigInt@${path}`
+      if (typeof value === 'symbol') return `Symbol@${path}`
+      if (!value || typeof value !== 'object') return null
+      if (seen.has(value as object)) return `Circular@${path}`
+      seen.add(value as object)
+      if (Array.isArray(value)) {
+        for (let index = 0; index < Math.min(value.length, 40); index += 1) {
+          const hit = walk(value[index], `${path}[${index}]`, depth + 1)
+          if (hit) return hit
+        }
+        return null
+      }
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        const hit = walk(child, `${path}.${key}`, depth + 1)
+        if (hit) return hit
+      }
+      return null
+    }
+    return walk(root, '$', 0) ?? '(未定位：可能是 getter 抛错或代理陷阱)'
+  }
+
+  function sanitizeForWire(message: Record<string, unknown>): Record<string, unknown> | null {
+    try {
+      const text = JSON.stringify(message)
+      if (text === undefined) {
+        console.warn(`[transport] 消息顶层不可序列化，已跳过发送 kind=${String(message.kind)}`)
+        return null
+      }
+      return JSON.parse(text) as Record<string, unknown>
+    } catch (error) {
+      console.warn(`[transport] 消息无法序列化，已跳过发送 kind=${String(message.kind)} `
+        + `err=${String(error).slice(0, 160)} at=${describeUnserializable(message)}`)
+      return null
+    }
+  }
+
   function send(message: Record<string, unknown>): boolean {
     const room = getRoom()
     if (!room) return false
+    const wire = sanitizeForWire(message)
+    if (!wire) return false
     try {
-      room.send(message)
+      room.send(wire)
       updateSignalQuality()
       return true
     } catch (error) {

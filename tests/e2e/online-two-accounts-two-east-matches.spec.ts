@@ -2849,3 +2849,238 @@ test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, te
     await closeAccountBrowserPair(pair)
   }
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 莲花麻将·血流（P2P）线上整场验收：2 真人 + 2 机器人（普通 AI / 大模型 AI）。
+// 前置：BLOOD_FLOW_AVAILABILITY.p2p = true（2026-09-10 放行），线上创建房间时
+// 规则选择器才会给出「莲花麻将·血流」。结算/终局 DOM 走血流专用的
+// .bf-settlement / .bf-final-ranking，与经典 .round-settlement / .final-backdrop 不同。
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function readBloodFlowScores(page: Page, scope: string) {
+  return page.locator(`${scope} .bf-result-player`).evaluateAll((articles) => articles.map((article) => ({
+    seat: Number(article.getAttribute('data-result-seat')),
+    name: article.querySelector('.bf-player-name b')?.textContent?.trim() ?? '',
+    amount: Number((article.querySelector('.bf-result-amount')?.textContent ?? '').replace(/[^\-\d]/g, '')),
+  })))
+}
+
+async function bloodFlowSettlementVisible(page: Page, view: 'round' | 'final') {
+  return page.locator(`.bf-settlement[data-settlement-view="${view}"]`)
+    .isVisible().catch(() => false)
+}
+
+/** 卡住诊断：一次读取该端的关键 DOM 状态（牌桌相位/局号/结算面板/可点动作）。 */
+async function bloodFlowSideState(page: Page) {
+  return page.evaluate(() => {
+    const visible = (element: Element | null) => Boolean(element && (element as HTMLElement).getClientRects().length)
+    const labels = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
+      .filter((element) => visible(element))
+      .map((element) => (element.textContent ?? '').trim().slice(0, 24))
+    const hud = document.querySelector<HTMLElement>('.game-table-hud')
+    const panel = document.querySelector<HTMLElement>('.bf-settlement')
+    return {
+      hudPhase: hud?.dataset.phase ?? null,
+      hudRound: hud?.dataset.round ?? null,
+      roundInfo: document.querySelector('.round-info')?.textContent?.trim().slice(0, 40) ?? '',
+      tableVisible: visible(hud),
+      settlementView: panel?.getAttribute('data-settlement-view') ?? null,
+      settlementVisible: visible(panel),
+      reopenVisible: visible(document.querySelector('.blood-flow-result-reopen')),
+      primaryButtons: labels('.bf-primary'),
+      readyStatus: labels('.bf-ready-status'),
+      actionButtons: labels('.action-bar button'),
+      turnButtons: labels('.turn-action-row button'),
+      waitingTips: labels('.waiting-tip'),
+      seats: [...document.querySelectorAll('.player-seat')].map((seat) => (
+        seat.querySelector('.player-info strong')?.textContent?.trim() ?? ''
+      )),
+    }
+  }).catch((error) => ({ error: String(error).slice(0, 160) }))
+}
+
+async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo; label: string }) {
+  const { llm, testInfo, label } = options
+  const pair = await launchAccountBrowserPair()
+  const pages: Page[] = []
+  const applicationErrors: string[] = []
+  const observed: [string[], string[]] = [[], []]
+  const consoleLogs: [string[], string[]] = [[], []]
+  const consoleKinds: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
+  const roundScores: Array<{ round: string; seats: Array<{ name: string; amount: number }> }> = []
+  let roomCode = ''
+  try {
+    // 大模型座位 Key 只写作品托管域（vibeapps），不能扩散到 OAuth 主站。
+    if (llm) await installHostLlmConfig(pair.contexts[0], ONLINE.deepseekApiKey)
+    const host = await authenticateAccount(pair, 0, ONLINE.accounts[0])
+    const client = await authenticateAccount(pair, 1, ONLINE.accounts[1])
+    pages.push(host, client)
+    for (const [index, page] of pages.entries()) {
+      page.on('pageerror', (error) => {
+        if (!/vibehub\.js/.test(error.stack ?? '')) applicationErrors.push(error.message)
+      })
+      page.on('console', (message) => {
+        const text = `[${message.type()}] ${message.text().slice(0, 200)}`
+        consoleLogs[index].push(text)
+        if (consoleLogs[index].length > 400) consoleLogs[index].shift()
+        // 包类型计数：主机是否发出、客机是否收到 round_settled（血流的结算包），
+        // 是「客人没有 roundResult ⇒ 结算面板永不出现 ⇒ 不回执 ⇒ 主机死等」的关键判据。
+        const rx = /transport-rx kind=(\S+)/.exec(message.text())
+        if (rx) consoleKinds[index].set(rx[1], (consoleKinds[index].get(rx[1]) ?? 0) + 1)
+        const tx = /transport-tx kind=(\S+)/.exec(message.text())
+        if (tx) consoleKinds[index].set(`tx:${tx[1]}`, (consoleKinds[index].get(`tx:${tx[1]}`) ?? 0) + 1)
+      })
+    }
+    for (const page of pages) await expect(page.locator('.lobby-layout')).toBeVisible()
+
+    await enterOnlineLobby(host, '血流验收房主', 'host')
+    await host.getByRole('button', { name: '创建房间', exact: true }).click()
+    await host.locator('.game-settings button', { hasText: '玩法' }).click()
+    await host.getByRole('button', { name: /莲花麻将·血流/ }).click()
+    await host.getByRole('button', { name: '确定', exact: true }).click()
+    await host.getByRole('button', { name: '确认创建', exact: true }).click()
+    await acceptDisclaimerIfShown(host)
+    await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 60_000 })
+    roomCode = (await host.locator('.room-code strong').innerText()).trim()
+    await expect(host.locator('.room-game-config')).toContainText('东风场')
+    await expect(host.locator('.room-game-config')).toContainText('血流')
+    console.log(`[BF-ONLINE] ${label} 房间 ${roomCode} 已创建（东风场 · 血流）`)
+
+    await enterOnlineLobby(client, '血流验收客人', 'client')
+    await client.getByRole('button', { name: '加入房间', exact: true }).click()
+    await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
+    await client.getByRole('button', { name: '确认加入', exact: true }).click()
+    await acceptDisclaimerIfShown(client)
+    await waitForRoomReady(host, client, roomCode)
+    await expect(host.locator('.room-seat.occupied')).toHaveCount(2)
+
+    if (llm) {
+      const picks = host.getByTestId('room-llm-pick')
+      await expect(picks, '房主应能为两个空位选择大模型').toHaveCount(2, { timeout: 30_000 })
+      await picks.nth(0).selectOption({ index: 1 })
+      await picks.nth(1).selectOption({ index: 2 })
+      await expect(host.locator('.room-seat.llm-planned')).toHaveCount(2, { timeout: 30_000 })
+    } else {
+      await expect(host.locator('.room-seat.llm-planned')).toHaveCount(0)
+    }
+    await attachDualScreenshots(pages as [Page, Page], testInfo, `${label}-room`)
+
+    await host.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await client.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await expect(host.locator('.room-start')).toBeEnabled({ timeout: 30_000 })
+    await host.locator('.room-start').click()
+    await Promise.all(pages.map((page) => installHostAutoPlayer(page)))
+
+    const deadline = Date.now() + 2_100_000
+    let lastHand = ''
+    let handStarted = Date.now()
+    let lastProgress = 0
+    /** 卡住/失败取证：把双端 DOM 状态与控制台尾部写到证据目录并挂到报告。 */
+    const dumpStallEvidence = async (reason: string) => {
+      const states = await Promise.all(pages.map((page) => bloodFlowSideState(page)))
+      const kinds = consoleKinds.map((map) => Object.fromEntries([...map.entries()].sort()))
+      const evidence = JSON.stringify({
+        label, roomCode, reason, hand: lastHand, states, kinds, applicationErrors,
+        hostLogs: consoleLogs[0].slice(-40), clientLogs: consoleLogs[1].slice(-40),
+      }, null, 2)
+      console.log(`[BF-ONLINE] ${label} 诊断：${reason}\n房主 ${JSON.stringify(states[0])}\n客人 ${JSON.stringify(states[1])}`
+        + `\n房主包型 ${JSON.stringify(kinds[0])}\n客人包型 ${JSON.stringify(kinds[1])}`
+        + `\n应用异常 ${JSON.stringify(applicationErrors.slice(0, 5))}`)
+      if (process.env.ONLINE_EVIDENCE_DIR) {
+        mkdirSync(process.env.ONLINE_EVIDENCE_DIR, { recursive: true })
+        writeFileSync(`${process.env.ONLINE_EVIDENCE_DIR}/${label}-stall.json`, evidence, 'utf8')
+      }
+      await testInfo.attach(`${label}-stall`, { body: evidence, contentType: 'application/json' })
+      await attachDualScreenshots(pages as [Page, Page], testInfo, `${label}-stall`)
+      return evidence
+    }
+    try {
+      while (Date.now() < deadline) {
+        const labels = await Promise.all(pages.map((page) => readRoundLabel(page)))
+        labels.forEach((value, index) => {
+          const token = roundToken(value)
+          if (token && !observed[index].includes(token)) {
+            observed[index].push(token)
+            console.log(`[BF-ONLINE] ${label} ${index === 0 ? '房主' : '客人'} 进入 ${token}`)
+          }
+        })
+        const hand = roundToken(labels[0])
+        if (hand && hand !== lastHand) { lastHand = hand; handStarted = Date.now() }
+        if (lastHand && Date.now() - handStarted > 300_000) {
+          await dumpStallEvidence(`${lastHand} 超过 5 分钟未推进`)
+          throw new Error(`${lastHand} 超过 5 分钟未推进`)
+        }
+
+        const finals = await Promise.all(pages.map((page) => bloodFlowSettlementVisible(page, 'final')))
+        if (finals.every(Boolean)) break
+
+        const rounds = await Promise.all(pages.map((page) => bloodFlowSettlementVisible(page, 'round')))
+        if (rounds.some(Boolean)) {
+          const seats = rounds[0]
+            ? await readBloodFlowScores(pages[0], '.bf-settlement[data-settlement-view="round"]')
+            : []
+          if (rounds.every(Boolean) && hand && seats.length === 4
+            && !roundScores.some((entry) => entry.round === hand)) {
+            roundScores.push({ round: hand, seats: seats.map(({ name, amount }) => ({ name, amount })) })
+            await attachDualScreenshots(pages as [Page, Page], testInfo, `${label}-${hand}`)
+            console.log(`[BF-ONLINE] ${label} ${hand} 结算：${seats.map((seat) => `${seat.name} ${seat.amount}`).join(' / ')}`)
+          } else if (rounds[0] !== rounds[1]) {
+            console.log(`[BF-ONLINE] ${label} ${hand} 结算面板单边可见（房主=${rounds[0]} 客人=${rounds[1]}），继续等待`)
+          }
+          // 局间屏障：主机等所有在线真人回执；哪端可见就在哪端点「继续下一局」。
+          await Promise.all(pages.map((page, index) => (
+            rounds[index]
+              ? page.locator('.bf-primary').click({ timeout: 5_000 }).catch(() => {})
+              : Promise.resolve()
+          )))
+          await pages[0].waitForTimeout(800)
+        }
+        if (Date.now() - lastProgress > 30_000) {
+          lastProgress = Date.now()
+          const states = await Promise.all(pages.map((page) => bloodFlowSideState(page)))
+          console.log(`[BF-ONLINE] ${label} ${labels.join(' | ')}；结算 ${roundScores.length} 局；`
+            + `房主 phase=${states[0].hudPhase} panel=${states[0].settlementView ?? '-'} `
+            + `客人 phase=${states[1].hudPhase} panel=${states[1].settlementView ?? '-'}`)
+        }
+        await pages[0].waitForTimeout(400)
+      }
+    } catch (error) {
+      if (!/未推进/.test(String(error))) await dumpStallEvidence(String(error).slice(0, 200))
+      throw error
+    }
+
+    expect(observed[0], '房主应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
+    expect(observed[1], '客人应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
+    await Promise.all(pages.map((page) => expect(
+      page.locator('.bf-settlement[data-settlement-view="final"]')).toBeVisible({ timeout: 60_000 })))
+    const standings = await Promise.all(pages.map((page) => readBloodFlowScores(page, '.bf-final-ranking')))
+    expect(standings[0]).toHaveLength(4)
+    const normalized = standings.map((rows) => rows
+      .slice().sort((a, b) => a.seat - b.seat)
+      .map((row) => `${row.seat}:${row.name}:${row.amount}`))
+    expect(normalized[1], '两端最终排名与累计积分应一致').toEqual(normalized[0])
+    await attachDualScreenshots(pages as [Page, Page], testInfo, `${label}-final`)
+
+    const result = JSON.stringify({
+      label, llm, roomCode, observed, roundScores, standings: standings[0], applicationErrors,
+    }, null, 2)
+    await testInfo.attach(`${label}-result`, { body: result, contentType: 'application/json' })
+    mkdirSync('tmp/blood-flow-online', { recursive: true })
+    writeFileSync(`tmp/blood-flow-online/${label}-${Date.now().toString(36)}.json`, result, 'utf8')
+    expect(applicationErrors, '应用异常应为空').toEqual([])
+    console.log(`[BF-ONLINE] ${label} 完整东风场通过：`
+      + `${standings[0].map((row) => `${row.name} ${row.amount}`).join(' / ')}；房间 ${roomCode}`)
+  } finally {
+    await closeAccountBrowserPair(pair)
+  }
+}
+
+test('线上两账号完成莲花麻将·血流东风场（2 真人 + 2 普通机器人）', async ({}, testInfo) => {
+  test.setTimeout(2_400_000)
+  await runBloodFlowEastMatch({ llm: false, testInfo, label: 'bf-plain-ai' })
+})
+
+test('线上两账号完成莲花麻将·血流东风场（2 真人 + 2 大模型机器人）', async ({}, testInfo) => {
+  test.setTimeout(2_400_000)
+  await runBloodFlowEastMatch({ llm: true, testInfo, label: 'bf-llm-ai' })
+})
