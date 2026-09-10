@@ -123,6 +123,11 @@ try {
     # `import type ... from './ws/authority'`, so vibehub still needs it.
     'src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts'
     'src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.test.ts'
+    # Master-only test for a keep file: asserts the master-only `enabled` option of
+    # useRemoteContinueCountdown (vibehub keeps its own hook without that option).
+    # The keep restore cannot drop master-added files inside a keep directory, so a
+    # new master test under src/game/online/presentation/ must be listed here.
+    'src/game/online/presentation/useRemoteContinueCountdown.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
   )
 
