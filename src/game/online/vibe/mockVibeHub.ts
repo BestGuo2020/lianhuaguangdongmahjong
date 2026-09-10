@@ -180,7 +180,7 @@ export interface MockVibeOptions {
 }
 
 export function createMockVibeClient(options: MockVibeOptions = {}): VibeHubSDK.Client {
-  const settleMs = options.settleMs ?? 250
+  const settleMs = options.settleMs ?? queryNumber('mockSettleMs') ?? 250
   const pingIntervalMs = options.pingIntervalMs ?? 1000
   const leaveTimeoutMs = options.leaveTimeoutMs ?? 4000
   const relayAfterMs = options.relayAfterMs

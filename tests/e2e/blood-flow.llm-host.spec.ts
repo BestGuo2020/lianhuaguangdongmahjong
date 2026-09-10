@@ -18,14 +18,14 @@ test('only the room host requests AI decisions and round-end reactions; both vie
       expect(data.publicPlayers.every((p: any) => !('hand' in p))).toBe(true)
     }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
-      content: JSON.stringify({ choice: reaction ? 'COMMENT' : data.candidates[0].id, message: reaction ? '本局结束，下局再来' : '不要播出的自由发言' }),
+      content: JSON.stringify({ choice: reaction ? 'COMMENT' : data.candidates[0].id, message: reaction ? '本局结束，下局再来' : data.currentWin?'我胡了，不应播出':'这张先走。' }),
     } }] }) })
   })
   await context.route('**/api/local-tts/synthesize', route => route.fulfill({ status: 503, body: 'test TTS failure' }))
   await host.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true, activeId: 'bf-model',
     seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{ id: 'bf-model', name: 'Test', providerType: 'custom',
       apiKey: 'test-only-private-key', baseUrl: 'https://model.example.test/v1', model: 'fixture-model', style: '稳健', timeoutMs: 40_000 }] })))
-  await host.goto('/?bloodFlow=1&theme=llm&mockPeer=bf-model-host')
+  await host.goto('/?bloodFlow=1&theme=llm&mockPeer=bf-model-host&mockSettleMs=1500')
   await host.getByRole('button', { name: /玩法 莲花广麻/ }).click()
   await host.getByRole('button', { name: /莲花麻将·血流/ }).click()
   await host.getByRole('button', { name: '确定', exact: true }).click()
@@ -35,7 +35,7 @@ test('only the room host requests AI decisions and round-end reactions; both vie
   await host.getByRole('button', { name: '确认创建', exact: true }).click(); await accept(host)
   await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 20_000 })
   const code = await host.locator('.room-code strong').innerText()
-  await client.goto('/?bloodFlow=1&mockPeer=bf-model-client')
+  await client.goto('/?bloodFlow=1&mockPeer=bf-model-client&mockSettleMs=1500')
   await client.getByRole('radio', { name: /联机对战/ }).click(); await client.getByPlaceholder('输入昵称').fill('模型客人')
   await client.getByRole('button', { name: '加入房间', exact: true }).click()
   await client.getByPlaceholder('输入 6 位房间码').fill(code.trim())
@@ -45,6 +45,10 @@ test('only the room host requests AI decisions and round-end reactions; both vie
   const picks = host.getByTestId('room-llm-pick')
   await expect(picks).toHaveCount(2)
   await picks.nth(0).selectOption({ index: 1 }); await picks.nth(1).selectOption({ index: 1 })
+  for(const page of [host,client])await page.evaluate(()=>{
+    ;(window as any).__ordinarySpeechSeen=false;(window as any).__forbiddenSpeechSeen=false
+    new MutationObserver(()=>{for(const e of document.querySelectorAll('.llm-bubble')){if(e.textContent?.includes('这张先走'))(window as any).__ordinarySpeechSeen=true;if(e.textContent?.includes('不应播出'))(window as any).__forbiddenSpeechSeen=true}}).observe(document.body,{subtree:true,childList:true,characterData:true})
+  })
   for (const page of [host, client]) await page.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
   await host.getByRole('button', { name: /开始对局/ }).click()
   for (const page of [host, client]) {
@@ -52,10 +56,15 @@ test('only the room host requests AI decisions and round-end reactions; both vie
     await expect(page.locator('.game-table-hud')).toHaveAttribute('data-opening-stage', '', { timeout: 30_000 })
     await page.getByRole('button', { name: /开启机器人托管/ }).click()
   }
-  for (const page of [host, client]) await expect(page.getByRole('dialog', { name: '血流公开流水' })).toBeVisible({ timeout: 150_000 })
+  for (const page of [host, client]) await expect(page.getByRole('dialog', { name: '血流本局结算' })).toBeVisible({ timeout: 150_000 })
   expect(hostDecisions).toBeGreaterThan(0)
   expect(clientRequests).toBe(0)
   await expect.poll(() => reactionRequests, { timeout: 20_000 }).toBe(2)
+  for(const page of [host,client]){
+    expect(await page.evaluate(()=>(window as any).__ordinarySpeechSeen)).toBe(true)
+    expect(await page.evaluate(()=>(window as any).__forbiddenSpeechSeen)).toBe(false)
+    await page.getByRole('button',{name:'查看流水',exact:true}).click()
+  }
   expect(await client.locator('.blood-flow-ledger tbody').innerText()).toBe(await host.locator('.blood-flow-ledger tbody').innerText())
   await client.close()
 })
