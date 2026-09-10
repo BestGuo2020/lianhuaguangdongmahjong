@@ -34,7 +34,8 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
     expect(BLOOD_FLOW_CONFIG.hardWinMultiplier).toBe(2)
     expect(LOTUS_RULESET.baseScore).toBe(100)
     expect(LOTUS_RULESET.flow).toMatchObject({ mode: 'single-win', continueAfterWin: false, allowMultipleWinners: false })
-    expect(BLOOD_FLOW_AVAILABILITY).toEqual({ local: true, ws: true, p2p: false })
+    // 本地 / WS / P2P 三面均已放行（P2P 于 2026-09-10 打开，用于部署环境整场验收）。
+    expect(BLOOD_FLOW_AVAILABILITY).toEqual({ local: true, ws: true, p2p: true })
     expect(Object.isFrozen(BLOOD_FLOW_CONFIG.patterns['four-kongs'].excludes)).toBe(true)
   })
 

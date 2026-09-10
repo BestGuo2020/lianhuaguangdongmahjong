@@ -66,16 +66,18 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 ### 2-A 可直接按小改动移植（结构一致）
 
+> **2026-09-10 实测核对（同步后逐项验证）**：vibehub 的 P2P 协议与 host 层与 WS 不同，表内各项的「是否真需要」按下表最后一列为准。
+
 | master 文件 | 改动内容 | vibehub 现状 | 动作 |
 |---|---|---|---|
-| `online/orchestration/requestCoordinator.ts` | 庄家开局首回合（`turnOrigin === 'opening'`）视作「已摸牌」→ 可天胡/可风杠 | 同名保留版，已有 `state.userDrewThisTurn.value = !message.ctx.skipDraw` | 改成 `const drawnTurn = !message.ctx.skipDraw \|\| message.ctx.turnOrigin === 'opening'`，并同步后面 `players[0].drawnTileIndex` 与 `give.mp3` 的判断 |
-| `online/protocol/messages.ts` | `turn_request.ctx` 增加 `turnOrigin?: string` | 同名保留版缺该字段 | 加字段 |
-| `online/protocol/decoder.ts` | 校验 `isOptional(raw.ctx.turnOrigin, isString)` | 同名保留版只校验到 `canWindKong` | 加一行（不加该字段会被丢弃，天胡修复不生效） |
-| `online/state/remoteGameState.ts` | 新增 `lastDiscardSound`（点炮胡要等牌名播报播完） | 同名保留版已有 `lastDiscard`，无该 ref | 加 `shallowRef<Promise<void> \| null>(null)` 并导出 |
-| `online/orchestration/remoteActionController.ts` | 出牌后立刻清 `turnCanHu` / `turnCanWindKong`（避免按钮残留） | 同名保留版 | 按其结构加同一行为 |
-| `online/orchestration/snapshotReconciler.ts` | `applyLastDiscard` 里产出 `lastDiscardSound` promise（走 `later` + `playSoundAndWait`） | 同名保留版已有 `applyLastDiscard` 与 `tileAudioFile` | 按其结构加；新增可选 `playSoundAndWait` 选项 |
-| `online/presentation/settlementTimeline.ts` | 点炮胡：等牌名播报播完 + `DISCARD_WIN_EFFECT_DELAY` 再起胡音效；点炮牌在牌河补回直到特效启动 | 同名保留版**结构不同**（`effectKey/settleIfReady/beginEffect` 队列版） | **按 vibehub 结构重写**：最小版＝在 `beginEffect` 前 `await state.lastDiscardSound`；补回牌河逻辑可后置 |
-| `online/presentation/settlementTimeline.test.ts`、`useRemoteGame.test.ts` 对应用例 | 同上 | vibehub 有自己的测试文件 | 用 vibehub 的测试风格补 1-2 个用例 |
+| `online/orchestration/requestCoordinator.ts` | 庄家开局首回合（`turnOrigin === 'opening'`）视作「已摸牌」→ 可天胡/可风杠 | 同名保留版有 `skipDraw`，**但没有 `turnOrigin`** | **待定**：vibehub 的 P2P 协议里不存在该字段（`git grep turnOrigin` 仅命中 `core/local/*` 与 `llm/*`）。要真生效需 host 侧（`host/lotusRemotePlayerController.ts` 构造 turn_request 时带上 `localTurnOrchestrator` 已有的 turnOrigin）+ 协议 + 客机三处一起改，属**新功能移植**，与本次血流验收无关 → 单独一批 |
+| `online/protocol/messages.ts` | `turn_request.ctx` 增加 `turnOrigin?: string` | 同上 | 同上（随 turnOrigin 一批） |
+| `online/protocol/decoder.ts` | 校验 `isOptional(raw.ctx.turnOrigin, isString)` | 同上 | 同上 |
+| `online/state/remoteGameState.ts` | 新增 `lastDiscardSound`（点炮胡要等牌名播报播完） | 保留版无该 ref，但 **`core/local/localGameState.ts` 与 `shared/runtime/tileFlowExecutor.ts` 在 vibehub 上已有 `lastDiscardSound`** | **本批执行**：给保留版 state 补 `lastDiscardSound`，由 `snapshotReconciler` 产出，`presentation/settlementTimeline` 消费 |
+| `online/orchestration/remoteActionController.ts` | 出牌后立刻清 `turnCanHu` / `turnCanWindKong` | 保留版已在 `requestCoordinator` 的弃牌/过牌/回合切换处清（L119-120、L149-150） | **无需动作**（已具备等价行为），需人工确认一处：弃牌后是否立即清（master 是在 `remoteActionController.applyDiscard` 清） |
+| `online/orchestration/snapshotReconciler.ts` | `applyLastDiscard` 里产出 `lastDiscardSound` promise（`later` + `playSoundAndWait`） | 同名保留版已有 `applyLastDiscard` + `tileAudioFile`，无 promise | **本批执行**（随 state 一起） |
+| `online/presentation/settlementTimeline.ts` | 点炮胡等牌名播报播完再起胡音效 + 点炮牌补回牌河 | 结构不同（`effectKey/settleIfReady/beginEffect` 队列版）；`shared/settlement/settlementTimeline.ts` 已有 `lastDiscardSound?` 可选入参 | **最小版**：在 `beginEffect` 前 `await state.lastDiscardSound`；补回牌河逻辑后置 |
+| `online/presentation/settlementTimeline.test.ts`、`useRemoteGame.test.ts` 对应用例 | 同上 | vibehub 有自己的测试文件 | 按 vibehub 测试风格补 1-2 个用例 |
 
 ### 2-B 不需要移植（master-only，vibehub 无对应）
 
