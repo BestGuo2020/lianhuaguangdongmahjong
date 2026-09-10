@@ -114,8 +114,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
     current: current => view.value?.authorityEpoch === current.authorityEpoch && view.value?.roundId === current.roundId && !!view.value?.public.roundResult,
     emit: (line, signal) => presentRoundReaction(line, signal),
-    // 联机局末感言仍用模板台词，但音色取房间供应商身份（不读本机单机 LLM 设置）。
-    voice: seat => (options.externalAuthority ? remoteSeatVoice(seat) : null),
+    // 只在联机时传 voice（音色取房间供应商身份，不读本机单机 LLM 设置）。
+    // 必须整体缺省而不能返回 null：reactions 一旦拿到 voice 就只用它，返回 null 会让该座位
+    // 直接 continue —— 单机局末感言（气泡 + TTS）会全部消失（2026-09-10 由 blood-flow.llm.spec
+    // 的 roundTts 断言暴露）。单机不传时运行时回退到 localBloodFlowProvider（本机 LLM 设置音色）。
+    ...(options.externalAuthority ? { voice: (seat: Seat) => remoteSeatVoice(seat) } : {}),
   })
   let worker: ReturnType<typeof createBloodFlowWorkerClient> | null = null
   let hintWorker: ReturnType<typeof createEvaluatorService> | null = null
