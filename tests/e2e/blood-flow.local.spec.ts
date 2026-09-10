@@ -55,8 +55,12 @@ test('blood-flow is available locally and in WS rooms', async ({ page }) => {
   await page.getByRole('button', { name: '确定', exact: true }).click()
   await expect(page.locator('.start-button')).toContainText('莲花麻将·血流')
   await page.getByRole('radio', { name: /联机对战/ }).click()
-  // WS 放行后：联机大厅保留血流玩法选择（不再回退默认规则）。
-  await expect(page.locator('.remote-lobby')).toContainText('莲花麻将·血流')
+  // 联机可用性断言必须跨分支成立：WS 大厅会在文案里显示当前规则，vibehub 的 P2P 大厅不显示，
+  // 因此统一改为「建房弹窗的玩法选择里能选到血流」——这正是「联机可选」的实际能力。
+  await page.getByRole('button', { name: '创建房间', exact: true }).click()
+  await page.locator('.game-settings button', { hasText: '玩法' }).click()
+  await expect(page.getByRole('button', { name: /莲花麻将·血流/ })).toBeVisible()
+  await page.goto('/?bloodFlow=1')
   await page.getByRole('radio', { name: /单机对战/ }).click()
   await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
   await page.getByRole('button', { name: /莲花麻将·血流/ }).click()
