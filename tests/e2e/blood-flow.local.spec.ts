@@ -57,6 +57,8 @@ test('blood-flow is available locally and in WS rooms', async ({ page }) => {
   await page.getByRole('radio', { name: /联机对战/ }).click()
   // 联机可用性断言必须跨分支成立：WS 大厅会在文案里显示当前规则，vibehub 的 P2P 大厅不显示，
   // 因此统一改为「建房弹窗的玩法选择里能选到血流」——这正是「联机可选」的实际能力。
+  // 建房按钮在未填昵称时是 disabled（两个分支一致），先填昵称再打开弹窗。
+  await page.getByPlaceholder('输入昵称').fill('联机校验')
   await page.getByRole('button', { name: '创建房间', exact: true }).click()
   await page.locator('.game-settings button', { hasText: '玩法' }).click()
   await expect(page.getByRole('button', { name: /莲花麻将·血流/ })).toBeVisible()
