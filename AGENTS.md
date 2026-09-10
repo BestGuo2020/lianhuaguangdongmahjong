@@ -47,3 +47,12 @@
 
 - 前端：`pnpm test`（vitest，`src` 下）
 - 后端：`backend/.venv/Scripts/python.exe -m pytest tests -q`（在 `backend/` 目录内）
+
+### 联机（P2P）问题一律线上验收（2026-09-10 决定）
+
+本地 `mockVibeHub` **不具备 VibeHub SDK 的真实环境**，因此它只用于**确定性逻辑/流程**断言，不再为它维护联机行为断言：
+
+- 它能覆盖：承诺洗牌与权威 worker（`tests/e2e/blood-flow.room.spec.ts`）、大厅/主题/刷新恢复（`blood-flow.lobby.spec.ts`）、协议与 replica 逻辑（`src/game/variants/lotus/bloodFlow/network/network.test.ts`）。
+- **它覆盖不了**（实测四类线上缺陷全部无法本地复现）：单包超限导致的静默发送失败、分片在直连 SDK 的订阅者处被丢弃、对端 peer id 漂移、收帧饥饿与失联判定。原因是 mock 在进程内投递、无大小上限与加密、peer id 恒定、无 WebRTC/中继抖动。
+- 因此联机行为（房间面板/roster、传输、断线恢复、结算同步）统一在**线上部署**验收：`vibehubcli`（`vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist`）更新后，用 `tmp/online_test` 的两个账号跑 `tests/e2e/online-two-accounts-two-east-matches.spec.ts` 里的血流用例（2 真人 + 2 普通机器人 / 2 真人 + 2 大模型机器人），取证落 `tmp/bf-online-evidence/`。
+- 依据与逐项记录见 `docs/vibehub-adaptation-checklist.md` 的「线上整场验收结果」与「联机验收策略」两节。
