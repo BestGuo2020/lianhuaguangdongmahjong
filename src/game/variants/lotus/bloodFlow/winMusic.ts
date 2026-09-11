@@ -1,4 +1,5 @@
 import { DEFAULT_BGM_FILE } from '../../../core/presentation/useAudio'
+import type { BgmTrackPort } from '../../../core/presentation/useAudio'
 
 /**
  * 血流「全场多胡」背景乐。
@@ -11,12 +12,7 @@ import { DEFAULT_BGM_FILE } from '../../../core/presentation/useAudio'
 export const HU_MUSIC_FILE = 'HuMusic.ogg'
 export const HU_MUSIC_WIN_TILE_THRESHOLD = 8
 
-export interface WinMusicBgmPort {
-  /** 交叉淡入淡出切换循环 BGM；file 为 `audio/` 下的文件名，秒数省略时用音频层默认时长。 */
-  fadeTo(file: string, fadeSeconds?: number): void
-  /** 预热目标曲目，避免第一次到阈值时才下载导致换曲延迟（可选）。 */
-  preload?(file: string): void
-}
+export interface WinMusicBgmPort extends BgmTrackPort {}
 
 export interface WinMusicState {
   /** 本局四家胡牌张数合计。 */
