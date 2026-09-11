@@ -179,8 +179,8 @@ npm run test:e2e
 代码通过 Vite 内置的 `import.meta.env.BASE_URL` 拼接音频、图片和头像资源路径。不要把密钥放入前端环境变量或提交到仓库。
 
 单机大模型启用后，吐槽文字会立即显示，同时异步请求独立的
-`POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，讲话期间自动压低
-BGM；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别 DeepSeek/千问/Kimi/豆包/MiniMax/GPT/GLM/Claude，也可
+`POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，与 BGM 同时播放
+（语音期间不压低 BGM：2026-09-11 用户决定，忽高忽低更影响对局节奏）；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别 DeepSeek/千问/Kimi/豆包/MiniMax/GPT/GLM/Claude，也可
 手动指定任一网关白名单音色或策略默认音色。此链路位于共享 `game/llm` 与
 `game/core/presentation`，master 与 vibehub 使用同一实现，不依赖 WebSocket/P2P。
 

@@ -63,7 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('useAudio LLM voice ducking', () => {
+describe('useAudio LLM 语音播放', () => {
   it('一炮多响组播：多条语音同时创建互不打断，全部结束后 resolve，静音时直接拒绝', async () => {
     const audio = useAudio()
     const before = MockAudio.instances.length
@@ -196,7 +196,7 @@ describe('useAudio LLM voice ducking', () => {
     await expect(completed).resolves.toBe(true)
   })
 
-  it('普通吐槽播放期间丢弃后来普通语音，不再积压到下一圈', () => {
+  it('普通吐槽播放期间丢弃后来普通语音，不再积压到下一圈，且不压低 BGM', () => {
     const audio = useAudio()
     const bgm = MockAudio.instances[0]
     expect(bgm.volume).toBe(0.32)
@@ -205,7 +205,8 @@ describe('useAudio LLM voice ducking', () => {
     expect(dispatchLocalLlmAudio(firstUrl, 1, 1)).toBe(true)
     const first = MockAudio.instances.find((item) => item.src === firstUrl)!
     expect(first.volume).toBe(1)
-    expect(bgm.volume).toBe(0.08)
+    // 语音期间 BGM 恒定：忽高忽低会影响对局节奏（2026-09-11 用户决定取消 ducking）。
+    expect(bgm.volume).toBe(0.32)
 
     audio.playLlmAudio('/api/tts/audio/second.mp3', 2, 2)
     expect(MockAudio.instances.some((item) => item.src.endsWith('/second.mp3'))).toBe(false)
@@ -213,7 +214,7 @@ describe('useAudio LLM voice ducking', () => {
     expect(bgm.volume).toBe(0.32)
   })
 
-  it('关键胜利语音打断普通吐槽并在结束后恢复 BGM', () => {
+  it('关键胜利语音打断普通吐槽，BGM 全程不变', () => {
     const audio = useAudio()
     const bgm = MockAudio.instances[0]
     const firstUrl = `/api/local-tts/audio/${'a'.repeat(64)}.mp3`
@@ -225,7 +226,7 @@ describe('useAudio LLM voice ducking', () => {
     expect(first.pause).toHaveBeenCalledOnce()
     const win = MockAudio.instances.find((item) => item.src.endsWith('/win.mp3'))!
     expect(win.play).toHaveBeenCalledOnce()
-    expect(bgm.volume).toBe(0.08)
+    expect(bgm.volume).toBe(0.32)
     win.emit('ended')
     expect(bgm.volume).toBe(0.32)
   })
