@@ -33,8 +33,6 @@ const EFFECT_AUDIO_FILES = [
 ]
 const EFFECT_WAIT_TIMEOUT_MS = 4_000
 const BGM_VOLUME = 0.32
-const BGM_DUCKED_VOLUME = 0.08
-const BGM_DUCK_RAMP_SECONDS = 0.12
 /** 默认循环 BGM；`audio/` 下的文件名。 */
 export const DEFAULT_BGM_FILE = 'bg.ogg'
 /** 换 BGM 的交叉淡入淡出时长：够长到听不出切换、又不拖到盖住下一拍动作。 */
@@ -156,13 +154,14 @@ export function useAudio() {
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
   // 两条路径都支持交叉淡入淡出：换曲时新旧各持一个增益/音量，斜坡互换后再停旧轨。
+  // 注意（2026-09-11 用户决定）：LLM 语音播放期间**不压低 BGM**——忽高忽低比语音盖住音乐
+  // 更影响对局节奏。BGM 恒定 BGM_VOLUME，不要再加 ducking。
   let audioContext: AudioContext | null = null
   const bgmBuffers = new Map<string, AudioBuffer>()
   let webBgmTrack: { file: string; source: AudioBufferSourceNode; gain: GainNode } | null = null
   let bgmGain: GainNode | null = null
   let bgmWebAudio = false
   let bgmPreloadPromise: Promise<void> | null = null
-  let bgmDucked = false
   let bgmTrackFile = DEFAULT_BGM_FILE
   // HTMLAudio 兜底（无 Web Audio / 解码失败时使用）
   const bgm = new Audio(`${AUDIO_BASE}${DEFAULT_BGM_FILE}`)
@@ -246,24 +245,8 @@ export function useAudio() {
     })
   }
 
-  function bgmMasterVolume() {
-    return bgmDucked ? BGM_DUCKED_VOLUME : BGM_VOLUME
-  }
-
   function applyFallbackVolumes() {
-    const master = bgmMasterVolume()
-    for (const track of fallbackTracks) track.element.volume = master * track.fade
-  }
-
-  function setBgmDucked(ducked: boolean) {
-    bgmDucked = ducked
-    const target = bgmMasterVolume()
-    applyFallbackVolumes()
-    if (!bgmGain || !audioContext) return
-    const now = audioContext.currentTime
-    bgmGain.gain.cancelScheduledValues(now)
-    bgmGain.gain.setValueAtTime(bgmGain.gain.value, now)
-    bgmGain.gain.linearRampToValueAtTime(target, now + BGM_DUCK_RAMP_SECONDS)
+    for (const track of fallbackTracks) track.element.volume = BGM_VOLUME * track.fade
   }
 
   function settleLlmMidpoint(item: LlmAudioItem, played: boolean) {
@@ -291,16 +274,12 @@ export function useAudio() {
       }
       settleLlmMidpoint(candidate, false)
     }
-    if (!item) {
-      setBgmDucked(false)
-      return
-    }
+    if (!item) return
     const audio = new Audio(item.url)
     activeLlmAudio = audio
     activeLlmItem = item
     audio.preload = 'auto'
     audio.volume = 1
-    setBgmDucked(true)
     let finished = false
     let started = false
     let fallbackTimer = 0
@@ -322,7 +301,6 @@ export function useAudio() {
       activeLlmAudio = null
       activeLlmItem = null
       pumpLlmAudio()
-      if (!activeLlmAudio) setBgmDucked(false)
     }
     const maybeResolveMidpoint = () => {
       if (item.waitForCompletion) return
@@ -441,17 +419,13 @@ export function useAudio() {
   /** 一炮多响：多位赢家的语音在同一拍开始，彼此不打断、不进串行队列。全部结束后 resolve。 */
   async function playConcurrentLlmAudio(items: LlmAudioGroupItem[]): Promise<void> {
     if (!soundOn.value || !effectsOn.value || !items.length) return
-    if (!groupAudios.size) setBgmDucked(true)
     const endings: Promise<void>[] = []
     for (const { url } of items) {
       if (!url) continue
       const audio = new Audio(url)
       groupAudios.add(audio)
       audio.volume = 1
-      const release = () => {
-        if (!groupAudios.delete(audio)) return
-        if (!groupAudios.size && !activeLlmAudio) setBgmDucked(false)
-      }
+      const release = () => { groupAudios.delete(audio) }
       endings.push(new Promise<void>((resolve) => {
         const settle = () => { release(); resolve() }
         audio.addEventListener('ended', settle, { once: true })
@@ -470,7 +444,6 @@ export function useAudio() {
     activeLlmItem = null
     groupAudios.forEach((audio) => { audio.pause(); audio.currentTime = 0 })
     groupAudios.clear()
-    setBgmDucked(false)
   }
 
   // 单机 TTS 通过共享总线接入；两分支的 App.vue 均无需感知该实现。
@@ -566,7 +539,7 @@ export function useAudio() {
     if (ctx.state === 'suspended') void ctx.resume()
     if (!bgmGain) {
       bgmGain = ctx.createGain()
-      bgmGain.gain.value = bgmMasterVolume()
+      bgmGain.gain.value = BGM_VOLUME
       bgmGain.connect(ctx.destination)
     }
     const now = ctx.currentTime
@@ -617,7 +590,7 @@ export function useAudio() {
     track.fade = 0
     track.element.pause()
     // 默认 BGM 元素常驻（恢复播放与静音开关都复用它），换曲产生的元素用完即弃。
-    if (track.element === bgm) { track.element.volume = bgmMasterVolume(); return }
+    if (track.element === bgm) { track.element.volume = BGM_VOLUME; return }
     const index = fallbackTracks.indexOf(track)
     if (index >= 0) fallbackTracks.splice(index, 1)
   }

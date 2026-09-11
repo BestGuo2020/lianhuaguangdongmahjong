@@ -174,7 +174,7 @@ describe('useAudio BGM 交叉淡入淡出（Web Audio 路径）', () => {
     audio.fadeToBgm('HuMusic.ogg', 0.05)
     await wait(30)
     expect(ctx.sources).toHaveLength(2)
-    // gains[0] 是主增益（ducking 用），换曲的是其后两条轨道增益。
+    // gains[0] 是常驻主增益（恒为 BGM_VOLUME，不再做语音 ducking），换曲的是其后两条轨道增益。
     const [oldTrack, newTrack] = ctx.gains.slice(1, 3).map(node => node.gain)
     expect(newTrack.ramps.some(([value]) => value === 1)).toBe(true)
     expect(oldTrack.ramps.some(([value]) => value === 0)).toBe(true)
