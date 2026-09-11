@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_BGM_FILE, activeBgmTrackPort, useAudio } from './useAudio'
 
-/** 交叉淡入淡出只在 BGM 层，这里独立桩出可观测的音量斜坡。 */
+/** 换曲过渡只在 BGM 层，这里独立桩出可观测的音量与增益曲线。 */
 class MockAudio {
   static instances: MockAudio[] = []
   src: string
@@ -98,55 +98,52 @@ function stubGlobals(withWebAudio: boolean) {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-describe('useAudio BGM 交叉淡入淡出（HTMLAudio 回退路径）', () => {
+describe('useAudio BGM 顺序切换（HTMLAudio 回退路径）', () => {
   beforeEach(() => stubGlobals(false))
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-  it('换曲时新轨淡入、旧轨淡出，斜坡结束后旧轨停止；重复点同一曲目不重复切换', async () => {
+  it('顺序切换：旧曲先淡到 0 才停，新曲随后从 0 淡起；重复点同一曲目不重复切换', async () => {
     const audio = useAudio()
     const bg = MockAudio.instances[0]
     await audio.startBgm()
     expect(bg.play).toHaveBeenCalledOnce()
 
-    audio.fadeToBgm('HuMusic.ogg', 0.2)
-    const hu = MockAudio.instances.find(item => item.src.endsWith('/audio/HuMusic.ogg'))
-    expect(hu).toBeDefined()
-    expect(hu!.loop).toBe(true)
-    expect(hu!.play).toHaveBeenCalledOnce()
-    // 交叉区间：两条同时在播、音量都在中间值（不硬切、也不叠加满音量）
-    await wait(110)
-    expect(hu!.volume).toBeGreaterThan(0)
-    expect(hu!.volume).toBeLessThan(0.32)
-    expect(bg.volume).toBeLessThan(0.32)
-    // 斜坡结束：新轨到满音量，旧轨停止
-    await wait(180)
-    expect(hu!.volume).toBeCloseTo(0.32, 5)
-    expect(bg.pause).toHaveBeenCalled()
-    expect(bg.volume).toBeCloseTo(0.32, 5)
+    // 总时长 0.5s → 淡出 0.18s + 淡入 0.32s
+    audio.fadeToBgm('HuMusic.ogg', 0.5)
+    // 淡出阶段：旧曲在降，且此刻新曲元素还没建（两曲不重叠）
+    await vi.waitFor(() => expect(bg.volume).toBeLessThan(0.32))
+    expect(bg.volume).toBeGreaterThan(0)
+    expect(MockAudio.instances.some(item => item.src.endsWith('/audio/HuMusic.ogg'))).toBe(false)
 
-    const plays = hu!.play.mock.calls.length
+    // 旧曲到 0 → 停旧曲 → 新曲才开始播、从 0 淡起
+    await vi.waitFor(() => expect(bg.pause).toHaveBeenCalled(), { timeout: 2000 })
+    await vi.waitFor(() => expect(MockAudio.instances.some(item => item.src.endsWith('/audio/HuMusic.ogg'))).toBe(true))
+    const hu = MockAudio.instances.find(item => item.src.endsWith('/audio/HuMusic.ogg'))!
+    expect(hu.loop).toBe(true)
+    expect(hu.play).toHaveBeenCalledOnce()
+    expect(hu.volume).toBeLessThan(0.32)
+
+    // 淡入结束：新曲到满音量
+    await vi.waitFor(() => expect(hu.volume).toBeCloseTo(0.32, 5), { timeout: 2000 })
+
+    const plays = hu.play.mock.calls.length
     audio.fadeToBgm('HuMusic.ogg', 0.2)
-    await wait(30)
-    expect(hu!.play.mock.calls.length).toBe(plays)
+    await wait(50)
+    expect(hu.play.mock.calls.length).toBe(plays)
   })
 
-  it('等功率交叉：整段过渡里两条轨的功率之和恒定，中间不掉响度', async () => {
+  it('新曲从 0 单调淡起，直到等于原声音量', async () => {
     const audio = useAudio()
-    const bg = MockAudio.instances[0]
     await audio.startBgm()
-    audio.fadeToBgm('HuMusic.ogg', 0.2)
+    audio.fadeToBgm('HuMusic.ogg', 0.6)
+    await vi.waitFor(() => expect(MockAudio.instances.some(item => item.src.endsWith('/audio/HuMusic.ogg'))).toBe(true), { timeout: 2000 })
     const hu = MockAudio.instances.find(item => item.src.endsWith('/audio/HuMusic.ogg'))!
-    const power = (ms: number) => hu.volume ** 2 + bg.volume ** 2
-
-    await wait(100)
-    // 线性斜坡会掉到 0.71²≈0.5 的功率；等功率下全程 ≈ 满功率 0.32²=0.1024
-    expect(power(100)).toBeGreaterThan(0.32 ** 2 * 0.9)
-    expect(hu.volume).toBeGreaterThan(0.32 * 0.4)
-    await wait(60)
-    expect(power(160)).toBeGreaterThan(0.32 ** 2 * 0.9)
-    await wait(120)
-    expect(hu.volume).toBeCloseTo(0.32, 5)
-    expect(bg.pause).toHaveBeenCalled()
+    const early = hu.volume
+    expect(early).toBeGreaterThanOrEqual(0)
+    expect(early).toBeLessThan(0.32)
+    await wait(200)
+    expect(hu.volume).toBeGreaterThan(early)
+    await vi.waitFor(() => expect(hu.volume).toBeCloseTo(0.32, 5), { timeout: 2000 })
   })
 
   it('局末切回默认 BGM，默认轨重新淡入', async () => {
@@ -154,27 +151,26 @@ describe('useAudio BGM 交叉淡入淡出（HTMLAudio 回退路径）', () => {
     const bg = MockAudio.instances[0]
     await audio.startBgm()
     audio.fadeToBgm('HuMusic.ogg', 0.05)
-    await wait(120)
-    expect(bg.pause).toHaveBeenCalled()
+    await vi.waitFor(() => expect(bg.pause).toHaveBeenCalled(), { timeout: 2000 })
     bg.pause.mockClear()
 
     audio.fadeToDefaultBgm(0.05)
-    await wait(120)
-    expect(bg.play).toHaveBeenCalled()
-    expect(bg.volume).toBeCloseTo(0.32, 5)
+    await vi.waitFor(() => expect(bg.play).toHaveBeenCalled(), { timeout: 2000 })
+    await vi.waitFor(() => expect(bg.volume).toBeCloseTo(0.32, 5), { timeout: 2000 })
   })
 
   it('切换过程中静音/关闭 BGM 不残留斜坡，且重新开启按当前曲目续播', async () => {
     const audio = useAudio()
     await audio.startBgm()
     audio.fadeToBgm('HuMusic.ogg', 0.3)
+    await vi.waitFor(() => expect(MockAudio.instances.some(item => item.src.endsWith('/audio/HuMusic.ogg'))).toBe(true), { timeout: 2000 })
     const hu = MockAudio.instances.find(item => item.src.endsWith('/audio/HuMusic.ogg'))!
     audio.bgmOn.value = false
-    await wait(20)
-    expect(hu.pause).toHaveBeenCalled()
+    await vi.waitFor(() => expect(hu.pause).toHaveBeenCalled())
+    // 关掉时把在飞的淡入结算到目标音量，避免重新开启后停在半音量
+    expect(hu.volume).toBeCloseTo(0.32, 5)
     audio.bgmOn.value = true
-    await wait(400)
-    expect(hu.play).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(hu.play).toHaveBeenCalledTimes(2), { timeout: 2000 })
     expect(hu.volume).toBeCloseTo(0.32, 5)
   })
 
@@ -192,38 +188,43 @@ describe('useAudio BGM 交叉淡入淡出（HTMLAudio 回退路径）', () => {
   })
 })
 
-describe('useAudio BGM 交叉淡入淡出（Web Audio 路径）', () => {
+describe('useAudio BGM 顺序切换（Web Audio 路径）', () => {
   beforeEach(() => stubGlobals(true))
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-  it('换曲生成第二条 BufferSource：新轨等功率升起、旧轨等功率落下，斜坡结束后旧轨 stop', async () => {
+  it('顺序切换：旧轨先淡到 0 并停止，之后才创建新 BufferSource 从 0 淡起', async () => {
     const audio = useAudio()
     await audio.startBgm()
     const ctx = MockAudioContext.created[0]
     expect(ctx.sources).toHaveLength(1)
 
-    audio.fadeToBgm('HuMusic.ogg', 0.05)
-    await wait(30)
+    // 总时长 0.06s → 淡出 0.0216s（换轨定时器约 0.08s 后触发），淡入 0.0384s
+    audio.fadeToBgm('HuMusic.ogg', 0.06)
+    await wait(10)
+    // 淡出阶段：只有旧轨，且它的增益曲线是 1 → 0
+    expect(ctx.sources).toHaveLength(1)
+    const oldGain = ctx.gains[1].gain
+    expect(oldGain.curves).toHaveLength(1)
+    expect(oldGain.curves[0].values[0]).toBeCloseTo(1, 5)
+    expect(oldGain.curves[0].values.at(-1)).toBe(0)
+
+    // 旧轨到 0 → 停旧轨 → 新轨才创建并从 0 淡起
+    await wait(120)
     expect(ctx.sources).toHaveLength(2)
-    // gains[0] 是常驻主增益（恒为 BGM_VOLUME），换曲的是其后两条轨道增益。
-    const [oldTrack, newTrack] = ctx.gains.slice(1, 3).map(node => node.gain)
-    const [inCurve] = newTrack.curves
-    const [outCurve] = oldTrack.curves
-    expect(inCurve.values[0]).toBe(0)
-    expect(inCurve.values.at(-1)).toBeCloseTo(1, 5)
-    expect(outCurve.values[0]).toBeCloseTo(1, 5)
-    expect(outCurve.values.at(-1)).toBe(0)
-    // 等功率：中点两条曲线各 ≈0.707，中间不掉响度（线性斜坡中点会只剩 0.5）
-    const middle = Math.floor(inCurve.values.length / 2)
-    expect(inCurve.values[middle]).toBeCloseTo(Math.SQRT1_2, 2)
-    expect(outCurve.values[middle]).toBeCloseTo(Math.SQRT1_2, 2)
-    expect(inCurve.duration).toBeCloseTo(0.05, 5)
+    expect(ctx.sources[0].stopped).toHaveBeenCalled()
+    const newGain = ctx.gains[2].gain
+    expect(newGain.curves).toHaveLength(1)
+    expect(newGain.curves[0].values[0]).toBe(0)
+    expect(newGain.curves[0].values.at(-1)).toBeCloseTo(1, 5)
+    // 线性淡入：中点 0.5（等功率会是 0.707）
+    const middle = Math.floor(newGain.curves[0].values.length / 2)
+    expect(newGain.curves[0].values[middle]).toBeCloseTo(0.5, 2)
+    expect(newGain.curves[0].duration).toBeCloseTo(0.06 * (1 - 0.36), 3)
     expect(ctx.sources[0].loop).toBe(true)
     expect(ctx.sources[1].loop).toBe(true)
 
-    audio.fadeToDefaultBgm(0.05)
+    audio.fadeToDefaultBgm(0.06)
     await wait(200)
-    expect(ctx.sources[0].stopped).toHaveBeenCalled()
     expect(ctx.sources[1].stopped).toHaveBeenCalled()
     expect(ctx.sources).toHaveLength(3)
     expect(ctx.decodeAudioData).toHaveBeenCalledWith(expect.any(ArrayBuffer))

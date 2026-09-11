@@ -49,7 +49,7 @@ import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
-  /** 全场胡牌张数到阈值时换 BGM（HuMusic.ogg），局末切回默认；交叉淡入淡出由音频层负责。 */
+  /** 全场胡牌张数到阈值时换 BGM（HuMusic.ogg），局末切回默认；过渡曲线由音频层负责。 */
   bgm?: WinMusicBgmPort
   /** 服务端 TTS 音频通道（联机模型原话）：与经典联机共用同一条 llm 音频队列。 */
   playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
@@ -261,7 +261,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
     view.value = next
-    // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（交叉淡入淡出在音频层）。
+    // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（淡出→换曲→淡入在音频层）。
     winMusic.update(winMusicState)
     // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
     if (next.window?.id !== submittedWindowId.value) submittedWindowId.value = ''
