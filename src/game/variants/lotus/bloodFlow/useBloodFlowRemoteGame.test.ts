@@ -462,4 +462,31 @@ describe('useBloodFlowRemoteGame', () => {
       expect(module.capabilities.value.bloodFlow?.actionBubbles[2]?.text).toBe('随便打一张。')
     })
   })
+
+  it('全场胡牌到 8 张换 HuMusic，本局结束切回默认 BGM', async () => {
+    const fadeTo = vi.fn()
+    const module = useBloodFlowRemoteGame({
+      playSound: () => {}, playSoundAndWait: async () => {},
+      getThemeName: () => 'jade', animeFixedTts: fixedTtsStub as never,
+      bgm: { fadeTo },
+    })
+    const viewWithWins = (wins: number[], status = 'playing') => ({
+      ...VIEW,
+      public: {
+        ...VIEW.public, status,
+        seats: VIEW.public.seats.map((seat, index) => ({ ...seat, winCount: wins[index] ?? 0 })),
+      },
+    })
+    capture.onMessage!({ kind: 'bf_snapshot', view: viewWithWins([3, 2, 1, 1]), round: 0, mode: 'east', dealer: 0 })
+    await vi.waitFor(() => expect(module.players).toHaveLength(4))
+    // 7 张：仍是默认 BGM
+    expect(fadeTo).not.toHaveBeenCalledWith('HuMusic.ogg', undefined)
+
+    capture.onMessage!({ kind: 'bf_snapshot', view: viewWithWins([3, 2, 2, 1]), round: 0, mode: 'east', dealer: 0 })
+    await vi.waitFor(() => expect(fadeTo).toHaveBeenCalledWith('HuMusic.ogg', undefined))
+
+    // 本局结束（结算）：切回默认 BGM
+    capture.onMessage!({ kind: 'bf_snapshot', view: viewWithWins([3, 2, 2, 1], 'settled'), round: 0, mode: 'east', dealer: 0 })
+    await vi.waitFor(() => expect(fadeTo).toHaveBeenLastCalledWith('bg.ogg', undefined))
+  })
 })

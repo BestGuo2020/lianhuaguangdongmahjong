@@ -50,6 +50,8 @@ export interface BloodFlowRemoteGameOptions {
   playLlmAudio?: BloodFlowGameOptions['playLlmAudio']
   getThemeName: () => string
   animeFixedTts: BloodFlowGameOptions['animeFixedTts']
+  /** 全场胡牌张数到阈值换 BGM（联机各端本地播放，与权威状态同源）。 */
+  bgm?: BloodFlowGameOptions['bgm']
 }
 
 export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
@@ -85,6 +87,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     playLlmAudio: options.playLlmAudio,
     getThemeName: options.getThemeName,
     animeFixedTts: options.animeFixedTts,
+    bgm: options.bgm,
     externalAuthority: {
       send: (command) => authority.send(command),
       nextRound: () => confirmNextRound(),

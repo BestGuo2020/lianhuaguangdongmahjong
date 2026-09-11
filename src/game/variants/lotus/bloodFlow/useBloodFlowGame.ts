@@ -21,6 +21,8 @@ import { createBloodFlowWorkerClient } from './workerClient'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import { computeReformHint } from './reformHint'
+import { createBloodFlowWinMusic, totalBloodFlowWinTiles } from './winMusic'
+import type { WinMusicBgmPort, WinMusicState } from './winMusic'
 import type { BloodFlowAction, BloodFlowOpeningState } from './state'
 import type { EngineCommand } from './state'
 import type { BloodFlowTableState, Seat, WinBatch } from './types'
@@ -46,6 +48,8 @@ import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
+  /** 全场胡牌张数到阈值时换 BGM（HuMusic.ogg），局末切回默认；交叉淡入淡出由音频层负责。 */
+  bgm?: WinMusicBgmPort
   /** 服务端 TTS 音频通道（联机模型原话）：与经典联机共用同一条 llm 音频队列。 */
   playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
   getThemeName?: () => string
@@ -71,6 +75,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
+  const winMusic = createBloodFlowWinMusic(options.bgm)
+  const winMusicState: WinMusicState = {
+    totalWinTiles: () => view.value ? totalBloodFlowWinTiles(view.value.public.seats) : 0,
+    playing: () => Boolean(view.value) && view.value!.public.status === 'playing' && !view.value!.public.roundResult,
+  }
   const handHints = shallowRef<HandWaitHints | null>(null)
   const presentationSerial = shallowRef(0)
   const continuation = shallowRef<import('./types').BloodFlowTableState['continuation']>()
@@ -153,6 +162,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     return options.externalAuthority ? Math.max(0, opensIn) + observe : Math.max(0, opensIn + observe)
   }
   function clear() {
+    // 重开一局/离开牌桌都要回到默认 BGM，避免「多胡」曲目残留到下一局或大厅。
+    winMusic.release()
     continuation.value=undefined
     generation++; busy = false
     presentationSerial.value++
@@ -248,6 +259,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function apply(next: BloodFlowSeatView) {
     const previous = view.value
     view.value = next
+    // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（交叉淡入淡出在音频层）。
+    winMusic.update(winMusicState)
     // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
     if (next.window?.id !== submittedWindowId.value) submittedWindowId.value = ''
     for(const [controller,current] of pendingDiscardSpeech)if(!current())controller.abort()

@@ -95,7 +95,9 @@ if (initialThemeCandidate !== null && initialThemeCandidate !== initialTableThem
   window.history.replaceState(window.history.state, '', canonicalUrl)
 }
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
-const { playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
+const { playEffect, playEffectAndWait, playLlmAudio, startBgm, fadeToBgm, preloadBgmTrack } = useAudio()
+/** 血流 BGM 端口：全场胡牌张数到阈值时换 HuMusic.ogg，局末切回默认（交叉淡入淡出在音频层）。 */
+const bloodFlowBgm = { fadeTo: fadeToBgm, preload: preloadBgmTrack }
 
 const gameMode = ref<GameMode>('local')
 // AI 大模型（单机人机座位 1-3）：仅大厅可配置；保存后立即装配到下一次开局。
@@ -222,11 +224,11 @@ const remoteGame = useRemoteGame({
 })
 
 const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
-  countdownEnabled: false,
+  countdownEnabled: false, bgm: bloodFlowBgm,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
   humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
 const bloodFlowRemoteGame = useBloodFlowRemoteGame({ playSound: playEffect,
-  playSoundAndWait: playEffectAndWait, playLlmAudio,
+  playSoundAndWait: playEffectAndWait, playLlmAudio, bgm: bloodFlowBgm,
   getCharacterId: () => animeCharacterId.value,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts })
 // 联机槽按玩法切换：血流走血流 WS 权威，其余走经典联机协议。
