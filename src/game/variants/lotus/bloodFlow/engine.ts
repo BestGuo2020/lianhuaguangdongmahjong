@@ -10,6 +10,7 @@ import { SEATS, vector, nextSeat, newSeatStates } from './state'
 import type { BloodFlowAction, BloodFlowOpeningState, EngineCommand, EngineWindow } from './state'
 import { acceptWindowDecision, windowComplete } from './claimWindow'
 import { assertZeroSum } from './ledger'
+import { recordWinEvaluation } from './winDiagnostics'
 import { resolveWinBatch } from './winBatch'
 import { summarizeRound } from './roundLifecycle'
 import { chooseFallbackDiscardIndex } from '../lotusAi'
@@ -154,7 +155,11 @@ export class BloodFlowEngine {
     const player = this.players[seat]
     const concealed = [...player.hand]
     if (source === 'self-draw' || source === 'kong-bloom') concealed.splice(player.drawnTileIndex, 1)
-    return evaluateWin({ concealed, melds: player.melds, winningTile: tile, source, jokers: this.jokers, opening })
+    const input = { concealed, melds: player.melds, winningTile: tile, source, jokers: this.jokers, opening }
+    const win = evaluateWin(input)
+    // 仅 DEV 生效：留档本次胡牌，供 __bfExplainWin() 摊开全部拆解（见 winDiagnostics.ts）。
+    if (win) recordWinEvaluation({ at: Date.now(), seat, input, reported: win.score })
+    return win
   }
   private openTurn() {
     const seat = this.currentPlayer, player = this.players[seat]
