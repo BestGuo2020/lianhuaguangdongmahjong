@@ -35,8 +35,10 @@ const EFFECT_WAIT_TIMEOUT_MS = 4_000
 const BGM_VOLUME = 0.32
 /** 默认循环 BGM；`audio/` 下的文件名。 */
 export const DEFAULT_BGM_FILE = 'bg.ogg'
-/** 换 BGM 的交叉淡入淡出时长：够长到听不出切换、又不拖到盖住下一拍动作。 */
-export const BGM_CROSSFADE_SECONDS = 1.6
+/** 换曲总时长：先把旧曲淡到 0（此时才停旧曲），再让新曲从 0 淡起。 */
+export const BGM_SWITCH_FADE_SECONDS = 1.4
+/** 总时长里分给「淡出」的比例（其余给「淡入」）：约 0.5s 淡出 + 0.9s 淡入。 */
+const BGM_FADE_OUT_RATIO = 0.36
 const BGM_FADE_STEP_MS = 40
 const NORMAL_LLM_AUDIO_TTL_MS = 3_000
 const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
@@ -67,7 +69,7 @@ export function useEffectPlayer(){return getCurrentInstance()?inject(EFFECT_PLAY
  * 玩法层随时取用——联机两条分支（WS / P2P）都不必各自改 App.vue 接线。
  */
 export interface BgmTrackPort {
-  /** 交叉淡入淡出切换循环 BGM；file 为 `audio/` 下的文件名，秒数省略时用默认时长。 */
+  /** 顺序切换循环 BGM：旧曲先淡到 0 停掉，新曲再从 0 淡起；file 为 `audio/` 下的文件名。 */
   fadeTo(file: string, fadeSeconds?: number): void
   /** 预热目标曲目，避免第一次换曲时才下载（可选）。 */
   preload?(file: string): void
@@ -153,12 +155,16 @@ export function useAudio() {
   const groupAudios = new Set<HTMLAudioElement>()
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
-  // 两条路径都支持交叉淡入淡出：换曲时新旧各持一个增益/音量，斜坡互换后再停旧轨。
-  // 注意（2026-09-11 用户决定）：LLM 语音播放期间**不压低 BGM**——忽高忽低比语音盖住音乐
-  // 更影响对局节奏。BGM 恒定 BGM_VOLUME，不要再加 ducking。
+  // 换曲是**顺序切换**（2026-09-11 用户选定）：旧曲先淡到 0 → 旧曲停 → 新曲从 0 淡起，
+  // 线性淡入（中点 0.5），不做等功率重叠——用户要的是"收干净再起新曲"的听感，
+  // 因此过渡中间允许出现短暂的安静（不要把这里改成两曲重叠的 crossfade）。
+  // 另一条约定：LLM 语音播放期间**不压低 BGM**，BGM 恒定 BGM_VOLUME。
   let audioContext: AudioContext | null = null
   const bgmBuffers = new Map<string, AudioBuffer>()
   let webBgmTrack: { file: string; source: AudioBufferSourceNode; gain: GainNode } | null = null
+  /** 正在淡出的旧轨（顺序切换期间）与它的换轨定时器。 */
+  let pendingWebBgmTrack: { file: string; source: AudioBufferSourceNode; gain: GainNode } | null = null
+  let webBgmSwapTimer = 0
   let bgmGain: GainNode | null = null
   let bgmWebAudio = false
   let bgmPreloadPromise: Promise<void> | null = null
@@ -532,37 +538,35 @@ export function useAudio() {
   })
 
   // Web Audio 无缝循环：BufferSource.loop 在缓冲区边界样本级拼接，无 HTMLAudio 的卡顿。
-  // 换曲用**等功率（equal-power）交叉**：新轨按 sin、旧轨按 cos 走同一条 π/2 曲线。
-  // 两条线性斜坡会让中点只剩 √(0.5²+0.5²)≈0.71 的功率（听感掉 ~3dB 再回来），
-  // sin/cos 组合在整段交叉里保持 a²+b²=1，响度听不出起伏。
-  const CROSSFADE_CURVE_STEPS = 64
-  function crossfadeCurve(current: number, direction: 'in' | 'out', steps = CROSSFADE_CURVE_STEPS) {
+  // 换曲顺序：旧轨先线性淡到 0 → 停旧轨 → 新轨从 0 线性淡起（中点 0.5）。
+  const FADE_CURVE_STEPS = 64
+  function fadeCurve(from: number, to: number, steps = FADE_CURVE_STEPS) {
     const curve = new Float32Array(steps + 1)
-    for (let index = 0; index <= steps; index += 1) {
-      const angle = (Math.PI / 2) * (index / steps)
-      // 起点必须等于当前增益：换曲被再次打断时不会跳变。
-      curve[index] = direction === 'in'
-        ? current + (1 - current) * Math.sin(angle)
-        : current * Math.cos(angle)
-    }
-    // 端点取精确值，避免 cos(π/2) 的 6e-17 残量留在增益上。
-    curve[0] = current
-    curve[steps] = direction === 'in' ? 1 : 0
+    for (let index = 0; index <= steps; index += 1) curve[index] = from + (to - from) * (index / steps)
+    curve[0] = from
+    curve[steps] = to
     return curve
   }
 
-  /** 等功率曲线优先；个别浏览器拒绝曲线调度时退回斜坡，绝不把新轨留在 0 增益。 */
-  function scheduleCrossfade(param: AudioParam, current: number, direction: 'in' | 'out', startTime: number, duration: number) {
+  /** 曲线优先；个别浏览器拒绝曲线调度时退回等效斜坡，绝不把新轨留在 0 增益。 */
+  function scheduleFade(param: AudioParam, from: number, to: number, startTime: number, duration: number) {
     try {
-      param.setValueCurveAtTime(crossfadeCurve(current, direction), startTime, duration)
+      param.setValueCurveAtTime(fadeCurve(from, to), startTime, duration)
     } catch {
       param.cancelScheduledValues(startTime)
-      param.setValueAtTime(current, startTime)
-      param.linearRampToValueAtTime(direction === 'in' ? 1 : 0, startTime + duration)
+      param.setValueAtTime(from, startTime)
+      param.linearRampToValueAtTime(to, startTime + duration)
     }
   }
 
-  function playWebBgmTrack(file: string, buffer: AudioBuffer, fadeSeconds: number) {
+  function stopWebBgmTrack(track: { source: AudioBufferSourceNode; gain: GainNode }) {
+    try { track.source.stop() } catch { /* 已停止 */ }
+    track.source.disconnect()
+    track.gain.disconnect()
+  }
+
+  /** 起一条新轨（从 0 线性淡起；fadeInSeconds=0 直接满音量）。 */
+  function startWebBgmTrack(file: string, buffer: AudioBuffer, fadeInSeconds: number) {
     const ctx = ensureAudioContext()
     if (!ctx) return
     if (ctx.state === 'suspended') void ctx.resume()
@@ -572,9 +576,8 @@ export function useAudio() {
       bgmGain.connect(ctx.destination)
     }
     const now = ctx.currentTime
-    const previous = webBgmTrack
     const gain = ctx.createGain()
-    if (fadeSeconds > 0) scheduleCrossfade(gain.gain, 0, 'in', now, fadeSeconds)
+    if (fadeInSeconds > 0) scheduleFade(gain.gain, 0, 1, now, fadeInSeconds)
     else gain.gain.setValueAtTime(1, now)
     gain.connect(bgmGain)
     const source = ctx.createBufferSource()
@@ -583,17 +586,32 @@ export function useAudio() {
     source.connect(gain)
     source.start(0)
     webBgmTrack = { file, source, gain }
-    if (!previous) return
-    const outgoing = Math.max(fadeSeconds, 0.05)
-    previous.gain.gain.cancelScheduledValues(now)
-    scheduleCrossfade(previous.gain.gain, previous.gain.gain.value, 'out', now, outgoing)
-    const retire = () => {
-      try { previous.source.stop() } catch { /* 已停止 */ }
-      previous.source.disconnect()
-      previous.gain.disconnect()
+  }
+
+  /** 顺序切换：旧轨淡到 0 后才停，随后新轨才起（两曲不重叠）。 */
+  function switchWebBgmTrack(file: string, buffer: AudioBuffer, outSeconds: number, inSeconds: number) {
+    // 上一次切换还没换完就被打断：立刻收掉在淡出的那条，避免两条旧轨叠加。
+    if (webBgmSwapTimer) { window.clearTimeout(webBgmSwapTimer); webBgmSwapTimer = 0 }
+    if (pendingWebBgmTrack) { stopWebBgmTrack(pendingWebBgmTrack); pendingWebBgmTrack = null }
+    const outgoing = webBgmTrack
+    webBgmTrack = null
+    if (!outgoing || outSeconds <= 0) {
+      if (outgoing) stopWebBgmTrack(outgoing)
+      startWebBgmTrack(file, buffer, inSeconds)
+      return
     }
-    if (fadeSeconds > 0) window.setTimeout(retire, Math.ceil(fadeSeconds * 1_000) + 80)
-    else retire()
+    const ctx = ensureAudioContext()
+    if (!ctx) { stopWebBgmTrack(outgoing); startWebBgmTrack(file, buffer, inSeconds); return }
+    const now = ctx.currentTime
+    outgoing.gain.gain.cancelScheduledValues(now)
+    scheduleFade(outgoing.gain.gain, outgoing.gain.gain.value, 0, now, outSeconds)
+    pendingWebBgmTrack = outgoing
+    webBgmSwapTimer = window.setTimeout(() => {
+      webBgmSwapTimer = 0
+      pendingWebBgmTrack = null
+      stopWebBgmTrack(outgoing)
+      startWebBgmTrack(file, buffer, inSeconds)
+    }, Math.ceil(outSeconds * 1_000) + 60)
   }
 
   function fallbackTrackFor(file: string) {
@@ -634,36 +652,57 @@ export function useAudio() {
     applyFallbackVolumes()
   }
 
-  function crossfadeFallbackBgm(file: string, fadeSeconds: number) {
+  /** 新曲从 0 线性淡起（中点 0.5）；fadeInSeconds=0 直接满音量。 */
+  function fadeInFallbackBgm(file: string, fadeInSeconds: number) {
     const incoming = fallbackTrackFor(file)
     usePreloadedFallbackSrc(incoming)
-    if (fallbackFadeTimer) { window.clearTimeout(fallbackFadeTimer); fallbackFadeTimer = 0 }
+    incoming.fade = 0
+    applyFallbackVolumes()
     incoming.element.play().catch(() => {})
-    if (fadeSeconds <= 0) { settleFallbackBgm(file); return }
-    const outgoing = fallbackTracks.filter(track => track !== incoming && track.fade > 0)
-    const incomingStart = incoming.fade
-    const outgoingStarts = outgoing.map(track => track.fade)
+    if (fadeInSeconds <= 0) { incoming.fade = 1; applyFallbackVolumes(); return }
     const startedAt = Date.now()
     const step = () => {
-      const progress = Math.min(1, (Date.now() - startedAt) / (fadeSeconds * 1_000))
-      // 等功率交叉：新轨 sin 升起、旧轨 cos 落下，a²+b² 恒为 1，中间不会掉响度。
-      const angle = (Math.PI / 2) * progress
-      incoming.fade = incomingStart + (1 - incomingStart) * Math.sin(angle)
-      outgoing.forEach((track, index) => { track.fade = outgoingStarts[index] * Math.cos(angle) })
+      const progress = Math.min(1, (Date.now() - startedAt) / (fadeInSeconds * 1_000))
+      incoming.fade = progress
       applyFallbackVolumes()
       if (progress < 1) { fallbackFadeTimer = window.setTimeout(step, BGM_FADE_STEP_MS); return }
       fallbackFadeTimer = 0
-      outgoing.forEach(stopFallbackTrack)
     }
     step()
   }
 
+  /** 顺序切换：旧曲淡到 0 才停，随后新曲才从 0 淡起（两曲不重叠）。 */
+  function switchFallbackBgm(file: string, outSeconds: number, inSeconds: number) {
+    if (fallbackFadeTimer) { window.clearTimeout(fallbackFadeTimer); fallbackFadeTimer = 0 }
+    const outgoing = fallbackTracks.filter(track => track.file !== file && track.fade > 0)
+    if (!outgoing.length || outSeconds <= 0) {
+      outgoing.forEach(stopFallbackTrack)
+      fadeInFallbackBgm(file, inSeconds)
+      return
+    }
+    const starts = outgoing.map(track => track.fade)
+    const startedAt = Date.now()
+    const stepOut = () => {
+      const progress = Math.min(1, (Date.now() - startedAt) / (outSeconds * 1_000))
+      outgoing.forEach((track, index) => { track.fade = starts[index] * (1 - progress) })
+      applyFallbackVolumes()
+      if (progress < 1) { fallbackFadeTimer = window.setTimeout(stepOut, BGM_FADE_STEP_MS); return }
+      fallbackFadeTimer = 0
+      outgoing.forEach(stopFallbackTrack)
+      fadeInFallbackBgm(file, inSeconds)
+    }
+    stepOut()
+  }
+
   async function applyBgmTrack(file: string, fadeSeconds: number) {
+    // 总时长拆成「先淡出再淡入」两段；0 表示立即切换（开局起步）。
+    const outSeconds = fadeSeconds > 0 ? fadeSeconds * BGM_FADE_OUT_RATIO : 0
+    const inSeconds = fadeSeconds > 0 ? fadeSeconds * (1 - BGM_FADE_OUT_RATIO) : 0
     if (bgmWebAudio) {
       const buffer = await loadBgmBuffer(file)
-      if (buffer) { playWebBgmTrack(file, buffer, fadeSeconds); return }
+      if (buffer) { switchWebBgmTrack(file, buffer, outSeconds, inSeconds); return }
     }
-    crossfadeFallbackBgm(file, fadeSeconds)
+    switchFallbackBgm(file, outSeconds, inSeconds)
   }
 
   /** 预热一条 BGM：Web Audio 下解码进缓存，回退路径下预建元素让浏览器先下载。 */
@@ -672,8 +711,9 @@ export function useAudio() {
     usePreloadedFallbackSrc(fallbackTrackFor(file))
   }
 
-  /** 交叉淡入淡出切换循环 BGM（同一时刻只有一条在播）。file 为 `audio/` 下的文件名。 */
-  function fadeToBgm(file: string, fadeSeconds = BGM_CROSSFADE_SECONDS) {
+  /** 顺序切换循环 BGM（旧曲先淡到 0 停掉，新曲再从 0 淡起；同一时刻只有一条在播）。
+   *  file 为 `audio/` 下的文件名，fadeSeconds 是整段过渡总时长（缺省见 BGM_SWITCH_FADE_SECONDS）。 */
+  function fadeToBgm(file: string, fadeSeconds = BGM_SWITCH_FADE_SECONDS) {
     if (file === bgmTrackFile) return
     bgmTrackFile = file
     if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
@@ -681,7 +721,7 @@ export function useAudio() {
   }
 
   /** 回到默认 BGM（bg.ogg）。 */
-  function fadeToDefaultBgm(fadeSeconds = BGM_CROSSFADE_SECONDS) {
+  function fadeToDefaultBgm(fadeSeconds = BGM_SWITCH_FADE_SECONDS) {
     fadeToBgm(DEFAULT_BGM_FILE, fadeSeconds)
   }
 
@@ -694,8 +734,8 @@ export function useAudio() {
     if (!soundOn.value || !bgmOn.value) return
     await preloadBgm()   // 确保 buffer 就绪，避免开局静音
     if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
-    // 首播不做交叉淡入淡出：此刻还没有在播的 BGM，直接进当前目标曲目。
-    if (bgmWebAudio && bgmBuffers.has(bgmTrackFile)) playWebBgmTrack(bgmTrackFile, bgmBuffers.get(bgmTrackFile)!, 0)
+    // 开局起步：此刻没有在播的 BGM，直接进当前目标曲目，不做淡入。
+    if (bgmWebAudio && bgmBuffers.has(bgmTrackFile)) startWebBgmTrack(bgmTrackFile, bgmBuffers.get(bgmTrackFile)!, 0)
     else await applyBgmTrack(bgmTrackFile, 0)
   }
 
@@ -726,7 +766,8 @@ export function useAudio() {
     } else if (bgmStarted.value) {
       if (bgmWebAudio && audioContext) {
         if (audioContext.state === 'suspended') void audioContext.resume()
-        if (!webBgmTrack) void applyBgmTrack(bgmTrackFile, 0)
+        // 换曲进行中（旧轨在淡出）不要插一条新轨，等换轨定时器把它接上。
+        if (!webBgmTrack && !webBgmSwapTimer) void applyBgmTrack(bgmTrackFile, 0)
       } else {
         const current = fallbackTrackFor(bgmTrackFile)
         usePreloadedFallbackSrc(current)
@@ -747,9 +788,9 @@ export function useAudio() {
     removeBgmPrimeListeners()
     if (bgmTrackPort === bgmPort) bgmTrackPort = null
     if (bgmWebAudio) {
-      try { webBgmTrack?.source.stop() } catch { /* 已停止 */ }
-      webBgmTrack?.source.disconnect()
-      webBgmTrack?.gain.disconnect()
+      if (webBgmSwapTimer) { window.clearTimeout(webBgmSwapTimer); webBgmSwapTimer = 0 }
+      if (pendingWebBgmTrack) { stopWebBgmTrack(pendingWebBgmTrack); pendingWebBgmTrack = null }
+      if (webBgmTrack) stopWebBgmTrack(webBgmTrack)
       webBgmTrack = null
       void audioContext?.close()
       audioContext = null
