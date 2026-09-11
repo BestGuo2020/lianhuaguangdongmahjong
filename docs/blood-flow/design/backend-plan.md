@@ -1,6 +1,6 @@
 # 血流后端联机实现计划（2026-09-08 定稿）
 
-范围（用户定稿）：**M1～M4 一起做**；**随机对拍纳入 M1 验收**；**不加观战**（房间沿用现有 4 人 + AI 补位、现有重连机制，不新增观战/中途迁移要求）。后端权威，前端 `BloodFlowEngine` 为唯一规格源；vibehub / P2P 继续后置。
+范围（用户定稿）：**M1～M4 一起做**；**随机对拍纳入 M1 验收**；**不加观战**（房间沿用现有 4 人 + AI 补位、现有重连机制，不新增观战/中途迁移要求）。后端权威，前端 `BloodFlowEngine` 为唯一规格源；vibehub / P2P 原为后置项，**2026-09-10 已上线验收**（见[验收记录 2026-09-10](../../blood-flow/acceptance.md) 与 [vibehub 适配清单](../../vibehub-adaptation-checklist.md)）。
 
 ## 架构与一致性机制
 
@@ -62,7 +62,7 @@
 
 - 后端：`backend/.venv/Scripts/python.exe -m pytest tests -q` 全绿（新增 `tests/test_blood_flow_rules.py`、`test_blood_flow_manager.py`、`test_blood_flow_ws.py`、`test_blood_flow_ai.py`）；后端独立 git 提交（main 分支）。
 - 前端：master 分支提交 WS 适配与测试；`pnpm test`、`pnpm build`；血流关键 e2e 回归。
-- 文档：tasks.md / acceptance.md 记录两仓库提交与验收证据；不跑 `pnpm sync:vibehub`（P2P 后置）。
+- 文档：tasks.md / acceptance.md 记录两仓库提交与验收证据。（原「不跑 `pnpm sync:vibehub`（P2P 后置）」已于 2026-09-10 作废：P2P 上线验收，当日运行 9 次同步并部署 `B5AJupT1`。）
 
 ## 风险与降级
 
