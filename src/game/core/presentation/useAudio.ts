@@ -35,6 +35,11 @@ const EFFECT_WAIT_TIMEOUT_MS = 4_000
 const BGM_VOLUME = 0.32
 const BGM_DUCKED_VOLUME = 0.08
 const BGM_DUCK_RAMP_SECONDS = 0.12
+/** 默认循环 BGM；`audio/` 下的文件名。 */
+export const DEFAULT_BGM_FILE = 'bg.ogg'
+/** 换 BGM 的交叉淡入淡出时长：够长到听不出切换、又不拖到盖住下一拍动作。 */
+export const BGM_CROSSFADE_SECONDS = 1.6
+const BGM_FADE_STEP_MS = 40
 const NORMAL_LLM_AUDIO_TTL_MS = 3_000
 const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
 const LLM_AUDIO_PLAYBACK_TIMEOUT_MS = 12_000
@@ -131,18 +136,25 @@ export function useAudio() {
   const groupAudios = new Set<HTMLAudioElement>()
   // BGM：优先走 Web Audio 的 BufferSource.loop —— 循环边界样本级无缝，避免
   // HTMLAudio loop 每次到头 seek/缓冲的卡顿。Web Audio 不可用时回退 HTMLAudio。
+  // 两条路径都支持交叉淡入淡出：换曲时新旧各持一个增益/音量，斜坡互换后再停旧轨。
   let audioContext: AudioContext | null = null
-  let bgmBuffer: AudioBuffer | null = null
-  let bgmSource: AudioBufferSourceNode | null = null
+  const bgmBuffers = new Map<string, AudioBuffer>()
+  let webBgmTrack: { file: string; source: AudioBufferSourceNode; gain: GainNode } | null = null
   let bgmGain: GainNode | null = null
   let bgmWebAudio = false
   let bgmPreloadPromise: Promise<void> | null = null
+  let bgmDucked = false
+  let bgmTrackFile = DEFAULT_BGM_FILE
   // HTMLAudio 兜底（无 Web Audio / 解码失败时使用）
-  const bgm = new Audio(`${AUDIO_BASE}bg.ogg`)
+  const bgm = new Audio(`${AUDIO_BASE}${DEFAULT_BGM_FILE}`)
   bgm.preload = 'auto'
   bgm.loop = true
   bgm.volume = BGM_VOLUME
   let bgmFallbackSrc: string | null = null
+  interface FallbackTrack { file: string; element: HTMLAudioElement; fade: number }
+  const fallbackTracks: FallbackTrack[] = [{ file: DEFAULT_BGM_FILE, element: bgm, fade: 1 }]
+  /** 回退路径的换曲斜坡：同一时刻只有一条，暂停/卸载时立刻结算到目标状态。 */
+  let fallbackFadeTimer = 0
 
   function createTemplate(src: string) {
     const audio = new Audio(src)
@@ -215,9 +227,19 @@ export function useAudio() {
     })
   }
 
+  function bgmMasterVolume() {
+    return bgmDucked ? BGM_DUCKED_VOLUME : BGM_VOLUME
+  }
+
+  function applyFallbackVolumes() {
+    const master = bgmMasterVolume()
+    for (const track of fallbackTracks) track.element.volume = master * track.fade
+  }
+
   function setBgmDucked(ducked: boolean) {
-    const target = ducked ? BGM_DUCKED_VOLUME : BGM_VOLUME
-    bgm.volume = target
+    bgmDucked = ducked
+    const target = bgmMasterVolume()
+    applyFallbackVolumes()
     if (!bgmGain || !audioContext) return
     const now = audioContext.currentTime
     bgmGain.gain.cancelScheduledValues(now)
@@ -458,25 +480,41 @@ export function useAudio() {
     return audioContext
   }
 
-  // BGM 主动下载并解码（移动端 preload='auto' 可能被忽略）。首次用户交互时触发：
-  // 同步创建/恢复 AudioContext（手势内解锁自动播放策略），fetch+decode 在后台完成。
+  /** BGM 主动下载并解码（移动端 preload='auto' 可能被忽略）。首次用户交互时触发：
+   *  同步创建/恢复 AudioContext（手势内解锁自动播放策略），fetch+decode 在后台完成。 */
+  async function loadBgmBuffer(file: string): Promise<AudioBuffer | null> {
+    const cached = bgmBuffers.get(file)
+    if (cached) return cached
+    const ctx = ensureAudioContext()
+    if (!ctx) return null
+    try {
+      const response = await fetch(`${AUDIO_BASE}${file}`, { cache: 'force-cache' })
+      if (!response.ok) throw new Error(`Failed to preload bgm: ${response.status}`)
+      const buffer = await ctx.decodeAudioData(await response.arrayBuffer())
+      bgmBuffers.set(file, buffer)
+      return buffer
+    } catch {
+      return null
+    }
+  }
+
   function preloadBgm(): Promise<void> {
     if (bgmPreloadPromise) return bgmPreloadPromise
     const ctx = ensureAudioContext()
     if (ctx && ctx.state === 'suspended') void ctx.resume()
     bgmPreloadPromise = (async () => {
+      if (await loadBgmBuffer(DEFAULT_BGM_FILE)) {
+        bgmWebAudio = true
+        return
+      }
+      // 无 Web Audio 或解码失败：改用 object URL 喂给 HTMLAudio，避免只靠网络地址。
       try {
-        const response = await fetch(`${AUDIO_BASE}bg.ogg`, { cache: 'force-cache' })
+        const response = await fetch(`${AUDIO_BASE}${DEFAULT_BGM_FILE}`, { cache: 'force-cache' })
         if (!response.ok) throw new Error(`Failed to preload bgm: ${response.status}`)
-        const arrayBuffer = await response.arrayBuffer()
-        if (ctx) {
-          bgmBuffer = await ctx.decodeAudioData(arrayBuffer)
-          bgmWebAudio = true
-        } else {
-          const objectUrl = URL.createObjectURL(new Blob([arrayBuffer], { type: 'audio/ogg' }))
-          effectObjectUrls.add(objectUrl)
-          bgmFallbackSrc = objectUrl
-        }
+        const blob = new Blob([await response.arrayBuffer()], { type: 'audio/ogg' })
+        const objectUrl = URL.createObjectURL(blob)
+        effectObjectUrls.add(objectUrl)
+        bgmFallbackSrc = objectUrl
       } catch {
         // 解码/下载失败：保持 HTMLAudio 网络地址回退
       }
@@ -502,22 +540,124 @@ export function useAudio() {
   })
 
   // Web Audio 无缝循环：BufferSource.loop 在缓冲区边界样本级拼接，无 HTMLAudio 的卡顿。
-  function playBgmWebAudio() {
+  // 换曲时新轨从 0 淡入、旧轨同步淡出并在斜坡结束后停止，两条 BGM 不叠加。
+  function playWebBgmTrack(file: string, buffer: AudioBuffer, fadeSeconds: number) {
     const ctx = ensureAudioContext()
-    if (!ctx || !bgmBuffer || bgmSource) return
+    if (!ctx) return
     if (ctx.state === 'suspended') void ctx.resume()
     if (!bgmGain) {
       bgmGain = ctx.createGain()
-      bgmGain.gain.value = activeLlmAudio ? BGM_DUCKED_VOLUME : BGM_VOLUME
+      bgmGain.gain.value = bgmMasterVolume()
       bgmGain.connect(ctx.destination)
     }
+    const now = ctx.currentTime
+    const previous = webBgmTrack
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(fadeSeconds > 0 ? 0 : 1, now)
+    if (fadeSeconds > 0) gain.gain.linearRampToValueAtTime(1, now + fadeSeconds)
+    gain.connect(bgmGain)
     const source = ctx.createBufferSource()
-    source.buffer = bgmBuffer
+    source.buffer = buffer
     source.loop = true
-    source.connect(bgmGain)
+    source.connect(gain)
     source.start(0)
-    source.onended = () => { if (bgmSource === source) bgmSource = null }
-    bgmSource = source
+    webBgmTrack = { file, source, gain }
+    if (!previous) return
+    previous.gain.gain.cancelScheduledValues(now)
+    previous.gain.gain.setValueAtTime(previous.gain.gain.value, now)
+    previous.gain.gain.linearRampToValueAtTime(0, now + Math.max(fadeSeconds, 0.05))
+    const retire = () => {
+      try { previous.source.stop() } catch { /* 已停止 */ }
+      previous.source.disconnect()
+      previous.gain.disconnect()
+    }
+    if (fadeSeconds > 0) window.setTimeout(retire, Math.ceil(fadeSeconds * 1_000) + 80)
+    else retire()
+  }
+
+  function fallbackTrackFor(file: string) {
+    const existing = fallbackTracks.find(track => track.file === file)
+    if (existing) return existing
+    const element = new Audio(`${AUDIO_BASE}${file}`)
+    element.preload = 'auto'
+    element.loop = true
+    element.volume = 0
+    const track: FallbackTrack = { file, element, fade: 0 }
+    fallbackTracks.push(track)
+    return track
+  }
+
+  /** 默认 BGM 若已预下载成 object URL，优先用它（离线/隐私模式下的解码回退）。 */
+  function usePreloadedFallbackSrc(track: FallbackTrack) {
+    if (track.file !== DEFAULT_BGM_FILE || !bgmFallbackSrc) return
+    if (track.element.src === bgmFallbackSrc) return
+    track.element.src = bgmFallbackSrc
+  }
+
+  function stopFallbackTrack(track: FallbackTrack) {
+    track.fade = 0
+    track.element.pause()
+    // 默认 BGM 元素常驻（恢复播放与静音开关都复用它），换曲产生的元素用完即弃。
+    if (track.element === bgm) { track.element.volume = bgmMasterVolume(); return }
+    const index = fallbackTracks.indexOf(track)
+    if (index >= 0) fallbackTracks.splice(index, 1)
+  }
+
+  /** 立刻结束换曲斜坡：目标曲目满音量，其余停掉（暂停 BGM、卸载时调用）。 */
+  function settleFallbackBgm(file: string) {
+    if (fallbackFadeTimer) { window.clearTimeout(fallbackFadeTimer); fallbackFadeTimer = 0 }
+    for (const track of [...fallbackTracks]) {
+      if (track.file === file) { usePreloadedFallbackSrc(track); track.fade = 1; continue }
+      if (track.fade > 0 || track.element !== bgm) stopFallbackTrack(track)
+    }
+    applyFallbackVolumes()
+  }
+
+  function crossfadeFallbackBgm(file: string, fadeSeconds: number) {
+    const incoming = fallbackTrackFor(file)
+    usePreloadedFallbackSrc(incoming)
+    if (fallbackFadeTimer) { window.clearTimeout(fallbackFadeTimer); fallbackFadeTimer = 0 }
+    incoming.element.play().catch(() => {})
+    if (fadeSeconds <= 0) { settleFallbackBgm(file); return }
+    const outgoing = fallbackTracks.filter(track => track !== incoming && track.fade > 0)
+    const startedAt = Date.now()
+    const step = () => {
+      const progress = Math.min(1, (Date.now() - startedAt) / (fadeSeconds * 1_000))
+      incoming.fade = progress
+      for (const track of outgoing) track.fade = 1 - progress
+      applyFallbackVolumes()
+      if (progress < 1) { fallbackFadeTimer = window.setTimeout(step, BGM_FADE_STEP_MS); return }
+      fallbackFadeTimer = 0
+      outgoing.forEach(stopFallbackTrack)
+    }
+    step()
+  }
+
+  async function applyBgmTrack(file: string, fadeSeconds: number) {
+    if (bgmWebAudio) {
+      const buffer = await loadBgmBuffer(file)
+      if (buffer) { playWebBgmTrack(file, buffer, fadeSeconds); return }
+    }
+    crossfadeFallbackBgm(file, fadeSeconds)
+  }
+
+  /** 预热一条 BGM：Web Audio 下解码进缓存，回退路径下预建元素让浏览器先下载。 */
+  function preloadBgmTrack(file: string) {
+    if (ensureAudioContext()) { void loadBgmBuffer(file); return }
+    usePreloadedFallbackSrc(fallbackTrackFor(file))
+  }
+
+  /** 交叉淡入淡出切换循环 BGM（同一时刻只有一条在播）。file 为 `audio/` 下的文件名。 */
+  function fadeToBgm(file: string, fadeSeconds = BGM_CROSSFADE_SECONDS) {
+    if (file === bgmTrackFile) return
+    bgmTrackFile = file
+    if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
+    void applyBgmTrack(file, fadeSeconds)
+  }
+
+  /** 回到默认 BGM（bg.ogg）。 */
+  function fadeToDefaultBgm(fadeSeconds = BGM_CROSSFADE_SECONDS) {
+    fadeToBgm(DEFAULT_BGM_FILE, fadeSeconds)
   }
 
   async function startBgm() {
@@ -525,14 +665,9 @@ export function useAudio() {
     if (!soundOn.value || !bgmOn.value) return
     await preloadBgm()   // 确保 buffer 就绪，避免开局静音
     if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
-    if (bgmWebAudio && bgmBuffer) {
-      playBgmWebAudio()
-    } else if (bgmFallbackSrc && bgm.src !== bgmFallbackSrc) {
-      bgm.src = bgmFallbackSrc
-      bgm.play().catch(() => {})
-    } else {
-      bgm.play().catch(() => {})
-    }
+    // 首播不做交叉淡入淡出：此刻还没有在播的 BGM，直接进当前目标曲目。
+    if (bgmWebAudio && bgmBuffers.has(bgmTrackFile)) playWebBgmTrack(bgmTrackFile, bgmBuffers.get(bgmTrackFile)!, 0)
+    else await applyBgmTrack(bgmTrackFile, 0)
   }
 
   function stopEffects() {
@@ -554,13 +689,19 @@ export function useAudio() {
     if (!globalEnabled || !bgmEnabled) {
       // Web Audio：suspend 保留播放位置，再次开启时 resume 无缝续播
       if (bgmWebAudio) void audioContext?.suspend()
-      else bgm.pause()
+      else {
+        // 回退路径：先把在飞的换曲斜坡结算到目标曲目，再整体静音，避免斜坡回调在后台继续跑。
+        settleFallbackBgm(bgmTrackFile)
+        fallbackTracks.filter(track => track.fade > 0 || track.element === bgm).forEach(track => track.element.pause())
+      }
     } else if (bgmStarted.value) {
       if (bgmWebAudio && audioContext) {
         if (audioContext.state === 'suspended') void audioContext.resume()
-        if (!bgmSource && bgmBuffer) playBgmWebAudio()
+        if (!webBgmTrack) void applyBgmTrack(bgmTrackFile, 0)
       } else {
-        bgm.play().catch(() => {})
+        const current = fallbackTrackFor(bgmTrackFile)
+        usePreloadedFallbackSrc(current)
+        current.element.play().catch(() => {})
       }
     }
 
@@ -576,12 +717,15 @@ export function useAudio() {
     unsubscribeLocalLlmAudio()
     removeBgmPrimeListeners()
     if (bgmWebAudio) {
-      bgmSource?.stop()
-      bgmSource = null
+      try { webBgmTrack?.source.stop() } catch { /* 已停止 */ }
+      webBgmTrack?.source.disconnect()
+      webBgmTrack?.gain.disconnect()
+      webBgmTrack = null
       void audioContext?.close()
       audioContext = null
     } else {
-      bgm.pause()
+      if (fallbackFadeTimer) { window.clearTimeout(fallbackFadeTimer); fallbackFadeTimer = 0 }
+      fallbackTracks.forEach(track => track.element.pause())
     }
     stopEffects()
     stopLlmAudio()
@@ -600,5 +744,8 @@ export function useAudio() {
     playLocalLlmAudioUntilMidpoint,
     startBgm,
     preloadBgm,
+    preloadBgmTrack,
+    fadeToBgm,
+    fadeToDefaultBgm,
   }
 }
