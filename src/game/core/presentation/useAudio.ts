@@ -532,7 +532,36 @@ export function useAudio() {
   })
 
   // Web Audio 无缝循环：BufferSource.loop 在缓冲区边界样本级拼接，无 HTMLAudio 的卡顿。
-  // 换曲时新轨从 0 淡入、旧轨同步淡出并在斜坡结束后停止，两条 BGM 不叠加。
+  // 换曲用**等功率（equal-power）交叉**：新轨按 sin、旧轨按 cos 走同一条 π/2 曲线。
+  // 两条线性斜坡会让中点只剩 √(0.5²+0.5²)≈0.71 的功率（听感掉 ~3dB 再回来），
+  // sin/cos 组合在整段交叉里保持 a²+b²=1，响度听不出起伏。
+  const CROSSFADE_CURVE_STEPS = 64
+  function crossfadeCurve(current: number, direction: 'in' | 'out', steps = CROSSFADE_CURVE_STEPS) {
+    const curve = new Float32Array(steps + 1)
+    for (let index = 0; index <= steps; index += 1) {
+      const angle = (Math.PI / 2) * (index / steps)
+      // 起点必须等于当前增益：换曲被再次打断时不会跳变。
+      curve[index] = direction === 'in'
+        ? current + (1 - current) * Math.sin(angle)
+        : current * Math.cos(angle)
+    }
+    // 端点取精确值，避免 cos(π/2) 的 6e-17 残量留在增益上。
+    curve[0] = current
+    curve[steps] = direction === 'in' ? 1 : 0
+    return curve
+  }
+
+  /** 等功率曲线优先；个别浏览器拒绝曲线调度时退回斜坡，绝不把新轨留在 0 增益。 */
+  function scheduleCrossfade(param: AudioParam, current: number, direction: 'in' | 'out', startTime: number, duration: number) {
+    try {
+      param.setValueCurveAtTime(crossfadeCurve(current, direction), startTime, duration)
+    } catch {
+      param.cancelScheduledValues(startTime)
+      param.setValueAtTime(current, startTime)
+      param.linearRampToValueAtTime(direction === 'in' ? 1 : 0, startTime + duration)
+    }
+  }
+
   function playWebBgmTrack(file: string, buffer: AudioBuffer, fadeSeconds: number) {
     const ctx = ensureAudioContext()
     if (!ctx) return
@@ -545,8 +574,8 @@ export function useAudio() {
     const now = ctx.currentTime
     const previous = webBgmTrack
     const gain = ctx.createGain()
-    gain.gain.setValueAtTime(fadeSeconds > 0 ? 0 : 1, now)
-    if (fadeSeconds > 0) gain.gain.linearRampToValueAtTime(1, now + fadeSeconds)
+    if (fadeSeconds > 0) scheduleCrossfade(gain.gain, 0, 'in', now, fadeSeconds)
+    else gain.gain.setValueAtTime(1, now)
     gain.connect(bgmGain)
     const source = ctx.createBufferSource()
     source.buffer = buffer
@@ -555,9 +584,9 @@ export function useAudio() {
     source.start(0)
     webBgmTrack = { file, source, gain }
     if (!previous) return
+    const outgoing = Math.max(fadeSeconds, 0.05)
     previous.gain.gain.cancelScheduledValues(now)
-    previous.gain.gain.setValueAtTime(previous.gain.gain.value, now)
-    previous.gain.gain.linearRampToValueAtTime(0, now + Math.max(fadeSeconds, 0.05))
+    scheduleCrossfade(previous.gain.gain, previous.gain.gain.value, 'out', now, outgoing)
     const retire = () => {
       try { previous.source.stop() } catch { /* 已停止 */ }
       previous.source.disconnect()
@@ -612,11 +641,15 @@ export function useAudio() {
     incoming.element.play().catch(() => {})
     if (fadeSeconds <= 0) { settleFallbackBgm(file); return }
     const outgoing = fallbackTracks.filter(track => track !== incoming && track.fade > 0)
+    const incomingStart = incoming.fade
+    const outgoingStarts = outgoing.map(track => track.fade)
     const startedAt = Date.now()
     const step = () => {
       const progress = Math.min(1, (Date.now() - startedAt) / (fadeSeconds * 1_000))
-      incoming.fade = progress
-      for (const track of outgoing) track.fade = 1 - progress
+      // 等功率交叉：新轨 sin 升起、旧轨 cos 落下，a²+b² 恒为 1，中间不会掉响度。
+      const angle = (Math.PI / 2) * progress
+      incoming.fade = incomingStart + (1 - incomingStart) * Math.sin(angle)
+      outgoing.forEach((track, index) => { track.fade = outgoingStarts[index] * Math.cos(angle) })
       applyFallbackVolumes()
       if (progress < 1) { fallbackFadeTimer = window.setTimeout(step, BGM_FADE_STEP_MS); return }
       fallbackFadeTimer = 0

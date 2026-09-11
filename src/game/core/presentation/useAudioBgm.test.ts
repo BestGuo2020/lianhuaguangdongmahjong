@@ -19,17 +19,29 @@ class MockAudio {
   removeEventListener() {}
 }
 
-interface GainSpy { value: number; ramps: Array<[number, number]>; setValueAtTime: ReturnType<typeof vi.fn>; linearRampToValueAtTime: ReturnType<typeof vi.fn>; cancelScheduledValues: ReturnType<typeof vi.fn> }
+interface GainSpy {
+  value: number
+  ramps: Array<[number, number]>
+  curves: Array<{ values: number[]; duration: number }>
+  setValueAtTime: ReturnType<typeof vi.fn>
+  linearRampToValueAtTime: ReturnType<typeof vi.fn>
+  setValueCurveAtTime: ReturnType<typeof vi.fn>
+  cancelScheduledValues: ReturnType<typeof vi.fn>
+}
 class MockGainNode {
   readonly gain: GainSpy
   connect = vi.fn()
   disconnect = vi.fn()
   constructor() {
     const gain: GainSpy = {
-      value: 1, ramps: [],
+      value: 1, ramps: [], curves: [],
       setValueAtTime: vi.fn((value: number) => { gain.value = value }),
       cancelScheduledValues: vi.fn(),
       linearRampToValueAtTime: vi.fn((value: number, time: number) => { gain.ramps.push([value, time]); gain.value = value }),
+      setValueCurveAtTime: vi.fn((values: Float32Array, _start: number, duration: number) => {
+        gain.curves.push({ values: [...values], duration })
+        gain.value = values[values.length - 1]
+      }),
     }
     this.gain = gain
   }
@@ -118,6 +130,25 @@ describe('useAudio BGM 交叉淡入淡出（HTMLAudio 回退路径）', () => {
     expect(hu!.play.mock.calls.length).toBe(plays)
   })
 
+  it('等功率交叉：整段过渡里两条轨的功率之和恒定，中间不掉响度', async () => {
+    const audio = useAudio()
+    const bg = MockAudio.instances[0]
+    await audio.startBgm()
+    audio.fadeToBgm('HuMusic.ogg', 0.2)
+    const hu = MockAudio.instances.find(item => item.src.endsWith('/audio/HuMusic.ogg'))!
+    const power = (ms: number) => hu.volume ** 2 + bg.volume ** 2
+
+    await wait(100)
+    // 线性斜坡会掉到 0.71²≈0.5 的功率；等功率下全程 ≈ 满功率 0.32²=0.1024
+    expect(power(100)).toBeGreaterThan(0.32 ** 2 * 0.9)
+    expect(hu.volume).toBeGreaterThan(0.32 * 0.4)
+    await wait(60)
+    expect(power(160)).toBeGreaterThan(0.32 ** 2 * 0.9)
+    await wait(120)
+    expect(hu.volume).toBeCloseTo(0.32, 5)
+    expect(bg.pause).toHaveBeenCalled()
+  })
+
   it('局末切回默认 BGM，默认轨重新淡入', async () => {
     const audio = useAudio()
     const bg = MockAudio.instances[0]
@@ -165,7 +196,7 @@ describe('useAudio BGM 交叉淡入淡出（Web Audio 路径）', () => {
   beforeEach(() => stubGlobals(true))
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-  it('换曲生成第二条 BufferSource：新轨 0→1、旧轨 →0，斜坡结束后旧轨 stop', async () => {
+  it('换曲生成第二条 BufferSource：新轨等功率升起、旧轨等功率落下，斜坡结束后旧轨 stop', async () => {
     const audio = useAudio()
     await audio.startBgm()
     const ctx = MockAudioContext.created[0]
@@ -174,10 +205,19 @@ describe('useAudio BGM 交叉淡入淡出（Web Audio 路径）', () => {
     audio.fadeToBgm('HuMusic.ogg', 0.05)
     await wait(30)
     expect(ctx.sources).toHaveLength(2)
-    // gains[0] 是常驻主增益（恒为 BGM_VOLUME，不再做语音 ducking），换曲的是其后两条轨道增益。
+    // gains[0] 是常驻主增益（恒为 BGM_VOLUME），换曲的是其后两条轨道增益。
     const [oldTrack, newTrack] = ctx.gains.slice(1, 3).map(node => node.gain)
-    expect(newTrack.ramps.some(([value]) => value === 1)).toBe(true)
-    expect(oldTrack.ramps.some(([value]) => value === 0)).toBe(true)
+    const [inCurve] = newTrack.curves
+    const [outCurve] = oldTrack.curves
+    expect(inCurve.values[0]).toBe(0)
+    expect(inCurve.values.at(-1)).toBeCloseTo(1, 5)
+    expect(outCurve.values[0]).toBeCloseTo(1, 5)
+    expect(outCurve.values.at(-1)).toBe(0)
+    // 等功率：中点两条曲线各 ≈0.707，中间不掉响度（线性斜坡中点会只剩 0.5）
+    const middle = Math.floor(inCurve.values.length / 2)
+    expect(inCurve.values[middle]).toBeCloseTo(Math.SQRT1_2, 2)
+    expect(outCurve.values[middle]).toBeCloseTo(Math.SQRT1_2, 2)
+    expect(inCurve.duration).toBeCloseTo(0.05, 5)
     expect(ctx.sources[0].loop).toBe(true)
     expect(ctx.sources[1].loop).toBe(true)
 
