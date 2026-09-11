@@ -14,6 +14,7 @@ import { createLocalTransientEventPresenter } from '../../../core/local/localTra
 import { resolveAnimeAudioPolicy } from '../../../core/presentation/animeAudioPolicy'
 import { defaultAvatarForSeat } from '../../../core/presentation/avatar'
 import { isLocalLlmSeat } from '../../../core/presentation/localLlmVoiceRegistry'
+import { activeBgmTrackPort } from '../../../core/presentation/useAudio'
 import type { AnimeFixedTtsExecutor } from '../../../llm/animeFixedTtsExecutor'
 import type { PlayerSeed } from '../../../shared/runtime/localOpening'
 import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from './config'
@@ -75,7 +76,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
-  const winMusic = createBloodFlowWinMusic(options.bgm)
+  // 端口优先取显式注入（测试/自定义音频），否则取音频层注册表——联机两条分支都不需要各自接线。
+  const winMusic = createBloodFlowWinMusic(options.bgm ?? activeBgmTrackPort() ?? undefined)
   const winMusicState: WinMusicState = {
     totalWinTiles: () => view.value ? totalBloodFlowWinTiles(view.value.public.seats) : 0,
     playing: () => Boolean(view.value) && view.value!.public.status === 'playing' && !view.value!.public.roundResult,

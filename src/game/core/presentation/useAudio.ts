@@ -63,6 +63,25 @@ const EFFECT_PLAYER_KEY:InjectionKey<EffectPlayer>=Symbol('effect-player')
 /** Shared UI effects use the existing player and its sound/effects mute controls. */
 export function useEffectPlayer(){return getCurrentInstance()?inject(EFFECT_PLAYER_KEY,null):null}
 
+/**
+ * BGM 曲目端口：玩法层（如血流「全场多胡」）用它换循环 BGM，不直接碰音频实现。
+ * 与 `llmAudioBus`/`useEffectPlayer` 同款做法：`useAudio()` 注册到模块级单例，
+ * 玩法层随时取用——联机两条分支（WS / P2P）都不必各自改 App.vue 接线。
+ */
+export interface BgmTrackPort {
+  /** 交叉淡入淡出切换循环 BGM；file 为 `audio/` 下的文件名，秒数省略时用默认时长。 */
+  fadeTo(file: string, fadeSeconds?: number): void
+  /** 预热目标曲目，避免第一次换曲时才下载（可选）。 */
+  preload?(file: string): void
+}
+
+let bgmTrackPort: BgmTrackPort | null = null
+
+/** 当前页面注册的 BGM 曲目端口；未挂载音频层时为 null。 */
+export function activeBgmTrackPort(): BgmTrackPort | null {
+  return bgmTrackPort
+}
+
 export function useAudioControls(): AudioControls {
   const controls = inject(AUDIO_CONTROLS_KEY, null)
   if (!controls) throw new Error('Audio controls must be used below useAudio()')
@@ -660,6 +679,10 @@ export function useAudio() {
     fadeToBgm(DEFAULT_BGM_FILE, fadeSeconds)
   }
 
+  // 玩法层（血流多胡 BGM 等）通过注册表取端口，不必在 App.vue 里逐分支接线。
+  const bgmPort: BgmTrackPort = { fadeTo: fadeToBgm, preload: preloadBgmTrack }
+  bgmTrackPort = bgmPort
+
   async function startBgm() {
     bgmStarted.value = true
     if (!soundOn.value || !bgmOn.value) return
@@ -716,6 +739,7 @@ export function useAudio() {
     unregisterLlmAudioGroupPlayer()
     unsubscribeLocalLlmAudio()
     removeBgmPrimeListeners()
+    if (bgmTrackPort === bgmPort) bgmTrackPort = null
     if (bgmWebAudio) {
       try { webBgmTrack?.source.stop() } catch { /* 已停止 */ }
       webBgmTrack?.source.disconnect()

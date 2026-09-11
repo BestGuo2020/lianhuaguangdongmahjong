@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_BGM_FILE, useAudio } from './useAudio'
+import { DEFAULT_BGM_FILE, activeBgmTrackPort, useAudio } from './useAudio'
 
 /** 交叉淡入淡出只在 BGM 层，这里独立桩出可观测的音量斜坡。 */
 class MockAudio {
@@ -145,6 +145,19 @@ describe('useAudio BGM 交叉淡入淡出（HTMLAudio 回退路径）', () => {
     await wait(400)
     expect(hu.play).toHaveBeenCalledTimes(2)
     expect(hu.volume).toBeCloseTo(0.32, 5)
+  })
+
+  it('注册表暴露 BGM 曲目端口：玩法层不接线也能换曲（两条联机分支共用）', async () => {
+    const audio = useAudio()
+    const port = activeBgmTrackPort()
+    expect(port).not.toBeNull()
+    const bg = MockAudio.instances[0]
+    await audio.startBgm()
+    port!.preload?.('HuMusic.ogg')
+    port!.fadeTo('HuMusic.ogg', 0.05)
+    await wait(120)
+    expect(MockAudio.instances.filter(item => item.src.endsWith('/audio/HuMusic.ogg'))).toHaveLength(1)
+    expect(bg.pause).toHaveBeenCalled()
   })
 })
 
