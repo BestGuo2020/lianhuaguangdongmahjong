@@ -53,7 +53,10 @@ const livePlayers=shallowRef(players),liveLastDiscard=shallowRef<{tile:TileType;
 const hudState = shallowRef<Record<string, unknown>>({})
 // Compare the exact HUD with ordinary rules, without running an unrelated AI turn.
 ;(window as any).__setCommonPresentation = (value: Record<string, unknown>) => { hudState.value = value }
-const waitInfo = { discard: 'm1', tiles: [{tile:'s2',remaining:3},{tile:'s3',remaining:2},{tile:'s4',remaining:0},{tile:'s6',remaining:1}], total:6 }
+// 听牌面板容量压测：默认 4 张听口（原有断言不变），?waits=N 可放到最多 9+ 张验证一行一列数上限。
+const waitTilePool: TileType[] = ['s2', 's3', 's4', 's6', 's7', 's9', 'p2', 'p5', 'p8', 'm3', 'm7', 'east']
+const waitCount = Math.min(Math.max(Number(query.get('waits') ?? 4) || 4, 1), waitTilePool.length)
+const waitInfo = { discard: 'm1', tiles: waitTilePool.slice(0, waitCount).map((tile, index) => ({ tile, remaining: [3, 2, 0, 1][index % 4] })), total: 6 }
 function showHudState(state: 'waiting'|'selection'|'preview') {
   // 可胡画面 = 锁手之前的操作画面：解除锁手，保证胡/碰/杠/吃/过五种按钮齐全。
   liveState.value = { ...liveState.value, seats: vector(s => ({ ...liveState.value.seats[s], locked: false })) }

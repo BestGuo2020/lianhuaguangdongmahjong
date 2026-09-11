@@ -116,6 +116,11 @@ const compactPiles = ref(pileMedia.matches)
 const resizePiles = () => { compactPiles.value = pileMedia.matches }
 pileMedia.addEventListener('change', resizePiles)
 onBeforeUnmount(() => pileMedia.removeEventListener('change', resizePiles))
+// 听牌面板列数要随可用宽度连续变化（手机横竖屏切换不触发上面的媒体查询变化事件）。
+const viewportWidth = ref(window.innerWidth)
+const resizeViewport = () => { viewportWidth.value = window.innerWidth }
+window.addEventListener('resize', resizeViewport)
+onBeforeUnmount(() => window.removeEventListener('resize', resizeViewport))
 const compactBloodFlowEffects = computed(() => compactPiles.value || new URLSearchParams(window.location.search).get('quality') === 'low')
 const presentationDirector=new BloodFlowPresentationDirector(import.meta.env.DEV?Number(new URLSearchParams(window.location.search).get('motionScale'))||1:1)
 const effectPlayer=useEffectPlayer(),playedImpacts=new Set<string>()
@@ -275,6 +280,18 @@ const bloodFlowWaitTiles = computed(() => (activeWaits.value?.tiles ?? []).map(i
   const score = scores?.find(wait => wait.tile === item.tile)
   return { ...item, multiplier: (score?.selfDraw ?? score?.discard)?.finalMultiplier ?? null }
 }))
+// 听牌面板一行最多 9 张。面板是收缩宽度容器，列数算多了超出部分会被
+// .blood-flow-waiting-tip 的 overflow-x: hidden 静默裁掉，所以窄屏按「面板可用宽度 ÷ 单张牌宽」
+// 自动降列：可用宽度取 .waiting-tip 的 max-width（min(620px, 82vw)）减左右内边距，再留 12px
+// 余量吸收各主题字号差异；单张牌宽与间距取下方 .blood-flow-wait-* 里的常态一档。
+const bloodFlowWaitColumns = computed(() => {
+  const tileCount = bloodFlowWaitTiles.value.length
+  if (!tileCount) return 1
+  const compact = compactPiles.value, gap = compact ? 10 : 14
+  const available = Math.min(620, viewportWidth.value * .82) - 38
+  const fit = Math.floor((available + gap) / ((compact ? 30 : 44) + gap))
+  return Math.max(1, Math.min(9, tileCount, fit))
+})
 // 托管开关：仅多人联机模式显示；结算/亮相/回大厅等阶段隐藏，其余对局时段（含他人回合）常驻可切换。
 const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
   && !['lobby', 'win-effect', 'revealing', 'settled', 'finished'].includes(props.phase))
@@ -671,7 +688,7 @@ function onAvatarError(entry: GamePlayer) {
       <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
-      <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ gridTemplateColumns: `repeat(${Math.min(4, bloodFlowWaitTiles.length) || 1}, minmax(0, 1fr))` }">
+      <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ '--bf-wait-cols': bloodFlowWaitColumns, gridTemplateColumns: `repeat(${bloodFlowWaitColumns}, minmax(0, 1fr))` }">
         <div v-for="item in bloodFlowWaitTiles" :key="item.tile" class="blood-flow-wait-tile" :class="{ exhausted: item.remaining === 0 }"
           :aria-label="`${tileName(item.tile)}，自摸预估${item.multiplier ?? '未知'}倍，剩余${item.remaining}张`">
           <MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
@@ -715,17 +732,23 @@ function onAvatarError(entry: GamePlayer) {
   .blood-flow-reform-tip { font-size: 10px; padding: 3px 7px; max-width: 62vw; }
   .reform-badge { top: -13px; min-width: 14px; font-size: 9px; line-height: 13px; }
 }
-.blood-flow-waiting-tip { max-height: min(320px, 55vh); align-items: flex-start; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
-.blood-flow-wait-grid { display: grid; gap: 12px 14px; }
+/* .waiting-tip 用 left: 50% + translateX(-50%) 居中，绝对定位的收缩宽度上限因此是「容器的一半」：
+   9 张听牌会被这个上限挤扁（30px 的牌塞进 20px 的列）。血流面板改为左右都为 0 的自动外边距居中，
+   可用宽度回到整屏，列数再由 bloodFlowWaitColumns 收窄。 */
+.blood-flow-waiting-tip { left: 0; right: 0; width: fit-content; margin-inline: auto; transform: none; max-height: min(320px, 55vh); align-items: flex-start; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+/* 列数由 bloodFlowWaitColumns 决定（--bf-wait-cols），面板宽度/牌宽/间距在这里声明，
+   供下面的牌宽收敛公式复用：--bf-wait-panel 取 .waiting-tip 的 max-width。 */
+.blood-flow-wait-grid { --bf-wait-panel: min(620px, 82cqw); --bf-wait-pad: 26px; --bf-wait-gap: 14px; --bf-wait-tile-cap: 44px; display: grid; gap: 12px 14px; grid-template-columns: repeat(var(--bf-wait-cols, 1), minmax(0, 1fr)); }
 .blood-flow-wait-tile { display: grid; justify-items: center; align-content: start; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
-.blood-flow-wait-tile .mahjong-tile.small { --tile-width: 44px; margin-bottom: 4px; }
+/* 牌宽先取常态 44px，超出面板可用宽度时按列数收敛，窄屏/异常字号下也不会横向裁切。 */
+.blood-flow-wait-tile .mahjong-tile.small { --tile-width: min(var(--bf-wait-tile-cap), calc((var(--bf-wait-panel) - var(--bf-wait-pad) - (var(--bf-wait-cols, 1) - 1) * var(--bf-wait-gap)) / var(--bf-wait-cols, 1))); margin-bottom: 4px; }
 .wait-multiplier { color: var(--theme-accent); font-weight: 800; }
 .wait-remaining { color: var(--theme-text); }
 .blood-flow-wait-tile.exhausted { opacity: .5; }
 @container (max-width: 900px) or (max-height: 500px) {
-  .blood-flow-wait-grid { gap: 8px 10px; }
+  .blood-flow-wait-grid { gap: 8px 10px; --bf-wait-pad: 14px; --bf-wait-gap: 10px; --bf-wait-tile-cap: 30px; }
   .blood-flow-wait-tile { font-size: 11px; }
-  .blood-flow-wait-tile .mahjong-tile.small { --tile-width: 30px; margin-bottom: 2px; }
+  .blood-flow-wait-tile .mahjong-tile.small { margin-bottom: 2px; }
 }
 .blood-flow-pile-badge { position: relative; display: block; flex-shrink: 0; max-width: 100%; min-height: 24px; padding: 3px 7px; margin-top: 2px; border: 1px solid color-mix(in srgb, var(--theme-accent) 40%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--theme-accent) 10%, transparent); color: var(--theme-text); font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
 .blood-flow-pile-badge { pointer-events: auto; background: var(--theme-panel); }
