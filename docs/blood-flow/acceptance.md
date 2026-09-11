@@ -16,6 +16,13 @@
 - 既有断言不受影响：`blood-flow.presentation.spec.ts` / `settlement-navigation.spec.ts` 只按标题行与 `自摸` 文本匹配，本批未改这些文案。
 - 未验证：真实整局实玩时玩家能否只看徽标就对上番型权重；番型名在标题与徽标各出现一次（徽标多带权重），是否需要去重留给后续反馈。本批不涉及演出、声音、联机与后端。
 
+**推送与发布（2026-09-12）**
+
+- 推送：master `b4f5ce3..5db2312`、vibehub `5e58108..9fe8c92`（`git push origin master` / `git push origin vibehub`）。
+- 发布：vibehub 工作区 `pnpm build` 重新构建 dist，`vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist --note-file tmp/release-note-20260912.txt` 返回部署成功——跳过 228 个未变化文件、删除 5 个旧文件（含上一版 `assets/index-CGwNGNIh.js`）、上传 9 个：新 `assets/index-BqpBSQ7T.js`、`assets/index-C4lFlMzt.css`、`assets/{MahjongTable3D-B8W9GFd6,RulesPanel-WIGVBukI,engineWorker-DkVUQ1Pd}.js`、`index.html` 与 `audio/HuMusic.ogg`、`audio/chihushandian.ogg`、`audio/hufangmj.ogg`。线上地址 <https://vibe.lumigrav.space/play/M-USGs_ieQksAeOJYtHF4>。
+- 本次线上更新不只含本批：上一版部署（2026-09-10，`index-CGwNGNIh.js`）之后累积的 09-11～09-12 改动一并上线——血流「全场胡牌累计 ≥8 张换 HuMusic.ogg、局末回切、淡入淡出」、取消语音期间的 BGM 压低、血流听牌面板一行最多 9 张并按宽度降列，以及本次结算卡徽标明细。
+- 未验证：本次发布未跑线上双账号整场（AGENTS 的联机验收流程）；线上仅按 CLI 部署结果与静态产物替换核对，浏览器内实际对局、听觉观感与 P2P 行为未在本次复测。
+
 ## 2026-09-10：血流联机 P2P 上线与房间生命周期（两场线上整场通过）
 
 本批把血流从「后端 WS 联机」推到「vibehub P2P 上线可玩」，并收口规则与房间语义。提交：master `020bb47`→`f4f6c7e`（18 笔）、后端 main `37bb8cc`/`7d15030`/`195972d`、vibehub `12b2d0e`/`07150c2`/`ce46cdb`/`9dbc445`/`f8ffdfd`/`c0656f7`（另有 9 次 `pnpm sync:vibehub`；三仓均已推送远端）。
