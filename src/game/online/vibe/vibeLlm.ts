@@ -22,6 +22,7 @@ import {
 } from '../../llm/llmController'
 import { resolveLocalTtsVoiceKey } from '../../llm/localTtsClient'
 import { avatarFor, displayNameOf, effectiveNickname } from '../../llm/persona'
+import { preloadImages } from '../../core/presentation/imagePreload'
 import { compactLlmSpeechText, type LlmSpeechPriority } from '../../llm/speechPolicy'
 import { llmWinLine, type LlmWinType } from '../../llm/winLines'
 
@@ -113,6 +114,9 @@ export function resolveHostLlmSelections(
     privateSeats.push({ seat: item.seat, presetId: preset.id, style: item.style })
     publicSeats.push(publicSeatOf(item.seat, preset, item.style))
   }
+  // 本次开局实际会用到的人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）先行预取：
+  // 联机 LLM 座位第一次出现时不至于现场等图；不做供应商×风格全量预取。
+  void preloadImages(publicSeats.map((seat) => seat.avatar))
   return { privateSeats, publicSeats }
 }
 
