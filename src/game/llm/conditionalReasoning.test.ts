@@ -121,8 +121,9 @@ describe('条件深度思考', () => {
     expect(coordinator.admit(request({ roundIndex: 4 }), 1, 45_000).enabled).toBe(false)
   })
 
-  it('前两巡两副露的中等威胁不触发，三副露明显染手才越过早巡门槛', () => {
+  it('前两巡两副露的中等威胁不触发，三组箭牌的高倍威胁才越过早巡门槛', () => {
     const meld = { type: 'peng', tile: '2万', tiles: ['2万', '2万', '2万'] }
+    const dragons = ['红中', '发财', '白板'].map((tile) => ({ type: 'peng', tile, tiles: [tile, tile, tile] }))
     const snapshots = {
       self: { discards: [], melds: [] }, upper: { discards: ['东风'], melds: [meld, meld] },
       opposite: { discards: [], melds: [] }, lower: { discards: [], melds: [] },
@@ -132,7 +133,14 @@ describe('条件深度思考', () => {
     expect(evaluateReasoningTriggers(legacy, DEFAULT_CONDITIONAL_REASONING, () => 1).reasons)
       .not.toContain('opponent-threat')
 
+    // 三副露同花色仍是染手中档（赔付量级 ≈ 清一色硬胡），早巡 90 门槛不越过。
     legacy.state.snapshots.upper.melds.push(meld)
+    expect(estimateOpponentThreat(legacy)).toBe(70)
+    expect(evaluateReasoningTriggers(legacy, DEFAULT_CONDITIONAL_REASONING, () => 1).reasons)
+      .not.toContain('opponent-threat')
+
+    // 三组箭牌 = 十六倍级嫌疑 → 高倍档，越过早巡门槛。
+    legacy.state.snapshots.upper.melds = dragons
     expect(estimateOpponentThreat(legacy)).toBe(90)
     expect(evaluateReasoningTriggers(legacy, DEFAULT_CONDITIONAL_REASONING, () => 1).reasons).toContain('opponent-threat')
     legacy.ruleCode = 'lotus-classic'

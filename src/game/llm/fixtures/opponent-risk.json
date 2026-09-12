@@ -1,0 +1,104 @@
+{
+  "kind": "lianhua-llm-opponent-risk",
+  "version": 1,
+  "note": "对手牌型风险定价（档位版）的公共信息黄金输入。TS 与 Python 必须产出完全相同的 profiles / exposure / feature；牌面使用内部牌面 id（m1 / p4 / east / red …）。exposure 单位：点。",
+  "cases": [
+    {
+      "id": "quiet",
+      "note": "无任何公共信号：必须退化为旧口径（公开张数档位 × 40）",
+      "wallCount": 60,
+      "visibleTiles": ["p3", "p3", "s1"],
+      "opponents": [
+        { "seat": 1, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false },
+        { "seat": 2, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false },
+        { "seat": 3, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false }
+      ],
+      "expectedProfiles": [
+        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false },
+        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false },
+        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false }
+      ],
+      "expectedExposure": { "p3": 0, "s1": 4, "m5": 10 },
+      "expectedFeature": { "m5": null }
+    },
+    {
+      "id": "flush-and-locked",
+      "note": "副露染手 + 已锁手且已胡过：现物与花色折扣都不适用，任何一张同价",
+      "wallCount": 40,
+      "visibleTiles": ["east", "east", "p3"],
+      "opponents": [
+        {
+          "seat": 1,
+          "discards": ["m1"],
+          "melds": [
+            { "type": "peng", "tile": "p4", "tiles": ["p4", "p4", "p4"] },
+            { "type": "peng", "tile": "p7", "tiles": ["p7", "p7", "p7"] }
+          ],
+          "winCount": 9,
+          "locked": true
+        },
+        { "seat": 2, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false }
+      ],
+      "expectedProfiles": [
+        { "tier": 2, "factor": 16, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"], "suspectSuit": "p", "locked": true },
+        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false }
+      ],
+      "expectedExposure": { "p3": 160, "m5": 160, "east": 160 },
+      "expectedFeature": {
+        "p3": { "tier": "中", "payment": 160, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"] },
+        "m5": { "tier": "中", "payment": 160, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"] }
+      }
+    },
+    {
+      "id": "three-dragons",
+      "note": "三组箭牌 = 十六倍级嫌疑（tier 3，×32）",
+      "wallCount": 60,
+      "visibleTiles": [],
+      "opponents": [
+        {
+          "seat": 1,
+          "discards": [],
+          "melds": [
+            { "type": "peng", "tile": "red", "tiles": ["red", "red", "red"] },
+            { "type": "peng", "tile": "green", "tiles": ["green", "green", "green"] },
+            { "type": "peng", "tile": "white", "tiles": ["white", "white", "white"] }
+          ],
+          "winCount": 0,
+          "locked": false
+        }
+      ],
+      "expectedProfiles": [
+        { "tier": 3, "factor": 32, "signals": ["副露含三组箭牌", "副露字牌成组", "副露3组"], "suspectSuit": null, "locked": false }
+      ],
+      "expectedExposure": { "m5": 320, "east": 320 },
+      "expectedFeature": {
+        "m5": { "tier": "高", "payment": 320, "signals": ["副露含三组箭牌", "副露字牌成组", "副露3组"] }
+      }
+    },
+    {
+      "id": "half-flush",
+      "note": "半染手（副露 2 组且同花色占比 ≥0.5）：嫌疑花色 ×1、非嫌疑花色 ×0.5",
+      "wallCount": 60,
+      "visibleTiles": [],
+      "opponents": [
+        {
+          "seat": 2,
+          "discards": ["p1", "p2", "p3", "s1", "s2", "s3", "east", "east", "east"],
+          "melds": [
+            { "type": "chi", "tile": "p4", "tiles": ["p3", "p4", "p5"] },
+            { "type": "gang", "tile": "m7", "tiles": ["m7", "m7", "m7", "m7"] }
+          ],
+          "winCount": 0,
+          "locked": false
+        }
+      ],
+      "expectedProfiles": [
+        { "tier": 1, "factor": 4, "signals": ["副露半染手"], "suspectSuit": "m", "locked": false }
+      ],
+      "expectedExposure": { "m5": 40, "p5": 20 },
+      "expectedFeature": {
+        "m5": { "tier": "低", "payment": 40, "signals": ["副露半染手"] }
+      }
+    }
+  ]
+}

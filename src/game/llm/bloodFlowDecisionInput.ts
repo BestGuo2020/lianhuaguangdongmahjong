@@ -10,7 +10,7 @@ import {visibleTiles, type BloodFlowSeatView} from '../variants/lotus/bloodFlow/
 import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
 
 export interface BloodFlowDecisionMetadata {roundIndex?:number;dealerIndex?:number;seatWind?:string;roundWind?:string}
-export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持平胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。'
+export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持平胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶64倍；同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达平胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。'
 
 function label(action:BloodFlowAction,view:BloodFlowSeatView):string {
   const player=view.players[view.seat]
@@ -40,10 +40,12 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   // is overridden. The public request below carries the actual blood-flow ID.
   const input:DecisionInput={ruleCode:'lotus-legacy',decision:claim?'claim':'turn',playerIndex:view.seat,
     hand:player.hand,melds:player.melds,exposedMelds:player.melds.length,jokerTiles:view.jokers,wildcardTiles:['white'],
-    visibleTiles:visibleTiles(view),publicTiles,peers:view.players,scores:view.players.map(p=>p.score),
+    visibleTiles:visibleTiles(view),publicTiles,peers:view.players.map(player=>({...player,
+      winCount:view.public.seats[player.seat]?.winCount??0,locked:view.public.seats[player.seat]?.locked??false})),scores:view.players.map(p=>p.score),
     tile:claim?source?.tile:undefined,from:claim?source?.seat:undefined,
     chiOptions:chiActions.map(a=>({kind:/^[mps]/.test(a.tiles[0])?'sequence':['east','south','west','north'].includes(a.tiles[0])?'wind':'dragon',tiles:a.tiles})),
     upperLastDiscard:view.players[(view.seat+3)%4].discards.at(-1),wallCount:view.wallCount,
+    opponentPatternRisk:aiConfig.opponentPatternRisk,
     earlyRound:player.discards.length<2,turnOrigin,drawnTile:player.hand[player.drawnTileIndex]??null,
     requestId,stateVersion:String(view.version),scoreDeltaForAction:deltaFor,
     seatWind:metadata.dealerIndex==null?undefined:['东','南','西','北'][(view.seat-metadata.dealerIndex+4)%4],

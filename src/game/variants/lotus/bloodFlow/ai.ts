@@ -8,6 +8,7 @@ import type { BloodFlowAiConfig } from './config'
 import { BLOOD_FLOW_AI } from './config'
 import { patternPotentialEv } from './patternPotentials'
 import { bloodFlowEvContext } from './evContext'
+import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
 
 export { bloodFlowEvContext, firstWinFloor } from './evContext'
 
@@ -66,7 +67,7 @@ export function decideBloodFlowAction(view: BloodFlowSeatView, minimumFirstPayme
 // EV 上下文（胡/连锁/门槛/潜力/改张/抢杠两值）由 evContext 统一计算，
 // 本地决策与 LLM 候选特征共用同一份结果。
 
-/** 放炮成本：牌河公开张数档位 × 按 4 倍级单家支付（40 点）估算的暴露。 */
+/** 放炮成本（旧口径）：牌河公开张数档位 × 按 4 倍级单家支付（40 点）估算的暴露。 */
 function safetyExposureFor(config: BloodFlowAiConfig, visible: readonly TileType[]) {
   return (tile: TileType) => {
     let count = 0
@@ -74,6 +75,46 @@ function safetyExposureFor(config: BloodFlowAiConfig, visible: readonly TileType
     const ladder = count >= 2 ? config.safetyCostSafe : count === 1 ? config.safetyCostOne : config.safetyCostNone
     return ladder * 40
   }
+}
+
+/** config → 风险模块调参（前后端同源，见 shared/ai/opponentPatternRisk.ts）。 */
+export function bloodFlowRiskTuning(config: BloodFlowAiConfig) {
+  return {
+    factorTier1: config.riskFactorTier1, factorTier2: config.riskFactorTier2, factorTier3: config.riskFactorTier3,
+    offSuitFactor: config.riskOffSuitFactor, exposureUnit: 40,
+    safetyCostNone: config.safetyCostNone, safetyCostOne: config.safetyCostOne, safetyCostSafe: config.safetyCostSafe,
+    lateGameWallCount: config.lateGameWallCount,
+  }
+}
+
+/**
+ * 对手牌型风险档（只用公共信息）。血流额外带入已胡次数与锁手。
+ * `opponentPatternRisk: 'off'` 时返回空数组，调用方回退旧口径。
+ */
+export type BloodFlowOpponentRisk = OpponentRiskProfile & { seat: number }
+
+export function bloodFlowOpponentRisk(view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI): BloodFlowOpponentRisk[] {
+  if (config.opponentPatternRisk === 'off') return []
+  const seats = view.players.filter(player => player.seat !== view.seat).map(player => player.seat)
+  return opponentRiskProfiles({
+    wallCount: view.wallCount,
+    tuning: bloodFlowRiskTuning(config),
+    opponents: seats.map(seat => ({
+      discards: view.players[seat]?.discards ?? [], melds: view.players[seat]?.melds ?? [],
+      winCount: view.public.seats[seat]?.winCount ?? 0,
+      locked: view.public.seats[seat]?.locked ?? false,
+    })),
+  }).map((profile, position) => ({ ...profile, seat: seats[position] ?? position }))
+}
+
+/** 弃牌放炮成本：无风险信号时与旧口径逐位一致。 */
+export function bloodFlowSafetyExposure(
+  view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI,
+  visible: readonly TileType[] = visibleTiles(view),
+): (tile: TileType) => number {
+  const profiles = bloodFlowOpponentRisk(view, config)
+  if (!profiles.length) return safetyExposureFor(config, visible)
+  return opponentPatternExposure(profiles, visible, bloodFlowRiskTuning(config))
 }
 
 interface EvExtras {
@@ -102,7 +143,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   const wallCount = view.wallCount
   const extras: EvExtras = {
     patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount),
-    safetyExposure: safetyExposureFor(config, visible),
+    safetyExposure: bloodFlowSafetyExposure(view, config, visible),
     melds,
   }
   const context = { hand, jokers, exposedMelds: melds.length, visibleTiles: visible, wallCount,

@@ -1,4 +1,9 @@
-import type { Candidate, DecisionRequest, StateSnapshotV1 } from './schema'
+import { tileFromName, type Candidate, type DecisionRequest, type StateSnapshotV1 } from './schema'
+import type { TileType } from '../core/contracts/types'
+import {
+  opponentRiskProfiles, opponentThreatScore,
+  type OpponentMeldView, type OpponentPublicView,
+} from '../shared/ai/opponentPatternRisk'
 
 /** Only public decision facts needed by the shared reasoning policy. */
 export type ReasoningDecision = Pick<DecisionRequest, 'candidates'> & { ruleCode:string;
@@ -133,29 +138,39 @@ export function hasReadyDecisionTradeoff(request: ReasoningDecision, maxGap: num
   )
 }
 
-function suitOf(tile: string): string | null {
-  if (tile.endsWith('万')) return '万'
-  if (tile.endsWith('筒')) return '筒'
-  if (tile.endsWith('条')) return '条'
-  return null
+/** 规范快照（中文牌名）→ 风险模块（内部牌面）。未知牌名一律丢弃，不猜测。 */
+function internalTiles(names: readonly string[]): TileType[] {
+  const tiles: TileType[] = []
+  for (const name of names) {
+    const tile = tileFromName(name)
+    if (tile) tiles.push(tile)
+  }
+  return tiles
 }
 
-/** 公开信息威胁值：副露为主，叠加染手集中度、后段与短牌河异常。 */
+function snapshotOpponents(state: ReasoningDecision['state']): OpponentPublicView[] {
+  return [state.snapshots.upper, state.snapshots.opposite, state.snapshots.lower].map((view) => {
+    const melds: OpponentMeldView[] = []
+    for (const meld of view.melds) {
+      const tiles = internalTiles(meld.tiles)
+      const tile = tileFromName(meld.tile) ?? tiles[0]
+      if (tile) melds.push({ type: meld.type, tile, tiles })
+    }
+    return { discards: internalTiles(view.discards), melds }
+  })
+}
+
+/**
+ * 公开信息威胁值：与放炮定价同源（shared/ai/opponentPatternRisk.ts）。
+ * 副露为主，叠加染手集中度、三元 / 四喜 / 字牌成组、后段与短牌河异常。
+ * 局限：门清大牌无法识别，只作弱信号（tier 1）。
+ */
 export function estimateOpponentThreat(request: ReasoningDecision): number {
   if (request.ruleCode === 'lotus-classic') return 0
-  const opponents = [request.state.snapshots.upper, request.state.snapshots.opposite, request.state.snapshots.lower]
-  return Math.max(0, ...opponents.map((view) => {
-    const exposedTiles = view.melds.flatMap((meld) => meld.tiles)
-    const suits = exposedTiles.map(suitOf).filter((value): value is string => value !== null)
-    const suitCounts = new Map<string, number>()
-    suits.forEach((suit) => suitCounts.set(suit, (suitCounts.get(suit) ?? 0) + 1))
-    const dominant = suits.length ? Math.max(...suitCounts.values()) / suits.length : 0
-    let threat = view.melds.length * 20
-    if (view.melds.length >= 2 && dominant >= 0.75) threat += 22
-    if (request.state.wallCount <= 24) threat += 10
-    if (view.melds.length >= 2 && view.discards.length <= 7) threat += 8
-    return Math.min(100, threat)
-  }))
+  return opponentThreatScore(
+    opponentRiskProfiles({ wallCount: request.state.wallCount, opponents: snapshotOpponents(request.state) }),
+    request.state.wallCount,
+  )
 }
 
 export function estimateScoreSwing(request: ReasoningDecision): number {

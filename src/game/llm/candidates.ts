@@ -15,6 +15,10 @@ import {
   type RuleCode, type StateSnapshotV1, type TileName,
 } from './schema'
 import { compareHandProgress, evaluateHandProgress } from '../shared/ai/handProgress'
+import {
+  maxOpponentRiskTier, opponentPatternFeature, opponentRiskProfiles, RISK_TIER_LABEL,
+  type OpponentRiskProfile,
+} from '../shared/ai/opponentPatternRisk'
 
 export interface DecisionInput {
   ruleCode: RuleCode
@@ -35,7 +39,13 @@ export interface DecisionInput {
   from?: number
   // v1.1 元数据（LlMAdapterFields）：
   scores?: number[]
-  peers?: Array<{ discards: TileType[]; melds: Array<{ type: string; tile: TileType; tiles: TileType[] }> }>
+  peers?: Array<{
+    discards: TileType[]
+    melds: Array<{ type: string; tile: TileType; tiles: TileType[] }>
+    /** 血流：该家本局已胡次数 / 是否锁手（可选；非血流不填）。 */
+    winCount?: number
+    locked?: boolean
+  }>
   seatWind?: string
   roundWind?: string
   dealerIndex?: number
@@ -47,6 +57,8 @@ export interface DecisionInput {
   upperLastDiscard?: TileType | null
   earlyRound?: boolean
   wallCount?: number
+  /** 对手牌型风险定价开关（血流由调用方传 BLOOD_FLOW_AI.opponentPatternRisk）；缺省视为 'tier'。 */
+  opponentPatternRisk?: 'off' | 'tier'
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
   turnOrigin?: 'draw' | 'peng' | 'chi' | 'kong-draw' | 'opening'
@@ -78,10 +90,22 @@ export function protectedDiscardTiles(input: DecisionInput): Set<TileType> {
   return new Set(isLotus(input) ? [...jokersOf(input), ...wildcardsOf(input)] : ['white'])
 }
 
-function countsOf(input: DecisionInput): Map<TileType, number> {
-  const map = new Map<TileType, number>()
+function countsOf(input: DecisionInput): Map<TileType, number> {  const map = new Map<TileType, number>()
   for (const tile of input.visibleTiles ?? []) map.set(tile, (map.get(tile) ?? 0) + 1)
   return map
+}
+
+/** 对手牌型风险的公共信息输入：只取其他座位的牌河 / 副露（广麻无普通点炮 → 恒为空）。 */
+function opponentRiskProfilesOf(input: DecisionInput): OpponentRiskProfile[] {
+  if (input.ruleCode === 'lotus-classic') return []
+  if (input.opponentPatternRisk === 'off') return []
+  const peers = input.peers ?? []
+  return opponentRiskProfiles({
+    wallCount: input.wallCount ?? 99,
+    opponents: peers
+      .filter((_, index) => index !== input.playerIndex)
+      .map((peer) => ({ discards: peer.discards, melds: peer.melds, winCount: peer.winCount, locked: peer.locked })),
+  })
 }
 
 /** 听口：给定手牌（3n+1 听牌态）能胡的牌。 */
@@ -187,6 +211,9 @@ export function buildCandidateFeatures(
     base.effectiveRemaining = quality.ready ? quality.effectiveRemaining : 'n/a'
     base.specialPattern = specialPatternOf(input, after, quality.waits)
     base.safety = safetyBand(input, input.hand[id])
+    // 对手牌型风险定价：同一张牌打给在做大牌的对手，赔付可能高 8~32 倍（档位版，只用公共牌）。
+    const riskFeature = opponentPatternFeature(opponentRiskProfilesOf(input), input.visibleTiles ?? input.hand, input.hand[id])
+    if (riskFeature) base.opponentRisk = riskFeature
     if (protectedDiscardTiles(input).has(input.hand[id])) {
       base.risks.push('癞子/精牌，通常必须保留；当前无普通牌可打')
     }
@@ -230,7 +257,12 @@ export function buildCandidateFeatures(
     if (isTenpai(input, input.hand)) risks.push('可能破坏听牌')
     if (action.kind === 'added-kong') {
       const tile = input.melds[id]?.tile
-      if (tile && matchingCount(input.publicTiles ?? [], tile) === 0) risks.push('被抢杠概率较高')
+      if (tile && matchingCount(input.publicTiles ?? [], tile) === 0) {
+        const tier = maxOpponentRiskTier(opponentRiskProfilesOf(input))
+        risks.push(tier >= 2
+          ? `被抢杠概率较高，且对手疑似大牌（${RISK_TIER_LABEL[tier]}档），抢杠赔付远高于平胡`
+          : '被抢杠概率较高')
+      }
     }
     base.risks = risks
     applyScoreDelta(input, action, base)

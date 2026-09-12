@@ -168,6 +168,7 @@ interface CandidateFeatures {
 | `scoreDeltaBand` | 候选动作带来的即时自身收益档位 | 在克隆分数状态上调用规则集杠分/收益结算器，再按规则集阈值映射；无即时收益时为 `n/a` | ✅ | ✅ |
 | `isEngineSuggestion` | 引擎建议标记（确定性 top-1 对应的候选） | 决策时先跑一次无随机的 `decideTurn`/`decideClaim` 并标记 | ✅ | ✅ |
 | `risks` | 风险提示 | 补杠：该牌河中出现张数（被抢杠概率）、是否破坏听牌（莲花 `shouldTakeAddedKong` 已有）；暗杠/风杠：是否破坏听牌 | 简化 | ✅ |
+| `opponentRisk` | 对手牌型（大牌）风险定价：`{tier: 高/中/低, payment: 估算单次点炮赔付(点), signals: [≤3 条公共信号]}` | 公共信息估算模块 `shared/ai/opponentPatternRisk.ts`（对手牌河 / 副露明细 / 已胡次数 / 锁手 / 墙余）；无信号时该字段不出现 | 不出现（无普通点炮） | ✅ |
 
 `CandidateFeatures` 的字段必须允许 `unknown` / `n/a`，因为 `pass`、`gang` 和“执行后还需弃牌”的动作没有统一的 post-action 听口定义。每种规则集必须提供 golden fixture，前后端逐字段比对。
 
@@ -178,6 +179,7 @@ interface CandidateFeatures {
 - `efficiency` 的同分候选必须按以下顺序稳定 tie-break：§6.1 固定牌面顺序 → `candidates.ts` 的候选枚举顺序（§4.1/§4.2，实现中唯一的排序事实来源）→ `meldIndex` / `handIndex` / `optionIndex` 数值顺序 → 候选 ID 字典序。
 - `scoreDeltaBand` 由规则集在克隆分数状态上计算：补杠使用 added-kong 结算逻辑，暗杠/乱风杠使用对应 concealed/风杠结算逻辑；当前广麻也有杠分，不能默认标记为 `n/a`。仅无即时分数收益的动作标记 `n/a`。档位阈值与 `safety`/`efficiency` 一起在 v1.2 校准后回写本文档（开放问题 #1）；v1 实现先使用杠分数值的相对档位。
 - Prompt 中不写死“补杠 +6 分”等规则无关数值；若展示收益，只能使用规则集计算出的 `scoreDeltaBand`。
+- `opponentRisk`（2026-09-10 追加，前后端同源）：档位由公共信号取最大值 —— tier1 `低`＝半染手 / 短牌河 / 牌河未见某花色（门清弱信号），tier2 `中`＝染手嫌疑（副露 ≥2 组且同花色占比 ≥0.75）/ 副露 ≥3 组 / 箭牌或风牌成组 ≥2 / 已锁手且已胡过，tier3 `高`＝三组箭牌或三组风牌（十六倍级）。`payment = 40 × 公开张数档位(0.25/0.1/0) × max_对手(档位倍率 × 花色系数)`，档位倍率 4/16/32、花色系数 1/0.5；一次弃牌最多被一家胡，所以取最高权重的对手而不相加；已锁手家不吃现物折扣与花色折扣。全部 tier=0 或开关 `'off'` 时必须退化为旧的 `40 × 公开张数档位`（逐位一致，有回归测试）。门清大牌只有弱信号，不得假装可识别。
 
 ---
 
@@ -545,6 +547,7 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 | | 非法 choice / JSON 解析失败 → 反馈重试 → 引擎建议 | 调用顺序 2 次 + 回退动作；HTTP 错误不重试 |
 | | 超时、取消、reset、换局、状态版本过期 | 旧响应丢弃，不改变游戏状态 |
 | | 按牌去重候选（`3万 3万 5万` → 2 个候选） | 候选数、稳定顺序与 choice→第一张索引映射 |
+| | 对手风险定价 golden fixture（`src/game/llm/fixtures/opponent-risk.json`，4 个 case：无信号 / 染手+已锁手 / 三组箭牌 / 半染手） | TS `opponentRiskFixture.test.ts` 与 Python `tests/test_opponent_pattern_risk_fixture.py` 对同一份 JSON 产出完全相同的 `profiles`（tier/倍率/信号**顺序**）/`exposure`/`feature`；无信号 case 必须等于旧口径 |
 | | `skipDraw` 时候选不含杠/胡；`peng/chi` 后仍有可弃牌 | 非法动作不进入引擎执行 |
 | | `useGame.sim.test.ts` / `lotusGame.sim.test.ts` 换 LlmController（mock 动态合法 choice） | 完整打完，无卡死、无状态污染 |
 | 后端（pytest，monkeypatch LLM client） | `LLMPlayer` 合法路径与 `canHu` 短路 | 返回动作经自校验；胡不进入 LLM |

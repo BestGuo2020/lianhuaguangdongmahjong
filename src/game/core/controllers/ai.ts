@@ -4,6 +4,7 @@ import { matchingCount } from '../rules/rules'
 import type { GamePlayer, Meld, TileType } from '../contracts/types'
 import { DEFAULT_RULESET, type RuleSet } from '../rules/ruleset'
 import { compareHandProgress, evaluateHandProgress, type HandProgress } from '../../shared/ai/handProgress'
+import { maxOpponentRiskTier, opponentRiskProfiles } from '../../shared/ai/opponentPatternRisk'
 
 /** AI 回合内的动作命令 */
 export type TurnDecision =
@@ -133,6 +134,27 @@ function opponentThreat(view: Pick<AITurnView, 'peers' | 'playerIndex' | 'wallCo
   }, 0)
 }
 
+/** 补杠被抢杠的残局窗口：墙余 ≤ 该值视为残局（与既有 lateBonus 口径一致）。 */
+const ADDED_KONG_LATE_WALL = 16
+
+/**
+ * 抢杠风险：广麻没有普通点炮，补杠是唯一会把听牌目标直接交给别家的主动动作。
+ * 残局 + 该牌在公开牌池完全未现 + 对手牌型风险档 ≥ 1（染手 / 三元四喜 / 门清染手弱信号 / 短牌河快听）
+ * 时放弃补杠：抢杠胡的事件倍率为 ×2，给在做大牌的对手等于把高倍赔付亲手送出去。
+ * 只用对手牌河与副露；对手暗手始终不参与计算。
+ */
+function addedKongRobRisk(view: AITurnView, tile: TileType): boolean {
+  if ((view.wallCount ?? 99) > ADDED_KONG_LATE_WALL) return false
+  if (matchingCount(view.publicTiles ?? [], tile) > 0) return false
+  const profiles = opponentRiskProfiles({
+    wallCount: view.wallCount ?? 99,
+    opponents: (view.peers ?? [])
+      .filter((_, index) => index !== (view.playerIndex ?? -1))
+      .map((peer) => ({ discards: peer.discards, melds: peer.melds })),
+  })
+  return maxOpponentRiskTier(profiles) >= 1
+}
+
 /** 补杠是广麻唯一会直接暴露抢杠胡目标的主动动作，残局/多副露时更保守。 */
 function shouldTakeAddedKong(view: AITurnView, meldIndex: number, ruleset: RuleSet) {
   if (isTenpai(view.hand, view.exposedMelds, ruleset)) return false
@@ -144,7 +166,9 @@ function shouldTakeAddedKong(view: AITurnView, meldIndex: number, ruleset: RuleS
   const current = bestDiscardProgress(view.hand, view.exposedMelds, ruleset, view.visibleTiles)
   const projected = progressOf(after, view.exposedMelds, ruleset, view.visibleTiles)
   const threat = opponentThreat(view)
-  return threat < 10 && (!current || projected.shanten <= current.shanten + 1)
+  if (threat >= 10) return false
+  if (addedKongRobRisk(view, tile)) return false
+  return !current || projected.shanten <= current.shanten + 1
 }
 
 /** 暗杠按移除四张、增加一组副露后的结构投影，避免无条件拆掉更好的手牌。 */

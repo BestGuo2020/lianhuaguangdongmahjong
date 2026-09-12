@@ -29,6 +29,11 @@ export interface CandidateFeatures {
   scoreDelta?: number
   risks: string[]
   /**
+   * 对手牌型（大牌）风险的公共信息估算（血流 / 莲花麻将；广麻无普通点炮，恒不出现）。
+   * 档位版：tier 为全场最高风险档，payment 为按公开张数与档位折算的估算单次点炮赔付（点）。
+   */
+  opponentRisk?: { tier: Band; payment: number; signals: string[] }
+  /**
    * 血流 EV 策略注入（llmEvFeatures 开启时）：本地期望收益模型对候选的依据。
    * 只是决策参考，真实计分以 currentWin 为准；模型覆盖默认建议时 message 须给理由。
    */

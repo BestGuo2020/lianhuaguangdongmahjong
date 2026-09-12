@@ -13,7 +13,7 @@ import type { Seat } from '../variants/lotus/bloodFlow/types'
 import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorService'
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
-import { bloodFlowAiActions } from '../variants/lotus/bloodFlow/ai'
+import { bloodFlowAiActions, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
@@ -62,6 +62,9 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
     tileRules: '手中两种精牌可替代其他牌；白板只可替代精面或自身（白板本身翻精时按精牌）。别人打出的精按本张使用。',
     discardPolicy: '首胡前有普通弃牌可选时，候选已保护精牌和白板；锁手后不能换手，新摸牌不能胡则必须摸切，包括精牌。',
     locked: view.public.seats[view.seat].locked, wins: view.public.seats.map(s => s.winCount),
+    opponentRisk: bloodFlowOpponentRisk(view)
+      .filter(profile => profile.tier > 0)
+      .map(profile => ({ seat: profile.seat, tier: profile.tier, signals: profile.signals })),
     currentWin: view.ownScore, lockImpact: '首次胡后保留当前暗手和副露，只能对新摸牌胡、过或摸切，不能再改手或吃碰杠。已胡仍须付款。',
     ...(speechStyle?{speakingStyle:speechStyle}:{}),
     waits: waits.map(w => ({ tile: tileName(w.tile), remaining: Math.max(0, 4 - visible.filter(t => t === w.tile).length),
