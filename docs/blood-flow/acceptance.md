@@ -27,8 +27,10 @@
 
 **未验证 / 遗留**
 
-- WS 联机（master + 后端）的验收在**本地**执行（P2P 才需要上线）：命令与用例见下一节；本轮 v3 的 WS 本地复跑安排在后端镜像落地后进行（Python 侧 v3 镜像进行中）。
-- 兜牌政策的效果证据以**微场景 + 决策级**为准（见上表）；端局聚合指标在数十局量级没有灵敏度，不据此宣称"更少点炮"。
+- WS 联机（master + 后端）的验收在**本地**执行（P2P 才需要上线）。v3 已完成本地复跑（后端 Python 侧 v3 镜像落地后，见下一节命令）：**3 passed（2.1m）**——`blood-flow.remote.spec.ts`（两真实客户端跑通血流 WS 房间全链路，1.8m）、`remote-lotus-legacy.smoke.spec.ts`（双客户端联机莲花开局与权威状态一致，1.9m）、`blood-flow.create-room.spec.ts`（建房在途按钮态，1.3m）。
+- **后端 v3 镜像已完成并本地验收**：`app/core/opponent_pattern_risk.py`（公开番型/危险轴）、新增 `app/core/blood_flow/defense_policy.py`（兜/弃政策）、`app/core/blood_flow/ai.py`（候选层硬约束 + fold 选择 + config 透传）、`app/llm/blood_flow_candidates.py`（`opponentPatterns` / `defense` prompt 字段）、`app/core/blood_flow/config.py`、新增 `tests/test_blood_flow_defense.py`（20 条用例，含硬约束三条）。独立对拍：同一份 9 case fixture **0 mismatch**（逐字段含 `axisSource/honorsInFlush/honorEmphasis` + exposure + feature）；定向 86 passed、受影响模块 230 passed。
+- **v3 就到这里，不再继续扩展**（用户 2026-09-12 决定）：兜牌政策在**弃牌轴**上的实测边际收益≈0（定价已在起作用），它的价值是候选空间收窄与 LLM 显式信号；若要更强的"少点炮"效果需要下调兜牌门槛或对已知十六倍级对手禁止任何非安全张弃牌，代价是自家牌打残，本轮不做。
+- **"能不能防住"的结论（如实记录）**：防不住"不放炮"，只能防"少赔"。已锁手 + 单吊任意听的对手**完全防不住**（他每摸必胡、你每巡必须弃一张，任何一张他都吃）；大牌方向已公开但未锁手的对手能降概率、能挑最安全的牌，但不能阻止他自摸；**唯一能在结构上阻断点炮的路径是自己抢到锁手 + 任一听**（此后每摸必胡、永不弃牌）。端局聚合指标不作为效果证据。
 
 ## 2026-09-12：门清大牌读牌 + 损失最小化（v2）上线与两场线上整场通过
 
