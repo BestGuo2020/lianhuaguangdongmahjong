@@ -16,6 +16,17 @@ export interface OpponentMeldView {
   tiles: readonly TileType[]
 }
 
+/** 对手已公开的胡牌番型（来自 PublicWinScore.items + patternMultiplier，玩家视角本就公开）。 */
+export interface OpponentKnownWin {
+  /** PatternId（'thirteenOrphans' / 'nine-gates' / 'pure-suit' …），比文案匹配稳定。 */
+  readonly id: string
+  readonly label: string
+  /** 番型倍率（不含事件倍率与硬胡），用于给威胁档设下限。 */
+  readonly multiplier: number
+  /** 该次胡的那张牌（公共批次 source.tile）：清一色/九莲一类花色番型靠它确定"哪一门"。 */
+  readonly tile?: TileType
+}
+
 /** 决策者可合法看到的对手信息（座位视图 / 规范快照同形）。 */
 export interface OpponentPublicView {
   discards: readonly TileType[]
@@ -24,6 +35,8 @@ export interface OpponentPublicView {
   winCount?: number
   /** 血流：该家是否已锁手；非血流可省略。 */
   locked?: boolean
+  /** 血流：该家历次胡牌的番型（公开信息，用于比读牌河更确定的防守）。 */
+  knownWins?: readonly OpponentKnownWin[]
 }
 
 export interface OpponentRiskTuning {
@@ -66,6 +79,10 @@ export interface OpponentRiskTuning {
   suitZeroRiver: number
   /** 七对嫌疑（弱信号）：中张占牌河 ≥ 该比例。 */
   middleHeavyShare: number
+  /** 已公开番型的倍率下限 → 威胁档下限（4 / 8 / 16 对应 tier1 / tier2 / tier3）。 */
+  knownTier1Multiplier: number
+  knownTier2Multiplier: number
+  knownTier3Multiplier: number
 }
 
 export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
@@ -89,6 +106,9 @@ export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
   suitSparseCount: 1,
   suitZeroRiver: 12,
   middleHeavyShare: 0.75,
+  knownTier1Multiplier: 4,
+  knownTier2Multiplier: 8,
+  knownTier3Multiplier: 16,
 })
 
 export const RISK_TIER_LABEL: Record<Exclude<OpponentRiskTier, 0>, '低' | '中' | '高'> = {
@@ -106,6 +126,11 @@ export interface OpponentRiskProfile {
   suspectSuit: SuitKey | null
   /** 十三幺 / 字一色 / 混清幺九嫌疑：该家几乎不打字牌与幺九 → 中张反而便宜。 */
   avoidsHonorTerminals: boolean
+  /** 危险轴来源：`'inferred'` = 由牌河读牌推断（对锁手家不适用，锁手可能是单吊任意听）；
+   *  `'known'` = 由对手已公开番型确定（已公开番型限定了牌型，锁手后同样适用）。 */
+  axisSource: 'inferred' | 'known' | null
+  /** 混一色：字牌也算「本门」，不享受非嫌疑花色折扣。 */
+  honorsInFlush: boolean
   locked: boolean
 }
 
@@ -127,6 +152,15 @@ const NUMBERED_TILE = /^([mps])([1-9])$/
 const DRAGONS: readonly TileType[] = ['red', 'green', 'white']
 const WINDS: readonly TileType[] = ['east', 'south', 'west', 'north']
 const SUIT_LABELS: Record<SuitKey, string> = { m: '万', p: '筒', s: '条' }
+/** 已公开番型 → 逐张危险轴：只吃字牌与幺九（十三幺 / 字一色 / 清幺九 / 混幺九）→ 中张便宜。 */
+const HONOR_TERMINAL_PATTERNS: ReadonlySet<string> = new Set([
+  'thirteenOrphans', 'all-honors', 'pure-terminals', 'mixed-terminals',
+])
+/** 已公开番型 → 单花色轴：非嫌疑花色便宜（其中混一色的字牌仍算「本门」）。 */
+const FLUSH_PATTERNS: ReadonlySet<string> = new Set([
+  'pure-suit', 'nine-gates', 'all-green', 'mixed-suit',
+])
+const HONORS_IN_FLUSH: ReadonlySet<string> = new Set(['mixed-suit'])
 
 /** 幺九牌（数牌 1/9）。 */
 export function isTerminalTile(tile: TileType): boolean {
@@ -272,11 +306,36 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
       if (middles / riverLength >= tuning.middleHeavyShare) raise(1, '牌河中张密集')
     }
     if (wallCount <= tuning.lateGameWallCount && discards.length >= 1 && discards.length <= 7) raise(1, '残局少牌河')
+    // 已公开番型（比读牌河更确定）：给威胁档设下限，并按牌型选定逐张危险轴。
+    const knownWins = opponent.knownWins ?? []
+    let axisSource: 'inferred' | 'known' | null = null
+    let honorsInFlush = false
+    if (knownWins.length) {
+      const strongest = knownWins.reduce((best, win) => (win.multiplier > best.multiplier ? win : best), knownWins[0])
+      const patternTier: OpponentRiskTier = strongest.multiplier >= tuning.knownTier3Multiplier ? 3
+        : strongest.multiplier >= tuning.knownTier2Multiplier ? 2
+          : strongest.multiplier >= tuning.knownTier1Multiplier ? 1 : 0
+      if (patternTier > 0) raise(patternTier, `已胡${strongest.label}`)
+      if (knownWins.some((win) => HONOR_TERMINAL_PATTERNS.has(win.id))) {
+        avoidsHonorTerminals = true
+        axisSource = 'known'
+      } else if (knownWins.some((win) => FLUSH_PATTERNS.has(win.id))) {
+        axisSource = 'known'
+        honorsInFlush = knownWins.some((win) => HONORS_IN_FLUSH.has(win.id))
+        // 哪一门由公开的胡牌牌面确定（比牌河推断可靠）；拿不到就退回牌河推断。
+        const flushTile = knownWins
+          .filter((win) => FLUSH_PATTERNS.has(win.id))
+          .map((win) => (win.tile ? suitOfTile(win.tile) : null))
+          .find((suit): suit is SuitKey => suit !== null)
+        if (flushTile) suspectSuit = flushTile
+      }
+    }
+    if (axisSource === null && (avoidsHonorTerminals || suspectSuit !== null)) axisSource = 'inferred'
     const winCount = opponent.winCount ?? 0
     if (opponent.locked && winCount > 0) raise(tuning.lockedTier, `已胡${winCount}次仍听`)
     return {
       index, tier, factor: factorFor(tier, tuning), signals: [...new Set(signals)],
-      suspectSuit, avoidsHonorTerminals, locked: Boolean(opponent.locked && winCount > 0),
+      suspectSuit, avoidsHonorTerminals, axisSource, honorsInFlush, locked: Boolean(opponent.locked && winCount > 0),
     }
   })
 }
@@ -318,22 +377,27 @@ export function opponentPatternExposure(
     let weight = 1
     let chosen: OpponentRiskProfile | null = null
     for (const profile of profiles) {
-      // 已锁手的家可能停在单吊任意听（任何一张都能胡）：现物折扣、花色折扣与危险轴折扣都不适用。
-      const offSuit = !profile.locked && profile.suspectSuit !== null && suit !== profile.suspectSuit
+      // 危险轴是否可用：'known'（已公开番型）对锁手家同样成立——已公开番型限定了牌型；
+      // 'inferred'（读牌河）对锁手家不可用，因为锁手可能是单吊任意听（任何一张都能胡）。
+      const axisApplies = profile.axisSource === 'known' || !profile.locked
+      const honorOnOffSuitAxis = profile.honorsInFlush && isHonorTile(tile)
+      const offSuit = axisApplies && profile.suspectSuit !== null
+        && suit !== profile.suspectSuit && !honorOnOffSuitAxis
       const inSuspectSuit = profile.suspectSuit !== null && suit === profile.suspectSuit
       let tileFactor = offSuit ? resolved.offSuitFactor : 1
-      // 逐张危险轴：十三幺 / 字一色嫌疑下中张几乎不被需要 → 便宜；但嫌疑花色内的中张照价（九莲要同一花色 1-9）。
-      if (!profile.locked && profile.avoidsHonorTerminals && isMiddleTile(tile) && !inSuspectSuit) {
+      // 逐张危险轴：十三幺 / 字一色轴下中张几乎不被需要 → 便宜；但嫌疑花色内的中张照价（九莲要同一花色 1-9）。
+      if (axisApplies && profile.avoidsHonorTerminals && isMiddleTile(tile) && !inSuspectSuit) {
         tileFactor *= resolved.honorTerminalMiddleFactor
       }
       const candidate = profile.factor * tileFactor
       if (candidate > weight) { weight = candidate; chosen = profile }
     }
     // 一次弃牌最多被一家胡：取权重最高的一家的口径。
+    const chosenAxis = chosen !== null && (chosen.axisSource === 'known' || !chosen.locked)
     const ratio = chosen === null ? ladder
-      : chosen.locked ? resolved.safetyCostNone
-        // 十三幺/字一色轴上字牌与幺九保留下限：多现 ≠ 安全（该牌型每种只要一张）。
-        : chosen.avoidsHonorTerminals && !isMiddleTile(tile)
+      : chosen.locked && chosen.axisSource !== 'known' ? resolved.safetyCostNone
+        // 十三幺 / 字一色轴上字牌与幺九保留下限：多现 ≠ 安全（该牌型每种只要一张）。
+        : chosen.avoidsHonorTerminals && chosenAxis && !isMiddleTile(tile)
           ? Math.max(ladder, resolved.honorTerminalLadderFloor)
           : ladder
     return resolved.exposureUnit * weight * ratio

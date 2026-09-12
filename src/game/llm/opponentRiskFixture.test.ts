@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import fixture from './fixtures/opponent-risk.json'
 import {
   opponentPatternExposure, opponentPatternFeature, opponentRiskProfiles,
-  type OpponentPublicView,
+  type OpponentKnownWin, type OpponentPublicView,
 } from '../shared/ai/opponentPatternRisk'
 import type { TileType } from '../core/contracts/types'
 
@@ -28,12 +28,14 @@ describe('对手风险定价 golden fixture（TS ↔ Python 同源）', () => {
       opponents: item.opponents.map((opponent) => ({
         discards: opponent.discards, melds: opponent.melds,
         winCount: opponent.winCount, locked: opponent.locked,
+        knownWins: (opponent as { knownWins?: OpponentKnownWin[] }).knownWins,
       })),
     })
     const summary = profiles.map((profile) => ({
       tier: profile.tier, factor: profile.factor, signals: [...profile.signals],
       suspectSuit: profile.suspectSuit, locked: profile.locked,
       avoidsHonorTerminals: profile.avoidsHonorTerminals,
+      axisSource: profile.axisSource, honorsInFlush: profile.honorsInFlush,
     }))
     expect(summary).toEqual(item.expectedProfiles)
 

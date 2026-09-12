@@ -27,9 +27,13 @@ v1 只能从副露/牌河读到 tier2，**门清超大牌（十三幺 / 九莲 /
 
 **未验证 / 遗留**
 
-- 与上一版相同：**WS 联机（master + 后端）的线上部署仍未做**（仓库内没有后端生产部署脚本与凭据）；v2 对该路径的覆盖是本地真实后端联机回归（`pnpm exec playwright test tests/e2e/blood-flow.remote.spec.ts`，见上一节的 1 passed / 2.2m）。
+- **WS 联机（master + 后端）的验收按设计在本地执行**，不需要线上部署：只有 P2P（vibehub）因为本地 mock 不具备 SDK / WebRTC / 中继环境才必须上线验收（见 AGENTS.md 的联机验收策略）。本地 WS 验收 = playwright 自动拉起 `backend/.venv` 的 uvicorn 与前端 dev server，再用真实浏览器客户端跑完整链路。本批（v2）实测：
+  - `blood-flow.remote.spec.ts`（两个真实客户端跑通血流 WS 房间全部链路）→ **1 passed（1.8m）**
+  - `remote-lotus-legacy.smoke.spec.ts`（双客户端联机莲花开局与权威状态一致）→ **1 passed（1.9m）**
+  - `blood-flow.create-room.spec.ts`（建房在途的按钮态）→ **1 passed（1.2m）**
+  - 命令：`pnpm exec playwright test tests/e2e/blood-flow.remote.spec.ts tests/e2e/remote-lotus-legacy.smoke.spec.ts tests/e2e/blood-flow.create-room.spec.ts`（合计 **3 passed / 2.0m**；本机常驻的 `uvicorn --reload` 会被复用，因此跑的是改动后的后端代码）。
 - v2 的**端局聚合指标没有改善**（见上）；要论证"少点炮给大牌"仍需分岔后重放的配对实验或数百局 + 置信区间。
-- **对手已公开的番型尚未进 AI 视野**：`PublicWinScore.items`（谁已胡过十三幺/九莲、多少倍）是公开且比读牌河更强的确定性信息，但目前 AI 决策只消费 `batches[].source.tile`，LLM 的 prompt 只给"每家胡了几次"。这是下一步（v3：公开番型 + 赌/弃政策——对手已知 16 倍级且我方上限明显低于它则弃胡兜安全张，我方上限 ≥ 它则继续赌）的范围。
+- **对手已公开的番型尚未进 AI 视野**（v3 已开工，见下一条）：`PublicWinScore.items`（谁已胡过十三幺/九莲、多少倍）是公开且比读牌河更强的确定性信息，v2 时 AI 决策只消费 `batches[].source.tile`、LLM 的 prompt 只给"每家胡了几次"。
 
 ## 2026-09-12：对手大牌风险定价（档位版）上线与两场线上整场通过
 
@@ -63,7 +67,7 @@ pnpm exec playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts
 
 **未验证 / 遗留**
 
-- WS 联机（master + 后端）的**线上部署**未做：仓库内没有后端生产部署脚本与凭据（文档只给本地 `uvicorn`），因此线上 WS 房间的 LLM 座位仍跑旧后端。本次为该路径补的是**本地真实后端联机回归**：`pnpm exec playwright test tests/e2e/blood-flow.remote.spec.ts` → **1 passed（2.2m）**（两真实客户端 + `uvicorn --reload` 本机后端）。
+- WS 联机（master + 后端）的验收在**本地**执行（P2P 才需要上线，见 AGENTS.md 联机验收策略）：`pnpm exec playwright test tests/e2e/blood-flow.remote.spec.ts` → **1 passed（2.2m）**（playwright 自动拉起 uvicorn 与前端 dev server，两个真实浏览器客户端跑通 WS 房间链路）。
 - 本次发布为文档外零改动（本页记录提交不改 bundle），线上产物对应 vibehub `9ea4d0b` 的构建。
 
 ## 2026-09-12：结算卡明细改为徽标（删除计分详情折叠）

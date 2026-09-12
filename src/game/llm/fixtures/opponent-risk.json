@@ -7,46 +7,211 @@
       "id": "quiet",
       "note": "无任何公共信号：必须退化为旧口径（公开张数档位 × 40）",
       "wallCount": 60,
-      "visibleTiles": ["p3", "p3", "s1"],
+      "visibleTiles": [
+        "p3",
+        "p3",
+        "s1"
+      ],
       "opponents": [
-        { "seat": 1, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false },
-        { "seat": 2, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false },
-        { "seat": 3, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false }
+        {
+          "seat": 1,
+          "discards": [
+            "m1",
+            "m2",
+            "m3",
+            "p1",
+            "p2",
+            "p3",
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "melds": [],
+          "winCount": 0,
+          "locked": false
+        },
+        {
+          "seat": 2,
+          "discards": [
+            "m1",
+            "m2",
+            "m3",
+            "p1",
+            "p2",
+            "p3",
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "melds": [],
+          "winCount": 0,
+          "locked": false
+        },
+        {
+          "seat": 3,
+          "discards": [
+            "m1",
+            "m2",
+            "m3",
+            "p1",
+            "p2",
+            "p3",
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "melds": [],
+          "winCount": 0,
+          "locked": false
+        }
       ],
       "expectedProfiles": [
-        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": false },
-        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": false },
-        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": false }
+        {
+          "tier": 0,
+          "factor": 1,
+          "signals": [],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": null,
+          "honorsInFlush": false
+        },
+        {
+          "tier": 0,
+          "factor": 1,
+          "signals": [],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": null,
+          "honorsInFlush": false
+        },
+        {
+          "tier": 0,
+          "factor": 1,
+          "signals": [],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": null,
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "p3": 0, "s1": 4, "m5": 10 },
-      "expectedFeature": { "m5": null }
+      "expectedExposure": {
+        "p3": 0,
+        "s1": 4,
+        "m5": 10
+      },
+      "expectedFeature": {
+        "m5": null
+      }
     },
     {
       "id": "flush-and-locked",
       "note": "副露染手 + 已锁手且已胡过：现物与花色折扣都不适用，任何一张同价",
       "wallCount": 40,
-      "visibleTiles": ["east", "east", "p3"],
+      "visibleTiles": [
+        "east",
+        "east",
+        "p3"
+      ],
       "opponents": [
         {
           "seat": 1,
-          "discards": ["m1"],
+          "discards": [
+            "m1"
+          ],
           "melds": [
-            { "type": "peng", "tile": "p4", "tiles": ["p4", "p4", "p4"] },
-            { "type": "peng", "tile": "p7", "tiles": ["p7", "p7", "p7"] }
+            {
+              "type": "peng",
+              "tile": "p4",
+              "tiles": [
+                "p4",
+                "p4",
+                "p4"
+              ]
+            },
+            {
+              "type": "peng",
+              "tile": "p7",
+              "tiles": [
+                "p7",
+                "p7",
+                "p7"
+              ]
+            }
           ],
           "winCount": 9,
           "locked": true
         },
-        { "seat": 2, "discards": ["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3"], "melds": [], "winCount": 0, "locked": false }
+        {
+          "seat": 2,
+          "discards": [
+            "m1",
+            "m2",
+            "m3",
+            "p1",
+            "p2",
+            "p3",
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "melds": [],
+          "winCount": 0,
+          "locked": false
+        }
       ],
       "expectedProfiles": [
-        { "tier": 2, "factor": 16, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"], "suspectSuit": "p", "locked": true, "avoidsHonorTerminals": false },
-        { "tier": 0, "factor": 1, "signals": [], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": false }
+        {
+          "tier": 2,
+          "factor": 16,
+          "signals": [
+            "副露染手嫌疑",
+            "副露少牌河快听",
+            "已胡9次仍听"
+          ],
+          "suspectSuit": "p",
+          "locked": true,
+          "avoidsHonorTerminals": false,
+          "axisSource": "inferred",
+          "honorsInFlush": false
+        },
+        {
+          "tier": 0,
+          "factor": 1,
+          "signals": [],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": null,
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "p3": 160, "m5": 160, "east": 160 },
+      "expectedExposure": {
+        "p3": 160,
+        "m5": 160,
+        "east": 160
+      },
       "expectedFeature": {
-        "p3": { "tier": "中", "payment": 160, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"] },
-        "m5": { "tier": "中", "payment": 160, "signals": ["副露染手嫌疑", "副露少牌河快听", "已胡9次仍听"] }
+        "p3": {
+          "tier": "中",
+          "payment": 160,
+          "signals": [
+            "副露染手嫌疑",
+            "副露少牌河快听",
+            "已胡9次仍听"
+          ]
+        },
+        "m5": {
+          "tier": "中",
+          "payment": 160,
+          "signals": [
+            "副露染手嫌疑",
+            "副露少牌河快听",
+            "已胡9次仍听"
+          ]
+        }
       }
     },
     {
@@ -59,20 +224,68 @@
           "seat": 1,
           "discards": [],
           "melds": [
-            { "type": "peng", "tile": "red", "tiles": ["red", "red", "red"] },
-            { "type": "peng", "tile": "green", "tiles": ["green", "green", "green"] },
-            { "type": "peng", "tile": "white", "tiles": ["white", "white", "white"] }
+            {
+              "type": "peng",
+              "tile": "red",
+              "tiles": [
+                "red",
+                "red",
+                "red"
+              ]
+            },
+            {
+              "type": "peng",
+              "tile": "green",
+              "tiles": [
+                "green",
+                "green",
+                "green"
+              ]
+            },
+            {
+              "type": "peng",
+              "tile": "white",
+              "tiles": [
+                "white",
+                "white",
+                "white"
+              ]
+            }
           ],
           "winCount": 0,
           "locked": false
         }
       ],
       "expectedProfiles": [
-        { "tier": 3, "factor": 32, "signals": ["副露含三组箭牌", "副露字牌成组", "副露3组"], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": false }
+        {
+          "tier": 3,
+          "factor": 32,
+          "signals": [
+            "副露含三组箭牌",
+            "副露字牌成组",
+            "副露3组"
+          ],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": null,
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "m5": 320, "east": 320 },
+      "expectedExposure": {
+        "m5": 320,
+        "east": 320
+      },
       "expectedFeature": {
-        "m5": { "tier": "高", "payment": 320, "signals": ["副露含三组箭牌", "副露字牌成组", "副露3组"] }
+        "m5": {
+          "tier": "高",
+          "payment": 320,
+          "signals": [
+            "副露含三组箭牌",
+            "副露字牌成组",
+            "副露3组"
+          ]
+        }
       }
     },
     {
@@ -83,21 +296,68 @@
       "opponents": [
         {
           "seat": 2,
-          "discards": ["p1", "p2", "p3", "s1", "s2", "s3", "east", "east", "east"],
+          "discards": [
+            "p1",
+            "p2",
+            "p3",
+            "s1",
+            "s2",
+            "s3",
+            "east",
+            "east",
+            "east"
+          ],
           "melds": [
-            { "type": "chi", "tile": "p4", "tiles": ["p3", "p4", "p5"] },
-            { "type": "gang", "tile": "m7", "tiles": ["m7", "m7", "m7", "m7"] }
+            {
+              "type": "chi",
+              "tile": "p4",
+              "tiles": [
+                "p3",
+                "p4",
+                "p5"
+              ]
+            },
+            {
+              "type": "gang",
+              "tile": "m7",
+              "tiles": [
+                "m7",
+                "m7",
+                "m7",
+                "m7"
+              ]
+            }
           ],
           "winCount": 0,
           "locked": false
         }
       ],
       "expectedProfiles": [
-        { "tier": 1, "factor": 4, "signals": ["副露半染手"], "suspectSuit": "m", "locked": false, "avoidsHonorTerminals": false }
+        {
+          "tier": 1,
+          "factor": 4,
+          "signals": [
+            "副露半染手"
+          ],
+          "suspectSuit": "m",
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": "inferred",
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "m5": 40, "p5": 20 },
+      "expectedExposure": {
+        "m5": 40,
+        "p5": 20
+      },
       "expectedFeature": {
-        "m5": { "tier": "低", "payment": 40, "signals": ["副露半染手"] }
+        "m5": {
+          "tier": "低",
+          "payment": 40,
+          "signals": [
+            "副露半染手"
+          ]
+        }
       }
     },
     {
@@ -108,18 +368,47 @@
       "opponents": [
         {
           "seat": 1,
-          "discards": ["m1", "p9", "m2", "m3", "p2", "p3", "s2", "east"],
+          "discards": [
+            "m1",
+            "p9",
+            "m2",
+            "m3",
+            "p2",
+            "p3",
+            "s2",
+            "east"
+          ],
           "melds": [],
           "winCount": 0,
           "locked": false
         }
       ],
       "expectedProfiles": [
-        { "tier": 1, "factor": 4, "signals": ["牌河少打条"], "suspectSuit": "s", "locked": false, "avoidsHonorTerminals": false }
+        {
+          "tier": 1,
+          "factor": 4,
+          "signals": [
+            "牌河少打条"
+          ],
+          "suspectSuit": "s",
+          "locked": false,
+          "avoidsHonorTerminals": false,
+          "axisSource": "inferred",
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "s5": 40, "m5": 20 },
+      "expectedExposure": {
+        "s5": 40,
+        "m5": 20
+      },
       "expectedFeature": {
-        "s5": { "tier": "低", "payment": 40, "signals": ["牌河少打条"] }
+        "s5": {
+          "tier": "低",
+          "payment": 40,
+          "signals": [
+            "牌河少打条"
+          ]
+        }
       }
     },
     {
@@ -130,19 +419,63 @@
       "opponents": [
         {
           "seat": 1,
-          "discards": ["m3", "m4", "m5", "m6", "m7", "p3", "p4", "p5", "p6", "p7", "s3", "s4"],
+          "discards": [
+            "m3",
+            "m4",
+            "m5",
+            "m6",
+            "m7",
+            "p3",
+            "p4",
+            "p5",
+            "p6",
+            "p7",
+            "s3",
+            "s4"
+          ],
           "melds": [],
           "winCount": 0,
           "locked": false
         }
       ],
       "expectedProfiles": [
-        { "tier": 3, "factor": 32, "signals": ["牌河零字牌幺九", "牌河中张密集"], "suspectSuit": null, "locked": false, "avoidsHonorTerminals": true }
+        {
+          "tier": 3,
+          "factor": 32,
+          "signals": [
+            "牌河零字牌幺九",
+            "牌河中张密集"
+          ],
+          "suspectSuit": null,
+          "locked": false,
+          "avoidsHonorTerminals": true,
+          "axisSource": "inferred",
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "north": 320, "m9": 320, "p5": 80, "m2": 80 },
+      "expectedExposure": {
+        "north": 320,
+        "m9": 320,
+        "p5": 80,
+        "m2": 80
+      },
       "expectedFeature": {
-        "north": { "tier": "高", "payment": 320, "signals": ["牌河零字牌幺九", "牌河中张密集"] },
-        "p5": { "tier": "高", "payment": 80, "signals": ["牌河零字牌幺九", "牌河中张密集"] }
+        "north": {
+          "tier": "高",
+          "payment": 320,
+          "signals": [
+            "牌河零字牌幺九",
+            "牌河中张密集"
+          ]
+        },
+        "p5": {
+          "tier": "高",
+          "payment": 80,
+          "signals": [
+            "牌河零字牌幺九",
+            "牌河中张密集"
+          ]
+        }
       }
     },
     {
@@ -153,18 +486,127 @@
       "opponents": [
         {
           "seat": 2,
-          "discards": ["m2", "m3", "m4", "m5", "m6", "m7", "m8", "p2", "p3", "p4", "p5", "p6"],
+          "discards": [
+            "m2",
+            "m3",
+            "m4",
+            "m5",
+            "m6",
+            "m7",
+            "m8",
+            "p2",
+            "p3",
+            "p4",
+            "p5",
+            "p6"
+          ],
           "melds": [],
           "winCount": 0,
           "locked": false
         }
       ],
       "expectedProfiles": [
-        { "tier": 3, "factor": 32, "signals": ["牌河零字牌幺九", "牌河未打条", "牌河中张密集"], "suspectSuit": "s", "locked": false, "avoidsHonorTerminals": true }
+        {
+          "tier": 3,
+          "factor": 32,
+          "signals": [
+            "牌河零字牌幺九",
+            "牌河未打条",
+            "牌河中张密集"
+          ],
+          "suspectSuit": "s",
+          "locked": false,
+          "avoidsHonorTerminals": true,
+          "axisSource": "inferred",
+          "honorsInFlush": false
+        }
       ],
-      "expectedExposure": { "s5": 320, "m5": 40, "north": 160 },
+      "expectedExposure": {
+        "s5": 320,
+        "m5": 40,
+        "north": 160
+      },
       "expectedFeature": {
-        "s5": { "tier": "高", "payment": 320, "signals": ["牌河零字牌幺九", "牌河未打条", "牌河中张密集"] }
+        "s5": {
+          "tier": "高",
+          "payment": 320,
+          "signals": [
+            "牌河零字牌幺九",
+            "牌河未打条",
+            "牌河中张密集"
+          ]
+        }
+      }
+    },
+    {
+      "id": "known-thirteen-orphans",
+      "note": "已公开番型（对手已胡十三幺且锁手）：威胁档由公开番型兜住，危险轴为 known —— 对锁手家同样生效",
+      "wallCount": 40,
+      "visibleTiles": [],
+      "opponents": [
+        {
+          "seat": 3,
+          "discards": [
+            "m1",
+            "p9",
+            "m4",
+            "m5",
+            "p4",
+            "p5",
+            "s4",
+            "s5",
+            "east",
+            "south"
+          ],
+          "melds": [],
+          "winCount": 3,
+          "locked": true,
+          "knownWins": [
+            {
+              "id": "thirteenOrphans",
+              "label": "十三幺",
+              "multiplier": 16
+            }
+          ]
+        }
+      ],
+      "expectedProfiles": [
+        {
+          "tier": 3,
+          "factor": 32,
+          "signals": [
+            "已胡十三幺",
+            "已胡3次仍听"
+          ],
+          "suspectSuit": null,
+          "locked": true,
+          "avoidsHonorTerminals": true,
+          "axisSource": "known",
+          "honorsInFlush": false
+        }
+      ],
+      "expectedExposure": {
+        "north": 320,
+        "m9": 320,
+        "p5": 80
+      },
+      "expectedFeature": {
+        "north": {
+          "tier": "高",
+          "payment": 320,
+          "signals": [
+            "已胡十三幺",
+            "已胡3次仍听"
+          ]
+        },
+        "p5": {
+          "tier": "高",
+          "payment": 80,
+          "signals": [
+            "已胡十三幺",
+            "已胡3次仍听"
+          ]
+        }
       }
     }
   ]

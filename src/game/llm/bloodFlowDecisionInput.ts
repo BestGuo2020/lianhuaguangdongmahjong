@@ -10,7 +10,7 @@ import {visibleTiles, type BloodFlowSeatView} from '../variants/lotus/bloodFlow/
 import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
 
 export interface BloodFlowDecisionMetadata {roundIndex?:number;dealerIndex?:number;seatWind?:string;roundWind?:string}
-export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持平胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶64倍；同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达平胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。门清对手也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。'
+export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持平胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶64倍；同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达平胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。门清对手也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。对手已胡过的番型同样是公开信息（features.opponentRisk.signals 里的「已胡十三幺」等）：已公开番型限定了他的牌型，锁手后依然成立，因此比读牌河更可靠。'
 
 function label(action:BloodFlowAction,view:BloodFlowSeatView):string {
   const player=view.players[view.seat]
