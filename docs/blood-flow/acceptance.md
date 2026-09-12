@@ -1,6 +1,41 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-12。本页维护已有证据和待取得的证据；最新补修为「血流结算卡明细改为徽标（删除计分详情折叠）」。此前补修为「血流联机 P2P 上线（规则修正 / 身份语音 / 结算时序 / 房间生命周期 / P2P 四类缺陷）」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-12。本页维护已有证据和待取得的证据；最新补修为「对手大牌风险定价（档位版）上线 + 两场线上整场验收」。此前补修为「血流结算卡明细改为徽标（删除计分详情折叠）」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-12：对手大牌风险定价（档位版）上线与两场线上整场通过
+
+把「点炮给在做大牌的对手」从"与番型无关的常数价格"改成按公共证据分档：新增 `src/game/shared/ai/opponentPatternRisk.ts`（前端）与 `backend/app/core/opponent_pattern_risk.py`（后端镜像，逐位等价），只用对手牌河 / 副露明细 / 已胡次数 / 锁手 / 墙余 / 公开牌池；档位倍率 ×1 / ×4 / ×16 / ×32，染手嫌疑花色 ×0.5，已锁手家不吃现物与花色折扣。提交：master `923276e`、vibehub `9ea4d0b`（`pnpm sync:vibehub`）、后端 main `5ef2153`；三仓均已推送远端。
+
+- 接线：血流引擎建议（`bloodFlow/ai.ts`）、LLM 候选 `features.opponentRisk` 与 `｜风险赔付：约N点（档·信号）`、prompt 顶层 `opponentRisk` 与赔付口径规则摘要、条件深思威胁分与定价同源；广麻补杠 gate（残局 + 该牌公共牌池完全未现 + 对手档 ≥1 → 不补杠）。常量开关 `BLOOD_FLOW_AI.opponentPatternRisk = 'off'` 可逐位回退旧口径。
+- 测试：前端 `vitest run src` **1299 passed / 2 skipped**；后端全量 `pytest tests -q` **681 passed**，受影响模块复验 212 passed；TS↔Python golden fixture（`src/game/llm/fixtures/opponent-risk.json`，4 case）两侧 4/4，另有引擎级选择分歧用例（`off` 打 p1 → 档位版改打非嫌疑花色）。
+- 效果边界（诚实记录）：20 种子双臂对拍端局指标**无系统性方向**（点炮批次 385 → 397），决策级仅 0.75% / 0.78% 局面选择不同；「点炮给高风险档对手」占比 98.4% 几近饱和、无分辨力。完整数字见[记录](records/strategy-opponent-risk.md)与[策略文档的效果边界小节](design/ai-strategy.md#实测效果边界2026-09-10-20-种子双臂对拍)。
+
+**发布（vibehub 分支）**
+
+- 在 vibehub 工作区（`work/vibehub-theme11v`，HEAD `9ea4d0b`）执行 `pnpm deploy:vibehub`（= `npm run build` + `vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist --note-file tmp\vibehub-update-note.txt`）→ **部署成功**：找到 237 个文件、跳过 231 个未变化、删除 5 个旧文件（`assets/{MahjongTable3D-CBlAVBPo,RulesPanel-BYkPCqjr,engineWorker-DkVUQ1Pd,index-BIl3QqaT,worker-DhX9t7Br}.js`）、上传 6 个：`assets/index-CGNqIbhu.js`、`assets/{MahjongTable3D-BFKXQnnW,RulesPanel-DEbn5avy,engineWorker-CQbn34WF,worker-4T7M1BWE}.js` 与 `index.html`（CSS 内容未变，按同一 hash 名跳过）。线上地址 <https://vibe.lumigrav.space/play/M-USGs_ieQksAeOJYtHF4>。
+- 发布产物核对：本地 `dist/assets/index-CGNqIbhu.js` 与 `engineWorker-CQbn34WF.js` 中可检索到本次新增的 `风险赔付` / `opponentRisk` / `副露含三组箭牌` / `已胡N次仍听`，即线上包确含本批改动。
+
+**线上整场验收（2026-09-12，AGENTS 指定的两条血流用例）**
+
+命令与环境（在 vibehub 工作区执行）：
+
+```powershell
+$env:E2E_SKIP_WEBSERVER='1'
+$env:ONLINE_CONFIG_PATH='D:\vueprojects\lianhua_guangma\tmp\online_test'
+$env:ONLINE_EVIDENCE_DIR='D:\vueprojects\lianhua_guangma\tmp\bf-online-evidence'
+pnpm exec playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts -g "普通机器人"
+pnpm exec playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts -g "大模型机器人"
+```
+
+- 部署自检 `-g "线上部署包含事件驱动恢复"` → **1 passed（6.1s）**，线上构建标记读出 `sdkEventRecovery/settlementRecovery/... = true`。
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 普通机器人）` → **1 passed（4.9m）**，房间 `3RFBTA`：东1～东4 打满，双端逐局结算一致，终局 玩家3 6730 / 玩家4 1220 / 血流验收客人 60 / 血流验收房主 -10。
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 大模型机器人）` → **1 passed（7.5m）**，房间 `6KH379`：东1～东4 打满，终局 大肥鱼 6860 / 大肥鱼 1420 / 血流验收客人 -100 / 血流验收房主 -180。
+- 取证：`tmp/bf-online-evidence/` 新增 `bf-plain-ai-{room,东1局,东2局,东3局,final}-{host,client}.png` 10 张与 `bf-llm-ai-*` 10 张（16:05～16:18）。
+
+**未验证 / 遗留**
+
+- WS 联机（master + 后端）的**线上部署**未做：仓库内没有后端生产部署脚本与凭据（文档只给本地 `uvicorn`），因此线上 WS 房间的 LLM 座位仍跑旧后端。本次为该路径补的是**本地真实后端联机回归**：`pnpm exec playwright test tests/e2e/blood-flow.remote.spec.ts` → **1 passed（2.2m）**（两真实客户端 + `uvicorn --reload` 本机后端）。
+- 本次发布为文档外零改动（本页记录提交不改 bundle），线上产物对应 vibehub `9ea4d0b` 的构建。
 
 ## 2026-09-12：结算卡明细改为徽标（删除计分详情折叠）
 
