@@ -183,7 +183,14 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 - SDK 在 `localhost`/`127.0.0.1` 下用 `location.origin` 作 apiBase（`defaultApiBase()`），因此本地必须**同源代理**平台路径（`/api/sdk`、`/api/relay`、`/api/game-auth`、`/connect`、`/relay-worker.js`）；代理已配好并通过验证（`GET /api/sdk/me` 能拿到平台的 401，说明请求确实到达平台）。
 - 官方 CLI **没有本地 dev/serve 命令**（`vibehub --help` 全量列出：login/whoami/metadata/deploy/update/mod/collaboration/github-setup/token/generate/list/logout/remove），所以不存在平台侧本地服务可用。
 
-因此：`mockVibeHub` **保留**为本地默认联调环境（离线、确定性、CI 友好）；`VITE_VIBE_REAL=1` 仅保留给"本地 + 真实登录"的联调尝试（登录弹窗经代理 + 平台 cookie 是否可行**尚未验证**）。线上验收依旧是 P2P 的唯一端到端依据，触发条件收敛为：**改动触及 P2P 传输 / 房间 / roster / 重连 / 结算同步时**才必须上线跑两场；日常 AI、规则、UI 改动以本地全量 + 单机 e2e 为准。
+因此：`mockVibeHub` **保留**为本地默认联调环境（离线、确定性、CI 友好）。**两条本地真 SDK 路线均已实测不通**：
+
+| 路线 | 结果 |
+|---|---|
+| 本地真 SDK + **匿名**进房 | **不通**：SDK 的 room/信令接口一律要求登录凭证（`_fetch` 无 token 直接 `请先登录`；服务端 `POST /api/sdk/rooms` 无条件 401） |
+| 本地真 SDK + **真实登录** | **不通**（用户实测）：登录流程因**本地伪装域名不受信任**而失败（平台/浏览器不接受 `local.lumigrav.space` 这类本地来源） |
+
+`VITE_VIBE_REAL=1` 开关与 vite 平台 API 代理保留为**该验证的痕迹与参考**（默认关闭、仅影响 dev，不影响任何线上行为）。结论：**本地不存在可用的真实 P2P 环境**，线上验收依旧是 P2P 的唯一端到端依据，触发条件收敛为：**改动触及 P2P 传输 / 房间 / roster / 重连 / 结算同步时**才必须上线跑两场；日常 AI、规则、UI 改动以本地全量 + 单机 e2e 为准。
 
 ---
 
