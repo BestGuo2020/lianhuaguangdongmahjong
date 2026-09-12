@@ -46,6 +46,10 @@ describe('llmAnime 运行时资源 manifest', () => {
 })
 
 describe('llmAnime 立绘与头像预取', () => {
+  // 12 个角色的鸣牌/胡牌卡共 24 张；头像按角色目录取，mistral 复用 deepseek → 唯一 URL 11 张。
+  const uniqueUrls = ANIME_CHARACTER_IDS.length * 2
+    + new Set(ANIME_CHARACTER_IDS.map(animeCharacterAvatarUrl)).size
+
   beforeEach(() => {
     vi.resetModules()
     requested.length = 0
@@ -59,14 +63,14 @@ describe('llmAnime 立绘与头像预取', () => {
     const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
     await preloadAnimeCharacterAssets()
 
-    expect(requested).toHaveLength(ANIME_CHARACTER_IDS.length * 3)
     for (const id of ANIME_CHARACTER_IDS) {
       expect(requested).toContain(animeCharacterAvatarUrl(id))
       expect(requested).toContain(animeActionArtUrl(id, 'peng'))
       expect(requested).toContain(animeActionArtUrl(id, 'hu'))
     }
-    // 同一张卡不得因为多个动作类型重复请求。
-    expect(new Set(requested).size).toBe(ANIME_CHARACTER_IDS.length * 2 + new Set(ANIME_CHARACTER_IDS.map(animeCharacterAvatarUrl)).size)
+    // 唯一 URL 各请求一次：同一张卡不得因多个动作类型重复请求，头像复用目录也不重复请求。
+    expect(requested).toHaveLength(uniqueUrls)
+    expect(new Set(requested).size).toBe(uniqueUrls)
   })
 
   it('重复与并发调用复用同一预取，不重复拉取', async () => {
@@ -84,6 +88,6 @@ describe('llmAnime 立绘与头像预取', () => {
     MockImage.fail = true
     const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
     await expect(preloadAnimeCharacterAssets()).resolves.toBeUndefined()
-    expect(requested).toHaveLength(ANIME_CHARACTER_IDS.length * 3)
+    expect(requested).toHaveLength(uniqueUrls)
   })
 })

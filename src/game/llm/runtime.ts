@@ -10,6 +10,7 @@ import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats, type LlmMessageMeta } from './llmController'
 import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
 import { avatarFolderOf, avatarFor, displayNameOf, effectiveNickname } from './persona'
+import { preloadImages } from '../core/presentation/imagePreload'
 import { resolveAnimeCharacterId } from './animeCharacters'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
@@ -51,13 +52,17 @@ function toProviderConfig(preset: LlmProviderPreset, style: LlmProviderPreset['s
 function seedFor(settings: LlmSettings, seat: 1 | 2 | 3): PlayerSeed {
   const preset = presetForSeat(settings, seat) ?? settings.presets[0]
   const style = styleForSeat(settings, seat) ?? preset.style
-  return {
+  const seed: PlayerSeed = {
     name: displayNameOf(effectiveNickname(preset), style),
     avatar: avatarFor(preset, style),
     isLlm: true,
     characterId: resolveAnimeCharacterId(avatarFolderOf(preset)),
     playerKind: 'llm',
   }
+  // 人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）按座位预热：只取实际会用到的那几张，
+  // 避免牌桌首次渲染（LLM 座位第一次出现）才开始下载；不做供应商×风格全量预取。
+  void preloadImages([seed.avatar])
+  return seed
 }
 
 function baseRuntime(): { settings: LlmSettings; stats: LlmControllerStats } {

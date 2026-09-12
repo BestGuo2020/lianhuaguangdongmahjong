@@ -4,6 +4,7 @@ import {
   type CharacterId,
 } from '../../llm/animeCharacters'
 import { animeCharacterAvatarUrl } from '../../llm/animeCharacterPreference'
+import { preloadImages } from './imagePreload'
 import type { AnimeActionKey } from './animeActionPresentation'
 
 export const LLM_ANIME_ASSET_VERSION = 'v1'
@@ -29,15 +30,6 @@ export function animeActionArtUrl(characterId: unknown, action: AnimeActionKey):
 // 避免立绘/头像首次出现时闪烁或延迟。失败静默（首次使用时仍按需加载）。
 let assetPreloadReady: Promise<void> | null = null
 
-function preloadImage(src: string): Promise<void> {
-  return new Promise((resolve) => {
-    const image = new Image()
-    image.onload = () => resolve()
-    image.onerror = () => resolve()
-    image.src = src
-  })
-}
-
 /** 预取全部角色头像 + 每角色两张立绘（鸣牌卡/胡牌卡）。并发调用复用同一 Promise。 */
 export function preloadAnimeCharacterAssets(): Promise<void> {
   if (assetPreloadReady) return assetPreloadReady
@@ -46,6 +38,6 @@ export function preloadAnimeCharacterAssets(): Promise<void> {
     animeActionArtUrl(id, 'peng'),
     animeActionArtUrl(id, 'hu'),
   ]).filter((url): url is string => Boolean(url))
-  assetPreloadReady = Promise.all(urls.map(preloadImage)).then(() => {})
+  assetPreloadReady = preloadImages(urls)
   return assetPreloadReady
 }
