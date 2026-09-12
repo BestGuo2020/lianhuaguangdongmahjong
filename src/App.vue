@@ -24,6 +24,7 @@ import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useRemoteContinueCountdown } from './game/online/presentation/useRemoteContinueCountdown'
 import { useAudio } from './game/core/presentation/useAudio'
 import { preloadAnimeCharacterAssets } from './game/core/presentation/llmAnimeAssets'
+import { defaultAvatarForSeat } from './game/core/presentation/avatar'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import type { MatchType, TileType } from './game/core/contracts/types'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
@@ -32,7 +33,7 @@ import { themePresentationByName, themePresentationCssVariables } from './theme/
 import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
 import type { PlayerSeed } from './game/shared/runtime/localOpening'
-import { readAnimeCharacterPreference, saveAnimeCharacterPreference, animeCharacterAvatarUrl } from './game/llm/animeCharacterPreference'
+import { readAnimeCharacterPreference, saveAnimeCharacterPreference } from './game/llm/animeCharacterPreference'
 import type { CharacterId } from './game/llm/animeCharacters'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -112,6 +113,8 @@ const localAnimeFixedTts = createFixedTtsExecutor()
 const lotusAnimeFixedTts = createFixedTtsExecutor()
 const remoteAnimeFixedTts = createFixedTtsExecutor()
 watch(tableThemeName, (theme) => {
+  // 二次元主题：角色头像与鸣牌/胡牌立绘在开局前预热；immediate 让 `?theme=llmAnime`
+  // 直接进入（或恢复上次主题）也预取，而不是只在切换到该主题时预取。
   if (theme === 'llmAnime') {
     void preloadAnimeCharacterAssets()
     return
@@ -119,7 +122,7 @@ watch(tableThemeName, (theme) => {
   localAnimeFixedTts.cancel()
   lotusAnimeFixedTts.cancel()
   remoteAnimeFixedTts.cancel()
-})
+}, { immediate: true })
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
 const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
 
@@ -132,16 +135,18 @@ preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
 const animeCharacterId = ref<CharacterId>(readAnimeCharacterPreference())
+// 本家头像始终是本地默认头像；二次元角色头像只由 `llmAnime` 的表现层覆盖
+// （GameTableHud / SettlementOverlay / BloodFlowResultPlayers 按主题选择），
+// 这样非 llmAnime 主题不会显示角色头像，llm 主题只有本家/真人是非大模型头像。
 const localHumanSeed: PlayerSeed = {
   name: '巅峰雀神',
-  avatar: animeCharacterAvatarUrl(animeCharacterId.value),
+  avatar: defaultAvatarForSeat(0),
   characterId: animeCharacterId.value,
   playerKind: 'human',
 }
 watch(animeCharacterId, (value) => {
-  const saved = saveAnimeCharacterPreference(value)
-  localHumanSeed.characterId = saved
-  localHumanSeed.avatar = animeCharacterAvatarUrl(saved)
+  // 角色形象只改 characterId（动作/语音/llmAnime 头像的来源），不改权威 avatar。
+  localHumanSeed.characterId = saveAnimeCharacterPreference(value)
 })
 const vibeLlmOptions = listHostLlmOptions()
 const llmStats = computed<LlmControllerStats>(() => ({
