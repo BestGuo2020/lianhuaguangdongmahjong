@@ -166,6 +166,25 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 另：`blood-flow.llm-host.spec.ts`（mock 版 P2P LLM 宿主）已标 `test.fixme`：其断言依赖 SDK 下发的 roster/昵称（`RoomPanel` 取 `humanAt(...).nickname`）与 LLM 座位选择器，mock 不实现，原理上不可能通过；等价覆盖由线上「2 真人 + 2 大模型机器人」整场承担（房间 9HUUY2 ✅）。
 
+### 本地"真 SDK 匿名联机"验证结论（2026-09-12）：不可行，mock 保留
+
+起因：希望本地跑真 SDK 以减少线上验收次数。为此加了 `VITE_VIBE_REAL=1` 开关（dev 下走真 SDK 而非 mock）与 vite 平台 API 代理，并做了一次实跑。结论：**匿名进房在 SDK 层就不被允许**，与 mock、来源校验、安全上下文都无关。
+
+证据（`https://vibe.lumigrav.space/sdk/v3/vibehub.js`，2026-09-12 拉取）：
+
+- `VibeSDK.prototype._fetch` 在没有 token 时**直接 reject**：`if (!this.token) { var missing = new Error("请先登录"); missing.status = 401; ... }`（L3544-3548）；
+- `this.token` **只**由 `_acceptToken(token, expiresAt)` 赋值（L3500-3506），而它只被登录/授权流程调用 —— SDK 内**不存在游客/匿名签发路径**；
+- 服务端同结论：直接重放 `POST https://vibe.lumigrav.space/api/sdk/rooms`（body `{"room":"…","action":"claim","peer":"…"}`），在**带平台 Origin / 带本地 Origin / 不带 Origin** 三种情况下**全部 401 `{"error":"未授权"}`**；
+- `crossOriginIsolated` 只门控登录弹窗方式（`_isolatedLogin` vs `_popupLogin`），**不是**匿名联机的前置条件；
+- 平台文档里的"匿名"仅指**中继节点贡献**（节点注册、绑定临时 peerId 的短期能力凭证），不含进房（见 `llms-full.txt` 关于匿名 relay 的段落）。
+
+本地真 SDK 的两个附带发现（对将来"本地 + 真实登录"联调有用）：
+
+- SDK 在 `localhost`/`127.0.0.1` 下用 `location.origin` 作 apiBase（`defaultApiBase()`），因此本地必须**同源代理**平台路径（`/api/sdk`、`/api/relay`、`/api/game-auth`、`/connect`、`/relay-worker.js`）；代理已配好并通过验证（`GET /api/sdk/me` 能拿到平台的 401，说明请求确实到达平台）。
+- 官方 CLI **没有本地 dev/serve 命令**（`vibehub --help` 全量列出：login/whoami/metadata/deploy/update/mod/collaboration/github-setup/token/generate/list/logout/remove），所以不存在平台侧本地服务可用。
+
+因此：`mockVibeHub` **保留**为本地默认联调环境（离线、确定性、CI 友好）；`VITE_VIBE_REAL=1` 仅保留给"本地 + 真实登录"的联调尝试（登录弹窗经代理 + 平台 cookie 是否可行**尚未验证**）。线上验收依旧是 P2P 的唯一端到端依据，触发条件收敛为：**改动触及 P2P 传输 / 房间 / roster / 重连 / 结算同步时**才必须上线跑两场；日常 AI、规则、UI 改动以本地全量 + 单机 e2e 为准。
+
 ---
 
 ## 附：本批 master 改动 → vibehub 归属一览

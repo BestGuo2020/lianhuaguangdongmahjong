@@ -55,4 +55,6 @@
 - 它能覆盖：承诺洗牌与权威 worker（`tests/e2e/blood-flow.room.spec.ts`）、大厅/主题/刷新恢复（`blood-flow.lobby.spec.ts`）、协议与 replica 逻辑（`src/game/variants/lotus/bloodFlow/network/network.test.ts`）。
 - **它覆盖不了**（实测四类线上缺陷全部无法本地复现）：单包超限导致的静默发送失败、分片在直连 SDK 的订阅者处被丢弃、对端 peer id 漂移、收帧饥饿与失联判定。原因是 mock 在进程内投递、无大小上限与加密、peer id 恒定、无 WebRTC/中继抖动。
 - 因此联机行为（房间面板/roster、传输、断线恢复、结算同步）统一在**线上部署**验收：`vibehubcli`（`vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist`）更新后，用 `tmp/online_test` 的两个账号跑 `tests/e2e/online-two-accounts-two-east-matches.spec.ts` 里的血流用例（2 真人 + 2 普通机器人 / 2 真人 + 2 大模型机器人），取证落 `tmp/bf-online-evidence/`。
+- **触发条件（2026-09-12 收敛）**：改动触及 P2P 传输 / 房间 / roster / 重连 / 结算同步时**必须**上线跑两场；日常 AI、规则、UI 改动以本地全量测试 + 单机 e2e 为准，不必每次上线。
+- **本地跑真 SDK 不可行（2026-09-12 实测）**：SDK 的 room/信令接口一律要求登录凭证（`_fetch` 无 token 直接 `请先登录`；服务端 `POST /api/sdk/rooms` 无条件 401），文档里的"匿名"只指中继节点贡献。`VITE_VIBE_REAL=1` 开关与 vite 平台 API 代理已备好，仅可用于"本地 + 真实登录"尝试；`mockVibeHub` 因此保留为本地默认联调环境。
 - 依据与逐项记录见 `docs/vibehub-adaptation-checklist.md` 的「线上整场验收结果」与「联机验收策略」两节。
