@@ -4,7 +4,7 @@ import {
   type CharacterId,
 } from '../../llm/animeCharacters'
 import { animeCharacterAvatarUrl } from '../../llm/animeCharacterPreference'
-import { preloadImages, materializeImages } from './imagePreload'
+import { preloadImages, materializeImages, materializedImageSrc } from './imagePreload'
 import type { AnimeActionKey } from './animeActionPresentation'
 
 export const LLM_ANIME_ASSET_VERSION = 'v1'
@@ -33,10 +33,12 @@ let assetPreloadReady: Promise<void> | null = null
 /**
  * 预取全部角色头像 + 每角色两张立绘（鸣牌卡/胡牌卡）。并发调用复用同一 Promise。
  *
- * 立绘额外做一次「物化」：抓成 blob URL 并预热解码。动作 cue 的出现窗口很短（吃碰杠约 1s 级），
- * 只把字节放进 HTTP 缓存仍然不够——线上静态资源 `max-age=60`，过了新鲜期每次渲染都要先发一次
- * 304 校验，再加上现场解码，立绘就会时有时无。blob URL 是同源本地字节、不会再校验，
- * `AnimeActionCue` 直接引用它即可稳定上屏（拿不到就回退原始 URL，行为不变差）。
+ * 立绘走「物化」而不是普通预取：抓成 blob URL 并预热解码。动作 cue 的出现窗口很短（吃碰杠 1s 级、
+ * 血流胡牌立绘满不透明度约 370ms），只把字节放进 HTTP 缓存仍然不够——线上静态资源 `max-age=60`，
+ * 过了新鲜期每次渲染都要先发一次校验、再叠现场解码（实测单张 249KB 在真实网络下要 0.7~1.7 秒），
+ * 立绘就会时有时无。blob URL 是同源本地字节、不会再校验，`AnimeActionCue` 直接引用它即可稳定上屏。
+ *
+ * 物化失败的 URL（无 blob 支持 / 抓取失败）再退回普通预取兜底；都失败时由 cue 按需加载，行为不会更差。
  */
 export function preloadAnimeCharacterAssets(): Promise<void> {
   if (assetPreloadReady) return assetPreloadReady
@@ -46,8 +48,8 @@ export function preloadAnimeCharacterAssets(): Promise<void> {
     animeActionArtUrl(id, 'hu'),
   ]).filter((url): url is string => Boolean(url))
   assetPreloadReady = Promise.all([
-    preloadImages([...avatars, ...actionCards]),
+    preloadImages(avatars),
     materializeImages(actionCards),
-  ]).then(() => {})
+  ]).then(() => preloadImages(actionCards.filter((url) => !materializedImageSrc(url))))
   return assetPreloadReady
 }
