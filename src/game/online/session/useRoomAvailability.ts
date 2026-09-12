@@ -1,6 +1,6 @@
 import { onUnmounted, ref, watch, type Ref } from 'vue'
 import type { GameMode } from '../../core/contracts/activeGamePort'
-import { preloadImages } from '../../core/presentation/imagePreload'
+import { materializeImages } from '../../core/presentation/imagePreload'
 import { getRoomMeta, type RoomMeta } from '../api/roomApi'
 
 export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>) {
@@ -21,10 +21,11 @@ export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>
     pollingTimer = null
   }
 
-  // 服务端提供的 LLM 人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）随房间元数据预热：
-  // 房主建房/开局后的空位大模型座位会用到它们，避免牌桌首次渲染才开始下载。
+  // 服务端提供的 LLM 人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）随房间元数据物化：
+  // 房主建房/开局后的空位大模型座位会用到它们；只进 HTTP 缓存的话，托管方 60s 新鲜期一过
+  // 座位头像首次渲染仍要发一次 304 校验（实测单次 0.5~1.9s），所以这里也走 blob + 预热解码。
   watch(() => (roomMeta.value?.llmProviders ?? []).map((provider) => provider.avatar),
-    (avatars) => { void preloadImages(avatars) }, { immediate: true })
+    (avatars) => { void materializeImages(avatars) }, { immediate: true })
 
   watch([gameMode, roomId], ([mode, id]) => {
     if (mode === 'remote' && !id) {
