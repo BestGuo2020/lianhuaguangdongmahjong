@@ -24,7 +24,7 @@ export function bloodFlowAiActions(
   const indices = view.ownActions.filter(a => a.kind === 'discard').map(a => a.index)
   const allowed = new Set(lotusDiscardCandidates(view.players[view.seat].hand, view.jokers, indices).map(c => c.index))
   const legal = view.ownActions.filter(a => a.kind !== 'discard' || allowed.has(a.index))
-  return applyDefenseConstraint(view, legal, config, defense)
+  return applyDefenseConstraint(view, dropDominatedPeng(legal), config, defense)
 }
 
 const CLAIM_KINDS: ReadonlySet<string> = new Set(['peng', 'chi', 'gang', 'added-kong', 'concealed-kong', 'wind-kong'])
@@ -54,6 +54,20 @@ function applyDefenseConstraint(
     .filter((_, position) => costs[position] <= floor + config.defense.foldDiscardTolerance)
     .map(action => action.index))
   return actions.filter(action => (action.kind === 'discard' ? safe.has(action.index) : keepWinPass(action)))
+}
+
+/**
+ * 能大明杠时不给"碰"候选（与非血流 `candidates.ts` 的 `pengWouldDiscardClaimedTile` 守卫、以及
+ * 本地 AI `decideClaim` 的"能杠必杠"一致）。
+ *
+ * 为什么杠严格优于碰：响应别人弃牌时手上必然是 3 张（第四张在弃牌里），碰会把这 3 张拆成
+ * "副露 2 张 + 手里留 1 张死牌"，而杠是同一副露 + 杠分 + 补牌机会，且大明杠不可被抢。
+ * 之前血流 LLM 候选直接照搬合法动作，模型可以选"碰"，下一手再把多出来那张打掉——
+ * 表现就是"本来能开大明杠，结果碰牌 + 打出要碰的牌"。
+ */
+function dropDominatedPeng(actions: readonly BloodFlowAction[]): readonly BloodFlowAction[] {
+  if (!actions.some(action => action.kind === 'gang')) return actions
+  return actions.filter(action => action.kind !== 'peng')
 }
 
 /** 旧策略入口（legacy）：见胡就胡 + 固定首胡门槛，行为保持不变。 */
