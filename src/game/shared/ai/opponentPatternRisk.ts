@@ -73,6 +73,13 @@ export interface OpponentRiskTuning {
   honorTerminalLadderFloor: number
   /** 字牌刻子轴（三元 / 四喜 / 字一色）：非字牌数牌的系数。 */
   honorEmphasisNumberFactor: number
+  /**
+   * **已公开番型**（axisSource='known'）时，该番型「用不到的那一类牌」的系数。
+   * 实测（`patterns/tmpFrozenPaymentProbe` 同类场景）：锁手清一色对手对非本门牌**根本不能胡**（0 点），
+   * 对本门牌 80 点；锁手十三幺对中张只有七星十三烂 80 点、对字牌幺九 320 点。
+   * 所以已知番型时轴外牌应压到接近 0，而不是只打五折。
+   */
+  knownOffAxisFactor: number
   /** 花色回避：牌河 ≥ concealedRiverMin 且该花色占比 ≤ 该值 → 九莲 / 门清清一色嫌疑。 */
   suitAvoidShare: number
   /** 短牌河兜底：某花色张数 ≤ 该值（占比可能高于 suitAvoidShare）→ 弱信号，别把 v1 的灵敏度丢掉。 */
@@ -105,6 +112,7 @@ export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
   honorTerminalMiddleFactor: 0.25,
   honorTerminalLadderFloor: 0.1,
   honorEmphasisNumberFactor: 0.5,
+  knownOffAxisFactor: 0.1,
   suitAvoidShare: 0.1,
   suitSparseCount: 1,
   suitZeroRiver: 12,
@@ -398,8 +406,11 @@ export function opponentPatternExposure(
       const offSuit = axisApplies && profile.suspectSuit !== null
         && suit !== profile.suspectSuit && !honorOnOffSuitAxis
       const inSuspectSuit = profile.suspectSuit !== null && suit === profile.suspectSuit
-      let tileFactor = offSuit ? resolved.offSuitFactor : 1
+      // 已知番型的轴外牌压到接近 0（实测：锁手清一色对非本门牌 0 点）；推断出来的轴仍只打五折。
+      const offAxisFactor = profile.axisSource === 'known' ? resolved.knownOffAxisFactor : resolved.offSuitFactor
+      let tileFactor = offSuit ? offAxisFactor : 1
       // 逐张危险轴：十三幺 / 字一色轴下中张几乎不被需要 → 便宜；但嫌疑花色内的中张照价（九莲要同一花色 1-9）。
+      // 注意：这条轴的轴外牌**不能**压到 0——实测锁手十三幺形态对中张仍能以"七星十三烂"胡 80 点。
       if (axisApplies && profile.avoidsHonorTerminals && isMiddleTile(tile) && !inSuspectSuit) {
         tileFactor *= resolved.honorTerminalMiddleFactor
       }
@@ -411,6 +422,8 @@ export function opponentPatternExposure(
       if (candidate > weight) { weight = candidate; chosen = profile }
     }
     // 一次弃牌最多被一家胡：取权重最高的一家的口径。
+    // 只有牌河推断（axisSource='inferred'）时才因为"锁手可能是单吊任意听"而放弃折扣；
+    // 已公开番型（'known'）限定了牌型 ⇒ 锁手家也照常吃现物/公开张数折扣（多现更不可能是他的等待）。
     const chosenAxis = chosen !== null && (chosen.axisSource === 'known' || !chosen.locked)
     const ratio = chosen === null ? ladder
       : chosen.locked && chosen.axisSource !== 'known' ? resolved.safetyCostNone

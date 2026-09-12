@@ -691,6 +691,78 @@
           ]
         }
       }
+    },
+    {
+      "id": "known-pure-suit-locked",
+      "note": "已公开番型：清一色 + 锁手。实测该对手对非本门牌根本不能胡（0 点）、对本门牌 80 点；这里按 known 轴把轴外压到 0.1 倍（保守不归零）",
+      "wallCount": 40,
+      "visibleTiles": [],
+      "opponents": [
+        {
+          "seat": 1,
+          "discards": [
+            "m1",
+            "p9",
+            "m4",
+            "m5",
+            "p4",
+            "p5",
+            "s4",
+            "s5",
+            "east",
+            "south"
+          ],
+          "melds": [],
+          "winCount": 2,
+          "locked": true,
+          "knownWins": [
+            {
+              "id": "pure-suit",
+              "label": "清一色",
+              "multiplier": 4,
+              "tile": "p5"
+            }
+          ]
+        }
+      ],
+      "expectedProfiles": [
+        {
+          "tier": 2,
+          "factor": 16,
+          "signals": [
+            "已胡清一色",
+            "已胡2次仍听"
+          ],
+          "suspectSuit": "p",
+          "locked": true,
+          "avoidsHonorTerminals": false,
+          "axisSource": "known",
+          "honorsInFlush": false,
+          "honorEmphasis": false
+        }
+      ],
+      "expectedExposure": {
+        "p9": 160,
+        "m5": 16
+      },
+      "expectedFeature": {
+        "p9": {
+          "tier": "中",
+          "payment": 160,
+          "signals": [
+            "已胡清一色",
+            "已胡2次仍听"
+          ]
+        },
+        "m5": {
+          "tier": "中",
+          "payment": 16,
+          "signals": [
+            "已胡清一色",
+            "已胡2次仍听"
+          ]
+        }
+      }
     }
   ]
 }
