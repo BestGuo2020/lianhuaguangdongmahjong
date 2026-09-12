@@ -91,6 +91,14 @@ export interface BloodFlowAiConfig {
   readonly safetyCostNone: number
   readonly safetyCostOne: number
   readonly safetyCostSafe: number
+  /** 对手牌型（大牌）风险定价：'off' = 只看公开张数的旧口径，'tier' = 档位版（见 shared/ai/opponentPatternRisk.ts）。 */
+  readonly opponentPatternRisk: 'off' | 'tier'
+  /** 档位倍率：1 = 平胡量级；4/16/32 ≈ 混一色 / 清一色 / 十六倍级硬胡点炮的单家赔付量级。 */
+  readonly riskFactorTier1: number
+  readonly riskFactorTier2: number
+  readonly riskFactorTier3: number
+  /** 染手（花色集中）嫌疑对手：非嫌疑花色牌的系数。 */
+  readonly riskOffSuitFactor: number
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
 }
@@ -110,6 +118,11 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
   safetyCostNone: 0.25,
   safetyCostOne: 0.1,
   safetyCostSafe: 0,
+  opponentPatternRisk: 'tier',
+  riskFactorTier1: 4,
+  riskFactorTier2: 16,
+  riskFactorTier3: 32,
+  riskOffSuitFactor: 0.5,
   llmEvFeatures: true,
 })
 

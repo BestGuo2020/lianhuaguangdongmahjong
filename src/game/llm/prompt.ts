@@ -97,6 +97,10 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
   if (ruleCode !== 'lotus-classic' && features.safety && features.safety !== 'unknown' && features.safety !== 'n/a') {
     parts.push(`安全度：${features.safety}`)
   }
+  if (features.opponentRisk) {
+    const { tier, payment, signals } = features.opponentRisk
+    parts.push(`风险赔付：约${payment}点（${tier}${signals.length ? `·${signals.join('、')}` : ''}）`)
+  }
   if (features.efficiency !== 'unknown' && features.efficiency !== 'n/a') parts.push(`牌效：${features.efficiency}`)
   if (features.scoreDeltaBand && features.scoreDeltaBand !== 'n/a') parts.push(`收益：${features.scoreDeltaBand}`)
   if (features.ev?.win) {
