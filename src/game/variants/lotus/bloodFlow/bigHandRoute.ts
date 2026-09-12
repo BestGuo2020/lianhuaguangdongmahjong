@@ -21,6 +21,11 @@ export interface BigHandRoute {
   readonly need: readonly string[]
   /** 当前持有、属于该路线的牌（用于判定"打这张是否掉路线"）。 */
   readonly keepers: readonly TileType[]
+  /**
+   * 是否**能按自然牌（硬胡）完成**：false = 必须靠精牌顶替，完成时是软胡（无硬胡 ×2）。
+   * 实战实测：10 局里做成的 6 次十三幺有 5 次靠精顶替 ⇒ 赔付口径必须区分硬/软，否则会"为 160 点放弃 80 点小胡"。
+   */
+  readonly naturalOnly: boolean
 }
 
 export interface BigHandRouteConfig {
@@ -40,17 +45,26 @@ export interface BigHandRouteConfig {
   readonly minWallForCommit: number
   /** 时机门槛②：落后这么多分时也允许承诺（需要大牌翻盘）。 */
   readonly minDeficitForCommit: number
+  /**
+   * 精牌 ≥ `jokerReliefCount` 张时，牌墙门槛放宽到该值（精牌多 ⇒ 完成率高 ⇒ 可以更早承诺）。
+   */
+  readonly minWallForCommitWithJokers: number
+  /** 触发"精牌放宽"的持有精牌张数。 */
+  readonly jokerReliefCount: number
 }
 
 export const BLOOD_FLOW_BIG_HAND_ROUTE: Readonly<BigHandRouteConfig> = Object.freeze({
   mode: 'off',
   // 收紧后：十三幺要 12 种幺九（13 种为完成）、九莲要该门 12 张以上且 1-9 齐
+  // 注意：这两条都是"含精牌折算后"的要求，持有 J 张可顶替的精牌时自然牌要求降为 12-J / 12-J 张
   minOrphanKinds: 12,
   minSuitRanks: 9,
   minSuitTiles: 12,
   declineWinRatio: 2,
   minWallForCommit: 20,
   minDeficitForCommit: 300,
+  minWallForCommitWithJokers: 15,
+  jokerReliefCount: 2,
 })
 
 /** 收紧前的松门槛（仅用于 A/B 对照）。 */
@@ -91,6 +105,8 @@ export function detectBigHandRoute(
         progress: kindsAfterJokers / 13,
         need: THIRTEEN_ORPHANS.filter(tile => !hand.includes(tile)),
         keepers: hand.filter(tile => ORPHAN_SET.has(tile)),
+        // 13 种都在手上 → 可以自然完成（硬胡）；否则必须靠精顶替（软胡）
+        naturalOnly: kinds >= 13,
       })
     }
   }
@@ -99,7 +115,8 @@ export function detectBigHandRoute(
   if (melds.length === 0) {
     for (const suit of ['m', 'p', 's'] as const) {
       const tiles = hand.filter(tile => tile.startsWith(suit))
-      const ranks = new Set(tiles.map(tile => tile[1]))
+      const naturalTiles = tiles.filter(tile => !wildcards.has(tile))
+      const ranks = new Set(naturalTiles.map(tile => tile[1]))
       const wildcardExtra = Math.min(9 - ranks.size, jokerCount)
       if (ranks.size + wildcardExtra >= config.minSuitRanks && tiles.length + jokerCount >= config.minSuitTiles) {
         const missing = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -109,6 +126,8 @@ export function detectBigHandRoute(
           progress: Math.min(1, (ranks.size + wildcardExtra) / 9),
           need: missing as unknown as readonly string[],
           keepers: tiles,
+          // 1-9 全自然 + 本门自然张数 ≥13 → 可自然完成（硬胡）
+          naturalOnly: ranks.size >= 9 && naturalTiles.length >= 13,
         })
       }
     }
@@ -132,9 +151,12 @@ export function routeKeepsProgress(
   return next.progress + 1e-9 >= route.progress
 }
 
-/** 路线完成时的估算收益（硬胡 × 基础分），用于和"立即胡"比较。 */
+/**
+ * 路线完成时的估算收益（点）：**软胡（靠精顶替）只有硬胡的一半**（无 ×2）。
+ * 实测：做成的十三幺 5/6 靠精顶替，所以赔付口径必须区分，否则会出现"为 160 点放弃 80 点小胡"的不划算承诺。
+ */
 export function routePayoff(route: BigHandRoute, basePoints: number, hardWinMultiplier = 2): number {
-  return basePoints * route.weight * hardWinMultiplier
+  return basePoints * route.weight * (route.naturalOnly ? hardWinMultiplier : 1)
 }
 
 export interface BigHandRouteNarrowing {
@@ -170,10 +192,13 @@ export function narrowActionsToRoute<T extends { kind: string; index?: number }>
   },
 ): { route: BigHandRoute | null; actions: readonly T[]; collapsed: boolean } {
   const config = options.config ?? BLOOD_FLOW_BIG_HAND_ROUTE
+  const wildcards = new Set([...jokers, 'white'])
   const route = detectBigHandRoute(hand, melds, jokers, config)
   if (!route) return { route: null, actions, collapsed: false }
-  // 时机门槛：牌墙还有余地，或落后到需要大牌翻盘，才值得承诺。
-  const wallOk = options.wallCount === undefined || options.wallCount >= config.minWallForCommit
+  // 时机门槛：牌墙还有余地，或落后到需要大牌翻盘，才值得承诺；持有精牌多时牌墙要求放宽。
+  const heldJokers = hand.filter(tile => wildcards.has(tile)).length
+  const wallFloor = heldJokers >= config.jokerReliefCount ? config.minWallForCommitWithJokers : config.minWallForCommit
+  const wallOk = options.wallCount === undefined || options.wallCount >= wallFloor
   const deficitOk = (options.scoreDeficit ?? 0) >= config.minDeficitForCommit
   if (!wallOk && !deficitOk) return { route, actions, collapsed: false }
   const chaseWorth = routePayoff(route, options.basePoints) >= (options.immediateWinPayment ?? 0) * config.declineWinRatio
