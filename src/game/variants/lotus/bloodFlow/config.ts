@@ -1,6 +1,7 @@
 import type { PatternDefinition, PatternId } from '../patterns/types'
 import type { BloodFlowRuleConfig } from './types'
 import type { DefensePolicyConfig } from './defensePolicy'
+import { BLOOD_FLOW_BIG_HAND_ROUTE, type BigHandRouteConfig } from './bigHandRoute'
 
 function pattern(id: PatternId, label: string, weight: number, excludes: PatternId[] = []): PatternDefinition {
   return Object.freeze({ id, label, weight, excludes: Object.freeze(excludes) })
@@ -102,6 +103,8 @@ export interface BloodFlowAiConfig {
   readonly riskOffSuitFactor: number
   /** 兜/弃政策阈值（v3）。 */
   readonly defense: DefensePolicyConfig
+  /** 真·大牌路线（v4）：只影响 LLM 候选构造，不动引擎/普通 AI。 */
+  readonly bigHandRoute: BigHandRouteConfig
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
 }
@@ -120,8 +123,7 @@ export const BLOOD_FLOW_DEFENSE: Readonly<DefensePolicyConfig> = Object.freeze({
   foldDiscardTolerance: 0,
 })
 
-export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
-  strategy: 'ev',
+export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   minimumFirstPayment: 0,
   selfDrawWeight: 6,
   firstWinFloorEarly: 40,
@@ -141,7 +143,20 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
   riskFactorTier3: 32,
   riskOffSuitFactor: 0.5,
   defense: BLOOD_FLOW_DEFENSE,
+  bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE,
   llmEvFeatures: true,
+})
+
+/**
+ * **LLM 座位**使用的 AI 配置：开启"真·大牌路线"（候选层收窄）。
+ *
+ * 只影响 LLM 候选构造：路线成立时撤掉"胡"、吃碰杠，弃牌只剩不掉路线的牌。
+ * 普通 AI 座位不走这条路径（它们的决策来自 engineWorker/backends.bot，仍用 BLOOD_FLOW_AI），
+ * 所以打开这个开关**不会改变任何机器人行为**。要回退只需改成 BLOOD_FLOW_AI。
+ */
+export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
+  ...BLOOD_FLOW_AI,
+  bigHandRoute: Object.freeze({ ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }),
 })
 
 /** Shared by the local continuation and the existing DOM/3D director. */

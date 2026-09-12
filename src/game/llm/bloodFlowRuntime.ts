@@ -14,7 +14,7 @@ import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorServ
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
 import { bloodFlowAiActions, bloodFlowDefensePolicy, bloodFlowKnownWins, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
-import { BLOOD_FLOW_AI } from '../variants/lotus/bloodFlow/config'
+import { BLOOD_FLOW_AI, type BloodFlowAiConfig } from '../variants/lotus/bloodFlow/config'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
@@ -50,11 +50,17 @@ export function remoteVoiceIdentity(player: { style?: string; voiceKey?: string 
 export function bloodFlowDecisionBudget(provider: LlmProviderPreset, view: BloodFlowSeatView, now: number) {
   return configuredDecisionBudget(provider, (view.window?.deadlineAt ?? now) - now - 250)
 }
-export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, requestId: string, speechStyle?:LlmStyle, metadata:BloodFlowDecisionMetadata={}, decisionStyle:LlmStyle=speechStyle??'稳健') {
+export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, requestId: string, speechStyle?:LlmStyle, metadata:BloodFlowDecisionMetadata={}, decisionStyle:LlmStyle=speechStyle??'稳健', aiConfig:BloodFlowAiConfig=BLOOD_FLOW_AI) {
   const player = view.players[view.seat], visible = visibleTiles(view)
-  const {candidates,request}=buildBloodFlowDecisionInput(view,requestId,metadata)
+  const {candidates,request,bigHandRoute,collapsedByRoute}=buildBloodFlowDecisionInput(view,requestId,metadata,aiConfig)
   const state = {
-    ruleSummary:BLOOD_FLOW_PROMPT_RULES, publicState:request.state, engineSuggestion:request.engineSuggestion,
+    ruleSummary:collapsedByRoute
+      ? `${BLOOD_FLOW_PROMPT_RULES}已进入大牌路线（commitment）：引擎已决定放弃小胡继续做这条十六倍级牌型，候选里不会出现"胡"、吃碰杠，弃牌也只剩不掉路线的牌——你只需在这些牌里选"怎么打"，不要因为缺少选项而报错。`
+      : BLOOD_FLOW_PROMPT_RULES,
+    publicState:request.state, engineSuggestion:request.engineSuggestion,
+    bigHandRoute: bigHandRoute
+      ? { id: bigHandRoute.id, label: bigHandRoute.label, progress: Number(bigHandRoute.progress.toFixed(2)), need: bigHandRoute.need, committed: Boolean(collapsedByRoute) }
+      : null,
     ruleVersion: view.public.ruleVersion, requestId, authorityEpoch: view.authorityEpoch, roundId: view.roundId,
     windowId: view.window?.id, stateVersion: view.window?.version, seat: view.seat,
     hand: player.hand.map(tileName), melds: player.melds.map(m => ({ type: m.type, tiles: m.tiles.map(tileName) })),
@@ -98,7 +104,7 @@ async function loadWaits(view: BloodFlowSeatView, signal: AbortSignal): Promise<
   finally { signal.removeEventListener('abort', abort); worker.cancel() }
 }
 
-export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void } = {}) {
+export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; aiConfig?: BloodFlowAiConfig; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void } = {}) {
   const stats = reactive<LlmControllerStats>({ requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 })
   const jobs = new Map<string, { promise: Promise<BloodFlowAction | null>; controller: AbortController; current: () => boolean }>()
   const reasoning = new ConditionalReasoningCoordinator()
@@ -137,7 +143,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
       const task = (async () => {
         const waits = await (options.waits ?? loadWaits)(view, controller.signal)
         if (controller.signal.aborted || !isCurrent()) return null
-        const built = bloodFlowDecisionPrompt(view, waits, requestId, provider.style, options.metadata?.(), provider.style)
+        const built = bloodFlowDecisionPrompt(view, waits, requestId, provider.style, options.metadata?.(), provider.style, options.aiConfig)
         const remaining=Number.isFinite(budget)?Math.max(0,budget-(now()-startedAt)):Infinity
         if(remaining<=0||controller.signal.aborted||!isCurrent())return null
         attempted = true
