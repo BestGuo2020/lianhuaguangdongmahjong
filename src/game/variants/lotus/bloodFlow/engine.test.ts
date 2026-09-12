@@ -260,7 +260,7 @@ describe('E03 authority conservation and continuous rounds', () => {
     engine.submit(engine.command(0, { kind: 'discard', index: 13 }))
     for (const seat of [1, 2, 3] as const) expect(engine.submit(engine.command(seat, { kind: 'win' }))).toBe(true)
     expect(engine.archives).toHaveLength(1)
-    expect(engine.players.map(p => p.score)).toEqual([1000, 2220, 2600, 2180])
+    expect(engine.players.map(p => p.score)).toEqual([-200, 2540, 3280, 2380])
     expect(engine.seats.map(s => s.winCount)).toEqual([0, 1, 1, 1])
     engine.assertConservation()
   })

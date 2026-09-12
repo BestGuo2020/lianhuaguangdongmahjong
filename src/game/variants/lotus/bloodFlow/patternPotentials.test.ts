@@ -43,24 +43,24 @@ it('detects a lone-joker any-tile wait and prices the chain', () => {
 
 it('estimates income with event multipliers, hard-win and the per-payer cap', () => {
   const pure: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm8', 'm8', 'm9', 'm9']
-  // 清一色 4 倍 × 自摸 2 × 硬胡 2 = 16 倍 → 160/人，共 480。
+  // 清一色 8 倍 × 自摸 2 × 硬胡 2 = 32 倍 → 320/人，共 960。
   expect(estimateWinIncome(pure, NO_MELDS, [], 'self-draw')).toEqual({
-    paymentPerPayer: 160, total: 480, multiplier: 16, hardLikely: true,
+    paymentPerPayer: 320, total: 960, multiplier: 32, hardLikely: true,
   })
-  // 点炮：事件 ×1 → 8 倍 → 80/人，单家共 80。
-  expect(estimateWinIncome(pure, NO_MELDS, [], 'discard').total).toBe(80)
+  // 点炮：事件 ×1 → 16 倍 → 160/人，单家共 160。
+  expect(estimateWinIncome(pure, NO_MELDS, [], 'discard').total).toBe(160)
 
-  // 1112345678999 + m1 = 九莲宝灯 16 倍 × 自摸 2 × 硬胡 2 = 64 → 封顶 640/人。
+  // 1112345678999 + m1 = 九莲宝灯 32 倍 × 自摸 2 × 硬胡 2 = 128 → 正好封顶 1280/人。
   const nineGates: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm9', 'm9', 'm1']
   expect(estimateWinIncome(nineGates, NO_MELDS, [], 'self-draw')).toEqual({
-    paymentPerPayer: 640, total: 1920, multiplier: 64, hardLikely: true,
+    paymentPerPayer: 1280, total: 3840, multiplier: 128, hardLikely: true,
   })
 
-  // 含精牌 → 不硬胡：清一色 4 × 自摸 2 × 1 = 8 倍。
+  // 含精牌 → 不硬胡：清一色 8 × 自摸 2 × 1 = 16 倍。
   const withJoker: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm8', 'm8', 'm9', 'white']
   const jokerEstimate = estimateWinIncome(withJoker, NO_MELDS, ['white'], 'self-draw')
   expect(jokerEstimate.hardLikely).toBe(false)
-  expect(jokerEstimate.paymentPerPayer).toBe(80)
+  expect(jokerEstimate.paymentPerPayer).toBe(160)
 })
 
 it('keeps cached waits consistent with a direct call', () => {

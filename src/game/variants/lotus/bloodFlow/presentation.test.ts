@@ -66,7 +66,8 @@ it('grades by base pattern weight, permits an upgrade and coalesces only visual 
   expect(winTier(batch(1, ['pinghu']).winners[0])).toBe(0)
   const queue = new BloodFlowPresentationQueue()
   queue.enqueue(batch(1, ['all-honors']), 0)
-  expect(queue.next(0)?.duration).toBe(3180)
+  // 字一色 8 → 24 番（2026-09-12 重平衡）→ 档位 2 → 3，时长随之变成 3480。
+  expect(queue.next(0)?.duration).toBe(3480)
   queue.enqueue(batch(2), 500)
   expect(queue.next(500)?.duration).toBe(3480)
   const business = Array.from({ length: 20 }, (_, i) => batch(i + 3, ['mixed-suit'], (i % 4) as Seat))
