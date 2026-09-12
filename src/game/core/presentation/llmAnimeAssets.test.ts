@@ -79,9 +79,11 @@ describe('llmAnime 立绘与头像预取', () => {
     const second = preloadAnimeCharacterAssets()
     expect(second).toBe(first)
 
-    const started = requested.length
-    await Promise.all([first, second])
-    expect(requested.length).toBe(started)
+    await first
+    const afterFirst = requested.length
+    // 再次调用（同一 Promise）：不该产生新的图片请求
+    await preloadAnimeCharacterAssets()
+    expect(requested.length).toBe(afterFirst)
   })
 
   it('单张图失败不阻塞预取（首次使用时仍按需加载）', async () => {
@@ -116,5 +118,8 @@ describe('llmAnime 立绘与头像预取', () => {
       expect(materializedImageSrc(animeActionArtUrl(id, 'hu'))).toMatch(/^blob:card\//)
       expect(materializedImageSrc(animeCharacterAvatarUrl(id))).toBeNull()
     }
+    // 物化成功的立绘不再走 img 预取兜底；头像仍按普通预取进缓存。
+    expect(requested.filter((url) => /\/actions\//.test(url))).toEqual([])
+    for (const id of ANIME_CHARACTER_IDS) expect(requested).toContain(animeCharacterAvatarUrl(id))
   })
 })
