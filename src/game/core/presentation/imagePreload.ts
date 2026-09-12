@@ -79,3 +79,11 @@ export function materializedImageSrc(url: string | null | undefined): string | n
   if (!url) return null
   return materialized.get(url) ?? null
 }
+
+/**
+ * 渲染用图片来源：物化好就用本地 blob（不再随 HTTP 新鲜期做协商校验/重新下载），否则原样返回。
+ * 用于「元素会被反复重建」的渲染点：座位头像、结算名单头像、动作立绘。
+ */
+export function displayImageSrc(url: string | null | undefined): string {
+  return materializedImageSrc(url) ?? url ?? ''
+}

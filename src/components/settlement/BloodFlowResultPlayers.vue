@@ -5,13 +5,14 @@ import type { BloodFlowRoundResult } from '../../game/variants/lotus/bloodFlow/t
 import type { TableThemeName } from '../table/three/tableTheme'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
+import { displayImageSrc } from '../../game/core/presentation/imagePreload'
 const props = defineProps<{ result: BloodFlowRoundResult; players: GamePlayer[]; localSeat: number; themeName: TableThemeName; final?: boolean;
   bubbles?: Record<number, { text: string; id: number }> }>()
 const entries = computed(() => props.players.map(p => ({ ...p, total: props.result.endingScores[p.seat],
   net: props.result.endingScores[p.seat] - props.result.openingScores[p.seat], rank: props.result.ranks[p.seat] }))
   .sort((a,b) => props.final ? a.rank-b.rank || a.seat-b.seat : b.net-a.net || a.seat-b.seat))
 const signed = (n: number) => `${n>0?'+':''}${n}`
-const avatar = (p: GamePlayer) => props.themeName === 'llmAnime' ? animeAvatarForPlayer(p) : p.avatar || defaultAvatarForSeat(p.seat)
+const avatar = (p: GamePlayer) => displayImageSrc(props.themeName === 'llmAnime' ? animeAvatarForPlayer(p) : p.avatar || defaultAvatarForSeat(p.seat))
 function fallback(event: Event, seat: number) { const img=event.target as HTMLImageElement; img.onerror=null; img.src=defaultAvatarForSeat(seat) }
 </script>
 <template>

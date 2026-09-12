@@ -8,6 +8,7 @@ import type { GamePlayer, TileType } from '../../game/core/contracts/types'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { TableThemeName } from '../table/three/tableTheme'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
+import { displayImageSrc } from '../../game/core/presentation/imagePreload'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 import {
   resolveRoundResultPresentation,
@@ -55,14 +56,15 @@ function displayedAvatar(entry?: {
   isLlm?: boolean
 }) {
   if (!entry?.avatar) return ''
-  return props.themeName === 'llmAnime'
+  // 结算名单每局重建：已物化的头像用本地 blob，避免每次重建都做一次协商校验（实测 0.5~1.9s）。
+  return displayImageSrc(props.themeName === 'llmAnime'
     ? animeAvatarForPlayer({
       avatar: entry.avatar,
       characterId: entry.characterId,
       playerKind: entry.playerKind,
       isLlm: entry.isLlm,
     })
-    : entry?.avatar
+    : entry.avatar)
 }
 
 function animeEntryStyle(entry?: { characterId?: string }) {

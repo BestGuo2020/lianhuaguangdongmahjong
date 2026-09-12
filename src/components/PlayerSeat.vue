@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { defaultAvatarForSeat } from '../game/core/presentation/avatar'
+import { displayImageSrc } from '../game/core/presentation/imagePreload'
 import type { GamePlayer } from '../game/core/contracts/types'
 import type { TableThemeName } from './table/three/tableTheme'
 import { animeCharacterAccent } from '../game/core/presentation/animeCharacterPalette'
@@ -22,14 +23,15 @@ const props = withDefaults(defineProps<{
 }>(), { active: false, actionActive: false, scoreDelta: 0, scoreFlowId: 0, dealer: false, avatarOverride: undefined, bubble: null })
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
-const avatarSrc = ref(props.avatarOverride || props.player.avatar)
+// 已物化的头像用本地 blob（座位会随快照重建，避免每次重建都做一次协商校验）。
+const avatarSrc = ref(displayImageSrc(props.avatarOverride || props.player.avatar))
 watch(() => [props.avatarOverride, props.player.avatar], () => {
-  avatarSrc.value = props.avatarOverride || props.player.avatar
+  avatarSrc.value = displayImageSrc(props.avatarOverride || props.player.avatar)
 })
 function onAvatarError() {
-  avatarSrc.value = props.avatarOverride && avatarSrc.value !== props.player.avatar
+  avatarSrc.value = displayImageSrc(props.avatarOverride && avatarSrc.value !== props.player.avatar
     ? props.player.avatar
-    : defaultAvatarForSeat(props.player.seat)
+    : defaultAvatarForSeat(props.player.seat))
 }
 const animeStyle = computed(() => props.themeName === 'llmAnime'
   ? { '--anime-accent': animeCharacterAccent(props.player.characterId) }
