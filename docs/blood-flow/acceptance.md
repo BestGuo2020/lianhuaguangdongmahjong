@@ -57,6 +57,14 @@
 
 **测试**：前端新增 `src/game/variants/lotus/bloodFlow/kongOverPeng.test.ts`（4 项：三张→只有直杠没有碰、本地 AI 仍开杠、两张→碰保留、LLM 载荷里无"碰"候选）；后端 `tests/test_blood_flow_defense.py` 新增 3 项同源断言。前端全量 **1344 passed / 2 skipped**、后端受影响 **200 passed**、`vue-tsc` 通过。
 
+**发布与线上验收（修复包）**
+
+- 提交：master `0dc916e`、vibehub `ce5ea35`（sync）、后端 main `cb437ff`，均已推送。
+- `pnpm deploy:vibehub`（vibehub HEAD `ce5ea35`）→ **部署成功**：上传 5 个文件（`assets/index-jgKpE4FL.js`、`assets/{MahjongTable3D-*,RulesPanel-D4wiIJrh,engineWorker-C5q0Cu0F}.js`、`index.html`）。
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 大模型机器人）`（本修复的关键路径，LLM 座位）→ **1 passed（7.5m）**，房间 `4A6TFR`：东1～东4 打满，终局 大肥鱼 3010 / 大肥鱼 2940 / 血流验收房主 1040 / 血流验收客人 1010。
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 普通机器人）` → **1 passed（5.3m）**。
+- 取证：`tmp/bf-online-evidence/` 更新。
+
 ## 2026-09-12（同日第二次发布）：按实测校准"锁手对手的逐张赔付"
 
 用户提出"只要少赔就行，哪怕对手是任意听，点炮点赔得少的也可以"。据此实测（`evaluateWin`，`concealed` 排除胡的那张、13 张；四种冻结手牌逐张扫"我打这张他要付多少"）：
