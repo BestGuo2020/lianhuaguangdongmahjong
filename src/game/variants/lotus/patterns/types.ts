@@ -8,9 +8,9 @@ export type RegularPatternId =
   | 'three-concealed-triplets' | 'four-concealed-triplets'
   | 'all-honors' | 'three-kongs' | 'four-kongs'
 
-export type SpecialPatternId = 'pinghu' | 'sevenPairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
+export type SpecialPatternId = 'pinghu' | 'sevenPairs' | 'luxury-seven-pairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
 export type PatternId = RegularPatternId | SpecialPatternId
-export type HandShape = 'standard' | Exclude<SpecialPatternId, 'pinghu'>
+export type HandShape = 'standard' | Exclude<SpecialPatternId, 'pinghu' | 'luxury-seven-pairs'>
 
 export interface PatternDefinition {
   readonly id: PatternId

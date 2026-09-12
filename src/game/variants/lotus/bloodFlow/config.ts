@@ -7,29 +7,42 @@ function pattern(id: PatternId, label: string, weight: number, excludes: Pattern
   return Object.freeze({ id, label, weight, excludes: Object.freeze(excludes) })
 }
 
-/** The only blood-flow weights. Old rulesets deliberately do not import this config. */
+/**
+ * 血流番值表（2026-09-12 重平衡：对齐广东麻将近似的相对比例）。
+ *
+ * 起因：实测 20 局 727 次胡牌里 4 番档 95% 集中在「七星十三烂 + 三暗刻」，8 番档只有四暗刻 3 次，
+ * 清一色/七对因权重过低（4 / 2）一次都没做成——大牌番过于集中。参照广东麻将番型表
+ * （大三元/大四喜/十三幺 88、字一色/清幺九 64、小四喜/小三元 48、豪华七对/混幺九 32、清一色/七小对 16、
+ * 混一色/碰碰和 8、鸡胡 2）把相对比例拉开，并同步把单家封顶从 64 提到 128（否则顶端会被封顶吃掉，
+ * 例如十三幺硬胡自摸 16×2×2 = 64 正好撞顶）。
+ */
 const patterns = Object.freeze({
-  'pure-suit': pattern('pure-suit', '清一色', 4),
-  'mixed-suit': pattern('mixed-suit', '混一色', 2),
-  'all-triplets': pattern('all-triplets', '碰碰胡', 2),
-  'little-three-dragons': pattern('little-three-dragons', '小三元', 4),
-  'big-three-dragons': pattern('big-three-dragons', '大三元', 8),
-  'little-four-winds': pattern('little-four-winds', '小四喜', 8),
-  'big-four-winds': pattern('big-four-winds', '大四喜', 16, ['all-triplets']),
-  'nine-gates': pattern('nine-gates', '九莲宝灯', 16, ['pure-suit']),
-  'all-green': pattern('all-green', '绿一色', 16),
-  'pure-terminals': pattern('pure-terminals', '清幺九', 16, ['all-triplets']),
-  'mixed-terminals': pattern('mixed-terminals', '混幺九', 4, ['all-triplets']),
-  'three-concealed-triplets': pattern('three-concealed-triplets', '三暗刻', 4),
-  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 8, ['three-concealed-triplets', 'all-triplets']),
-  'all-honors': pattern('all-honors', '字一色', 8),
-  'three-kongs': pattern('three-kongs', '三杠', 8),
-  'four-kongs': pattern('four-kongs', '四杠', 16, ['three-kongs', 'all-triplets']),
-  pinghu: pattern('pinghu', '平胡', 1),
-  sevenPairs: pattern('sevenPairs', '七对', 2),
+  // 顶端「彩票档」：实测频次≈0（大三元/大四喜/字一色/清幺九/四杠/九莲 20 局 0 次），做成即巨分。
+  'big-three-dragons': pattern('big-three-dragons', '大三元', 32),
+  'big-four-winds': pattern('big-four-winds', '大四喜', 32, ['all-triplets']),
+  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 32),
+  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit']),
+  'four-kongs': pattern('four-kongs', '四杠', 32, ['three-kongs', 'all-triplets']),
+  'all-honors': pattern('all-honors', '字一色', 24),
+  'pure-terminals': pattern('pure-terminals', '清幺九', 24, ['all-triplets']),
+  'all-green': pattern('all-green', '绿一色', 24),
+  // 高档：小三元/小四喜/四暗刻/豪华七对（实测少见，做成一次就是大分）
+  'little-three-dragons': pattern('little-three-dragons', '小三元', 16),
+  'little-four-winds': pattern('little-four-winds', '小四喜', 16),
+  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets']),
+  'luxury-seven-pairs': pattern('luxury-seven-pairs', '豪华七对', 16, ['sevenPairs']),
+  // 中档：真正会被做出来的目标（清一色从 4 → 8 让 AI 愿意追；七对从 2 → 6 匹配它 29% 的出现率）
+  'mixed-terminals': pattern('mixed-terminals', '混幺九', 12, ['all-triplets']),
+  'three-kongs': pattern('three-kongs', '三杠', 12),
+  'pure-suit': pattern('pure-suit', '清一色', 8),
+  sevenPairs: pattern('sevenPairs', '七对', 6),
+  'three-concealed-triplets': pattern('three-concealed-triplets', '三暗刻', 6),
+  qiXing: pattern('qiXing', '七星十三烂', 6),
+  // 基础档
+  'mixed-suit': pattern('mixed-suit', '混一色', 4),
+  'all-triplets': pattern('all-triplets', '碰碰胡', 4),
   shiSanLan: pattern('shiSanLan', '十三烂', 2),
-  qiXing: pattern('qiXing', '七星十三烂', 4),
-  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 16),
+  pinghu: pattern('pinghu', '平胡', 1),
 })
 
 export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
@@ -38,7 +51,8 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   label: '莲花麻将·血流',
   basePoints: 10,
   initialScore: 2000,
-  maxMultiplierPerPayer: 64,
+  /** 单家封顶。2026-09-12 从 64 提到 128：番值表拉开后顶端（十三幺/大三元 32 番）会被 64 吃掉。 */
+  maxMultiplierPerPayer: 128,
   hardWinMultiplier: 2,
   patterns,
   eventMultipliers: Object.freeze({ discard: 1, 'self-draw': 2, 'robbed-kong': 2, 'kong-bloom': 4 }),

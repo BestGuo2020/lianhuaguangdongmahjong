@@ -12,6 +12,9 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   const tiles = hand.groups.flatMap(g => [...g.tiles])
   const suits = new Set(tiles.filter(t => !isHonor(t)).map(t => t[0]))
   const honors = tiles.some(isHonor)
+  // 豪华七对：七对里含自然四张相同（`natural` 表示每张实体牌都按本张使用，所以四张同牌即自然四张）。
+  if (hand.shape === 'sevenPairs' && hand.natural
+    && tiles.some(tile => tiles.filter(other => other === tile).length >= 4)) result.push('luxury-seven-pairs')
   if (suits.size === 1) result.push(honors ? 'mixed-suit' : 'pure-suit')
   if (tiles.every(isHonor)) result.push('all-honors')
   if (tiles.every(t => ['s2', 's3', 's4', 's6', 's8', 'green'].includes(t))) result.push('all-green')
