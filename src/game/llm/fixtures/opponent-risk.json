@@ -74,7 +74,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": null,
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         },
         {
           "tier": 0,
@@ -84,7 +85,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": null,
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         },
         {
           "tier": 0,
@@ -94,7 +96,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": null,
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -175,7 +178,8 @@
           "locked": true,
           "avoidsHonorTerminals": false,
           "axisSource": "inferred",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         },
         {
           "tier": 0,
@@ -185,7 +189,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": null,
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -269,7 +274,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": null,
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -343,7 +349,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": "inferred",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -394,7 +401,8 @@
           "locked": false,
           "avoidsHonorTerminals": false,
           "axisSource": "inferred",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -450,7 +458,8 @@
           "locked": false,
           "avoidsHonorTerminals": true,
           "axisSource": "inferred",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -518,7 +527,8 @@
           "locked": false,
           "avoidsHonorTerminals": true,
           "axisSource": "inferred",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -582,7 +592,8 @@
           "locked": true,
           "avoidsHonorTerminals": true,
           "axisSource": "known",
-          "honorsInFlush": false
+          "honorsInFlush": false,
+          "honorEmphasis": false
         }
       ],
       "expectedExposure": {
@@ -605,6 +616,78 @@
           "signals": [
             "已胡十三幺",
             "已胡3次仍听"
+          ]
+        }
+      }
+    },
+    {
+      "id": "known-big-three-dragons",
+      "note": "已公开番型：大三元（字牌刻子轴）——字牌照价、普通数牌便宜，锁手后仍成立",
+      "wallCount": 40,
+      "visibleTiles": [],
+      "opponents": [
+        {
+          "seat": 2,
+          "discards": [
+            "m1",
+            "p9",
+            "m4",
+            "m5",
+            "p4",
+            "p5",
+            "s4",
+            "s5",
+            "east",
+            "south"
+          ],
+          "melds": [],
+          "winCount": 1,
+          "locked": true,
+          "knownWins": [
+            {
+              "id": "big-three-dragons",
+              "label": "大三元",
+              "multiplier": 8,
+              "tile": "red"
+            }
+          ]
+        }
+      ],
+      "expectedProfiles": [
+        {
+          "tier": 2,
+          "factor": 16,
+          "signals": [
+            "已胡大三元",
+            "已胡1次仍听"
+          ],
+          "suspectSuit": null,
+          "locked": true,
+          "avoidsHonorTerminals": false,
+          "axisSource": "known",
+          "honorsInFlush": false,
+          "honorEmphasis": true
+        }
+      ],
+      "expectedExposure": {
+        "east": 160,
+        "m5": 80
+      },
+      "expectedFeature": {
+        "east": {
+          "tier": "中",
+          "payment": 160,
+          "signals": [
+            "已胡大三元",
+            "已胡1次仍听"
+          ]
+        },
+        "m5": {
+          "tier": "中",
+          "payment": 80,
+          "signals": [
+            "已胡大三元",
+            "已胡1次仍听"
           ]
         }
       }

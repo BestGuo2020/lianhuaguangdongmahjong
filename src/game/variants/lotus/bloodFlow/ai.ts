@@ -5,19 +5,55 @@ import type { BloodFlowAction } from './state'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import type { BloodFlowAiConfig } from './config'
-import { BLOOD_FLOW_AI } from './config'
-import { patternPotentialEv } from './patternPotentials'
+import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
+import { patternPotentialEv, patternPotentials, waitingTilesCached } from './patternPotentials'
 import { bloodFlowEvContext } from './evContext'
 import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
+import { decideDefensePolicy, ownHandFacts, type DefensePolicyConfig } from './defensePolicy'
+import { evaluateHandProgress } from '../../../shared/ai/handProgress'
 
 export { bloodFlowEvContext, firstWinFloor } from './evContext'
 
 /** Only adapt blood-flow legal/locked actions. Tile strategy belongs to lotusAi. */
-export function bloodFlowAiActions(view: BloodFlowSeatView): readonly BloodFlowAction[] {
+export function bloodFlowAiActions(
+  view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI,
+  /** 调用方已算过的政策（避免一次决策里重复算全手牌型/向听）。 */
+  defense?: ReturnType<typeof bloodFlowDefensePolicy>,
+): readonly BloodFlowAction[] {
   if (view.public.seats[view.seat].locked) return view.ownActions
   const indices = view.ownActions.filter(a => a.kind === 'discard').map(a => a.index)
   const allowed = new Set(lotusDiscardCandidates(view.players[view.seat].hand, view.jokers, indices).map(c => c.index))
-  return view.ownActions.filter(a => a.kind !== 'discard' || allowed.has(a.index))
+  const legal = view.ownActions.filter(a => a.kind !== 'discard' || allowed.has(a.index))
+  return applyDefenseConstraint(view, legal, config, defense)
+}
+
+const CLAIM_KINDS: ReadonlySet<string> = new Set(['peng', 'chi', 'gang', 'added-kong', 'concealed-kong', 'wind-kong'])
+
+/**
+ * 兜牌模式的硬约束（v3，用户定稿方案 c）：候选层直接收窄，引擎与 LLM 共用同一份候选——
+ *   ① 撤掉全部吃碰杠候选（不给自己制造"必须打危险张"的局面）；
+ *   ② 弃牌候选只保留放炮成本最小档的那些（让模型只能在安全张里挑怎么打）；
+ *   ③ 两个出口不受限：能打一张即精吊任意听、或我方上限不低于对手时，政策本身就是 push，不触发约束。
+ * 胡永远保留（不会因为兜牌而放过已经能胡的牌）。
+ */
+function applyDefenseConstraint(
+  view: BloodFlowSeatView, actions: readonly BloodFlowAction[], config: BloodFlowAiConfig,
+  precomputed?: ReturnType<typeof bloodFlowDefensePolicy>,
+): readonly BloodFlowAction[] {
+  if (config.defense.mode === 'off') return actions
+  const defense = precomputed ?? bloodFlowDefensePolicy(view, config)
+  if (defense.result.mode !== 'fold') return actions
+  const keepWinPass = (action: BloodFlowAction) => action.kind === 'win' || action.kind === 'pass'
+  const discards = actions.filter((action): action is Extract<BloodFlowAction, { kind: 'discard' }> => action.kind === 'discard')
+  if (!discards.length) return actions.filter(action => keepWinPass(action))
+  const exposure = bloodFlowSafetyExposure(view, config)
+  const hand = view.players[view.seat].hand
+  const costs = discards.map(action => exposure(hand[action.index]))
+  const floor = Math.min(...costs)
+  const safe = new Set(discards
+    .filter((_, position) => costs[position] <= floor + config.defense.foldDiscardTolerance)
+    .map(action => action.index))
+  return actions.filter(action => (action.kind === 'discard' ? safe.has(action.index) : keepWinPass(action)))
 }
 
 /** 旧策略入口（legacy）：见胡就胡 + 固定首胡门槛，行为保持不变。 */
@@ -129,6 +165,44 @@ export function bloodFlowSafetyExposure(
   return opponentPatternExposure(profiles, visible, bloodFlowRiskTuning(config))
 }
 
+/** 每座位的公开番型（供 prompt、政策与后端镜像共用）。 */
+export function bloodFlowKnownWins(view: BloodFlowSeatView): Array<{ seat: number; patterns: Array<{ label: string; multiplier: number }> }> {
+  return view.players
+    .map(player => ({
+      seat: player.seat,
+      patterns: knownWinsOf(view, player.seat).map(win => ({ label: win.label, multiplier: win.multiplier })),
+    }))
+    .filter(entry => entry.patterns.length > 0)
+}
+
+/**
+ * 兜/弃政策（v3）：对手已做成大牌时本家"继续走"还是"弃胡兜安全张"。
+ * 规则见 defensePolicy.ts 顶部注释（用户定稿的两条兜牌法 + 一条赌的出口）。
+ */
+export function bloodFlowDefensePolicy(view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI) {
+  const player = view.players[view.seat]
+  const visible = visibleTiles(view)
+  const wildcards: TileType[] = [...new Set<TileType>([...view.jokers, 'white'])]
+  const profiles = bloodFlowOpponentRisk(view, config)
+  const own = ownHandFacts(player.hand, player.melds, view.jokers, visible, {
+    config: config.defense,
+    directions: patternPotentials(player.hand, player.melds, view.jokers)
+      .map(direction => ({ weight: direction.weight, progress: direction.progress, label: BLOOD_FLOW_CONFIG.patterns[direction.id].label })),
+  })
+  const opponents = view.players
+    .filter(other => other.seat !== view.seat)
+    .map(other => {
+      const profile = profiles.find(item => item.seat === other.seat)
+      return {
+        tier: profile?.tier ?? 0,
+        locked: view.public.seats[other.seat]?.locked ?? false,
+        knownMultiplier: knownWinsOf(view, other.seat).reduce((best, win) => Math.max(best, win.multiplier), 0),
+        signals: profile?.signals ?? [],
+      }
+    })
+  return { own, result: decideDefensePolicy({ own, opponents, config: config.defense }) }
+}
+
 interface EvExtras {
   patternBonus: (hand: TileType[], melds: Meld[]) => number
   safetyExposure: (tile: TileType) => number
@@ -141,7 +215,9 @@ interface EvExtras {
  */
 export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI): BloodFlowAction | null {
   const player = view.players[view.seat]
-  const moves = bloodFlowAiActions(view)
+  // 政策一次决策只算一遍；候选构造与兜牌分支共用（硬约束下候选必须用同一份 config）。
+  const defense = config.defense.mode === 'off' ? undefined : bloodFlowDefensePolicy(view, config)
+  const moves = bloodFlowAiActions(view, config, defense)
   if (!moves.length) return null
   if (moves.length === 1) return moves[0]
   const locked = view.public.seats[view.seat].locked
@@ -193,7 +269,6 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
 
   if (win) {
     const ev = bloodFlowEvContext(view, config)
-
     // 自摸窗口：改张优先于门槛，再决定胡或继续发育。
     if (view.window?.kind === 'turn' && view.window.source.kind === 'draw' && player.drawnTileIndex >= 0) {
       const best = ev.reformCandidates.find(candidate => discards.some(d => d.index === candidate.index))
@@ -221,6 +296,20 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
     return win
   }
 
-  if (discards.length) return decideDiscard()
+  if (discards.length) {
+    // 兜/弃政策（v3）：对手已做成十六倍级大牌、本家未听牌且可达听口过窄 → 弃胡，改打最小赔付张。
+    // 有胡的窗口在前面就返回了，所以这里不会"放过已经能胡的牌"。
+    if (defense?.result.mode === 'fold') {
+      const exposure = extras.safetyExposure
+      return [...discards]
+        .sort((a, b) => exposure(hand[(a as { index: number }).index]) - exposure(hand[(b as { index: number }).index])
+          || (a as { index: number }).index - (b as { index: number }).index)[0]
+    }
+    return decideDiscard()
+  }
+  // 兜牌模式下停吃碰杠（不给自己制造必须打危险张的局面）。
+  if (defense?.result.mode === 'fold') {
+    return moves.find(a => a.kind === 'pass') ?? moves[0]
+  }
   return decideClaimTurn()
 }

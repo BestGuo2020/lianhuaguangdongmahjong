@@ -1,5 +1,6 @@
 import type { PatternDefinition, PatternId } from '../patterns/types'
 import type { BloodFlowRuleConfig } from './types'
+import type { DefensePolicyConfig } from './defensePolicy'
 
 function pattern(id: PatternId, label: string, weight: number, excludes: PatternId[] = []): PatternDefinition {
   return Object.freeze({ id, label, weight, excludes: Object.freeze(excludes) })
@@ -99,9 +100,25 @@ export interface BloodFlowAiConfig {
   readonly riskFactorTier3: number
   /** 染手（花色集中）嫌疑对手：非嫌疑花色牌的系数。 */
   readonly riskOffSuitFactor: number
+  /** 兜/弃政策阈值（v3）。 */
+  readonly defense: DefensePolicyConfig
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
 }
+
+/** 兜/弃政策默认值（v3；规则见 defensePolicy.ts 顶部注释）。 */
+export const BLOOD_FLOW_DEFENSE: Readonly<DefensePolicyConfig> = Object.freeze({
+  /** 触发"兜"的最低对手威胁档（3 = 十六倍级 / 门清大牌）。 */
+  foldThreatTier: 3,
+  /** 我方上限认定：番型方向接近度 ≥ 该值才算"真有机会做成"。 */
+  ceilingProgress: 0.35,
+  /** 我方上限认定：该方向的番型倍率下限（与对手对比用）。 */
+  ceilingWeightFloor: 4,
+  /** 兜牌硬约束：候选层撤碰吃杠 + 只留安全档（engine 与 LLM 共用同一份候选）。 */
+  mode: 'hard',
+  /** 兜牌时允许的弃牌安全档容差（0 = 只留放炮成本最小档）。 */
+  foldDiscardTolerance: 0,
+})
 
 export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
   strategy: 'ev',
@@ -123,6 +140,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({
   riskFactorTier2: 16,
   riskFactorTier3: 32,
   riskOffSuitFactor: 0.5,
+  defense: BLOOD_FLOW_DEFENSE,
   llmEvFeatures: true,
 })
 

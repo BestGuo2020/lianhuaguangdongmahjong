@@ -13,7 +13,8 @@ import type { Seat } from '../variants/lotus/bloodFlow/types'
 import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorService'
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
-import { bloodFlowAiActions, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
+import { bloodFlowAiActions, bloodFlowDefensePolicy, bloodFlowKnownWins, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
+import { BLOOD_FLOW_AI } from '../variants/lotus/bloodFlow/config'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
@@ -65,6 +66,16 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
     opponentRisk: bloodFlowOpponentRisk(view)
       .filter(profile => profile.tier > 0)
       .map(profile => ({ seat: profile.seat, tier: profile.tier, signals: profile.signals })),
+    /** 对手已公开的番型（谁已胡过十三幺/九莲等，玩家视角本就公开）。 */
+    opponentPatterns: bloodFlowKnownWins(view),
+    /** 本地兜/弃政策结论：mode=fold 时应只打最安全张并不再吃碰杠。 */
+    defense: (() => { const { result, own } = bloodFlowDefensePolicy(view); return {
+      mode: result.mode, reasons: result.reasons,
+      ownShanten: own.canTenpai ? 0 : 1, ownCanTenpai: own.canTenpai, ownBestWait: own.bestWaitRemaining,
+      ownAnyWaitReachable: own.anyWaitReachable, ownCeiling: own.ceilingMultiplier,
+      /** true = 候选已在引擎侧收窄（吃碰杠已撤、弃牌只剩安全档），模型只能在此范围内选择。 */
+      restricted: result.mode === 'fold' && BLOOD_FLOW_AI.defense.mode === 'hard',
+    } })(),
     currentWin: view.ownScore, lockImpact: '首次胡后保留当前暗手和副露，只能对新摸牌胡、过或摸切，不能再改手或吃碰杠。已胡仍须付款。',
     ...(speechStyle?{speakingStyle:speechStyle}:{}),
     waits: waits.map(w => ({ tile: tileName(w.tile), remaining: Math.max(0, 4 - visible.filter(t => t === w.tile).length),
