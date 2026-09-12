@@ -1,6 +1,34 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-12。本页维护已有证据和待取得的证据；最新补修为「门清大牌读牌 + 损失最小化（v2）上线 + 两场线上整场验收」。此前补修为「对手大牌风险定价（档位版）上线 + 两场线上整场验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-12。本页维护已有证据和待取得的证据；最新补修为「v3 公开番型 + 赌/弃政策（硬约束）上线 + 两场线上整场验收」。此前补修为「门清大牌读牌 + 损失最小化（v2）上线 + 两场线上整场验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-12：v3 公开番型 + 赌/弃政策（硬约束）上线与两场线上整场通过
+
+问题：**"谁已经胡过什么番型"本来就公开**（`PublicWinScore.items` / `patternMultiplier` / 公共批次 `source.tile`），而且血流首胡锁手后那副牌不再改变——这比读牌河确定得多，此前 AI 完全没消费。本批把它接进决策视野，并按用户定稿落地兜/弃政策与**方案 c 硬约束**。提交：master `6b36e5c`（+ 本文档）、vibehub `f14ab53`（`pnpm sync:vibehub`）；前端全量 **1339 passed / 2 skipped**、`vue-tsc` 通过。
+
+- **威胁档 = max(牌河读牌, 已公开番型)**：番型倍率 ≥4/≥8/≥16 → tier 下限 1/2/3；平胡一类弱番不设档不设轴。
+- **按番型定危险轴**（`axisSource='known'` 对锁手家同样成立；牌河推断的 `'inferred'` 轴对锁手家仍禁用，因为锁手可能是单吊任意听）：十三幺/字一色/清幺九/混幺九 → 字牌幺九轴；清一色/九莲/绿一色 → 花色轴（**哪一门取自公开的胡牌牌面**）；混一色 → 字牌算本门；大三元/小四喜/字一色 → 字牌刻子轴（非字牌 ×0.5）。
+- **兜/弃政策**：① 打一张即精吊任意听 → 继续走（锁手家只有"胡/摸切"两条路 ⇒ 任意听时永不弃牌 = 100% 不再点炮）；② 未听牌（打任何一张都听不上）+ 对手十六倍级 → 弃胡兜安全张；③ 我方上限 ≥ 对手 → 可以赌。
+- **方案 c 硬约束**：兜牌时**候选层**收窄（`bloodFlowAiActions` 单一事实来源，引擎与 LLM 共用）：撤掉全部吃碰杠、弃牌只留最小赔付档、胡永远保留、两个出口不受限；`defense.mode='off'` 可回退。
+- **LLM prompt**：新增 `opponentPatterns` 与 `defense{mode,reasons,ownCanTenpai,ownBestWait,ownAnyWaitReachable,ownCeiling,restricted}`，规则摘要说明 restricted 时吃碰杠不会出现。
+- **修两个真问题**：① `decideBloodFlowActionEv` 未把自己的 config 传给 `bloodFlowAiActions` → `'off'` 对照臂被默认政策过滤、污染对照实验；② 硬约束最初对每张弃牌跑一次完整向听搜索 → 12 种子整场 50s → **123s（超时）**，改用"打任意一张是否有听口"判 `canTenpai` 后回到 **57s**。
+- **实测边界（避免误判效果）**：兜牌在**弃牌轴**上与"只按 EV"选到同价张（差 0 点，因为 v1/v2 定价早已在 netScore 里）；硬约束的真正差别在**候选空间**（LLM 原本能挑一个引擎会拒绝的碰，现在该候选不存在）；只有牌河推断时锁手家全牌同价（320）⇒ 公开番型才是让兜牌有分辨力的前提。
+
+**发布（vibehub 分支）**
+
+- vibehub 工作区（HEAD `f14ab53`）`pnpm deploy:vibehub` → **部署成功**：找到 237 个文件、跳过 231 个未变化、删除 5 个旧包（`assets/{MahjongTable3D-Cxiwj1m7,RulesPanel-UHQk8ZGg,engineWorker-CBc1DJJh,index-BB2RPeYn,worker-4T7M1BWE}.js`）、上传 6 个：`assets/index-Bj4Yx-I1.js`、`assets/{MahjongTable3D-FeOwIrof,RulesPanel-CkwALfZd,engineWorker-xoAfz0Xk,worker-j_l9jm1z}.js` 与 `index.html`。线上地址 <https://vibe.lumigrav.space/play/M-USGs_ieQksAeOJYtHF4>。
+- 产物核对：本地 `dist/assets/index-Bj4Yx-I1.js` 可检索到 v3 的 `下游收窄`（规则摘要）与 `ownAnyWaitReachable`（payload 字段），`engineWorker-xoAfz0Xk.js` 含 v2 的 `牌河零字牌幺九`。
+
+**线上整场验收（2026-09-12，v3 包，AGENTS 指定的两条血流用例）**
+
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 普通机器人）` → **1 passed（5.3m）**，房间 `VBHWZ8`：东1～东4 打满，终局 玩家3 5690 / 玩家4 1290 / 血流验收房主 530 / 血流验收客人 490。
+- `线上两账号完成莲花麻将·血流东风场（2 真人 + 2 大模型机器人）` → **1 passed（6.1m）**，房间 `U3DGVW`：东1～东4 打满（这条才走到 v3 的 prompt 新字段与硬约束候选），终局 大肥鱼 3530 / 大肥鱼 2010 / 血流验收房主 1260 / 血流验收客人 1200。
+- 取证：`tmp/bf-online-evidence/` 新增 `bf-plain-ai-*` 与 `bf-llm-ai-*` 截图（18:12～18:24）。
+
+**未验证 / 遗留**
+
+- WS 联机（master + 后端）的验收在**本地**执行（P2P 才需要上线）：命令与用例见下一节；本轮 v3 的 WS 本地复跑安排在后端镜像落地后进行（Python 侧 v3 镜像进行中）。
+- 兜牌政策的效果证据以**微场景 + 决策级**为准（见上表）；端局聚合指标在数十局量级没有灵敏度，不据此宣称"更少点炮"。
 
 ## 2026-09-12：门清大牌读牌 + 损失最小化（v2）上线与两场线上整场通过
 
