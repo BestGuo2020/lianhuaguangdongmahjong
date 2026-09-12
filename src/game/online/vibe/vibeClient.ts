@@ -71,8 +71,8 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
   }
   initPromise = (async () => {
     // 本地开发默认用 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可联调全部
-    // 联机逻辑；VITE_VIBE_REAL=1 时改走真 SDK（真 WebRTC + 真中继 + 匿名），用于本地复现
-    // 传输层缺陷。生产构建不受影响（DEV=false 恒走真实 SDK）。
+    // 联机逻辑；VITE_VIBE_REAL=1 时改走真 SDK（真 WebRTC + 真中继），**但房间接口要求登录凭证**，
+    // 匿名进房在 SDK 层就被拒绝（见上方 useRealVibeSdk 注释）。生产构建不受影响（DEV=false 恒走真实 SDK）。
     if (import.meta.env.DEV && !useRealVibeSdk) {
       const { createMockVibeClient } = await import('./mockVibeHub')
       const mock = createMockVibeClient()
