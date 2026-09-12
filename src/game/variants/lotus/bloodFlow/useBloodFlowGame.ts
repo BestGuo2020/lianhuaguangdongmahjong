@@ -17,7 +17,7 @@ import { isLocalLlmSeat } from '../../../core/presentation/localLlmVoiceRegistry
 import { activeBgmTrackPort } from '../../../core/presentation/useAudio'
 import type { AnimeFixedTtsExecutor } from '../../../llm/animeFixedTtsExecutor'
 import type { PlayerSeed } from '../../../shared/runtime/localOpening'
-import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from './config'
+import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_LLM_AI, BLOOD_FLOW_TIMING } from './config'
 import { createBloodFlowWorkerClient } from './workerClient'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
@@ -94,6 +94,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const thinkingIds = new Map<string,number>()
   const thinkingSequences = new Map<number,number>()
   const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade',
+    // LLM 座位启用"真·大牌路线"（候选层收窄）；普通 AI 座位不走这条路径，行为不变。
+    aiConfig: BLOOD_FLOW_LLM_AI,
     metadata:()=>({roundIndex:state.round.value,dealerIndex:state.dealer.value}),
     onStatus:(absoluteSeat,active,text,requestId,style,voiceKey)=>{
       if(!bloodFlowReactionsAllowed(options.getThemeName?.()??'jade'))return

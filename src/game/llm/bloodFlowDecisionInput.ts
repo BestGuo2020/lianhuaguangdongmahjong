@@ -8,6 +8,7 @@ import {BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG} from '../variants/lotus/bloodFlow/conf
 import {bloodFlowEvContext} from '../variants/lotus/bloodFlow/evContext'
 import {visibleTiles, type BloodFlowSeatView} from '../variants/lotus/bloodFlow/seatView'
 import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
+import {narrowActionsToRoute, type BigHandRoute} from '../variants/lotus/bloodFlow/bigHandRoute'
 
 export interface BloodFlowDecisionMetadata {roundIndex?:number;dealerIndex?:number;seatWind?:string;roundWind?:string}
 export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持平胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶64倍；同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达平胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。门清对手也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。对手已胡过的番型同样是公开信息（features.opponentRisk.signals 里的「已胡十三幺」等）：已公开番型限定了他的牌型，锁手后依然成立，因此比读牌河更可靠。兜/弃政策：state.defense.mode 为 fold 时，本家未听牌且可达听口过窄而对手已做成十六倍级大牌——此时应只打最安全的牌、不要吃碰杠；若 ownAnyWaitReachable 为真（打一张即单吊任意听，此后每巡必胡、永不弃牌）或 ownCeiling 不低于对手倍率，则应继续进攻。state.defense.restricted 为真时，候选已在本地下游收窄（吃碰杠不会出现、弃牌只留安全档），只需在给出的候选里选择，不要因为缺少选项而报错。'
@@ -21,10 +22,32 @@ function label(action:BloodFlowAction,view:BloodFlowSeatView):string {
   return {win:'胡牌（首次胡后锁手）',pass:'过',peng:'碰',gang:'直杠','wind-kong':'风杠'}[action.kind]
 }
 
+/**
+ * 真·大牌路线（v4）：路线成立时把候选收窄成"不掉路线的牌"，并（收益明显更高时）撤掉"胡"候选。
+ * 只作用于 LLM 候选；引擎与普通 AI 的候选/决策完全不受影响（它们仍走 bloodFlowAiActions 的原样结果）。
+ * 返回收窄后的动作集与路线信息；未启用或无路线时原样返回。
+ */
+function narrowToBigHandRoute(view:BloodFlowSeatView,actions:readonly BloodFlowAction[],aiConfig:BloodFlowAiConfig){
+  const player=view.players[view.seat]
+  const ownScore=player.score
+  const topOpponent=Math.max(...view.players.filter(p=>p.seat!==view.seat).map(p=>p.score))
+  return narrowActionsToRoute(player.hand,player.melds,view.jokers,actions,{
+    config:aiConfig.bigHandRoute,
+    basePoints:BLOOD_FLOW_CONFIG.basePoints,
+    immediateWinPayment:view.ownScore?.paymentPerPayer??0,
+    wallCount:view.wallCount,
+    scoreDeficit:Math.max(0,topOpponent-ownScore),
+  })
+}
+
 /** Adapt authoritative candidates, never re-enumerate or prune them using old end-of-round rules. */
 export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:string,metadata:BloodFlowDecisionMetadata={},aiConfig:BloodFlowAiConfig=BLOOD_FLOW_AI) {
   const player=view.players[view.seat],actions=bloodFlowAiActions(view,aiConfig),source=view.window?.source
-  const chiActions=actions.filter((a):a is Extract<BloodFlowAction,{kind:'chi'}>=>a.kind==='chi')
+  // 真·大牌路线：只在 LLM 候选层收窄（引擎/普通 AI 仍用 actions 原样）。
+  const routePlan=narrowToBigHandRoute(view,actions,aiConfig)
+  const offered=routePlan.actions
+  const offeredView=offered===actions?view:({...view,ownActions:offered} as BloodFlowSeatView)
+  const chiActions=offered.filter((a):a is Extract<BloodFlowAction,{kind:'chi'}>=>a.kind==='chi')
   const canonical=(a:BloodFlowAction):CanonicalAction=>a.kind==='discard'?{kind:'discard',handIndex:a.index}
     :a.kind==='chi'?{kind:'chi',optionIndex:chiActions.indexOf(a)}:a
   const claim=view.window?.kind!=='turn'
@@ -54,8 +77,8 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   // EV 特征与默认推荐同源：本地贪婪决策的结果就是 engineSuggestion；llmEvFeatures 关闭时回退旧提示词。
   const useEv=aiConfig.llmEvFeatures&&validShape
   const evCtx=useEv?bloodFlowEvContext(view,aiConfig):null
-  const recommended=validShape?(useEv?decideBloodFlowActionEv(view,aiConfig):decideBloodFlowAction(view)):actions[0]
-  const candidates=actions.map((action,index)=>{
+  const recommended=validShape?(useEv?decideBloodFlowActionEv(offeredView,aiConfig):decideBloodFlowAction(offeredView)):offered[0]
+  const candidates=offered.map((action,index)=>{
     const mapped=canonical(action)
     const features=validShape&&action.kind!=='win'?buildCandidateFeatures(input,mapped,'unknown'):unknownCandidateFeatures()
     if(action.kind==='win'){
@@ -86,6 +109,6 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   })
   const state={...buildPublicDecisionSnapshot(input),ruleCode:'lotus-blood-flow' as const}
   const request={ruleCode:'lotus-blood-flow',state,candidates:candidates.map(c=>c.canonical),
-    engineSuggestion:candidates.find(c=>JSON.stringify(c.action)===JSON.stringify(recommended))?.id}
-  return {candidates,request}
+    engineSuggestion:candidates.find(c=>JSON.stringify(c.action)===JSON.stringify(recommended))?.id??candidates[0]?.id}
+  return {candidates,request,bigHandRoute:routePlan.route,collapsedByRoute:routePlan.collapsed}
 }
