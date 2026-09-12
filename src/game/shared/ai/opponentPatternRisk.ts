@@ -45,6 +45,27 @@ export interface OpponentRiskTuning {
   lateGameWallCount: number
   /** 残局提速墙余阈值（原 estimateOpponentThreat 的 24）。 */
   lateThreatWallCount: number
+  /** 门清读牌：牌河长度下限（低于此长度不做门清大牌读牌）。 */
+  concealedRiverMin: number
+  /** 字牌/幺九回避：牌河 ≥ concealedRiverMin 且字牌+幺九张数 ≤ 该值 → 十三幺 / 字一色 / 混清幺九嫌疑。 */
+  honorTerminalQuiet: number
+  /** 字牌/幺九为 0 且牌河 ≥ 该长度 → 高倍级（十六倍级）嫌疑。 */
+  honorTerminalZeroRiver: number
+  /** 逐张危险轴：十三幺 / 字一色嫌疑下中张（2-8 数牌）的系数（它们几乎不吃中张）。 */
+  honorTerminalMiddleFactor: number
+  /**
+   * 十三幺 / 字一色轴上字牌与幺九的公开张数下限：这类牌型每种只需要一张，
+   * "我手里有两张" 只降低概率、不等于安全，所以现物折扣不得归零。
+   */
+  honorTerminalLadderFloor: number
+  /** 花色回避：牌河 ≥ concealedRiverMin 且该花色占比 ≤ 该值 → 九莲 / 门清清一色嫌疑。 */
+  suitAvoidShare: number
+  /** 短牌河兜底：某花色张数 ≤ 该值（占比可能高于 suitAvoidShare）→ 弱信号，别把 v1 的灵敏度丢掉。 */
+  suitSparseCount: number
+  /** 某花色一张没打且牌河 ≥ 该长度 → 高倍级（十六倍级）嫌疑。 */
+  suitZeroRiver: number
+  /** 七对嫌疑（弱信号）：中张占牌河 ≥ 该比例。 */
+  middleHeavyShare: number
 }
 
 export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
@@ -59,6 +80,15 @@ export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
   lockedTier: 2,
   lateGameWallCount: 15,
   lateThreatWallCount: 24,
+  concealedRiverMin: 8,
+  honorTerminalQuiet: 1,
+  honorTerminalZeroRiver: 10,
+  honorTerminalMiddleFactor: 0.25,
+  honorTerminalLadderFloor: 0.1,
+  suitAvoidShare: 0.1,
+  suitSparseCount: 1,
+  suitZeroRiver: 12,
+  middleHeavyShare: 0.75,
 })
 
 export const RISK_TIER_LABEL: Record<Exclude<OpponentRiskTier, 0>, '低' | '中' | '高'> = {
@@ -74,6 +104,8 @@ export interface OpponentRiskProfile {
   factor: number
   signals: readonly string[]
   suspectSuit: SuitKey | null
+  /** 十三幺 / 字一色 / 混清幺九嫌疑：该家几乎不打字牌与幺九 → 中张反而便宜。 */
+  avoidsHonorTerminals: boolean
   locked: boolean
 }
 
@@ -91,8 +123,27 @@ export interface OpponentRiskFeature {
 }
 
 const SUIT_TILE = /^([mps])[1-9]$/
+const NUMBERED_TILE = /^([mps])([1-9])$/
 const DRAGONS: readonly TileType[] = ['red', 'green', 'white']
 const WINDS: readonly TileType[] = ['east', 'south', 'west', 'north']
+const SUIT_LABELS: Record<SuitKey, string> = { m: '万', p: '筒', s: '条' }
+
+/** 幺九牌（数牌 1/9）。 */
+export function isTerminalTile(tile: TileType): boolean {
+  const matched = NUMBERED_TILE.exec(tile)
+  return Boolean(matched && (matched[2] === '1' || matched[2] === '9'))
+}
+
+/** 字牌（风 + 箭）。 */
+export function isHonorTile(tile: TileType): boolean {
+  return DRAGONS.includes(tile) || WINDS.includes(tile)
+}
+
+/** 中张（数牌 2-8）：十三幺 / 字一色这类牌型几乎不需要它们。 */
+export function isMiddleTile(tile: TileType): boolean {
+  const matched = NUMBERED_TILE.exec(tile)
+  return Boolean(matched && matched[2] !== '1' && matched[2] !== '9')
+}
 
 function tuningOf(partial?: Partial<OpponentRiskTuning>): OpponentRiskTuning {
   return partial ? { ...OPPONENT_RISK, ...partial } : OPPONENT_RISK
@@ -170,6 +221,7 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
     const signals: string[] = []
     let tier: OpponentRiskTier = 0
     let suspectSuit: SuitKey | null = null
+    let avoidsHonorTerminals = false
     const raise = (next: OpponentRiskTier, signal?: string) => {
       if (next > tier) tier = next
       if (signal) signals.push(signal)
@@ -190,20 +242,41 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
     if (facts.groups >= 2 && discards.length >= 1 && discards.length <= 7 && wallCount > tuning.lateThreatWallCount) {
       raise(1, '副露少牌河快听')
     }
-    if (facts.groups === 0 && discards.length >= 8) {
+    // 门清大牌读牌（这是 tier3 唯一的来源）：牌河指纹——整局不打字牌/幺九 = 十三幺 / 字一色；
+    // 某花色几乎不打 = 九莲 / 门清清一色；牌河几乎全是中张 = 七对弱信号。
+    const riverLength = discards.length
+    if (facts.groups === 0 && riverLength >= tuning.concealedRiverMin) {
+      const honorTerminals = discards.filter(tile => isHonorTile(tile) || isTerminalTile(tile)).length
+      if (honorTerminals === 0 && riverLength >= tuning.honorTerminalZeroRiver) {
+        raise(3, '牌河零字牌幺九')
+        avoidsHonorTerminals = true
+      } else if (honorTerminals <= tuning.honorTerminalQuiet) {
+        raise(2, '牌河无字牌幺九')
+        avoidsHonorTerminals = true
+      }
       const counts = suitDiscardCounts(discards)
       const weakest = weakestSuit(counts)
-      if (weakest && (counts.get(weakest) ?? 0) <= 1) {
-        raise(1, `牌河未见${weakest === 'm' ? '万' : weakest === 'p' ? '筒' : '条'}`)
+      const weakestCount = weakest ? counts.get(weakest) ?? 0 : 0
+      if (weakest && weakestCount === 0 && riverLength >= tuning.suitZeroRiver) {
+        raise(3, `牌河未打${SUIT_LABELS[weakest]}`)
+        suspectSuit = suspectSuit ?? weakest
+      } else if (weakest && weakestCount / riverLength <= tuning.suitAvoidShare) {
+        raise(2, `牌河几乎未打${SUIT_LABELS[weakest]}`)
+        suspectSuit = suspectSuit ?? weakest
+      } else if (weakest && weakestCount <= tuning.suitSparseCount) {
+        // 短牌河（8-11 张）里某花色只有 ≤1 张：占比够不上 tier2，但仍是一档弱信号（v1 灵敏度）。
+        raise(1, `牌河少打${SUIT_LABELS[weakest]}`)
         suspectSuit = suspectSuit ?? weakest
       }
+      const middles = discards.filter(isMiddleTile).length
+      if (middles / riverLength >= tuning.middleHeavyShare) raise(1, '牌河中张密集')
     }
     if (wallCount <= tuning.lateGameWallCount && discards.length >= 1 && discards.length <= 7) raise(1, '残局少牌河')
     const winCount = opponent.winCount ?? 0
     if (opponent.locked && winCount > 0) raise(tuning.lockedTier, `已胡${winCount}次仍听`)
     return {
       index, tier, factor: factorFor(tier, tuning), signals: [...new Set(signals)],
-      suspectSuit, locked: Boolean(opponent.locked && winCount > 0),
+      suspectSuit, avoidsHonorTerminals, locked: Boolean(opponent.locked && winCount > 0),
     }
   })
 }
@@ -242,15 +315,28 @@ export function opponentPatternExposure(
     const ladder = ladderRatio(tile)
     if (!profiles.length) return resolved.exposureUnit * ladder
     const suit = suitOfTile(tile)
-    let weight = 1, bestIsLocked = false
+    let weight = 1
+    let chosen: OpponentRiskProfile | null = null
     for (const profile of profiles) {
-      // 已锁手的家可能停在单吊任意听（任何一张都能胡）：现物折扣与花色折扣都不适用。
+      // 已锁手的家可能停在单吊任意听（任何一张都能胡）：现物折扣、花色折扣与危险轴折扣都不适用。
       const offSuit = !profile.locked && profile.suspectSuit !== null && suit !== profile.suspectSuit
-      const candidate = profile.factor * (offSuit ? resolved.offSuitFactor : 1)
-      if (candidate > weight) { weight = candidate; bestIsLocked = profile.locked }
+      const inSuspectSuit = profile.suspectSuit !== null && suit === profile.suspectSuit
+      let tileFactor = offSuit ? resolved.offSuitFactor : 1
+      // 逐张危险轴：十三幺 / 字一色嫌疑下中张几乎不被需要 → 便宜；但嫌疑花色内的中张照价（九莲要同一花色 1-9）。
+      if (!profile.locked && profile.avoidsHonorTerminals && isMiddleTile(tile) && !inSuspectSuit) {
+        tileFactor *= resolved.honorTerminalMiddleFactor
+      }
+      const candidate = profile.factor * tileFactor
+      if (candidate > weight) { weight = candidate; chosen = profile }
     }
-    // 已锁手的家仍然每巡在听（已胡仍付款）：现物 / 公开多张不再享受折扣。
-    return resolved.exposureUnit * weight * (bestIsLocked ? resolved.safetyCostNone : ladder)
+    // 一次弃牌最多被一家胡：取权重最高的一家的口径。
+    const ratio = chosen === null ? ladder
+      : chosen.locked ? resolved.safetyCostNone
+        // 十三幺/字一色轴上字牌与幺九保留下限：多现 ≠ 安全（该牌型每种只要一张）。
+        : chosen.avoidsHonorTerminals && !isMiddleTile(tile)
+          ? Math.max(ladder, resolved.honorTerminalLadderFloor)
+          : ladder
+    return resolved.exposureUnit * weight * ratio
   }
 }
 

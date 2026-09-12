@@ -9,6 +9,8 @@ import type { TileType } from '../../core/contracts/types'
 const meld = (tile: TileType, type = 'peng') => ({ type, tile, tiles: [tile, tile, tile] as TileType[] })
 const quiet: OpponentPublicView = { discards: [], melds: [] }
 const discards = (count: number, tile: TileType): TileType[] => Array.from({ length: count }, () => tile)
+/** 十三幺 / 字一色教科书牌河：只打中张，一张字牌与幺九都没打。 */
+const THIRTEEN_ORPHANS_RIVER: TileType[] = ['m3', 'm4', 'm5', 'm6', 'm7', 'p3', 'p4', 'p5', 'p6', 'p7', 's3', 's4']
 
 describe('对手牌型风险档', () => {
   it('没有任何公共信号时 tier=0，赔付与旧口径（公开张数档位 × 40）逐位一致', () => {
@@ -54,12 +56,70 @@ describe('对手牌型风险档', () => {
     expect(threeWinds[0].tier).toBe(3)
   })
 
-  it('门清大牌无法识别，只用牌河弱信号（tier 1）', () => {
+  it('门清花色回避：整局几乎不打某花色 → 九莲/清一色嫌疑（tier 2），嫌疑花色更贵', () => {
     const opponent: OpponentPublicView = { discards: [...discards(6, 'm1'), 'p2', 'p3', 'white', 'east'], melds: [] }
     const profiles = opponentRiskProfiles({ wallCount: 60, opponents: [opponent] })
+    expect(profiles[0].tier).toBe(2)
+    expect(profiles[0].signals).toContain('牌河几乎未打条')
+    expect(profiles[0].suspectSuit).toBe('s')
+    const exposure = opponentPatternExposure(profiles, [])
+    expect(exposure('s5')).toBe(160)   // 40 × 16 × 0.25
+    expect(exposure('m5')).toBe(80)    // 非嫌疑花色 × 0.5
+  })
+
+  it('十三幺/字一色读牌：牌河零字牌幺九 → tier 3，字牌幺九照价 320、中张只要 80', () => {
+    const opponent: OpponentPublicView = { discards: [...THIRTEEN_ORPHANS_RIVER], melds: [] }
+    const profiles = opponentRiskProfiles({ wallCount: 30, opponents: [opponent] })
+    expect(profiles[0].tier).toBe(3)
+    expect(profiles[0].factor).toBe(OPPONENT_RISK.factorTier3)
+    expect(profiles[0].avoidsHonorTerminals).toBe(true)
+    expect(profiles[0].signals).toEqual(expect.arrayContaining(['牌河零字牌幺九', '牌河中张密集']))
+    const exposure = opponentPatternExposure(profiles, [])
+    expect(exposure('north')).toBe(320)   // 字牌：真实十六倍级硬胡点炮量级
+    expect(exposure('east')).toBe(320)
+    expect(exposure('m1')).toBe(320)      // 幺九
+    expect(exposure('p5')).toBe(80)       // 中张：十三幺几乎不需要 → 损失最小化的落点
+  })
+
+  it('门清单花色零牌河 → tier 3（九莲/清一色量级）', () => {
+    const river: TileType[] = ['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'p2', 'p3', 'p4', 'p5', 'p6']
+    const profiles = opponentRiskProfiles({ wallCount: 30, opponents: [{ discards: river, melds: [] }] })
+    expect(profiles[0].tier).toBe(3)
+    expect(profiles[0].signals).toContain('牌河未打条')
+    expect(profiles[0].suspectSuit).toBe('s')
+    expect(opponentPatternExposure(profiles, [])('s5')).toBe(320)
+  })
+
+  it('十三幺轴：手里两张字牌也不算安全（多现 ≠ 安全，保留下限）', () => {
+    const profiles = opponentRiskProfiles({ wallCount: 30, opponents: [{ discards: [...THIRTEEN_ORPHANS_RIVER], melds: [] }] })
+    const exposure = opponentPatternExposure(profiles, ['east', 'east'])
+    expect(exposure('east')).toBe(128)   // 40 × 32 × 0.1（下限），不是 0
+    expect(exposure('north')).toBe(320)
+  })
+
+  it('短牌河兜底：某花色只有 1 张仍给弱信号 tier1（不丢 v1 灵敏度）', () => {
+    const river: TileType[] = ['m1', 'p9', 'm2', 'm3', 'p2', 'p3', 's2', 'east']
+    const profiles = opponentRiskProfiles({ wallCount: 60, opponents: [{ discards: river, melds: [] }] })
     expect(profiles[0].tier).toBe(1)
-    expect(profiles[0].signals.some(signal => signal.startsWith('牌河未见'))).toBe(true)
-    expect(opponentPatternExposure(profiles, [])('s5')).toBe(40)  // 40 × 4 × 0.25
+    expect(profiles[0].signals).toContain('牌河少打条')
+    expect(profiles[0].suspectSuit).toBe('s')
+    const exposure = opponentPatternExposure(profiles, [])
+    expect(exposure('s5')).toBe(40)   // 40 × 4 × 0.25（嫌疑花色）
+    expect(exposure('m5')).toBe(20)   // 非嫌疑花色 ×0.5
+  })
+
+  it('门清短牌河不误判：长度不足只给弱信号，且不产生危险轴', () => {
+    const profiles = opponentRiskProfiles({ wallCount: 60, opponents: [{ discards: ['m2', 'm3', 'm4'], melds: [] }] })
+    expect(profiles[0].tier).toBe(0)
+    expect(profiles[0].avoidsHonorTerminals).toBe(false)
+  })
+
+  it('七对嫌疑（牌河中张密集）只是弱信号 tier 1', () => {
+    const river: TileType[] = ['m2', 'm3', 'm4', 'p3', 'p4', 'p5', 's3', 's4', 's5', 'east', 'south', 'north']
+    const profiles = opponentRiskProfiles({ wallCount: 60, opponents: [{ discards: river, melds: [] }] })
+    expect(profiles[0].signals).toContain('牌河中张密集')
+    expect(profiles[0].tier).toBe(1)
+    expect(profiles[0].avoidsHonorTerminals).toBe(false)
   })
 
   it('已锁手且已胡过的家：现物不再享受折扣', () => {

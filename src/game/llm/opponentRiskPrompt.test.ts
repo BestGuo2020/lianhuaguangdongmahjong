@@ -10,14 +10,14 @@ import { bloodFlowDecisionPrompt } from './bloodFlowRuntime'
 const peng = (tile: TileType): Meld => ({ type: 'peng', tile, from: 0, tiles: [tile, tile, tile] })
 const HAND: TileType[] = ['m1', 'm4', 'm7', 'p2', 'p5', 'p8', 's3', 's6', 's9', 'east', 'south', 'west', 'north']
 
-function view(options: { opponentMelds?: Meld[]; winCount?: number; locked?: boolean } = {}): BloodFlowSeatView {
+function view(options: { opponentMelds?: Meld[]; opponentDiscards?: TileType[]; winCount?: number; locked?: boolean } = {}): BloodFlowSeatView {
   const engine = new BloodFlowEngine({ authorityEpoch: 'risk-llm', roundId: '1', random: seededRandom(5), now: () => 0 })
   const seatView = bloodFlowSeatView(engine, 0)
   seatView.players[0].hand = [...HAND]
   seatView.players[0].drawnTileIndex = HAND.length - 1
   seatView.players[0].discards = []
   seatView.players[1].melds = options.opponentMelds ?? []
-  seatView.players[1].discards = []
+  seatView.players[1].discards = options.opponentDiscards ?? []
   seatView.jokers = ['white']
   seatView.wallCount = 60
   seatView.ownActions = [{ kind: 'pass' }, ...HAND.map((_, index) => ({ kind: 'discard', index }) as const)]
@@ -65,4 +65,17 @@ it('对手没有大牌信号时不注入该字段（保持旧 prompt 形状）',
   const payload = JSON.parse(prompt.messages.user)
   expect(payload.opponentRisk).toEqual([])
   expect(payload.candidates.every((candidate: { features: { opponentRisk?: unknown } }) => candidate.features.opponentRisk === undefined)).toBe(true)
+})
+
+it('门清十三幺嫌疑也进 prompt：信号 + 赔付档 + 规则摘要里的读牌说明', () => {
+  const river: TileType[] = ['m2', 'm3', 'm5', 'm6', 'm7', 'p3', 'p4', 'p5', 'p6', 'p7', 's2', 's3']
+  const prompt = bloodFlowDecisionPrompt(view({ opponentDiscards: river }), [], 'concealed')
+  const payload = JSON.parse(prompt.messages.user)
+  expect(payload.ruleSummary).toContain('整局不打字牌与幺九')
+  const risk = payload.opponentRisk.find((profile: { seat: number }) => profile.seat === 1)
+  expect(risk).toMatchObject({ tier: 3, signals: expect.arrayContaining(['牌河零字牌幺九']) })
+  // 注意：prompt 载荷里的候选只有 id/label/features/summary（不含 action），所以按 features 取。
+  const risky = payload.candidates.map((candidate: { features: { opponentRisk?: { payment: number } } }) =>
+    candidate.features.opponentRisk?.payment ?? 0)
+  expect(Math.max(...risky)).toBeGreaterThanOrEqual(80)   // 字牌/幺九按十六倍级量级定价
 })
