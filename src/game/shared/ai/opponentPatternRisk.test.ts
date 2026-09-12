@@ -122,6 +122,57 @@ describe('对手牌型风险档', () => {
     expect(profiles[0].avoidsHonorTerminals).toBe(false)
   })
 
+  it('已公开番型：十六倍级锁手家即便牌河干净也是 tier3，且危险轴对锁手家同样生效', () => {
+    const opponent: OpponentPublicView = {
+      discards: ['m1', 'p9', 'm4', 'm5', 'p4', 'p5', 's4', 's5', 'east', 'south'],
+      melds: [], winCount: 3, locked: true,
+      knownWins: [{ id: 'thirteenOrphans', label: '十三幺', multiplier: 16 }],
+    }
+    const profiles = opponentRiskProfiles({ wallCount: 40, opponents: [opponent] })
+    expect(profiles[0]).toMatchObject({
+      tier: 3, axisSource: 'known', avoidsHonorTerminals: true, locked: true,
+      signals: ['已胡十三幺', '已胡3次仍听'],
+    })
+    const exposure = opponentPatternExposure(profiles, [])
+    expect(exposure('north')).toBe(320)   // 字牌照价（锁手也不打折，但轴是 known → 保留多现下限）
+    expect(exposure('p5')).toBe(80)       // 中张便宜：十三幺不需要
+  })
+
+  it('已公开清一色：花色由公开胡牌牌面确定，折扣对锁手家也生效；混一色字牌算本门', () => {
+    const river: TileType[] = ['m2', 'm3', 'p2', 'p3', 'p4', 's2', 's3', 'east', 'south', 'north']
+    const pure: OpponentPublicView = {
+      discards: river, melds: [], winCount: 2, locked: true,
+      knownWins: [{ id: 'pure-suit', label: '清一色', multiplier: 4, tile: 'p5' }],
+    }
+    const mixed: OpponentPublicView = {
+      ...pure,
+      knownWins: [{ id: 'mixed-suit', label: '混一色', multiplier: 2, tile: 'p5' }],
+    }
+    const pureProfiles = opponentRiskProfiles({ wallCount: 40, opponents: [pure] })
+    const mixedProfiles = opponentRiskProfiles({ wallCount: 40, opponents: [mixed] })
+    expect(pureProfiles[0]).toMatchObject({ axisSource: 'known', suspectSuit: 'p', honorsInFlush: false })
+    expect(mixedProfiles[0].honorsInFlush).toBe(true)
+    const pureExposure = opponentPatternExposure(pureProfiles, [])
+    // 清一色（筒）：筒照价、万字 ×0.5、字牌同样 ×0.5
+    expect(pureExposure('p9')).toBeGreaterThan(pureExposure('m9'))
+    expect(pureExposure('east')).toBe(pureExposure('m9'))
+    // 混一色：字牌算本门 → 与筒同价，高于其他花色
+    const mixedExposure = opponentPatternExposure(mixedProfiles, [])
+    expect(mixedExposure('east')).toBe(mixedExposure('p9'))
+    expect(mixedExposure('east')).toBeGreaterThan(mixedExposure('m9'))
+  })
+
+  it('已公开弱番（平胡）不设档、不产生危险轴：不因为对手胡过就乱防', () => {
+    const opponent: OpponentPublicView = {
+      discards: ['m1', 'p9', 'm4', 'm5', 'p4', 'p5', 's4', 's5', 'east', 'south'],
+      melds: [], winCount: 1, locked: true,
+      knownWins: [{ id: 'pinghu', label: '平胡', multiplier: 1 }],
+    }
+    const profiles = opponentRiskProfiles({ wallCount: 40, opponents: [opponent] })
+    expect(profiles[0]).toMatchObject({ tier: 2, axisSource: null, avoidsHonorTerminals: false })
+    expect(profiles[0].signals).toEqual(['已胡1次仍听'])   // 只有锁手档，没有番型档
+  })
+
   it('已锁手且已胡过的家：现物不再享受折扣', () => {
     const opponent: OpponentPublicView = { discards: ['m1'], melds: [meld('p4'), meld('p7')], winCount: 12, locked: true }
     const profiles = opponentRiskProfiles({ wallCount: 40, opponents: [opponent] })

@@ -88,10 +88,21 @@ export function bloodFlowRiskTuning(config: BloodFlowAiConfig) {
 }
 
 /**
- * 对手牌型风险档（只用公共信息）。血流额外带入已胡次数与锁手。
+ * 对手牌型风险档（只用公共信息）。血流额外带入已胡次数、锁手与**已公开番型**。
  * `opponentPatternRisk: 'off'` 时返回空数组，调用方回退旧口径。
  */
 export type BloodFlowOpponentRisk = OpponentRiskProfile & { seat: number }
+
+/** 从公共批次里取某座位的历次胡牌番型（PublicWinScore.items + patternMultiplier，玩家视角本就公开）。 */
+function knownWinsOf(view: BloodFlowSeatView, seat: number) {
+  return view.public.batches
+    .flatMap(batch => batch.winners
+      .filter(win => win.winner === seat)
+      .flatMap(win => win.score.items.map(item => ({
+        id: item.id, label: item.label, multiplier: win.score.patternMultiplier,
+        tile: batch.source.tile,
+      }))))
+}
 
 export function bloodFlowOpponentRisk(view: BloodFlowSeatView, config: BloodFlowAiConfig = BLOOD_FLOW_AI): BloodFlowOpponentRisk[] {
   if (config.opponentPatternRisk === 'off') return []
@@ -103,6 +114,7 @@ export function bloodFlowOpponentRisk(view: BloodFlowSeatView, config: BloodFlow
       discards: view.players[seat]?.discards ?? [], melds: view.players[seat]?.melds ?? [],
       winCount: view.public.seats[seat]?.winCount ?? 0,
       locked: view.public.seats[seat]?.locked ?? false,
+      knownWins: knownWinsOf(view, seat),
     })),
   }).map((profile, position) => ({ ...profile, seat: seats[position] ?? position }))
 }
