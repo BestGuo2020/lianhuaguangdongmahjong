@@ -50,6 +50,19 @@ export function getVibeClient(): VibeHubSDK.Client | null {
   return client
 }
 
+/**
+ * 本地开发是否使用**真实 VibeHub SDK**（真 WebRTC + 真中继）。
+ *
+ * 默认 dev 走 `mockVibeHub`（BroadcastChannel，离线可跑，但传输层是假的）；`VITE_VIBE_REAL=1 pnpm dev`
+ * 时走真 SDK：SDK 在 localhost/127.0.0.1 下用 `location.origin` 作 apiBase，因此 vite.config.ts 必须把
+ * 平台 API（/api/sdk、/api/relay、/api/game-auth、/connect、/relay-worker.js）同源代理过去。
+ *
+ * 注意（2026-09-12 实测）：真 SDK 的 room/信令接口**一律要求登录凭证**——`_fetch` 在没有 token 时直接
+ * `reject("请先登录")`，服务端 `POST /api/sdk/rooms` 也无条件 401。所以本开关只能用于"本地 + 真实登录"，
+ * **不能**用于匿名联机；匿名仅适用于中继节点贡献。结论与证据见 docs/vibehub-adaptation-checklist.md §7。
+ */
+export const useRealVibeSdk = import.meta.env.VITE_VIBE_REAL === '1'
+
 export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
   if (initPromise) return initPromise
   if (typeof window === 'undefined') {
@@ -57,10 +70,10 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
     return Promise.resolve(null)
   }
   initPromise = (async () => {
-    // 本地开发：真实 VibeHub 云端对本地来源有 CORS + 来源校验（浏览器无法绕过），
-    // 直接使用本地 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可
-    // 联调全部联机逻辑，无需发布。生产构建不受影响（DEV=false 走真实 SDK）。
-    if (import.meta.env.DEV) {
+    // 本地开发默认用 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可联调全部
+    // 联机逻辑；VITE_VIBE_REAL=1 时改走真 SDK（真 WebRTC + 真中继 + 匿名），用于本地复现
+    // 传输层缺陷。生产构建不受影响（DEV=false 恒走真实 SDK）。
+    if (import.meta.env.DEV && !useRealVibeSdk) {
       const { createMockVibeClient } = await import('./mockVibeHub')
       const mock = createMockVibeClient()
       client = mock

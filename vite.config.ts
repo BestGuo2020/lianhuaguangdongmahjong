@@ -18,6 +18,23 @@ export default defineConfig({
   server: {
     port: 4173,
     proxy: {
+      // VITE_VIBE_REAL=1：本地走真实 VibeHub SDK 时，SDK 在 localhost/127.0.0.1 下用
+      // location.origin 作 apiBase，因此这些平台路径必须由本机同源提供，否则一律 404。
+      // 转发时改写 Origin/Referer 为平台来源，规避平台对本地来源的校验（浏览器发出的
+      // 同源 POST 仍会带 Origin: http://127.0.0.1:4173）。
+      ...Object.fromEntries([
+        '/api/sdk', '/api/relay', '/api/game-auth', '/connect', '/relay-worker.js',
+      ].map(path => [path, {
+        target: 'https://vibe.lumigrav.space',
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy: { on: (event: string, handler: (req: { setHeader: (name: string, value: string) => void }) => void) => void }) => {
+          proxy.on('proxyReq', (request) => {
+            request.setHeader('Origin', 'https://vibe.lumigrav.space')
+            request.setHeader('Referer', 'https://vibe.lumigrav.space/')
+          })
+        },
+      }])),
       // 单机 TTS 网关；保持与 master 本地开发一致的同源 /api 调用。
       '/api': {
         target: 'http://127.0.0.1:8000',
