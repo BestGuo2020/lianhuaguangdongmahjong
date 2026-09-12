@@ -56,6 +56,39 @@ describe('大牌路线判定', () => {
     expect(detectBigHandRoute(ORPHANS13, [], ['white'], BLOOD_FLOW_BIG_HAND_ROUTE)).toBeNull()  // 默认关闭
   })
 
+  it('精牌感知①：必须靠精顶替时按软胡折算（160 点），因此不再为小胡轻易承诺', () => {
+    const config = { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }
+    // 11 种自然幺九 + 一张精红中 → 等效 12 种 → 路线成立，但只能靠精完成（naturalOnly=false）
+    const softHand: TileType[] = ['m1', 'm9', 'p1', 'p9', 's1', 's9', 'east', 'south', 'west', 'north', 'red', 'm5', 'm6', 'green']
+    const soft = detectBigHandRoute(softHand, [], ['red'], config)!
+    expect(soft.id).toBe('thirteenOrphans')
+    expect(soft.naturalOnly).toBe(false)
+    expect(routePayoff(soft, 10)).toBe(160)                                  // 软胡：无硬胡 ×2
+    const actions = [{ kind: 'win' }, { kind: 'pass' }, ...softHand.map((_, index) => ({ kind: 'discard', index }))]
+    const winKept = (payment: number) => narrowActionsToRoute(softHand, [], ['red'], actions, {
+      config, basePoints: 10, immediateWinPayment: payment, wallCount: 30,
+    }).actions.some(action => action.kind === 'win')
+    // 80 点小胡：160 ≥ 160 → 撤掉"胡"（承诺路线）
+    expect(winKept(80)).toBe(false)
+    // 100 点胡：160 < 200 → 保留"胡"（软胡不值得赌）
+    expect(winKept(100)).toBe(true)
+    // 13 种自然（硬胡）→ 320 点
+    const hardOne = detectBigHandRoute(ORPHANS13, [], ['white'], config)!
+    expect(hardOne.naturalOnly).toBe(true)
+    expect(routePayoff(hardOne, 10)).toBe(320)
+  })
+
+  it('精牌感知②：持有 ≥2 张精牌时，牌墙门槛从 20 放宽到 15', () => {
+    const config = { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }
+    const oneJoker: TileType[] = ['m1', 'm9', 'p1', 'p9', 's1', 's9', 'east', 'south', 'west', 'north', 'red', 'white', 'm5', 'm6']
+    const twoJokers: TileType[] = ['m1', 'm9', 'p1', 'p9', 's1', 's9', 'east', 'south', 'west', 'north', 'white', 'red', 'm5', 'm6']
+    const actions = (hand: TileType[]) => [{ kind: 'pass' }, ...hand.map((_, index) => ({ kind: 'discard', index }))]
+    const base = { config, basePoints: 10, immediateWinPayment: 0, scoreDeficit: 0 }
+    // 墙 17：1 精 → 不承诺（16 < 20）；2 精 → 承诺（17 ≥ 15）
+    expect(narrowActionsToRoute(oneJoker, [], ['white'], actions(oneJoker), { ...base, wallCount: 17 }).collapsed).toBe(false)
+    expect(narrowActionsToRoute(twoJokers, [], ['white', 'red'], actions(twoJokers), { ...base, wallCount: 17 }).collapsed).toBe(true)
+  })
+
   it('时机门槛：牌墙不足且不落后时不承诺；牌墙充足或落后 300+ 时承诺', () => {
     const config = { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }
     const actions = [{ kind: 'win' }, { kind: 'pass' }, ...ORPHANS13.map((_, index) => ({ kind: 'discard', index }))]
