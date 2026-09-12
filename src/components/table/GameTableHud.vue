@@ -18,6 +18,7 @@ import { bloodFlowImpactProfile } from '../../theme/bloodFlowPresentation'
 import { useEffectPlayer } from '../../game/core/presentation/useAudio'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
+import { displayImageSrc } from '../../game/core/presentation/imagePreload'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 import {
   resolveRoundResultPresentation,
@@ -265,9 +266,9 @@ let lastTouchTap = { index: -1, time: 0 }
 let suppressTileClickUntil = 0
 
 const roundResultPresentation = computed(() => props.result ? resolveRoundResultPresentation(props.result) : null)
-const userAvatar = computed(() => props.themeName === 'llmAnime'
+const userAvatar = computed(() => displayImageSrc(props.themeName === 'llmAnime'
   ? animeAvatarForPlayer(props.user)
-  : props.user.avatar)
+  : props.user.avatar))
 const scoreDeltaFor = (playerIndex: number) => presentedScoreFlowEvent.value?.deltas.find((delta) => delta.playerIndex === playerIndex)?.amount ?? 0
 const scoreDirectionFor = (playerIndex: number) => scoreDirection(scoreDeltaFor(playerIndex))
 const hoveredWaits = computed(() => hoveredDiscard.value

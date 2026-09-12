@@ -93,7 +93,7 @@ describe('llmAnime 立绘与头像预取', () => {
     expect(requested).toHaveLength(uniqueUrls)
   })
 
-  it('立绘额外物化成 blob URL（头像只预取，不做物化）', async () => {
+  it('头像与立绘都物化成 blob URL（渲染点直接引用本地字节）', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['card']), { status: 200 })))
     const NativeURL = globalThis.URL
     const objectUrls: string[] = []
@@ -111,15 +111,16 @@ describe('llmAnime 立绘与头像预取', () => {
     const { materializedImageSrc } = await import('./imagePreload')
     await preloadAnimeCharacterAssets()
 
-    // 24 张立绘物化：AnimeActionCue 用原始 URL 就能取到本地 blob
-    expect(objectUrls).toHaveLength(ANIME_CHARACTER_IDS.length * 2)
+    // 24 张立绘 + 11 张唯一头像全部物化
+    expect(objectUrls).toHaveLength(ANIME_CHARACTER_IDS.length * 2
+      + new Set(ANIME_CHARACTER_IDS.map(animeCharacterAvatarUrl)).size)
     for (const id of ANIME_CHARACTER_IDS) {
       expect(materializedImageSrc(animeActionArtUrl(id, 'peng'))).toMatch(/^blob:card\//)
       expect(materializedImageSrc(animeActionArtUrl(id, 'hu'))).toMatch(/^blob:card\//)
-      expect(materializedImageSrc(animeCharacterAvatarUrl(id))).toBeNull()
+      expect(materializedImageSrc(animeCharacterAvatarUrl(id))).toMatch(/^blob:card\//)
     }
-    // 物化成功的立绘不再走 img 预取兜底；头像仍按普通预取进缓存。
-    expect(requested.filter((url) => /\/actions\//.test(url))).toEqual([])
-    for (const id of ANIME_CHARACTER_IDS) expect(requested).toContain(animeCharacterAvatarUrl(id))
+    // 物化成功的不再走 img 预取兜底：所有 Image 请求都是 blob（预热解码），没有原始路径
+    expect(requested.filter((url) => !url.startsWith('blob:'))).toEqual([])
+    expect(requested).toHaveLength(objectUrls.length)
   })
 })
