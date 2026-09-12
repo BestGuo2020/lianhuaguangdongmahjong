@@ -41,12 +41,13 @@ import {
   themePresentationCssVariables,
 } from './theme/themePresentation'
 import {
-  animeCharacterAvatarUrl,
   readAnimeCharacterPreference,
   saveAnimeCharacterPreference,
 } from './game/llm/animeCharacterPreference'
 import type { CharacterId } from './game/llm/animeCharacters'
 import { createAnimeFixedTtsExecutor } from './game/llm/animeFixedTtsExecutor'
+import { defaultAvatarForSeat } from './game/core/presentation/avatar'
+import { preloadAnimeCharacterAssets } from './game/core/presentation/llmAnimeAssets'
 import type { PlayerSeed } from './game/shared/runtime/localOpening'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -143,11 +144,16 @@ const localAnimeFixedTts = createFixedTtsExecutor()
 const lotusAnimeFixedTts = createFixedTtsExecutor()
 const remoteAnimeFixedTts = createFixedTtsExecutor()
 watch(tableThemeName, (theme) => {
-  if (theme === 'llmAnime') return
+  // 二次元主题：角色头像与鸣牌/胡牌立绘在开局前预热，避免首次出现时闪烁/延迟；
+  // immediate 让 `?theme=llmAnime` 直接进入（或恢复上次主题）也预取。
+  if (theme === 'llmAnime') {
+    void preloadAnimeCharacterAssets()
+    return
+  }
   localAnimeFixedTts.cancel()
   lotusAnimeFixedTts.cancel()
   remoteAnimeFixedTts.cancel()
-})
+}, { immediate: true })
 const localLlm = shallowRef(createLocalLlmControllers(llmHook, {
   getThemeName: () => tableThemeName.value,
 }))
@@ -167,16 +173,18 @@ preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
 const animeCharacterId = ref<CharacterId>(readAnimeCharacterPreference())
+// 本家头像始终是本地默认头像；二次元主题的角色头像只由 `llmAnime` 的表现层覆盖
+// （GameTableHud / SettlementOverlay / BloodFlowResultPlayers 按主题选择），
+// 这样非 llmAnime 主题不会显示二次元角色头像，主题热切换也不需要重开一局。
 const localHumanSeed: PlayerSeed = {
   name: '巅峰雀神',
-  avatar: animeCharacterAvatarUrl(animeCharacterId.value),
+  avatar: defaultAvatarForSeat(0),
   characterId: animeCharacterId.value,
   playerKind: 'human',
 }
 watch(animeCharacterId, (value) => {
-  const saved = saveAnimeCharacterPreference(value)
-  localHumanSeed.characterId = saved
-  localHumanSeed.avatar = animeCharacterAvatarUrl(saved)
+  // 角色形象只改 characterId（动作/语音/llmAnime 头像的来源），不改权威 avatar。
+  localHumanSeed.characterId = saveAnimeCharacterPreference(value)
 })
 const llmStats = computed<LlmControllerStats>(() => ({
   requests: localLlm.value.stats.requests + lotusLlm.value.stats.requests,
