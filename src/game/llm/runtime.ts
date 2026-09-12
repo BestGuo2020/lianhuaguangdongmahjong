@@ -10,7 +10,7 @@ import type { PlayerSeed } from '../shared/runtime/localOpening'
 import { CoreLlmController, LotusLlmController, createLlmStats, type LlmControllerHooks, type LlmControllerStats, type LlmMessageMeta } from './llmController'
 import { LLM_DECISION_TIMEOUT_MS, presetForSeat, readLlmSettings, styleForSeat, type LlmProviderPreset, type LlmSettings } from './config'
 import { avatarFolderOf, avatarFor, displayNameOf, effectiveNickname } from './persona'
-import { preloadImages } from '../core/presentation/imagePreload'
+import { materializeImages } from '../core/presentation/imagePreload'
 import { resolveAnimeCharacterId } from './animeCharacters'
 import { clearLocalLlmVoiceSeats, registerLocalLlmVoiceSeat } from '../core/presentation/localLlmVoiceRegistry'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
@@ -61,7 +61,9 @@ function seedFor(settings: LlmSettings, seat: 1 | 2 | 3): PlayerSeed {
   }
   // 人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）按座位预热：只取实际会用到的那几张，
   // 避免牌桌首次渲染（LLM 座位第一次出现）才开始下载；不做供应商×风格全量预取。
-  void preloadImages([seed.avatar])
+  // 用「物化」（blob + 预热解码）而不是只进 HTTP 缓存：托管方新鲜期只有 60s，座位头像晚于
+  // 这个时间首次渲染时仍要发一次 304 校验（实测单次 0.5~1.9s），头像会明显迟到。
+  void materializeImages([seed.avatar])
   return seed
 }
 
