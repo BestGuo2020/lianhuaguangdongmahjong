@@ -1,5 +1,6 @@
 import { onUnmounted, ref, watch, type Ref } from 'vue'
 import type { GameMode } from '../../core/contracts/activeGamePort'
+import { preloadImages } from '../../core/presentation/imagePreload'
 import { getRoomMeta, type RoomMeta } from '../api/roomApi'
 
 export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>) {
@@ -19,6 +20,11 @@ export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>
     window.clearInterval(pollingTimer)
     pollingTimer = null
   }
+
+  // 服务端提供的 LLM 人设头像（img/llm/<供应商>/llm-avatar-<风格>.png）随房间元数据预热：
+  // 房主建房/开局后的空位大模型座位会用到它们，避免牌桌首次渲染才开始下载。
+  watch(() => (roomMeta.value?.llmProviders ?? []).map((provider) => provider.avatar),
+    (avatars) => { void preloadImages(avatars) }, { immediate: true })
 
   watch([gameMode, roomId], ([mode, id]) => {
     if (mode === 'remote' && !id) {
