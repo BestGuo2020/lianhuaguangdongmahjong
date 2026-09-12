@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { GamePlayer, TableActionEvent } from '../../game/core/contracts/types'
 import { animeActionPresentation } from '../../game/core/presentation/animeActionPresentation'
 import { animeActionArtUrl } from '../../game/core/presentation/llmAnimeAssets'
+import { materializedImageSrc } from '../../game/core/presentation/imagePreload'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 import { resolveAnimeCharacter } from '../../game/llm/animeCharacters'
 import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
@@ -17,12 +18,16 @@ const props = defineProps<{
 
 const dedicatedArtFailed = ref(false)
 const baseAvatarFailed = ref(false)
+const artRetried = ref(false)
 const action = computed(() => animeActionPresentation(props.event.type))
 const character = computed(() => resolveAnimeCharacter(props.player?.characterId))
 const dedicatedArt = computed(() => animeActionArtUrl(character.value.id, action.value.key))
 const artwork = computed(() => !dedicatedArtFailed.value && dedicatedArt.value
   ? dedicatedArt.value
   : animeCharacterAvatarUrl(character.value.id))
+// 立绘优先用主题预取时物化好的 blob URL（本地字节 + 已解码，不再等网络/解码）；
+// 未就绪时回退原始 URL（预取失败或首次进入主题时）。
+const artworkSrc = computed(() => materializedImageSrc(artwork.value) ?? artwork.value)
 const usesDedicatedArt = computed(() => Boolean(dedicatedArt.value && !dedicatedArtFailed.value))
 const cueStyle = computed(() => ({ '--anime-accent': animeCharacterAccent(character.value.id), ...(props.progress==null?{}:{animation:'none',
   opacity:Math.min(1,props.progress/.13,Math.max(0,(1-props.progress)/.2)),scale:1-.08*Math.max(0,1-props.progress/.13)}) }))
@@ -30,11 +35,20 @@ const cueStyle = computed(() => ({ '--anime-accent': animeCharacterAccent(charac
 watch(() => [props.event.id, character.value.id], () => {
   dedicatedArtFailed.value = false
   baseAvatarFailed.value = false
+  artRetried.value = false
 })
 
 function onPortraitError(event: Event) {
   const image = event.currentTarget as HTMLImageElement
   if (usesDedicatedArt.value) {
+    // 一次性重试：cue 窗口很短，一次瞬时失败（解码被打断、图片缓存被回收）不该让整条 cue 丢掉立绘。
+    if (!artRetried.value) {
+      artRetried.value = true
+      const src = artworkSrc.value
+      image.src = ''
+      void nextTick(() => { image.src = src })
+      return
+    }
     dedicatedArtFailed.value = true
     return
   }
@@ -58,7 +72,7 @@ function onPortraitError(event: Event) {
   >
     <div class="anime-action-burst" aria-hidden="true"></div>
     <img
-      :src="artwork"
+      :src="artworkSrc"
       :class="{ 'dedicated-action-art': usesDedicatedArt, 'base-q-avatar': !usesDedicatedArt }"
       alt=""
       aria-hidden="true"

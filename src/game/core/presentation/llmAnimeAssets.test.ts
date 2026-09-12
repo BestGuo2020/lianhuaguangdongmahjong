@@ -90,4 +90,31 @@ describe('llmAnime 立绘与头像预取', () => {
     await expect(preloadAnimeCharacterAssets()).resolves.toBeUndefined()
     expect(requested).toHaveLength(uniqueUrls)
   })
+
+  it('立绘额外物化成 blob URL（头像只预取，不做物化）', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['card']), { status: 200 })))
+    const NativeURL = globalThis.URL
+    const objectUrls: string[] = []
+    let seq = 0
+    class MockURL extends NativeURL {
+      static createObjectURL = () => {
+        const url = `blob:card/${(seq += 1)}`
+        objectUrls.push(url)
+        return url
+      }
+    }
+    vi.stubGlobal('URL', MockURL)
+
+    const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
+    const { materializedImageSrc } = await import('./imagePreload')
+    await preloadAnimeCharacterAssets()
+
+    // 24 张立绘物化：AnimeActionCue 用原始 URL 就能取到本地 blob
+    expect(objectUrls).toHaveLength(ANIME_CHARACTER_IDS.length * 2)
+    for (const id of ANIME_CHARACTER_IDS) {
+      expect(materializedImageSrc(animeActionArtUrl(id, 'peng'))).toMatch(/^blob:card\//)
+      expect(materializedImageSrc(animeActionArtUrl(id, 'hu'))).toMatch(/^blob:card\//)
+      expect(materializedImageSrc(animeCharacterAvatarUrl(id))).toBeNull()
+    }
+  })
 })

@@ -8,6 +8,7 @@ class MockImage {
   onload: null | (() => void) = null
   onerror: null | (() => void) = null
   private value = ''
+  decodeCalls = 0
 
   set src(value: string) {
     this.value = value
@@ -16,6 +17,24 @@ class MockImage {
   }
 
   get src() { return this.value }
+
+  decode() {
+    this.decodeCalls += 1
+    return MockImage.failUrls.has(this.value) ? Promise.reject(new Error('decode failed')) : Promise.resolve()
+  }
+}
+
+const NativeURL = globalThis.URL
+let objectUrlSeq = 0
+const createObjectURL = vi.fn(() => `blob:mock/${(objectUrlSeq += 1)}`)
+
+function stubObjectUrl() {
+  objectUrlSeq = 0
+  createObjectURL.mockClear()
+  class MockURL extends NativeURL {
+    static createObjectURL = createObjectURL
+  }
+  vi.stubGlobal('URL', MockURL)
 }
 
 function loadModule() {
@@ -28,6 +47,7 @@ describe('图片预热', () => {
     requested.length = 0
     MockImage.failUrls = new Set()
     vi.stubGlobal('Image', MockImage)
+    stubObjectUrl()
   })
 
   afterEach(() => vi.unstubAllGlobals())
@@ -84,5 +104,65 @@ describe('图片预热', () => {
     await expect(preloadImages(['/a.png'])).resolves.toBeUndefined()
 
     expect(requested).toEqual([])
+  })
+})
+
+describe('图片物化（blob URL + 预热解码）', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    requested.length = 0
+    MockImage.failUrls = new Set()
+    vi.stubGlobal('Image', MockImage)
+    stubObjectUrl()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['image']), { status: 200 })))
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('抓成 blob URL 并预热解码，渲染方可以按原始 URL 取到它', async () => {
+    const { materializeImages, materializedImageSrc } = await loadModule()
+
+    expect(materializedImageSrc('/a.jpg')).toBeNull()
+    await materializeImages(['/a.jpg', '/a.jpg', '/b.jpg'])
+
+    expect(fetch).toHaveBeenCalledTimes(2)     // 同批重复 URL 只抓一次
+    expect(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0])).toBe('/a.jpg')
+    expect(materializedImageSrc('/a.jpg')).toBe('blob:mock/1')
+    expect(materializedImageSrc('/b.jpg')).toBe('blob:mock/2')
+    // blob URL 被解码预热过（解码失败也不影响引用）
+    expect(requested).toContain('blob:mock/1')
+  })
+
+  it('已物化的 URL 再次调用不再抓取', async () => {
+    const { materializeImages } = await loadModule()
+
+    await materializeImages(['/a.jpg'])
+    await materializeImages(['/a.jpg'])
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('抓取失败静默且之后可重试', async () => {
+    const { materializeImages, materializedImageSrc } = await loadModule()
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }))
+
+    await expect(materializeImages(['/a.jpg'])).resolves.toBeUndefined()
+    expect(materializedImageSrc('/a.jpg')).toBeNull()
+
+    await materializeImages(['/a.jpg'])
+    // 重试成功：拿到 blob URL（首次失败没走到 createObjectURL，因此仍是第 1 个）
+    expect(materializedImageSrc('/a.jpg')).toBe('blob:mock/1')
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('环境不支持 blob URL 时直接返回，不抛错', async () => {
+    const { materializeImages, materializedImageSrc } = await loadModule()
+    vi.stubGlobal('URL', { createObjectURL: undefined })
+
+    await expect(materializeImages(['/a.jpg'])).resolves.toBeUndefined()
+
+    expect(fetch).not.toHaveBeenCalled()
+    expect(materializedImageSrc('/a.jpg')).toBeNull()
   })
 })
