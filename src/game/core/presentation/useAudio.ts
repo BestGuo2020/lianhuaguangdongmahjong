@@ -565,10 +565,20 @@ export function useAudio() {
     track.gain.disconnect()
   }
 
+  /** 收掉所有 Web Audio BGM 轨（在播的 + 正在淡出的）。不变量：同一时刻只有一条 BGM。 */
+  function stopAllWebBgmTracks() {
+    if (webBgmSwapTimer) { window.clearTimeout(webBgmSwapTimer); webBgmSwapTimer = 0 }
+    if (pendingWebBgmTrack) { stopWebBgmTrack(pendingWebBgmTrack); pendingWebBgmTrack = null }
+    if (webBgmTrack) { stopWebBgmTrack(webBgmTrack); webBgmTrack = null }
+  }
+
   /** 起一条新轨（从 0 线性淡起；fadeInSeconds=0 直接满音量）。 */
   function startWebBgmTrack(file: string, buffer: AudioBuffer, fadeInSeconds: number) {
     const ctx = ensureAudioContext()
     if (!ctx) return
+    // 不变量：同一时刻只有一条在播 BGM。调用方漏停旧轨时也必须先收干净——
+    // 只覆盖 webBgmTrack 引用会让旧轨继续以满音量播放且再也停不掉（"多次开局多重 BGM" 的根因）。
+    if (webBgmTrack) stopAllWebBgmTracks()
     if (ctx.state === 'suspended') void ctx.resume()
     if (!bgmGain) {
       bgmGain = ctx.createGain()
@@ -734,9 +744,20 @@ export function useAudio() {
     if (!soundOn.value || !bgmOn.value) return
     await preloadBgm()   // 确保 buffer 就绪，避免开局静音
     if (!bgmStarted.value || !soundOn.value || !bgmOn.value) return
-    // 开局起步：此刻没有在播的 BGM，直接进当前目标曲目，不做淡入。
-    if (bgmWebAudio && bgmBuffers.has(bgmTrackFile)) startWebBgmTrack(bgmTrackFile, bgmBuffers.get(bgmTrackFile)!, 0)
-    else await applyBgmTrack(bgmTrackFile, 0)
+    // 开局起步不做淡入。BGM 跨局常驻（回大厅不中断），因此这里必须先确认「目标曲目是否已在播」：
+    // 已经在播就续播（同一条轨），否则先收掉旧轨再起新轨，绝不能只是再起一条（见 startWebBgmTrack 的注释）。
+    if (bgmWebAudio) {
+      const buffer = bgmBuffers.get(bgmTrackFile)
+      if (buffer) {
+        if (webBgmTrack?.file === bgmTrackFile && !pendingWebBgmTrack && !webBgmSwapTimer) return
+        stopAllWebBgmTracks()
+        startWebBgmTrack(bgmTrackFile, buffer, 0)
+        return
+      }
+      // 目标曲目没有解码缓存：走回退路径接管，同时确保不留下仍在播的 Web Audio 轨。
+      stopAllWebBgmTracks()
+    }
+    await applyBgmTrack(bgmTrackFile, 0)
   }
 
   function stopEffects() {
@@ -788,10 +809,7 @@ export function useAudio() {
     removeBgmPrimeListeners()
     if (bgmTrackPort === bgmPort) bgmTrackPort = null
     if (bgmWebAudio) {
-      if (webBgmSwapTimer) { window.clearTimeout(webBgmSwapTimer); webBgmSwapTimer = 0 }
-      if (pendingWebBgmTrack) { stopWebBgmTrack(pendingWebBgmTrack); pendingWebBgmTrack = null }
-      if (webBgmTrack) stopWebBgmTrack(webBgmTrack)
-      webBgmTrack = null
+      stopAllWebBgmTracks()
       void audioContext?.close()
       audioContext = null
     } else {
