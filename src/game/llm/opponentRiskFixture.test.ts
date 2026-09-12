@@ -28,7 +28,7 @@ describe('对手风险定价 golden fixture（TS ↔ Python 同源）', () => {
       opponents: item.opponents.map((opponent) => ({
         discards: opponent.discards, melds: opponent.melds,
         winCount: opponent.winCount, locked: opponent.locked,
-        knownWins: (opponent as { knownWins?: OpponentKnownWin[] }).knownWins,
+        knownWins: opponent.knownWins,
       })),
     })
     const summary = profiles.map((profile) => ({
@@ -36,6 +36,7 @@ describe('对手风险定价 golden fixture（TS ↔ Python 同源）', () => {
       suspectSuit: profile.suspectSuit, locked: profile.locked,
       avoidsHonorTerminals: profile.avoidsHonorTerminals,
       axisSource: profile.axisSource, honorsInFlush: profile.honorsInFlush,
+      honorEmphasis: profile.honorEmphasis,
     }))
     expect(summary).toEqual(item.expectedProfiles)
 

@@ -71,6 +71,8 @@ export interface OpponentRiskTuning {
    * "我手里有两张" 只降低概率、不等于安全，所以现物折扣不得归零。
    */
   honorTerminalLadderFloor: number
+  /** 字牌刻子轴（三元 / 四喜 / 字一色）：非字牌数牌的系数。 */
+  honorEmphasisNumberFactor: number
   /** 花色回避：牌河 ≥ concealedRiverMin 且该花色占比 ≤ 该值 → 九莲 / 门清清一色嫌疑。 */
   suitAvoidShare: number
   /** 短牌河兜底：某花色张数 ≤ 该值（占比可能高于 suitAvoidShare）→ 弱信号，别把 v1 的灵敏度丢掉。 */
@@ -102,6 +104,7 @@ export const OPPONENT_RISK: Readonly<OpponentRiskTuning> = Object.freeze({
   honorTerminalZeroRiver: 10,
   honorTerminalMiddleFactor: 0.25,
   honorTerminalLadderFloor: 0.1,
+  honorEmphasisNumberFactor: 0.5,
   suitAvoidShare: 0.1,
   suitSparseCount: 1,
   suitZeroRiver: 12,
@@ -131,6 +134,8 @@ export interface OpponentRiskProfile {
   axisSource: 'inferred' | 'known' | null
   /** 混一色：字牌也算「本门」，不享受非嫌疑花色折扣。 */
   honorsInFlush: boolean
+  /** 三元 / 四喜 / 字一色一类：字牌照价，普通数牌相对便宜（字牌刻子轴）。 */
+  honorEmphasis: boolean
   locked: boolean
 }
 
@@ -161,6 +166,10 @@ const FLUSH_PATTERNS: ReadonlySet<string> = new Set([
   'pure-suit', 'nine-gates', 'all-green', 'mixed-suit',
 ])
 const HONORS_IN_FLUSH: ReadonlySet<string> = new Set(['mixed-suit'])
+/** 已公开番型 → 字牌刻子轴：三元 / 四喜 / 字一色一类，字牌才是他要的，普通数牌相对便宜。 */
+const HONOR_EMPHASIS_PATTERNS: ReadonlySet<string> = new Set([
+  'little-three-dragons', 'big-three-dragons', 'little-four-winds', 'big-four-winds', 'all-honors',
+])
 
 /** 幺九牌（数牌 1/9）。 */
 export function isTerminalTile(tile: TileType): boolean {
@@ -310,12 +319,14 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
     const knownWins = opponent.knownWins ?? []
     let axisSource: 'inferred' | 'known' | null = null
     let honorsInFlush = false
+    let honorEmphasis = false
     if (knownWins.length) {
       const strongest = knownWins.reduce((best, win) => (win.multiplier > best.multiplier ? win : best), knownWins[0])
       const patternTier: OpponentRiskTier = strongest.multiplier >= tuning.knownTier3Multiplier ? 3
         : strongest.multiplier >= tuning.knownTier2Multiplier ? 2
           : strongest.multiplier >= tuning.knownTier1Multiplier ? 1 : 0
       if (patternTier > 0) raise(patternTier, `已胡${strongest.label}`)
+      honorEmphasis = knownWins.some((win) => HONOR_EMPHASIS_PATTERNS.has(win.id))
       if (knownWins.some((win) => HONOR_TERMINAL_PATTERNS.has(win.id))) {
         avoidsHonorTerminals = true
         axisSource = 'known'
@@ -328,6 +339,8 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
           .map((win) => (win.tile ? suitOfTile(win.tile) : null))
           .find((suit): suit is SuitKey => suit !== null)
         if (flushTile) suspectSuit = flushTile
+      } else if (honorEmphasis) {
+        axisSource = 'known'
       }
     }
     if (axisSource === null && (avoidsHonorTerminals || suspectSuit !== null)) axisSource = 'inferred'
@@ -335,7 +348,8 @@ export function opponentRiskProfiles(input: OpponentRiskInput): OpponentRiskProf
     if (opponent.locked && winCount > 0) raise(tuning.lockedTier, `已胡${winCount}次仍听`)
     return {
       index, tier, factor: factorFor(tier, tuning), signals: [...new Set(signals)],
-      suspectSuit, avoidsHonorTerminals, axisSource, honorsInFlush, locked: Boolean(opponent.locked && winCount > 0),
+      suspectSuit, avoidsHonorTerminals, axisSource, honorsInFlush, honorEmphasis,
+      locked: Boolean(opponent.locked && winCount > 0),
     }
   })
 }
@@ -388,6 +402,10 @@ export function opponentPatternExposure(
       // 逐张危险轴：十三幺 / 字一色轴下中张几乎不被需要 → 便宜；但嫌疑花色内的中张照价（九莲要同一花色 1-9）。
       if (axisApplies && profile.avoidsHonorTerminals && isMiddleTile(tile) && !inSuspectSuit) {
         tileFactor *= resolved.honorTerminalMiddleFactor
+      }
+      // 字牌刻子轴（三元 / 四喜 / 字一色）：字牌照价，普通数牌便宜。
+      if (axisApplies && profile.honorEmphasis && !isHonorTile(tile)) {
+        tileFactor *= resolved.honorEmphasisNumberFactor
       }
       const candidate = profile.factor * tileFactor
       if (candidate > weight) { weight = candidate; chosen = profile }

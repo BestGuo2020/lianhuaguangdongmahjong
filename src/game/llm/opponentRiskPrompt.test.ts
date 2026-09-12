@@ -67,6 +67,21 @@ it('对手没有大牌信号时不注入该字段（保持旧 prompt 形状）',
   expect(payload.candidates.every((candidate: { features: { opponentRisk?: unknown } }) => candidate.features.opponentRisk === undefined)).toBe(true)
 })
 
+it('prompt 载荷带兜/弃政策与对手公开番型字段（v3）', () => {
+  const river: TileType[] = ['m2', 'm3', 'm5', 'm6', 'm7', 'p3', 'p4', 'p5', 'p6', 'p7', 's2', 's3']
+  const prompt = bloodFlowDecisionPrompt(view({ opponentDiscards: river }), [], 'defense')
+  const payload = JSON.parse(prompt.messages.user)
+  expect(payload.ruleSummary).toContain('兜/弃政策')
+  expect(payload.defense).toMatchObject({
+    mode: expect.stringMatching(/^(push|fold|normal)$/),
+    ownShanten: expect.any(Number),
+    ownBestWait: expect.any(Number),
+    ownAnyWaitReachable: expect.any(Boolean),
+    ownCeiling: expect.any(Number),
+  })
+  expect(Array.isArray(payload.opponentPatterns)).toBe(true)
+})
+
 it('门清十三幺嫌疑也进 prompt：信号 + 赔付档 + 规则摘要里的读牌说明', () => {
   const river: TileType[] = ['m2', 'm3', 'm5', 'm6', 'm7', 'p3', 'p4', 'p5', 'p6', 'p7', 's2', 's3']
   const prompt = bloodFlowDecisionPrompt(view({ opponentDiscards: river }), [], 'concealed')
@@ -77,5 +92,9 @@ it('门清十三幺嫌疑也进 prompt：信号 + 赔付档 + 规则摘要里的
   // 注意：prompt 载荷里的候选只有 id/label/features/summary（不含 action），所以按 features 取。
   const risky = payload.candidates.map((candidate: { features: { opponentRisk?: { payment: number } } }) =>
     candidate.features.opponentRisk?.payment ?? 0)
-  expect(Math.max(...risky)).toBeGreaterThanOrEqual(80)   // 字牌/幺九按十六倍级量级定价
+  // 该局面触发兜牌 → (c) 硬约束已在候选层撤掉高危张，因此可见的赔付档只剩安全档（0 点）。
+  expect(payload.defense.restricted).toBe(true)
+  expect(payload.defense.mode).toBe('fold')
+  expect(Math.max(...risky)).toBe(0)
+  expect(payload.candidates.some((candidate: { features: { opponentRisk?: unknown } }) => candidate.features.opponentRisk)).toBe(true)
 })
