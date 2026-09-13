@@ -1,7 +1,7 @@
 import type { PatternDefinition, PatternId } from '../patterns/types'
 import type { BloodFlowRuleConfig } from './types'
 import type { DefensePolicyConfig } from './defensePolicy'
-import { BLOOD_FLOW_BIG_HAND_ROUTE, type BigHandRouteConfig } from './bigHandRoute'
+import { BLOOD_FLOW_BIG_HAND_ROUTE, BLOOD_FLOW_BIG_HAND_ROUTE_WIDE, type BigHandRouteConfig } from './bigHandRoute'
 import type { SevenPairsModel } from './patternPotentials'
 
 function pattern(id: PatternId, label: string, weight: number, excludes: PatternId[] = []): PatternDefinition {
@@ -227,7 +227,12 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   riskFactorTier3: 32,
   riskOffSuitFactor: 0.5,
   defense: BLOOD_FLOW_DEFENSE,
-  bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE,
+  /**
+   * 大牌路线（v4 + 2026-09-14 推广）：默认对**普通 AI 座**启用五条线
+   * （十三幺/九莲/清一色/混一色/碰碰胡）。要回到"只有十三幺/九莲、只作用于 LLM"，
+   * 改成 `BLOOD_FLOW_BIG_HAND_ROUTE` 即可（一行回退）。
+   */
+  bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE_WIDE,
   llmEvFeatures: true,
   kongValue: BLOOD_FLOW_KONG_VALUE,
   /** 七对潜力模型：默认开启（对齐引擎记账 + 豪华七对方向）；改成 'off' 一键回退旧口径做 A/B。 */
@@ -243,7 +248,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
  */
 export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
   ...BLOOD_FLOW_AI,
-  bigHandRoute: Object.freeze({ ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }),
+  bigHandRoute: Object.freeze({ ...BLOOD_FLOW_BIG_HAND_ROUTE_WIDE, mode: 'llm' as const }),
 })
 
 /** Shared by the local continuation and the existing DOM/3D director. */

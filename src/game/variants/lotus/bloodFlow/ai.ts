@@ -7,6 +7,7 @@ import { visibleTiles } from './seatView'
 import type { BloodFlowAiConfig } from './config'
 import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLOW_KONG_VALUE } from './config'
 import { kongCandidateValue, type KongValueKind } from './kongValue'
+import { narrowActionsToRoute } from './bigHandRoute'
 import { patternPotentialEv, patternPotentials, waitingTilesCached } from './patternPotentials'
 import { bloodFlowEvContext } from './evContext'
 import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
@@ -286,6 +287,31 @@ interface EvExtras {
 }
 
 /**
+ * 本地 AI 座的大牌路线收窄（2026-09-14 追加，用户定案"推广到普通 AI 座"）。
+ *
+ * 只在 `config.bigHandRoute.mode` 为 'bot' / 'all' 时生效；收窄逻辑与 LLM 座共用同一份
+ * `narrowActionsToRoute`（含时机门槛与"路线收益 ≥ 立即胡 × declineWinRatio 才撤胡"的承诺门槛，
+ * 因此**已经能胡成的大牌不会被放弃**）。
+ */
+function narrowRoutesForBot(
+  view: BloodFlowSeatView, actions: readonly BloodFlowAction[], config: BloodFlowAiConfig,
+) {
+  if (config.bigHandRoute.mode !== 'bot' && config.bigHandRoute.mode !== 'all') {
+    return { actions, collapsed: false, route: null }
+  }
+  const player = view.players[view.seat]
+  const top = Math.max(...view.players.filter(other => other.seat !== view.seat).map(other => other.score))
+  return narrowActionsToRoute(player.hand, player.melds, view.jokers, actions, {
+    config: config.bigHandRoute,
+    basePoints: BLOOD_FLOW_CONFIG.basePoints,
+    immediateWinPayment: view.ownScore?.paymentPerPayer ?? 0,
+    wallCount: view.wallCount,
+    scoreDeficit: Math.max(0, top - player.score),
+    claimedTile: view.window?.source.kind === 'discard' ? view.window.source.tile : undefined,
+  })
+}
+
+/**
  * 贪婪 EV 决策：胡 / 改张 / 吃碰杠 / 过 全部折算期望收益，取最大者。
  * 锁手后不变（有胡就胡、摸打、自动过）；计分、封顶、锁手规则零改动。
  */
@@ -293,7 +319,9 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   const player = view.players[view.seat]
   // 政策一次决策只算一遍；候选构造与兜牌分支共用（硬约束下候选必须用同一份 config）。
   const defense = config.defense.mode === 'off' ? undefined : bloodFlowDefensePolicy(view, config)
-  const moves = bloodFlowAiActions(view, config, defense)
+  // 大牌路线收窄（2026-09-14）：mode 'bot' / 'all' 时也作用于本地 AI 座（LLM 座走 buildBloodFlowDecisionInput）。
+  const routePlan = narrowRoutesForBot(view, bloodFlowAiActions(view, config, defense), config)
+  const moves = routePlan.actions
   if (!moves.length) return null
   if (moves.length === 1) return moves[0]
   const locked = view.public.seats[view.seat].locked

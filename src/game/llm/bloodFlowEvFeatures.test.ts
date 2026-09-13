@@ -5,6 +5,7 @@ import { bloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import type { BloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { seededRandom } from '../variants/lotus/bloodFlow/simulation'
 import { BLOOD_FLOW_AI } from '../variants/lotus/bloodFlow/config'
+import { BLOOD_FLOW_BIG_HAND_ROUTE } from '../variants/lotus/bloodFlow/bigHandRoute'
 import type { BloodFlowAction } from '../variants/lotus/bloodFlow/state'
 import type { SourceTileEvent, WinSource } from '../variants/lotus/bloodFlow/types'
 import { buildBloodFlowDecisionInput } from './bloodFlowDecisionInput'
@@ -69,7 +70,10 @@ it('injects robbed-kong win/pass EV on both options and suggests the greedy side
     windowKind: 'win', sourceKind: 'added-kong',
     ownScore: { paymentPerPayer: 20, source: 'robbed-kong' },
   })
-  const built = buildBloodFlowDecisionInput(v, 'rob')
+  // 路线关闭（显式）时才看得到"胡/过两支都摆出来"的 EV 对照；
+  // 默认配置已把大牌路线收窄推广到两端，这手"4 刻 + 单张"会被判成碰碰胡/四暗刻路线并承诺（见下一条用例）。
+  const noRoute = { ...BLOOD_FLOW_AI, bigHandRoute: { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'off' as const } }
+  const built = buildBloodFlowDecisionInput(v, 'rob', {}, noRoute)
   const winCandidate = built.candidates.find(c => c.action.kind === 'win')!
   const passCandidate = built.candidates.find(c => c.action.kind === 'pass')!
   expect(winCandidate.features.ev?.rob).toBeDefined()
@@ -78,6 +82,25 @@ it('injects robbed-kong win/pass EV on both options and suggests the greedy side
   expect(rob.passEv).toBeGreaterThan(rob.winEv)
   expect(built.request?.engineSuggestion).toBe(passCandidate.id)
   expect(passCandidate.summary).toContain('抢杠期望')
+})
+
+it('好手牌（4 刻 + 单张）默认会放弃 20 点抢杠胡去追碰碰胡/四暗刻（用户定案的推广口径）', () => {
+  const nearBig: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm2', 'm2', 'm3', 'm3', 'm3', 'm4', 'm4', 'm4', 'east']
+  const v = view({
+    hand: nearBig, jokers: [], ownActions: [{ kind: 'win' }, { kind: 'pass' }],
+    windowKind: 'win', sourceKind: 'added-kong',
+    ownScore: { paymentPerPayer: 20, source: 'robbed-kong' },
+  })
+  const built = buildBloodFlowDecisionInput(v, 'rob-route')
+  expect(built.collapsedByRoute).toBe(true)
+  expect(built.candidates.some(c => c.action.kind === 'win')).toBe(false)
+  // 但同一手牌若已经胡成大牌（160 点 ≥ 路线收益的一半），胡必须保留（不能让收窄"放弃大牌"）。
+  const rich = view({
+    hand: nearBig, jokers: [], ownActions: [{ kind: 'win' }, { kind: 'pass' }],
+    windowKind: 'win', sourceKind: 'added-kong',
+    ownScore: { paymentPerPayer: 160, source: 'robbed-kong' },
+  })
+  expect(buildBloodFlowDecisionInput(rich, 'rob-route-rich').candidates.some(c => c.action.kind === 'win')).toBe(true)
 })
 
 it('marks an early cheap win below the floor with the decline reason and suggests declining', () => {

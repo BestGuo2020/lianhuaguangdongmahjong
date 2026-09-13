@@ -164,11 +164,14 @@ describe('候选层收窄（只作用于 LLM）', () => {
     expect(built.candidates.map(candidate => candidate.action.kind)).toContain('win')
   })
 
-  it('默认关闭（mode off）：候选与现状完全一致，仍有"胡"与碰', () => {
-    const built = buildBloodFlowDecisionInput(view(ORPHANS13, { win: 80 }), 'route-off', {}, BLOOD_FLOW_AI)
+  it('路线关闭（mode off，显式）：候选与现状完全一致，仍有"胡"与碰', () => {
+    // 注意：默认配置（BLOOD_FLOW_AI）自 2026-09-14 起已推广到五条路线 + 两端生效，
+    // 所以"关闭口径"必须显式构造，不能再用 BLOOD_FLOW_AI 当基线。
+    const off = { ...BLOOD_FLOW_AI, bigHandRoute: { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'off' as const } }
+    const built = buildBloodFlowDecisionInput(view(ORPHANS13, { win: 80 }), 'route-off', {}, off)
     expect(built.bigHandRoute).toBeNull()
     expect(built.candidates.map(candidate => candidate.action.kind)).toContain('win')
-    expect(buildBloodFlowDecisionInput(view(ORPHANS11, { claim: true }), 'route-off-claim', {}, BLOOD_FLOW_AI)
+    expect(buildBloodFlowDecisionInput(view(ORPHANS11, { claim: true }), 'route-off-claim', {}, off)
       .candidates.map(candidate => candidate.action.kind)).toContain('peng')
   })
 
