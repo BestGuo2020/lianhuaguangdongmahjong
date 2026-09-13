@@ -2,7 +2,7 @@ import {buildCandidateFeatures, buildPublicDecisionSnapshot, unknownCandidateFea
 import {candidateLine} from './prompt'
 import type {Candidate, CanonicalAction} from './schema'
 import {tileName} from '../core/rules/tiles'
-import {bloodFlowAiActions, decideBloodFlowAction, decideBloodFlowActionEv} from '../variants/lotus/bloodFlow/ai'
+import {bloodFlowAiActions, decideBloodFlowAction, decideBloodFlowActionEv, bloodFlowKongValue} from '../variants/lotus/bloodFlow/ai'
 import type {BloodFlowAiConfig} from '../variants/lotus/bloodFlow/config'
 import {BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG} from '../variants/lotus/bloodFlow/config'
 import {bloodFlowEvContext} from '../variants/lotus/bloodFlow/evContext'
@@ -11,7 +11,7 @@ import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
 import {narrowActionsToRoute, type BigHandRoute} from '../variants/lotus/bloodFlow/bigHandRoute'
 
 export interface BloodFlowDecisionMetadata {roundIndex?:number;dealerIndex?:number;seatWind?:string;roundWind?:string}
-export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持鸡胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠、豪华七对、断幺九、全带幺、门清平胡（仅标准四面子一将型）、一色三步高/四步高、一色三节高/四节高、清龙。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶128倍；杠另有加成（明杠+1、暗杠/风杠+2，但已成三杠/四杠番种时不再叠加）。同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达鸡胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。对手没副露时也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。对手已胡过的番型同样是公开信息（features.opponentRisk.signals 里的「已胡十三幺」等）：已公开番型限定了他的牌型，锁手后依然成立，因此比读牌河更可靠。兜/弃政策：state.defense.mode 为 fold 时，本家未听牌且可达听口过窄而对手已做成十六倍级大牌——此时应只打最安全的牌、不要吃碰杠；若 ownAnyWaitReachable 为真（打一张即单吊任意听，此后每巡必胡、永不弃牌）或 ownCeiling 不低于对手倍率，则应继续进攻。state.defense.restricted 为真时，候选已在本地下游收窄（吃碰杠不会出现、弃牌只留安全档），只需在给出的候选里选择，不要因为缺少选项而报错。'
+export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：沿用翻精、白板受限替代、数牌吃和字牌顺；支持鸡胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠、豪华七对、断幺九、全带幺、门清平胡（仅标准四面子一将型）、一色三步高/四步高、一色三节高/四节高、清龙。自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶128倍；杠另有加成（明杠+1、暗杠/风杠+2，但已成三杠/四杠番种时不再叠加）。杠候选带 features.kongValue（开杠价值 = 杠收益 − 防守风险 − 自手牌型损失）：net ≤ 0 表示这一杠会拆掉自己的七对/豪华七对、破坏门清平胡或让向听变差，默认建议不会是杠。同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达鸡胡的8~32倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。对手没副露时也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。对手已胡过的番型同样是公开信息（features.opponentRisk.signals 里的「已胡十三幺」等）：已公开番型限定了他的牌型，锁手后依然成立，因此比读牌河更可靠。兜/弃政策：state.defense.mode 为 fold 时，本家未听牌且可达听口过窄而对手已做成十六倍级大牌——此时应只打最安全的牌、不要吃碰杠；若 ownAnyWaitReachable 为真（打一张即单吊任意听，此后每巡必胡、永不弃牌）或 ownCeiling 不低于对手倍率，则应继续进攻。state.defense.restricted 为真时，候选已在本地下游收窄（吃碰杠不会出现、弃牌只留安全档），只需在给出的候选里选择，不要因为缺少选项而报错。'
 
 function label(action:BloodFlowAction,view:BloodFlowSeatView):string {
   const player=view.players[view.seat]
@@ -104,6 +104,13 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
         features.ev={developEv:Math.round(evCtx.developEv),...(evCtx.robEv?{rob:evCtx.robEv}:{})}
       }
     }
+    // 开杠价值（第 3 步）：杠候选带上"杠收益 − 防守风险 − 自手牌型损失"的拆解，
+    // 让模型看得到这一杠要拆掉什么（默认建议已经按同一口径算过）。
+    const kong=bloodFlowKongValue(offeredView,action,aiConfig)
+    if(kong)features.kongValue={gain:Math.round(kong.gain),risk:Math.round(kong.risk),
+      selfLoss:{total:Math.round(kong.selfLoss.total),sevenPairs:Math.round(kong.selfLoss.sevenPairs),
+        concealedHand:Math.round(kong.selfLoss.concealedHand),shanten:Math.round(kong.selfLoss.shanten)},
+      net:Math.round(kong.net),...(kong.selfLoss.reasons.length?{reasons:kong.selfLoss.reasons}:{})}
     const common:Candidate={id:`A${index}`,label:label(action,view),action:mapped,features,legalityKey:JSON.stringify(action)}
     return {...common,action,canonical:common,summary:candidateLine(common,'lotus-blood-flow')}
   })

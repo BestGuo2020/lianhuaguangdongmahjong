@@ -49,6 +49,18 @@ export interface CandidateFeatures {
     rob?: { winEv: number; passEv: number }
     developEv?: number
   }
+  /**
+   * 开杠价值（第 3 步，2026-09-13；只出现在杠候选上）：
+   * `杠收益 − 防守风险 − 自手牌型损失 = net`，net ≤ 0 表示这一杠会亏掉自己的手牌型
+   * （拆七对/豪华七对、破坏门清平胡、向听恶化），默认建议因此会是"过/胡"而不是杠。
+   */
+  kongValue?: {
+    gain: number
+    risk: number
+    selfLoss: { total: number; sevenPairs: number; concealedHand: number; shanten: number }
+    net: number
+    reasons?: string[]
+  }
 }
 
 /** 规范动作：内部牌面/索引，不直接等同 WS 报文（§6.4） */

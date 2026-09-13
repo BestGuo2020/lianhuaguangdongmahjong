@@ -120,6 +120,11 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
   }
   if (features.ev?.rob) parts.push(`抢杠期望：胡${features.ev.rob.winEv} vs 过${features.ev.rob.passEv}`)
   if (features.ev?.developEv !== undefined) parts.push(`过：发育期望${features.ev.developEv}`)
+  if (features.kongValue) {
+    const kong = features.kongValue
+    parts.push(`开杠价值：${kong.net > 0 ? '+' : ''}${kong.net}（收益${kong.gain}−风险${kong.risk}−自损${kong.selfLoss.total}）`)
+    if (kong.reasons?.length) parts.push(`开杠代价：${kong.reasons.join('、')}`)
+  }
   if (features.risks.length) parts.push(`注意：${features.risks.join('；')}`)
   return `${candidate.id} ${candidate.label}${parts.length ? ` ｜ ${parts.join('｜')}` : ''}`
 }
