@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerLlmAudioPlayer, resetLlmAudioBusForTests } from '../core/presentation/llmAudioBus'
 import type { LlmProviderPreset } from './config'
-import { LocalTtsClient, resolveLocalTtsBaseUrl, resolveLocalTtsVoiceKey } from './localTtsClient'
+import { isPlatformTtsHost, LocalTtsClient, resolveLocalTtsBaseUrl, resolveLocalTtsVoiceKey } from './localTtsClient'
 
 function preset(overrides: Partial<LlmProviderPreset> = {}): LlmProviderPreset {
   return {
@@ -57,11 +57,43 @@ describe('LocalTtsClient', () => {
     expect(resolveLocalTtsVoiceKey(preset({ ttsVoiceKey: 'default' }))).toBe('default')
   })
 
-  it('本机两分支统一走同源代理，lumigrav 使用生产回退', () => {
+  it('本机两分支统一走同源代理，平台域名（含新域名 gamesvibe.app）走生产网关', () => {
     vi.stubGlobal('location', { hostname: '127.0.0.1' })
     expect(resolveLocalTtsBaseUrl()).toBe('')
     vi.stubGlobal('location', { hostname: 'room.lumigrav.space' })
     expect(resolveLocalTtsBaseUrl()).toBe('https://www.bestguo.top:58000')
+    // 2026-09-14：平台换域名到 gamesvibe.app 后，旧代码只认 lumigrav.space →
+    // 同源 /api/local-tts/synthesize 404 → LLM/llmAnime 主题静默没有语音。
+    vi.stubGlobal('location', { hostname: 'gamesvibe.app' })
+    expect(resolveLocalTtsBaseUrl()).toBe('https://www.bestguo.top:58000')
+    vi.stubGlobal('location', { hostname: 'play.gamesvibe.app' })
+    expect(resolveLocalTtsBaseUrl()).toBe('https://www.bestguo.top:58000')
+    vi.stubGlobal('location', { hostname: 'lianhuaguangdongmahjong.guoguo-labs.online' })
+    expect(resolveLocalTtsBaseUrl()).toBe('')
+    expect(isPlatformTtsHost('gamesvibe.app')).toBe(true)
+    expect(isPlatformTtsHost('notgamesvibe.app')).toBe(false)
+  })
+
+  it('同源基址 404（平台域名换掉但代码没跟上）时自动回退到网关，并记住可用基址', async () => {
+    const player = vi.fn(async () => true)
+    registerLlmAudioPlayer(player)
+    const audioPath = `/api/local-tts/audio/${'c'.repeat(64)}.mp3`
+    const seen: string[] = []
+    const fetcher = vi.fn(async (url: string) => {
+      seen.push(url)
+      if (url.startsWith('/api/local-tts')) return { ok: false, status: 404 }
+      return { ok: true, json: async () => ({ audioUrl: audioPath }) }
+    })
+    const client = new LocalTtsClient('', fetcher as never)
+    expect(await client.speak(0, '这局我先走了。', 'deepseek', '稳健')).toBe(true)
+    expect(seen).toEqual([
+      '/api/local-tts/synthesize',
+      'https://www.bestguo.top:58000/api/local-tts/synthesize',
+    ])
+    // 第二次直接命中网关，不再白撞一次 404。
+    expect(await client.speak(0, '稳住。', 'deepseek', '稳健')).toBe(true)
+    expect(seen[2]).toBe('https://www.bestguo.top:58000/api/local-tts/synthesize')
+    expect(seen).toHaveLength(3)
   })
 
   it('resolveAudioUrl 只合成不播放，供一炮多响组播取地址', async () => {

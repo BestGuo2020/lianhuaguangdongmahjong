@@ -8,7 +8,15 @@ import { inferLlmProviderType, type LlmProviderPreset, type LlmStyle, type LlmTt
 import type { LlmSpeechPriority } from './speechPolicy'
 import { avatarFolderOf } from './persona'
 
-const VIBEHUB_GATEWAY_FALLBACK = 'https://www.bestguo.top:58000'
+/**
+ * 自有 TTS 网关（持有供应商 key，前端不能直连供应商）。
+ * 平台域名换过一次（`*.lumigrav.space` → `gamesvibe.app`），而这里原来只认旧域名，
+ * 导致线上同源请求 `/api/local-tts/synthesize` 返回 404、LLM/llmAnime 主题**静默没有语音**。
+ * 现在改为：域名白名单 + 运行期回退探针（见 LocalTtsClient.synthesize），换域名不会再静默失效。
+ */
+const LOCAL_TTS_GATEWAY = 'https://www.bestguo.top:58000'
+/** 平台域名（vibehub 发布域，页面本身没有后端，必须走网关）。 */
+const PLATFORM_TTS_HOSTS = ['lumigrav.space', 'gamesvibe.app']
 const AUDIO_PATH_RE = /^\/api\/local-tts\/audio\/[0-9a-f]{64}\.mp3$/
 const REQUEST_TIMEOUT_MS = 8_000
 
@@ -24,6 +32,10 @@ function trimBase(value: string): string {
   return value.trim().replace(/\/+$/, '')
 }
 
+export function isPlatformTtsHost(hostname: string): boolean {
+  return PLATFORM_TTS_HOSTS.some(host => hostname === host || hostname.endsWith(`.${host}`))
+}
+
 export function resolveLocalTtsBaseUrl(): string {
   const configured = import.meta.env.VITE_LOCAL_TTS_BASE_URL || import.meta.env.VITE_API_BASE
   if (configured) return trimBase(configured)
@@ -32,8 +44,8 @@ export function resolveLocalTtsBaseUrl(): string {
     // 本地统一走同源 /api proxy，避免 localhost → 127.0.0.1 跨源/PNA 拦截。
     return ''
   }
-  if (typeof location !== 'undefined' && location.hostname.endsWith('lumigrav.space')) {
-    return VIBEHUB_GATEWAY_FALLBACK
+  if (typeof location !== 'undefined' && isPlatformTtsHost(location.hostname)) {
+    return LOCAL_TTS_GATEWAY
   }
   // master 生产同源；本地开发由 Vite /api proxy 转发。
   return ''
@@ -70,6 +82,8 @@ export class LocalTtsClient {
   private readonly activeControllers = new Set<AbortController>()
   private readonly fetchImpl: FetchLike
   private messageId = 0
+  /** 同源基址失败后已探到的可用网关（运行期记忆，避免每次请求都白跑一次 404）。 */
+  private resolvedBaseUrl: string | null = null
 
   constructor(
     private readonly baseUrl = resolveLocalTtsBaseUrl(),
@@ -78,6 +92,13 @@ export class LocalTtsClient {
     // Window.fetch 是带宿主品牌检查的原生方法；作为类字段调用会把 this 错绑为
     // LocalTtsClient，Chromium 抛 Illegal invocation。显式绑定 globalThis。
     this.fetchImpl = fetchImpl.bind(globalThis)
+  }
+
+  /** 请求基址候选：同源基址为空时额外挂一个网关探针（页面所在平台没有后端时的兜底）。 */
+  private baseCandidates(): string[] {
+    if (this.resolvedBaseUrl !== null) return [this.resolvedBaseUrl]
+    if (this.baseUrl) return [this.baseUrl]
+    return [this.baseUrl, LOCAL_TTS_GATEWAY]
   }
 
   async speak(
@@ -161,6 +182,27 @@ export class LocalTtsClient {
     cacheIdentity = '',
     signal?: AbortSignal,
   ): Promise<string | null> {
+    for (const base of this.baseCandidates()) {
+      const attempt = await this.synthesizeAt(base, text, voiceKey, style, cacheIdentity, signal)
+      if (attempt.url) {
+        // 探针成功的基址记下来：后续请求不再先撞一次死基址（例如平台换域名后的同源 404）。
+        if (base !== this.baseUrl) this.resolvedBaseUrl = base
+        return attempt.url
+      }
+      // 只有"没打通"（网络/状态码）才换下一个基址；打通了但响应不合契约说明网关本身有问题，换也没用。
+      if (!attempt.retryable || signal?.aborted) return null
+    }
+    return null
+  }
+
+  private async synthesizeAt(
+    base: string,
+    text: string,
+    voiceKey: string,
+    style: LlmStyle,
+    cacheIdentity: string,
+    signal?: AbortSignal,
+  ): Promise<{ url: string | null; retryable: boolean }> {
     const controller = new AbortController()
     this.activeControllers.add(controller)
     const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -168,25 +210,27 @@ export class LocalTtsClient {
     signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) controller.abort()
     try {
-      const response = await this.fetchImpl(`${this.baseUrl}/api/local-tts/synthesize`, {
+      const response = await this.fetchImpl(`${base}/api/local-tts/synthesize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voiceKey, style, cacheIdentity }),
         signal: controller.signal,
       })
       if (!response.ok) {
-        if (import.meta.env.DEV) console.warn(`[LocalTTS] synthesize HTTP ${response.status}`)
-        return null
+        if (import.meta.env.DEV) console.warn(`[LocalTTS] synthesize HTTP ${response.status}${base ? ` @ ${base}` : ''}`)
+        return { url: null, retryable: true }
       }
       const payload = await response.json() as Partial<LocalTtsResponse>
-      if (typeof payload.audioUrl !== 'string' || !AUDIO_PATH_RE.test(payload.audioUrl)) return null
-      return this.baseUrl ? `${this.baseUrl}${payload.audioUrl}` : payload.audioUrl
+      if (typeof payload.audioUrl !== 'string' || !AUDIO_PATH_RE.test(payload.audioUrl)) {
+        return { url: null, retryable: false }
+      }
+      return { url: base ? `${base}${payload.audioUrl}` : payload.audioUrl, retryable: false }
     } catch (error) {
       if (import.meta.env.DEV) {
         const reason = error instanceof Error ? `${error.name}: ${error.message}` : 'unknown'
-        console.warn(`[LocalTTS] synthesize failed: ${reason}`)
+        console.warn(`[LocalTTS] synthesize failed${base ? ` @ ${base}` : ''}: ${reason}`)
       }
-      return null
+      return { url: null, retryable: true }
     } finally {
       this.activeControllers.delete(controller)
       signal?.removeEventListener('abort', abort)
