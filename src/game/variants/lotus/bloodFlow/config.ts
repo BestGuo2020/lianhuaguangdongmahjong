@@ -2,6 +2,7 @@ import type { PatternDefinition, PatternId } from '../patterns/types'
 import type { BloodFlowRuleConfig } from './types'
 import type { DefensePolicyConfig } from './defensePolicy'
 import { BLOOD_FLOW_BIG_HAND_ROUTE, type BigHandRouteConfig } from './bigHandRoute'
+import type { SevenPairsModel } from './patternPotentials'
 
 function pattern(id: PatternId, label: string, weight: number, excludes: PatternId[] = []): PatternDefinition {
   return Object.freeze({ id, label, weight, excludes: Object.freeze(excludes) })
@@ -185,6 +186,11 @@ export interface BloodFlowAiConfig {
   readonly llmEvFeatures: boolean
   /** 开杠价值（第 3 步）：杠候选按 收益 − 防守风险 − 自手牌型损失 计分。 */
   readonly kongValue: KongValueConfig
+  /**
+   * 七对潜力模型（2026-09-13 追加）：'off' = 旧口径（七对只按 4 番估、多余精牌直接丢掉；
+   * 经典玩法与旧 A/B 臂逐位一致）；'ev' = 对齐引擎记账 + 新增豪华七对（12 番）方向。
+   */
+  readonly sevenPairsModel: SevenPairsModel
 }
 
 /** 兜/弃政策默认值（v3；规则见 defensePolicy.ts 顶部注释）。 */
@@ -224,6 +230,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE,
   llmEvFeatures: true,
   kongValue: BLOOD_FLOW_KONG_VALUE,
+  /** 七对潜力模型：默认开启（对齐引擎记账 + 豪华七对方向）；改成 'off' 一键回退旧口径做 A/B。 */
+  sevenPairsModel: 'ev',
 })
 
 /**

@@ -55,13 +55,27 @@ export function thirteenOrphansPotential(hand: readonly TileType[], jokers: read
   return (kindsAfterJokers - 10) * 3 + pairScore
 }
 
-/** 七对子潜力：已有对子数 + 精牌可补单张成对。 */
+/** 七对子潜力（旧口径）：已有对子数 + 精牌可补单张成对。**多余精牌被丢掉**，仅供经典玩法与旧 A/B 臂使用。 */
 export function sevenPairsPotential(hand: readonly TileType[], jokers: readonly TileType[]) {
+  const account = sevenPairsAccount(hand, jokers)
+  const nearSeven = account.pairs + Math.min(account.singles, account.jokers)
+  if (nearSeven < 5) return 0
+  return nearSeven * 4
+}
+
+/**
+ * 七对账目（2026-09-13 追加，**对齐引擎 isSevenPairs 的记账**）：
+ *   · c=2 → 1 对；c=4 → 2 对；c=3 → 1 对 + 1 单（与引擎一致，刻子不是"白拿一对"）；
+ *   · 精牌先补单张（min(singles, jokers)），**剩余精牌两两成对**（引擎里 2 张精牌可以自己成一对）；
+ *   · jokersForQuads = 补完单张后剩下的精牌数，用于判定"能不能补成四张"。
+ * 旧口径（sevenPairsPotential）只算到第一步，多余精牌直接丢掉——精越多估值反而越低，方向是反的。
+ */
+export function sevenPairsAccount(hand: readonly TileType[], jokers: readonly TileType[]) {
   const jokerSet = new Set(jokers)
   const counts = new Map<TileType, number>()
-  let jokerCount = 0
+  let jokersInHand = 0
   hand.forEach((tile) => {
-    if (jokerSet.has(tile)) jokerCount += 1
+    if (jokerSet.has(tile)) jokersInHand += 1
     else counts.set(tile, (counts.get(tile) ?? 0) + 1)
   })
   let pairs = 0
@@ -70,10 +84,51 @@ export function sevenPairsPotential(hand: readonly TileType[], jokers: readonly 
     pairs += Math.floor(count / 2)
     singles += count % 2
   })
-  const nearSeven = pairs + Math.min(singles, jokerCount)
-  if (nearSeven < 5) return 0
-  return nearSeven * 4
+  const pairedByJokers = Math.min(singles, jokersInHand)
+  const leftovers = jokersInHand - pairedByJokers
+  return {
+    pairs, singles, jokers: jokersInHand,
+    effectivePairs: pairs + pairedByJokers + Math.floor(leftovers / 2),
+    counts,
+  }
 }
+
+/** 七对进度 0..1（有效对子数 / 7）。 */
+export function sevenPairsProgress(hand: readonly TileType[], jokers: readonly TileType[]) {
+  return Math.max(0, Math.min(1, sevenPairsAccount(hand, jokers).effectivePairs / 7))
+}
+
+/**
+ * 四张可达性 0..1（豪华七对的第二半）。判定顺序（jokers = 手上精牌总数）：
+ *   count + jokers ≥ 4 → 1（实体四张 / 刻子+精 / 对子+2 精 / 单张+3 精：**精牌能直接补成四张**）
+ *   count ≥ 3          → 0.6（只有刻子，还得摸第 4 张）
+ *   count + jokers = 3 → 0.5（对子+1 精 或 单张+2 精）
+ *   count = 2          → 0.2（对子，还差两张）
+ * 注意：这里用**手上全部精牌**估四张，不再扣掉"补单张"的那部分——引擎的拆解是穷举的，
+ * 同一张精牌到底补单张还是补四张由它选最优；而豪华七对的价值恰恰来自"精→四张"这条路，
+ * 先扣单张会把这条路整条吃掉（实测：3 张实体 + 1 精的刻子会被判成 0.6 而不是 1）。
+ */
+export function quadAvailability(hand: readonly TileType[], jokers: readonly TileType[]) {
+  const account = sevenPairsAccount(hand, jokers)
+  const available = account.jokers
+  let best = 0
+  account.counts.forEach((count) => {
+    const reach = count + available
+    if (reach >= 4) best = Math.max(best, 1)
+    else if (count >= 3) best = Math.max(best, 0.6)
+    else if (reach === 3) best = Math.max(best, 0.5)
+    else if (count === 2) best = Math.max(best, 0.2)
+  })
+  return best
+}
+
+/** 豪华七对进度 0..1 = 七对进度 × 四张可达性（两半都成立才叫豪华）。 */
+export function luxurySevenPairsProgress(hand: readonly TileType[], jokers: readonly TileType[]) {
+  return sevenPairsProgress(hand, jokers) * quadAvailability(hand, jokers)
+}
+
+/** 七对模型开关：'off' = 2026-09-13 之前的口径（经典玩法与旧 A/B 臂逐位一致）；'ev' = 对齐引擎记账 + 豪华七对方向。 */
+export type SevenPairsModel = 'off' | 'ev'
 
 // ── 计数与结构工具 ──
 
@@ -138,8 +193,18 @@ export interface PatternDirection {
   score: number
 }
 
-/** 每种方向给定结构下的接近度；纯估算，供排序与门槛比较。 */
-export function patternPotentials(hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[]): PatternDirection[] {
+/**
+ * 每种方向给定结构下的接近度；纯估算，供排序与门槛比较。
+ *
+ * `model`（2026-09-13 追加，默认 'off' 保持旧口径逐位不变）：
+ * 'off' = 七对方向用旧 `sevenPairsPotential`（多余精牌丢掉，没有豪华七对方向）；
+ * 'ev'  = 七对方向用对齐引擎记账的 `sevenPairsProgress`，并**新增豪华七对（12 番）方向**
+ *         （进度 = 七对进度 × 四张可达性）。精牌能补成四张、两张精能自己成对，这两件事只有 'ev' 会算。
+ */
+export function patternPotentials(
+  hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
+  model: SevenPairsModel = 'off',
+): PatternDirection[] {
   const s = shape(hand, melds, jokers)
   const effective = hand.length + 3 * melds.length
   const directions: PatternDirection[] = []
@@ -256,26 +321,44 @@ export function patternPotentials(hand: readonly TileType[], melds: readonly Rea
   }
   const orphans = thirteenOrphansPotential(hand, wild)
   if (orphans > 0) add('thirteenOrphans', Math.min(1, orphans / 17))
-  const seven = sevenPairsPotential(hand, wild)
-  if (seven > 0) add('sevenPairs', Math.min(1, seven / 28))
+  if (model === 'ev') {
+    // 对齐引擎记账：多余精牌两两成对不再丢掉；精牌能补成四张时同时给出 12 番的豪华七对方向。
+    const account = sevenPairsAccount(hand, wild)
+    if (account.effectivePairs >= 5) {
+      add('sevenPairs', Math.min(1, account.effectivePairs / 7))
+      add('luxury-seven-pairs', luxurySevenPairsProgress(hand, wild))
+    }
+  } else {
+    const seven = sevenPairsPotential(hand, wild)
+    if (seven > 0) add('sevenPairs', Math.min(1, seven / 28))
+  }
 
   return directions
 }
 
 /** 潜力总分（potentialFloor 同一口径）。 */
-export function patternPotentialTotal(hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[]) {
-  return patternPotentials(hand, melds, jokers).reduce((total, d) => total + d.score, 0)
+export function patternPotentialTotal(
+  hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
+  model: SevenPairsModel = 'off',
+) {
+  return patternPotentials(hand, melds, jokers, model).reduce((total, d) => total + d.score, 0)
 }
 
 /** 弃牌排序用的潜力收益（点）：总分 × 底分，残局打折。 */
-export function patternPotentialEv(hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[], wallCount: number) {
+export function patternPotentialEv(
+  hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[], wallCount: number,
+  model: SevenPairsModel = 'off',
+) {
   const late = wallCount <= BLOOD_FLOW_AI.lateGameWallCount ? 0.4 : 1
-  return patternPotentialTotal(hand, melds, jokers) * BLOOD_FLOW_CONFIG.basePoints * late
+  return patternPotentialTotal(hand, melds, jokers, model) * BLOOD_FLOW_CONFIG.basePoints * late
 }
 
 // ── 完整 14 张的收益估算（只用于连锁期望与排序，不参与结算） ──
 
-function certainPatterns(hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[]): Set<PatternId> {
+function certainPatterns(
+  hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
+  model: SevenPairsModel = 'off',
+): Set<PatternId> {
   const s = shape(hand, melds, jokers)
   const certain = new Set<PatternId>()
   const meldTiles = s.meldTiles
@@ -345,7 +428,14 @@ function certainPatterns(hand: readonly TileType[], melds: readonly Readonly<Mel
   if (gangs >= 4) certain.add('four-kongs')
 
   const wild = [...wildcardSet(jokers)]
-  if (sevenPairsPotential(hand, wild) >= 28) certain.add('sevenPairs')
+  if (model === 'ev') {
+    // 模型开启时用对齐引擎的记账：完整手牌里"七对里含四张相同"就是豪华七对（精牌顶替后计入）。
+    const account = sevenPairsAccount(hand, wild)
+    if (account.effectivePairs >= 7) {
+      const luxury = quadAvailability(hand, wild) >= 1
+      certain.add(luxury ? 'luxury-seven-pairs' : 'sevenPairs')
+    }
+  } else if (sevenPairsPotential(hand, wild) >= 28) certain.add('sevenPairs')
   const shiSan = shiSanLanPotential(hand, wild)
   const honorsHeld = HONORS.filter(h => s.natural.includes(h)).length
   if (shiSan > 0 && shiSanLanDefectFree(hand, wild)) {
@@ -392,8 +482,9 @@ export interface WinIncomeEstimate {
 export function estimateWinIncome(
   hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
   source: WinSource,
+  model: SevenPairsModel = 'off',
 ): WinIncomeEstimate {
-  const patterns = certainPatterns(hand, melds, jokers)
+  const patterns = certainPatterns(hand, melds, jokers, model)
   let multiplier = 1
   for (const id of patterns) multiplier += BLOOD_FLOW_CONFIG.patterns[id].weight - 1
   const hardLikely = !hand.some(tile => wildcardSet(jokers).has(tile))
@@ -426,6 +517,7 @@ function remainingCount(tile: TileType, visibleTiles: readonly TileType[]) {
 export function chainEvEst(
   hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
   visibleTiles: readonly TileType[], wallCount: number,
+  model: SevenPairsModel = 'off',
 ) {
   if (!hand.length) return 0
   const waits = waitingTilesCached(hand, melds.length, jokers)
@@ -435,8 +527,8 @@ export function chainEvEst(
   for (const tile of waits) {
     const remaining = remainingCount(tile, visibleTiles)
     if (!remaining) continue
-    const self = estimateWinIncome([...hand, tile], melds, jokers, 'self-draw')
-    const discard = estimateWinIncome([...hand, tile], melds, jokers, 'discard')
+    const self = estimateWinIncome([...hand, tile], melds, jokers, 'self-draw', model)
+    const discard = estimateWinIncome([...hand, tile], melds, jokers, 'discard', model)
     const average = (BLOOD_FLOW_AI.selfDrawWeight * self.total + discard.total) / (BLOOD_FLOW_AI.selfDrawWeight + 1)
     total += remaining * average * chainFactor
   }

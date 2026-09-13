@@ -77,10 +77,10 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const floor = firstWinFloor(wallCount, config)
   const floorStage: EvFloorStage = wallCount <= config.lateGameWallCount ? 'late'
     : wallCount > config.earlyGameWallCount ? 'early' : 'mid'
-  const potentialTotal = patternPotentialTotal(lockedHand, melds, jokers)
-  const topDirections = [...patternPotentials(lockedHand, melds, jokers)]
+  const potentialTotal = patternPotentialTotal(lockedHand, melds, jokers, config.sevenPairsModel)
+  const topDirections = [...patternPotentials(lockedHand, melds, jokers, config.sevenPairsModel)]
     .sort((a, b) => b.score - a.score).slice(0, 3)
-  const developEv = patternPotentialEv(lockedHand, melds, jokers, wallCount)
+  const developEv = patternPotentialEv(lockedHand, melds, jokers, wallCount, config.sevenPairsModel)
 
   const reformCandidates: ReformCandidateInfo[] = []
   if (!locked && window?.kind === 'turn' && window.source.kind === 'draw' && drawnIndex >= 0 && winOffered) {
@@ -92,10 +92,10 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
       reformCandidates.push({
         index: action.index,
         tile: hand[action.index],
-        ev: chainEvEst(after, melds, jokers, visible, wallCount),
+        ev: chainEvEst(after, melds, jokers, visible, wallCount, config.sevenPairsModel),
         anyWait: waits.length >= 34,
         waitCount: waits.length,
-        patterns: [...patternPotentials(after, melds, jokers)]
+        patterns: [...patternPotentials(after, melds, jokers, config.sevenPairsModel)]
           .sort((a, b) => b.score - a.score).slice(0, 3)
           .map(direction => BLOOD_FLOW_CONFIG.patterns[direction.id].label),
       })
@@ -108,8 +108,8 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
     const kongFee = BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.kongPayments.added
     robEv = {
       winEv,
-      passEv: -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount)
-        + patternPotentialEv(hand, melds, jokers, wallCount),
+      passEv: -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount, config.sevenPairsModel)
+        + patternPotentialEv(hand, melds, jokers, wallCount, config.sevenPairsModel),
     }
   }
 
