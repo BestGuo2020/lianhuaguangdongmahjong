@@ -67,7 +67,7 @@ export function sevenPairsPotential(hand: readonly TileType[], jokers: readonly 
  * 七对账目（2026-09-13 追加，**对齐引擎 isSevenPairs 的记账**）：
  *   · c=2 → 1 对；c=4 → 2 对；c=3 → 1 对 + 1 单（与引擎一致，刻子不是"白拿一对"）；
  *   · 精牌先补单张（min(singles, jokers)），**剩余精牌两两成对**（引擎里 2 张精牌可以自己成一对）；
- *   · jokersForQuads = 补完单张后剩下的精牌数，用于判定"能不能补成四张"。
+ *   · `effectivePairs` 就是"引擎口径下已有几对"；四张可达性另由 `quadAvailability` 用全部精牌估。
  * 旧口径（sevenPairsPotential）只算到第一步，多余精牌直接丢掉——精越多估值反而越低，方向是反的。
  */
 export function sevenPairsAccount(hand: readonly TileType[], jokers: readonly TileType[]) {
