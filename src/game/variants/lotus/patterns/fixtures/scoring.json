@@ -15,9 +15,9 @@
       ],
       "expected": {
         "candidateIndex": 0,
-        "finalMultiplier": 64,
-        "paymentPerPayer": 640,
-        "totalWon": 640
+        "finalMultiplier": 32,
+        "paymentPerPayer": 320,
+        "totalWon": 320
       }
     },
     {
@@ -34,9 +34,9 @@
       ],
       "expected": {
         "candidateIndex": 0,
-        "finalMultiplier": 128,
-        "paymentPerPayer": 1280,
-        "totalWon": 3840
+        "finalMultiplier": 64,
+        "paymentPerPayer": 640,
+        "totalWon": 1920
       }
     },
     {
@@ -168,9 +168,9 @@
       ],
       "expected": {
         "candidateIndex": 0,
-        "finalMultiplier": 32,
-        "paymentPerPayer": 320,
-        "totalWon": 320
+        "finalMultiplier": 16,
+        "paymentPerPayer": 160,
+        "totalWon": 160
       }
     },
     {
@@ -210,9 +210,9 @@
       ],
       "expected": {
         "candidateIndex": 0,
-        "finalMultiplier": 64,
-        "paymentPerPayer": 640,
-        "totalWon": 640
+        "finalMultiplier": 70,
+        "paymentPerPayer": 700,
+        "totalWon": 700
       }
     },
     {
@@ -250,9 +250,9 @@
       ],
       "expected": {
         "candidateIndex": 0,
-        "finalMultiplier": 70,
-        "paymentPerPayer": 700,
-        "totalWon": 700
+        "finalMultiplier": 54,
+        "paymentPerPayer": 540,
+        "totalWon": 540
       }
     },
     {

@@ -12,7 +12,7 @@ describe('independent decomposition boundary checks', () => {
     const concealed = [...input.concealed]; concealed[11] = 'east'
     const external = evaluateWin({ ...input, concealed, winningTile: 'red' })!
     const selfDraw = evaluateWin({ ...input, concealed, winningTile: 'red', source: 'self-draw' })!
-    expect(external.score.items.map(p => p.id)).toEqual(['all-triplets', 'three-concealed-triplets'])
+    expect(external.score.items.map(p => p.id)).toEqual(['all-triplets', 'concealed-hand', 'three-concealed-triplets'])
     expect(selfDraw.score.items.map(p => p.id)).toEqual(['four-concealed-triplets'])
   })
   it('physical fifth copy, incomplete meld and pending kong are invalid inputs', () => {
@@ -34,7 +34,8 @@ describe('independent decomposition boundary checks', () => {
   it('self-draw and discard waits evaluate a wildcard as one physical instance', () => {
     const waits = evaluateWaits({ concealed: ['m1', 'm2', 'm3', 'p2', 'p3', 'p4', 's4', 's5', 's6', 'm6', 'm7', 'east', 'east'],
       jokers: ['south', 'west'], melds: [] })
-    expect(waits.find(w => w.tile === 'south')?.selfDraw?.paymentPerPayer).toBe(20)
+    // 门清（仅标准型）计入后：1 番平胡 + 门清 2 番 = 2 番 × 自摸 2 = 4 倍 → 40 点
+    expect(waits.find(w => w.tile === 'south')?.selfDraw?.paymentPerPayer).toBe(40)
     expect(waits.find(w => w.tile === 'south')?.discard).toBeNull()
     expect(waits.find(w => w.tile === 'm8')?.discard?.hardWin).toBe(true)
   })

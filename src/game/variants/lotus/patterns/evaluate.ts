@@ -5,6 +5,17 @@ import { isWinningHand } from '../lotusRules'
 import { matchPatterns } from './catalog'
 import { validateWinInput, visitDecompositions } from './decompose'
 import { compareScores, scorePatterns } from './score'
+import type { WinningDecomposition } from './types'
+
+/** 杠加成统计：风杠（字牌杠）单列；其余按是否暗成区分。 */
+function kongCountsOf(decomposition: WinningDecomposition) {
+  let exposed = 0, concealed = 0, wind = 0
+  for (const group of decomposition.groups) {
+    if (group.kind === 'wind-kong') wind += 1
+    else if (group.kind === 'kong') { if (group.concealed) concealed += 1; else exposed += 1 }
+  }
+  return { exposed, concealed, wind }
+}
 
 export function evaluateWin(input: WinEvaluationInput, config: BloodFlowRuleConfig = BLOOD_FLOW_CONFIG): WinEvaluation | null {
   if (!validateWinInput(input)) return null
@@ -13,7 +24,8 @@ export function evaluateWin(input: WinEvaluationInput, config: BloodFlowRuleConf
   if (!isWinningHand([...input.concealed, input.winningTile], input.melds.length, [...input.jokers], external ? [input.winningTile] : [], ['white'])) return null
   let best: WinEvaluation | null = null
   visitDecompositions(input, decomposition => {
-    const score = scorePatterns(matchPatterns(decomposition), decomposition.natural, input.source, input.opening, config)
+    const score = scorePatterns(matchPatterns(decomposition), decomposition.natural, input.source, input.opening, config,
+      kongCountsOf(decomposition))
     if (!best || compareScores(score, best.score) < 0) {
       best = { ruleVersion: config.version, decomposition, score,
         naturalEvidence: { allAssignmentsIdentity: decomposition.natural } }

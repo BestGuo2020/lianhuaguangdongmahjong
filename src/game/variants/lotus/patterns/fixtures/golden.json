@@ -1222,7 +1222,7 @@
         "winning": true,
         "shape": "standard",
         "hardWin": true,
-        "paymentPerPayer": 20
+        "paymentPerPayer": 40
       }
     },
     {
@@ -1256,7 +1256,7 @@
           "sevenPairs"
         ],
         "hardWin": true,
-        "paymentPerPayer": 120
+        "paymentPerPayer": 80
       }
     },
     {
@@ -1355,7 +1355,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 640
+        "paymentPerPayer": 320
       }
     },
     {
@@ -1386,7 +1386,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 1280
+        "paymentPerPayer": 640
       }
     },
     {
@@ -1466,7 +1466,7 @@
       "expected": {
         "winning": true,
         "hardWin": true,
-        "paymentPerPayer": 20
+        "paymentPerPayer": 40
       }
     },
     {
@@ -1499,7 +1499,7 @@
       "expected": {
         "winning": true,
         "hardWin": false,
-        "paymentPerPayer": 10
+        "paymentPerPayer": 20
       }
     },
     {
@@ -1533,7 +1533,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": false,
-        "paymentPerPayer": 640
+        "paymentPerPayer": 320
       }
     },
     {
@@ -1628,7 +1628,7 @@
       "expected": {
         "winning": true,
         "hardWin": false,
-        "paymentPerPayer": 20
+        "paymentPerPayer": 40
       }
     },
     {

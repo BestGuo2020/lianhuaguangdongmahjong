@@ -8,42 +8,81 @@ function pattern(id: PatternId, label: string, weight: number, excludes: Pattern
 }
 
 /**
- * 血流番值表（2026-09-12 重平衡：对齐广东麻将近似的相对比例）。
+ * 血流番值表（2026-09-12 **第二版完整番种表**，由用户定稿）。
  *
- * 起因：实测 20 局 727 次胡牌里 4 番档 95% 集中在「七星十三烂 + 三暗刻」，8 番档只有四暗刻 3 次，
- * 清一色/七对因权重过低（4 / 2）一次都没做成——大牌番过于集中。参照广东麻将番型表
- * （大三元/大四喜/十三幺 88、字一色/清幺九 64、小四喜/小三元 48、豪华七对/混幺九 32、清一色/七小对 16、
- * 混一色/碰碰和 8、鸡胡 2）把相对比例拉开，并同步把单家封顶从 64 提到 128（否则顶端会被封顶吃掉，
- * 例如十三幺硬胡自摸 16×2×2 = 64 正好撞顶）。
+ * 梯度：1 → 2 → 4 → 6 → 8 → 12 → 16 → 24 → 32。新增了"路线牌型"：
+ * 普通数牌路线（断幺九 → 三步高 → 清龙/四步高）、刻子路线（碰碰胡 → 三暗刻/三节高 → 四暗刻/四节高）、
+ * 花色路线（混一色 → 清一色 → 九莲）、幺九路线（全带幺 → 混幺九 → 清幺九/字一色）、七对路线（七对 → 豪华七对）。
+ * 覆盖规则用 `excludes` 表达（存在高位番种时剔除低位），详见各处注释与 catalog.ts 的判定。
  */
 const patterns = Object.freeze({
-  // 顶端「彩票档」：实测频次≈0（大三元/大四喜/字一色/清幺九/四杠/九莲 20 局 0 次），做成即巨分。
-  'big-three-dragons': pattern('big-three-dragons', '大三元', 32),
-  'big-four-winds': pattern('big-four-winds', '大四喜', 32, ['all-triplets']),
-  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 32),
-  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit']),
-  'four-kongs': pattern('four-kongs', '四杠', 32, ['three-kongs', 'all-triplets']),
-  'all-honors': pattern('all-honors', '字一色', 24),
-  'pure-terminals': pattern('pure-terminals', '清幺九', 24, ['all-triplets']),
+  // 顶级
+  'big-four-winds': pattern('big-four-winds', '大四喜', 32, ['all-triplets', 'little-four-winds']),
+  // 四杠只覆盖三杠（新表 §7：杠牌系列"四杠 → 三杠"）；四杠手必然也是四刻子+将，可与碰碰胡叠加。
+  'four-kongs': pattern('four-kongs', '四杠', 32, ['three-kongs']),
+  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit', 'concealed-hand']),
+  // 极高番
+  'big-three-dragons': pattern('big-three-dragons', '大三元', 24, ['little-three-dragons']),
+  'all-honors': pattern('all-honors', '字一色', 24, ['mixed-terminals', 'all-with-terminals', 'all-triplets']),
+  'pure-terminals': pattern('pure-terminals', '清幺九', 24, ['mixed-terminals', 'all-with-terminals', 'all-triplets']),
   'all-green': pattern('all-green', '绿一色', 24),
-  // 高档：小三元/小四喜/四暗刻/豪华七对（实测少见，做成一次就是大分）
+  // 大牌
   'little-three-dragons': pattern('little-three-dragons', '小三元', 16),
   'little-four-winds': pattern('little-four-winds', '小四喜', 16),
-  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets']),
-  'luxury-seven-pairs': pattern('luxury-seven-pairs', '豪华七对', 16, ['sevenPairs']),
-  // 中档：真正会被做出来的目标（清一色从 4 → 8 让 AI 愿意追；七对从 2 → 6 匹配它 29% 的出现率）
-  'mixed-terminals': pattern('mixed-terminals', '混幺九', 12, ['all-triplets']),
+  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets', 'concealed-hand']),
+  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 16,
+    ['all-with-terminals', 'mixed-terminals', 'sevenPairs', 'all-triplets']),
+  'one-suit-four-joints': pattern('one-suit-four-joints', '一色四节高', 16, ['one-suit-three-joints', 'all-triplets']),
+  // 高番
+  'mixed-terminals': pattern('mixed-terminals', '混幺九', 12, ['all-with-terminals', 'all-triplets']),
   'three-kongs': pattern('three-kongs', '三杠', 12),
-  'pure-suit': pattern('pure-suit', '清一色', 8),
-  sevenPairs: pattern('sevenPairs', '七对', 6),
+  'luxury-seven-pairs': pattern('luxury-seven-pairs', '豪华七对', 12,
+    ['sevenPairs', 'all-triplets', 'three-concealed-triplets', 'four-concealed-triplets', 'one-suit-three-joints', 'one-suit-four-joints']),
+  // 中高番
+  'pure-suit': pattern('pure-suit', '清一色', 8, ['mixed-suit']),
+  'one-suit-three-joints': pattern('one-suit-three-joints', '一色三节高', 8),
+  'one-suit-four-steps': pattern('one-suit-four-steps', '一色四步高', 8, ['one-suit-three-steps']),
+  // 中番
   'three-concealed-triplets': pattern('three-concealed-triplets', '三暗刻', 6),
-  qiXing: pattern('qiXing', '七星十三烂', 6),
-  // 基础档
+  qiXing: pattern('qiXing', '七星十三烂', 6, ['shiSanLan']),
+  'pure-straight': pattern('pure-straight', '清龙', 6),
+  // 中低番
   'mixed-suit': pattern('mixed-suit', '混一色', 4),
   'all-triplets': pattern('all-triplets', '碰碰胡', 4),
+  sevenPairs: pattern('sevenPairs', '七对', 4,
+    ['all-triplets', 'three-concealed-triplets', 'four-concealed-triplets', 'one-suit-three-joints', 'one-suit-four-joints']),
+  'one-suit-three-steps': pattern('one-suit-three-steps', '一色三步高', 4),
+  'all-with-terminals': pattern('all-with-terminals', '全带幺', 4),
+  // 低番 / 基础
   shiSanLan: pattern('shiSanLan', '十三烂', 2),
-  pinghu: pattern('pinghu', '平胡', 1),
+  'all-simples': pattern('all-simples', '断幺九', 2, ['all-with-terminals', 'mixed-terminals', 'pure-terminals', 'all-honors']),
+  // 门清平胡：**仅标准四面子一将型生效**（七对/十三幺/十三烂/七星等特殊结构不计，见 catalog.ts 的判定位置）
+  // 覆盖方向：由高位番种排除它（四暗刻/九莲宝灯），不要反过来——否则会把大牌吃掉。
+  'concealed-hand': pattern('concealed-hand', '门清平胡', 2),
+  pinghu: pattern('pinghu', '鸡胡', 1),
 })
+
+/**
+ * 杠加成（2026-09-12 新增，用户暂定）：每个**明杠 +1**、每个**暗杠/风杠 +2**，直接加到基础倍率上。
+ * 此前杠没有任何番型加成，"胡后可开杠"也就没有收益——这是三杠/四杠这类牌型做不出来的根因之一。
+ */
+export const BLOOD_FLOW_KONG_BONUS: Readonly<{ exposed: number; concealed: number; wind: number }> =
+  Object.freeze({ exposed: 1, concealed: 2, wind: 2 })
+
+/**
+ * 动作优先级实验开关（2026-09-12，默认 standard = 线上现状）。
+ *
+ * `kong-priority`：
+ * ① **胡牌之后仍可开杠**——锁手座位在自摸窗口可暗杠/风杠/补杠，别人打出的牌也可大明杠（仍不可碰/吃）；
+ * ② **动作优先级 杠 > 碰 > 吃 > 胡**（胡最低）——同一张牌的竞争里杠/碰/吃先结算、胡被压到最后；
+ *    座位自身同时有杠/碰/吃与胡时，不再把"胡"当默认首选。
+ *
+ * 目的：度量"是否更容易做出大牌"（尤其现在 5 万次胡牌里 0 次的三杠/四杠，以及清一色等中高番）。
+ * 只用于 A/B 度量，线上保持 standard。开关来自 `VITE_BLOOD_FLOW_EXPERIMENT=kong-priority`。
+ */
+export const BLOOD_FLOW_ACTION_PRIORITY: 'standard' | 'kong-priority' =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_EXPERIMENT === 'kong-priority'
+    ? 'kong-priority' : 'standard'
 
 export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   id: 'lotus-blood-flow',
@@ -58,6 +97,7 @@ export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   eventMultipliers: Object.freeze({ discard: 1, 'self-draw': 2, 'robbed-kong': 2, 'kong-bloom': 4 }),
   openingMinimumMultiplier: 8,
   kongPayments: Object.freeze({ discard: 1, added: 1, concealed: 2, wind: 2 }),
+  kongBonus: BLOOD_FLOW_KONG_BONUS,
   rounds: Object.freeze({ east: 4, hanchan: 8 }),
   lockAfterFirstWin: true,
   multipleWinners: true,

@@ -84,4 +84,5 @@ it('keeps first-win automated discards protected across actual fixed-seed rounds
     expect(engine.players.reduce((n,p)=>n+p.score,0)).toBe(8000)
   }
   expect(guardedDiscards).toBeGreaterThan(100)
-},120_000)
+  // 该用例跑 12 局固定种子全量对局（约 150s），机器负载高时 120s 不够；放宽到 300s 而非削减模拟量。
+},300_000)

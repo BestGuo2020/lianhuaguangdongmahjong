@@ -20,6 +20,8 @@ export interface BloodFlowRuleConfig {
   readonly eventMultipliers: Readonly<Record<WinSource, number>>
   readonly openingMinimumMultiplier: number
   readonly kongPayments: Readonly<Record<'discard' | 'added' | 'concealed' | 'wind', number>>
+  /** 杠加成权重（每个明杠 / 暗杠 / 风杠给基础倍率加多少）。 */
+  readonly kongBonus?: Readonly<Record<'exposed' | 'concealed' | 'wind', number>>
   readonly rounds: Readonly<Record<MatchType, number>>
   readonly lockAfterFirstWin: true
   readonly multipleWinners: true
@@ -52,6 +54,8 @@ export interface PublicWinScore {
   readonly opening: 'heaven' | 'earth' | null
   readonly patternMultiplier: number
   readonly eventMultiplier: number
+  /** 杠加成（明杠 +1 / 暗杠·风杠 +2 每个，2026-09-12 新增），已计入 patternMultiplier。 */
+  readonly kongBonus?: number
   readonly openingApplied: boolean
   readonly uncappedMultiplier: number
   readonly finalMultiplier: number
