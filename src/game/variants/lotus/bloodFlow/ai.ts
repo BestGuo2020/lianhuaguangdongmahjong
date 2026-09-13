@@ -261,7 +261,7 @@ export function bloodFlowDefensePolicy(view: BloodFlowSeatView, config: BloodFlo
   const profiles = bloodFlowOpponentRisk(view, config)
   const own = ownHandFacts(player.hand, player.melds, view.jokers, visible, {
     config: config.defense,
-    directions: patternPotentials(player.hand, player.melds, view.jokers)
+    directions: patternPotentials(player.hand, player.melds, view.jokers, config.sevenPairsModel)
       .map(direction => ({ weight: direction.weight, progress: direction.progress, label: BLOOD_FLOW_CONFIG.patterns[direction.id].label })),
   })
   const opponents = view.players
@@ -306,7 +306,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   const visible = visibleTiles(view)
   const wallCount = view.wallCount
   const extras: EvExtras = {
-    patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount),
+    patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount, config.sevenPairsModel),
     safetyExposure: bloodFlowSafetyExposure(view, config, visible),
     melds,
     kongEvaluator: kongEvaluatorFor(config),
