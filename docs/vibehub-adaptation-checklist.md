@@ -129,7 +129,6 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 - [x] `git log vibehub..master` 清空（最终 vibehub `b769810`）
 
 ## 6. 线上整场验收结果（2026-09-10，部署 `vibehubcli update --slug B5AJupT1`）
-
 两账号取自 `tmp/online_test`（账号1/账号2 分别作房主与客机），规则「莲花麻将·血流」、东风场、2 真人 + 2 机器人，各打满一场（东1～东4）：
 
 | 场景 | 房间 | 耗时 | 结果 |
@@ -138,6 +137,18 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 | 2 真人 + 2 **大模型机器人** | `9HUUY2` | 6.3 分钟 | ✅ 同上（大肥鱼 4000 / 大肥鱼 1730 / 客人 1470 / 房主 800） |
 
 用例在 vibehub 分支（仅存在于 vibehub，不被同步覆盖）：`tests/e2e/online-two-accounts-two-east-matches.spec.ts` 末尾的「线上两账号完成莲花麻将·血流东风场」两条测试；取证落盘在 `tmp/bf-online-evidence/`（双端截图 + stall 诊断 JSON）。部署产物与已验证提交一致（重新发布时「跳过 234 个未变化文件 / 需要上传 0 个文件」）。
+
+### 6.1 平台域名变更导致 TTS 断链（2026-09-14 修复）
+
+平台域名从 `*.lumigrav.space` 换到 **`gamesvibe.app`**（发布地址 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`），而两处只认旧域名的地方没有跟着改，表现为**大模型主题（`llm` / `llmAnime`）完全没有语音**：
+
+| 位置 | 旧行为 | 实测 | 修复 |
+|---|---|---|---|
+| 前端 TTS 基址（`resolveLocalTtsBaseUrl`） | 只认 `*.lumigrav.space`，其它域名回退同源 | `gamesvibe.app/api/local-tts/synthesize` → **404**；网关 `bestguo.top:58000` → **200 + audioUrl** | 平台域名白名单加入 `gamesvibe.app`（含子域）；同源基址"没打通"时运行期回退网关并记住可用基址 |
+| 后端 CORS（`allow_origin_regex`） | 只放行 `*.lumigrav.space` | 带 `Origin: https://gamesvibe.app` 请求网关**没有** `access-control-allow-origin` → 浏览器会拦 | 正则增加 `https://([\w-]+\.)*gamesvibe\.app`（`test_api.py` 覆盖新域名放行 + `notgamesvibe.app` 仍拦） |
+
+经验：**平台域名是外部变量**，TTS 这类"跨域取自有网关"的链路不能只靠域名硬编码，必须有运行期回退；下次换域名时前端自适应、后端只需补一条正则。
+
 
 验收过程中修掉的 P2P 问题（vibehub `07150c2` / `9dbc445` / `ce46cdb` + master `72fc54f`）：
 
