@@ -109,3 +109,42 @@ it('leaves locked and no-win windows untouched by the EV injection', () => {
   const built = buildBloodFlowDecisionInput(v, 'locked')
   expect(built.candidates.every(c => !c.features.ev)).toBe(true)
 })
+
+it('injects the kong value breakdown and declines a kong that would break the seven-pairs route', () => {
+  const hand: TileType[] = ['m3', 'm3', 'm3', 'm1', 'm1', 'm2', 'm2', 'p1', 'p1', 's3', 's3', 'p7', 's8']
+  const v = view({
+    hand, jokers: ['red'], drawnTileIndex: -1,
+    ownActions: [{ kind: 'pass' }, { kind: 'gang' }, { kind: 'peng' }],
+    windowKind: 'meld', sourceKind: 'discard',
+  })
+  v.window = { ...v.window!, source: { id: 's', kind: 'discard', tile: 'm3', seat: 3 } }
+  const built = buildBloodFlowDecisionInput(v, 'kong-value')
+  const gang = built.candidates.find(c => c.action.kind === 'gang')!
+  const kong = gang.features.kongValue!
+  expect(kong.net).toBeLessThan(0)
+  expect(kong.selfLoss.sevenPairs).toBeGreaterThan(kong.gain)
+  expect(kong.reasons?.join()).toContain('七对')
+  expect(gang.summary).toContain('开杠价值')
+  expect(built.request?.engineSuggestion).toBe(built.candidates.find(c => c.action.kind === 'pass')!.id)
+
+  const prompt = bloodFlowDecisionPrompt(v, [], 'kong-value')
+  const payload = JSON.parse(prompt.messages.user)
+  const injected = payload.candidates.find((c: { id: string }) => c.id === gang.id)
+  expect(injected.features.kongValue.net).toBe(kong.net)
+  expect(payload.ruleSummary).toContain('features.kongValue')
+})
+
+it('still offers the kong when the route is dead (kong value stays positive)', () => {
+  const hand: TileType[] = ['m5', 'm5', 'm5', 'm1', 'm1', 'm2', 'm2', 'p4', 'p5', 'p6', 's7', 's9', 'east']
+  const v = view({
+    hand, jokers: ['red'], drawnTileIndex: -1,
+    ownActions: [{ kind: 'pass' }, { kind: 'gang' }, { kind: 'peng' }],
+    windowKind: 'meld', sourceKind: 'discard',
+  })
+  v.window = { ...v.window!, source: { id: 's', kind: 'discard', tile: 'm5', seat: 3 } }
+  const built = buildBloodFlowDecisionInput(v, 'kong-value-dead')
+  const gang = built.candidates.find(c => c.action.kind === 'gang')!
+  expect(gang.features.kongValue!.selfLoss.sevenPairs).toBe(0)
+  expect(gang.features.kongValue!.net).toBeGreaterThan(0)
+  expect(built.request?.engineSuggestion).toBe(gang.id)
+})

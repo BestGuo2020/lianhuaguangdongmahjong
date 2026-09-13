@@ -121,6 +121,8 @@ chainFactor = min(1, chainHorizon / max(1, wallCount / 4))
 - **只有杠候选受这条约束**：碰/吃的候选质量比较（`compareQuality`）不变；明杠窗口里"碰"本来就被 `dropDominatedPeng` 撤掉，所以不杠 = 过。
 - **自摸胡不再被杠候选顶掉**（kong-priority 实验臂的关键修复）：`applyActionPriority` 原来只要存在杠/碰/吃候选就撤掉"胡"候选。手上四张（豪华七对成立）时**必然**存在暗杠候选 → 胡候选被撤 → AI 打掉胡牌张。现在撤胡之前先算 `kongsOutweighWin`：最优杠候选的净值必须超过胡的即时收 + 连锁期望才会压胡，否则保留胡候选。
 - **门槛与口径**：杠收益按"即时杠分 + 一份倍率加成"计，不做胡牌概率折现；抢杠风险按公开张数分档（与旧 `shouldTakeAddedKong` 的档位一致）；门清平胡按兜底折价。四项常数都在 `BLOOD_FLOW_KONG_VALUE` 里，可单独调。
+- **后端镜像（WS 联机的机器人走这份）**：`backend/app/core/blood_flow/kong_value.py`（同公式同常数）+ `config.py` 的 `KongValueConfig` + `lotus_ai.py` 的 `_accepts_kong` 钩子 + `blood_flow/ai.py` 注入 `kongEvaluator`；`backend/tests/test_blood_flow_kong_value.py` 里有一条**跨语言数值护栏**（收益 20/40/80/80、七对损失 42.4/160.0、门清 10.0/6.0、净值 −38.4/−96.0 与前端逐位一致）。注意后端**没有** kong-priority 开关，所以"撤胡候选"那条修复在后端不适用（那边本来就不会撤胡）。
+- **LLM 接线**：杠候选新增 `features.kongValue{gain,risk,selfLoss{total,sevenPairs,concealedHand,shanten},net,reasons}`（前后端同源，规则摘要逐字一致由 `backend/tests/test_blood_flow_llm.py::test_prompt_rules_mirror_frontend_literal` 守着），候选摘要渲染 `开杠价值：-38（收益20−风险0−自损58）｜开杠代价：拆掉七对/豪华七对路线（-42）…`；规则摘要补一句"net ≤ 0 表示这一杠会拆掉自己的七对/豪华七对、破坏门清平胡或让向听变差，默认建议不会是杠"。
 
 #### 具体数字（`tmp/kong-value-examples.test.ts` 打印）
 
