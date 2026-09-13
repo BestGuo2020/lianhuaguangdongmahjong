@@ -20,7 +20,7 @@ const patterns = Object.freeze({
   'big-four-winds': pattern('big-four-winds', '大四喜', 32, ['all-triplets', 'little-four-winds']),
   // 四杠只覆盖三杠（新表 §7：杠牌系列"四杠 → 三杠"）；四杠手必然也是四刻子+将，可与碰碰胡叠加。
   'four-kongs': pattern('four-kongs', '四杠', 32, ['three-kongs']),
-  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit', 'concealed-hand']),
+  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit']),
   // 极高番
   'big-three-dragons': pattern('big-three-dragons', '大三元', 24, ['little-three-dragons']),
   'all-honors': pattern('all-honors', '字一色', 24, ['mixed-terminals', 'all-with-terminals', 'all-triplets']),
