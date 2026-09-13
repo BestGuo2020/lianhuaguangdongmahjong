@@ -93,19 +93,21 @@ export const BLOOD_FLOW_KONG_VALUE: KongValueConfig = Object.freeze({
 })
 
 /**
- * 动作优先级实验开关（2026-09-12，默认 standard = 线上现状）。
+ * 动作优先级（2026-09-14 用户定案：**线上就是 杠 > 碰 > 吃 > 胡**）。
  *
- * `kong-priority`：
+ * `kong-priority`（默认）：
  * ① **胡牌之后仍可开杠**——锁手座位在自摸窗口可暗杠/风杠/补杠，别人打出的牌也可大明杠（仍不可碰/吃）；
  * ② **动作优先级 杠 > 碰 > 吃 > 胡**（胡最低）——同一张牌的竞争里杠/碰/吃先结算、胡被压到最后；
  *    座位自身同时有杠/碰/吃与胡时，不再把"胡"当默认首选。
  *
- * 目的：度量"是否更容易做出大牌"（尤其现在 5 万次胡牌里 0 次的三杠/四杠，以及清一色等中高番）。
- * 只用于 A/B 度量，线上保持 standard。开关来自 `VITE_BLOOD_FLOW_EXPERIMENT=kong-priority`。
+ * 2026-09-14 修复：此前这个开关只接受 `VITE_BLOOD_FLOW_EXPERIMENT=kong-priority` 才打开，
+ * 而仓库 `.env`（以及 vibehub 工作区）都没有这个变量 → **线上实际一直是 standard（胡优先）**，
+ * 用户实测"吃牌被胡拦截"正是这个原因。现在默认即 kong-priority，
+ * 需要旧口径做 A/B 时用 `VITE_BLOOD_FLOW_EXPERIMENT=standard` 显式切回。
  */
 export const BLOOD_FLOW_ACTION_PRIORITY: 'standard' | 'kong-priority' =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_EXPERIMENT === 'kong-priority'
-    ? 'kong-priority' : 'standard'
+  (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_EXPERIMENT === 'standard'
+    ? 'standard' : 'kong-priority'
 
 export const BLOOD_FLOW_CONFIG: BloodFlowRuleConfig = Object.freeze({
   id: 'lotus-blood-flow',

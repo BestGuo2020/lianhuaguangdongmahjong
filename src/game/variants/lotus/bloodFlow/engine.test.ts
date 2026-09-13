@@ -174,7 +174,7 @@ describe('shared discard response choices', () => {
     expect(engine.players[0].discards).toContain('m5')
     engine.assertConservation()
   })
-  it('waits for another hu decision and gives it priority over an already selected peng', () => {
+  it('碰/吃/杠 优先于胡：已选定的碰先结算，后到的胡被压在最后（2026-09-14 用户定案的动作优先级）', () => {
     const otherWait: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm6', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'south', 'south']
     const engine = scenario([discarder, claimHand, otherWait, null])
     discardFive(engine)
@@ -184,9 +184,11 @@ describe('shared discard response choices', () => {
     expect(engine.players[1].melds).toHaveLength(0)
     expect(engine.submit(engine.command(2, { kind: 'win' }))).toBe(true)
     passRemaining(engine, window.id)
-    expect(engine.players[1].melds).toHaveLength(0)
-    expect(engine.seats[2].winCount).toBe(1)
-    expect(engine.archives).toHaveLength(1)
+    // kong-priority（默认）：碰先落地，能胡的那家拿不到这张牌。
+    expect(engine.players[1].melds).toHaveLength(1)
+    expect(engine.players[1].melds[0].type).toBe('peng')
+    expect(engine.seats[2].winCount).toBe(0)
+    expect(engine.archives).toHaveLength(0)
     engine.assertConservation()
   })
   it('includes a nonwinning peng claimant while another seat is deciding hu', () => {
@@ -212,11 +214,15 @@ describe('shared discard response choices', () => {
     expect(engine.result).not.toBeNull()
     engine.assertConservation()
   })
-  it('锁手座位在弃牌响应窗口里只有「胡」（不得过胡）', () => {
+  it('锁手座位在弃牌响应窗口里不得过胡；kong-priority 下还可大明杠（不可碰/吃）', () => {
     const engine = scenario([discarder, claimHand, null, null])
     engine.seats[1] = { ...engine.seats[1], locked: true }
     discardFive(engine)
-    expect(engine.window!.options[1]).toEqual([{ kind: 'win' }])
+    const options = engine.window!.options[1]
+    expect(options).toContainEqual({ kind: 'win' })
+    expect(options).not.toContainEqual({ kind: 'pass' })
+    expect(options).toContainEqual({ kind: 'gang' })
+    expect(options).not.toContainEqual({ kind: 'peng' })
     passRemaining(engine, engine.window!.id)
     engine.assertConservation()
   })
