@@ -40,5 +40,5 @@ export function getRuleVariant(id: RuleVariant) {
 
 export const BLOOD_FLOW_RULE: RuleVariantOption = {
   id: 'lotus-blood-flow', name: '莲花麻将·血流', description: '翻精血流规则',
-  highlights: ['多次胡牌', '首胡锁手', '硬胡 ×2 · 单家 64 倍封顶'], badge: '测试', rulesetId: 'lotus-blood-flow',
+  highlights: ['多次胡牌', '首胡锁手', '硬胡 ×2 · 单家 128 倍封顶'], badge: '测试', rulesetId: 'lotus-blood-flow',
 }
