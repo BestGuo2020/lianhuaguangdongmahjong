@@ -1,11 +1,12 @@
 import type { Meld, TileType } from '../../../core/contracts/types'
-import { decideTurn, decideClaim, lotusDiscardCandidates, chooseFallbackDiscardIndex } from '../lotusAi'
+import { decideTurn, decideClaim, lotusDiscardCandidates, chooseFallbackDiscardIndex, type KongEvaluator } from '../lotusAi'
 import { canChi } from '../lotusRules'
 import type { BloodFlowAction } from './state'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import type { BloodFlowAiConfig } from './config'
-import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
+import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLOW_KONG_VALUE } from './config'
+import { kongCandidateValue, type KongValueKind } from './kongValue'
 import { patternPotentialEv, patternPotentials, waitingTilesCached } from './patternPotentials'
 import { bloodFlowEvContext } from './evContext'
 import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
@@ -20,22 +21,69 @@ export function bloodFlowAiActions(
   /** 调用方已算过的政策（避免一次决策里重复算全手牌型/向听）。 */
   defense?: ReturnType<typeof bloodFlowDefensePolicy>,
 ): readonly BloodFlowAction[] {
-  if (view.public.seats[view.seat].locked) return applyActionPriority(view.ownActions)
+  if (view.public.seats[view.seat].locked) return applyActionPriority(view, view.ownActions, config)
   const indices = view.ownActions.filter(a => a.kind === 'discard').map(a => a.index)
   const allowed = new Set(lotusDiscardCandidates(view.players[view.seat].hand, view.jokers, indices).map(c => c.index))
   const legal = view.ownActions.filter(a => a.kind !== 'discard' || allowed.has(a.index))
-  return applyDefenseConstraint(view, applyActionPriority(dropDominatedPeng(legal)), config, defense)
+  return applyDefenseConstraint(view, applyActionPriority(view, dropDominatedPeng(legal), config), config, defense)
 }
 
 /**
- * kong-priority 实验：动作优先级 杠 > 碰 > 吃 > 胡（胡最低）。
- * 有杠/碰/吃可选时不再提供"胡"候选——引擎侧已让竞争窗口按此顺序结算，这里让 AI 自身也不把胡当默认首选。
+ * 动作优先级（`kong-priority` 实验开关）下的候选收窄：
+ * ① 竞争窗口的"杠 > 碰 > 吃 > 胡"（胡最低）保持不变；
+ * ② **但杠候选要过 EV 这一关**（第 3 步，2026-09-13）：撤掉"胡"之前先按
+ *    `杠收益 − 防守风险 − 自手牌型损失` 给杠候选计分，只有最优杠候选确实压过胡（即时收 + 连锁期望）时才压胡。
+ *    否则会出现"自摸七对/豪华七对（手上正好四张，必然有暗杠候选）→ 胡候选被撤 → AI 把胡牌张打掉"，
+ *    这正是 kong 臂豪华七对 0 次的直接原因。碰/吃 的收窄不受影响（仍按实验口径压胡）。
+ *
+ * `priority` 参数只为测试注入（默认取模块级实验开关），线上行为由 `VITE_BLOOD_FLOW_EXPERIMENT` 决定。
  */
-function applyActionPriority(actions: readonly BloodFlowAction[]): readonly BloodFlowAction[] {
-  if (BLOOD_FLOW_ACTION_PRIORITY !== 'kong-priority') return actions
-  const hasClaim = actions.some(action => action.kind === 'gang' || action.kind === 'peng' || action.kind === 'chi'
-    || action.kind === 'added-kong' || action.kind === 'concealed-kong' || action.kind === 'wind-kong')
-  return hasClaim ? actions.filter(action => action.kind !== 'win') : actions
+export function applyActionPriority(
+  view: BloodFlowSeatView, actions: readonly BloodFlowAction[], config: BloodFlowAiConfig,
+  priority: 'standard' | 'kong-priority' = BLOOD_FLOW_ACTION_PRIORITY,
+): readonly BloodFlowAction[] {
+  if (priority !== 'kong-priority') return actions
+  const kongs = actions.filter(action => action.kind in KONG_ACTION_KINDS)
+  const otherClaims = actions.some(action => action.kind === 'peng' || action.kind === 'chi')
+  if (!kongs.length && !otherClaims) return actions
+  const win = actions.find(action => action.kind === 'win')
+  if (win && kongs.length && !kongsOutweighWin(view, kongs, config)) return actions
+  return actions.filter(action => action.kind !== 'win')
+}
+
+/** 杠候选按开杠价值计分；`kongValue.mode === 'off'` 时回退旧口径（杠优先，不比较）。 */
+const KONG_ACTION_KINDS: Readonly<Record<string, KongValueKind>> = {
+  gang: 'discard-gang', 'added-kong': 'added-kong', 'concealed-kong': 'concealed-kong', 'wind-kong': 'wind-kong',
+}
+
+function kongEvaluatorFor(config: BloodFlowAiConfig): KongEvaluator | undefined {
+  if ((config.kongValue ?? BLOOD_FLOW_KONG_VALUE).mode === 'off') return undefined
+  return context => kongCandidateValue({ ...context, config: config.kongValue ?? BLOOD_FLOW_KONG_VALUE })
+}
+
+export function bloodFlowKongValue(
+  view: BloodFlowSeatView, action: BloodFlowAction, config: BloodFlowAiConfig = BLOOD_FLOW_AI,
+) {
+  const kind = KONG_ACTION_KINDS[action.kind]
+  if (!kind) return null
+  const player = view.players[view.seat]
+  return kongCandidateValue({
+    kind, hand: player.hand, melds: player.melds, jokers: view.jokers,
+    tile: kind === 'discard-gang' ? view.window?.source.tile : kind === 'added-kong'
+      ? player.melds[(action as { meldIndex: number }).meldIndex]?.tile : (action as { tile?: TileType }).tile,
+    meldIndex: (action as { meldIndex?: number }).meldIndex,
+    publicTiles: view.players.flatMap(other => [...other.discards, ...other.melds.flatMap(meld => meld.tiles)]),
+    config: config.kongValue ?? BLOOD_FLOW_KONG_VALUE,
+  })
+}
+
+/** 最优杠候选的开杠价值是否压过胡（即时收 + 连锁期望）。 */
+function kongsOutweighWin(view: BloodFlowSeatView, kongs: readonly BloodFlowAction[], config: BloodFlowAiConfig) {
+  if ((config.kongValue ?? BLOOD_FLOW_KONG_VALUE).mode === 'off') return true
+  const best = kongs
+    .map(action => bloodFlowKongValue(view, action, config)?.net ?? Number.NEGATIVE_INFINITY)
+    .reduce((a, b) => Math.max(a, b), Number.NEGATIVE_INFINITY)
+  return best > bloodFlowEvContext(view, config).winEv
 }
 
 const CLAIM_KINDS: ReadonlySet<string> = new Set(['peng', 'chi', 'gang', 'added-kong', 'concealed-kong', 'wind-kong'])
@@ -106,7 +154,8 @@ export function decideBloodFlowAction(view: BloodFlowSeatView, minimumFirstPayme
   if (discards.length) {
     if (locked) return discards[0]
     try {
-      const decision = decideTurn({ ...context, melds: player.melds, kongBloom: false }, () => 0)
+      const decision = decideTurn({ ...context, melds: player.melds, kongBloom: false,
+        kongEvaluator: kongEvaluatorFor(BLOOD_FLOW_AI) }, () => 0)
       const action: BloodFlowAction = decision.kind === 'discard' ? { kind: 'discard', index: decision.handIndex } : decision
       return offered(action) ?? fallback()
     } catch { return fallback() }
@@ -116,6 +165,7 @@ export function decideBloodFlowAction(view: BloodFlowSeatView, minimumFirstPayme
   try {
     const source = view.window.source
     const decision = decideClaim({ ...context, tile: source.tile, from: source.seat,
+      kongEvaluator: kongEvaluatorFor(BLOOD_FLOW_AI),
       canGang: moves.some(a => a.kind === 'gang'), canPeng: moves.some(a => a.kind === 'peng'),
       chiOptions: canChi(player.hand, source.tile, view.jokers).filter(m => offered({ kind: 'chi', tiles: m.tiles })),
     })
@@ -232,6 +282,7 @@ interface EvExtras {
   patternBonus: (hand: TileType[], melds: Meld[]) => number
   safetyExposure: (tile: TileType) => number
   melds: Meld[]
+  kongEvaluator?: KongEvaluator
 }
 
 /**
@@ -258,6 +309,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
     patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount),
     safetyExposure: bloodFlowSafetyExposure(view, config, visible),
     melds,
+    kongEvaluator: kongEvaluatorFor(config),
   }
   const context = { hand, jokers, exposedMelds: melds.length, visibleTiles: visible, wallCount,
     upperLastDiscard: view.players[(view.seat + 3) % 4]?.discards.at(-1), earlyRound: player.discards.length < 2,
@@ -272,7 +324,8 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   }
   const decideDiscard = () => {
     try {
-      const decision = decideTurn({ ...context, melds, kongBloom: false, patternBonus: extras.patternBonus, safetyExposure: extras.safetyExposure }, () => 0)
+      const decision = decideTurn({ ...context, melds, kongBloom: false, patternBonus: extras.patternBonus,
+        safetyExposure: extras.safetyExposure, kongEvaluator: extras.kongEvaluator }, () => 0)
       const action: BloodFlowAction = decision.kind === 'discard' ? { kind: 'discard', index: decision.handIndex } : decision
       return offered(action) ?? fallback()
     } catch { return fallback() }
@@ -283,6 +336,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
     try {
       const source = view.window.source
       const decision = decideClaim({ ...context, melds, patternBonus: extras.patternBonus, safetyExposure: extras.safetyExposure,
+        kongEvaluator: extras.kongEvaluator,
         tile: source.tile, from: source.seat, canGang: moves.some(a => a.kind === 'gang'),
         canPeng: moves.some(a => a.kind === 'peng'),
         chiOptions: canChi(hand, source.tile, jokers).filter(m => offered({ kind: 'chi', tiles: m.tiles })),

@@ -211,6 +211,15 @@ function shantenOf(hand: readonly TileType[], options: HandProgressOptions) {
   )
 }
 
+/**
+ * 只要向听（含门清玩法的特殊牌型），不做进张口/进张数的 34 面枚举。
+ * 用于"结构有没有变差"这类高频比较（例如开杠前的自手牌型损失），口径与 evaluateHandProgress 的 shanten 一致。
+ */
+export function handShanten(hand: readonly TileType[], options: HandProgressOptions): number {
+  if (options.waitingTiles([...hand], options.exposedMelds).length) return 0
+  return Math.max(1, shantenOf(hand, options))
+}
+
 export function evaluateHandProgress(hand: TileType[], options: HandProgressOptions): HandProgress {
   const visible = options.visibleTiles ?? hand
   const waits = options.waitingTiles(hand, options.exposedMelds)
