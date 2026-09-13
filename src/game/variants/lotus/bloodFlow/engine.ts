@@ -3,7 +3,7 @@ import { sortTilesWithJokers, TILE_TYPES } from '../../../core/rules/tiles'
 import { canChi, concealedKongs, windKong } from '../lotusRules'
 import { buildRingWall, resolveFlip, resolveOpeningStack, buildDrawOrderWall, wallBreakIndexForOpeningStack, takeLotusTailTile } from '../lotusWall'
 import { evaluateWin } from '../patterns/evaluate'
-import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING, bloodFlowWinTiming } from './config'
+import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING, bloodFlowWinTiming } from './config'
 import { winTier } from './presentation'
 import type { BloodFlowLedgerEntry, BloodFlowPublicState, BloodFlowRoundResult, Seat, SourceTileEvent, WinEvaluation, WinSource } from './types'
 import { SEATS, vector, nextSeat, newSeatStates } from './state'
@@ -177,7 +177,7 @@ export class BloodFlowEngine {
     }
     // 开杠（暗杠/风杠/补杠）只在「本手来自摸牌」时提供：碰/吃之后的这一手必须先出牌，
     // 与经典玩法的 userDrewThisTurn 门控同口径（此前碰完就能立刻开杠，用户报为错误）。
-    if (this.drawSource && !this.seats[seat].locked && this.wall.length) {
+    if (this.drawSource && (BLOOD_FLOW_ACTION_PRIORITY === 'kong-priority' || !this.seats[seat].locked) && this.wall.length) {
       for (const tile of concealedKongs(player.hand, this.jokers)) moves.push({ kind: 'concealed-kong', tile })
       if (windKong(player.hand, this.jokers)) moves.push({ kind: 'wind-kong' })
       player.melds.forEach((m, meldIndex) => { if (m.type === 'peng' && player.hand.includes(m.tile)) moves.push({ kind: 'added-kong', meldIndex }) })
@@ -203,7 +203,13 @@ export class BloodFlowEngine {
     if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
       // 锁手座位的胡是唯一选项（不得过胡）：超时兜底也必须走胡，否则等于「过」。
-      const forcedWin = this.seats[seat].locked ? window.options[seat].find(a => a.kind === 'win') : undefined
+      // kong-priority 实验下改为：杠 > 胡（锁手后仍可先开杠，符合动作优先级）。
+      const forcedWin = this.seats[seat].locked
+        ? (BLOOD_FLOW_ACTION_PRIORITY === 'kong-priority'
+          ? window.options[seat].find(a => a.kind === 'gang' || a.kind === 'concealed-kong' || a.kind === 'added-kong' || a.kind === 'wind-kong')
+            ?? window.options[seat].find(a => a.kind === 'win')
+          : window.options[seat].find(a => a.kind === 'win'))
+        : undefined
       window.decisions[seat] = forcedWin ?? (window.kind === 'turn'
         ? { kind: 'discard', index: this.seats[seat].locked ? this.players[seat].drawnTileIndex
           : chooseFallbackDiscardIndex(this.players[seat].hand, this.jokers, window.options[seat].filter(a => a.kind === 'discard').map(a => a.index)) }
@@ -216,6 +222,17 @@ export class BloodFlowEngine {
   private resolveWindow() {
     const window = this.window!
     const winners = SEATS.filter(s => window.decisions[s]?.kind === 'win')
+    // kong-priority 实验：动作优先级 杠 > 碰 > 吃 > 胡（胡最低）。竞争窗口里先结算吃碰杠，赢家被压到最后。
+    if (BLOOD_FLOW_ACTION_PRIORITY === 'kong-priority' && window.kind !== 'turn') {
+      const meldClaimants = SEATS.filter(s => {
+        const kind = window.decisions[s]?.kind
+        return kind === 'gang' || kind === 'peng' || kind === 'chi'
+      }).sort((a, b) => {
+        const rank = (s: Seat) => window.decisions[s]!.kind === 'gang' ? 0 : window.decisions[s]!.kind === 'peng' ? 1 : 2
+        return rank(a) - rank(b) || ((a - window.source.seat + 4) % 4) - ((b - window.source.seat + 4) % 4)
+      })
+      if (meldClaimants.length) return this.claimMeld(meldClaimants[0], window.decisions[meldClaimants[0]]!, window.source)
+    }
     if (winners.length) return this.applyWinBatch(window, winners)
     if (window.kind === 'turn') {
       const action = window.decisions[this.currentPlayer]!
@@ -261,11 +278,12 @@ export class BloodFlowEngine {
       }
       // One discard, one choice per seat. Hu priority is resolved after decisions;
       // it must not hide peng/gang/chi behind a separate pass-only round.
-      if (source.kind === 'discard' && this.wall.length && !this.seats[seat].locked) {
+      // kong-priority 实验：锁手座位也可大明杠（仍不可碰/吃）。
+      if (source.kind === 'discard' && this.wall.length && (!this.seats[seat].locked || BLOOD_FLOW_ACTION_PRIORITY === 'kong-priority')) {
         const hand = this.players[seat].hand, count = hand.filter(t => t === source.tile).length
         if (count >= 3) actions.push({ kind: 'gang' })
-        if (count >= 2) actions.push({ kind: 'peng' })
-        if (seat === nextSeat(source.seat)) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
+        if (count >= 2 && !this.seats[seat].locked) actions.push({ kind: 'peng' })
+        if (seat === nextSeat(source.seat) && !this.seats[seat].locked) for (const chi of canChi(hand, source.tile, this.jokers)) actions.push({ kind: 'chi', tiles: chi.tiles })
       }
       // 锁手后不得过胡：已胡过的座位仍可点炮/抢杠继续胡，但「过」不再是选项（用户确认）。
       if (actions.length && !(this.seats[seat].locked && win)) actions.push({ kind: 'pass' })

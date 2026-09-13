@@ -334,7 +334,7 @@ describe('E03 authority conservation and continuous rounds', () => {
     expect(engine.archives).toHaveLength(1)
     expect(engine.ledger.filter(e => e.kind === 'kong')).toHaveLength(0)
     expect(engine.currentPlayer).toBe(1)
-    expect(engine.players.map(p => p.score)).toEqual([1880, 2040, 2040, 2040])
+    expect(engine.players.map(p => p.score)).toEqual([1760, 2080, 2080, 2080])
     engine.assertConservation()
   })
 

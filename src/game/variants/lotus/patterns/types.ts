@@ -7,6 +7,11 @@ export type RegularPatternId =
   | 'all-green' | 'pure-terminals' | 'mixed-terminals'
   | 'three-concealed-triplets' | 'four-concealed-triplets'
   | 'all-honors' | 'three-kongs' | 'four-kongs'
+  // 2026-09-12 第二版番种表新增：路线牌型（数牌/刻子/幺九三条路线）
+  // 门清：**仅标准四面子一将型生效**（特殊结构不计）
+  | 'all-simples' | 'concealed-hand' | 'all-with-terminals'
+  | 'one-suit-three-steps' | 'one-suit-four-steps' | 'pure-straight'
+  | 'one-suit-three-joints' | 'one-suit-four-joints'
 
 export type SpecialPatternId = 'pinghu' | 'sevenPairs' | 'luxury-seven-pairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
 export type PatternId = RegularPatternId | SpecialPatternId

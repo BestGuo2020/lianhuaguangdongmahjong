@@ -5,7 +5,7 @@ import type { BloodFlowAction } from './state'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import type { BloodFlowAiConfig } from './config'
-import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
+import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
 import { patternPotentialEv, patternPotentials, waitingTilesCached } from './patternPotentials'
 import { bloodFlowEvContext } from './evContext'
 import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
@@ -20,11 +20,22 @@ export function bloodFlowAiActions(
   /** 调用方已算过的政策（避免一次决策里重复算全手牌型/向听）。 */
   defense?: ReturnType<typeof bloodFlowDefensePolicy>,
 ): readonly BloodFlowAction[] {
-  if (view.public.seats[view.seat].locked) return view.ownActions
+  if (view.public.seats[view.seat].locked) return applyActionPriority(view.ownActions)
   const indices = view.ownActions.filter(a => a.kind === 'discard').map(a => a.index)
   const allowed = new Set(lotusDiscardCandidates(view.players[view.seat].hand, view.jokers, indices).map(c => c.index))
   const legal = view.ownActions.filter(a => a.kind !== 'discard' || allowed.has(a.index))
-  return applyDefenseConstraint(view, dropDominatedPeng(legal), config, defense)
+  return applyDefenseConstraint(view, applyActionPriority(dropDominatedPeng(legal)), config, defense)
+}
+
+/**
+ * kong-priority 实验：动作优先级 杠 > 碰 > 吃 > 胡（胡最低）。
+ * 有杠/碰/吃可选时不再提供"胡"候选——引擎侧已让竞争窗口按此顺序结算，这里让 AI 自身也不把胡当默认首选。
+ */
+function applyActionPriority(actions: readonly BloodFlowAction[]): readonly BloodFlowAction[] {
+  if (BLOOD_FLOW_ACTION_PRIORITY !== 'kong-priority') return actions
+  const hasClaim = actions.some(action => action.kind === 'gang' || action.kind === 'peng' || action.kind === 'chi'
+    || action.kind === 'added-kong' || action.kind === 'concealed-kong' || action.kind === 'wind-kong')
+  return hasClaim ? actions.filter(action => action.kind !== 'win') : actions
 }
 
 const CLAIM_KINDS: ReadonlySet<string> = new Set(['peng', 'chi', 'gang', 'added-kong', 'concealed-kong', 'wind-kong'])
