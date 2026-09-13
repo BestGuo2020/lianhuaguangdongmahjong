@@ -36,6 +36,7 @@
 | [TypeScript 千局报告](records/simulation.md) | 正文所列提交与固定种子；可由报告脚本更新 |
 | [策略分布报告](records/strategies.md) | 正文所列提交、三个策略各 100 局；可由报告脚本更新 |
 | [硬件渲染测量](records/rendering.md) | 已记录环境的历史测量，保留备查，不纳入当前游戏交互待办 |
+| [番表三指标](records/pattern-metrics.md) | 主路线占比 / 得分番值贡献率 / 番种重叠矩阵；800 局 × 3 臂（第 5 步探针） |
 
 ## 如何维护
 
