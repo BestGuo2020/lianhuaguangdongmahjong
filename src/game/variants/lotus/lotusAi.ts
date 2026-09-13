@@ -7,6 +7,7 @@ import type { RuleSet } from '../../core/rules/ruleset'
 import { hasReadyDiscard, projectKongBloom } from './kongProjection'
 import { compareHandProgress, evaluateHandProgress, type HandProgress } from '../../shared/ai/handProgress'
 import { sevenPairsPotential, shiSanLanPotential, thirteenOrphansPotential } from './bloodFlow/patternPotentials'
+import type { KongValueKind } from './bloodFlow/kongValue'
 
 function wildcardSet(jokers: readonly TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
@@ -67,6 +68,26 @@ export type LotusClaimAction =
 
 export type LotusRobKongAction = 'win' | 'pass'
 
+/**
+ * 开杠价值钩子（第 3 步，2026-09-13）：由血流策略注入，返回开杠候选的净值
+ * `杠收益 − 防守风险 − 自手牌型损失`（见 bloodFlow/kongValue.ts）。
+ *
+ * **不注入时经典玩法行为完全不变**：明杠仍"能杠必杠"，暗杠/风杠/补杠仍走"已听牌则放弃"的旧启发式。
+ * 注入后这些动作改由净值决定（> 0 才压过"不杠"），调用方再与最佳非杠候选（胡/碰/吃/弃牌）比较。
+ */
+export interface KongEvaluationContext {
+  kind: KongValueKind
+  hand: readonly TileType[]
+  melds: readonly Meld[]
+  jokers: readonly TileType[]
+  tile?: TileType
+  /** 补杠：被补的碰在 melds 中的位置。 */
+  meldIndex?: number
+  publicTiles?: readonly TileType[]
+}
+
+export type KongEvaluator = (context: KongEvaluationContext) => { net: number }
+
 export interface LotusTurnView {
   hand: TileType[]
   melds: Meld[]
@@ -84,6 +105,8 @@ export interface LotusTurnView {
   patternBonus?: (hand: TileType[], melds: Meld[]) => number
   /** 可选：弃牌放炮成本（点），血流策略注入。 */
   safetyExposure?: (tile: TileType) => number
+  /** 可选：开杠价值（杠收益 − 防守风险 − 自手牌型损失），血流策略注入；不传则用旧启发式。 */
+  kongEvaluator?: KongEvaluator
 }
 
 export interface LotusClaimView {
@@ -108,6 +131,8 @@ export interface LotusClaimView {
   safetyExposure?: (tile: TileType) => number
   /** 可选：现有副露（供 patternBonus 统计杠/碰）。 */
   melds?: Meld[]
+  /** 可选：开杠价值（杠收益 − 防守风险 − 自手牌型损失），血流策略注入；不传则用旧启发式。 */
+  kongEvaluator?: KongEvaluator
 }
 
 export interface LotusRobKongView {
@@ -118,9 +143,25 @@ export interface LotusRobKongView {
   jokers: TileType[]
 }
 
+/**
+ * 开杠是否值得（第 3 步）：注入 kongEvaluator 时按净值
+ * `杠收益 − 防守风险 − 自手牌型损失` 判断——净值为正才压过"不杠"（保留手牌继续打）；
+ * 没注入（经典玩法）时回退调用方给的旧启发式判断，行为不变。
+ */
+function acceptsKong(
+  view: LotusTurnView,
+  evaluator: KongEvaluator | undefined,
+  context: Pick<KongEvaluationContext, 'kind' | 'melds' | 'tile' | 'meldIndex'>,
+  legacy: () => boolean,
+): boolean {
+  if (!evaluator) return legacy()
+  return evaluator({ hand: view.hand, jokers: view.jokers, publicTiles: view.publicTiles, ...context }).net > 0
+}
+
 /** 回合决策：杠后全听特例 → 自摸胡 → 补杠 → 暗杠 → 乱风杠 → 弃牌。
  * random 注入以便引擎建议确定性化；默认 Math.random 维持既有行为。 */
 export function decideTurn(view: LotusTurnView, random: () => number = Math.random): LotusTurnDecision {
+  const kongEvaluator = view.kongEvaluator
   const guaranteedConcealedKong = (view.ruleset ?? LOTUS_RULESET).win
     .concealedKongs(view.hand, { jokers: view.jokers })
     .find((tile) => projectKongBloom({
@@ -140,12 +181,16 @@ export function decideTurn(view: LotusTurnView, random: () => number = Math.rand
     (meld) => meld.type === 'peng'
       && view.hand.includes(meld.tile),
   )
-  if (meldIndex >= 0 && shouldTakeAddedKong(view)) return { kind: 'added-kong', meldIndex }
+  if (meldIndex >= 0 && acceptsKong(view, kongEvaluator, {
+    kind: 'added-kong', melds: view.melds, tile: view.melds[meldIndex].tile, meldIndex,
+  }, () => shouldTakeAddedKong(view))) return { kind: 'added-kong', meldIndex }
 
   const kong = (view.ruleset ?? LOTUS_RULESET).win.concealedKongs(view.hand, { jokers: view.jokers })[0]
-  if (kong && shouldTakeConcealedKong(view, kong)) return { kind: 'concealed-kong', tile: kong }
+  if (kong && acceptsKong(view, kongEvaluator, { kind: 'concealed-kong', melds: view.melds, tile: kong },
+    () => shouldTakeConcealedKong(view, kong))) return { kind: 'concealed-kong', tile: kong }
 
-  if (windKong(view.hand, view.jokers) && shouldTakeWindKong(view)) return { kind: 'wind-kong' }
+  if (windKong(view.hand, view.jokers) && acceptsKong(view, kongEvaluator,
+    { kind: 'wind-kong', melds: view.melds }, () => shouldTakeWindKong(view))) return { kind: 'wind-kong' }
 
   return {
     kind: 'discard',
@@ -171,6 +216,9 @@ function isTenpai(hand: TileType[], exposedMelds: number, jokers: TileType[]): b
 /**
  * 补杠：把第 4 张亮出后别家可抢杠胡。牌河该牌出现越少，别家听它的可能性越高；
  * 若手牌已听牌，补杠会破坏手牌结构且暴露被抢风险 → 放弃。
+ *
+ * 血流注入 kongEvaluator 后不再走这条（改由"杠收益 − 抢杠风险 − 向听损失"定价），
+ * 这里保留为经典玩法的口径。
  */
 function shouldTakeAddedKong(view: LotusTurnView): boolean {
   const meld = view.melds.find((item) => item.type === 'peng')
@@ -180,12 +228,13 @@ function shouldTakeAddedKong(view: LotusTurnView): boolean {
   return !isTenpai(view.hand, view.exposedMelds, view.jokers)
 }
 
-/** 暗杠：移除 4 张后结构大变；已听牌时杠会破坏听牌 → 放弃，未听牌则杠（+6B 收益）。 */
+/** 暗杠：移除 4 张后结构大变；已听牌时杠会破坏听牌 → 放弃，未听牌则杠（+6B 收益）。
+ * 血流注入 kongEvaluator 后改由开杠价值定价（手上的四张可能是豪华七对的本体）。 */
 function shouldTakeConcealedKong(view: LotusTurnView, _tile: TileType): boolean {
   return !isTenpai(view.hand, view.exposedMelds, view.jokers)
 }
 
-/** 风杠：同样移除 4 张；已听牌时放弃。 */
+/** 风杠：同样移除 4 张；已听牌时放弃（血流注入 kongEvaluator 后由开杠价值定价）。 */
 function shouldTakeWindKong(view: LotusTurnView): boolean {
   return !isTenpai(view.hand, view.exposedMelds, view.jokers)
 }
@@ -194,7 +243,17 @@ function shouldTakeWindKong(view: LotusTurnView): boolean {
 export function decideClaim(view: LotusClaimView): LotusClaimAction {
   // 杠后会从牌尾补牌，无法仅凭当前 13 张手牌准确判断补牌后的听口，
   // 因此继续保留杠的最高优先级；碰与吃则必须比较动作后的听牌质量。
-  if (view.canGang) return { kind: 'gang' }
+  //
+  // 第 3 步（2026-09-13）：血流注入 kongEvaluator 后，明杠也变成"计分开杠"——
+  // 明杠会造出一副露（门清平胡没了）并拆掉手上的三张（七对/豪华七对路线没了），
+  // 这些损失按点折算后与"不杠"（保留手牌，即最佳非杠候选：碰/吃/过）比较，净值为正才杠。
+  if (view.canGang) {
+    const value = view.kongEvaluator?.({
+      kind: 'discard-gang', hand: view.hand, melds: view.melds ?? [], jokers: view.jokers,
+      tile: view.tile, publicTiles: view.publicTiles,
+    })
+    if (!value || value.net > 0) return { kind: 'gang' }
+  }
 
   const extras: DiscardExtras = { melds: view.melds, patternBonus: view.patternBonus, safetyExposure: view.safetyExposure }
   const baseline = currentHandQuality(

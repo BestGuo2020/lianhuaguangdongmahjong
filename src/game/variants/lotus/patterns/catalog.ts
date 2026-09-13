@@ -23,9 +23,10 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   const tiles = hand.groups.flatMap(g => [...g.tiles])
   const suits = new Set(tiles.filter(t => !isHonor(t)).map(t => t[0]))
   const honors = tiles.some(isHonor)
-  // 豪华七对：七对里含自然四张相同（`natural` 表示每张实体牌都按本张使用，所以四张同牌即自然四张）。
-  if (hand.shape === 'sevenPairs' && hand.natural
-    && tiles.some(tile => tiles.filter(other => other === tile).length >= 4)) result.push('luxury-seven-pairs')
+  // 豪华七对：七对里含"四张相同"。2026-09-12 用户定案：**允许精牌替补**凑成那四张
+  // （tiles 是 represented 牌面，精牌顶替后计入），因此不再要求整手全自然（hand.natural）。
+  // 好处：不必真的摸到 4 张实体同牌，也不必为了它放弃开杠——精牌就能补齐，豪华七对因此可达。
+  if (hand.shape === 'sevenPairs' && tiles.some(tile => tiles.filter(other => other === tile).length >= 4)) result.push('luxury-seven-pairs')
   if (suits.size === 1) result.push(honors ? 'mixed-suit' : 'pure-suit')
   if (tiles.every(isHonor)) result.push('all-honors')
   if (tiles.every(t => ['s2', 's3', 's4', 's6', 's8', 'green'].includes(t))) result.push('all-green')
@@ -55,9 +56,6 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
     if (counts.every((n, i) => n >= (i === 0 || i === 8 ? 3 : 1))) result.push('nine-gates')
   }
   // —— 2026-09-12 第二版番种表新增 ——
-  // 门清：**仅标准四面子一将型生效**（七对/十三幺/十三烂/七星等特殊结构在上面已提前返回，天然不计门清）：
-  // 全部面子都出自手牌（暗杠不破门清；吃/碰/明杠会破）。
-  if (hand.groups.every(g => g.origin.kind === 'hand')) result.push('concealed-hand')
   // 断幺九：全部为 2~8 数牌。
   if (tiles.every(t => !isHonor(t) && !isTerminal(t))) result.push('all-simples')
   // 全带幺：每副面子与将牌都含幺九或字牌（允许 123 / 789 这类含幺的顺子）。
@@ -82,5 +80,8 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
     if (hasConsecutiveRun(numbers, 4)) result.push('one-suit-four-joints')
     else if (hasConsecutiveRun(numbers, 3)) result.push('one-suit-three-joints')
   }
-  return result.length ? result : ['pinghu']
+  // 门清平胡是**兜底本体**（方案B，2026-09-12 用户定案）：标准四面子一将、未副露、且不满足任何其他番种时，
+  // 取代鸡胡作为兜底；**不与任何主体番种叠加**。七对/十三幺/十三烂/七星等特殊结构在函数开头已提前返回。
+  const concealedHand = hand.groups.every(g => g.origin.kind === 'hand')
+  return result.length ? result : [concealedHand ? 'concealed-hand' : 'pinghu']
 }

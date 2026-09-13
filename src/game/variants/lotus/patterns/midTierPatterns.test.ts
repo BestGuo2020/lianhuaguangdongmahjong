@@ -67,7 +67,19 @@ describe('一色节高', () => {
   })
 })
 
-describe('门清（仅标准四面子一将型生效）', () => {
+describe('豪华七对：精牌可替补凑成四张相同', () => {
+  it('3 张实体同牌 + 1 张精 → 记为豪华七对（软胡）', () => {
+    // m2×3 + 精(white) 当第四张 m2，其余三对补齐 → 七对中含"四张相同"
+    const hand: TileType[] = ['m2', 'm2', 'm2', 'p5', 'p5', 's7', 's7', 'm9', 'm9', 'east', 'east', 'p1', 'p1']
+    const win = evaluateWin({ concealed: hand, melds: [] as never, winningTile: 'white', source: 'self-draw', jokers: ['white'], opening: null })
+    const items = win ? win.score.items.map(item => item.id) : []
+    expect(items).toContain('luxury-seven-pairs')
+    expect(items).not.toContain('sevenPairs')
+    expect(win?.score.hardWin).toBe(false)
+  })
+})
+
+describe('门清平胡（方案B：兜底本体，不与任何主体番种叠加）', () => {
   it('标准型无副露成立；七对等特殊结构不计门清', () => {
     expect(ids(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'], 'p8'))
       .toContain('concealed-hand')

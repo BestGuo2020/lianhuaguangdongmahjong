@@ -20,7 +20,7 @@ const patterns = Object.freeze({
   'big-four-winds': pattern('big-four-winds', '大四喜', 32, ['all-triplets', 'little-four-winds']),
   // 四杠只覆盖三杠（新表 §7：杠牌系列"四杠 → 三杠"）；四杠手必然也是四刻子+将，可与碰碰胡叠加。
   'four-kongs': pattern('four-kongs', '四杠', 32, ['three-kongs']),
-  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit', 'concealed-hand']),
+  'nine-gates': pattern('nine-gates', '九莲宝灯', 32, ['pure-suit']),
   // 极高番
   'big-three-dragons': pattern('big-three-dragons', '大三元', 24, ['little-three-dragons']),
   'all-honors': pattern('all-honors', '字一色', 24, ['mixed-terminals', 'all-with-terminals', 'all-triplets']),
@@ -68,6 +68,28 @@ const patterns = Object.freeze({
  */
 export const BLOOD_FLOW_KONG_BONUS: Readonly<{ exposed: number; concealed: number; wind: number }> =
   Object.freeze({ exposed: 1, concealed: 2, wind: 2 })
+
+/**
+ * 开杠价值配置（2026-09-13，用户定案第 3 步）。
+ *
+ * 血流 AI 的开杠候选不再"能杠必杠"，而是按 `杠收益 − 防守风险 − 自手牌型损失` 计分（见 kongValue.ts），
+ * 净值为正才压过"不杠"。`mode: 'off'` 用于 A/B 对照（回退到旧的"能杠必杠 + 已听牌才放弃"口径）。
+ */
+export interface KongValueConfig {
+  readonly mode: 'off' | 'ev'
+  /** 倍率加成的折算权重（× 底分）：1 = 按单家一份计（杠加成只在胡牌时兑现，这里不按胡牌概率再折）。 */
+  readonly bonusWeight: number
+  /** 补杠抢杠风险（点，未见张时）。 */
+  readonly robRisk: number
+  /** 向听每恶化一档的折算损失（点）＝ 1 番底分。 */
+  readonly shantenStepLoss: number
+  /** 门清平胡作为"兜底本体"的折价：只有在别的番种都不成立时才兑现，因此不按全额计。 */
+  readonly concealedHandFallback: number
+}
+
+export const BLOOD_FLOW_KONG_VALUE: KongValueConfig = Object.freeze({
+  mode: 'ev', bonusWeight: 1, robRisk: 60, shantenStepLoss: 10, concealedHandFallback: 0.5,
+})
 
 /**
  * 动作优先级实验开关（2026-09-12，默认 standard = 线上现状）。
@@ -161,6 +183,8 @@ export interface BloodFlowAiConfig {
   readonly bigHandRoute: BigHandRouteConfig
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
+  /** 开杠价值（第 3 步）：杠候选按 收益 − 防守风险 − 自手牌型损失 计分。 */
+  readonly kongValue: KongValueConfig
 }
 
 /** 兜/弃政策默认值（v3；规则见 defensePolicy.ts 顶部注释）。 */
@@ -199,6 +223,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   defense: BLOOD_FLOW_DEFENSE,
   bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE,
   llmEvFeatures: true,
+  kongValue: BLOOD_FLOW_KONG_VALUE,
 })
 
 /**
