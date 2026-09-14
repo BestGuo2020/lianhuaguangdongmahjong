@@ -36,6 +36,12 @@ export interface BloodFlowAuthorityOptions {
   cancelDecisions?(): void
   /** 机器人/大模型决策上限（毫秒）；缺省用 BLOOD_FLOW_TIMING.authorityBotDecisionTimeoutMs。 */
   botDecisionTimeoutMs?: number
+  /**
+   * 停滞取证（2026-09-14，仅 `?bfdiag=1` 时传入）：把 tick 内每个提前 return 的原因、
+   * 机器人分支的进出与座位打出来。线上实测"权威在等一个未绑定座位、却不推进"时，
+   * 只有这条 trace 能区分是"等窗口开启""非进行中状态"还是"机器人分支没进/没生效"。
+   */
+  trace?(message: string): void
 }
 
 /** Transport-independent coordinator. Serializes mutations, broadcasts private snapshots,
@@ -185,18 +191,28 @@ export class BloodFlowAuthority {
   /** One authority tick. The caller owns scheduling; UI/TTS completion never calls this. */
   tick(): Promise<void> {
     this.chain = this.chain.then(async () => {
-      if (this.stopped || !this.current) return
+      const trace = this.options.trace
+      if (this.stopped || !this.current) { trace?.('tick 跳过：stopped 或无当前视图'); return }
       for (const [peer, since] of this.disconnected) {
         const seat = this.bindings.get(peer)
         if (seat !== undefined && this.now() - since >= BLOOD_FLOW_TIMING.recoveryGraceMs) this.aiSeats.add(seat)
       }
-      if (this.current.public.status !== 'playing') { await this.releaseOpening(); await this.maybeAdvance(); return }
-      if (this.current.window && this.now() < this.current.window.opensAt) return
+      if (this.current.public.status !== 'playing') {
+        trace?.(`tick 非进行中状态=${this.current.public.status}（尝试开局闸门/推进下一局）`)
+        await this.releaseOpening(); await this.maybeAdvance(); return
+      }
+      if (this.current.window && this.now() < this.current.window.opensAt) {
+        trace?.(`tick 等待窗口开启 window=${this.current.window.id} 还有 ${Math.round(this.current.window.opensAt - this.now())}ms`)
+        return
+      }
       if (this.current.window && this.current.window.id !== this.publishedOpenWindow) await this.publish()
       if (this.current.window && this.now() >= this.current.window.deadlineAt) {
+        trace?.(`tick 窗口过期 window=${this.current.window.id} 到期 ${Math.round(this.now() - this.current.window.deadlineAt)}ms 前，执行 expire`)
         await this.options.backend.expire(this.current.window.id); await this.publish(); return
       }
       const bots = this.current.waitingSeats.filter(s => this.aiSeats.has(s) || this.autoSeats.has(s) || ![...this.bindings.values()].includes(s))
+      trace?.(`tick window=${this.current.window?.id ?? '-'} 等待=${JSON.stringify(this.current.waitingSeats)} `
+        + `已绑定=${JSON.stringify([...this.bindings.values()])} 机器人=${JSON.stringify(bots)} 到期还有=${this.current.window ? Math.round(this.current.window.deadlineAt - this.now()) : '-'}ms`)
       if (bots.length && this.current.window) {
         const windowId = this.current.window.id
         // Each seat requests once; a multi-win window never waits through full budgets serially.
