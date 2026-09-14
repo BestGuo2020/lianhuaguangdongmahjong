@@ -41,6 +41,10 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   let lastStateSequence = -1, lastStateRound = -1, lastStateAdvance = 0
   /** 自愈可观测：已上报过的决策超时次数（避免同一计数重复打印）。 */
   let reportedDecisionTimeouts = 0
+  /** 自愈可观测：已上报过的引擎/传输调用超时次数。 */
+  let reportedWorkerTimeouts = 0
+  /** 停滞取证：房间侧（450ms 定时器）的 tick 调用次数；与权威的 tickRuns 对照即可判断"是不是调用停了"。 */
+  let tickCalls = 0
   /** 自愈可观测：客机因"状态停滞"重握手的次数（打印时自增）。 */
   let stateStallHandshakes = 0
   let timer: ReturnType<typeof setInterval> | null = null
@@ -371,14 +375,21 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         if (!started && !starting && [...authority.bindings.keys()].every(p => authority!.compatible.has(p))) {
           starting = true
           void authority.start().then(() => { started = true; starting = false }).catch(() => { starting = false; fail('规则版本协商或承诺洗牌失败'); authority?.interrupt() })
-        } else if (started) void authority.tick().then(() => {
-          // 自愈可观测（2026-09-14）：决策超时是"权威链差点被堵死"的直接信号。
-          // 只有 ?bfdiag=1 才打印，验收脚本会把它计数进结果里（跑通也看得见看门狗有没有干活）。
-          if (BF_DIAG && authority && authority.botDecisionTimeouts > reportedDecisionTimeouts) {
-            reportedDecisionTimeouts = authority.botDecisionTimeouts
-            console.warn(`[bf-diag] 权威决策超时 #${reportedDecisionTimeouts}（已回落引擎机器人策略）`)
-          }
-        })
+        } else if (started) {
+          tickCalls += 1
+          void authority.tick().then(() => {
+            // 自愈可观测（2026-09-14）：决策/引擎调用超时是"权威链差点被堵死"的直接信号。
+            // 只有 ?bfdiag=1 才打印，验收脚本会把它计数进结果里（跑通也看得见看门狗有没有干活）。
+            if (BF_DIAG && authority && authority.botDecisionTimeouts > reportedDecisionTimeouts) {
+              reportedDecisionTimeouts = authority.botDecisionTimeouts
+              console.warn(`[bf-diag] 权威决策超时 #${reportedDecisionTimeouts}（已回落引擎机器人策略）`)
+            }
+            if (BF_DIAG && authority && authority.workerCallTimeouts > reportedWorkerTimeouts) {
+              reportedWorkerTimeouts = authority.workerCallTimeouts
+              console.warn(`[bf-diag] 权威引擎/传输调用超时 #${reportedWorkerTimeouts}（已跳过本次操作、下轮重试）`)
+            }
+          })
+        }
         if (!started && !starting && Date.now() - lastReceived > 15_000) {
           fail('有客户端未支持当前血流规则，请更新后重开'); authority.interrupt(); if (timer) clearInterval(timer); timer = null
         }
@@ -415,6 +426,9 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     ;(window as unknown as { __bfDiag?: () => unknown }).__bfDiag = () => ({
       side: authority ? 'host' : replica ? 'guest' : 'idle',
       roomId: replica?.roomId ?? latestFrame?.roomId ?? null,
+      tickCalls,
+      tickRuns: authority?.tickRuns ?? null,
+      chainBusyMs: authority ? Math.round(authority.chainBusyMs) : null,
       lastReceivedAgoMs: lastReceived ? Date.now() - lastReceived : null,
       lastStateAdvanceAgoMs: lastStateAdvance ? Date.now() - lastStateAdvance : null,
       stateStallHandshakes,
