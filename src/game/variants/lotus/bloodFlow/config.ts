@@ -154,6 +154,17 @@ export const BLOOD_FLOW_TIMING = Object.freeze({
    * 这个上限只兜住"连 abort 都没回来"的挂死，不影响正常的大模型出牌质量。
    */
   authorityBotDecisionTimeoutMs: 15_000,
+  /**
+   * 权威链上"引擎/传输调用"的上限（2026-09-14 追加，第二轮自愈）。
+   *
+   * 线上 trace 实测（房间 G626L9）：卡死时权威的最后一条 tick 停在 window 79，引擎已走到 window 80；
+   * 卡住前最后发生的是**一次 45 KB 快照被切成 12 个分片**的广播，而 `botDecisionTimeouts=0`
+   * 说明卡的不是决策那一步——是 `backend.view / expire / command / bot` 与 `publish()→sendSnapshot()`
+   * 这条路上的某个 await 永不返回，整条串行链（窗口过期、机器人推进、发快照）随之停摆。
+   * 这里给每个这类调用一个硬上限：超时就记数、打 trace 并**跳过本次操作**（下一次 tick 重试），
+   * 读视图超时时机器人分支直接回落 `backend.bot`，保证链每轮都有界推进。
+   */
+  authorityWorkerTimeoutMs: 4_000,
   compactWinMs: 2300, largeWinMs: 2600, topWinMs: 2900, multiWinIntroMs: 1500,
   fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
 })
