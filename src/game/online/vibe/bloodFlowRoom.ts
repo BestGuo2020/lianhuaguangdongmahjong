@@ -166,6 +166,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
           console.warn(`[bf-diag] replica 拒收 kind=${probe.kind} round=${probe.round} seq=${seq} `
             + `携带结算=${result} 已应用round=${current.round} replicaSeq=${current.sequence} `
             + `已应用结算=${Boolean(current.view?.public.roundResult)}`)
+          // 拒收原因细分（2026-09-14）：座位不符 / epoch 不符 / 序列回退 / 重复序列，
+          // 是"客机收帧但视图不更新"这类停滞最需要区分的信息。
+          const view = (probe as { view?: { seat?: unknown; public?: { status?: unknown } } }).view
+          const epoch = (probe as { authorityEpoch?: unknown }).authorityEpoch
+          console.warn(`[bf-diag] 拒收细分 座位报文=${String(view?.seat)} 本机=${current.seat} `
+            + `epoch报文=${String(epoch)} 本机=${String(current.view?.authorityEpoch)} `
+            + `seq报文=${String(seq)} 已应用=${current.sequence} ${String(view?.public?.status ?? '')}`)
         }
       }
       return
@@ -397,8 +404,45 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     if (!authority) transmit(replica.hello())
   }
 
-  return { port, attach, stop, get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },
-    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
+  /**
+   * 停滞取证钩子（2026-09-14，仅 `?bfdiag=1`）：线上验收卡住时，光看 HUD 阶段无法区分
+   * 「主机把窗口投影给了错的人」还是「客机收下却没暴露可操作项」。这里直接暴露两端引擎级现场：
+   * 客机的 replica 窗口/等待座位/可操作项、主机的权威当前视图与座位绑定。
+   */
+  if (BF_DIAG && typeof window !== 'undefined') {
+    ;(window as unknown as { __bfDiag?: () => unknown }).__bfDiag = () => ({
+      side: authority ? 'host' : replica ? 'guest' : 'idle',
+      roomId: replica?.roomId ?? latestFrame?.roomId ?? null,
+      lastReceivedAgoMs: lastReceived ? Date.now() - lastReceived : null,
+      lastStateAdvanceAgoMs: lastStateAdvance ? Date.now() - lastStateAdvance : null,
+      stateStallHandshakes,
+      replica: replica?.view ? {
+        seat: replica.seat, sequence: replica.sequence, round: replica.round,
+        status: replica.view.public.status, currentPlayer: replica.view.currentPlayer,
+        window: replica.view.window
+          ? { id: replica.view.window.id, kind: replica.view.window.kind, version: replica.view.window.version }
+          : null,
+        waitingSeats: [...replica.view.waitingSeats],
+        ownActions: replica.view.ownActions.map(action => action.kind),
+        settled: Boolean(replica.view.public.roundResult),
+      } : null,
+      authority: authority ? {
+        round: authority.round, botDecisionTimeouts: authority.botDecisionTimeouts,
+        aiSeats: [...authority.aiSeats], autoSeats: [...authority.autoSeats],
+        bindings: [...authority.bindings.entries()],
+        current: authority.currentView ? {
+          status: authority.currentView.public.status, currentPlayer: authority.currentView.currentPlayer,
+          window: authority.currentView.window
+            ? { id: authority.currentView.window.id, kind: authority.currentView.window.kind }
+            : null,
+          waitingSeats: [...authority.currentView.waitingSeats],
+          ownActions: authority.currentView.ownActions.map(action => action.kind),
+        } : null,
+      } : null,
+    })
+  }
+
+  return { port, attach, stop, get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
       ruleVersion: version, authorityEpoch: latestFrame.authorityEpoch, enabled }) },
     interrupt: (reason: string) => { fail(reason); authority?.stop(); if (timer) clearInterval(timer); timer = null },
   }

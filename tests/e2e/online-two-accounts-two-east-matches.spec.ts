@@ -2900,6 +2900,9 @@ async function bloodFlowSideState(page: Page) {
       seats: [...document.querySelectorAll('.player-seat')].map((seat) => (
         seat.querySelector('.player-info strong')?.textContent?.trim() ?? ''
       )),
+      // 引擎级现场（2026-09-14，仅 ?bfdiag=1 时有）：只看 HUD 阶段无法区分
+      // 「主机把窗口投影给错的人」与「客机收下但没暴露可操作项」。
+      diag: (globalThis as { __bfDiag?: () => unknown }).__bfDiag?.() ?? null,
     }
   }).catch((error) => ({ error: String(error).slice(0, 160) }))
 }
