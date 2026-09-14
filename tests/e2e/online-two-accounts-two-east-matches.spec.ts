@@ -278,7 +278,10 @@ async function installAudioProbe(context: BrowserContext) {
 async function installHostLlmConfig(context: BrowserContext, apiKey: string) {
   await context.addInitScript((key) => {
     // 只写作品托管域；OAuth 弹窗位于主站，不能把模型 Key 扩散到登录域 localStorage。
-    if (location.hostname !== 'vibeapps.lumigrav.space') return
+    // 2026-09-14：平台托管域由 vibeapps.lumigrav.space 迁到 apps.gamesvibe.app（旧域名彻底弃用）。
+    // 这里原来硬编码旧域名，新域名下整段注入被跳过 → 房主没有大模型供应商配置 →
+    // 房间里的「AI 选择」下拉只有"普通 AI"一项 → selectOption 永远等不到（表现为用例挂死）。
+    if (!/(^|\.)gamesvibe\.app$/.test(location.hostname)) return
     localStorage.setItem('llm.providers', JSON.stringify({
       configVersion: 2,
       enabled: true,
@@ -1199,8 +1202,9 @@ async function readFinalStandings(page: Page): Promise<FinalStanding[]> {
 }
 
 function isExternalVibeSdkFetchFailure(error: PageErrorRecord): boolean {
+  // SDK 脚本来自平台域（2026-09-14 起 gamesvibe.app 提供同一份；旧域名已弃用）。
   return error.message === 'Failed to fetch'
-    && /https:\/\/vibe\.lumigrav\.space\/sdk\/v3\/vibehub\.js(?:[:?]|$)/.test(error.stack)
+    && /https:\/\/[a-z0-9.-]*gamesvibe\.app\/sdk\/v3\/vibehub\.js(?:[:?]|$)/.test(error.stack)
 }
 
 async function readVisibleTableState(page: Page): Promise<VisibleTableState> {
