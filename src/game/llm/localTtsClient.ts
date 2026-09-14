@@ -10,13 +10,14 @@ import { avatarFolderOf } from './persona'
 
 /**
  * 自有 TTS 网关（持有供应商 key，前端不能直连供应商）。
- * 平台域名换过一次（`*.lumigrav.space` → `gamesvibe.app`），而这里原来只认旧域名，
- * 导致线上同源请求 `/api/local-tts/synthesize` 返回 404、LLM/llmAnime 主题**静默没有语音**。
- * 现在改为：域名白名单 + 运行期回退探针（见 LocalTtsClient.synthesize），换域名不会再静默失效。
+ * 平台域名已从 `*.lumigrav.space` 迁到 `gamesvibe.app`（2026-09-14 用户决定**彻底弃用旧域名**），
+ * 这里原来只认旧域名，导致线上同源请求 `/api/local-tts/synthesize` 返回 404、
+ * LLM/llmAnime 主题**静默没有语音**。现在只认新域名，并保留运行期回退探针
+ * （见 LocalTtsClient.synthesize）：以后再换域名也不会静默失效。
  */
 const LOCAL_TTS_GATEWAY = 'https://www.bestguo.top:58000'
-/** 平台域名（vibehub 发布域，页面本身没有后端，必须走网关）。 */
-const PLATFORM_TTS_HOSTS = ['lumigrav.space', 'gamesvibe.app']
+/** 平台域名（vibehub 发布域，页面本身没有后端，必须走网关）。旧域名 lumigrav.space 已弃用。 */
+const PLATFORM_TTS_HOSTS = ['gamesvibe.app']
 const AUDIO_PATH_RE = /^\/api\/local-tts\/audio\/[0-9a-f]{64}\.mp3$/
 const REQUEST_TIMEOUT_MS = 8_000
 
