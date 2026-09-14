@@ -34,6 +34,8 @@ export interface BloodFlowAuthorityOptions {
   onRoundSettled?(view: BloodFlowSeatView, round: number): void
   decide?(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null>
   cancelDecisions?(): void
+  /** 机器人/大模型决策上限（毫秒）；缺省用 BLOOD_FLOW_TIMING.authorityBotDecisionTimeoutMs。 */
+  botDecisionTimeoutMs?: number
 }
 
 /** Transport-independent coordinator. Serializes mutations, broadcasts private snapshots,
@@ -44,6 +46,11 @@ export class BloodFlowAuthority {
   readonly autoSeats = new Set<Seat>()
   readonly disconnected = new Map<string, number>()
   readonly settledRounds = new Set<string>()
+  /**
+   * 自愈诊断（2026-09-14）：机器人/大模型决策超时次数。> 0 说明有过"决策挂住"，
+   * 那时权威链靠超时回落才继续推进（否则窗口过期/发快照全部排不上队，双方卡死）。
+   */
+  botDecisionTimeouts = 0
   private confirmed = new Set<Seat>()
   private publishedBatches = new Set<string>()
   private chain = Promise.resolve()
@@ -194,7 +201,7 @@ export class BloodFlowAuthority {
         const choices = await Promise.all(bots.map(async seat => {
           const own = await this.options.backend.view(seat)
           const current = () => !this.stopped && this.current?.window?.id === windowId && !!this.current?.waitingSeats.includes(seat)
-          const action = this.options.decide ? await this.options.decide(own, current) : null
+          const action = await this.decideBounded(own, current)
           return { seat, own, action, current }
         }))
         for (const choice of choices) {
@@ -210,6 +217,33 @@ export class BloodFlowAuthority {
       }
     }).catch(() => { this.interrupt() })
     return this.chain
+  }
+
+  /**
+   * 有界机器人/大模型决策（2026-09-14 自愈）。
+   *
+   * `decide` 是权威链里唯一等外部的 await（大模型请求可能很慢甚至不返回）。它一旦挂住，
+   * 同一条串行链上的窗口过期、快照广播与命令校验全部排不上队：双方都停在等待、只剩托管按钮，
+   * 表现为线上那种"5 分钟不推进"。这里给它一个硬上限，超时就返回 null，
+   * 调用方随即回落到引擎自己的机器人策略（`backend.bot`），保证每轮 tick 都有界推进。
+   */
+  private async decideBounded(
+    view: BloodFlowSeatView,
+    isCurrent: () => boolean,
+  ): Promise<BloodFlowAction | null> {
+    const decide = this.options.decide
+    if (!decide) return null
+    const budget = this.options.botDecisionTimeoutMs ?? BLOOD_FLOW_TIMING.authorityBotDecisionTimeoutMs
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      return await Promise.race([
+        // 迟到的决策结果无人接收，这里兜住 rejection，避免 unhandled rejection。
+        Promise.resolve(decide(view, isCurrent)).catch(() => null),
+        new Promise<null>(resolve => { timer = setTimeout(() => { this.botDecisionTimeouts += 1; resolve(null) }, budget) }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
   peerDisconnected(peer: string) { if (peer !== this.options.hostPeer && this.bindings.has(peer) && !this.disconnected.has(peer)) this.disconnected.set(peer, this.now()) }
   /** Only call after the existing lobby has verified its stable seat token. */

@@ -141,6 +141,19 @@ export const BLOOD_FLOW_TIMING = Object.freeze({
   // remoteDecisionMs 与后端 BLOOD_FLOW_TIMING.remoteDecisionMs 对齐（12s = 经典房间回合超时），
   // WS 权威与 P2P 权威共用同一决策窗口，读秒长度不再两套。
   winBeatMs: 450, normalDecisionMs: 15_000, remoteDecisionMs: 12_000, recoveryGraceMs: 12_000,
+  /**
+   * 权威链上的机器人/大模型决策上限（2026-09-14 追加，P2P 中盘卡死的自愈）。
+   *
+   * 背景：`BloodFlowAuthority.tick()` 与 `receive()` 共用同一条串行 promise 链，
+   * 机器人决策是链里唯一"等外部"的 await（大模型请求可能慢/挂）。一旦它不返回，
+   * 后续的窗口过期、快照广播、命令校验全部排不上队——表现就是线上验收里那种
+   * "双方都停在等待、只剩托管按钮、5 分钟不动"。超时后回落到引擎自己的机器人策略
+   * （`backend.bot(seat, windowId)`），保证链每轮都有界推进。
+   *
+   * 取 remoteDecisionMs + 3s：正常路径下大模型决策由 runtime 按窗口预算自己 abort，
+   * 这个上限只兜住"连 abort 都没回来"的挂死，不影响正常的大模型出牌质量。
+   */
+  authorityBotDecisionTimeoutMs: 15_000,
   compactWinMs: 2300, largeWinMs: 2600, topWinMs: 2900, multiWinIntroMs: 1500,
   fullEffectCooldownMs: 8000, visualBacklogMs: 2000,
 })
