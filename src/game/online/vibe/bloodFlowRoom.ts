@@ -271,6 +271,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       authority = new BloodFlowAuthority({ roomId: active.roomId, authorityEpoch: epoch, hostPeer: active.peerId,
         mode: options.getMode(), seatByPeer: bindings, backend: createWorkerAuthorityBackend(),
         decide: (view, current) => decisions.decide(view, current), cancelDecisions: decisions.cancel,
+        // 停滞取证：仅 ?bfdiag=1 时把 tick 的关键分支打到控制台（验收取证会收集这些行）。
+        trace: BF_DIAG ? (message: string) => console.warn(`[bf-diag] 权威 tick：${message}`) : undefined,
         onRoundSettled: view => { void reactions.run(view) },
         send: (peer, message) => {
           if (room !== active || token !== lifecycle) return
