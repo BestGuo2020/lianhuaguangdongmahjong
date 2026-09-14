@@ -61,6 +61,15 @@ export class BloodFlowAuthority {
   botDecisionTimeouts = 0
   /** 自愈诊断：引擎/传输调用超时次数（view/expire/command/bot/publish 路径）。 */
   workerCallTimeouts = 0
+  /**
+   * 停滞取证（2026-09-14）：tick 链的活性。
+   * `tickRuns` 只在链体真正执行时自增；调用方（房间 450ms 定时器）的调用次数记在房间侧。
+   * 卡住时"调用在涨、执行不涨"＝链被某个 await 堵住；两者都不涨＝调用方停了。
+   * `chainBusySince` 记录当前链体开始时间，供 `chainBusyMs` 判断堵塞时长。
+   */
+  tickRuns = 0
+  private chainBusySince = 0
+  get chainBusyMs() { return this.chainBusySince ? this.now() - this.chainBusySince : 0 }
   private confirmed = new Set<Seat>()
   private publishedBatches = new Set<string>()
   private chain = Promise.resolve()
@@ -202,6 +211,8 @@ export class BloodFlowAuthority {
   /** One authority tick. The caller owns scheduling; UI/TTS completion never calls this. */
   tick(): Promise<void> {
     this.chain = this.chain.then(async () => {
+      this.tickRuns += 1
+      this.chainBusySince = this.now()
       const trace = this.options.trace
       if (this.stopped || !this.current) { trace?.('tick 跳过：stopped 或无当前视图'); return }
       for (const [peer, since] of this.disconnected) {
@@ -247,9 +258,13 @@ export class BloodFlowAuthority {
           }
           else await this.opBounded('bot', () => this.options.backend.bot(choice.seat, windowId))
           await this.publish()
+          // 停滞取证（2026-09-14）：机器人动作"执行了"不等于"局面推进了"。
+          // 这里记录动作后的窗口，若窗口没变，就是引擎把这一手吞了（而不是链被堵住）。
+          trace?.(`机器人动作后 seat=${choice.seat} 原窗口=${windowId} 现窗口=${this.current?.window?.id ?? '(无)'} `
+            + `等待=${JSON.stringify(this.current?.waitingSeats ?? [])}`)
         }
       }
-    }).catch(() => { this.interrupt() })
+    }).catch(() => { this.interrupt() }).finally(() => { this.chainBusySince = 0 })
     return this.chain
   }
 
