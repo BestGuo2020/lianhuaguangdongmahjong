@@ -25,13 +25,13 @@ export default defineConfig({
       ...Object.fromEntries([
         '/api/sdk', '/api/relay', '/api/game-auth', '/connect', '/relay-worker.js',
       ].map(path => [path, {
-        target: 'https://vibe.lumigrav.space',
+        target: 'https://gamesvibe.app',
         changeOrigin: true,
         secure: true,
         configure: (proxy: { on: (event: string, handler: (req: { setHeader: (name: string, value: string) => void }) => void) => void }) => {
           proxy.on('proxyReq', (request) => {
-            request.setHeader('Origin', 'https://vibe.lumigrav.space')
-            request.setHeader('Referer', 'https://vibe.lumigrav.space/')
+            request.setHeader('Origin', 'https://gamesvibe.app')
+            request.setHeader('Referer', 'https://gamesvibe.app/')
           })
         },
       }])),
@@ -41,8 +41,8 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-    // 本地联调 WebRTC：通过 hosts 把 127.0.0.1 伪装成 *.lumigrav.space 域名
-    // （VibeHub SDK 只给该域提供服务），因此放开 Vite 的 Host 头校验。
+    // 本地联调 WebRTC：通过 hosts 把 127.0.0.1 伪装成平台域名（VibeHub SDK 只给该域提供服务），
+    // 因此放开 Vite 的 Host 头校验。
     allowedHosts: true,
     watch: {
       // 编辑器「另存为重命名」会在源码目录留下 `.xxx.ts.<pid>.tmpdir` 临时目录，

@@ -6,22 +6,26 @@ export interface VibeUser {
   image: string | null
 }
 
-/** 作品 slug：VibeHub 试玩路径 https://vibeapps.lumigrav.space/B5AJupT1/ 的第一段。 */
+/** 作品 slug：VibeHub 试玩路径 https://gamesvibe.app/play/<slug> 的 slug。 */
 export const VIBE_WORK_SLUG = 'B5AJupT1'
 
 export type VibeStatus = 'idle' | 'initializing' | 'authenticating' | 'ready' | 'unavailable' | 'error'
 
 /**
- * 平台域族（2026-09-14 修复）。
+ * 平台域族（2026-09-14：平台域名从 `*.lumigrav.space` 迁到 `*.gamesvibe.app`，**旧域名彻底弃用**）。
  *
- * 平台域名由 `*.lumigrav.space` 换成 `*.gamesvibe.app`（试玩页 `https://gamesvibe.app/play/...`，
- * 应用本体在 `https://apps.gamesvibe.app/B5AJupT1/...`）。旧代码只判断 `endsWith('lumigrav.space')`，
- * 于是新域下 `isVibeHost=false → canInitVibeHub=false → initVibeHub() 直接返回 null`：
- * **线上联机（创建/加入房间、登录提示）整体不可用**。SDK 本身在两个域都还能取到
- * （`https://vibe.lumigrav.space/sdk/v3/vibehub.js` 200，SDK 的 apiBase 硬编码就是这个域），
- * 所以问题只在这处域名白名单；以后平台再换域名只需改这里 + `index.html` 的 SDK script。
+ * 旧代码只判断 `endsWith('lumigrav.space')`，于是新域下
+ * `isVibeHost=false → canInitVibeHub=false → initVibeHub() 直接返回 null`：
+ * **线上联机（创建/加入房间、登录提示）整体不可用**。
+ *
+ * 新域名已验证提供全部平台接口：SDK `https://gamesvibe.app/sdk/v3/vibehub.js` 200、
+ * `/api/sdk/*`（rooms/data/me/signal/turn）401 未授权、`/api/relay/nodes` 200、
+ * `/api/game-auth*` 405（POST-only）——所以 SDK 脚本、apiBase、页面都统一指向 gamesvibe.app，
+ * 代码里不再出现旧域名。
  */
-const PLATFORM_HOSTS = ['lumigrav.space', 'gamesvibe.app'] as const
+const PLATFORM_HOSTS = ['gamesvibe.app'] as const
+/** 平台 API 基址（SDK 默认 apiBase 硬编码旧域名 `vibe.lumigrav.space`，这里显式覆盖）。 */
+export const VIBE_API_BASE = 'https://gamesvibe.app'
 
 export function isPlatformHost(hostname: string | null | undefined): boolean {
   if (!hostname) return false
@@ -104,7 +108,10 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
     }
     vibeStatus.value = 'initializing'
     try {
-      const instance = await window.VibeHub.init({ work: VIBE_WORK_SLUG })
+      // 生产域显式给 apiBase（SDK 默认值硬编码旧域名）；本地开发不给，走 SDK 的 location.origin → vite 代理。
+      const instance = await window.VibeHub.init(
+        isVibeHost ? { work: VIBE_WORK_SLUG, apiBase: VIBE_API_BASE } : { work: VIBE_WORK_SLUG },
+      )
       client = instance
       vibeUser.value = instance.user
       stopWatching = instance.onAuthChange((user) => {

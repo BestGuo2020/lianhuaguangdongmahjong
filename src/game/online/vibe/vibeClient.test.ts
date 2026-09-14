@@ -30,13 +30,14 @@ describe('平台域判定（2026-09-14：平台域名换到 gamesvibe.app）', (
     expect(root.isVibeHost).toBe(true)
   })
 
-  it('旧域族 lumigrav.space 继续放行', async () => {
+  it('旧域名 lumigrav.space 已弃用：不再被当作平台域', async () => {
     const module = await withHostname('vibeapps.lumigrav.space')
-    expect(module.isVibeHost).toBe(true)
+    expect(module.isVibeHost).toBe(false)
+    expect(module.isPlatformHost('vibeapps.lumigrav.space')).toBe(false)
   })
 
   it('相似但不同的域必须排除（不能用 contains 判定）', async () => {
-    for (const hostname of ['notgamesvibe.app', 'gamesvibe.app.evil.com', 'evil-lumigrav.space', 'example.com']) {
+    for (const hostname of ['notgamesvibe.app', 'gamesvibe.app.evil.com', 'lumigrav.space', 'example.com']) {
       const module = await withHostname(hostname)
       expect(module.isVibeHost).toBe(false)
       expect(module.isPlatformHost(hostname)).toBe(false)
