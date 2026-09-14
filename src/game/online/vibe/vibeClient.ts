@@ -11,9 +11,26 @@ export const VIBE_WORK_SLUG = 'B5AJupT1'
 
 export type VibeStatus = 'idle' | 'initializing' | 'authenticating' | 'ready' | 'unavailable' | 'error'
 
-/** 是否部署在 lumigrav.space 生产域（仅生产域强制登录）。 */
+/**
+ * 平台域族（2026-09-14 修复）。
+ *
+ * 平台域名由 `*.lumigrav.space` 换成 `*.gamesvibe.app`（试玩页 `https://gamesvibe.app/play/...`，
+ * 应用本体在 `https://apps.gamesvibe.app/B5AJupT1/...`）。旧代码只判断 `endsWith('lumigrav.space')`，
+ * 于是新域下 `isVibeHost=false → canInitVibeHub=false → initVibeHub() 直接返回 null`：
+ * **线上联机（创建/加入房间、登录提示）整体不可用**。SDK 本身在两个域都还能取到
+ * （`https://vibe.lumigrav.space/sdk/v3/vibehub.js` 200，SDK 的 apiBase 硬编码就是这个域），
+ * 所以问题只在这处域名白名单；以后平台再换域名只需改这里 + `index.html` 的 SDK script。
+ */
+const PLATFORM_HOSTS = ['lumigrav.space', 'gamesvibe.app'] as const
+
+export function isPlatformHost(hostname: string | null | undefined): boolean {
+  if (!hostname) return false
+  return PLATFORM_HOSTS.some(host => hostname === host || hostname.endsWith(`.${host}`))
+}
+
+/** 是否部署在平台生产域（仅生产域强制登录）。 */
 export const isVibeHost = typeof window !== 'undefined'
-  && window.location.hostname.endsWith('lumigrav.space')
+  && isPlatformHost(window.location.hostname)
 
 /**
  * 是否允许初始化 VibeHub SDK：生产域 + 本地开发。

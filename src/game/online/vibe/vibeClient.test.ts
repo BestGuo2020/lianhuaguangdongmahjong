@@ -15,6 +15,35 @@ async function setupClient() {
   return { module, client }
 }
 
+describe('平台域判定（2026-09-14：平台域名换到 gamesvibe.app）', () => {
+  async function withHostname(hostname: string) {
+    vi.stubGlobal('window', { location: { hostname } })
+    vi.resetModules()
+    return import('./vibeClient')
+  }
+
+  it('新域族 gamesvibe.app（含子域）也算平台生产域 —— 否则 SDK 不初始化、线上联机整体不可用', async () => {
+    const module = await withHostname('apps.gamesvibe.app')
+    expect(module.isPlatformHost('apps.gamesvibe.app')).toBe(true)
+    expect(module.isVibeHost).toBe(true)
+    const root = await withHostname('gamesvibe.app')
+    expect(root.isVibeHost).toBe(true)
+  })
+
+  it('旧域族 lumigrav.space 继续放行', async () => {
+    const module = await withHostname('vibeapps.lumigrav.space')
+    expect(module.isVibeHost).toBe(true)
+  })
+
+  it('相似但不同的域必须排除（不能用 contains 判定）', async () => {
+    for (const hostname of ['notgamesvibe.app', 'gamesvibe.app.evil.com', 'evil-lumigrav.space', 'example.com']) {
+      const module = await withHostname(hostname)
+      expect(module.isVibeHost).toBe(false)
+      expect(module.isPlatformHost(hostname)).toBe(false)
+    }
+  })
+})
+
 describe('vibeClient login', () => {
   it('登录进行中复用同一个 SDK Promise，并在结束前保持忙碌状态', async () => {
     const { module, client } = await setupClient()
