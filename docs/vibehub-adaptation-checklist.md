@@ -149,6 +149,27 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 经验：**平台域名是外部变量**，TTS 这类"跨域取自有网关"的链路不能只靠域名硬编码，必须有运行期回退；下次换域名时前端自适应、后端只需补一条正则。
 
+### 6.2 平台域名变更导致线上联机整体不可用（2026-09-14 修复，vibehub 分支）
+
+现象：`gamesvibe.app` 上点「联机对战」→ 只看到昵称 + 创建/加入房间（灰）或登录提示，**创建/加入房间都进不去**；用户怀疑线上跑了 mock。
+
+实际根因（**不是 mock**）：
+
+| 事实 | 证据 |
+|---|---|
+| 生产包不含 mock | mock 分支由 `import.meta.env.DEV` 守卫，构建时被摇掉；`dist/assets` 里没有任何 mock 分块 |
+| SDK 仍可取到 | `https://vibe.lumigrav.space/sdk/v3/vibehub.js` → 200；SDK 内 `defaultApiBase()` 硬编码 `https://vibe.lumigrav.space`（非 localhost 时） |
+| 真凶是域名白名单 | `vibeClient.isVibeHost` 只判断 `hostname.endsWith('lumigrav.space')`。平台把试玩页换成 `https://gamesvibe.app/play/...`（应用本体 `apps.gamesvibe.app`）→ `isVibeHost=false` → `canInitVibeHub=false` → `initVibeHub()` 直接 `return null`（`vibeStatus='unavailable'`），**SDK 从不初始化**；`loginRequired` 也随之为 false，界面连登录都不提示 |
+
+修复：新增 `isPlatformHost`（域族白名单 `lumigrav.space` + `gamesvibe.app`，精确或子域匹配，不用 contains），`isVibeHost` 改用它 → `canInitVibeHub` / `loginRequired` 恢复；`App.vue` 注释同步；`vibeClient.test.ts` 补 3 条回归（新域族放行 / 旧域族放行 / `notgamesvibe.app`、`gamesvibe.app.evil.com` 必须排除）。
+
+跑验收的两个 Windows 坑（都踩过）：① **CJK 参数会被转码**——`npx playwright test -g 血流` 在 PowerShell 下匹配不到，改用临时 config 的 `grep: /[\u6d41\u884c]/`（unicode 转义，纯 ASCII）；② 该 spec 是 **serial** 文件，grep 写宽了（例如只匹配「大模型」会同时选中两条非血流用例）一条失败就会跳过目标用例。
+
+线上验证：重新部署后匿名打开试玩页 → 联机对战显示「多人对战需要 VibeHub 账号登录 / 登录」，证明已走到 SDK 初始化分支（修复前该分支被直接跳过）。
+
+**验收环境提醒（2026-09-14 发现）**：`tmp/online_test` 里的测试 URL 仍是**旧域名** `https://vibeapps.lumigrav.space/B5AJupT1/`，而旧域名下 SDK 的 relay 节点接口已被平台 CORS 挡掉（`/api/relay/nodes` preflight 失败 → `Relay 节点发现失败`，P2P 只能直连）。跑线上验收时应把 URL 换成 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`，否则测的不是用户实际在用的域名、且会引入 relay 相关的偶发失败。
+
+
 
 验收过程中修掉的 P2P 问题（vibehub `07150c2` / `9dbc445` / `ce46cdb` + master `72fc54f`）：
 
