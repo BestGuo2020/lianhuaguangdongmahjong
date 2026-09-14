@@ -30,24 +30,67 @@ describe('断幺九 / 全带幺', () => {
 })
 
 describe('一色步高 / 清龙', () => {
-  it('一色三步高：同门三副顺子起始 1/2/3 成立；不连续则不成立', () => {
+  // 国标把"依次递增一位"（素三步步高）与"依次递增二位"（素三连环扣）合称一色三步高，
+  // 因此同门三副顺子的起始数字取公差 1 或 2 都成立：
+  // 窄三步 123/234/345、234/345/456、345/456/567、456/567/678、567/678/789；
+  // 宽三步 123/345/567、234/456/678、345/567/789。
+  it('一色三步高（窄三步·递增一位）：起始 1/2/3 成立', () => {
     // 123 234 345 + 碰碰式对子
     expect(ids(['m1', 'm2', 'm3', 'm2', 'm3', 'm4', 'm3', 'm4', 'm5', 's5', 's5', 's5', 's9'], 's9'))
       .toContain('one-suit-three-steps')
-    // 123 345 567（起始 1/3/5，不连续）
-    expect(ids(['m1', 'm2', 'm3', 'm3', 'm4', 'm5', 'm5', 'm6', 'm7', 's5', 's5', 's5', 's9'], 's9'))
+  })
+
+  it('一色三步高（宽三步·递增二位）：起始 1/3/5、2/4/6、3/5/7 全部成立', () => {
+    // 123 345 567
+    expect(ids(['m1', 'm2', 'm3', 'm3', 'm4', 'm5', 'm5', 'm6', 'm7', 'east', 'east', 'east', 's5'], 's5'))
+      .toContain('one-suit-three-steps')
+    // 234 456 678
+    expect(ids(['m2', 'm3', 'm4', 'm4', 'm5', 'm6', 'm6', 'm7', 'm8', 'east', 'east', 'east', 's5'], 's5'))
+      .toContain('one-suit-three-steps')
+    // 345 567 789
+    expect(ids(['m3', 'm4', 'm5', 'm5', 'm6', 'm7', 'm7', 'm8', 'm9', 'east', 'east', 'east', 's5'], 's5'))
+      .toContain('one-suit-three-steps')
+  })
+
+  it('一色三步高：隔两档（1/4/7 清龙）与跨花色都不成立', () => {
+    // 123 456 789 只算清龙，不是三步高
+    const straight = ids(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'east', 'east', 'east', 's5'], 's5')
+    expect(straight).toContain('pure-straight')
+    expect(straight).not.toContain('one-suit-three-steps')
+    // 123 万 + 345 筒 + 567 索：必须同花色
+    expect(ids(['m1', 'm2', 'm3', 'p3', 'p4', 'p5', 's5', 's6', 's7', 'east', 'east', 'east', 's9'], 's9'))
       .not.toContain('one-suit-three-steps')
   })
 
-  it('一色四步高覆盖一色三步高（只计高位）', () => {
-    const items = ids(['m1', 'm2', 'm3', 'm2', 'm3', 'm4', 'm3', 'm4', 'm5', 'm4', 'm5', 'm6', 's9'], 's9')
-    expect(items).toContain('one-suit-four-steps')
-    expect(items).not.toContain('one-suit-three-steps')
+  it('一色四步高覆盖一色三步高（只计高位；公差 1 / 2 都算四步高）', () => {
+    const narrow = ids(['m1', 'm2', 'm3', 'm2', 'm3', 'm4', 'm3', 'm4', 'm5', 'm4', 'm5', 'm6', 's9'], 's9')
+    expect(narrow).toContain('one-suit-four-steps')
+    expect(narrow).not.toContain('one-suit-three-steps')
+    // 123 345 567 789（宽四步）
+    const wide = ids(['m1', 'm2', 'm3', 'm3', 'm4', 'm5', 'm5', 'm6', 'm7', 'm7', 'm8', 'm9', 's5'], 's5')
+    expect(wide).toContain('one-suit-four-steps')
+    expect(wide).not.toContain('one-suit-three-steps')
   })
 
   it('清龙：123 456 789 同门成立', () => {
     expect(ids(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 's5', 's5', 's5', 's9'], 's9'))
       .toContain('pure-straight')
+  })
+
+  it('精牌当将的宽三步（实测手牌）：精(九萬) + 3p4p5p5p7p7p8p8p9p 胡 6p → 一色三步高', () => {
+    // 手牌 10 张 + 1 副副露 + 胡牌张 = 14；拆解 345p + 567p + 789p + 88p(精当将)。
+    // 副露取筒子刻子（碰 1p），手牌仍是一色筒子。
+    const peng: Meld = { type: 'peng', tile: 'p1', tiles: ['p1', 'p1', 'p1'], from: 1 }
+    const win = evaluateWin({
+      concealed: ['m9', 'p3', 'p4', 'p5', 'p5', 'p7', 'p7', 'p8', 'p8', 'p9'],
+      melds: [peng], winningTile: 'p6', source: 'self-draw', jokers: ['m9'], opening: null,
+    })
+    const items = win?.score.items.map(item => item.id) ?? []
+    expect(items).toContain('one-suit-three-steps')
+    expect(items).toContain('pure-suit')
+    // 精要顶牌（当 8p 做将）→ 软胡，没有硬胡 ×2；倍率 = 1 + (8-1) + (4-1) = 11
+    expect(win?.score.hardWin).toBe(false)
+    expect(win?.score.patternMultiplier).toBe(11)
   })
 })
 
@@ -55,6 +98,7 @@ describe('一色节高', () => {
   it('一色三节高：同门三副连续数字刻子成立；数字不连续不成立', () => {
     expect(ids(['m2', 'm2', 'm2', 'm3', 'm3', 'm3', 'm4', 'm4', 'm4', 's5', 's5', 's5', 's9'], 's9'))
       .toContain('one-suit-three-joints')
+    // 节高只有"依次递增一位"：2/4/6（递增二位）不算——步高放开公差 2 后这条必须仍然成立。
     expect(ids(['m2', 'm2', 'm2', 'm4', 'm4', 'm4', 'm6', 'm6', 'm6', 's5', 's5', 's5', 's9'], 's9'))
       .not.toContain('one-suit-three-joints')
   })
