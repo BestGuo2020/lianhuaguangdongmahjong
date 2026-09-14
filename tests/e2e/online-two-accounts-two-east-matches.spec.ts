@@ -5,7 +5,7 @@ import { chromium, expect, test, type Browser, type BrowserContext, type CDPSess
 
 interface Account { email: string; password: string }
 interface OnlineConfig { url: string; accounts: [Account, Account]; deepseekApiKey: string }
-interface AutoPlayerEvent { at: number; type: 'hu-click' | 'pass-click' | 'discard-click' }
+interface AutoPlayerEvent { at: number; type: 'hu-click' | 'pass-click' | 'discard-click' | 'trusteeship-click' }
 interface TableVisualState {
   stage: string | null
   diceValues: number[]
@@ -698,7 +698,23 @@ async function installHostAutoPlayer(page: Page) {
           return
         }
       }
-      const tile = document.querySelector<HTMLElement>('.hand-rack.playable .hand-tile-slot .mahjong-tile')
+      // 2026-09-14：“托管”＝把本座位交给引擎代打（blood_flow_auto）。验收里两个账号是脚本驱动的
+      // 真人座位，没有这一步就只能靠读秒代打——每个回合 12 秒，一局必然顶穿“每局 5 分钟”的预算。
+      // 它是**开关**（aria-pressed=autoPlay）：只在未开启时点一次，否则每 120ms 会把它来回切回去。
+      const trusteeship = [...document.querySelectorAll<HTMLButtonElement>('.turn-action-row button.autoplay-action')]
+        .find(button => button.getAttribute('aria-pressed') !== 'true' && !button.disabled)
+      if (trusteeship) {
+        state.__onlineAutoPlayerEvents?.push({ at: Date.now(), type: 'trusteeship-click' })
+        trusteeship.click()
+        return
+      }
+      // 2026-09-14 修复：血流**锁手**（胡过之后）只允许打"刚摸的那张"，其余手牌是 disabled；
+      // 原来固定点第一张 → 锁手座位永远点不动 → 每个真人回合都要等满读秒由引擎代打，
+      // 4 局下来必然顶穿验收的"每局 5 分钟"预算（现场：tickCalls 正常、chainBusyMs 780ms、
+      // 权威一直在等 1 号位，日志显示机器人座位窗口一路推进 —— 链没被堵，是真人没出牌）。
+      const tile = document.querySelector<HTMLElement>(
+        '.hand-rack.playable .hand-tile-slot.drawn .mahjong-tile,'
+        + ' .hand-rack.playable .hand-tile-slot .mahjong-tile:not(.disabled)')
       if (tile) {
         state.__onlineAutoPlayerEvents?.push({ at: Date.now(), type: 'discard-click' })
         tile.click()
@@ -3010,6 +3026,15 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     let lastHand = ''
     let handStarted = Date.now()
     let lastProgress = 0
+    /**
+     * 每局预算（2026-09-14 放宽 5 → 12 分钟）。
+     *
+     * 血流一局要打到牌墙耗尽，脚本驱动的整场里一局 30+ 次胡牌、每次胡牌后还要继续，
+     * 实测正常推进也要 4–6 分钟 —— 5 分钟预算会把"正常但慢"误判成卡死（此前几次
+     * 失败/通过都压在 4–5 分钟附近）。真正的"冻结"由引擎级诊断判定：
+     * `chainBusyMs` 长时间不归零、`tickCalls−tickRuns` 持续拉大、`workerCallTimeouts` 增长。
+     */
+    const handBudgetMs = 720_000
     /** 卡住/失败取证：把双端 DOM 状态与控制台尾部写到证据目录并挂到报告。 */
     const dumpStallEvidence = async (reason: string) => {
       const states = await Promise.all(pages.map((page) => bloodFlowSideState(page)))
@@ -3043,7 +3068,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
         })
         const hand = roundToken(labels[0])
         if (hand && hand !== lastHand) { lastHand = hand; handStarted = Date.now() }
-        if (lastHand && Date.now() - handStarted > 300_000) {
+        if (lastHand && Date.now() - handStarted > handBudgetMs) {
           await dumpStallEvidence(`${lastHand} 超过 5 分钟未推进`)
           throw new Error(`${lastHand} 超过 5 分钟未推进`)
         }
