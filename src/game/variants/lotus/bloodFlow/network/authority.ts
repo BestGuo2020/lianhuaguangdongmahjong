@@ -64,6 +64,8 @@ export class BloodFlowAuthority {
   round = 0
   dealer: Seat = 0
   readonly bindings: Map<string, Seat>
+  /** 只读视图出口（2026-09-14 追加）：线上停滞取证要看到权威此刻认定的窗口归属与等待座位。 */
+  get currentView(): BloodFlowSeatView | null { return this.current }
   constructor(readonly options: BloodFlowAuthorityOptions) {
     this.bindings = new Map(options.seatByPeer)
     this.compatible.add(options.hostPeer)
