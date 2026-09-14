@@ -37,6 +37,8 @@ interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 
 export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   let room: VibeHubSDK.Room | null = null, replica: BloodFlowReplica | null = null, authority: BloodFlowAuthority | null = null
   let lifecycle = 0, hostPeer = '', started = false, starting = false, lastReceived = 0, lastHello = 0, goneSince = 0
+  /** 状态推进（sequence/round 变化）与"收到帧"分开跟踪；见 present() 里的注释。 */
+  let lastStateSequence = -1, lastStateRound = -1, lastStateAdvance = 0
   let timer: ReturnType<typeof setInterval> | null = null
   let latestFrame: Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' | 'round_settled' }> | null = null
   let offline: (() => void) | null = null, online: (() => void) | null = null
@@ -167,6 +169,11 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     lastReceived = Date.now(); goneSince = 0
     const message = decodeBloodFlowPacket(raw)
     if (!message) return
+    // 状态推进打点（2026-09-14 自愈）：与"收到帧"分开记。主机权威链被堵住时会**反复广播同一份
+    // 状态**——只按收帧判断会以为一切正常，其实牌局早已停住（线上验收实测：双端停在等待、只剩托管）。
+    if ('sequence' in message && (message.sequence !== lastStateSequence || message.round !== lastStateRound)) {
+      lastStateSequence = message.sequence; lastStateRound = message.round; lastStateAdvance = Date.now()
+    }
     if (message.kind === 'blood_flow_error') {
       fail(message.code === 'INCOMPATIBLE_RULE_VERSION' ? '房间规则版本不兼容，请更新所有客户端' : '房主对局已中断，保留最后确认流水')
       return
@@ -363,6 +370,14 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         else if (Date.now() - lastReceived > 3_000 && Date.now() - lastHello >= 3_000) {
           lastHello = Date.now(); transmit(replica!.hello())
           if (BF_DIAG) console.warn(`[bf-diag] 客机收帧停滞 ${Math.round((Date.now() - lastReceived) / 1000)}s，已重握手请求权威快照`)
+        }
+        // 第二道网：帧一直在到，但**状态不前进**（sequence/round 都没变）——典型是主机权威链被
+        // 一条挂住的机器人/大模型决策堵死，只反复广播同一份状态。20s 阈值大于最长决策窗口
+        // （12s）+ 一炮多响的并发决策余量，避免把正常的慢回合误判成停滞。
+        else if (replica?.view && !replica.view.public.roundResult
+          && Date.now() - lastStateAdvance > 20_000 && Date.now() - lastHello >= 20_000) {
+          lastHello = Date.now(); transmit(replica!.hello())
+          if (BF_DIAG) console.warn(`[bf-diag] 客机状态停滞 ${Math.round((Date.now() - lastStateAdvance) / 1000)}s（seq=${lastStateSequence} 未推进，帧仍在到），已重握手`)
         }
         if (replica?.view && !replica.view.public.roundResult && Date.now() - lastReceived > 40_000) goneSince ||= Date.now()
         if (goneSince && Date.now() - goneSince > 30_000) fail('房主无法恢复，对局中断，保留最后确认流水')
