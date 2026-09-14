@@ -39,6 +39,10 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   let lifecycle = 0, hostPeer = '', started = false, starting = false, lastReceived = 0, lastHello = 0, goneSince = 0
   /** 状态推进（sequence/round 变化）与"收到帧"分开跟踪；见 present() 里的注释。 */
   let lastStateSequence = -1, lastStateRound = -1, lastStateAdvance = 0
+  /** 自愈可观测：已上报过的决策超时次数（避免同一计数重复打印）。 */
+  let reportedDecisionTimeouts = 0
+  /** 自愈可观测：客机因"状态停滞"重握手的次数（打印时自增）。 */
+  let stateStallHandshakes = 0
   let timer: ReturnType<typeof setInterval> | null = null
   let latestFrame: Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' | 'round_settled' }> | null = null
   let offline: (() => void) | null = null, online: (() => void) | null = null
@@ -358,7 +362,14 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         if (!started && !starting && [...authority.bindings.keys()].every(p => authority!.compatible.has(p))) {
           starting = true
           void authority.start().then(() => { started = true; starting = false }).catch(() => { starting = false; fail('规则版本协商或承诺洗牌失败'); authority?.interrupt() })
-        } else if (started) void authority.tick()
+        } else if (started) void authority.tick().then(() => {
+          // 自愈可观测（2026-09-14）：决策超时是"权威链差点被堵死"的直接信号。
+          // 只有 ?bfdiag=1 才打印，验收脚本会把它计数进结果里（跑通也看得见看门狗有没有干活）。
+          if (BF_DIAG && authority && authority.botDecisionTimeouts > reportedDecisionTimeouts) {
+            reportedDecisionTimeouts = authority.botDecisionTimeouts
+            console.warn(`[bf-diag] 权威决策超时 #${reportedDecisionTimeouts}（已回落引擎机器人策略）`)
+          }
+        })
         if (!started && !starting && Date.now() - lastReceived > 15_000) {
           fail('有客户端未支持当前血流规则，请更新后重开'); authority.interrupt(); if (timer) clearInterval(timer); timer = null
         }
@@ -377,7 +388,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         else if (replica?.view && !replica.view.public.roundResult
           && Date.now() - lastStateAdvance > 20_000 && Date.now() - lastHello >= 20_000) {
           lastHello = Date.now(); transmit(replica!.hello())
-          if (BF_DIAG) console.warn(`[bf-diag] 客机状态停滞 ${Math.round((Date.now() - lastStateAdvance) / 1000)}s（seq=${lastStateSequence} 未推进，帧仍在到），已重握手`)
+          if (BF_DIAG) console.warn(`[bf-diag] 客机状态停滞 ${Math.round((Date.now() - lastStateAdvance) / 1000)}s（seq=${lastStateSequence} 未推进，帧仍在到），已重握手 #${++stateStallHandshakes}`)
         }
         if (replica?.view && !replica.view.public.roundResult && Date.now() - lastReceived > 40_000) goneSince ||= Date.now()
         if (goneSince && Date.now() - goneSince > 30_000) fail('房主无法恢复，对局中断，保留最后确认流水')

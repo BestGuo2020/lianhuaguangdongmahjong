@@ -3078,8 +3078,20 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     expect(normalized[1], '两端最终排名与累计积分应一致').toEqual(normalized[0])
     await attachDualScreenshots(pages as [Page, Page], testInfo, `${label}-final`)
 
+    // 自愈可观测（2026-09-14）：把看门狗信号也写进结果——跑通与卡住都能看出它有没有干活。
+    // 主机：`[bf-diag] 权威决策超时 #N`（决策挂住→回落引擎机器人策略）；
+    // 客机：`[bf-diag] 客机状态停滞 Ns ... 已重握手 #M` 与 `[bf-diag] 客机收帧停滞 Ns`。
+    const selfHealSignals = consoleLogs.flatMap((logs, index) => logs
+      .filter((line) => /\[bf-diag\]/.test(line))
+      .map((line) => ({ side: index === 0 ? 'host' : 'client', line: line.slice(0, 200) })))
     const result = JSON.stringify({
       label, llm, roomCode, observed, roundScores, standings: standings[0], applicationErrors,
+      selfHeal: {
+        signals: selfHealSignals,
+        decisionTimeouts: selfHealSignals.filter(s => /权威决策超时/.test(s.line)).length,
+        clientStateStalls: selfHealSignals.filter(s => /状态停滞/.test(s.line)).length,
+        clientFrameStalls: selfHealSignals.filter(s => /收帧停滞/.test(s.line)).length,
+      },
     }, null, 2)
     await testInfo.attach(`${label}-result`, { body: result, contentType: 'application/json' })
     mkdirSync('tmp/blood-flow-online', { recursive: true })
