@@ -430,6 +430,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       } : null,
       authority: authority ? {
         round: authority.round, botDecisionTimeouts: authority.botDecisionTimeouts,
+        workerCallTimeouts: authority.workerCallTimeouts,
         aiSeats: [...authority.aiSeats], autoSeats: [...authority.autoSeats],
         bindings: [...authority.bindings.entries()],
         current: authority.currentView ? {
