@@ -11,14 +11,14 @@ import { seededRandom } from '../simulation'
 import { buildRingWall } from '../../lotusWall'
 import { decideBloodFlowAction } from '../ai'
 
-function room() {
+function room(extra: Partial<ConstructorParameters<typeof BloodFlowAuthority>[0]> = {}) {
   let now = 0
   const backend = createDirectAuthorityBackend(() => now, { winBeatMs: 0 })
   const queued: { peer: string; packet: BloodFlowPacket }[] = []
   const sync = vi.fn()
   const replicas = SEATS.map(seat => new BloodFlowReplica('room', 'p0', seat, sync))
   const settled = vi.fn()
-  const host = new BloodFlowAuthority({ roomId: 'room', authorityEpoch: 'epoch', hostPeer: 'p0', mode: 'east', backend,
+  const host = new BloodFlowAuthority({ ...extra, roomId: 'room', authorityEpoch: 'epoch', hostPeer: 'p0', mode: 'east', backend,
     seatByPeer: new Map(SEATS.map(s => [`p${s}`, s])), now: () => now,
     prepareOpening: async round => ({ initialWall: buildRingWall(seededRandom(47 + round)), firstDice: [2, 3], secondDice: [3, 4] }),
     send: (peer, packet) => queued.push({ peer, packet }), onRoundSettled: settled })
@@ -62,8 +62,40 @@ describe('E06 four-endpoint authority and recovery', () => {
     expect([...r.backend.engine.jokers,'white']).not.toContain(r.backend.engine.discardActions.at(-1)?.tile)
     r.backend.engine.assertConservation()
   })
-  it('refuses unknown versions and refuses start before every human has a compatible client', async () => {
-    const r = room()
+  // 2026-09-14 自愈：decide 是权威链里唯一等外部的 await（大模型请求可能很慢甚至不返回）。
+  // 它挂住时整条串行链（窗口过期、快照广播、命令校验）都排不上队，线上表现为"双方停在等待、只剩托管"。
+  it('挂死的机器人决策不再冻结权威链：超时后回落引擎机器人策略并继续推进', async () => {
+    const hanging = new Promise<never>(() => {})
+    const r = room({ decide: () => hanging, botDecisionTimeoutMs: 20 })
+    await start(r)
+    r.host.aiSeats.add(0)
+    const id = r.backend.engine.window!.id
+    const bot = vi.spyOn(r.backend, 'bot')
+    await r.host.tick()
+    expect(r.host.botDecisionTimeouts).toBe(1)
+    expect(bot).toHaveBeenCalled()
+    expect(r.backend.engine.window?.id).not.toBe(id)
+    r.backend.engine.assertConservation()
+  })
+
+  it('预算内的正常决策仍被采用（不误判为超时）', async () => {
+    let decide: (() => Promise<import('../state').BloodFlowAction | null>) | null = null
+    const r = room({ decide: () => decide!(), botDecisionTimeoutMs: 1_000 })
+    await start(r)
+    r.host.aiSeats.add(0)
+    const actions = r.backend.engine.window!.options[0]
+    const chosen = actions.find(a => a.kind !== 'pass') ?? actions[0]
+    const spy = vi.fn(async () => chosen)
+    decide = spy
+    const bot = vi.spyOn(r.backend, 'bot')
+    await r.host.tick()
+    expect(spy).toHaveBeenCalled()
+    expect(r.host.botDecisionTimeouts).toBe(0)
+    expect(bot).not.toHaveBeenCalled()
+    r.backend.engine.assertConservation()
+  })
+
+  it('refuses unknown versions and refuses start before every human has a compatible client', async () => {    const r = room()
     await r.host.receive({ kind: 'blood_flow_hello', roomId: 'room', ruleVersion: 'old' }, 'p1')
     expect(r.queued[0].packet).toMatchObject({ kind: 'blood_flow_error', code: 'INCOMPATIBLE_RULE_VERSION' })
     await expect(r.host.start()).rejects.toThrow('INCOMPATIBLE_RULE_VERSION')
