@@ -167,7 +167,22 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 线上验证：重新部署后匿名打开试玩页 → 联机对战显示「多人对战需要 VibeHub 账号登录 / 登录」，证明已走到 SDK 初始化分支（修复前该分支被直接跳过）。
 
-**验收环境提醒（2026-09-14 发现）**：`tmp/online_test` 里的测试 URL 仍是**旧域名** `https://vibeapps.lumigrav.space/B5AJupT1/`，而旧域名下 SDK 的 relay 节点接口已被平台 CORS 挡掉（`/api/relay/nodes` preflight 失败 → `Relay 节点发现失败`，P2P 只能直连）。跑线上验收时应把 URL 换成 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`，否则测的不是用户实际在用的域名、且会引入 relay 相关的偶发失败。
+**验收环境提醒（2026-09-14 发现）**：`tmp/online_test` 里的测试 URL 仍是**旧域名** `https://vibeapps.lumigrav.space/B5AJupT1/`，而旧域名下 SDK 的 relay 节点接口已被平台 CORS 挡掉（`/api/relay/nodes` preflight 失败 → `Relay 节点发现失败`，P2P 只能直连）。跑线上验收时应把 URL 换成**应用本体** `https://apps.gamesvibe.app/B5AJupT1/`（注意不是平台试玩页 `gamesvibe.app/play/...`——那页把游戏放在 iframe 里，spec 的定位器不穿透 iframe）。
+
+### 6.3 「整场卡住」的四层原因与逐层取证（2026-09-15）
+
+同一句"东N局超过 5 分钟未推进"背后有四种完全不同的原因，靠引擎级诊断逐层分离（`?bfdiag=1`）：
+
+| 层 | 现场特征 | 结论/修复 |
+|---|---|---|
+| ① 权威链被一条不返回的 await 冻死 | 早期现场：权威最后一条 tick 停在 window 79 而引擎已到 80、卡住前一次 **45KB 快照切 12 片**、`botDecisionTimeouts=0` | master `2975e8b`：`authorityWorkerTimeoutMs=4s` + `callBounded/viewBounded/opBounded` 包住 `view/expire/command/bot/publish/pause/resume`，超时**跳过本次**、下轮重试；读视图超时直接回落 `backend.bot` |
+| ② 仍是链的问题但护栏计数为 0 | `chainBusyMs` 很小、`tickCalls≈tickRuns`、`workerCallTimeouts=0`、窗口连续推进 | 说明**链没被堵** → 去查调用方与真人座位（③④） |
+| ③ 验收脚本的"真人"座位从不出牌 | 停滞瞬间双端手牌 `aria-disabled="true"`；`autoSeats` 只有 1 个；日志显示真人座位窗口靠读秒代打 | vibehub `832687c`：自动出牌优先点 `.hand-tile-slot.drawn`（血流**锁手**只允许打刚摸的那张），并只在 `aria-pressed !== 'true'` 时点一次「托管」（它是开关，120ms 连点会来回切换） |
+| ④ 预算太紧把"正常但慢"判成卡死 | `结算 N 局` 持续增长、阶段连续推进，仍报"未推进" | vibehub `832687c`：每局预算 5 → **12 分钟**；真正的冻结判据改为引擎级诊断（`chainBusyMs` 不归零 / `tickCalls−tickRuns` 持续拉大 / `workerCallTimeouts` 增长） |
+
+**关键诊断字段**（`__bfDiag()`，仅 `?bfdiag=1`）：`tickCalls`（房间 450ms 定时器调用次数）、`tickRuns`（链体真正执行次数）、`chainBusyMs`（链堵塞时长）、`authority.workerCallTimeouts` / `botDecisionTimeouts`、`replica.window/waitingSeats/ownActions`、`authority.current`（权威此刻的窗口归属与等待座位）、以及 `机器人动作后 原窗口→现窗口` trace（识别"执行了但局面没变"的吞动作）。
+
+**判读口诀**：`tickCalls` 涨而 `tickRuns` 不涨＝链被堵（看 `chainBusyMs` 与超时计数）；两者都不涨＝调用方停了；两者都涨、窗口却在原地＝有人没出牌（看 `waitingSeats` 是谁、`autoSeats` 有没有它）。
 
 
 

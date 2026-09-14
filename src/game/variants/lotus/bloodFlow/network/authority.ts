@@ -46,6 +46,19 @@ export interface BloodFlowAuthorityOptions {
   trace?(message: string): void
 }
 
+/**
+ * 快照瘦身（2026-09-15）：常规帧只保留最近 2 条胡牌与最近 4 条结算流水。
+ * 客机（replica）会把瘦身帧与上一份视图做并集合并，所以历史不会丢；
+ * 全量帧只出现在重同步（hello / blood_flow_sync）与每局首次结算上。
+ */
+function trimViewForDiet(view: BloodFlowSeatView): BloodFlowSeatView {
+  const ledger = view.public.roundResult?.ledger
+  const roundResult = view.public.roundResult && ledger && ledger.length > 4
+    ? { ...view.public.roundResult, ledger: ledger.slice(-4) }
+    : view.public.roundResult
+  return { ...view, public: { ...view.public, batches: view.public.batches.slice(-2), roundResult } }
+}
+
 /** Transport-independent coordinator. Serializes mutations, broadcasts private snapshots,
  * and preserves verified seat identity across transient peer changes. */
 export class BloodFlowAuthority {
@@ -71,6 +84,8 @@ export class BloodFlowAuthority {
   private chainBusySince = 0
   get chainBusyMs() { return this.chainBusySince ? this.now() - this.chainBusySince : 0 }
   private confirmed = new Set<Seat>()
+  /** 快照瘦身：每个 peer 已经完整发过结算帧的 roundId（同一局后续结算帧走瘦身版）。 */
+  private readonly settledSentTo = new Map<string, string>()
   private publishedBatches = new Set<string>()
   private chain = Promise.resolve()
   private stopped = false
@@ -105,7 +120,7 @@ export class BloodFlowAuthority {
           this.safeSend(peer, { ...this.envelope(), kind: 'blood_flow_error', code: 'INCOMPATIBLE_RULE_VERSION' }); return
         }
         this.compatible.add(peer); this.disconnected.delete(peer); this.aiSeats.delete(this.bindings.get(peer)!)
-        if (this.current) await this.sendSnapshot(peer)
+        if (this.current) await this.sendSnapshot(peer, false)
         return
       }
       if (!this.compatible.has(peer)) return
@@ -121,7 +136,7 @@ export class BloodFlowAuthority {
         }
         return
       }
-      if (message.kind === 'blood_flow_sync') { if (this.current) await this.sendSnapshot(peer); return }
+      if (message.kind === 'blood_flow_sync') { if (this.current) await this.sendSnapshot(peer, false); return }
       if (message.kind === 'blood_flow_command') {
         const seat = this.bindings.get(peer)!, c = message.command
         if (c.seat !== seat || c.authorityEpoch !== this.options.authorityEpoch) return
@@ -158,16 +173,24 @@ export class BloodFlowAuthority {
     this.openingGate = true; this.openingReady.clear()
     await this.publish()
   }
-  private async sendSnapshot(peer: string) {
+  private async sendSnapshot(peer: string, diet = true) {
     const seat = this.bindings.get(peer)
     if (seat === undefined || !this.compatible.has(peer)) return
     const projected = await this.viewBounded(seat)
     if (!projected) return
     // Additional public receipts travel in the envelope; older v1 view decoders keep their shape.
-    const {kongEvents,...view}=projected
+    const {kongEvents,...rawView}=projected
+    // 快照瘦身（2026-09-15）：常规帧只带最近 2 条胡牌 + 最近 4 条结算流水；重同步（hello/sync）
+    // 与每局**首次**结算帧发全量。客机（replica）会把瘦身帧与上一份视图并集合并，历史不丢。
+    const firstSettle = Boolean(rawView.public.roundResult) && this.settledSentTo.get(peer) !== rawView.roundId
+    if (rawView.public.roundResult) this.settledSentTo.set(peer, rawView.roundId)
+    const trim = diet && !firstSettle
+    const view = trim ? trimViewForDiet(rawView) : rawView
+    const sentKong = trim ? (kongEvents ?? []).slice(-4) : kongEvents
     const requiredSeats=[...this.bindings.values()].filter(s=>!this.aiSeats.has(s))
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
-      mode: this.options.mode, dealer: this.dealer, view, ...(kongEvents?.length?{kongEvents}:{}),
+      mode: this.options.mode, dealer: this.dealer, view, ...(sentKong?.length?{kongEvents:sentKong}:{}),
+      ...(trim ? { diet: true as const } : {}),
       ...(view.public.roundResult?{continuation:{requiredSeats,readySeats:requiredSeats.filter(s=>this.confirmed.has(s))}}:{}) }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
       : { ...base, kind: 'blood_flow_snapshot', autoPlay: this.autoSeats.has(seat), ...(this.openingGate ? { opening: this.openingData! } : {}) })

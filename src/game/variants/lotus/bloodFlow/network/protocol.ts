@@ -29,9 +29,16 @@ export type BloodFlowPacket =
   | (BloodFlowEnvelope & { kind: 'blood_flow_auto'; authorityEpoch: string; enabled: boolean })
   | (BloodFlowEnvelope & { kind: 'blood_flow_reaction'; reaction: BloodFlowReaction })
   | (BloodFlowEnvelope & { kind: 'blood_flow_action_speech'; speech:BloodFlowActionSpeech })
-  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean })
+  /**
+   * `diet`（2026-09-15 快照瘦身）：常规发布的帧只带**最近若干条**胡牌与结算流水，客机与上一份视图
+   * 做并集合并；`hello` / `blood_flow_sync`（重同步）与每局**首次**结算帧仍发全量。
+   *
+   * 背景：线上实测本局到东4局时全量快照可达 45KB，被切成 12 个分片广播；分片正是 SDK 侧最容易
+   * 静默丢失的形态（见本文件 §联机验收策略里记录的"分片在订阅者处被丢弃"）。
+   */
+  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean; diet?: true })
   | (AuthorityEnvelope & { kind: 'win_batch'; batch: WinBatch })
-  | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat })
+  | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat; diet?: true })
   | (BloodFlowEnvelope & { kind: 'blood_flow_error'; code: 'INCOMPATIBLE_RULE_VERSION' | 'INTERRUPTED' })
 
 const object = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null && !Array.isArray(v)

@@ -4,6 +4,25 @@ import type { Seat } from '../types'
 import { vector } from '../state'
 import { decodeBloodFlowPacket } from './protocol'
 
+/**
+ * 瘦身帧合并（2026-09-15）：瘦身帧只带最近 2 条胡牌与最近 4 条结算流水，
+ * 这里把上一份视图里的历史并集补回，得到与全量帧等价的视图（历史不丢）。
+ */
+function mergeDietView(incoming: BloodFlowSeatView, previous: BloodFlowSeatView | null): BloodFlowSeatView {
+  if (!previous || previous.roundId !== incoming.roundId) return incoming
+  const merged = new Map<string, BloodFlowSeatView['public']['batches'][number]>()
+  for (const batch of previous.public.batches) merged.set(batch.batchId, batch)
+  for (const batch of incoming.public.batches) merged.set(batch.batchId, batch)
+  const batches = [...merged.values()].sort((a, b) => a.sequence - b.sequence)
+  const sameRoundLedger = previous.public.roundResult?.roundId === incoming.public.roundResult?.roundId
+  const ledger = incoming.public.roundResult?.ledger
+  const roundResult = incoming.public.roundResult && ledger && sameRoundLedger
+    && ledger.length < (previous.public.roundResult?.ledger.length ?? 0)
+    ? { ...incoming.public.roundResult, ledger: previous.public.roundResult!.ledger }
+    : incoming.public.roundResult
+  return { ...incoming, public: { ...incoming.public, batches, roundResult } }
+}
+
 /** Absolute-score replica: deltas are explanatory data, never applied a second time. */
 export class BloodFlowReplica {
   view: BloodFlowSeatView | null = null
@@ -35,7 +54,11 @@ export class BloodFlowReplica {
       if (message.sequence === this.snapshotSequence && this.view?.public.status !== 'paused') return false
       this.epoch = message.authorityEpoch
       this.round = message.round; this.snapshotSequence = message.sequence; this.sequence = message.sequence
-      this.view = structuredClone(message.view)
+      // 快照瘦身（2026-09-15）：瘦身帧与上一份视图并集合并，历史（胡牌/结算流水）不会丢。
+      const incoming = message.kind === 'blood_flow_snapshot' && (message as { diet?: true }).diet === true
+        ? mergeDietView(message.view, this.view)
+        : message.view
+      this.view = structuredClone(incoming)
       this.view.kongEvents=structuredClone(message.kongEvents??message.view.kongEvents??[])
       for (const batch of this.view.public.batches) this.seenBatches.add(batch.batchId)
       if (this.view.public.roundResult) this.completedRounds.add(this.view.roundId)

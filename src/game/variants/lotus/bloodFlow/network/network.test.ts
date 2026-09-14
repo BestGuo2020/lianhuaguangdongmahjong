@@ -149,6 +149,64 @@ describe('E06 four-endpoint authority and recovery', () => {
     r.backend.engine.assertConservation()
   })
 
+  // 2026-09-15 快照瘦身：线上实测东4局全量快照可达 45KB、被切成 12 个分片，而分片正是 SDK 侧
+  // 最容易静默丢失的形态。常规帧只带最近 2 条胡牌，客机与上一份视图并集合并；重同步发全量。
+  it('常规快照瘦身：重同步发全量、常规帧显著变小，且客机合并后历史不丢', async () => {
+    const r = room(); await start(r)
+    const winCount = () => r.backend.engine.ledger.filter(entry => entry.kind === 'win').length
+    for (let step = 0; step < 600 && winCount() < 3; step += 1) {
+      const engine = r.backend.engine
+      const window = engine.window
+      if (!window) break
+      // 与上面的整场用例同一套驱动：挑"有待选项且未决策"的座位，动作优先取客机视图里的合法项。
+      const seat = SEATS.find(s => window.options[s].length && !window.decisions[s])
+      if (seat === undefined) break
+      const action = r.replicas[seat].view?.ownActions[0] ?? window.options[seat][0]
+      if (!action) break
+      await r.host.receive({ ...r.replicas[seat].hello(), kind: 'blood_flow_command',
+        command: engine.command(seat, action) }, `p${seat}`)
+      r.flush()
+    }
+    expect(winCount()).toBeGreaterThanOrEqual(3)
+    const full = await r.backend.view(1)
+    expect(full.public.batches.length).toBeGreaterThan(2)
+
+    // 重同步（hello）→ 全量：客机拿到本局全部胡牌，且不带 diet 标记
+    r.queued.length = 0
+    await r.host.receive(r.replicas[1].hello(), 'p1')
+    const resync = r.queued.map(entry => entry.packet)
+      .find((packet): packet is Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' }> => packet.kind === 'blood_flow_snapshot')!
+    expect((resync as { diet?: true }).diet).toBeUndefined()
+    expect(resync.view.public.batches.length).toBe(full.public.batches.length)
+
+    // 常规发布（tick / 命令 → publish）→ 瘦身帧：只带最近 2 条，且体积显著更小
+    let diet: Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' }> | undefined
+    for (let step = 0; step < 40 && !diet; step += 1) {
+      const engine = r.backend.engine
+      const window = engine.window
+      if (!window) break
+      const seat = SEATS.find(s => window.options[s].length && !window.decisions[s])
+      if (seat === undefined) break
+      const action = r.replicas[seat].view?.ownActions[0] ?? window.options[seat][0]
+      if (!action) break
+      r.queued.length = 0
+      await r.host.receive({ ...r.replicas[seat].hello(), kind: 'blood_flow_command',
+        command: engine.command(seat, action) }, `p${seat}`)
+      diet = r.flush().map(entry => entry.packet)
+        .find((packet): packet is Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' }> =>
+          packet.kind === 'blood_flow_snapshot' && (packet as { diet?: true }).diet === true)
+    }
+    expect(diet, '常规帧应带 diet 标记').toBeDefined()
+    expect(diet!.view.public.batches.length).toBeLessThanOrEqual(2)
+    expect(JSON.stringify(diet).length).toBeLessThan(JSON.stringify(resync).length)
+
+    // 客机（replica）合并后仍保有完整历史：不因瘦身帧丢胡牌记录
+    const guest = r.replicas[1]
+    expect(guest.view!.public.batches.map(batch => batch.batchId))
+      .toEqual(full.public.batches.map(batch => batch.batchId))
+    r.backend.engine.assertConservation()
+  })
+
   it('refuses unknown versions and refuses start before every human has a compatible client', async () => {    const r = room()
     await r.host.receive({ kind: 'blood_flow_hello', roomId: 'room', ruleVersion: 'old' }, 'p1')
     expect(r.queued[0].packet).toMatchObject({ kind: 'blood_flow_error', code: 'INCOMPATIBLE_RULE_VERSION' })
