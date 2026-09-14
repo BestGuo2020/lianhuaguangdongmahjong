@@ -280,8 +280,9 @@ async function installHostLlmConfig(context: BrowserContext, apiKey: string) {
     // 只写作品托管域；OAuth 弹窗位于主站，不能把模型 Key 扩散到登录域 localStorage。
     // 2026-09-14：平台托管域由 vibeapps.lumigrav.space 迁到 apps.gamesvibe.app（旧域名彻底弃用）。
     // 这里原来硬编码旧域名，新域名下整段注入被跳过 → 房主没有大模型供应商配置 →
-    // 房间里的「AI 选择」下拉只有"普通 AI"一项 → selectOption 永远等不到（表现为用例挂死）。
-    if (!/(^|\.)gamesvibe\.app$/.test(location.hostname)) return
+    // 房间里的「AI 选择」下拉只有“普通 AI”一项 → selectOption 永远等不到（表现为用例挂死）。
+    // 只认应用本体域（apps.*），不要把 Key 写进主站登录页。
+    if (!/^apps\.gamesvibe\.app$/.test(location.hostname)) return
     localStorage.setItem('llm.providers', JSON.stringify({
       configVersion: 2,
       enabled: true,
@@ -2970,6 +2971,22 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     await expect(host.locator('.room-seat.occupied')).toHaveCount(2)
 
     if (llm) {
+      // 诊断（2026-09-14）：房主页面上的大模型配置是否真的落到 localStorage。
+      // 之前只看到"下拉里没有第 2 个选项"，这条日志直接回答"注入没生效"还是"应用读不到/丢弃了"。
+      const llmConfigProbe = await host.evaluate(() => {
+        const raw = localStorage.getItem('llm.providers')
+        if (!raw) return { present: false as const }
+        try {
+          const parsed = JSON.parse(raw) as { configVersion?: number; enabled?: boolean; presets?: { apiKey?: string; baseUrl?: string; model?: string }[] }
+          return {
+            present: true as const,
+            configVersion: parsed.configVersion,
+            enabled: parsed.enabled,
+            presets: (parsed.presets ?? []).map(p => ({ hasKey: Boolean(p.apiKey && p.apiKey.trim()), baseUrl: p.baseUrl ?? '', model: p.model ?? '' })),
+          }
+        } catch { return { present: true as const, parseError: true as const } }
+      })
+      console.log(`[BF-ONLINE] ${label} 房主大模型配置诊断：${JSON.stringify(llmConfigProbe)}`)
       const picks = host.getByTestId('room-llm-pick')
       await expect(picks, '房主应能为两个空位选择大模型').toHaveCount(2, { timeout: 30_000 })
       await picks.nth(0).selectOption({ index: 1 })
