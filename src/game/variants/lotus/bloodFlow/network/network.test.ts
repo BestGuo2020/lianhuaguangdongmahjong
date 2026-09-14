@@ -95,6 +95,60 @@ describe('E06 four-endpoint authority and recovery', () => {
     r.backend.engine.assertConservation()
   })
 
+  // 2026-09-14 第二轮自愈：线上 trace 实测（房间 G626L9）卡死时权威的最后一条 tick 停在
+  // window 79、引擎已走到 window 80，卡住前最后发生的是"一次 45KB 快照分 12 片广播"，
+  // 而决策超时计数为 0 —— 说明冻住的是引擎/传输 await（view/expire/command/bot/publish），
+  // 不是决策。这里把每个这类调用都做成有界：超时跳过本次、下一轮重试，链永远有界推进。
+  it('读视图挂死时权威链仍有界推进（超时跳过 + 计数 + 下一轮恢复）', async () => {
+    const traces: string[] = []
+    const r = room({ workerTimeoutMs: 20, trace: message => traces.push(message) })
+    await start(r)
+    const base = r.backend
+    const original = base.view.bind(base)
+    let hang = true
+    base.view = (seat: Seat) => (hang ? new Promise<never>(() => {}) : original(seat))
+    const id = r.backend.engine.window!.id
+    r.host.aiSeats.add(0)
+    await r.host.tick()
+    expect(traces.join(' | '), traces.join(' | ')).toContain('超时')
+    expect(r.host.workerCallTimeouts).toBeGreaterThan(0)
+    // 关键：即使读不到该座位的视图，机器人回落（backend.bot）仍把这一手打完，窗口照常推进。
+    expect(r.backend.engine.window?.id).not.toBe(id)
+    r.backend.engine.assertConservation()
+    // 视图恢复后：连续 tick 不再超时（链健康、无残留阻塞）。后续窗口属于真人座位，
+    // 需要真人的 blood_flow_command 才推进，所以这里只断言"不再超时"。
+    hang = false
+    const timeoutsBefore = r.host.workerCallTimeouts
+    for (let round = 0; round < 3; round += 1) await r.host.tick()
+    expect(r.host.workerCallTimeouts).toBe(timeoutsBefore)
+    r.backend.engine.assertConservation()
+  })
+
+  it('过期操作挂死时也不会冻结链：tick 有界返回，下一轮继续', async () => {
+    const traces: string[] = []
+    const r = room({ workerTimeoutMs: 20, trace: message => traces.push(message) })
+    await start(r)
+    const base = r.backend
+    const originalExpire = base.expire.bind(base)
+    let hang = true
+    let lastWindowId = ''
+    base.expire = (windowId: string) => {
+      lastWindowId = windowId
+      return hang ? new Promise<never>(() => {}) : originalExpire(windowId)
+    }
+    r.host.aiSeats.add(0)
+    const id = r.backend.engine.window!.id
+    r.time(r.backend.engine.window!.deadlineAt)
+    await r.host.tick()
+    expect(traces.join(' | '), traces.join(' | ')).toContain('超时')
+    expect(r.host.workerCallTimeouts).toBeGreaterThan(0)
+    expect(lastWindowId).toBe(id)
+    hang = false
+    await r.host.tick()
+    expect(r.backend.engine.window?.id).not.toBe(id)
+    r.backend.engine.assertConservation()
+  })
+
   it('refuses unknown versions and refuses start before every human has a compatible client', async () => {    const r = room()
     await r.host.receive({ kind: 'blood_flow_hello', roomId: 'room', ruleVersion: 'old' }, 'p1')
     expect(r.queued[0].packet).toMatchObject({ kind: 'blood_flow_error', code: 'INCOMPATIBLE_RULE_VERSION' })
