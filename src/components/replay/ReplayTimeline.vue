@@ -140,6 +140,14 @@ function shiftRound(offset: number) {
   color: var(--theme-text);
   font: inherit;
   font-size: 13px;
+  /* 全局声明的是 color-scheme: only light，原生下拉弹层会变成白底；
+     这里显式给深色方案 + 选项配色，否则浅色选项文字在白底上看不清。 */
+  color-scheme: dark;
+}
+.replay-round select option,
+.replay-speed select option {
+  background-color: var(--theme-panel, #0a231a);
+  color: var(--theme-text, #f8f3df);
 }
 .sr-only {
   position: absolute;

@@ -199,9 +199,20 @@ const hasMatches = computed(() => matches.value.length > 0)
   background: var(--theme-button);
   color: var(--theme-text);
   font: inherit;
+  /* 同控制条：全局 color-scheme 是 only light，需显式给深色弹层配色。 */
+  color-scheme: dark;
+}
+.replay-list-settings select option {
+  background-color: var(--theme-panel, #0a231a);
+  color: var(--theme-text, #f8f3df);
 }
 .replay-list-hint { color: var(--theme-accent); }
-.replay-list-actions { justify-content: space-between; }
+.replay-list-actions {
+  /* 居中排列（与结算卡片一致）：贴到内容区左右边缘时，直角按钮会视觉上"戳出"卡片圆角边框。 */
+  justify-content: center;
+  gap: 14px;
+  margin: 16px 8px 0;
+}
 @media (max-width: 720px) {
   .replay-row { grid-template-columns: 6px minmax(0, 1fr) auto; grid-template-areas: 'theme main actions' '. meta actions' '. rank actions'; }
   .replay-row-theme { grid-area: theme; }
