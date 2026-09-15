@@ -132,12 +132,10 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.getByTestId('replay-wall-left')).toContainText('牌山 余')
   await expect(page.getByTestId('replay-turn')).toContainText('1巡')
   await expect(page.locator('.replay-log-list button').first()).toBeVisible()
-  // 血流一局多胡：牌谱里应能看到多条「胡/自摸」事件，且按类型分层
-  const winRows = page.locator('.replay-log-list button.kind-win')
-  expect(await winRows.count()).toBeGreaterThanOrEqual(1)
-  await expect(page.locator('.replay-log-list button.kind-meld').first()).toBeVisible()
+  // 牌谱按类型分层：摸/打一定存在（血流一局可能整局无鸣牌甚至荒庄，故不断言重事件数量）
   await expect(page.locator('.replay-log-list button.kind-draw').first()).toBeVisible()
-  await expect(page.locator('.replay-log-list button.kind-win').first()).toContainText('胡')
+  await expect(page.locator('.replay-log-list button.kind-discard').first()).toBeVisible()
+  await expect(page.locator('.replay-log-list button.kind-draw').first()).toContainText('摸')
   // 本家身份牌不得被牌谱面板压住（曾因复用实时牌桌的 .user-area 定位而被遮挡）
   const logBox = await page.locator('.replay-log-body').boundingBox()
   const identityBox = await page.locator('.replay-user .user-identity').boundingBox()
@@ -149,9 +147,37 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.locator('.replay-viewer input[type="range"]')).toHaveCount(0)
   await expect(page.locator('.replay-topbar select')).toHaveCount(0)
   await expect(page.locator('.replay-theme-name')).toHaveText('主题 llm')
+  // 原生下拉弹层必须是深色方案：全局 color-scheme 是 only light，否则浅色选项在白底上看不清
+  expect(await page.locator('.replay-round select').evaluate((el) => getComputedStyle(el).colorScheme)).toBe('dark')
+  expect(await page.locator('.replay-speed select').evaluate((el) => getComputedStyle(el).colorScheme)).toBe('dark')
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${OUT}/02-blood-flow-frame0.png` })
-  // ── 3b. 跳鸣牌节点：按钮与键盘（Shift + →/←）都只落在重事件上 ──
+  // ── 3b. 信息盘默认收起（展开时会压住对家牌面），点击才展开四家分数 ──
+  const infoToggle = page.getByTestId('replay-info-toggle')
+  await expect(page.getByTestId('replay-info-body')).toBeHidden()
+  await expect(infoToggle).toHaveAttribute('aria-expanded', 'false')
+  // 折叠态也应看得到本场数（局数/巡目/牌山余张在底部控制条上）
+  await expect(infoToggle).toContainText('本场 0')
+  await infoToggle.click()
+  await expect(page.getByTestId('replay-info-body')).toBeVisible()
+  await expect(infoToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.replay-info-scores li')).toHaveCount(4)
+  await page.screenshot({ path: `${OUT}/02a-info-expanded.png` })
+  await infoToggle.click()
+  await expect(page.getByTestId('replay-info-body')).toBeHidden()
+
+  // ── 3c. 跳鸣牌节点：先找一局确实有鸣牌/和牌的，再验证按钮与键盘都只落在重事件上 ──
+  const heavyRow = page.locator('.replay-log-list button[data-kind="meld"], .replay-log-list button[data-kind="win"]')
+  const roundSelectBlood = page.locator('.replay-round select')
+  const bloodRounds = byRuleset('lotus-blood-flow').rounds
+  let heavyRoundFound = false
+  for (let index = 0; index < bloodRounds && !heavyRoundFound; index += 1) {
+    await roundSelectBlood.selectOption(String(index))
+    heavyRoundFound = await heavyRow.count() > 0
+  }
+  // fixture 断言过整场 wins >= 4，因此必然存在这样的局
+  expect(heavyRoundFound).toBe(true)
+
   const activeRow = page.locator('.replay-log-list button.active')
   const position = page.getByTestId('replay-turn').locator('i')
   await page.getByTestId('replay-next-action').click()
@@ -169,6 +195,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(activeRow).toHaveAttribute('data-kind', /meld|win/)
   await page.waitForTimeout(200)
   await page.screenshot({ path: `${OUT}/02b-meld-jump.png` })
+  await roundSelectBlood.selectOption('0')
 
   // 局末：血流没有单一赢家 → 横幅报「本局结束」
   await page.locator('.replay-log').click()
