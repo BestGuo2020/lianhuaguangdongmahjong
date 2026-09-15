@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useGame } from '../core/local/useGame'
 import type { GamePlayer, Meld, TileType } from '../core/contracts/types'
 import { createReplayRecorder } from './recorder'
+import { firstUncloneable } from './plain'
 import { buildReplayFrames, type ReplayFrame } from './projection'
 import type { ReplayMatch, ReplayRound } from './types'
 
@@ -58,26 +59,6 @@ function clonePlayers(players: readonly GamePlayer[]) {
 }
 
 type PlayerSnapshot = ReturnType<typeof clonePlayers>
-
-/**
- * 定位第一个不可结构化克隆的字段路径（后序：优先报最深的坏节点）。
- * IndexedDB 落库失败时用它给出可操作的报错，而不是一句 DataCloneError。
- */
-function firstUncloneable(value: unknown, path = '$'): string | null {
-  const children: Array<[string, unknown]> = Array.isArray(value)
-    ? value.map((child, index) => [`[${index}]`, child])
-    : (value && typeof value === 'object' ? Object.entries(value as Record<string, unknown>) : [])
-  for (const [key, child] of children) {
-    const deeper = firstUncloneable(child, Array.isArray(value) ? `${path}${key}` : `${path}.${key}`)
-    if (deeper) return deeper
-  }
-  try {
-    structuredClone(value)
-    return null
-  } catch {
-    return path
-  }
-}
 
 /** 一帧的全部牌张数（手牌 + 副露 + 牌河 + 牌山）——守恒量恒为 136。 */
 function tileTotal(frame: ReplayFrame): number {

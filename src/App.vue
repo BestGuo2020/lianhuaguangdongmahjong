@@ -9,6 +9,7 @@ import GameTableHud from './components/table/GameTableHud.vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
+import ReplayListView from './components/replay/ReplayListView.vue'
 import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
 import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGame'
@@ -27,7 +28,9 @@ import { preloadAnimeCharacterAssets } from './game/core/presentation/llmAnimeAs
 import { defaultAvatarForSeat } from './game/core/presentation/avatar'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import type { MatchType, TileType } from './game/core/contracts/types'
-import { DEFAULT_RULE_VARIANT, type RuleVariant } from './game/core/rules/ruleVariants'
+import { DEFAULT_RULE_VARIANT, getRuleVariant, type RuleVariant } from './game/core/rules/ruleVariants'
+import { useReplayRecorder } from './game/replay/useReplayRecorder'
+import type { ReplayMatch, ReplayRound } from './game/replay/types'
 import type { TableThemeName } from './components/table/three/tableTheme'
 import { themePresentationByName, themePresentationCssVariables } from './theme/themePresentation'
 import { resolveInitialTableTheme, shouldAutoUseLlmTheme } from './components/table/three/tableThemePreference'
@@ -38,6 +41,8 @@ import type { CharacterId } from './game/llm/animeCharacters'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
 const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vue'))
+// 回放视图会拉起 3D 牌桌，按需加载。
+const ReplayViewer = defineAsyncComponent(() => import('./components/replay/ReplayViewer.vue'))
 const robotIconUrl = `${import.meta.env.BASE_URL}img/robot.svg`
 
 const rulesOpen = ref(false)
@@ -157,6 +162,17 @@ const llmStats = computed<LlmControllerStats>(() => ({
   messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
   invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
 }))
+// ── 对局回放（只存本机 IndexedDB，不上服务器）──
+// 录制器在三个单机引擎之间共享：同一时刻只有所选玩法的引擎在跑，局序不会交错。
+const replay = useReplayRecorder({
+  meta: () => ({
+    rulesetId: selectedRule.value,
+    rulesetName: getRuleVariant(selectedRule.value).name,
+    themeName: tableThemeName.value,
+    humanSeat: 0,
+  }),
+})
+
 const localGame = useGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
@@ -167,6 +183,7 @@ const localGame = useGame({
   humanPlayerSeed: localHumanSeed,
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: localAnimeFixedTts,
+  recorder: replay.hooks,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -177,10 +194,11 @@ const lotusGame = useLotusGame({
   humanPlayerSeed: localHumanSeed,
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: lotusAnimeFixedTts,
+  recorder: replay.hooks,
 })
 const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts, countdownEnabled: false,
-  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds })
+  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds, recorder: replay.hooks })
 const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
@@ -346,6 +364,30 @@ watch(showLobby, (value) => {
   if (value) resetTableReady()
   else llmOpen.value = false
 }, { immediate: true })
+
+// ── 对局回放：列表与查看（只读本机 IndexedDB）──
+const replayOpen = ref(false)
+const replayView = ref<{ match: ReplayMatch; rounds: ReplayRound[] } | null>(null)
+async function openReplay(matchId: string) {
+  const match = await replay.storage.loadMatch(matchId)
+  if (!match) return
+  const rounds = await replay.storage.loadRounds(matchId)
+  replayOpen.value = false
+  replayView.value = { match, rounds }
+}
+// 回放落库时机：场末按引擎最终 standings 记录名次；中途回大厅按已打完的局收尾（标「未完成」）。
+watch(matchFinished, (finished) => {
+  if (!finished) return
+  replay.finishAuto(standings.value.map((entry) => ({
+    seat: entry.playerIndex,
+    name: entry.name,
+    score: entry.score,
+    rank: entry.rank,
+  })))
+})
+watch(showLobby, (lobby) => {
+  if (lobby) replay.finishAuto()
+})
 
 function applyLlmSettings() {
   // 保存事件只会在大厅触发；运行中的对局不会被切换模型打断。
@@ -545,6 +587,7 @@ const themeLockReason = computed(() => (
           @leave-room="leaveRoom"
           @close-room="closeRoom"
           @open-stats="statsOpen = true"
+          @open-replay="replayOpen = true"
           @open-rules="rulesOpen = true"
         />
 
@@ -572,6 +615,12 @@ const themeLockReason = computed(() => (
           :player-id="playerId"
           :nickname="nickname"
           :fallback-nickname="nicknameInput"
+        />
+        <ReplayListView
+          v-model:open="replayOpen"
+          :storage="replay.storage"
+          :available="replay.available.value"
+          @view="openReplay"
         />
         <DisclaimerDialog
           :open="disclaimerGate.open.value"
@@ -602,6 +651,12 @@ const themeLockReason = computed(() => (
       :stats="llmStats"
       @close="llmOpen = false"
       @saved="applyLlmSettings"
+    />
+    <ReplayViewer
+      v-if="replayView"
+      :match="replayView.match"
+      :rounds="replayView.rounds"
+      @close="replayView = null"
     />
   </main>
 </template>

@@ -1,6 +1,6 @@
 // 「莲花麻将」本地引擎组装：把规则/开局/回合/杠/结算/人类/AI 拼成 GamePort。
 // 结构仿 core/local/useGame.ts，但整体独立于「莲花广麻」，复用共享的计时/瞬态事件/音效模块。
-import { computed, getCurrentInstance, onBeforeUnmount, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import type { TableActionEvent, TileType } from '../../core/contracts/types'
 import { defineGamePort, type GameStartOptions } from '../../core/contracts/gamePort'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
@@ -24,6 +24,7 @@ import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 import { LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
+import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
 import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolicy'
 import {
   ANIME_ACTION_FALLBACK_AUDIO,
@@ -59,6 +60,8 @@ interface UseLotusGameOptions {
   /** 二次元固定台词执行器（吃碰杠胡动作音 + 胡牌后结算台词）。 */
   animeFixedTts?: AnimeFixedTtsExecutor
   ruleset?: RuleSet
+  /** 对局回放录制钩子（可选；不传时零行为变化）。 */
+  recorder?: ReplayRecorderHooks
 }
 
 export function useLotusGame({
@@ -76,6 +79,7 @@ export function useLotusGame({
   getTableThemeName = () => 'jade',
   animeFixedTts,
   ruleset = LOTUS_RULESET,
+  recorder,
 }: UseLotusGameOptions = {}) {
   const sound = headless ? () => {} : playSound
   const soundAndWait = headless ? async () => {} : playSoundAndWait
@@ -83,6 +87,27 @@ export function useLotusGame({
 
   const state = createLotusGameState()
   const selectors = createLotusSelectors(state, ruleset)
+
+  // ── 对局回放录制 ──
+  // 比广麻多带翻精结果（指示牌/精牌/替身/断点），回放才能还原牌山与牌面标记。
+  const replayFrame = (): ReplayFrameSource => ({
+    players: state.players,
+    wallLeft: state.wall.value.length,
+    headDrawn: state.wallHeadDrawn.value,
+    currentPlayer: state.currentPlayer.value,
+    round: state.round.value,
+    dealer: state.dealer.value,
+    honba: state.honba.value,
+    matchType: state.matchType.value,
+    diceValues: [...state.diceValues.value],
+    firstDice: state.firstDice.value ? [...state.firstDice.value] : undefined,
+    diceThrowerIndex: state.diceThrowerIndex.value,
+    wallBreakIndex: state.wallBreakIndex.value,
+    flipTile: state.flipTile.value,
+    jokerTiles: [...state.jokerTiles.value],
+    wildcardTiles: [...state.wildcardTiles.value],
+    flipStack: state.flipStack.value,
+  })
 
   let openingTimeline!: ReturnType<typeof createLotusOpening>
   let settlementTimeline!: ReturnType<typeof createLotusSettlement>
@@ -187,6 +212,14 @@ export function useLotusGame({
     ? (callback: () => void) => timer.later(callback, 0)
     : timer.later
   transient = createLocalTransientEventPresenter({ state, later: timer.later, onTableAction: playAnimeAction })
+  if (recorder) {
+    // 碰/吃/杠/胡的唯一统一出口（含莲花麻将的风杠与吃）。
+    const baseShowTableAction = transient.showTableAction
+    transient.showTableAction = (type, actorIndex, sourceIndex, tile, meldIndex) => {
+      baseShowTableAction(type, actorIndex, sourceIndex, tile, meldIndex)
+      recorder.tableAction({ type, actorIndex, sourceIndex, tile, meldIndex }, replayFrame())
+    }
+  }
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
   const followDealer = createFollowDealerTracker({
@@ -254,6 +287,33 @@ export function useLotusGame({
     stopCountdown: countdown.stop,
     followDealer,
   })
+  if (recorder) {
+    // 必须在创建编排器/动作控制器之前包装：它们按引用捕获这两个函数。
+    const baseDrawFor = tileFlowExecutor.drawFor
+    tileFlowExecutor.drawFor = async (playerIndex: number, fromTail = false) => {
+      const drawn = await baseDrawFor(playerIndex, fromTail)
+      if (drawn) {
+        const player = state.players[playerIndex]
+        const tile = player?.hand[player.drawnTileIndex] ?? player?.hand[player.hand.length - 1]
+        if (tile) recorder.draw({ seat: playerIndex, tile, fromTail }, replayFrame())
+      }
+      return drawn
+    }
+    const baseDiscardTile = tileFlowExecutor.discardTile
+    tileFlowExecutor.discardTile = (playerIndex: number, requestedIndex: number) => {
+      const before = state.players[playerIndex]?.discards.length ?? 0
+      baseDiscardTile(playerIndex, requestedIndex)
+      const player = state.players[playerIndex]
+      const tile = player && player.discards.length > before ? player.discards[player.discards.length - 1] : null
+      if (!tile) return
+      const last = state.lastDiscard.value
+      recorder.discard({
+        seat: playerIndex,
+        tile,
+        id: last && last.from === playerIndex ? last.id : Date.now(),
+      }, replayFrame())
+    }
+  }
 
   openingTimeline = createLotusOpening({
     state,
@@ -351,6 +411,16 @@ export function useLotusGame({
       flipStack: state.flipStack.value,
     },
   }))
+
+  // 对局回放：开局锚点（发牌/翻精完成）与局末亮牌快照，用 sync 刷新确保取到当下局面。
+  if (recorder) {
+    watch(state.phase, (phase) => {
+      if (phase === 'opening') recorder.roundStart(replayFrame())
+    }, { flush: 'sync' })
+    watch(state.result, (result) => {
+      if (result) recorder.roundEnd(result, replayFrame())
+    }, { flush: 'sync' })
+  }
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
   if (getCurrentInstance()) onBeforeUnmount(clearPresentation)

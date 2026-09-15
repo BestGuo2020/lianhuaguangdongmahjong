@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useLotusGame } from '../variants/lotus/lotusGame'
 import { createReplayRecorder } from './recorder'
+import { firstUncloneable } from './plain'
 import { buildReplayFrames, type ReplayFrame } from './projection'
 import type { GamePlayer, Meld } from '../core/contracts/types'
 import type { ReplayMatch, ReplayRound } from './types'
@@ -138,7 +139,7 @@ describe('玩法二（莲花麻将）回放录制', () => {
         ).toEqual(engine[seat].melds)
       })
       expect(round.steps.length, `第 ${index + 1} 局事件数`).toBeGreaterThan(0)
-      expect(() => structuredClone(round), `第 ${index + 1} 局不可结构化克隆`).not.toThrow()
+      expect(firstUncloneable(round), `第 ${index + 1} 局该字段不可结构化克隆`).toBeNull()
     })
     // 天胡/地胡会造成极短的局；要求至少有一局拥有完整事件流
     expect(Math.max(...rounds.map((round) => round.steps.length))).toBeGreaterThan(20)

@@ -8,6 +8,7 @@ import type { RuleVariant } from '../core/rules/ruleVariants'
 import { MATCH_HANDS } from '../core/local/localGameConfig'
 import type { TableThemeName } from '../../theme/themeIdentity'
 import { roundLabelFor } from './format'
+import { toPlain } from './plain'
 import {
   REPLAY_SCHEMA_VERSION,
   type ReplayAnchor,
@@ -97,37 +98,10 @@ function cloneMeld(meld: Meld): Meld {
 }
 
 /**
- * 结算结果转成纯对象再落库。
- * 引擎的 `state.result` 是 Vue 响应式代理（ref 的深层代理），直接交给 IndexedDB 会
- * 触发 DataCloneError（结构化克隆不能克隆 Proxy），必须显式取字段。
+ * 结算结果转成纯对象再落库（见 plain.ts 的 toPlain）。
+ * 引擎可能在类型之外挂运行时字段（莲花就挂了 `winHand`），因此不逐字段枚举；
+ * 直接递归解包，既不丢字段也不带 Vue 代理。
  */
-function plainResult(result: RoundResult): RoundResult {
-  return {
-    presentationKey: result.presentationKey,
-    draw: result.draw,
-    winnerIndex: result.winnerIndex,
-    winner: result.winner,
-    roundLabel: result.roundLabel,
-    honba: result.honba,
-    horses: result.horses ? [...result.horses] : undefined,
-    hits: result.hits,
-    multiplier: result.multiplier,
-    totalMultiplier: result.totalMultiplier,
-    horsePoints: result.horsePoints,
-    points: result.points,
-    totalWon: result.totalWon,
-    details: result.details?.map((detail) => ({ ...detail })),
-    scoreChanges: result.scoreChanges?.map((change) => ({ ...change })),
-    tenpai: result.tenpai ? [...result.tenpai] : undefined,
-    dealerTenpai: result.dealerTenpai,
-    fourRed: result.fourRed,
-    kongBloom: result.kongBloom,
-    robbedKong: result.robbedKong,
-    robbedKongPlayerIndex: result.robbedKongPlayerIndex,
-    winTile: result.winTile,
-    winType: result.winType,
-  }
-}
 
 /** 落库调用一律不向引擎抛错：存储异常不得影响对局（同步抛与 Promise 拒绝都吞掉）。 */
 function safeSave(work: () => Promise<void> | void) {
@@ -267,8 +241,9 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     current.myRank = mine?.rank
     current.myScore = mine?.score ?? rounds[rounds.length - 1].final?.scores[humanSeat]
     current.summary = summaryOf(rounds, current.players, humanSeat)
-    safeSave(() => options.sink.saveMatch(current))
-    return current
+    const record = toPlain(current)
+    safeSave(() => options.sink.saveMatch(record))
+    return record
   }
 
   const hooks: ReplayRecorderHooks = {
@@ -378,14 +353,16 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         details: result.details?.map((detail) => ({ ...detail })),
         totalMultiplier: result.totalMultiplier ?? result.multiplier,
         points: result.points,
-        result: plainResult(result),
+        result: toPlain(result),
       }
       round.final = final
       round.landedAt = now()
       knownScores = final.scores
-      rounds.push(round)
+      // 录制边界统一解包成纯数据：Vue 代理与引擎的运行时字段都不会污染落库。
+      const record = toPlain(round)
+      rounds.push(record)
       match.roundCount = rounds.length
-      safeSave(() => options.sink.saveRound(round))
+      safeSave(() => options.sink.saveRound(record))
       round = null
     },
   }
