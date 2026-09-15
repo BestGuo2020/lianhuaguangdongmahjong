@@ -139,7 +139,8 @@ export interface ReplayMatch {
   matchType: MatchType
   /** 「东风场」/「半庄场」。 */
   matchName: string
-  gameMode: 'local'
+  /** local = 本机单机对局；remote = 联机对局（牌谱由房主生成后下发，全知）。 */
+  gameMode: 'local' | 'remote'
   themeName: TableThemeName
   players: ReplayPlayer[]
   humanSeat: number

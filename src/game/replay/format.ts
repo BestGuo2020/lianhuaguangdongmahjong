@@ -101,3 +101,8 @@ export function matchSubtitle(match: Pick<ReplayMatch, 'roundCount' | 'myRank' |
   if (match.status === 'aborted') return `${rounds} · 未完成`
   return `${rounds} · ${formatRank(match.myRank)} · ${formatDelta(match.myScore)}分`
 }
+
+/** 对局来源：单机 / 联机（联机牌谱由房主生成后下发，四家均为明牌）。 */
+export function gameModeLabel(match: Pick<ReplayMatch, 'gameMode'>): string {
+  return match.gameMode === 'remote' ? '联机' : '单机'
+}
