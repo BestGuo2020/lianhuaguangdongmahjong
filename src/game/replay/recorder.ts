@@ -30,6 +30,8 @@ export interface ReplayMatchMeta {
   rulesetName: string
   themeName: TableThemeName
   humanSeat: number
+  /** local（默认）= 单机对局；remote = 联机对局的房主侧牌谱。 */
+  gameMode?: 'local' | 'remote'
 }
 
 export interface ReplaySink {
@@ -174,7 +176,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       rulesetName: meta.rulesetName,
       matchType: frame.matchType,
       matchName: frame.matchType === 'hanchan' ? '半庄场' : '东风场',
-      gameMode: 'local',
+      gameMode: meta.gameMode ?? 'local',
       themeName: meta.themeName,
       players: matchPlayersOf(frame),
       humanSeat: meta.humanSeat,

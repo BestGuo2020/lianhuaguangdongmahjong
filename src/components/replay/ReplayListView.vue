@@ -2,7 +2,7 @@
 // 对局回放列表：一行 = 一整场（玩法 / 场次 / 对局日期 / 位次 / 主题），提供「查看 / 导出 / 删除」。
 // 底部提供保留策略（本机偏好）与全部清空。
 import { computed, ref, watch } from 'vue'
-import { formatMatchDate, formatRank, matchSubtitle } from '../../game/replay/format'
+import { formatMatchDate, formatRank, gameModeLabel, matchSubtitle } from '../../game/replay/format'
 import { buildReplayExport, downloadReplayExport, replayExportFilename } from '../../game/replay/export'
 import { REPLAY_KEEP_OPTIONS, readReplayKeepCount, saveReplayKeepCount } from '../../game/replay/preferences'
 import type { ReplayStorage } from '../../game/replay/storage'
@@ -115,7 +115,10 @@ const hasMatches = computed(() => matches.value.length > 0)
           <li v-for="match in matches" :key="match.id" class="replay-row">
             <span class="replay-row-theme" :style="{ '--replay-theme-accent': themeAccent(match.themeName) }" aria-hidden="true"></span>
             <div class="replay-row-main">
-              <strong>{{ match.rulesetName }} · {{ match.matchName }}</strong>
+              <strong>
+                <em class="replay-row-mode" :data-mode="match.gameMode">{{ gameModeLabel(match) }}</em>
+                {{ match.rulesetName }} · {{ match.matchName }}
+              </strong>
               <span class="replay-row-sub">{{ matchSubtitle(match) }}</span>
             </div>
             <div class="replay-row-meta">
@@ -174,6 +177,17 @@ const hasMatches = computed(() => matches.value.length > 0)
 .replay-row-theme { width: 6px; height: 34px; border-radius: 3px; background: var(--replay-theme-accent); }
 .replay-row-main { display: grid; gap: 2px; min-width: 0; }
 .replay-row-main strong { overflow: hidden; color: var(--theme-text); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.replay-row-mode {
+  margin-right: 5px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
+  border-radius: 4px;
+  color: var(--theme-text-muted);
+  font-size: 10px;
+  font-style: normal;
+  vertical-align: 1px;
+}
+.replay-row-mode[data-mode="remote"] { border-color: color-mix(in srgb, var(--theme-accent) 60%, transparent); color: var(--theme-accent); }
 .replay-row-sub { color: var(--theme-text-muted); font-size: 12px; }
 .replay-row-meta { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .replay-row-date { color: var(--theme-text); font-size: 12px; }
