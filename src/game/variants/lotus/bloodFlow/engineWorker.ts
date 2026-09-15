@@ -7,7 +7,14 @@ import { decideBloodFlowAction, decideBloodFlowActionEv } from './ai'
 import { BLOOD_FLOW_AI } from './config'
 import { evaluateWaits } from '../patterns/evaluate'
 
-export type EngineWorkerRequest = { id: number } & (
+export type EngineWorkerRequest = {
+  id: number
+  /**
+   * 本地回放录制：回复里额外附带一份「旁观视角」（四家明牌 + 累计弃牌流水）。
+   * 与座位视角同一次回复送达，因此不受 worker 重开/终止影响；该字段永不下发到网络。
+   */
+  replay?: boolean
+} & (
   | { kind: 'start'; options: Omit<BloodFlowEngineOptions, 'random' | 'now'> }
   | { kind: 'command'; command: EngineCommand }
   | { kind: 'bot'; seat: Seat; windowId: string }
@@ -35,7 +42,9 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     if (data.kind === 'advance') engine.advance(data.transitionId)
     if (data.kind === 'pause') engine.pause()
     if (data.kind === 'resume') engine.resume()
+    let viewSeat: Seat | null = data.kind === 'view' ? data.seat : 0
     if (data.kind === 'waits') {
+      viewSeat = null
       if (engine.window?.id !== data.windowId) result = []
       else {
         const player = engine.players[data.seat]
@@ -43,7 +52,13 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
         if (data.discardIndex !== null) concealed.splice(data.discardIndex, 1)
         result = evaluateWaits({ concealed, melds: player.melds, jokers: engine.jokers })
       }
-    } else result = bloodFlowSeatView(engine, data.kind === 'view' ? data.seat : 0)
+    }
+    if (viewSeat !== null) {
+      const view = bloodFlowSeatView(engine, viewSeat)
+      result = data.replay
+        ? { ...view, replay: bloodFlowSeatView(engine, 0, { revealAll: true, includeDiscards: true }) }
+        : view
+    }
     self.postMessage({ id: data.id, result })
   } catch (error) {
     self.postMessage({ id: data.id, error: error instanceof Error ? error.message : String(error) })

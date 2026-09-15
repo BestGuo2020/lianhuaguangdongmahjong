@@ -45,6 +45,8 @@ import type { BloodFlowWsAudio, BloodFlowWsSpeech } from './ws/authority'
 import type {BloodFlowDiscardSpeech} from '../../../llm/bloodFlowSpeech'
 import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
 import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
+import { createBloodFlowRecordState, recordBloodFlowSettle, recordBloodFlowView, type BloodFlowRecordContext } from '../../../replay/bloodFlowRecorder'
+import type { ReplayRecorderHooks } from '../../../replay/types'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -63,6 +65,8 @@ export interface BloodFlowGameOptions {
   autoplay?: boolean
   paceMs?: number
   countdownEnabled?: boolean
+  /** 对局回放录制钩子（可选；不传时零行为变化，且不会请求旁观视角）。 */
+  recorder?: ReplayRecorderHooks
   externalAuthority?: {
     send(command: EngineCommand): void
     nextRound(): void
@@ -72,10 +76,39 @@ export interface BloodFlowGameOptions {
 }
 type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?: NetworkOpening; replay?: boolean; continuation?:{readySeats:Seat[];requiredSeats:Seat[]} }
 
+/** worker 回复：座位视角，录制开启时额外带一份旁观视角（本地专用）。 */
+type BloodFlowWorkerView = BloodFlowSeatView & { replay?: BloodFlowSeatView }
+
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
+  /** 对局回放：血流旁观视角的增量状态（仅录制开启时使用）。 */
+  const replayRecordState = createBloodFlowRecordState()
+  /** 把一份旁观视角折成回放事件（录制关闭时为零成本空操作）。 */
+  function recordReplaySpectator(spectator: BloodFlowSeatView) {
+    const recorder = options.recorder
+    if (!recorder) return
+    recordBloodFlowView(recorder, spectator, replayContext(), replayRecordState)
+  }
+  /** 局末收尾（幂等）：旁观视角与座位视角两条链都调用它。 */
+  function recordReplaySettle(view: BloodFlowSeatView) {
+    const recorder = options.recorder
+    if (!recorder) return
+    recordBloodFlowSettle(recorder, view, replayContext(), replayRecordState)
+  }
+  function replayContext(): BloodFlowRecordContext {
+    return {
+      matchType: state.matchType.value,
+      round: state.round.value,
+      dealer: state.dealer.value,
+      honba: state.honba.value,
+      firstDice: state.firstDice.value ? [...state.firstDice.value] : undefined,
+      secondDice: state.secondDice.value ? [...state.secondDice.value] : undefined,
+      diceThrowerIndex: state.diceThrowerIndex.value,
+      wildcardTiles: [...state.wildcardTiles.value],
+    }
+  }
   // 端口优先取显式注入（测试/自定义音频），否则取音频层注册表——联机两条分支都不需要各自接线。
   const winMusic = createBloodFlowWinMusic(options.bgm ?? activeBgmTrackPort() ?? undefined)
   const winMusicState: WinMusicState = {
@@ -260,9 +293,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech();cancelActionSpeech();decisions.cancelSpeech() } })
 
-  function apply(next: BloodFlowSeatView) {
+  function apply(next: BloodFlowWorkerView) {
     const previous = view.value
     view.value = next
+    // 对局回放：apply 是本地所有视角更新的唯一汇聚点（request / actBot / 远端桥都走这里），
+    // 因此录制必须挂在这里，否则绕过 request 的路径（如机器人seat直连 worker）会漏事件与结算。
+    if (options.recorder) {
+      // 先补事件流水（含该局最后一张弃牌与鸣牌），再收尾；收尾幂等。
+      if (next.replay) recordReplaySpectator(next.replay)
+      if (next.public.roundResult) recordReplaySettle(next)
+    }
     // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（淡出→换曲→淡入在音频层）。
     winMusic.update(winMusicState)
     // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
@@ -387,9 +427,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     busy = true
     const epoch = generation
     try {
-      const next = await worker.request<BloodFlowSeatView>(body)
+      // 录制开启时让 worker 在同一次回复里附带旁观视角：与座位视角同一拍送达，
+      // 不会因为下一局重开 worker 而丢掉局末结算。
+      const next = await worker.request<BloodFlowWorkerView>(
+        options.recorder ? { ...body, replay: true } : body,
+      )
       if (epoch !== generation) return
-      busy = false; apply(next)
+      busy = false
+      apply(next)
     } catch (error) {
       if (epoch !== generation) return
       clear()
@@ -435,7 +480,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const current = () => epoch === generation && view.value?.window?.id === windowId && !!view.value?.waitingSeats.includes(seat)
       && Date.now() < view.value.window.deadlineAt
     try {
-      const own = await active.request<BloodFlowSeatView>({ kind: 'view', seat })
+      const own = await active.request<BloodFlowWorkerView>({ kind: 'view', seat, replay: Boolean(options.recorder) })
       if (!current() || own.window?.id !== windowId) return
       const action = await decisions.decide(own, current)
       if (!current()) return
@@ -445,9 +490,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       }
       // Audio may have waited across a deadline, leave, or authority refresh.
       if (!current()) return
-      const next = await active.request<BloodFlowSeatView>(action ? { kind: 'command', command: {
+      const next = await active.request<BloodFlowWorkerView>(action ? { kind: 'command', command: {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
-      } } : { kind: 'bot', seat, windowId })
+      }, replay: Boolean(options.recorder) } : { kind: 'bot', seat, windowId, replay: Boolean(options.recorder) })
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
     } catch {
       if (epoch === generation) {
