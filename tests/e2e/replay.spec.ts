@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 
 // 对局回放端到端（三个玩法）：
 // fixture 用真实引擎各打完整场东风场并落库到 IndexedDB → 真实 App 在大厅列出 → 打开 3D 回放视图。
@@ -78,6 +78,36 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   expect(cardBackground).not.toBe('none')
   await page.screenshot({ path: `${OUT}/01-list.png` })
 
+  // ── 2b. 导出 JSON 牌谱（真下载，校验文件名与内容）──
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    rowOf('莲花广麻').getByTestId('replay-export').click(),
+  ])
+  expect(download.suggestedFilename()).toMatch(/^replay-lotus-classic-\d{8}-\d{4}-[0-9a-z]{0,8}\.json$/)
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8')) as {
+    kind: string
+    match: { rulesetName: string; roundCount: number }
+    rounds: Array<{ roundLabel: string; steps: unknown[] }>
+  }
+  expect(exported.kind).toBe('lianhua-replay')
+  expect(exported.match.rulesetName).toBe('莲花广麻')
+  expect(exported.rounds).toHaveLength(exported.match.roundCount)
+  expect(exported.rounds.every((round) => Array.isArray(round.steps))).toBe(true)
+  await expect(page.getByTestId('replay-hint')).toContainText('已导出')
+
+  // ── 2c. 保留策略（本机偏好）──
+  const keepSelect = page.getByTestId('replay-keep-count')
+  await expect(keepSelect).toHaveValue('50')
+  await keepSelect.selectOption('10')
+  await expect(page.getByTestId('replay-hint')).toContainText('保留最近 10 场')
+  await expect(keepSelect).toHaveValue('10')
+  await expect(page.locator('.replay-list-count')).toContainText('已存 3 场')
+  // 回到默认上限，避免影响后续断言
+  await keepSelect.selectOption('50')
+  await expect(keepSelect).toHaveValue('50')
+
   const viewer = page.getByTestId('replay-viewer')
   async function openReplay(label: string) {
     // 列表可能已经打开（首次进入时就是打开的），只在关闭状态下点大厅入口。
@@ -102,9 +132,12 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.getByTestId('replay-wall-left')).toContainText('牌山 余')
   await expect(page.getByTestId('replay-turn')).toContainText('1巡')
   await expect(page.locator('.replay-log-list button').first()).toBeVisible()
-  // 血流一局多胡：牌谱里应能看到多条「胡/自摸」事件
-  const winRows = page.locator('.replay-log-list button').filter({ hasText: /自摸|胡/ })
+  // 血流一局多胡：牌谱里应能看到多条「胡/自摸」事件，且按类型分层
+  const winRows = page.locator('.replay-log-list button.kind-win')
   expect(await winRows.count()).toBeGreaterThanOrEqual(1)
+  await expect(page.locator('.replay-log-list button.kind-meld').first()).toBeVisible()
+  await expect(page.locator('.replay-log-list button.kind-draw').first()).toBeVisible()
+  await expect(page.locator('.replay-log-list button.kind-win').first()).toContainText('胡')
   // 本家身份牌不得被牌谱面板压住（曾因复用实时牌桌的 .user-area 定位而被遮挡）
   const logBox = await page.locator('.replay-log-body').boundingBox()
   const identityBox = await page.locator('.replay-user .user-identity').boundingBox()
@@ -118,6 +151,25 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.locator('.replay-theme-name')).toHaveText('主题 llm')
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${OUT}/02-blood-flow-frame0.png` })
+  // ── 3b. 跳鸣牌节点：按钮与键盘（Shift + →/←）都只落在重事件上 ──
+  const activeRow = page.locator('.replay-log-list button.active')
+  const position = page.getByTestId('replay-turn').locator('i')
+  await page.getByTestId('replay-next-action').click()
+  await expect(activeRow).toHaveAttribute('data-kind', /meld|win/)
+  const firstActionPosition = await position.textContent()
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(activeRow).toHaveAttribute('data-kind', /meld|win/)
+  expect(await position.textContent()).not.toBe(firstActionPosition)
+  await page.keyboard.press('Shift+ArrowLeft')
+  await expect(activeRow).toHaveAttribute('data-kind', /meld|win/)
+  // 回到开局后再向后跳，应落到本局第一个重事件
+  await page.keyboard.press('Home')
+  await expect(page.getByTestId('replay-turn')).toContainText('1巡')
+  await page.getByTestId('replay-next-action').click()
+  await expect(activeRow).toHaveAttribute('data-kind', /meld|win/)
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: `${OUT}/02b-meld-jump.png` })
+
   // 局末：血流没有单一赢家 → 横幅报「本局结束」
   await page.locator('.replay-log').click()
   await page.keyboard.press('End')
@@ -133,7 +185,6 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.locator('.replay-title')).toContainText('莲花麻将')
   await expect(page.locator('.replay-hand-rack .hand-tile-slot')).toHaveCount(14)
 
-  const position = page.getByTestId('replay-turn').locator('i')
   const positionAtStart = (await position.textContent()) ?? ''
   await page.getByRole('button', { name: '下一步' }).click()
   await expect(position).not.toHaveText(positionAtStart)

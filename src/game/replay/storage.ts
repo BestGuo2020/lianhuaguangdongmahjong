@@ -7,6 +7,10 @@ import { REPLAY_MAX_MATCHES, type ReplayMatch, type ReplayRound } from './types'
 export interface ReplayStorage {
   /** 本地存储是否可用（无 IDB / 隐私模式 / 写入失败均为 false）。 */
   readonly available: boolean
+  /** 当前保留上限（场）。 */
+  readonly maxMatches: number
+  /** 调整保留上限并立即淘汰超出的最旧场次。 */
+  setMaxMatches(maxMatches: number): Promise<void>
   saveMatch(match: ReplayMatch): Promise<void>
   saveRound(round: ReplayRound): Promise<void>
   list(): Promise<ReplayMatch[]>
@@ -25,7 +29,7 @@ export interface ReplayStorageOptions {
 }
 
 export function createReplayStorage(options: ReplayStorageOptions = {}): ReplayStorage {
-  const maxMatches = options.maxMatches ?? REPLAY_MAX_MATCHES
+  let maxMatches = Math.max(1, options.maxMatches ?? REPLAY_MAX_MATCHES)
   const report = (error: unknown) => { options.onError?.(error) }
   let driver: ReplayStoreDriver | null = options.driver !== undefined
     ? options.driver
@@ -51,6 +55,11 @@ export function createReplayStorage(options: ReplayStorageOptions = {}): ReplayS
 
   const storage: ReplayStorage = {
     get available() { return driver !== null },
+    get maxMatches() { return maxMatches },
+    async setMaxMatches(next) {
+      maxMatches = Math.max(1, Math.floor(next) || 1)
+      await storage.trim()
+    },
     saveMatch(match) {
       return guard(async () => {
         assertCloneable(match, '场次记录')
