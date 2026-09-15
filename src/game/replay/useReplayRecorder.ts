@@ -2,11 +2,14 @@
 import { ref, type Ref } from 'vue'
 import { createReplayRecorder, type ReplayMatchMeta, type ReplayRecorder, type ReplaySink } from './recorder'
 import { createReplayStorage, type ReplayStorage } from './storage'
+import { readReplayKeepCount } from './preferences'
 import type { ReplayMatch, ReplayStanding } from './types'
 
 export interface UseReplayRecorderOptions {
   meta: () => ReplayMatchMeta
   storage?: ReplayStorage | null
+  /** 保留上限（场）；缺省读本机偏好。 */
+  maxMatches?: number
   now?: () => number
 }
 
@@ -28,6 +31,8 @@ export interface ReplayRecording {
 export function useReplayRecorder(options: UseReplayRecorderOptions): ReplayRecording {
   const available = ref(true)
   const storage = options.storage ?? createReplayStorage({
+    // 保留上限取本机偏好（超出按开始时间淘汰最旧）。
+    maxMatches: options.maxMatches ?? readReplayKeepCount(),
     onError: () => { available.value = false },
   })
   if (!storage.available) available.value = false

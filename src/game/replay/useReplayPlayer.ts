@@ -27,6 +27,8 @@ export interface ReplayPlayer {
   round: ComputedRef<ReplayRound | null>
   atStart: ComputedRef<boolean>
   atEnd: ComputedRef<boolean>
+  /** 本局全部鸣牌/和牌节点对应的帧序号。 */
+  actionFrames: ComputedRef<number[]>
   next(): void
   prev(): void
   first(): void
@@ -39,6 +41,8 @@ export interface ReplayPlayer {
   /** 切换局；越界自动收敛。 */
   selectRound(index: number): void
   stepBy(offset: number): void
+  /** 跳到下一个（1）/ 上一个（-1）鸣牌或和牌节点。 */
+  jumpAction(direction: 1 | -1): void
 }
 
 export function useReplayPlayer(options: UseReplayPlayerOptions): ReplayPlayer {
@@ -63,6 +67,10 @@ export function useReplayPlayer(options: UseReplayPlayerOptions): ReplayPlayer {
   })
   const atStart = computed(() => frameIndex.value <= 0)
   const atEnd = computed(() => frameIndex.value >= frames.value.length - 1)
+  /** 鸣牌/和牌节点（牌谱里的"重事件"）：跳转以它们为锚点，避免逐帧翻找。 */
+  const actionFrames = computed(() => frames.value
+    .filter((item) => item.step && (item.step.t === 'meld' || item.step.t === 'win'))
+    .map((item) => item.index))
 
   let timer: number | null = null
 
@@ -121,6 +129,19 @@ export function useReplayPlayer(options: UseReplayPlayerOptions): ReplayPlayer {
     moveTo(frameIndex.value + offset)
   }
 
+  /** 跳到下一个/上一个鸣牌或和牌节点；越界时停在原位。 */
+  function jumpAction(direction: 1 | -1) {
+    const anchors = actionFrames.value
+    if (!anchors.length) return
+    pause()
+    const current = frameIndex.value
+    const target = direction > 0
+      ? anchors.find((index) => index > current)
+      : [...anchors].reverse().find((index) => index < current)
+    if (target === undefined) return
+    moveTo(target)
+  }
+
   function selectRound(index: number) {
     const total = options.rounds().length
     if (!total) return
@@ -145,6 +166,7 @@ export function useReplayPlayer(options: UseReplayPlayerOptions): ReplayPlayer {
     round,
     atStart,
     atEnd,
+    actionFrames,
     next() { pause(); moveTo(frameIndex.value + 1) },
     prev() { pause(); moveTo(frameIndex.value - 1) },
     first() { pause(); moveTo(0) },
@@ -155,5 +177,6 @@ export function useReplayPlayer(options: UseReplayPlayerOptions): ReplayPlayer {
     seek(index) { pause(); moveTo(index) },
     selectRound,
     stepBy,
+    jumpAction,
   }
 }

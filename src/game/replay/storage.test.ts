@@ -100,6 +100,24 @@ describe('回放存储（内存驱动）', () => {
     expect(await storage.loadRounds('m2')).toHaveLength(1)
   })
 
+  it('调整保留上限后立即淘汰超出的最旧场次', async () => {
+    const storage = createReplayStorage({ driver: createMemoryDriver(), maxMatches: 3 })
+    expect(storage.maxMatches).toBe(3)
+    for (const [id, startedAt] of [['a', 100], ['b', 200], ['c', 300], ['d', 400]] as const) {
+      await storage.saveMatch(makeMatch(id, startedAt))
+    }
+    expect((await storage.list()).map((match) => match.id)).toEqual(['d', 'c', 'b'])
+
+    await storage.setMaxMatches(2)
+    expect(storage.maxMatches).toBe(2)
+    expect((await storage.list()).map((match) => match.id)).toEqual(['d', 'c'])
+
+    // 非法上限收敛为至少 1 场，不会把库清空
+    await storage.setMaxMatches(0)
+    expect(storage.maxMatches).toBe(1)
+    expect((await storage.list()).map((match) => match.id)).toEqual(['d'])
+  })
+
   it('删除单场与清空', async () => {
     const storage = createReplayStorage({ driver: createMemoryDriver() })
     await storage.saveMatch(makeMatch('a', 100))

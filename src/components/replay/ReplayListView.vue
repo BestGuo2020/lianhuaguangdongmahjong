@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 对局回放列表：一行 = 一整场（玩法 / 场次 / 对局日期 / 位次 / 主题），提供「查看」。
+// 对局回放列表：一行 = 一整场（玩法 / 场次 / 对局日期 / 位次 / 主题），提供「查看 / 导出 / 删除」。
+// 底部提供保留策略（本机偏好）与全部清空。
 import { computed, ref, watch } from 'vue'
 import { formatMatchDate, formatRank, matchSubtitle } from '../../game/replay/format'
+import { buildReplayExport, downloadReplayExport, replayExportFilename } from '../../game/replay/export'
+import { REPLAY_KEEP_OPTIONS, readReplayKeepCount, saveReplayKeepCount } from '../../game/replay/preferences'
 import type { ReplayStorage } from '../../game/replay/storage'
 import type { ReplayMatch } from '../../game/replay/types'
 import { tableThemeIdentity } from '../../theme/themeIdentity'
@@ -22,6 +25,15 @@ const emit = defineEmits<{
 const matches = ref<ReplayMatch[]>([])
 const loading = ref(false)
 const busy = ref(false)
+const hint = ref('')
+const keepCount = ref(readReplayKeepCount())
+let hintTimer: number | null = null
+
+function flashHint(text: string) {
+  hint.value = text
+  if (hintTimer != null) globalThis.clearTimeout(hintTimer)
+  hintTimer = globalThis.setTimeout(() => { hint.value = '' }, 2600) as unknown as number
+}
 
 async function reload() {
   loading.value = true
@@ -30,7 +42,10 @@ async function reload() {
 }
 
 watch(() => props.open, (open) => {
-  if (open) void reload()
+  if (open) {
+    keepCount.value = readReplayKeepCount()
+    void reload()
+  }
 }, { immediate: true })
 
 async function removeMatch(match: ReplayMatch) {
@@ -47,6 +62,31 @@ async function clearAll() {
   await props.storage.clearAll()
   await reload()
   busy.value = false
+}
+
+/** 导出该场牌谱（场次 + 各局事件流）为 JSON 文件。 */
+async function exportMatch(match: ReplayMatch) {
+  busy.value = true
+  try {
+    const rounds = await props.storage.loadRounds(match.id)
+    if (!rounds.length) {
+      flashHint('这场没有可导出的牌谱')
+      return
+    }
+    const payload = buildReplayExport(match, rounds)
+    const written = downloadReplayExport(payload, replayExportFilename(match, payload.exportedAt))
+    flashHint(written ? `已导出 ${rounds.length} 局牌谱` : '当前环境不支持下载')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function changeKeepCount(event: Event) {
+  const next = saveReplayKeepCount(Number((event.target as HTMLSelectElement).value))
+  keepCount.value = next
+  await props.storage.setMaxMatches(next)
+  await reload()
+  flashHint(`保留最近 ${next} 场`)
 }
 
 const themeLabel = (name: ReplayMatch['themeName']) => tableThemeIdentity(name).label
@@ -89,10 +129,22 @@ const hasMatches = computed(() => matches.value.length > 0)
             </div>
             <div class="replay-row-actions">
               <button type="button" data-action-role="primary" @click="emit('view', match.id)">查看</button>
+              <button type="button" data-action-role="secondary" data-testid="replay-export" :disabled="busy" @click="exportMatch(match)">导出</button>
               <button type="button" data-action-role="secondary" :disabled="busy" @click="removeMatch(match)">删除</button>
             </div>
           </li>
         </ul>
+
+        <div class="replay-list-settings">
+          <label>
+            保留最近
+            <select data-testid="replay-keep-count" :value="keepCount" @change="changeKeepCount">
+              <option v-for="option in REPLAY_KEEP_OPTIONS" :key="option" :value="option">{{ option }} 场</option>
+            </select>
+          </label>
+          <span class="replay-list-count">已存 {{ matches.length }} 场，超出自动删除最旧</span>
+          <span v-if="hint" class="replay-list-hint" role="status" data-testid="replay-hint">{{ hint }}</span>
+        </div>
 
         <div class="result-actions replay-list-actions">
           <button v-if="hasMatches" type="button" data-action-role="danger" :disabled="busy" @click="clearAll">清空全部</button>
@@ -105,13 +157,13 @@ const hasMatches = computed(() => matches.value.length > 0)
 
 <style scoped>
 .replay-list-backdrop { z-index: 210; }
-.replay-list-card { width: min(760px, 95%); }
+.replay-list-card { width: min(820px, 95%); }
 .replay-list-note { margin: 0 0 10px; color: var(--theme-text-muted); font-size: 12px; text-align: center; }
 .replay-list-empty { padding: 22px 0; color: var(--theme-text-muted); font-size: 13px; text-align: center; }
-.replay-list { display: grid; gap: 6px; max-height: min(56vh, 520px); margin: 0; padding: 2px; overflow: hidden auto; list-style: none; }
+.replay-list { display: grid; gap: 6px; max-height: min(50vh, 460px); margin: 0; padding: 2px; overflow: hidden auto; list-style: none; }
 .replay-row {
   display: grid;
-  grid-template-columns: 6px minmax(0, 1.5fr) minmax(0, 1fr) 46px auto;
+  grid-template-columns: 6px minmax(0, 1.4fr) minmax(0, 1fr) 46px auto;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -130,6 +182,25 @@ const hasMatches = computed(() => matches.value.length > 0)
 .replay-row-rank.rank-1 { color: var(--theme-accent); }
 .replay-row-actions { display: flex; gap: 6px; }
 .replay-row-actions button { padding: 5px 10px; border-radius: 7px; font-size: 12px; }
+.replay-list-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px 0;
+  color: var(--theme-text-muted);
+  font-size: 12px;
+}
+.replay-list-settings select {
+  margin-left: 4px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
+  border-radius: 6px;
+  background: var(--theme-button);
+  color: var(--theme-text);
+  font: inherit;
+}
+.replay-list-hint { color: var(--theme-accent); }
 .replay-list-actions { justify-content: space-between; }
 @media (max-width: 720px) {
   .replay-row { grid-template-columns: 6px minmax(0, 1fr) auto; grid-template-areas: 'theme main actions' '. meta actions' '. rank actions'; }

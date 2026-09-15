@@ -74,8 +74,16 @@ function onKeydown(event: KeyboardEvent) {
   if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
   switch (event.key) {
     case 'Escape': emit('close'); break
-    case 'ArrowRight': event.preventDefault(); event.shiftKey ? player.stepBy(5) : player.next(); break
-    case 'ArrowLeft': event.preventDefault(); event.shiftKey ? player.stepBy(-5) : player.prev(); break
+    case 'ArrowRight':
+      event.preventDefault()
+      if (event.shiftKey) player.jumpAction(1)
+      else player.next()
+      break
+    case 'ArrowLeft':
+      event.preventDefault()
+      if (event.shiftKey) player.jumpAction(-1)
+      else player.prev()
+      break
     case ' ': event.preventDefault(); player.toggle(); break
     case 'Home': player.first(); break
     case 'End': player.last(); break
@@ -145,6 +153,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       :joker-tiles="jokerTileList()"
       :wildcard-tiles="round?.wildcardTiles ?? []"
       @jump="player.seek"
+      @action="player.jumpAction"
     />
 
     <Transition name="announce">
@@ -192,7 +201,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
-.replay-viewer { z-index: 200; }
+.replay-viewer {
+  z-index: 200;
+  /* 牌谱面板尺寸的单一来源：本家身份牌按它让位，避免两处各自写死而错位。 */
+  --replay-log-width: 252px;
+  --replay-log-left: 10px;
+}
 .replay-topbar {
   position: absolute;
   top: 0;
@@ -246,7 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .replay-user .user-identity {
   /* 牌谱面板占据左侧，本家身份牌让到面板右侧、手牌架上方（与实时牌桌同位但避让只读面板）。 */
-  left: calc(256px + var(--safe-left));
+  left: calc(var(--replay-log-left) + var(--replay-log-width) + 10px + var(--safe-left));
   bottom: calc(176px + var(--safe-bottom));
 }
 .replay-hand-rack { bottom: calc(58px + var(--safe-bottom)); }
@@ -270,6 +284,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   pointer-events: none;
 }
 @media (max-width: 900px) {
+  .replay-viewer { --replay-log-width: 206px; }
   .replay-theme-name { display: none; }
 }
 </style>
