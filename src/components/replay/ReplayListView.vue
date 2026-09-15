@@ -100,7 +100,7 @@ const hasMatches = computed(() => matches.value.length > 0)
       <section class="result-card settlement-card replay-list-card">
         <h2>对局回放</h2>
         <p class="replay-list-note">
-          仅保存在本机浏览器（IndexedDB），不上传服务器。
+          仅保存在浏览器，不上传服务器。
         </p>
 
         <p v-if="!available" class="replay-list-empty" data-testid="replay-unavailable">

@@ -63,6 +63,9 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.getByTestId('replay-list')).toBeVisible()
   const rows = page.locator('.replay-row')
   await expect(rows).toHaveCount(3)
+  // 用户可见文案不暴露底层实现（只讲"仅保存在浏览器，不上传服务器"）
+  await expect(page.locator('.replay-list-note')).toHaveText('仅保存在浏览器，不上传服务器。')
+  await expect(page.locator('.replay-list-card')).not.toContainText('IndexedDB')
   const rowOf = (label: string) => page.locator('.replay-row').filter({ hasText: label })
   await expect(rowOf('莲花麻将·血流')).toContainText('东风场')
   await expect(rowOf('莲花麻将·血流')).toContainText('主题 大模型专属')
