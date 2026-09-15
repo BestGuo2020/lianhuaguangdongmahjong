@@ -203,6 +203,8 @@ const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
+  // 联机牌谱：房主生成全知牌谱广播给全员，各自存进同一个本地库（与单机回放共用一个列表）
+  replayStorage: replay.storage,
   onLlmMessage: llmHook.onLlmMessage,
   getTableThemeName: () => tableThemeName.value,
   getCharacterId: () => animeCharacterId.value,

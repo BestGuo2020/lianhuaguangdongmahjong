@@ -57,6 +57,17 @@ import type { LlmSpeechPriority } from '../llm/speechPolicy'
 import { useGame } from '../core/local/useGame'
 import { useLotusGame } from '../variants/lotus/lotusGame'
 import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
+import { createReplayRecorder } from '../replay/recorder'
+import {
+  REPLAY_ACK_KIND,
+  REPLAY_REQUEST_KIND,
+  createRemoteReplayHost,
+  createRemoteReplayPeer,
+  isRemoteReplayMessage,
+  type RemoteReplayMessage,
+} from '../replay/remoteRelay'
+import type { ReplayStorage } from '../replay/storage'
+import { getRuleVariant } from '../core/rules/ruleVariants'
 import { RemotePlayerController } from './host/remotePlayerController'
 import { LotusRemotePlayerController } from './host/lotusRemotePlayerController'
 import { verifySnapshot } from './antiCheat/publicStateVerifier'
@@ -262,6 +273,11 @@ interface UseVibeRemoteGameOptions {
   getCharacterId?: () => string
   /** 二次元固定台词执行器（吃碰杠胡动作音 + 胡牌后结算台词）。 */
   animeFixedTts?: AnimeFixedTtsExecutor
+  /**
+   * 联机牌谱的本地存储：房主用它落库并广播给所有玩家，客机用它接收落库。
+   * 不传则联机回放整体关闭（零行为变化）。
+   */
+  replayStorage?: ReplayStorage | null
 }
 
 export function useVibeRemoteGame({
@@ -272,6 +288,7 @@ export function useVibeRemoteGame({
   getTableThemeName = () => 'jade',
   getCharacterId = () => 'deepseek',
   animeFixedTts,
+  replayStorage = null,
 }: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
@@ -303,6 +320,112 @@ export function useVibeRemoteGame({
   const plannedAiSeats = ref<PublicAiSeat[]>([])
   const initialTableThemeName = getTableThemeName()
   const roomTableThemeName = ref<TableThemeName>(isTableThemeName(initialTableThemeName) ? initialTableThemeName : 'jade')
+
+  // ── 联机牌谱（全知）：房主生成 → 广播给所有玩家 → 各自存本地 ──
+  // 房主的引擎是唯一事实来源，因此全知牌谱只能由房主录制；传输走 replay 中继
+  // （清单 + 切片 + 回执补发），不依赖传输层的自动分片。
+  const remoteReplayStorage: ReplayStorage | null = replayStorage
+  let replayHostRelay: ReturnType<typeof createRemoteReplayHost> | null = null
+  let replayPeerRelay: ReturnType<typeof createRemoteReplayPeer> | null = null
+  let replayPeerTimer: ReturnType<typeof setInterval> | null = null
+  let hostReplayFinalized = false
+  const hostReplayRecorder = remoteReplayStorage
+    ? createReplayRecorder({
+      meta: () => ({
+        rulesetId: rulesetId.value,
+        rulesetName: getRuleVariant(rulesetId.value).name,
+        themeName: roomTableThemeName.value,
+        humanSeat: mySeat.value >= 0 ? mySeat.value : 0,
+        gameMode: 'remote' as const,
+      }),
+      sink: {
+        saveRound: (round) => {
+          void remoteReplayStorage.saveRound(round)
+          void replayHostRelay?.broadcastRound(round)
+        },
+        saveMatch: (match) => {
+          void remoteReplayStorage.saveMatch(match)
+          void replayHostRelay?.broadcastMatch(match)
+        },
+      },
+    })
+    : null
+
+  /** 发送一条回放协议消息（走房间广播；分片都很小，不触发传输层自动分片）。 */
+  function sendReplayMessage(message: object) {
+    try {
+      transport.send(message as Record<string, unknown>)
+    } catch { /* 断线期间丢弃：牌谱不是对局必需路径 */ }
+  }
+
+  function ensureReplayHost(): ReturnType<typeof createRemoteReplayHost> | null {
+    if (!remoteReplayStorage) return null
+    if (!replayHostRelay) {
+      replayHostRelay = createRemoteReplayHost({
+        send: sendReplayMessage,
+        loadRounds: (matchId) => remoteReplayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => remoteReplayStorage.loadMatch(matchId),
+      })
+    }
+    return replayHostRelay
+  }
+
+  function ensureReplayPeer(): ReturnType<typeof createRemoteReplayPeer> | null {
+    if (!remoteReplayStorage) return null
+    if (!replayPeerRelay) {
+      replayPeerRelay = createRemoteReplayPeer({
+        send: sendReplayMessage,
+        saveRound: (round) => remoteReplayStorage.saveRound(round),
+        saveMatch: (match) => remoteReplayStorage.saveMatch(match),
+        loadRounds: (matchId) => remoteReplayStorage.loadRounds(matchId),
+        getMySeat: () => mySeat.value,
+      })
+      // 半截会话靠定时回执催补（丢片只有靠回执才能发现）
+      replayPeerTimer = setInterval(() => replayPeerRelay?.tick(), 1_000)
+    }
+    return replayPeerRelay
+  }
+
+  /**
+   * 回放协议消息的统一入口。
+   * 注意顺序：回执/补局请求来自远端客机，必须放在 `handleMessage` 的
+   * 「房主忽略远端消息」早退之前处理；但它们只驱动回放中继，不写任何对局状态，
+   * 因此不破坏「房主引擎是唯一事实来源」这条不变量。
+   */
+  function handleRemoteReplayMessage(raw: unknown): boolean {
+    if (!remoteReplayStorage) return false
+    const kind = (raw as { kind?: unknown } | null)?.kind
+    if (kind === REPLAY_ACK_KIND || kind === REPLAY_REQUEST_KIND) {
+      if (!isHost.value) return true
+      const host = ensureReplayHost()
+      const message = raw as RemoteReplayMessage
+      if (host && message.kind === REPLAY_ACK_KIND) void host.handleAck(message.ack)
+      else if (host && message.kind === REPLAY_REQUEST_KIND) void host.handleRequest(message)
+      return true
+    }
+    if (!isRemoteReplayMessage(raw)) {
+      // 房主自视快照里带 matchFinished 时收尾本场牌谱（一局一落库、场末广播场次记录）
+      if (isHost.value && kind === 'state_snapshot') maybeFinishHostReplay(raw)
+      return false
+    }
+    const peer = ensureReplayPeer()
+    if (!peer) return false
+    void peer.handle(raw)
+    return true
+  }
+
+  /** 场末收尾：广播场次记录（很小），客机据此补齐缺失的局。 */
+  function maybeFinishHostReplay(raw: unknown) {
+    if (!isHost.value || !hostReplayRecorder || hostReplayFinalized) return
+    const snapshot = raw as { matchFinished?: boolean; players?: Array<{ playerIndex?: number; name: string; score: number }> }
+    if (!snapshot.matchFinished) return
+    hostReplayFinalized = true
+    const standings = (snapshot.players ?? [])
+      .map((player, index) => ({ seat: player.playerIndex ?? index, name: player.name, score: player.score, rank: 0 }))
+      .sort((a, b) => b.score - a.score)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }))
+    hostReplayRecorder.finishAuto(standings.length ? standings : undefined)
+  }
   const playAnimeAction = (event: TableActionEvent) => {
     if (!animeFixedTts || roomTableThemeName.value !== 'llmAnime') return
     const actor = players[event.actorIndex]
@@ -564,6 +687,7 @@ export function useVibeRemoteGame({
       if (rulesetId.value === 'lotus-legacy') {
         const llmRuntime = createVibeLotusLlmRuntime(resolvedLlm.privateSeats, { onMessage: emitHostLlmMessage })
         activeHostLlmRuntime = llmRuntime
+        hostReplayFinalized = false
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
@@ -580,6 +704,8 @@ export function useVibeRemoteGame({
             countdownEnabled: false,
             headless: true,
             waitForOpeningReady,
+            // 联机牌谱：房主引擎产出全知牌谱（未配置存储时为 undefined，零行为变化）
+            recorder: hostReplayRecorder?.hooks,
           }),
           opening: openingPromise,
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
@@ -591,6 +717,7 @@ export function useVibeRemoteGame({
       } else {
         const llmRuntime = createVibeCoreLlmRuntime(resolvedLlm.privateSeats, { onMessage: emitHostLlmMessage })
         activeHostLlmRuntime = llmRuntime
+        hostReplayFinalized = false
         hostGame.value = startHostGame({
           room,
           rulesetId: rulesetId.value,
@@ -607,6 +734,8 @@ export function useVibeRemoteGame({
             countdownEnabled: false,
             headless: true,
             waitForOpeningReady,
+            // 联机牌谱：房主引擎产出全知牌谱（未配置存储时为 undefined，零行为变化）
+            recorder: hostReplayRecorder?.hooks,
           }),
           opening: openingPromise,
           getSeatByPeer: () => new Map(lobbySeats.value.filter((s) => s.seat > 0).map((s) => [s.peerId, s.seat])),
@@ -1847,6 +1976,9 @@ export function useVibeRemoteGame({
   }
 
   function handleMessage(raw: unknown, fromPeerId?: string) {
+  // 联机牌谱协议先处理：回执/补局请求来自远端客机，必须在下面的「房主忽略远端消息」之前，
+  // 但它只驱动回放中继（不写对局状态），房主引擎仍是唯一事实来源。
+  if (handleRemoteReplayMessage(raw)) return
     // 房主的引擎是唯一事实来源。房主 viewer 的本地事件通过无 fromPeerId
     // 进入这里；任何来自远端的 ServerMessage 都不能反向写入房主表现层，
     // 更不能借 rejoin_ok/state_snapshot 改写房主自己的座位、房间或终局状态。
@@ -2118,6 +2250,8 @@ export function useVibeRemoteGame({
     hostGame.value?.stop()
     closeConnection()
     clearTimers()
+    // 联机牌谱：停掉半截会话的定时回执（已落库的牌谱不受影响）
+    if (replayPeerTimer) { clearInterval(replayPeerTimer); replayPeerTimer = null }
   }
   const instance = getCurrentInstance()
   if (instance) onBeforeUnmount(cleanup)
