@@ -1,6 +1,7 @@
-import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
+import { getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import { defineGamePort, type GameStartOptions } from '../contracts/gamePort'
 import type { EndGameOptions, TableActionEvent, TileType } from '../contracts/types'
+import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
 import { AiController, HumanController, type HumanBridge, type PlayerController } from '../controllers/playerController'
 import type { ActionContext } from '../rules/actions'
 import { tileName } from '../rules/tiles'
@@ -47,6 +48,8 @@ interface UseGameOptions {
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
   ruleset?: RuleSet
+  /** 对局回放录制钩子（可选；不传时零行为变化）。 */
+  recorder?: ReplayRecorderHooks
 }
 
 export function useGame({
@@ -60,9 +63,26 @@ export function useGame({
   animeFixedTts,
   countdownEnabled = true,
   ruleset = DEFAULT_RULESET,
+  recorder,
 }: UseGameOptions = {}) {
   const state = createLocalGameState()
   const selectors = createLocalGameSelectors(state, ruleset)
+
+  // ── 对局回放录制 ──
+  // 只读局面快照：录制器不认识引擎内部结构，全靠这个对象取值。
+  const replayFrame = (): ReplayFrameSource => ({
+    players: state.players,
+    wallLeft: state.wall.value.length,
+    headDrawn: state.wallHeadDrawn.value,
+    currentPlayer: state.currentPlayer.value,
+    round: state.round.value,
+    dealer: state.dealer.value,
+    honba: state.honba.value,
+    matchType: state.matchType.value,
+    diceValues: [...state.diceValues.value],
+    diceThrowerIndex: state.diceThrowerIndex.value,
+    wallBreakIndex: state.wallBreakIndex.value,
+  })
   let openingTimeline!: ReturnType<typeof createLocalOpeningTimeline>
   let settlementTimeline!: ReturnType<typeof createLocalSettlementTimeline>
   let kongActionExecutor!: ReturnType<typeof createLocalKongActionExecutor>
@@ -155,6 +175,14 @@ export function useGame({
     later: scheduler.later,
     onTableAction: playAnimeAction,
   })
+  if (recorder) {
+    // 碰/吃/杠/胡的唯一统一出口：所有鸣牌与胡牌动作都会经过 showTableAction。
+    const baseShowTableAction = transientEvents.showTableAction
+    transientEvents.showTableAction = (type, actorIndex, sourceIndex, tile, meldIndex) => {
+      baseShowTableAction(type, actorIndex, sourceIndex, tile, meldIndex)
+      recorder.tableAction({ type, actorIndex, sourceIndex, tile, meldIndex }, replayFrame())
+    }
+  }
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
   const followDealer = createFollowDealerTracker({
@@ -222,6 +250,33 @@ export function useGame({
     stopCountdown: countdown.stop,
     followDealer,
   })
+  if (recorder) {
+    // 必须在创建编排器/动作控制器之前包装：它们按引用捕获这两个函数。
+    const baseDrawFor = tileFlowExecutor.drawFor
+    tileFlowExecutor.drawFor = async (playerIndex: number, fromTail = false) => {
+      const drawn = await baseDrawFor(playerIndex, fromTail)
+      if (drawn) {
+        const player = state.players[playerIndex]
+        const tile = player?.hand[player.drawnTileIndex] ?? player?.hand[player.hand.length - 1]
+        if (tile) recorder.draw({ seat: playerIndex, tile, fromTail }, replayFrame())
+      }
+      return drawn
+    }
+    const baseDiscardTile = tileFlowExecutor.discardTile
+    tileFlowExecutor.discardTile = (playerIndex: number, requestedIndex: number) => {
+      const before = state.players[playerIndex]?.discards.length ?? 0
+      baseDiscardTile(playerIndex, requestedIndex)
+      const player = state.players[playerIndex]
+      const tile = player && player.discards.length > before ? player.discards[player.discards.length - 1] : null
+      if (!tile) return
+      const last = state.lastDiscard.value
+      recorder.discard({
+        seat: playerIndex,
+        tile,
+        id: last && last.from === playerIndex ? last.id : Date.now(),
+      }, replayFrame())
+    }
+  }
 
   openingTimeline = createLocalOpeningTimeline({
     state,
@@ -309,6 +364,17 @@ export function useGame({
     endDraw,
     beginTurn: (playerIndex) => beginTurn(playerIndex),
   })
+
+  // 对局回放：开局锚点（发牌完成）与局末亮牌快照。
+  // 用 sync 刷新：必须在引擎写下该状态的同一刻取快照，避免被随后的 nextRound / 清场抢先。
+  if (recorder) {
+    watch(state.phase, (phase) => {
+      if (phase === 'opening') recorder.roundStart(replayFrame())
+    }, { flush: 'sync' })
+    watch(state.result, (result) => {
+      if (result) recorder.roundEnd(result, replayFrame())
+    }, { flush: 'sync' })
+  }
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
   if (getCurrentInstance()) onBeforeUnmount(clearPresentation)

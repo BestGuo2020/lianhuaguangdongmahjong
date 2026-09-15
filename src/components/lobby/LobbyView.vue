@@ -77,6 +77,8 @@ const emit = defineEmits<{
   /** 退出本场：回主大厅但保留座位（可重新进原座位）。 */
   leaveMatch: []
   openStats: []
+  /** 打开本地对局回放列表（只存本机 IndexedDB）。 */
+  openReplay: []
   openRules: []
   wakuLogin: []
   wakuLogout: []
@@ -266,6 +268,7 @@ function toggleWakuDemoAuth() {
 
         <div class="lobby-links">
           <button v-if="gameMode === 'remote'" class="text-button" data-action-role="light" @click="$emit('openStats')">我的战绩 →</button>
+          <button class="text-button" data-action-role="light" data-testid="open-replay" @click="$emit('openReplay')">对局回放 →</button>
           <button class="text-button" data-action-role="light" @click="$emit('openRules')">游戏规则 →</button>
           <a class="repository-link" data-action-role="light" href="https://github.com/BestGuo2020/lianhuaguangdongmahjong" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 新标签页打开莲花广麻仓库">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.24c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.28-1.69-1.28-1.69-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18A11 11 0 0 1 12 6.1c.98 0 1.95.13 2.87.39 2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
