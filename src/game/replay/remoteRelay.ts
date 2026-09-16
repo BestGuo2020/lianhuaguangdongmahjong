@@ -379,6 +379,12 @@ export interface RemoteReplayPeer {
   handle(message: unknown): Promise<boolean>
   /** 到期的半截会话：回执催补或放弃（也可由定时器驱动）。 */
   tick(now?: number): void
+  /**
+   * 复核本机这场是否齐了（落库后调用）。
+   * 缺局判断不能只挂在"收到牌谱"上：房主是自己录制、不接收任何东西，
+   * 它本地缺失时也必须主动去要（否则"由非房主补局"只做了一半）。
+   */
+  review(matchId: string): Promise<void>
   /** 已收全并落库的局数（诊断/测试用）。 */
   saved(): number
 }
@@ -590,6 +596,11 @@ export function createRemoteReplayPeer(options: RemoteReplayPeerOptions): Remote
     },
     saved() {
       return savedCount
+    },
+    async review(matchId) {
+      // 本机这场是否齐了：没有场次记录就把它也一起要（缺局判断的本地侧入口）
+      noteGap(matchId, !(await options.loadMatch(matchId)))
+      await reconcile(now(), true)
     },
   }
 }

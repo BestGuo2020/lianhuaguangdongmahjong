@@ -3356,6 +3356,74 @@ test('线上回放：客机中途丢失本地牌谱后，场末仍能自动补�
   }
 })
 
+test('线上回放补局：房主本地牌谱丢失后，由客机（非房主持有者）补回缺局', async ({}, testInfo) => {
+  test.setTimeout(2_400_000)
+  const pair = await launchAccountBrowserPair()
+  let pages: [Page, Page] | null = null
+  const applicationErrors: string[] = []
+  let roomCode = ''
+  try {
+    pages = [await authenticateAccount(pair, 0, ONLINE.accounts[0]), await authenticateAccount(pair, 1, ONLINE.accounts[1])]
+    const [host, client] = pages
+    pages.forEach((page) => page.on('pageerror', (error) => {
+      if (!/vibehub\.js/.test(error.stack ?? '')) applicationErrors.push(error.message)
+    }))
+    for (const page of pages) await expect(page.locator('.lobby-layout')).toBeVisible()
+
+    await enterOnlineLobby(host, '补局房主2', 'host')
+    await host.getByRole('button', { name: '创建房间', exact: true }).click()
+    await host.locator('.game-settings button', { hasText: '玩法' }).click()
+    await host.getByRole('button', { name: /^莲花麻将 翻精癞子/ }).click()
+    await host.getByRole('button', { name: '确定', exact: true }).click()
+    await host.getByRole('button', { name: '确认创建', exact: true }).click()
+    await acceptDisclaimerIfShown(host)
+    await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 60_000 })
+    roomCode = (await host.locator('.room-code strong').innerText()).trim()
+    await enterOnlineLobby(client, '补局客人2', 'client')
+    await client.getByRole('button', { name: '加入房间', exact: true }).click()
+    await client.getByPlaceholder('输入 6 位房间码').fill(roomCode)
+    await client.getByRole('button', { name: '确认加入', exact: true }).click()
+    await acceptDisclaimerIfShown(client)
+    await waitForRoomReady(host, client, roomCode)
+    await host.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await client.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+    await expect(host.locator('.room-start')).toBeEnabled({ timeout: 30_000 })
+    await host.locator('.room-start').click()
+    await Promise.all(pages.map((page) => installHostAutoPlayer(page)))
+
+    // 开局后清空**房主**的本地回放库：此前的局只剩客机手上有 ⇒ 房主只能靠客机补回
+    await expect.poll(async () => (await readRoundLabel(host)).length, { timeout: 180_000, intervals: [2_000] })
+      .toBeGreaterThan(0)
+    await clearLocalReplay(host)
+    const afterClear = await readLocalReplaySummary(host)
+    expect(afterClear.matches).toHaveLength(0)
+    console.log('[REPLAY-HOLDER] 已清空房主的本地牌谱：此前的局只存在于客机本地')
+
+    const deadline = Date.now() + 1_800_000
+    let lastProgress = Date.now()
+    while (Date.now() < deadline) {
+      const finals = await Promise.all(pages.map(
+        (page) => page.locator('.final-backdrop').isVisible().catch(() => false),
+      ))
+      if (finals.every(Boolean)) break
+      await Promise.all(pages.map(clickContinueIfAvailable))
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      if (Date.now() - lastProgress > 60_000) {
+        console.log(`[REPLAY-HOLDER] 推进中：${(await Promise.all(pages.map(readRoundLabel))).join(' | ')}`)
+        lastProgress = Date.now()
+      }
+    }
+    await Promise.all(pages.map((page) => expect(page.locator('.final-backdrop')).toBeVisible({ timeout: 30_000 })))
+
+    // 房主本地被清空过，仍应自动补齐（缺的那几局只有客机有 ⇒ 证明是"非房主持有者"补的）
+    await expectOnlineReplayPaipu({ pages, testInfo, label: 'replay-holder-serve', rulesetPattern: /莲花麻将(?!·)/ })
+    expect(applicationErrors, '应用异常应为空').toEqual([])
+    console.log(`[REPLAY-HOLDER] 房主被清库后仍补齐；房间 ${roomCode}`)
+  } finally {
+    await closeAccountBrowserPair(pair)
+  }
+})
+
 test('线上两账号完成莲花麻将·血流东风场（2 真人 + 2 普通机器人）', async ({}, testInfo) => {
   test.setTimeout(2_400_000)
   await runBloodFlowEastMatch({ llm: false, testInfo, label: 'bf-plain-ai' })

@@ -350,10 +350,13 @@ export function useVibeRemoteGame({
           void remoteReplayStorage.saveRound(round)
           // 必须在这里惰性建中继：否则广播永远命中 null（中继只在收到回执/补局请求时才创建）
           void ensureReplayHost()?.broadcastRound(round)
+          // 房主是自己录制、不接收牌谱的那一方：本地不全时也必须能自愈（去问任意持有者）
+          void ensureReplayPeer()?.review(round.matchId)
         },
         saveMatch: (match) => {
           void remoteReplayStorage.saveMatch(match)
           void ensureReplayHost()?.broadcastMatch(match)
+          void ensureReplayPeer()?.review(match.id)
         },
       },
     })

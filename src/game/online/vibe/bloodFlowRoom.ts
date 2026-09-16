@@ -119,10 +119,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
           // 必须在这里惰性建中继：中继此前只在收到回执/补局请求时才创建，
           // 结果广播永远命中 null（线上实测：客机本地一条牌谱都没有）
           void ensureReplayHost()?.broadcastRound(round)
+          // 房主是自己录制、不接收牌谱的那一方：本地不全时也必须能自愈（去问任意持有者）
+          void ensureReplayPeer()?.review(round.matchId)
         },
         saveMatch: (match) => {
           void replayStorage.saveMatch(match)
           void ensureReplayHost()?.broadcastMatch(match)
+          void ensureReplayPeer()?.review(match.id)
         },
       },
     })
