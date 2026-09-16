@@ -31,7 +31,10 @@ const patterns = Object.freeze({
   'little-three-dragons': pattern('little-three-dragons', '小三元', 16),
   'little-four-winds': pattern('little-four-winds', '小四喜', 16),
   'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets']),
-  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 16,
+  // 十三幺：2026-09-15 由 16 → **32 番**（用户定案，数据支持）。实测 1200 局 45,637 次胡牌里只出现 4 次
+  // （每百胡 0.01）——全表最稀有的会出现的番种，而单次最高赔付只有 320/家，低于豪华七对(12 番)的 480
+  // 与四暗刻(16 番)的 780。调到 32 与九莲宝灯（同 1200 局出现 0 次）、大四喜、四杠同档。
+  thirteenOrphans: pattern('thirteenOrphans', '十三幺', 32,
     ['all-with-terminals', 'mixed-terminals', 'sevenPairs', 'all-triplets']),
   'one-suit-four-joints': pattern('one-suit-four-joints', '一色四节高', 16, ['one-suit-three-joints', 'all-triplets']),
   // 高番

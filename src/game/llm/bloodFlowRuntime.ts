@@ -55,7 +55,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
   const {candidates,request,bigHandRoute,collapsedByRoute}=buildBloodFlowDecisionInput(view,requestId,metadata,aiConfig)
   const state = {
     ruleSummary:collapsedByRoute
-      ? `${BLOOD_FLOW_PROMPT_RULES}已进入大牌路线（commitment）：引擎已决定放弃小胡继续做这条十六倍级牌型，候选里不会出现"胡"、吃碰杠，弃牌也只剩不掉路线的牌——你只需在这些牌里选"怎么打"，不要因为缺少选项而报错。`
+      ? `${BLOOD_FLOW_PROMPT_RULES}已进入大牌路线（commitment）：引擎已决定放弃小胡继续做这条十六至三十二倍级牌型，候选里不会出现"胡"、吃碰杠，弃牌也只剩不掉路线的牌——你只需在这些牌里选"怎么打"，不要因为缺少选项而报错。`
       : BLOOD_FLOW_PROMPT_RULES,
     publicState:request.state, engineSuggestion:request.engineSuggestion,
     bigHandRoute: bigHandRoute
