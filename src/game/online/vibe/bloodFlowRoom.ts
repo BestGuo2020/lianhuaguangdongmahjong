@@ -214,7 +214,10 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   }
   try { for (const id of JSON.parse(sessionStorage.getItem(completedKey) ?? '[]')) if (typeof id === 'string') completed.add(id) } catch { /* ephemeral stats */ }
 
-  const port = useBloodFlowGame({ ...options, recorder: replayRecorder?.hooks, externalAuthority: {
+  // 注意：**不要**给这个本地客户端再传 `recorder`。房间侧已经用旁观视角驱动同一份录制器
+  // （事件流 + 结算），而客户端自己的结算路径会用另一份状态再 roundStart 一次，
+  // 把"有事件流的那份"按同一个 id 覆盖成"只有结算帧的那份"（线上与本地 mock 实测 steps 全 0）。
+  const port = useBloodFlowGame({ ...options, externalAuthority: {
     send: command => transmit({ kind: 'blood_flow_command', roomId: room?.roomId ?? '', ruleVersion: version, command }),
     nextRound: () => {
       if (!latestFrame) return
