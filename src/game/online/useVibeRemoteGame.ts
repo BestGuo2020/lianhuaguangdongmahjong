@@ -341,11 +341,12 @@ export function useVibeRemoteGame({
       sink: {
         saveRound: (round) => {
           void remoteReplayStorage.saveRound(round)
-          void replayHostRelay?.broadcastRound(round)
+          // 必须在这里惰性建中继：否则广播永远命中 null（中继只在收到回执/补局请求时才创建）
+          void ensureReplayHost()?.broadcastRound(round)
         },
         saveMatch: (match) => {
           void remoteReplayStorage.saveMatch(match)
-          void replayHostRelay?.broadcastMatch(match)
+          void ensureReplayHost()?.broadcastMatch(match)
         },
       },
     })

@@ -109,11 +109,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       sink: {
         saveRound: (round) => {
           void replayStorage.saveRound(round)
-          void replayHostRelay?.broadcastRound(round)
+          // 必须在这里惰性建中继：中继此前只在收到回执/补局请求时才创建，
+          // 结果广播永远命中 null（线上实测：客机本地一条牌谱都没有）
+          void ensureReplayHost()?.broadcastRound(round)
         },
         saveMatch: (match) => {
           void replayStorage.saveMatch(match)
-          void replayHostRelay?.broadcastMatch(match)
+          void ensureReplayHost()?.broadcastMatch(match)
         },
       },
     })
