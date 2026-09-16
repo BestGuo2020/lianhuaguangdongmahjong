@@ -60,11 +60,15 @@ import { startHostGame, type HostOpeningData } from './host/hostGameRunner'
 import { createReplayRecorder } from '../replay/recorder'
 import {
   REPLAY_ACK_KIND,
+  REPLAY_INVENTORY_KIND,
   REPLAY_REQUEST_KIND,
+  createManifestRegistry,
   createRemoteReplayHost,
   createRemoteReplayPeer,
+  createRemoteReplayServer,
   isRemoteReplayMessage,
   type RemoteReplayMessage,
+  type RemoteReplayRequestMessage,
 } from '../replay/remoteRelay'
 import type { ReplayStorage } from '../replay/storage'
 import { getRuleVariant } from '../core/rules/ruleVariants'
@@ -328,6 +332,9 @@ export function useVibeRemoteGame({
   let replayHostRelay: ReturnType<typeof createRemoteReplayHost> | null = null
   let replayPeerRelay: ReturnType<typeof createRemoteReplayPeer> | null = null
   let replayPeerTimer: ReturnType<typeof setInterval> | null = null
+  let replayServer: ReturnType<typeof createRemoteReplayServer> | null = null
+  /** 清单登记簿：多个持有者靠它错峰，谁先发别人就不再重复发。 */
+  const replayRegistry = createManifestRegistry()
   let hostReplayFinalized = false
   const hostReplayRecorder = remoteReplayStorage
     ? createReplayRecorder({
@@ -371,6 +378,21 @@ export function useVibeRemoteGame({
     return replayHostRelay
   }
 
+  /** 补局服务器：每个参与者都有 —— 谁手上留着对方缺的局，谁就能补（不必是房主）。 */
+  function ensureReplayServer(): ReturnType<typeof createRemoteReplayServer> | null {
+    if (!remoteReplayStorage) return null
+    if (!replayServer) {
+      replayServer = createRemoteReplayServer({
+        send: sendReplayMessage,
+        loadRounds: (matchId) => remoteReplayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => remoteReplayStorage.loadMatch(matchId),
+        selfKey: () => `${mySeat.value}:${roomId.value}`,
+        registry: replayRegistry,
+      })
+    }
+    return replayServer
+  }
+
   function ensureReplayPeer(): ReturnType<typeof createRemoteReplayPeer> | null {
     if (!remoteReplayStorage) return null
     if (!replayPeerRelay) {
@@ -379,10 +401,17 @@ export function useVibeRemoteGame({
         saveRound: (round) => remoteReplayStorage.saveRound(round),
         saveMatch: (match) => remoteReplayStorage.saveMatch(match),
         loadRounds: (matchId) => remoteReplayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => remoteReplayStorage.loadMatch(matchId),
         getMySeat: () => mySeat.value,
+        onManifestSeen: (id) => replayRegistry.note(id),
+        // 落库后广播本机持有清单：让别人知道缺局可以找谁要（含"场次记录也缺"的情况）
+        onSaved: (detail) => { if (detail.kind === 'match') void ensureReplayServer()?.announce(detail.matchId) },
       })
       // 半截会话靠定时回执催补（丢片只有靠回执才能发现）
-      replayPeerTimer = setInterval(() => replayPeerRelay?.tick(), 1_000)
+      replayPeerTimer = setInterval(() => {
+        replayPeerRelay?.tick()
+        replayRegistry.prune()
+      }, 1_000)
     }
     return replayPeerRelay
   }
@@ -397,13 +426,20 @@ export function useVibeRemoteGame({
     if (!remoteReplayStorage) return false
     const kind = (raw as { kind?: unknown } | null)?.kind
     if (kind === REPLAY_ACK_KIND || kind === REPLAY_REQUEST_KIND) {
-      if (!isHost.value) return true
-      const host = ensureReplayHost()
       const message = raw as RemoteReplayMessage
-      if (host && message.kind === REPLAY_ACK_KIND) void host.handleAck(message.ack)
-      else if (host && message.kind === REPLAY_REQUEST_KIND) void host.handleRequest(message)
+      if (message.kind === REPLAY_ACK_KIND) {
+        // 回执只跟"我广播出去的那份"有关 ⇒ 只有实际做过广播的一方需要处理
+        if (isHost.value) void ensureReplayHost()?.handleAck(message.ack)
+        return true
+      }
+      // 补局请求：房主立即应答，同时**每个参与者**都按错峰应答一次（任意持有者都能补，
+      // 房主清过库/换过权威时也能补齐）；清单已有人发过的持有者会自己取消。
+      const request = raw as RemoteReplayRequestMessage
+      if (isHost.value) void ensureReplayHost()?.handleRequest(request)
+      void ensureReplayServer()?.handleRequest(request)
       return true
     }
+    if (kind === REPLAY_INVENTORY_KIND) replayRegistry.prune()
     if (!isRemoteReplayMessage(raw)) {
       // 房主自视快照里带 matchFinished 时收尾本场牌谱（一局一落库、场末广播场次记录）
       if (isHost.value && kind === 'state_snapshot') maybeFinishHostReplay(raw)

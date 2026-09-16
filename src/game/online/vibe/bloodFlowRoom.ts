@@ -22,11 +22,15 @@ import type { HostLlmSeatSelection } from './vibeLlm'
 import {createReplayRecorder} from '../../replay/recorder'
 import {
   REPLAY_ACK_KIND,
+  REPLAY_INVENTORY_KIND,
   REPLAY_REQUEST_KIND,
+  createManifestRegistry,
   createRemoteReplayHost,
   createRemoteReplayPeer,
+  createRemoteReplayServer,
   isRemoteReplayMessage,
   type RemoteReplayMessage,
+  type RemoteReplayRequestMessage,
 } from '../../replay/remoteRelay'
 import {
   createBloodFlowRecordState,
@@ -97,6 +101,9 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   let replaySpectatorSamples = 0, replaySpectatorMisses = 0
   let replayHostRelay: ReturnType<typeof createRemoteReplayHost> | null = null
   let replayPeerRelay: ReturnType<typeof createRemoteReplayPeer> | null = null
+  let replayServer: ReturnType<typeof createRemoteReplayServer> | null = null
+  /** 清单登记簿：多个持有者靠它错峰，谁先发别人就不再重复发。 */
+  const replayRegistry = createManifestRegistry()
   const replayRecorder = replayStorage
     ? createReplayRecorder({
       meta: () => ({
@@ -138,6 +145,21 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     return replayHostRelay
   }
 
+  /** 补局服务器：每个参与者都有 —— 谁手上留着对方缺的局，谁就能补（不必是房主）。 */
+  function ensureReplayServer(): ReturnType<typeof createRemoteReplayServer> | null {
+    if (!replayStorage) return null
+    if (!replayServer) {
+      replayServer = createRemoteReplayServer({
+        send: sendReplayMessage,
+        loadRounds: (matchId) => replayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => replayStorage.loadMatch(matchId),
+        selfKey: () => `${options.getSeat()}:${room?.roomId ?? ''}`,
+        registry: replayRegistry,
+      })
+    }
+    return replayServer
+  }
+
   function ensureReplayPeer(): ReturnType<typeof createRemoteReplayPeer> | null {
     if (!replayStorage) return null
     if (!replayPeerRelay) {
@@ -146,7 +168,11 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         saveRound: (round) => replayStorage.saveRound(round),
         saveMatch: (match) => replayStorage.saveMatch(match),
         loadRounds: (matchId) => replayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => replayStorage.loadMatch(matchId),
         getMySeat: () => options.getSeat(),
+        onManifestSeen: (id) => replayRegistry.note(id),
+        // 落库后广播本机持有清单：让别人知道缺局可以找谁要（含"场次记录也缺"的情况）
+        onSaved: (detail) => { if (detail.kind === 'match') void ensureReplayServer()?.announce(detail.matchId) },
       })
     }
     return replayPeerRelay
@@ -160,13 +186,18 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     if (!replayStorage) return false
     const kind = (raw as { kind?: unknown } | null)?.kind
     if (kind === REPLAY_ACK_KIND || kind === REPLAY_REQUEST_KIND) {
-      if (!authority) return true
-      const host = ensureReplayHost()
       const message = raw as RemoteReplayMessage
-      if (host && message.kind === REPLAY_ACK_KIND) void host.handleAck(message.ack)
-      else if (host && message.kind === REPLAY_REQUEST_KIND) void host.handleRequest(message)
+      if (message.kind === REPLAY_ACK_KIND) {
+        if (authority) void ensureReplayHost()?.handleAck(message.ack)
+        return true
+      }
+      // 补局请求：房主立即应答，同时每个参与者都按错峰应答一次（任意持有者都能补）
+      const request = raw as RemoteReplayRequestMessage
+      if (authority) void ensureReplayHost()?.handleRequest(request)
+      void ensureReplayServer()?.handleRequest(request)
       return true
     }
+    if (kind === REPLAY_INVENTORY_KIND) replayRegistry.prune()
     if (!isRemoteReplayMessage(raw)) return false
     const peer = ensureReplayPeer()
     if (!peer) return false
