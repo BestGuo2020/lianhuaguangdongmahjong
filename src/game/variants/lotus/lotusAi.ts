@@ -245,7 +245,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   // 因此继续保留杠的最高优先级；碰与吃则必须比较动作后的听牌质量。
   //
   // 第 3 步（2026-09-13）：血流注入 kongEvaluator 后，明杠也变成"计分开杠"——
-  // 明杠会造出一副露（门清平胡没了）并拆掉手上的三张（七对/豪华七对路线没了），
+  // 明杠会造出一副露（门清没了）并拆掉手上的三张（七对/豪华七对路线没了），
   // 这些损失按点折算后与"不杠"（保留手牌，即最佳非杠候选：碰/吃/过）比较，净值为正才杠。
   if (view.canGang) {
     const value = view.kongEvaluator?.({

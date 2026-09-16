@@ -1256,7 +1256,7 @@
           "sevenPairs"
         ],
         "hardWin": true,
-        "paymentPerPayer": 80
+        "paymentPerPayer": 100
       }
     },
     {
@@ -1290,7 +1290,7 @@
           "shiSanLan"
         ],
         "hardWin": true,
-        "paymentPerPayer": 40
+        "paymentPerPayer": 60
       }
     },
     {
@@ -1324,7 +1324,7 @@
           "qiXing"
         ],
         "hardWin": true,
-        "paymentPerPayer": 120
+        "paymentPerPayer": 140
       }
     },
     {
@@ -1355,7 +1355,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 320
+        "paymentPerPayer": 340
       }
     },
     {
@@ -1386,7 +1386,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 640
+        "paymentPerPayer": 680
       }
     },
     {
@@ -1433,7 +1433,7 @@
           "all-triplets"
         ],
         "hardWin": true,
-        "paymentPerPayer": 440
+        "paymentPerPayer": 480
       }
     },
     {
@@ -1533,7 +1533,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": false,
-        "paymentPerPayer": 320
+        "paymentPerPayer": 340
       }
     },
     {

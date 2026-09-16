@@ -45,7 +45,12 @@ it('局面与候选都带上对手风险档，规则摘要写明赔付口径', (
   const prompt = bloodFlowDecisionPrompt(view({ opponentMelds: [peng('p4'), peng('p7')] }), [], 'risk')
   const payload = JSON.parse(prompt.messages.user)
   expect(payload.ruleSummary).toContain('点炮赔付')
-  expect(payload.ruleSummary).toContain('8~32倍')
+  // 2026-09-15 番表变更后鸡胡降到 0.5 番（支付减半），"大牌 vs 鸡胡"的倍数区间随之上移。
+  expect(payload.ruleSummary).toContain('16~64倍')
+  // 新的门清/平胡/鸡胡语义必须在规则摘要里写明，否则模型会按旧口径算番。
+  expect(payload.ruleSummary).toContain('门清（1番')
+  expect(payload.ruleSummary).toContain('平胡（1番')
+  expect(payload.ruleSummary).toContain('鸡胡（0.5番、支付减半）')
   const risk = payload.opponentRisk.find((profile: { seat: number }) => profile.seat === 1)
   expect(risk).toMatchObject({ tier: 2, signals: expect.arrayContaining(['副露染手嫌疑']) })
   expect(paymentOf(payload, '打出二筒')).toBeGreaterThan(0)

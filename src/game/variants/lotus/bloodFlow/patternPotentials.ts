@@ -485,12 +485,15 @@ export function estimateWinIncome(
   model: SevenPairsModel = 'off',
 ): WinIncomeEstimate {
   const patterns = certainPatterns(hand, melds, jokers, model)
-  let multiplier = 1
-  for (const id of patterns) multiplier += BLOOD_FLOW_CONFIG.patterns[id].weight - 1
+  // 2026-09-15 与 score.ts 同口径：倍率 = Σ(番值)（无番种时取 1，鸡胡的半番落在支付减半上）。
+  let multiplier = 0
+  for (const id of patterns) multiplier += BLOOD_FLOW_CONFIG.patterns[id].weight
+  const halfPayment = patterns.size === 1 && patterns.has('chicken')
+  const patternMultiplier = Math.max(1, multiplier)
   const hardLikely = !hand.some(tile => wildcardSet(jokers).has(tile))
   const eventMultiplier = BLOOD_FLOW_CONFIG.eventMultipliers[source]
-  const finalMultiplier = Math.min(multiplier * eventMultiplier * (hardLikely ? 2 : 1), BLOOD_FLOW_CONFIG.maxMultiplierPerPayer)
-  const paymentPerPayer = BLOOD_FLOW_CONFIG.basePoints * finalMultiplier
+  const finalMultiplier = Math.min(patternMultiplier * eventMultiplier * (hardLikely ? 2 : 1), BLOOD_FLOW_CONFIG.maxMultiplierPerPayer)
+  const paymentPerPayer = (BLOOD_FLOW_CONFIG.basePoints * finalMultiplier) / (halfPayment ? 2 : 1)
   const payers = source === 'self-draw' || source === 'kong-bloom' ? 3 : 1
   return { paymentPerPayer, total: paymentPerPayer * payers, multiplier: finalMultiplier, hardLikely }
 }

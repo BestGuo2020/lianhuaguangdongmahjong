@@ -51,10 +51,10 @@ const zeroSum = (v: unknown) => vector(v) && (v as number[]).reduce((a, b) => a 
 const only = (v: Record<string, any>, keys: readonly string[]) => Object.keys(v).every(k => keys.includes(k))
 
 export function isPublicWinScore(v: unknown): boolean {
-  // 白名单与上限必须跟随规则配置：杠加成字段（2026-09-12 新增）、单家封顶（64 → 128）、
-  // 番种数量（30），否则高番/带杠加成的结算会在 replica 校验处被拒。
+  // 白名单与上限必须跟随规则配置：杠加成字段（2026-09-12）、支付减半字段（2026-09-15，鸡胡半番）、
+  // 单家封顶（64 → 128）、番种数量（31），否则高番/带杠/鸡胡的结算会在 replica 校验处被拒。
   const patternCount = Object.keys(BLOOD_FLOW_CONFIG.patterns).length
-  if (!object(v) || !only(v, ['items', 'excluded', 'hardWin', 'source', 'opening', 'patternMultiplier', 'eventMultiplier',
+  if (!object(v) || !only(v, ['items', 'excluded', 'hardWin', 'source', 'opening', 'patternMultiplier', 'halfPayment', 'eventMultiplier',
     'kongBonus', 'openingApplied', 'uncappedMultiplier', 'finalMultiplier', 'capped', 'paymentPerPayer'])) return false
   return Array.isArray(v.items) && v.items.length <= patternCount && v.items.every((p: unknown) => object(p)
     && only(p, ['id', 'label', 'weight']) && Object.hasOwn(BLOOD_FLOW_CONFIG.patterns, p.id)
@@ -64,9 +64,10 @@ export function isPublicWinScore(v: unknown): boolean {
     && typeof v.hardWin === 'boolean' && ['discard', 'self-draw', 'robbed-kong', 'kong-bloom'].includes(v.source)
     && [null, 'heaven', 'earth'].includes(v.opening) && typeof v.openingApplied === 'boolean' && typeof v.capped === 'boolean'
     && (v.kongBonus === undefined || (int(v.kongBonus) && v.kongBonus >= 0))
+    && (v.halfPayment === undefined || typeof v.halfPayment === 'boolean')
     && ['patternMultiplier', 'eventMultiplier', 'uncappedMultiplier', 'finalMultiplier', 'paymentPerPayer'].every(k => int(v[k]) && v[k] > 0)
     && v.finalMultiplier <= BLOOD_FLOW_CONFIG.maxMultiplierPerPayer
-    && v.paymentPerPayer === v.finalMultiplier * BLOOD_FLOW_CONFIG.basePoints
+    && v.paymentPerPayer === (v.finalMultiplier * BLOOD_FLOW_CONFIG.basePoints) / (v.halfPayment ? 2 : 1)
 }
 
 function isSource(v: unknown) {

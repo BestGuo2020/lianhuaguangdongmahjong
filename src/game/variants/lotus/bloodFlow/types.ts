@@ -53,6 +53,12 @@ export interface PublicWinScore {
   readonly source: WinSource
   readonly opening: 'heaven' | 'earth' | null
   readonly patternMultiplier: number
+  /**
+   * 支付减半（2026-09-15 新增）：只有鸡胡（0.5 番、无任何计分番种）时为 true。
+   * 倍率必须保持整数（协议 `isPublicWinScore` 用 int() 校验倍率与点数，0.5 会让整包被客机拒收），
+   * 因此"半番"落在点数的这一半上：点数 = 底分 × 倍率 ÷ 2（底分 10 → 鸡胡 5 点，自摸/硬胡翻倍后仍为整数）。
+   */
+  readonly halfPayment?: boolean
   readonly eventMultiplier: number
   /** 杠加成（明杠 +1 / 暗杠·风杠 +2 每个，2026-09-12 新增），已计入 patternMultiplier。 */
   readonly kongBonus?: number

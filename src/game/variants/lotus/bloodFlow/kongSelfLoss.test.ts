@@ -1,7 +1,7 @@
 // 第 3 步（2026-09-13）：开杠决策的"自手牌型损失"。
 //
 //   开杠价值 = 杠收益 − 防守风险 − 自手牌型损失（见 kongValue.ts）
-//   自手牌型损失 = ① 七对/豪华七对潜力损失 + ② 明杠破坏门清平胡 + ③ 向听恶化
+//   自手牌型损失 = ① 七对/豪华七对潜力损失 + ② 明杠破坏门清 + ③ 向听恶化
 //
 // 这条规则**不是**"检测到七对就禁杠"：路线越接近（对子越多、越接近四张）扣得越多；
 // 路线还没成形（对子不够，sevenPairsPotential = 0）时扣减为 0，该杠照杠。
@@ -18,7 +18,7 @@ const JOKERS: TileType[] = ['red']
 const LUXURY_ROUTE: TileType[] = ['m3', 'm3', 'm3', 'm1', 'm1', 'm2', 'm2', 'p1', 'p1', 's3', 's3', 'p7', 's8']
 /** 七对路线已废：只有 3 对，sevenPairsPotential = 0。 */
 const SEVEN_PAIRS_DEAD: TileType[] = ['m5', 'm5', 'm5', 'm1', 'm1', 'm2', 'm2', 'p4', 'p5', 'p6', 's7', 's9', 'east']
-/** 门清听牌：四副面子 + 单张 east，明杠 m5 会造出一副露，门清平胡（2 番）随之消失。 */
+/** 门清听牌：四副面子 + 单张 east，明杠 m5 会造出一副露，门清（1 番）随之消失。 */
 const CONCEALED_TENPAI: TileType[] = ['m5', 'm5', 'm5', 'm1', 'm2', 'm3', 'p4', 'p5', 'p6', 's7', 's8', 's9', 'east']
 
 function claimView(hand: readonly TileType[], melds: Meld[] = [], discards: TileType[] = [], tile: TileType = 'm3'): BloodFlowSeatView {
@@ -100,13 +100,13 @@ describe('② 七对路线已废 → 仍杠', () => {
   })
 })
 
-describe('③ 明杠破坏门清平胡 → 计入损失', () => {
+describe('③ 明杠破坏门清 → 计入损失', () => {
   const input: KongValueInput = { kind: 'discard-gang', hand: CONCEALED_TENPAI, melds: [], jokers: JOKERS, tile: 'm5' }
 
-  it('门清听牌开明杠：门清平胡（2 番兜底本体）按接近度折价后计入扣减', () => {
+  it('门清听牌开明杠：门清（1 番独立番种）按接近度折价后计入扣减', () => {
     const value = kongCandidateValue(input)
     expect(value.selfLoss.concealedHand).toBeGreaterThan(0)
-    expect(value.selfLoss.reasons.join()).toContain('门清平胡')
+    expect(value.selfLoss.reasons.join()).toContain('门清')
     expect(value.net).toBeCloseTo(value.gain - value.risk - value.selfLoss.total, 6)
     expect(value.net).toBeLessThan(value.gain)
   })
@@ -118,7 +118,7 @@ describe('③ 明杠破坏门清平胡 → 计入损失', () => {
     expect(value.selfLoss.total).toBeLessThan(kongCandidateValue(input).selfLoss.total)
   })
 
-  it('门清平胡的损失不足时仍照杠（损失是"计入比较"，不是"一律禁杠"）', () => {
+  it('门清的损失不足时仍照杠（损失是"计入比较"，不是"一律禁杠"）', () => {
     expect(kongCandidateValue(input).net).toBeGreaterThan(0)
     expect(decideBloodFlowActionEv(claimView(CONCEALED_TENPAI, [], [], 'm5'), BLOOD_FLOW_AI)).toEqual({ kind: 'gang' })
   })

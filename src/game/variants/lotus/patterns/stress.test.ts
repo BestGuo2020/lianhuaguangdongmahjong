@@ -7,7 +7,7 @@ it('scores eight jokers plus four limited whiteboards without cutting off soluti
     winningTile: 'p1', melds: [], jokers: ['m1', 'm2'], source: 'self-draw', opening: null,
   })
   expect(result).not.toBeNull()
-  // 2026-09-12 第二版番种表：档位调整后为 106（四暗刻 16 + 清幺九 24 等，硬胡 ×2）。
+  // 2026-09-15 番表变更后为 114：口径改为 Σ(番值)，且门清成为独立番种（本手无副露 → +1 番），硬胡 ×2。
   // Four limited whiteboards cannot all represent winds/dragons, so no bigger honor hand.
-  expect(result!.score.finalMultiplier).toBe(106)
+  expect(result!.score.finalMultiplier).toBe(114)
 }, 60_000)

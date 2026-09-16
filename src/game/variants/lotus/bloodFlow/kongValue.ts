@@ -7,7 +7,7 @@
 //   · 防守风险：补杠是血流唯一会把第 4 张亮出去给人抢杠的动作（明杠/暗杠/风杠不可抢）。
 //   · 自手牌型损失（selfLoss，三项，全部换算成"点"与其它 EV 同口径）：
 //       ① 七对 / 豪华七对潜力损失：杠会把这门路线的对子拆成副露，七对从此不可能；
-//       ② 明杠破坏门清平胡的损失：门清平胡（2 番，方案B 兜底本体）要求不副露，
+//       ② 明杠破坏门清的损失：门清（1 番，2026-09-15 起为独立番种、与任何番种叠加）要求不副露，
 //          任何杠都会造出一副副露（补杠除外——碰的时候门清已经没了）；
 //       ③ 向听恶化：杠后的（手牌 + 副露）向听比杠前更差时，每档折算固定点数；
 //          向听用"含七对/十三幺/十三烂的整车向听"，因此杠掉特殊路线会在这里再记一次结构退化。
@@ -55,7 +55,7 @@ export interface KongSelfLoss {
   total: number
   /** ① 七对 / 豪华七对路线被杠拆掉的潜力损失。 */
   sevenPairs: number
-  /** ② 造出副露后失去门清平胡（兜底本体）的损失。 */
+  /** ② 造出副露后失去门清（1 番，独立番种）的损失。 */
   concealedHand: number
   /** ③ 向听恶化（含七对/十三幺/十三烂的整车向听），每档折算。 */
   shanten: number
@@ -161,7 +161,7 @@ export function sevenPairsRouteValue(hand: readonly TileType[], melds: readonly 
     + BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight * luxury ** 2
 }
 
-/** 门清平胡只是"兜底本体"（有别的番种时不算），因此按接近度再折一个兜底价。 */
+/** 门清（2026-09-15 起为独立番种、与任何番种叠加），这里按接近度折一个价。 */
 function concealedHandLoss(hand: readonly TileType[], jokers: readonly TileType[], config: KongValueConfig) {
   const shanten = routeShanten(hand, 0, jokers)
   const progress = shanten <= 0 ? 1 : shanten === 1 ? 0.6 : shanten === 2 ? 0.35 : 0.15
@@ -208,11 +208,11 @@ export function kongSelfLoss(input: KongValueInput): KongSelfLoss {
   const sevenPairs = Math.max(0, before - after) * BLOOD_FLOW_CONFIG.basePoints
   if (sevenPairs > 0) reasons.push(`拆掉七对/豪华七对路线（-${Math.round(sevenPairs)}）`)
 
-  // ② 门清平胡（未副露 → 杠后必然有副露）
+  // ② 门清（未副露 → 杠后必然有副露）
   const exposedBefore = input.melds.length === 0
   const exposedAfter = (post?.melds.length ?? input.melds.length) > 0
   const concealedHand = exposedBefore && exposedAfter ? concealedHandLoss(input.hand, input.jokers, config) : 0
-  if (concealedHand > 0) reasons.push(`破坏门清平胡（-${Math.round(concealedHand)}）`)
+  if (concealedHand > 0) reasons.push(`破坏门清（-${Math.round(concealedHand)}）`)
 
   // ③ 向听恶化（含七对/十三幺等特殊路线的"整车"向听；杠后必然有副露，特殊路线随之消失）
   const shantenBefore = routeShanten(input.hand, input.melds.length, input.jokers)

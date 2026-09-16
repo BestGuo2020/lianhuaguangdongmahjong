@@ -174,7 +174,7 @@ describe('E06 four-endpoint authority and recovery', () => {
     // 重同步（hello）→ 全量：客机拿到本局全部胡牌，且不带 diet 标记
     r.queued.length = 0
     await r.host.receive(r.replicas[1].hello(), 'p1')
-    const resync = r.queued.map(entry => entry.packet)
+    const resync = r.flush().map(item => item.packet)
       .find((packet): packet is Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' }> => packet.kind === 'blood_flow_snapshot')!
     expect((resync as { diet?: true }).diet).toBeUndefined()
     expect(resync.view.public.batches.length).toBe(full.public.batches.length)
@@ -192,17 +192,26 @@ describe('E06 four-endpoint authority and recovery', () => {
       r.queued.length = 0
       await r.host.receive({ ...r.replicas[seat].hello(), kind: 'blood_flow_command',
         command: engine.command(seat, action) }, `p${seat}`)
-      diet = r.flush().map(entry => entry.packet)
+      diet = r.flush()
+        // 必须挑**发给 1 号位**的那份：视图是逐座位投影的，座位不符会被 replica 正确拒收。
+        .filter(item => item.peer === 'p1')
+        .map(item => item.packet)
         .find((packet): packet is Extract<BloodFlowPacket, { kind: 'blood_flow_snapshot' }> =>
           packet.kind === 'blood_flow_snapshot' && (packet as { diet?: true }).diet === true)
     }
     expect(diet, '常规帧应带 diet 标记').toBeDefined()
     expect(diet!.view.public.batches.length).toBeLessThanOrEqual(2)
     expect(JSON.stringify(diet).length).toBeLessThan(JSON.stringify(resync).length)
+    expect(diet!.sequence).toBeGreaterThan(resync.sequence)
 
-    // 客机（replica）合并后仍保有完整历史：不因瘦身帧丢胡牌记录
-    const guest = r.replicas[1]
-    expect(guest.view!.public.batches.map(batch => batch.batchId))
+    // 客机合并：一个干净的 replica 先吃全量帧、再吃瘦身帧，历史必须完整保留。
+    // （直接用测试里的长流程 replica 会被前序包与去重逻辑干扰，这里单独造一个。）
+    const fresh = new BloodFlowReplica('room', 'p0', 1, vi.fn())
+    expect(fresh.receive(resync, 'p0')).toBe(true)
+    expect(fresh.view!.public.batches.map(batch => batch.batchId)).toEqual(full.public.batches.map(batch => batch.batchId))
+    const tookDiet = fresh.receive(diet!, 'p0')
+    expect(tookDiet, '瘦身帧应被同座位客机接受').toBe(true)
+    expect(fresh.view!.public.batches.map(batch => batch.batchId))
       .toEqual(full.public.batches.map(batch => batch.batchId))
     r.backend.engine.assertConservation()
   })
