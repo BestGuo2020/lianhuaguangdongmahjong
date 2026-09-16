@@ -404,7 +404,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   }
 
   if (discards.length) {
-    // 兜/弃政策（v3）：对手已做成十六倍级大牌、本家未听牌且可达听口过窄 → 弃胡，改打最小赔付张。
+    // 兜/弃政策（v3）：对手已做成十六倍级及以上大牌（含三十二倍级的十三幺/九莲宝灯）、本家未听牌且可达听口过窄 → 弃胡，改打最小赔付张。
     // 有胡的窗口在前面就返回了，所以这里不会"放过已经能胡的牌"。
     if (defense?.result.mode === 'fold') {
       const exposure = extras.safetyExposure

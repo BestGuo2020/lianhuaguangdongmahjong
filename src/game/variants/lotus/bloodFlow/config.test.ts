@@ -45,7 +45,8 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
     expect(BLOOD_FLOW_CONFIG.patterns.chicken.weight).toBe(0.5)
     expect(BLOOD_FLOW_CONFIG.patterns.pinghu).toMatchObject({ label: '平胡', weight: 1 })
     expect(BLOOD_FLOW_CONFIG.patterns['concealed-hand']).toMatchObject({ label: '门清', weight: 1 })
-    expect(BLOOD_FLOW_CONFIG.patterns.thirteenOrphans.weight).toBe(16)
+    // 十三幺 2026-09-15 由 16 → 32（实测 1200 局仅 4 次，全表最稀有，赔付却低于豪华七对）
+    expect(BLOOD_FLOW_CONFIG.patterns.thirteenOrphans.weight).toBe(32)
     expect(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight).toBe(12)
     expect(BLOOD_FLOW_CONFIG.patterns).not.toHaveProperty('hard-win')
     expect(BLOOD_FLOW_CONFIG.hardWinMultiplier).toBe(2)
@@ -59,8 +60,8 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
   it('rejects missing/duplicated fixture identities and preserves the specified arithmetic examples', () => {
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length)
     expect(new Set(scoringCases.map(c => c.id)).size).toBe(scoringCases.length)
-    expect(cases.find(c => c.id === 'hard-orphans-discard')?.expected.paymentPerPayer).toBe(340)
-    expect(cases.find(c => c.id === 'hard-orphans-self-draw')?.expected.paymentPerPayer).toBe(680)
+    expect(cases.find(c => c.id === 'hard-orphans-discard')?.expected.paymentPerPayer).toBe(660)
+    expect(cases.find(c => c.id === 'hard-orphans-self-draw')?.expected.paymentPerPayer).toBe(1280)
     expect(cases.find(c => c.id === 'hard-pure-triplets-self-draw')?.expected.paymentPerPayer).toBe(480)
   })
 

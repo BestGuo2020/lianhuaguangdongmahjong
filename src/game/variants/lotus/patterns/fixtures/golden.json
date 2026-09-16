@@ -1355,7 +1355,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 340
+        "paymentPerPayer": 660
       }
     },
     {
@@ -1386,7 +1386,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": true,
-        "paymentPerPayer": 680
+        "paymentPerPayer": 1280
       }
     },
     {
@@ -1533,7 +1533,7 @@
         "winning": true,
         "shape": "thirteenOrphans",
         "hardWin": false,
-        "paymentPerPayer": 340
+        "paymentPerPayer": 660
       }
     },
     {
