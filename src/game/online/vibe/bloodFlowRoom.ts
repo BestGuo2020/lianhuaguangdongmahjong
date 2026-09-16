@@ -93,6 +93,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   // 因此全知牌谱必须走 `authority.spectatorView()`（四家明牌 + 累计弃牌流水）。
   const replayStorage: ReplayStorage | null = options.replayStorage ?? null
   const replayState = createBloodFlowRecordState()
+  /** 诊断：房主旁观采样的成功/失败次数（线上验收据此判断"牌谱有没有事件流"）。 */
+  let replaySpectatorSamples = 0, replaySpectatorMisses = 0
   let replayHostRelay: ReturnType<typeof createRemoteReplayHost> | null = null
   let replayPeerRelay: ReturnType<typeof createRemoteReplayPeer> | null = null
   const replayRecorder = replayStorage
@@ -204,7 +206,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     const recorder = replayRecorder, active = authority
     if (!recorder || !active) return
     const view = await active.spectatorView()
-    if (!view) return
+    if (!view) { replaySpectatorMisses += 1; return }
+    replaySpectatorSamples += 1
     const context = replayContext()
     recordBloodFlowView(recorder.hooks, view, context, replayState)
     if (view.public.roundResult) recordBloodFlowSettle(recorder.hooks, view, context, replayState)
@@ -366,6 +369,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
           void stats.flushMatch(message.authorityEpoch)
           // 场末收尾：广播场次记录（客机据此补齐缺失的局）
           replayRecorder?.finishAuto(replayStandings(message.view))
+          if (BF_DIAG) console.log(`[bf-replay] 房主旁观采样 成功=${replaySpectatorSamples} 失败=${replaySpectatorMisses}`)
         }
       }).catch((error) => {
         if (BF_DIAG) console.warn(`[bf-diag] acceptRemoteView 失败 round=${message.round} `
@@ -512,6 +516,9 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     window.addEventListener('offline', offline); window.addEventListener('online', online)
     timer = setInterval(() => {
       if (token !== lifecycle || room !== active) return
+      // 联机牌谱：房主的旁观采样由这个定时器驱动 —— 房主自身的视图应用路径未必经过
+      // present() 的那个分支，挂在报文上会漏采（线上验收实测：steps 全 0）。
+      if (authority && replayRecorder) void sampleReplay()
       // 联机牌谱：半截会话定期回执催补（丢片只有靠回执才能发现）
       replayPeerRelay?.tick()
       if (authority) {
