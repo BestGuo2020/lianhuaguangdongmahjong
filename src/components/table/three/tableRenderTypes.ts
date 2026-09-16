@@ -2,10 +2,12 @@ import type { DealAnimation, LastDiscard, OpeningStage, WinEffect } from '../../
 import type { GamePlayer, TableActionEvent, TileType, WinPresentation } from '../../../game/core/contracts/types'
 import type { TableThemeName } from './tableTheme'
 import type { WinBatch, SourceTileEvent } from '../../../game/variants/lotus/bloodFlow/types'
+import type { WinPileBatch } from './bloodFlowWinPile'
 import type { BloodFlowCue } from '../../../game/variants/lotus/bloodFlow/presentation'
 
 export interface TableProps {
-  bloodFlowBatches?: readonly WinBatch[]
+  /** 血流胡牌牌堆（盖楼）：实时给完整 WinBatch，回放给按"胡"步累积的结构子集。 */
+  bloodFlowBatches?: readonly WinPileBatch[]
   bloodFlowCompact?: boolean
   bloodFlowPresentationKey?: string
   bloodFlowCue?: BloodFlowCue | null

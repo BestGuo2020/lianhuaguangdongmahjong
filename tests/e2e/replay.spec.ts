@@ -206,6 +206,13 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.getByTestId('replay-result')).toContainText('本局结束')
   await page.waitForTimeout(300)
   await page.screenshot({ path: `${OUT}/03-blood-flow-settled.png` })
+  // 血流「盖楼」：局末应把本局每一次胡牌都码到赢家身边（复用实时那套牌堆渲染）
+  const bloodFlowPiles = Number(await page.locator('canvas.mahjong-scene').getAttribute('data-blood-flow-piles'))
+  expect(bloodFlowPiles, '局末应显示已盖楼层数').toBeGreaterThan(0)
+  await expect(page.locator('canvas.mahjong-scene')).toHaveAttribute('data-blood-flow-effects', /\d+/)
+  // 回退到开局：楼层随推进累积，开局时不应还留着后面的楼
+  await page.keyboard.press('Home')
+  await expect(page.locator('canvas.mahjong-scene')).toHaveAttribute('data-blood-flow-piles', '0')
 
   // ── 4. 莲花麻将回放：切局 / 单步 / 牌谱跳转 / 视角开关 ──
   await page.getByRole('button', { name: '← 返回大厅' }).click()
