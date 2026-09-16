@@ -511,6 +511,18 @@ vitest 为 node 环境且无 `fake-indexeddb`：**纯逻辑独立成模块全量
 
 测试：`remoteRelay.holders.test.ts` **9/9**（房主清库后由他人补齐、**房主本地不全时自己复核后由持有者补回**、同一请求只补一份的两场景、场次记录可补、无人持有按上限放弃、错峰哈希、登记簿抑制与过期）；回放套件**连跑 20 轮 0 失败**；两侧全量 1519 / 1667 项通过。
 
+### 12.6 血流回放的「盖楼」（2026-09-16 第四轮）
+
+用户反馈：血流一局多次胡牌，回放里**看不出谁胡了哪些牌**（实时牌桌本来有牌堆，回放没有）。
+做法：**按"胡"的步骤累积牌堆，画到 3D 牌桌上**，复用实时那套摆放函数。
+
+| 点 | 做法 |
+|---|---|
+| 数据 | 回放手里没有引擎的完整 `WinBatch`（番型/赔付在当时的快照里）⇒ 用结构子集 `WinPileBatch { batchId?, source{id,tile,seat,kind}, winners[]{id,winner,ordinal?} }`；实时真 `WinBatch` 是它的超集，两边共用一条渲染路径 |
+| 投影 | `projection.ts` 里每个 `t === 'win'` 的步骤折成一楼（自摸 ⇒ `kind: 'draw'` 源牌是赢家自己；点炮 ⇒ `kind: 'discard'` 源牌来自放炮者），**随帧累积** ⇒ 回放推进时逐楼出现，跳到局末看到全部 |
+| 可断言性 | 牌桌 canvas 暴露 `data-blood-flow-piles`（已盖楼层数）与既有的 `data-blood-flow-effects` |
+| 测试 | 新增 `projection.bloodFlow.test.ts` **3/3**（累积与源牌/胡牌者、能被牌堆函数直接消费、非血流玩法不产生牌堆）；`bloodFlowWinPile.test.ts` 既有 64 项保持绿；本地回放 e2e 追加断言（局末楼层 > 0、`Home` 回开局归 0）⇒ 证明是**逐楼累积**而不是一次性显示 |
+
 ### 12.5 边界与未覆盖
 
 - **经典（莲花麻将）联机回放也已线上验收通过**：断言抽成共用 helper `expectOnlineReplayPaipu({ pages, testInfo, label, rulesetPattern })`，经典场、血流两场与补局场景共用。经典场取证：两侧各 5 局、**逐局 steps 完全一致**（108/110/32/113…）、结算帧四家明牌、`humanSeat` 0/1 且位次各按自己（3 位 / 4 位）。
