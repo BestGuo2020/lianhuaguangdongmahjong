@@ -188,13 +188,14 @@ describe('联机回放补局：任意持有者应答', () => {
         }
         const due = timers.splice(0).sort((a, b) => a.delay - b.delay)
         if (due.length) for (const entry of due) entry.callback()
-        // 错峰回调里的编码/发布是 fire-and-forget（gzip + 摘要流水线）：
-        // 轮询到"发布数不再变化且队列已空"再判定收敛，否则会误判队列已空。
+        // 错峰回调里的编码/发布是 fire-and-forget（gzip + 摘要流水线）：至少要等够几轮
+        // 再判定收敛，否则会把"还在飞的发布"当成没发生（实测需要 ~200ms）。
         let previousPublished = -1
-        for (let turn = 0; turn < 12; turn += 1) {
-          if (!messages.length && !timers.length && published.length === previousPublished) break
+        for (let turn = 0; turn < 40; turn += 1) {
+          const stable = !messages.length && !timers.length && published.length === previousPublished
           previousPublished = published.length
-          await new Promise((resolve) => setTimeout(resolve, 2))
+          await new Promise((resolve) => setTimeout(resolve, 5))
+          if (stable && turn >= 4) break
         }
         if (!messages.length && !timers.length) {
           await new Promise((resolve) => setTimeout(resolve, 2))
@@ -205,6 +206,25 @@ describe('联机回放补局：任意持有者应答', () => {
 
     return { holders, byName, peers, servers, hosts, pump, published, served, asked, scheduled, rejected, registry, timers, messages }
   }
+
+  it('房主本地不全时也会自愈：自己复核后向持有者要回缺局', async () => {
+    // 房间里没有"房主中继"（房主自己就是被清库的那一方），只有另一个持有者
+    const fabric = createFabric(['hostLike', 'holder'], { hostName: null })
+    // hostLike 手上只剩 3、4 局 + 场次记录（此前那些局被清了）；holder 有整场
+    fabric.byName.get('hostLike')!.matches.set('m6', makeMatch('m6', 4))
+    for (const index of [3, 4]) fabric.byName.get('hostLike')!.withRound(makeRound('m6', index))
+    fabric.byName.get('holder')!.matches.set('m6', makeMatch('m6', 4))
+    for (const index of [1, 2, 3, 4]) fabric.byName.get('holder')!.withRound(makeRound('m6', index))
+
+    await fabric.peers.get('hostLike')!.review('m6')
+    await fabric.pump()
+
+    expect(fabric.byName.get('hostLike')!.rounds.get('m6')?.map((round) => round.roundIndex),
+      `asked=${JSON.stringify(fabric.asked)} served=${JSON.stringify(fabric.served)} published=${JSON.stringify(fabric.published)} scheduled=${JSON.stringify(fabric.scheduled)}`).toEqual([1, 2, 3, 4])
+    expect(fabric.byName.get('hostLike')!.matches.get('m6')?.roundCount).toBe(4)
+    expect(fabric.published.filter((entry) => entry.startsWith('holder:'))).not.toEqual([])
+    expect(fabric.rejected).toEqual([])
+  })
 
   it('探针：server 单独应答能发出去', async () => {
     const sent: unknown[] = []
