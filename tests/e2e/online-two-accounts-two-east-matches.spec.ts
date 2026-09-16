@@ -2923,6 +2923,48 @@ async function bloodFlowSideState(page: Page) {
   }).catch((error) => ({ error: String(error).slice(0, 160) }))
 }
 
+/**
+ * 读取某玩家页面的本地回放库（联机牌谱验收用）：
+ * 只读取已存在的库，不做任何创建，避免干扰 App 自己的 IndexedDB 初始化。
+ */
+async function readLocalReplaySummary(page: Page): Promise<{
+  matches: Array<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string }>
+  rounds: Array<{ matchId: string; roundIndex: number; roundLabel: string; steps: number; hasFinal: boolean; revealedHands: number[] }>
+}> {
+  return page.evaluate(async () => {
+    const list = await (indexedDB as IDBFactory & { databases?: () => Promise<Array<{ name?: string }>> })
+      .databases?.().catch(() => [])
+    const hasReplayDb = (list ?? []).some((entry) => entry.name === 'lianhua-guangma-replay')
+    if (!hasReplayDb) return { matches: [], rounds: [] }
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('lianhua-guangma-replay')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const readAll = <T>(store: string) => new Promise<T[]>((resolve, reject) => {
+      if (!db.objectStoreNames.contains(store)) { resolve([]); return }
+      const tx = db.transaction(store, 'readonly')
+      const request = tx.objectStore(store).getAll()
+      request.onsuccess = () => resolve(request.result as T[])
+      request.onerror = () => reject(request.error)
+    })
+    const matches = await readAll<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string }>('matches')
+    const rounds = await readAll<{ matchId: string; roundIndex: number; roundLabel: string; steps?: unknown[]; final?: { hands?: string[][] } }>('rounds')
+    db.close()
+    return {
+      matches: matches.map((match) => ({
+        id: match.id, rulesetName: match.rulesetName, gameMode: match.gameMode, roundCount: match.roundCount,
+        myRank: match.myRank, themeName: match.themeName, humanSeat: match.humanSeat, status: match.status,
+      })),
+      rounds: rounds.map((round) => ({
+        matchId: round.matchId, roundIndex: round.roundIndex, roundLabel: round.roundLabel,
+        steps: round.steps?.length ?? 0, hasFinal: Boolean(round.final),
+        revealedHands: (round.final?.hands ?? []).map((hand) => hand.length),
+      })),
+    }
+  })
+}
+
 async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo; label: string }) {
   const { llm, testInfo, label } = options
   const pair = await launchAccountBrowserPair()
@@ -3142,6 +3184,38 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     mkdirSync('tmp/blood-flow-online', { recursive: true })
     writeFileSync(`tmp/blood-flow-online/${label}-${Date.now().toString(36)}.json`, result, 'utf8')
     expect(applicationErrors, '应用异常应为空').toEqual([])
+
+    // ── 联机牌谱（全知）验收：房主录制 → 广播 → 两名玩家各自落库 ──
+    // 这是「联机回放」这条功能的线上判据：客机拿到的也必须是**全知**牌谱
+    // （结算帧四家手牌都非空），而不是只有自己的牌或干脆没有记录。
+    const replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+    const replayEvidence = {
+      label,
+      host: replaySummaries[0],
+      client: replaySummaries[1],
+      checkedAt: new Date().toISOString(),
+    }
+    mkdirSync('tmp/bf-online-evidence', { recursive: true })
+    writeFileSync(`tmp/bf-online-evidence/replay-${label}-${Date.now().toString(36)}.json`,
+      JSON.stringify(replayEvidence, null, 2), 'utf8')
+    await testInfo.attach(`${label}-replay`, {
+      body: JSON.stringify(replayEvidence, null, 2), contentType: 'application/json',
+    })
+    for (const [index, summary] of replaySummaries.entries()) {
+      const side = index === 0 ? '房主' : '客机'
+      const match = summary.matches.find((item) => item.gameMode === 'remote' && /血流/.test(item.rulesetName))
+      expect(match, `${side}本地应存有联机血流牌谱（现有：${JSON.stringify(summary.matches)}）`).toBeTruthy()
+      const stored = summary.rounds.filter((round) => round.matchId === match!.id)
+      expect(stored.length, `${side}落库局数（东风场应 ≥4 局）`).toBeGreaterThanOrEqual(4)
+      expect(stored.every((round) => round.hasFinal), `${side}每局都应有结算快照`).toBe(true)
+      expect(stored.every((round) => round.steps > 0), `${side}每局都应有事件流`).toBe(true)
+      // 全知牌谱：结算帧四家明牌
+      expect(stored.every((round) => round.revealedHands.filter((count) => count > 0).length === 4),
+        `${side}结算帧应为四家明牌（实际：${JSON.stringify(stored.map((round) => round.revealedHands))}）`).toBe(true)
+      expect(match!.roundCount).toBeGreaterThanOrEqual(4)
+    }
+    console.log(`[BF-ONLINE] ${label} 联机牌谱：房主 ${replaySummaries[0].rounds.length} 局 / `
+      + `客机 ${replaySummaries[1].rounds.length} 局（均为全知）`)
     console.log(`[BF-ONLINE] ${label} 完整东风场通过：`
       + `${standings[0].map((row) => `${row.name} ${row.amount}`).join(' / ')}；房间 ${roomCode}`)
   } finally {
