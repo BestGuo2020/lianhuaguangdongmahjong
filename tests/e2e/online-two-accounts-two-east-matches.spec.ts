@@ -2857,6 +2857,8 @@ test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, te
     expect(standings[0]).toHaveLength(4)
     expect(standings[1]).toEqual(standings[0])
     expect(applicationErrors).toEqual([])
+    // 联机牌谱（全知）：经典（莲花麻将）联机路径同样必须让两名玩家各自拿到全知牌谱
+    await expectOnlineReplayPaipu({ pages, testInfo, label: 'phase11v-classic', rulesetPattern: /莲花麻将(?!·)/ })
     await attachDualScreenshots(pages, testInfo, 'phase11v-online-final')
     const resultJson = JSON.stringify({ roomCode, observed, settlements: samples, standings: standings[0], applicationErrors }, null, 2)
     await testInfo.attach('phase11v-online-result', { body: resultJson, contentType: 'application/json' })
@@ -2928,7 +2930,7 @@ async function bloodFlowSideState(page: Page) {
  * 只读取已存在的库，不做任何创建，避免干扰 App 自己的 IndexedDB 初始化。
  */
 async function readLocalReplaySummary(page: Page): Promise<{
-  matches: Array<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string }>
+  matches: Array<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string; startedAt: number }>
   rounds: Array<{ matchId: string; roundIndex: number; roundLabel: string; steps: number; hasFinal: boolean; revealedHands: number[] }>
 }> {
   return page.evaluate(async () => {
@@ -2948,13 +2950,14 @@ async function readLocalReplaySummary(page: Page): Promise<{
       request.onsuccess = () => resolve(request.result as T[])
       request.onerror = () => reject(request.error)
     })
-    const matches = await readAll<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string }>('matches')
+    const matches = await readAll<{ id: string; rulesetName: string; gameMode: string; roundCount: number; myRank?: number; themeName: string; humanSeat: number; status: string; startedAt: number }>('matches')
     const rounds = await readAll<{ matchId: string; roundIndex: number; roundLabel: string; steps?: unknown[]; final?: { hands?: string[][] } }>('rounds')
     db.close()
     return {
       matches: matches.map((match) => ({
         id: match.id, rulesetName: match.rulesetName, gameMode: match.gameMode, roundCount: match.roundCount,
         myRank: match.myRank, themeName: match.themeName, humanSeat: match.humanSeat, status: match.status,
+        startedAt: match.startedAt ?? 0,
       })),
       rounds: rounds.map((round) => ({
         matchId: round.matchId, roundIndex: round.roundIndex, roundLabel: round.roundLabel,
@@ -2964,6 +2967,69 @@ async function readLocalReplaySummary(page: Page): Promise<{
     }
   })
 }
+
+/**
+ * 联机（P2P）对局回放的线上验收：房主录制 → 广播 → **两名玩家各自本地**都拿到全知牌谱。
+ *
+ * 注意：验收账号是长期复用的，本地库里会累积历次验收的牌谱 ⇒ 必须按 `startedAt` 取**最新一场**，
+ * 且玩法选择要用精确正则（`莲花麻将` 也会命中 `莲花麻将·血流`）。
+ */
+async function expectOnlineReplayPaipu(options: {
+  pages: Page[]
+  testInfo: TestInfo
+  label: string
+  rulesetPattern: RegExp
+}) {
+  const { pages, testInfo, label, rulesetPattern } = options
+  const newestRemoteMatch = (summary: Awaited<ReturnType<typeof readLocalReplaySummary>>) =>
+    summary.matches
+      .filter((match) => match.gameMode === 'remote' && rulesetPattern.test(match.rulesetName))
+      .sort((a, b) => b.startedAt - a.startedAt)[0]
+
+  // 落库是异步的（广播 → 校验 → IndexedDB 写入），先等两边都收齐应有的局数再断言
+  let summaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const complete = summaries.every((summary) => {
+      const match = newestRemoteMatch(summary)
+      return Boolean(match) && summary.rounds.filter((round) => round.matchId === match!.id).length >= match!.roundCount
+    })
+    if (complete) break
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    summaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+  }
+
+  const evidence = {
+    label,
+    host: summaries[0],
+    client: summaries[1],
+    checkedAt: new Date().toISOString(),
+  }
+  mkdirSync('tmp/bf-online-evidence', { recursive: true })
+  writeFileSync(`tmp/bf-online-evidence/replay-${label}-${Date.now().toString(36)}.json`,
+    JSON.stringify(evidence, null, 2), 'utf8')
+  await testInfo.attach(`${label}-replay`, {
+    body: JSON.stringify(evidence, null, 2), contentType: 'application/json',
+  })
+
+  for (const [index, summary] of summaries.entries()) {
+    const side = index === 0 ? '房主' : '客机'
+    const match = newestRemoteMatch(summary)
+    expect(match, `${side}本地应存有联机牌谱（现有：${JSON.stringify(summary.matches)}）`).toBeTruthy()
+    const stored = summary.rounds.filter((round) => round.matchId === match!.id)
+    expect(stored.length, `${side}落库局数（东风场应 ≥4 局）`).toBeGreaterThanOrEqual(4)
+    expect(stored.every((round) => round.hasFinal), `${side}每局都应有结算快照`).toBe(true)
+    expect(stored.every((round) => round.steps > 0),
+      `${side}每局都应有事件流（实际：${JSON.stringify(stored.map((round) => round.steps))}）`).toBe(true)
+    // 全知牌谱：结算帧四家明牌（客机也必须是全知，而不是只有自己的牌）
+    expect(stored.every((round) => round.revealedHands.filter((count) => count > 0).length === 4),
+      `${side}结算帧应为四家明牌（实际：${JSON.stringify(stored.map((round) => round.revealedHands))}）`).toBe(true)
+    expect(match!.roundCount).toBeGreaterThanOrEqual(4)
+  }
+  console.log(`[REPLAY-ONLINE] ${label} 联机牌谱：房主 ${summaries[0].rounds.length} 局 / `
+    + `客机 ${summaries[1].rounds.length} 局（均为全知）；座位 ${summaries[0].matches.length ? newestRemoteMatch(summaries[0])?.humanSeat : '?'}`
+    + `/${newestRemoteMatch(summaries[1])?.humanSeat} 位次 ${newestRemoteMatch(summaries[0])?.myRank}/${newestRemoteMatch(summaries[1])?.myRank}`)
+}
+
 
 async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo; label: string }) {
   const { llm, testInfo, label } = options
@@ -3188,46 +3254,8 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     // ── 联机牌谱（全知）验收：房主录制 → 广播 → 两名玩家各自落库 ──
     // 这是「联机回放」这条功能的线上判据：客机拿到的也必须是**全知**牌谱
     // （结算帧四家手牌都非空），而不是只有自己的牌或干脆没有记录。
-    // 落库是异步的（广播 → 校验 → IndexedDB 写入），先等两边都收齐应有的局数再断言
-    let replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
-    const remoteMatchOf = (summary: typeof replaySummaries[number]) =>
-      summary.matches.find((item) => item.gameMode === 'remote' && /血流/.test(item.rulesetName))
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const complete = replaySummaries.every((summary) => {
-        const match = remoteMatchOf(summary)
-        return Boolean(match) && summary.rounds.filter((round) => round.matchId === match!.id).length >= match!.roundCount
-      })
-      if (complete) break
-      await new Promise((resolve) => setTimeout(resolve, 1_000))
-      replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
-    }
-    const replayEvidence = {
-      label,
-      host: replaySummaries[0],
-      client: replaySummaries[1],
-      checkedAt: new Date().toISOString(),
-    }
-    mkdirSync('tmp/bf-online-evidence', { recursive: true })
-    writeFileSync(`tmp/bf-online-evidence/replay-${label}-${Date.now().toString(36)}.json`,
-      JSON.stringify(replayEvidence, null, 2), 'utf8')
-    await testInfo.attach(`${label}-replay`, {
-      body: JSON.stringify(replayEvidence, null, 2), contentType: 'application/json',
-    })
-    for (const [index, summary] of replaySummaries.entries()) {
-      const side = index === 0 ? '房主' : '客机'
-      const match = remoteMatchOf(summary)
-      expect(match, `${side}本地应存有联机血流牌谱（现有：${JSON.stringify(summary.matches)}）`).toBeTruthy()
-      const stored = summary.rounds.filter((round) => round.matchId === match!.id)
-      expect(stored.length, `${side}落库局数（东风场应 ≥4 局）`).toBeGreaterThanOrEqual(4)
-      expect(stored.every((round) => round.hasFinal), `${side}每局都应有结算快照`).toBe(true)
-      expect(stored.every((round) => round.steps > 0), `${side}每局都应有事件流`).toBe(true)
-      // 全知牌谱：结算帧四家明牌
-      expect(stored.every((round) => round.revealedHands.filter((count) => count > 0).length === 4),
-        `${side}结算帧应为四家明牌（实际：${JSON.stringify(stored.map((round) => round.revealedHands))}）`).toBe(true)
-      expect(match!.roundCount).toBeGreaterThanOrEqual(4)
-    }
-    console.log(`[BF-ONLINE] ${label} 联机牌谱：房主 ${replaySummaries[0].rounds.length} 局 / `
-      + `客机 ${replaySummaries[1].rounds.length} 局（均为全知）`)
+    // 联机牌谱（全知）：房主录制 → 广播 → 两名玩家各自本地都存下同一份全知牌谱
+    await expectOnlineReplayPaipu({ pages, testInfo, label, rulesetPattern: /血流/ })
     console.log(`[BF-ONLINE] ${label} 完整东风场通过：`
       + `${standings[0].map((row) => `${row.name} ${row.amount}`).join(' / ')}；房间 ${roomCode}`)
   } finally {
