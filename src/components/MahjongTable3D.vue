@@ -310,6 +310,10 @@ function render(time = 0) {
     const bloodFlowFrame = bloodFlowWinEffects?.animate(time)
     const bloodFlowActive = bloodFlowFrame?.active ?? false
     if (props.bloodFlowBatches && canvas.value) canvas.value.dataset.bloodFlowEffects = String(bloodFlowWinEffects?.activeCount ?? 0)
+    // 已盖楼层数（每条胡牌记录一楼）：回放/实时共用；也是"牌堆到底画出来没有"的可断言依据。
+    if (props.bloodFlowBatches && canvas.value) canvas.value.dataset.bloodFlowPiles = String(
+      props.bloodFlowBatches.reduce((total, batch) => total + batch.winners.length, 0),
+    )
     if(props.bloodFlowBatches&&canvas.value){canvas.value.dataset.bloodFlowCue=props.bloodFlowCue?.id??'';canvas.value.dataset.bloodFlowCueStart=String(props.bloodFlowCue?.startedAt??'');canvas.value.dataset.bloodFlowPhase=props.bloodFlowCue?cuePhase(props.bloodFlowCue,time):''}
     if (winFrame) {
       // 胡牌演出的 exposure 以旧牌桌 .92 为基准；主题只叠加同样的亮度变化，

@@ -8,6 +8,8 @@ import type { LastDiscard } from '../core/contracts/gamePort'
 import type { TableProps } from '../../components/table/three/tableRenderTypes'
 import { sortTilesWithJokers } from '../core/rules/tiles'
 import type { ReplayMatch, ReplayRound, ReplayStep } from './types'
+import type { WinPileBatch } from '../../components/table/three/bloodFlowWinPile'
+import type { Seat } from '../variants/lotus/bloodFlow/types'
 
 export interface ReplayFrame {
   /** 直接喂给 <MahjongTable3D>。 */
@@ -73,6 +75,12 @@ export function buildReplayFrames(
   let currentPlayer = round.anchor.currentPlayer
   let lastDiscard: LastDiscard | null = null
   let discardCount = 0
+
+  // ── 血流的「盖楼」：把每一步胡牌折成一楼，随回放推进累积 ──
+  // 回放没有引擎的完整 WinBatch（番型/赔付在当时的快照里），但牌堆只需要
+  // 「源牌 + 每个胡牌者」，所以按 win 步骤合成结构等价的数据，复用实时那套摆放函数。
+  const isBloodFlow = match.rulesetId === 'lotus-blood-flow'
+  const winPiles: WinPileBatch[] = []
 
   const frames: ReplayFrame[] = []
 
@@ -157,6 +165,8 @@ export function buildReplayFrames(
         wallBreakIndex: round.wallBreakIndex,
         flipTile: round.flipTile,
         flipStack: round.flipStack ?? undefined,
+        // 血流牌堆（盖楼）：到当前帧为止已经胡过的楼
+        ...(isBloodFlow ? { bloodFlowBatches: [...winPiles] } : {}),
       },
       hand: options.revealAll ? sortTilesWithJokers(localHand, round.jokerTiles) : localHand,
       drawnTileIndex: frameDrawn[humanSeat] ?? -1,
@@ -200,6 +210,21 @@ export function buildReplayFrames(
     wallLeft = step.wallLeft
     headDrawn = step.headDrawn
     currentPlayer = step.currentPlayer
+
+    // 血流：每一次胡牌都是新的一楼（一炮多响会是并列的楼，各自算一层）
+    if (isBloodFlow && step.t === 'win' && step.tile) {
+      const sourceSeat = step.from == null ? step.seat : step.from
+      winPiles.push({
+        batchId: `replay/${round.id}/${stepIndex}`,
+        source: {
+          id: `replay-source/${round.id}/${stepIndex}`,
+          tile: step.tile,
+          seat: sourceSeat as Seat,
+          kind: step.from == null ? 'draw' : 'discard',
+        },
+        winners: [{ id: `replay-win/${round.id}/${stepIndex}`, winner: step.seat }],
+      })
+    }
 
     const turn = Math.floor(discardCount / 4) + 1
     if (step.t === 'discard') discardCount += 1
