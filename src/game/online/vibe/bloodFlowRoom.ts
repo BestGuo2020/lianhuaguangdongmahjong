@@ -19,6 +19,23 @@ import { watch } from 'vue'
 import { createBloodFlowDecisions, createBloodFlowReactions, type BloodFlowReaction } from '../../llm/bloodFlowRuntime'
 import { readLlmSettings, type LlmProviderPreset } from '../../llm/config'
 import type { HostLlmSeatSelection } from './vibeLlm'
+import {createReplayRecorder} from '../../replay/recorder'
+import {
+  REPLAY_ACK_KIND,
+  REPLAY_REQUEST_KIND,
+  createRemoteReplayHost,
+  createRemoteReplayPeer,
+  isRemoteReplayMessage,
+  type RemoteReplayMessage,
+} from '../../replay/remoteRelay'
+import {
+  createBloodFlowRecordState,
+  recordBloodFlowSettle,
+  recordBloodFlowView,
+  type BloodFlowRecordContext,
+} from '../../replay/bloodFlowRecorder'
+import type {ReplayStorage} from '../../replay/storage'
+import {getRuleVariant} from '../../core/rules/ruleVariants'
 import {actionSpeechMatches,type BloodFlowActionSpeech} from '../../llm/bloodFlowSpeech'
 
 interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 'playSoundAndWait' | 'getThemeName' | 'animeFixedTts' | 'paceMs'> {
@@ -32,6 +49,11 @@ interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 
   onError(message: string): void
   getPrivateAiSelections?(): readonly HostLlmSeatSelection[]
   onAutoPlayChanged?(enabled: boolean): void
+  /**
+   * 联机牌谱（全知）本地存储：房主用权威的旁观视角录制并广播给全员，客机收片落库。
+   * 不传则联机回放整体关闭（零行为变化）。
+   */
+  replayStorage?: ReplayStorage | null
 }
 
 export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
@@ -65,9 +87,131 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     return preset?.apiKey.trim() ? { ...preset, style: selected.style } : null
   }
   const decisions = createBloodFlowDecisions({ provider,theme:()=>options.getThemeName?.()??'jade' })
+
+  // ── 联机牌谱（全知）：房主用权威的旁观视角录制 → 广播给全员 → 各自存本地 ──
+  // 血流的房主权威跑在 BloodFlowAuthority（引擎在 worker 里），座位视角只有自己的手牌，
+  // 因此全知牌谱必须走 `authority.spectatorView()`（四家明牌 + 累计弃牌流水）。
+  const replayStorage: ReplayStorage | null = options.replayStorage ?? null
+  const replayState = createBloodFlowRecordState()
+  let replayHostRelay: ReturnType<typeof createRemoteReplayHost> | null = null
+  let replayPeerRelay: ReturnType<typeof createRemoteReplayPeer> | null = null
+  const replayRecorder = replayStorage
+    ? createReplayRecorder({
+      meta: () => ({
+        rulesetId: 'lotus-blood-flow' as const,
+        rulesetName: getRuleVariant('lotus-blood-flow').name,
+        themeName: (options.getThemeName?.() ?? 'jade') as never,
+        humanSeat: options.getSeat(),
+        gameMode: 'remote' as const,
+      }),
+      sink: {
+        saveRound: (round) => {
+          void replayStorage.saveRound(round)
+          void replayHostRelay?.broadcastRound(round)
+        },
+        saveMatch: (match) => {
+          void replayStorage.saveMatch(match)
+          void replayHostRelay?.broadcastMatch(match)
+        },
+      },
+    })
+    : null
+
+  function sendReplayMessage(message: object) {
+    if (!room) return
+    try { sendChunked(room, message) } catch { /* 断线期间丢弃：牌谱不是对局必需路径 */ }
+  }
+
+  function ensureReplayHost(): ReturnType<typeof createRemoteReplayHost> | null {
+    if (!replayStorage) return null
+    if (!replayHostRelay) {
+      replayHostRelay = createRemoteReplayHost({
+        send: sendReplayMessage,
+        loadRounds: (matchId) => replayStorage.loadRounds(matchId),
+        loadMatch: (matchId) => replayStorage.loadMatch(matchId),
+      })
+    }
+    return replayHostRelay
+  }
+
+  function ensureReplayPeer(): ReturnType<typeof createRemoteReplayPeer> | null {
+    if (!replayStorage) return null
+    if (!replayPeerRelay) {
+      replayPeerRelay = createRemoteReplayPeer({
+        send: sendReplayMessage,
+        saveRound: (round) => replayStorage.saveRound(round),
+        saveMatch: (match) => replayStorage.saveMatch(match),
+        loadRounds: (matchId) => replayStorage.loadRounds(matchId),
+        getMySeat: () => options.getSeat(),
+      })
+    }
+    return replayPeerRelay
+  }
+
+  /**
+   * 回放协议消息入口。回执/补局请求来自远端客机，必须排在 replica 的
+   * 报文校验（receive）之前；它们只驱动回放中继，不写任何对局状态。
+   */
+  function handleReplayMessage(raw: unknown): boolean {
+    if (!replayStorage) return false
+    const kind = (raw as { kind?: unknown } | null)?.kind
+    if (kind === REPLAY_ACK_KIND || kind === REPLAY_REQUEST_KIND) {
+      if (!authority) return true
+      const host = ensureReplayHost()
+      const message = raw as RemoteReplayMessage
+      if (host && message.kind === REPLAY_ACK_KIND) void host.handleAck(message.ack)
+      else if (host && message.kind === REPLAY_REQUEST_KIND) void host.handleRequest(message)
+      return true
+    }
+    if (!isRemoteReplayMessage(raw)) return false
+    const peer = ensureReplayPeer()
+    if (!peer) return false
+    void peer.handle(raw)
+    return true
+  }
+
+  function replayContext(): BloodFlowRecordContext {
+    return {
+      matchType: options.getMode(),
+      round: port.round.value,
+      dealer: port.dealer.value,
+      honba: 0,
+      diceThrowerIndex: port.dealer.value,
+      wildcardTiles: ['white'],
+    }
+  }
+
+  /** 场末名次：取结算帧的逐家分数与名次（联机牌谱的位次按客机自己重算，这里给房主口径）。 */
+  function replayStandings(view: {
+    players: Array<{ name: string; score: number }>
+    public: { roundResult?: { endingScores: readonly number[]; ranks?: readonly number[] } | null }
+  }) {
+    const result = view.public.roundResult
+    if (!result) return undefined
+    return view.players
+      .map((player, seat) => ({
+        seat,
+        name: player.name,
+        score: result.endingScores?.[seat] ?? player.score,
+        rank: result.ranks?.[seat] ?? 0,
+      }))
+      .sort((a, b) => (a.rank || 99) - (b.rank || 99) || b.score - a.score)
+      .map((entry, index) => ({ ...entry, rank: entry.rank || index + 1 }))
+  }
+
+  /** 房主采样：取一份旁观视角喂给录制器；结算帧顺带收尾本局。 */
+  async function sampleReplay(): Promise<void> {
+    const recorder = replayRecorder, active = authority
+    if (!recorder || !active) return
+    const view = await active.spectatorView()
+    if (!view) return
+    const context = replayContext()
+    recordBloodFlowView(recorder.hooks, view, context, replayState)
+    if (view.public.roundResult) recordBloodFlowSettle(recorder.hooks, view, context, replayState)
+  }
   try { for (const id of JSON.parse(sessionStorage.getItem(completedKey) ?? '[]')) if (typeof id === 'string') completed.add(id) } catch { /* ephemeral stats */ }
 
-  const port = useBloodFlowGame({ ...options, externalAuthority: {
+  const port = useBloodFlowGame({ ...options, recorder: replayRecorder?.hooks, externalAuthority: {
     send: command => transmit({ kind: 'blood_flow_command', roomId: room?.roomId ?? '', ruleVersion: version, command }),
     nextRound: () => {
       if (!latestFrame) return
@@ -149,6 +293,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   function present(raw: unknown, from: string) {
     const active = room, current = replica
     if (!active || !current) return
+    // 联机牌谱协议先处理：回执/补局请求来自远端，必须排在 replica 报文校验之前
+    if (handleReplayMessage(raw)) return
     const reaction = decodeBloodFlowPacket(raw)
     if(reaction?.kind==='blood_flow_action_speech'){
       const line=reaction.speech
@@ -206,6 +352,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       void port.acceptRemoteView(current.view, { ...message, replay }).then(() => {
         flushReactions()
         flushActionSpeech()
+        // 房主：每次状态应用后取一份旁观视角喂录制器（全知牌谱只能由房主产出）
+        if (authority) void sampleReplay()
         if (room !== active || !message.view.public.roundResult || completed.has(message.authorityEpoch)) return
         const result = message.view.public.roundResult, own = current.seat
         stats.noteHandResult({ epoch: message.authorityEpoch, round: message.round, honba: 0,
@@ -216,6 +364,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
           completed.add(message.authorityEpoch)
           try { sessionStorage.setItem(completedKey, JSON.stringify([...completed].slice(-20))) } catch { /* at-most-once in this session */ }
           void stats.flushMatch(message.authorityEpoch)
+          // 场末收尾：广播场次记录（客机据此补齐缺失的局）
+          replayRecorder?.finishAuto(replayStandings(message.view))
         }
       }).catch((error) => {
         if (BF_DIAG) console.warn(`[bf-diag] acceptRemoteView 失败 round=${message.round} `
@@ -362,6 +512,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     window.addEventListener('offline', offline); window.addEventListener('online', online)
     timer = setInterval(() => {
       if (token !== lifecycle || room !== active) return
+      // 联机牌谱：半截会话定期回执催补（丢片只有靠回执才能发现）
+      replayPeerRelay?.tick()
       if (authority) {
         const observed = verified(), bindings = new Map(authority.bindings)
         // Refresh verified peer IDs for existing seats, never drop a locked human merely

@@ -465,6 +465,8 @@ export function useVibeRemoteGame({
   let handleRoundShuffleStart: (room: VibeHubSDK.Room, message: ShuffleStartMessage, fromPeerId: string) => void = () => {}
   const bloodFlowRoom = createBloodFlowRoom({ playSound, playSoundAndWait, getThemeName: getTableThemeName, animeFixedTts,
     getSeat: () => mySeat.value, getMode: () => matchType.value, getIsHost: () => isHost.value,
+    // 联机牌谱：血流房主用权威旁观视角录制全知牌谱并广播（未配置存储时整体关闭）
+    replayStorage,
     getPrivateAiSelections: () => hostLlmSelections,
     onAutoPlayChanged: enabled => { autoPlay.value = enabled },
     getVerifiedBindings: () => new Map(lobbySeats.value.map(s => [s.peerId, s.seat])),
