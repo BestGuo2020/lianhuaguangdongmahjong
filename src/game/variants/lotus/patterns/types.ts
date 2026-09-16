@@ -13,9 +13,9 @@ export type RegularPatternId =
   | 'one-suit-three-steps' | 'one-suit-four-steps' | 'pure-straight'
   | 'one-suit-three-joints' | 'one-suit-four-joints'
 
-export type SpecialPatternId = 'pinghu' | 'sevenPairs' | 'luxury-seven-pairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
+export type SpecialPatternId = 'pinghu' | 'chicken' | 'sevenPairs' | 'luxury-seven-pairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
 export type PatternId = RegularPatternId | SpecialPatternId
-export type HandShape = 'standard' | Exclude<SpecialPatternId, 'pinghu' | 'luxury-seven-pairs'>
+export type HandShape = 'standard' | Exclude<SpecialPatternId, 'pinghu' | 'chicken' | 'luxury-seven-pairs'>
 
 export interface PatternDefinition {
   readonly id: PatternId

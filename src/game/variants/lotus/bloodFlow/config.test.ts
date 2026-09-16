@@ -17,8 +17,10 @@ const requiredWeights: Record<RegularPatternId, number> = {
   'all-green': 24, 'pure-terminals': 24, 'mixed-terminals': 12,
   'three-concealed-triplets': 6, 'four-concealed-triplets': 16,
   'all-honors': 24, 'three-kongs': 12, 'four-kongs': 32,
-  // 新增路线牌型（正反例见 patterns/midTierPatterns.test.ts）；门清仅标准四面子型生效
-  'all-simples': 2, 'concealed-hand': 2, 'all-with-terminals': 4,
+  // 新增路线牌型（正反例见 patterns/midTierPatterns.test.ts）
+  // 2026-09-15 定案：门清（只看无副露，与任何番种叠加）1 番；平胡（存在全顺无刻子拆解）1 番；
+  // 鸡胡（无任何计分番种时的兜底）0.5 番；原「门清平胡」2 番合并番种已删除。
+  'all-simples': 2, 'concealed-hand': 1, 'all-with-terminals': 4,
   'one-suit-three-steps': 4, 'one-suit-four-steps': 8, 'pure-straight': 6,
   'one-suit-three-joints': 8, 'one-suit-four-joints': 16,
 }
@@ -38,7 +40,11 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
   it('versions fixtures and keeps modifier, old rules, and rollout independent', () => {
     expect(golden.ruleVersion).toBe(BLOOD_FLOW_CONFIG.version)
     expect(scores.ruleVersion).toBe(BLOOD_FLOW_CONFIG.version)
-    expect(Object.keys(BLOOD_FLOW_CONFIG.patterns)).toHaveLength(30)
+    // 31 = 原 30 项 + 新增兜底番种「鸡胡」（0.5 番）；门清/平胡沿用原 id（语义改写）
+    expect(Object.keys(BLOOD_FLOW_CONFIG.patterns)).toHaveLength(31)
+    expect(BLOOD_FLOW_CONFIG.patterns.chicken.weight).toBe(0.5)
+    expect(BLOOD_FLOW_CONFIG.patterns.pinghu).toMatchObject({ label: '平胡', weight: 1 })
+    expect(BLOOD_FLOW_CONFIG.patterns['concealed-hand']).toMatchObject({ label: '门清', weight: 1 })
     expect(BLOOD_FLOW_CONFIG.patterns.thirteenOrphans.weight).toBe(16)
     expect(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight).toBe(12)
     expect(BLOOD_FLOW_CONFIG.patterns).not.toHaveProperty('hard-win')
@@ -53,9 +59,9 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
   it('rejects missing/duplicated fixture identities and preserves the specified arithmetic examples', () => {
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length)
     expect(new Set(scoringCases.map(c => c.id)).size).toBe(scoringCases.length)
-    expect(cases.find(c => c.id === 'hard-orphans-discard')?.expected.paymentPerPayer).toBe(320)
-    expect(cases.find(c => c.id === 'hard-orphans-self-draw')?.expected.paymentPerPayer).toBe(640)
-    expect(cases.find(c => c.id === 'hard-pure-triplets-self-draw')?.expected.paymentPerPayer).toBe(440)
+    expect(cases.find(c => c.id === 'hard-orphans-discard')?.expected.paymentPerPayer).toBe(340)
+    expect(cases.find(c => c.id === 'hard-orphans-self-draw')?.expected.paymentPerPayer).toBe(680)
+    expect(cases.find(c => c.id === 'hard-pure-triplets-self-draw')?.expected.paymentPerPayer).toBe(480)
   })
 
   it.each(cases)('$id uses physical tiles and a separate single winning tile', ({ input, expected }) => {

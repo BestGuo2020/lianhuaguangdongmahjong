@@ -88,9 +88,10 @@ describe('一色步高 / 清龙', () => {
     const items = win?.score.items.map(item => item.id) ?? []
     expect(items).toContain('one-suit-three-steps')
     expect(items).toContain('pure-suit')
-    // 精要顶牌（当 8p 做将）→ 软胡，没有硬胡 ×2；倍率 = 1 + (8-1) + (4-1) = 11
+    // 精要顶牌（当 8p 做将）→ 软胡，没有硬胡 ×2；倍率 = Σ(番值) = 8(清一色) + 4(一色三步高) = 12
+    // （2026-09-15 口径由 1 + Σ(w−1) 改为 Σ(w)；本手有副露，因此既无门清也无平胡）
     expect(win?.score.hardWin).toBe(false)
-    expect(win?.score.patternMultiplier).toBe(11)
+    expect(win?.score.patternMultiplier).toBe(12)
   })
 })
 
@@ -123,17 +124,17 @@ describe('豪华七对：精牌可替补凑成四张相同', () => {
   })
 })
 
-describe('门清平胡（方案B：兜底本体，不与任何主体番种叠加）', () => {
-  it('标准型无副露成立；七对等特殊结构不计门清', () => {
+describe('门清（2026-09-15 定案：只看无副露，且与任何番种叠加）', () => {
+  it('标准型无副露成立；七对/十三烂等特殊结构同样算门清', () => {
     expect(ids(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'], 'p8'))
       .toContain('concealed-hand')
-    // 七对虽是门清结构，但按"仅标准型生效"不计门清
+    // 七对同样是"无副露" → 计门清（旧规则"仅标准型生效"已废除）
     const pairs = ids(['m1', 'm1', 'm2', 'm2', 'm3', 'm3', 'p4', 'p4', 'p5', 'p5', 's6', 's6', 's7'], 's7')
     expect(pairs).toContain('sevenPairs')
-    expect(pairs).not.toContain('concealed-hand')
+    expect(pairs).toContain('concealed-hand')
     // 十三烂同理
     const scattered = ids(['m1', 'm4', 'm7', 'p1', 'p4', 'p7', 's1', 's4', 's7', 'east', 'south', 'west', 'north'], 'red')
-    expect(scattered ?? []).not.toContain('concealed-hand')
+    expect(scattered ?? []).toContain('concealed-hand')
   })
 })
 
@@ -144,10 +145,10 @@ describe('杠加成', () => {
   it('明杠 +1、暗杠/风杠 +2，计入番型倍率', () => {
     expect(BLOOD_FLOW_KONG_BONUS).toMatchObject({ exposed: 1, concealed: 2, wind: 2 })
     expect(BLOOD_FLOW_CONFIG.kongBonus).toMatchObject({ exposed: 1, concealed: 2, wind: 2 })
-    // 无杠：基础倍率 = 1 + Σ(w-1)
+    // 无杠：基础倍率 = Σ(番值)（2026-09-15 口径）
     const plain = score(['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'], 'p8')!
     expect(plain.score.kongBonus).toBe(0)
-    expect(plain.score.patternMultiplier).toBe(1 + plain.score.items.reduce((sum, item) => sum + item.weight - 1, 0))
+    expect(plain.score.patternMultiplier).toBe(plain.score.items.reduce((sum, item) => sum + item.weight, 0))
     // 两个明杠 + 一个暗杠 → 加成 1+1+2 = 4；倍率里必须体现
     const withKongs = evaluateWin({
       concealed: ['m4', 'm5', 'm6', 'east'], melds: [kong('gang', 'm1'), kong('gang', 's3'), kong('angang', 'p2')],
@@ -156,7 +157,7 @@ describe('杠加成', () => {
     // 这手同时成三杠番种 → 按"不重复计算"口径，每副杠的加成归零
     expect(withKongs.score.items.map(item => item.id)).toContain('three-kongs')
     expect(withKongs.score.kongBonus).toBe(0)
-    expect(withKongs.score.patternMultiplier).toBe(1 + withKongs.score.items.reduce((sum, item) => sum + item.weight - 1, 0))
+    expect(withKongs.score.patternMultiplier).toBe(withKongs.score.items.reduce((sum, item) => sum + item.weight, 0))
     // 只有两副杠（不成三杠/四杠番种）→ 加成照计：1(明) + 2(暗) = 3
     const twoKongs = evaluateWin({
       concealed: ['m4', 'm5', 'm6', 'p7', 'p8', 'p9', 'east'], melds: [kong('gang', 'm1'), kong('angang', 'p2')],

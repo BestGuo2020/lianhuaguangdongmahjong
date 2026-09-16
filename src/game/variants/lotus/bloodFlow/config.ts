@@ -30,7 +30,7 @@ const patterns = Object.freeze({
   // 大牌
   'little-three-dragons': pattern('little-three-dragons', '小三元', 16),
   'little-four-winds': pattern('little-four-winds', '小四喜', 16),
-  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets', 'concealed-hand']),
+  'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets']),
   thirteenOrphans: pattern('thirteenOrphans', '十三幺', 16,
     ['all-with-terminals', 'mixed-terminals', 'sevenPairs', 'all-triplets']),
   'one-suit-four-joints': pattern('one-suit-four-joints', '一色四节高', 16, ['one-suit-three-joints', 'all-triplets']),
@@ -57,10 +57,18 @@ const patterns = Object.freeze({
   // 低番 / 基础
   shiSanLan: pattern('shiSanLan', '十三烂', 2),
   'all-simples': pattern('all-simples', '断幺九', 2, ['all-with-terminals', 'mixed-terminals', 'pure-terminals', 'all-honors']),
-  // 门清平胡：**仅标准四面子一将型生效**（七对/十三幺/十三烂/七星等特殊结构不计，见 catalog.ts 的判定位置）
-  // 覆盖方向：由高位番种排除它（四暗刻/九莲宝灯），不要反过来——否则会把大牌吃掉。
-  'concealed-hand': pattern('concealed-hand', '门清平胡', 2),
-  pinghu: pattern('pinghu', '鸡胡', 1),
+  // —— 2026-09-15 用户定案：拆掉「门清平胡」这个 2 番合并番种，换成两个独立番种 ——
+  // 门清（1 番）：只看无副露（不排除用精牌），**与任何番种叠加**（清一色/碰碰胡/七对/四暗刻…都吃得到）；
+  //   因此四暗刻的 excludes 里已移除它。
+  // 平胡（1 番）：存在一种拆解 = 4 顺子 + 1 将、无刻子；可副露、字牌也可成顺；精牌只能补顺不能补刻。
+  // 鸡胡（0.5 番）：完全没有任何计分番种时的兜底体；**不与任何番种叠加**（有番种时兜底一并消失，
+  //   所以不会把清一色从 8 番拉低成 7.5 番）。
+  // 合成口径同时改为 Σ(番值) + 杠加成（原 1 + Σ(番值−1)）：因为在这张表里"1 番"原本等于"不加成"，
+  // 若不改口径，「门清 1 番 + 平胡 1 番」只会得到 1 番 = 10 点，比原来的门清平胡（20 点）还低。
+  // 改后：鸡胡 0.5 番（5 点）、门清+平胡 2 番（20 点，与原来一致）、清一色仍 8 番、门清+清一色 9 番。
+  'concealed-hand': pattern('concealed-hand', '门清', 1),
+  pinghu: pattern('pinghu', '平胡', 1),
+  chicken: pattern('chicken', '鸡胡', 0.5),
 })
 
 /**
@@ -84,7 +92,7 @@ export interface KongValueConfig {
   readonly robRisk: number
   /** 向听每恶化一档的折算损失（点）＝ 1 番底分。 */
   readonly shantenStepLoss: number
-  /** 门清平胡作为"兜底本体"的折价：只有在别的番种都不成立时才兑现，因此不按全额计。 */
+  /** 门清（2026-09-15 起为独立番种）在杠价值模型里的折价：按接近度折算，不按全额计。 */
   readonly concealedHandFallback: number
 }
 

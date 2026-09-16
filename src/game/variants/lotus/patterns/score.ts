@@ -27,16 +27,27 @@ export function scorePatterns(patterns: readonly PatternId[], natural: boolean, 
   // 三杠/四杠本身就是"把杠算进去"的番种 → 此时不再叠加每副杠的加成（避免重复奖励同一个结构）。
   const kongPatternScored = items.some(item => item.id === 'three-kongs' || item.id === 'four-kongs')
   const kongBonus = kongPatternScored ? 0 : kongBonusOf(kongs, config)
-  const patternMultiplier = 1 + items.reduce((sum, p) => sum + p.weight - 1, 0) + kongBonus
+  // 2026-09-15 口径变更：`1 + Σ(番值−1)` → **Σ(番值)**。
+  // 原口径下"1 番"等于"不加成"（底数就是 1 番），新增的 1 番番种（门清/平胡）会完全无效。
+  // 于是：鸡胡兜底 0.5 番、门清 1 番、平胡 1 番、门清+平胡 2 番（与旧门清平胡一致）、
+  // 清一色仍 8 番、门清+清一色 9 番。
+  //
+  // 但**倍率必须是整数**（协议 `isPublicWinScore` 用 int() 校验倍率与点数，0.5 会让整包被客机拒收），
+  // 所以鸡胡的"半番"不落在倍率上，而是落在**支付减半**（`halfPayment`）上：
+  // 只有鸡胡（Σ 番值 < 1，即没有任何计分番种）时 rawSum = 0.5 → 倍率取 max(1, 0.5) = 1、
+  // 点数 = 底分 × 倍率 ÷ 2 = 5（自摸/硬胡等整倍后仍是整数）。
+  const rawSum = items.reduce((sum, p) => sum + p.weight, 0)
+  const halfPayment = rawSum < 1
+  const patternMultiplier = Math.max(1, rawSum) + kongBonus
   const eventMultiplier = config.eventMultipliers[source]
   const ordinary = patternMultiplier * eventMultiplier
   const openingApplied = opening !== null && ordinary < config.openingMinimumMultiplier
   const uncappedMultiplier = (openingApplied ? config.openingMinimumMultiplier : ordinary)
     * (natural ? config.hardWinMultiplier : 1)
   const finalMultiplier = Math.min(uncappedMultiplier, config.maxMultiplierPerPayer)
-  return { items, excluded, hardWin: natural, source, opening, patternMultiplier, eventMultiplier, kongBonus,
+  return { items, excluded, hardWin: natural, source, opening, patternMultiplier, eventMultiplier, kongBonus, halfPayment,
     openingApplied, uncappedMultiplier, finalMultiplier, capped: uncappedMultiplier > finalMultiplier,
-    paymentPerPayer: config.basePoints * finalMultiplier }
+    paymentPerPayer: (config.basePoints * finalMultiplier) / (halfPayment ? 2 : 1) }
 }
 
 /** Negative means a wins. Never lend the natural flag to another decomposition. */

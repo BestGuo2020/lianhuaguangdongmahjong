@@ -34,8 +34,13 @@ function hasSteppedRun(numbers: readonly number[], length: number, steps: readon
 }
 
 export function matchPatterns(hand: WinningDecomposition): PatternId[] {
-  if (hand.shape !== 'standard' && hand.shape !== 'sevenPairs') return [hand.shape]
+  // 门清（2026-09-15 定案）：只看无副露，不排除用精牌；**与任何番种叠加**（清一色/碰碰胡/七对…都吃得到）。
+  const concealed = hand.groups.every(g => g.origin.kind === 'hand')
+  if (hand.shape !== 'standard' && hand.shape !== 'sevenPairs') {
+    return concealed ? [hand.shape, 'concealed-hand'] : [hand.shape]
+  }
   const result: PatternId[] = hand.shape === 'sevenPairs' ? ['sevenPairs'] : []
+  if (concealed) result.push('concealed-hand')
   const tiles = hand.groups.flatMap(g => [...g.tiles])
   const suits = new Set(tiles.filter(t => !isHonor(t)).map(t => t[0]))
   const honors = tiles.some(isHonor)
@@ -61,9 +66,9 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   if (windCount === 3 && WINDS.includes(pair) && !triplets.some(g => g.tiles[0] === pair)) result.push('little-four-winds')
   if (allTriplets && tiles.every(isTerminal)) result.push('pure-terminals')
   if (allTriplets && honors && suits.size > 0 && tiles.every(t => isHonor(t) || isTerminal(t))) result.push('mixed-terminals')
-  const concealed = triplets.filter(g => g.concealed).length
-  if (concealed >= 3) result.push('three-concealed-triplets')
-  if (concealed === 4) result.push('four-concealed-triplets')
+  const concealedTriplets = triplets.filter(g => g.concealed).length
+  if (concealedTriplets >= 3) result.push('three-concealed-triplets')
+  if (concealedTriplets === 4) result.push('four-concealed-triplets')
   const kongs = melds.filter(g => g.kind === 'kong').length
   if (kongs >= 3) result.push('three-kongs')
   if (kongs === 4) result.push('four-kongs')
@@ -91,13 +96,18 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
     else if (hasSteppedRun(starts, 3)) result.push('one-suit-three-steps')
     if ([1, 4, 7].every(start => starts.includes(start))) result.push('pure-straight')
   }
+  // —— 平胡（2026-09-15 定案语义）——
+  // 存在一种拆解 = 4 顺子 + 1 将、**无刻子**；可副露；字牌也可成顺（乱风顺 / 三元顺与引擎面子规则一致）；
+  // 癞子只能补顺不能补刻。判定直接落在"当前这一种拆解"上：`evaluateWin` 会枚举所有拆解再取最高分，
+  // 所以只要存在全顺拆解，"没有刻子/杠"的那次枚举就会给出平胡（含癞子顶刻的拆解自然被排除）。
+  const allRuns = melds.every(g => g.kind === 'sequence')
+  if (allRuns) result.push('pinghu')
   // 一色节高：同花色刻子/杠的数字连续（节高只有"依次递增一位"，公差固定 1）。
   for (const numbers of bySuit(triplets).values()) {
     if (hasSteppedRun(numbers, 4, [1])) result.push('one-suit-four-joints')
     else if (hasSteppedRun(numbers, 3, [1])) result.push('one-suit-three-joints')
   }
-  // 门清平胡是**兜底本体**（方案B，2026-09-12 用户定案）：标准四面子一将、未副露、且不满足任何其他番种时，
-  // 取代鸡胡作为兜底；**不与任何主体番种叠加**。七对/十三幺/十三烂/七星等特殊结构在函数开头已提前返回。
-  const concealedHand = hand.groups.every(g => g.origin.kind === 'hand')
-  return result.length ? result : [concealedHand ? 'concealed-hand' : 'pinghu']
+  // 鸡胡（2026-09-15 定案）：完全没有任何计分番种时的**兜底体**，0.5 番（减半），
+  // 不再与任何番种叠加（有番种时连兜底一起消失，因此不会出现"清一色反而被拉低"）。
+  return result.length ? result : ['chicken']
 }

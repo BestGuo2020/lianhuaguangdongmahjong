@@ -266,7 +266,8 @@ describe('E03 authority conservation and continuous rounds', () => {
     engine.submit(engine.command(0, { kind: 'discard', index: 13 }))
     for (const seat of [1, 2, 3] as const) expect(engine.submit(engine.command(seat, { kind: 'win' }))).toBe(true)
     expect(engine.archives).toHaveLength(1)
-    expect(engine.players.map(p => p.score)).toEqual([-200, 2540, 3280, 2380])
+    // 2026-09-15 番表变更后（门清独立、口径 Σ(番值)）三家大牌的分差变化，合计仍守恒 8000。
+    expect(engine.players.map(p => p.score)).toEqual([-280, 2580, 3280, 2420])
     expect(engine.seats.map(s => s.winCount)).toEqual([0, 1, 1, 1])
     engine.assertConservation()
   })

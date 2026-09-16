@@ -12,8 +12,10 @@ describe('independent decomposition boundary checks', () => {
     const concealed = [...input.concealed]; concealed[11] = 'east'
     const external = evaluateWin({ ...input, concealed, winningTile: 'red' })!
     const selfDraw = evaluateWin({ ...input, concealed, winningTile: 'red', source: 'self-draw' })!
-    expect(external.score.items.map(p => p.id)).toEqual(['all-triplets', 'three-concealed-triplets'])
-    expect(selfDraw.score.items.map(p => p.id)).toEqual(['four-concealed-triplets'])
+    // 2026-09-15：门清改为独立番种（四暗刻的 excludes 里已移除它）。两手的共同点是"无副露"，
+    // 因此两张成绩单都多出「门清」——注意门清只看副露，不看胡牌来源（点炮胡也算门清）。
+    expect(external.score.items.map(p => p.id)).toEqual(['all-triplets', 'concealed-hand', 'three-concealed-triplets'])
+    expect(selfDraw.score.items.map(p => p.id)).toEqual(['concealed-hand', 'four-concealed-triplets'])
   })
   it('physical fifth copy, incomplete meld and pending kong are invalid inputs', () => {
     expect(evaluateWin({ ...input, melds: [{ type: 'peng', tile: 'm1', tiles: ['m1', 'm1'] }], concealed: input.concealed.slice(3) })).toBeNull()
@@ -34,7 +36,7 @@ describe('independent decomposition boundary checks', () => {
   it('self-draw and discard waits evaluate a wildcard as one physical instance', () => {
     const waits = evaluateWaits({ concealed: ['m1', 'm2', 'm3', 'p2', 'p3', 'p4', 's4', 's5', 's6', 'm6', 'm7', 'east', 'east'],
       jokers: ['south', 'west'], melds: [] })
-    // 方案B：该手无其他番种 → 门清平胡兜底 2 番 × 自摸 2 = 4 倍 → 40 点
+    // 该手无副露 → 门清(1) + 平胡(1) = 2 番 × 自摸 2 = 4 倍 → 40 点（与旧「门清平胡 2 番」一致）
     expect(waits.find(w => w.tile === 'south')?.selfDraw?.paymentPerPayer).toBe(40)
     expect(waits.find(w => w.tile === 'south')?.discard).toBeNull()
     expect(waits.find(w => w.tile === 'm8')?.discard?.hardWin).toBe(true)
