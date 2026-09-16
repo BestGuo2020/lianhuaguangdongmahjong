@@ -629,7 +629,12 @@ export function useVibeRemoteGame({
       // 房主 seat 0 的本家形象来自本地选择（getCharacterId）。
       seatCharacters.set(0, getCharacterId())
       // 房主自视：无头引擎的 seat 0 快照/事件喂给本地 viewer，与客户端走同一套表现层。
-      const onLocalSnapshot = (snapshot: ServerSnapshot) => snapshotReconciler.apply(snapshot)
+      const onLocalSnapshot = (snapshot: ServerSnapshot) => {
+    snapshotReconciler.apply(snapshot)
+    // 联机牌谱收尾必须挂在这里：房主自视快照走的是 snapshotReconciler，
+    // 不经过 handleMessage（线上实测：经典场 4 局都录到了，但场次记录永远不写）
+    if (isHost.value && snapshot.matchFinished) maybeFinishHostReplay(snapshot)
+  }
       const emitHostLlmMessage = async (
         seat: number,
         text: string,
