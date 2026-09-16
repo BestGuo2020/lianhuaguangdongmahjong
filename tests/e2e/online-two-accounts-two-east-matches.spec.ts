@@ -3188,7 +3188,19 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     // ── 联机牌谱（全知）验收：房主录制 → 广播 → 两名玩家各自落库 ──
     // 这是「联机回放」这条功能的线上判据：客机拿到的也必须是**全知**牌谱
     // （结算帧四家手牌都非空），而不是只有自己的牌或干脆没有记录。
-    const replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+    // 落库是异步的（广播 → 校验 → IndexedDB 写入），先等两边都收齐应有的局数再断言
+    let replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+    const remoteMatchOf = (summary: typeof replaySummaries[number]) =>
+      summary.matches.find((item) => item.gameMode === 'remote' && /血流/.test(item.rulesetName))
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const complete = replaySummaries.every((summary) => {
+        const match = remoteMatchOf(summary)
+        return Boolean(match) && summary.rounds.filter((round) => round.matchId === match!.id).length >= match!.roundCount
+      })
+      if (complete) break
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+      replaySummaries = await Promise.all(pages.map((page) => readLocalReplaySummary(page)))
+    }
     const replayEvidence = {
       label,
       host: replaySummaries[0],
@@ -3203,7 +3215,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     })
     for (const [index, summary] of replaySummaries.entries()) {
       const side = index === 0 ? '房主' : '客机'
-      const match = summary.matches.find((item) => item.gameMode === 'remote' && /血流/.test(item.rulesetName))
+      const match = remoteMatchOf(summary)
       expect(match, `${side}本地应存有联机血流牌谱（现有：${JSON.stringify(summary.matches)}）`).toBeTruthy()
       const stored = summary.rounds.filter((round) => round.matchId === match!.id)
       expect(stored.length, `${side}落库局数（东风场应 ≥4 局）`).toBeGreaterThanOrEqual(4)

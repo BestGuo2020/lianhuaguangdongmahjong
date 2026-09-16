@@ -361,6 +361,12 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         // 房主：每次状态应用后取一份旁观视角喂录制器（全知牌谱只能由房主产出）
         if (authority) void sampleReplay()
         if (room !== active || !message.view.public.roundResult || completed.has(message.authorityEpoch)) return
+        // 结算帧当场收尾本局（不等下一次旁观采样，否则场末最后一局可能还没落库）
+        if (authority && replayRecorder) {
+          const context = replayContext()
+          recordBloodFlowView(replayRecorder.hooks, message.view, context, replayState)
+          recordBloodFlowSettle(replayRecorder.hooks, message.view, context, replayState)
+        }
         const result = message.view.public.roundResult, own = current.seat
         stats.noteHandResult({ epoch: message.authorityEpoch, round: message.round, honba: 0,
           result: { winnerIndex: result.winCounts[own] > 0 ? 0 : undefined,
