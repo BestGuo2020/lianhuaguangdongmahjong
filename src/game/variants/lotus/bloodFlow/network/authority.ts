@@ -12,6 +12,11 @@ import { decodeBloodFlowPacket } from './protocol'
 export interface BloodFlowAuthorityBackend {
   start(options: Omit<BloodFlowEngineOptions, 'random' | 'now'>): Promise<void>
   view(seat: Seat): Promise<BloodFlowSeatView>
+  /**
+   * 旁观视角（**本地专用**，供对局回放）：四家明牌 + 累计弃牌流水。
+   * 只由房主的回放录制器调用，绝不进入任何下发报文。
+   */
+  spectator(): Promise<BloodFlowSeatView>
   command(command: EngineCommand): Promise<void>
   bot(seat: Seat, windowId: string): Promise<void>
   expire(windowId: string): Promise<void>
@@ -297,6 +302,14 @@ export class BloodFlowAuthority {
    */
   private async viewBounded(seat: Seat): Promise<BloodFlowSeatView | null> {
     return this.callBounded(`view(${seat})`, () => this.options.backend.view(seat), null)
+  }
+
+  /**
+   * 房主的旁观视角（本地专用，供对局回放录制）：四家明牌 + 累计弃牌流水。
+   * 与 viewBounded 同样有界：超时返回 null，录制器跳过本次采样而不拖住权威链。
+   */
+  async spectatorView(): Promise<BloodFlowSeatView | null> {
+    return this.callBounded('spectator', () => this.options.backend.spectator(), null)
   }
 
   /** 有界执行一个引擎/传输操作；返回 false 表示超时或失败（调用方应跳过本次并等下轮重试）。 */

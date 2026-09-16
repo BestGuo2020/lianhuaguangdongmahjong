@@ -14,6 +14,8 @@ export function createDirectAuthorityBackend(now: () => number = Date.now, testT
     get engine() { return get() },
     start: async options => { engine = new BloodFlowEngine({ ...options, ...testTiming, now }) },
     view: async seat => bloodFlowSeatView(get(), seat),
+    // 旁观视角（本地专用，供对局回放）：四家明牌 + 累计弃牌流水；永不下发到网络。
+    spectator: async () => bloodFlowSeatView(get(), 0, { revealAll: true, includeDiscards: true }),
     command: async command => { get().submit(command) },
     bot: async (seat, windowId) => {
       if (get().window?.id !== windowId) return
@@ -34,6 +36,12 @@ export function createWorkerAuthorityBackend(): BloodFlowAuthorityBackend {
   return {
     start: async options => { await client.request({ kind: 'start', options }) },
     view: seat => client.request<BloodFlowSeatView>({ kind: 'view', seat }),
+    // 旁观视角：worker 侧带 `replay` 标记的回复附带四家明牌 + 累计弃牌流水（本地专用）。
+    // 若旧 worker 不支持该标记（版本漂移），退回座位 0 的普通视图并把明牌缺失暴露出来。
+    spectator: async () => {
+      const view = await client.request<BloodFlowSeatView & { replay?: BloodFlowSeatView }>({ kind: 'view', seat: 0, replay: true })
+      return view.replay ?? view
+    },
     command: async command => { await client.request({ kind: 'command', command }) },
     bot: async (seat, windowId) => { await client.request({ kind: 'bot', seat, windowId }) },
     expire: async windowId => { await client.request({ kind: 'expire', windowId }) },
