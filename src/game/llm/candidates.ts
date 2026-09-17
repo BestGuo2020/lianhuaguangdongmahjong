@@ -195,19 +195,32 @@ export function buildCandidateFeatures(
 ): Candidate['features'] {
   const id = action.kind === 'discard' ? action.handIndex : action.kind === 'added-kong' ? action.meldIndex : -1
   const base = unknownCandidateFeatures(efficiency)
+  /**
+   * 进张/听口清单的瘦身（2026-09-17）：完整清单是每个候选里最占篇幅的字段——
+   * 12 个候选各带 20~30 条 `{tile, remaining}`，实测让单次 prompt 从 ~7k 涨到 ~14k 字符。
+   * 模型做决策需要的是"进张多少、最该等哪几张"，不需要全部枚举，
+   * 因此只保留**张数最多的前 N 张**（其余用 `ukeire`/`effectiveRemaining` 的总量表达），
+   * 另附 `effectiveTotal` 提示完整条数。信息不丢失关键部分，体积显著下降。
+   */
+  const TOP_TILES = 6
+  const trimTiles = <T extends { tile: string; remaining: number }>(list: readonly T[]) =>
+    [...list].sort((a, b) => b.remaining - a.remaining).slice(0, TOP_TILES)
   // discard / peng / chi 后的听口
   if (action.kind === 'discard') {
     const after = input.hand.filter((_, index) => index !== id)
     const quality = qualityOf(input, after)
     base.shanten = quality.progress.shanten
     base.ukeire = quality.progress.ukeire
-    base.effectiveTiles = quality.progress.effectiveTiles.map((item) => ({
+    const effective = trimTiles(quality.progress.effectiveTiles.map((item) => ({
       tile: tileName(item.tile), remaining: item.remaining,
-    }))
+    })))
+    base.effectiveTiles = effective
+    base.effectiveTotal = quality.progress.effectiveTiles.length
     base.ready = quality.ready
     base.waits = quality.ready
-      ? quality.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) }))
+      ? trimTiles(quality.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) })))
       : 'n/a'
+    if (quality.ready && quality.waits.length > TOP_TILES) base.waitsTotal = quality.waits.length
     base.effectiveRemaining = quality.ready ? quality.effectiveRemaining : 'n/a'
     base.specialPattern = specialPatternOf(input, after, quality.waits)
     base.safety = safetyBand(input, input.hand[id])
@@ -233,8 +246,10 @@ export function buildCandidateFeatures(
       base.ready = best.ready
       base.shanten = best.progress.shanten
       base.ukeire = best.progress.ukeire
-      base.effectiveTiles = best.progress.effectiveTiles.map((item) => ({ tile: tileName(item.tile), remaining: item.remaining }))
-      base.waits = best.ready ? best.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) })) : 'n/a'
+      base.effectiveTiles = trimTiles(best.progress.effectiveTiles.map((item) => ({ tile: tileName(item.tile), remaining: item.remaining })))
+      base.effectiveTotal = best.progress.effectiveTiles.length
+      base.waits = best.ready ? trimTiles(best.waits.map((t) => ({ tile: tileName(t), remaining: remaining(input, t) }))) : 'n/a'
+      if (best.ready && best.waits.length > TOP_TILES) base.waitsTotal = best.waits.length
       base.effectiveRemaining = best.ready ? best.effectiveRemaining : 'n/a'
     }
     base.specialPattern = 'none'
