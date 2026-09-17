@@ -6,7 +6,7 @@ import { HONORS, TILE_TYPES } from '../../../core/rules/tiles'
 import type { PatternId } from '../patterns/types'
 import { waitingTiles } from '../lotusRules'
 import type { WinSource } from './types'
-import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
+import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, type BloodFlowAiConfig } from './config'
 
 export function wildcardSet(jokers: readonly TileType[]) {
   return new Set<TileType>([...jokers, 'white'])
@@ -344,12 +344,18 @@ export function patternPotentialTotal(
   return patternPotentials(hand, melds, jokers, model).reduce((total, d) => total + d.score, 0)
 }
 
-/** 弃牌排序用的潜力收益（点）：总分 × 底分，残局打折。 */
+/**
+ * 弃牌排序用的潜力收益（点）：总分 × 底分，残局打折。
+ *
+ * ⚠️ `config` 必须由调用方传入**当前生效**的配置：早期这里硬读冻结的 `BLOOD_FLOW_AI`，
+ * 导致 `lateGameWallCount` 的覆盖（A/B、测试注入）**完全不生效**（2026-09-18 修）。
+ */
 export function patternPotentialEv(
   hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[], wallCount: number,
   model: SevenPairsModel = 'off',
+  config: Pick<BloodFlowAiConfig, 'lateGameWallCount'> = BLOOD_FLOW_AI,
 ) {
-  const late = wallCount <= BLOOD_FLOW_AI.lateGameWallCount ? 0.4 : 1
+  const late = wallCount <= config.lateGameWallCount ? 0.4 : 1
   return patternPotentialTotal(hand, melds, jokers, model) * BLOOD_FLOW_CONFIG.basePoints * late
 }
 
@@ -516,23 +522,30 @@ function remainingCount(tile: TileType, visibleTiles: readonly TileType[]) {
   return Math.max(0, 4 - matchingCount(visibleTiles, tile))
 }
 
-/** 锁手后继续胡的连锁期望（点）：听口 × 剩余张 × 每张期望收入 × 展望系数。 */
+/**
+ * 锁手后继续胡的连锁期望（点）：听口 × 剩余张 × 每张期望收入 × 展望系数。
+ *
+ * ⚠️ `config` 必须由调用方传入**当前生效**的配置：早期这里硬读冻结的 `BLOOD_FLOW_AI`，
+ * 导致 `chainHorizon` 与 `selfDrawWeight` 的覆盖**完全不生效**（2026-09-18 修）。
+ * 实测症状：把 `chainHorizon` 从 8 改成 5 跑 1200 局，两个臂**逐局完全一致**（Δ 全为 0）。
+ */
 export function chainEvEst(
   hand: readonly TileType[], melds: readonly Readonly<Meld>[], jokers: readonly TileType[],
   visibleTiles: readonly TileType[], wallCount: number,
   model: SevenPairsModel = 'off',
+  config: Pick<BloodFlowAiConfig, 'chainHorizon' | 'selfDrawWeight'> = BLOOD_FLOW_AI,
 ) {
   if (!hand.length) return 0
   const waits = waitingTilesCached(hand, melds.length, jokers)
   if (!waits.length) return 0
-  const chainFactor = Math.min(1, BLOOD_FLOW_AI.chainHorizon / Math.max(1, wallCount / 4))
+  const chainFactor = Math.min(1, config.chainHorizon / Math.max(1, wallCount / 4))
   let total = 0
   for (const tile of waits) {
     const remaining = remainingCount(tile, visibleTiles)
     if (!remaining) continue
     const self = estimateWinIncome([...hand, tile], melds, jokers, 'self-draw', model)
     const discard = estimateWinIncome([...hand, tile], melds, jokers, 'discard', model)
-    const average = (BLOOD_FLOW_AI.selfDrawWeight * self.total + discard.total) / (BLOOD_FLOW_AI.selfDrawWeight + 1)
+    const average = (config.selfDrawWeight * self.total + discard.total) / (config.selfDrawWeight + 1)
     total += remaining * average * chainFactor
   }
   return total

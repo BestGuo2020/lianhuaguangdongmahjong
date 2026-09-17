@@ -334,7 +334,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   const visible = visibleTiles(view)
   const wallCount = view.wallCount
   const extras: EvExtras = {
-    patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount, config.sevenPairsModel),
+    patternBonus: (tiles, currentMelds) => patternPotentialEv(tiles, currentMelds, jokers, wallCount, config.sevenPairsModel, config),
     safetyExposure: bloodFlowSafetyExposure(view, config, visible),
     melds,
     kongEvaluator: kongEvaluatorFor(config),

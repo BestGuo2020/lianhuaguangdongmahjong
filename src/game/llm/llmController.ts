@@ -53,12 +53,14 @@ export interface LlmControllerStats {
   thinkingRequests?: number
   /** 命中统一触发器后从关闭/低强度升级的请求数。 */
   enhancedReasoningRequests?: number
+  /** ε-容忍约束跳过的窗口数（血流 LLM 座；未启用 ε 时恒为 0）。 */
+  gateSkips?: number
 }
 
 export function createLlmStats(): LlmControllerStats {
   return {
     requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0,
-    reasoningRequests: 0, thinkingRequests: 0, enhancedReasoningRequests: 0,
+    reasoningRequests: 0, thinkingRequests: 0, enhancedReasoningRequests: 0, gateSkips: 0,
   }
 }
 
