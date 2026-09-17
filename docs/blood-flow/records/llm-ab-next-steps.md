@@ -17,7 +17,11 @@
 ```bash
 # 生成分片脚本：模型 座位数 总rounds 分片数 tag
 node tmp/make-shards.mjs deepseek-flash 1 300 3 my-tag
-# 可选 env：SHARD_QUALITY=1（开逐次覆盖质量钩子）/ SHARD_PROGRESS=10（每 N 局写进度）
+# 可选 env：
+#   SHARD_QUALITY=1     开逐次覆盖质量钩子
+#   SHARD_PROGRESS=10   每 N 局写进度
+#   SHARD_MAX_CALLS=N   ⛔ **硬性调用上限**（每片）；达到后不再调用模型、其余窗口回落本地 EV，
+#                       结果里带 `budgetExhausted: true` 与 `calls`。**跑任何付费批次都请设它** ✓
 
 # 启动（**必须**用 DSH 后台作业机制，别用游离 Start-Process，否则 GUI 面板看不到、也停不掉）
 powershell -NoProfile -ExecutionPolicy Bypass -File tmp/run-llmab.ps1 my-tag
@@ -41,6 +45,9 @@ node tmp/llmab-table-compare.mjs expTag baseTag   # 整桌 vs 基线（同种子
   可缓存内容只有稳定前缀：system 说明（975 字符）+ `ruleSummary`（1,270 字符）≈ **1k token** ✓
   → 把它们移到**最前**预计只能省约 **20%** 输入成本 ✓（不是 10 倍 ✗，别指望缓存救成本 ✓）。
 - 💰 **真正的省钱杠杆（按效力排序）**：① **少调用**（ε-容忍约束 → 明显该打哪张的窗口直接不调模型；覆盖率仅 12%，说明多数窗口无需模型）；② 只用 flash；③ 保持已做的载荷瘦身（14.4k→10.2k 字符 ✓）；④ 前缀化只值 ~20%。
+- 🛑 **硬性花钱上限（已实现）**：`MAX_CALLS=N`（单进程）或 `SHARD_MAX_CALLS=N`（分片批量）—— 达到上限后**不再调用模型** ✓，
+  其余窗口自动回落本地 EV ✓，结果 JSON 里带 `budgetExhausted` 与 `calls` ✓。**跑任何付费批次都先设它** ✓。
+  参考量级：1000 局（1 座）实测 **33,197 次调用**、每次约 4.6k token ≈ **1.5 亿输入 token** → 按官方单价自己折算上限 ✓。
 - 密钥：读 `tmp/test-api-key.json` 的 `presets`（**不要**打印密钥）
 - 成本量级：提示词瘦身后约 **4.6k token/次**；1000 局（1 座）≈ 47k 次调用
 
