@@ -15,6 +15,9 @@ import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
 import { bloodFlowAiActions, bloodFlowDefensePolicy, bloodFlowKnownWins, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
 import { BLOOD_FLOW_AI, type BloodFlowAiConfig } from '../variants/lotus/bloodFlow/config'
+import {
+  bloodFlowEvGateFromEnv, evaluateEvGate, type BloodFlowEvGateConfig,
+} from '../variants/lotus/bloodFlow/evGate'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
@@ -104,10 +107,17 @@ async function loadWaits(view: BloodFlowSeatView, signal: AbortSignal): Promise<
   finally { signal.removeEventListener('abort', abort); worker.cancel() }
 }
 
-export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; aiConfig?: BloodFlowAiConfig; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void } = {}) {
+export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; aiConfig?: BloodFlowAiConfig; gate?: BloodFlowEvGateConfig; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void } = {}) {
   const stats = reactive<LlmControllerStats>({ requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 })
   const jobs = new Map<string, { promise: Promise<BloodFlowAction | null>; controller: AbortController; current: () => boolean }>()
   const reasoning = new ConditionalReasoningCoordinator()
+  /**
+   * ε-容忍约束（2026-09-17，任务 ε）：默认从环境读（未设 = 关闭，行为与既有版本一致）。
+   * 跳过判定发生在**调用模型之前**——明显该打哪张的窗口（本地最优与次优几乎等价）
+   * 直接采用本地 EV 建议，调用次数与对局耗时同时下降。
+   */
+  const gate = options.gate ?? bloodFlowEvGateFromEnv()
+  const gateStats = { considered: 0, skipped: 0, gapSum: 0, gapCount: 0 }
   // 胡牌窗口里模型给出的自己的台词；批次提交后由赢家语音使用（所有主题一致）。
   // 合成在模型返回胡牌决定的瞬间就开始，胡牌时刻语音即可开播（不与演出抢时间）。
   const winLines = new Map<string, { text: string; style: LlmStyle; voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; urlPromise?: Promise<string | null> }>()
@@ -116,6 +126,16 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
   const speech=createBloodFlowActionSpeech(options.theme??(()=> 'jade'),options.now)
   return {
     stats,
+    /** ε 闸门配置与计数（实验用；默认 epsilon=0 时 skipped 恒为 0）。 */
+    evGate: { ...gate, stats: gateStats },
+    /**
+     * 本窗口的 ε 判定（**不产生副作用**）：只读地算"本地最优与次优差多少"。
+     * 调用方用它做统计/门槛；实际跳过发生在 `decide()` 里。
+     */
+    evaluateGate(view: BloodFlowSeatView) {
+      return evaluateEvGate(view, bloodFlowAiActions(view, options.aiConfig ?? BLOOD_FLOW_AI),
+        options.aiConfig ?? BLOOD_FLOW_AI, gate)
+    },
     /** 取走某胡牌窗口内该座位模型自己的台词（一次）；没有则回退程序台词。 */
     takeWinLine(windowId: string, seat: number) {
       const key = `${windowId}/${seat}`, line = winLines.get(key)
@@ -127,6 +147,23 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
       const actions = bloodFlowAiActions(view)
       if (actions.length === 1) return Promise.resolve(actions[0])
       if (view.public.seats[view.seat].locked) return Promise.resolve(view.ownActions.find(a => a.kind === 'win') ?? view.ownActions.find(a => a.kind === 'discard') ?? null)
+      /**
+       * ε-容忍约束（2026-09-17）：本地最优与次优的价值差 ≤ ε ⇒ 模型怎么选都几乎无差别 ⇒
+       * **不调用模型**，返回 null（调用方照常采用本地 EV 建议）。
+       * `enabled: false`（默认）时这一分支恒不成立；`enabled: true` + `epsilon: 0`
+       * 是"只跳过本地完全等价窗口"的正式实验臂（不是关闭）。
+       */
+      if (gate.enabled) {
+        const decision = evaluateEvGate(view, actions, options.aiConfig ?? BLOOD_FLOW_AI, gate)
+        gateStats.considered += 1
+        gateStats.gapSum += decision.gap
+        gateStats.gapCount += 1
+        if (decision.skipModel) {
+          gateStats.skipped += 1
+          stats.gateSkips = (stats.gateSkips ?? 0) + 1
+          return Promise.resolve(null)
+        }
+      }
       const provider = (options.provider ?? localBloodFlowProvider)(view.seat)
       if (!provider) return Promise.resolve(null)
       const key = `${view.authorityEpoch}/${view.roundId}/${view.window.id}/${view.seat}`

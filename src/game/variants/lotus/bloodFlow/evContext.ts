@@ -72,7 +72,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   // 自摸胡后摸牌归档：锁手形态 = 手牌去掉摸牌位；点炮/抢杠形态 = 当前 13 张。
   const lockedHand = window?.kind === 'turn' && drawnIndex >= 0
     ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
-  const chainAfterWin = winOffered ? chainEvEst(lockedHand, melds, jokers, visible, wallCount) : 0
+  const chainAfterWin = winOffered ? chainEvEst(lockedHand, melds, jokers, visible, wallCount, config.sevenPairsModel, config) : 0
   const winEv = immediateTotal + chainAfterWin
   const floor = firstWinFloor(wallCount, config)
   const floorStage: EvFloorStage = wallCount <= config.lateGameWallCount ? 'late'
@@ -80,7 +80,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const potentialTotal = patternPotentialTotal(lockedHand, melds, jokers, config.sevenPairsModel)
   const topDirections = [...patternPotentials(lockedHand, melds, jokers, config.sevenPairsModel)]
     .sort((a, b) => b.score - a.score).slice(0, 3)
-  const developEv = patternPotentialEv(lockedHand, melds, jokers, wallCount, config.sevenPairsModel)
+  const developEv = patternPotentialEv(lockedHand, melds, jokers, wallCount, config.sevenPairsModel, config)
 
   const reformCandidates: ReformCandidateInfo[] = []
   if (!locked && window?.kind === 'turn' && window.source.kind === 'draw' && drawnIndex >= 0 && winOffered) {
@@ -92,7 +92,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
       reformCandidates.push({
         index: action.index,
         tile: hand[action.index],
-        ev: chainEvEst(after, melds, jokers, visible, wallCount, config.sevenPairsModel),
+        ev: chainEvEst(after, melds, jokers, visible, wallCount, config.sevenPairsModel, config),
         anyWait: waits.length >= 34,
         waitCount: waits.length,
         patterns: [...patternPotentials(after, melds, jokers, config.sevenPairsModel)]
@@ -108,8 +108,8 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
     const kongFee = BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.kongPayments.added
     robEv = {
       winEv,
-      passEv: -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount, config.sevenPairsModel)
-        + patternPotentialEv(hand, melds, jokers, wallCount, config.sevenPairsModel),
+      passEv: -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount, config.sevenPairsModel, config)
+        + patternPotentialEv(hand, melds, jokers, wallCount, config.sevenPairsModel, config),
     }
   }
 
