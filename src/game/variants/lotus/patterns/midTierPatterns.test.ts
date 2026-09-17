@@ -142,9 +142,10 @@ describe('杠加成', () => {
   const kong = (type: 'gang' | 'angang' | 'windgang', tile: TileType): Meld =>
     ({ type, tile, tiles: [tile, tile, tile, tile] }) as unknown as Meld
 
-  it('明杠 +1、暗杠/风杠 +2，计入番型倍率', () => {
-    expect(BLOOD_FLOW_KONG_BONUS).toMatchObject({ exposed: 1, concealed: 2, wind: 2 })
-    expect(BLOOD_FLOW_CONFIG.kongBonus).toMatchObject({ exposed: 1, concealed: 2, wind: 2 })
+  it('明杠 +1、暗杠 +2、风杠 +1，计入番型倍率', () => {
+    // 风杠 2026-09-15 起与明杠同档（+1）：实测出现率 10.7%/局，是暗杠（5.3%）的两倍
+    expect(BLOOD_FLOW_KONG_BONUS).toMatchObject({ exposed: 1, concealed: 2, wind: 1 })
+    expect(BLOOD_FLOW_CONFIG.kongBonus).toMatchObject({ exposed: 1, concealed: 2, wind: 1 })
     // 无杠：基础倍率 = Σ(番值)（2026-09-15 口径）
     const plain = score(['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'], 'p8')!
     expect(plain.score.kongBonus).toBe(0)
@@ -167,11 +168,62 @@ describe('杠加成', () => {
       expect(twoKongs.score.items.map(item => item.id)).not.toContain('three-kongs')
       expect(twoKongs.score.kongBonus).toBe(3)
     }
-    // 风杠按 +2
+    // 风杠按 +1（与明杠同档）→ 风杠 + 明杠 = 1 + 1 = 2
     const wind = evaluateWin({
       concealed: ['m4', 'm5', 'm6', 'east'], melds: [kong('windgang', 'east'), kong('gang', 'm1')],
       winningTile: 'east', source: 'discard', jokers: [], opening: null,
     })
-    if (wind) expect(wind.score.kongBonus).toBeGreaterThanOrEqual(3)
+    if (wind) expect(wind.score.kongBonus).toBe(2)
+  })
+
+  it('门清：暗杠 / 风杠不破门清，明杠 / 碰 才破（2026-09-15 定案）', () => {
+    // 合法结构：1 副杠 + 3 顺子 + 将（east 将 = 手里 1 张 + 胡牌张）
+    const concealed: TileType[] = ['m2', 'm3', 'm4', 'p2', 'p3', 'p4', 'p6', 'p7', 'p8', 'east']
+    const meld = (m: Record<string, unknown>): Meld => m as unknown as Meld
+    const idsOf = (m: Meld) => evaluateWin({ concealed, melds: [m], winningTile: 'east',
+      source: 'discard', jokers: [], opening: null })!.score.items.map(item => item.id)
+    // 暗杠 → 仍算门清
+    expect(idsOf(meld({ type: 'angang', tile: 's3', tiles: ['s3', 's3', 's3', 's3'] }))).toContain('concealed-hand')
+    // 风杠（引擎存成 angang + windKong）→ 仍算门清
+    expect(idsOf(meld({ type: 'angang', tile: 'east', tiles: ['east', 'south', 'west', 'north'], windKong: true })))
+      .toContain('concealed-hand')
+    // 明杠（吃/碰他人的牌）→ 破门清
+    expect(idsOf(meld({ type: 'gang', tile: 's3', tiles: ['s3', 's3', 's3', 's3'] }))).not.toContain('concealed-hand')
+    // 碰 → 破门清（顺带验证吃也不保留：吃出来的顺子本身不是门清）
+    expect(idsOf(meld({ type: 'peng', tile: 's3', tiles: ['s3', 's3', 's3'] }))).not.toContain('concealed-hand')
+    expect(idsOf(meld({ type: 'chi', tile: 's3', tiles: ['s3', 's4', 's5'] }))).not.toContain('concealed-hand')
+  })
+
+  it('鸡胡遇杠：只算杠番（不加鸡胡 0.5 番、也没有兜底 1 番），番型名字仍是鸡胡', () => {
+    const concealed: TileType[] = ['m2', 'm3', 'm4', 'p2', 'p3', 'p4', 'p6', 'p7', 'p8', 'east']
+    const withKong = evaluateWin({ concealed,
+      melds: [{ type: 'gang', tile: 's3', tiles: ['s3', 's3', 's3', 's3'] } as unknown as Meld],
+      winningTile: 'east', source: 'discard', jokers: [], opening: null })!
+    // 明杠破门清、也没有任何其他番 → 只剩鸡胡，但**倍率等于杠番 1**（不含 0.5、不含兜底 1 番）；
+    // 这手全自然 → 硬胡 ×2 → 实付 20 点/家（软胡（用精）时才是 10 点）。
+    expect(withKong.score.items.map(item => item.id)).toEqual(['chicken'])
+    expect(withKong.score.kongBonus).toBe(1)
+    expect(withKong.score.patternMultiplier).toBe(1)
+    expect(withKong.score.halfPayment).toBe(false)
+    expect(withKong.score.hardWin).toBe(true)
+    expect(withKong.score.finalMultiplier).toBe(2)
+    expect(withKong.score.paymentPerPayer).toBe(20)
+    // 暗杠（+2）同理：倍率 = 2
+    const withAnGang = evaluateWin({ concealed,
+      melds: [{ type: 'angang', tile: 's3', tiles: ['s3', 's3', 's3', 's3'] } as unknown as Meld],
+      winningTile: 'east', source: 'discard', jokers: [], opening: null })!
+    // 暗杠保留门清 → 不是纯鸡胡，这里验证"门清 + 杠加成"的正常口径
+    expect(withAnGang.score.items.map(item => item.id)).toEqual(['concealed-hand'])
+    expect(withAnGang.score.patternMultiplier).toBe(3)
+    // 纯鸡胡（无杠）→ 仍走半番：倍率 1、支付减半（硬胡 ×2 后 10 点 = 10×2÷2）
+    // 结构：1 副吃 + 2 顺子 + 1 刻子 + 将 → 有副露（不成门清）、有刻子（不成平胡）、含字牌（不成断幺九）→ 只剩鸡胡
+    const noKong = evaluateWin({ concealed: ['p2', 'p3', 'p4', 's2', 's3', 's4', 'm5', 'm5', 'm5', 'east'],
+      melds: [{ type: 'chi', tile: 'm2', tiles: ['m2', 'm3', 'm4'] } as unknown as Meld],
+      winningTile: 'east', source: 'discard', jokers: [], opening: null })!
+    expect(noKong.score.items.map(item => item.id)).toEqual(['chicken'])
+    expect(noKong.score.patternMultiplier).toBe(1)
+    expect(noKong.score.halfPayment).toBe(true)
+    expect(noKong.score.finalMultiplier).toBe(2)
+    expect(noKong.score.paymentPerPayer).toBe(10)
   })
 })

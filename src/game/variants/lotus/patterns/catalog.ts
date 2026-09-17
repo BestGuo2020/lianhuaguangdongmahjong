@@ -34,8 +34,15 @@ function hasSteppedRun(numbers: readonly number[], length: number, steps: readon
 }
 
 export function matchPatterns(hand: WinningDecomposition): PatternId[] {
-  // 门清（2026-09-15 定案）：只看无副露，不排除用精牌；**与任何番种叠加**（清一色/碰碰胡/七对…都吃得到）。
-  const concealed = hand.groups.every(g => g.origin.kind === 'hand')
+  // 门清（2026-09-15 用户定案）：只看**无副露** —— 不排除用精牌，**与任何番种叠加**
+  // （清一色/碰碰胡/七对…都吃得到），且**暗杠与风杠不算破门清**。
+  // 风杠必须把东南西北亮明（否则可以诈暗杠），但它在规则上与暗杠等价（都取自手牌、都不能被抢杠），
+  // 因此同样保留门清；明杠（吃/碰他人的牌）与碰/吃仍然破门清。
+  // 注意 `decompose.ts` 里风杠的 `concealed` 标记是 false（`m.type === 'angang' && !m.windKong`），
+  // 所以必须显式认 `wind-kong` 这一种。
+  const concealed = hand.groups.every(g => g.origin.kind === 'hand'
+    || g.kind === 'wind-kong'
+    || (g.kind === 'kong' && g.concealed))
   if (hand.shape !== 'standard' && hand.shape !== 'sevenPairs') {
     return concealed ? [hand.shape, 'concealed-hand'] : [hand.shape]
   }
