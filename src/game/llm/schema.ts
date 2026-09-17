@@ -16,9 +16,16 @@ export type Band = '高' | '中' | '低'
 export interface CandidateFeatures {
   shanten: number | 'n/a'
   ukeire: number | 'n/a'
+  /**
+   * 进张清单（2026-09-17 瘦身）：**只保留张数最多的前 N 张**，完整条数见 `effectiveTotal`。
+   * 完整枚举是候选块最大的篇幅来源（实测把单次 prompt 从 ~7k 撑到 ~14k 字符），
+   * 而决策只需"进张多少、最该等哪几张"。`waits` 同理（完整条数见 `waitsTotal`）。
+   */
   effectiveTiles: Array<{ tile: TileName; remaining: number }> | 'n/a'
+  effectiveTotal?: number
   ready: boolean | 'unknown'
   waits: Array<{ tile: TileName; remaining: number }> | 'n/a'
+  waitsTotal?: number
   effectiveRemaining: number | 'n/a'
   specialPattern: string | 'none' | 'n/a'
   safety: Band | 'unknown' | 'n/a'
