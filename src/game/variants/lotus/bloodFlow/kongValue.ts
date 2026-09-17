@@ -208,10 +208,14 @@ export function kongSelfLoss(input: KongValueInput): KongSelfLoss {
   const sevenPairs = Math.max(0, before - after) * BLOOD_FLOW_CONFIG.basePoints
   if (sevenPairs > 0) reasons.push(`拆掉七对/豪华七对路线（-${Math.round(sevenPairs)}）`)
 
-  // ② 门清（未副露 → 杠后必然有副露）
+  // ② 门清（2026-09-15 用户定案后：只有**明杠**会破门清）
+  // 暗杠与风杠都取自手牌、都不能被抢杠，规则上保留门清 → 它们不再计入"破坏门清"的自损。
+  // 补杠（added-kong）是碰之后补的第 4 张：碰的时候门清早就没了，所以天然不计。
+  const breaksConcealed = input.kind === 'discard-gang'
   const exposedBefore = input.melds.length === 0
   const exposedAfter = (post?.melds.length ?? input.melds.length) > 0
-  const concealedHand = exposedBefore && exposedAfter ? concealedHandLoss(input.hand, input.jokers, config) : 0
+  const concealedHand = breaksConcealed && exposedBefore && exposedAfter
+    ? concealedHandLoss(input.hand, input.jokers, config) : 0
   if (concealedHand > 0) reasons.push(`破坏门清（-${Math.round(concealedHand)}）`)
 
   // ③ 向听恶化（含七对/十三幺等特殊路线的"整车"向听；杠后必然有副露，特殊路线随之消失）

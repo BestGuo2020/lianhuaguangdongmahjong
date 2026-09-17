@@ -122,6 +122,21 @@ describe('③ 明杠破坏门清 → 计入损失', () => {
     expect(kongCandidateValue(input).net).toBeGreaterThan(0)
     expect(decideBloodFlowActionEv(claimView(CONCEALED_TENPAI, [], [], 'm5'), BLOOD_FLOW_AI)).toEqual({ kind: 'gang' })
   })
+
+  it('暗杠 / 风杠保留门清 → 不计这项损失（2026-09-15 定案）', () => {
+    // 暗杠：手里四张同牌
+    const concealedKong: KongValueInput = { kind: 'concealed-kong', hand: [...CONCEALED_TENPAI, 'm5', 'm5', 'm5'],
+      melds: [], jokers: JOKERS, tile: 'm5' }
+    const anGang = kongCandidateValue(concealedKong)
+    expect(anGang.selfLoss.concealedHand).toBe(0)
+    expect(anGang.selfLoss.reasons.join()).not.toContain('破坏门清')
+    // 风杠：东南西北各一张
+    const windKong: KongValueInput = { kind: 'wind-kong',
+      hand: [...CONCEALED_TENPAI, 'east', 'south', 'west', 'north'], melds: [], jokers: JOKERS }
+    const wind = kongCandidateValue(windKong)
+    expect(wind.selfLoss.concealedHand).toBe(0)
+    expect(wind.selfLoss.reasons.join()).not.toContain('破坏门清')
+  })
 })
 
 describe('补杠的抢杠风险按公开张数计价', () => {

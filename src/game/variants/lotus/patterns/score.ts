@@ -3,7 +3,8 @@ import type { BloodFlowRuleConfig, PublicWinScore, WinSource } from '../bloodFlo
 import type { PatternId } from './types'
 
 /**
- * 杠加成（2026-09-12 新增）：每个**明杠 +1**、**暗杠/风杠 +2**，直接加到番型倍率上。
+ * 杠加成（2026-09-12 新增；2026-09-15 风杠降到与明杠同档）：每个**明杠 +1**、**风杠 +1**、
+ * **暗杠 +2**，直接加到番型倍率上。
  * 此前杠没有任何番型收益，这正是三杠/四杠做不出来的根因之一。
  */
 export interface KongCounts { readonly exposed: number; readonly concealed: number; readonly wind: number }
@@ -36,9 +37,16 @@ export function scorePatterns(patterns: readonly PatternId[], natural: boolean, 
   // 所以鸡胡的"半番"不落在倍率上，而是落在**支付减半**（`halfPayment`）上：
   // 只有鸡胡（Σ 番值 < 1，即没有任何计分番种）时 rawSum = 0.5 → 倍率取 max(1, 0.5) = 1、
   // 点数 = 底分 × 倍率 ÷ 2 = 5（自摸/硬胡等整倍后仍是整数）。
+  // 鸡胡遇到杠（2026-09-15 用户定案）：**鸡胡不与任何番型叠加，包括大明杠/暗杠/风杠**。
+  // 开杠后"只是把鸡胡的番型提升成了杠的番型"——**只算杠番，不加鸡胡那 0.5 番**，
+  // 也不再有兜底的 1 番基数；但**番型名字仍叫鸡胡**（items 保持 ['chicken']，便于结算显示）。
+  // 杠杆的**即时杠分**（20/40/80 点，见 kongPayments）不受影响，仍然照付。
+  const chickenOnly = items.length === 1 && items[0].id === 'chicken' && !kongPatternScored
+  const kongOnlyChicken = chickenOnly && kongBonus > 0
   const rawSum = items.reduce((sum, p) => sum + p.weight, 0)
-  const halfPayment = rawSum < 1
-  const patternMultiplier = Math.max(1, rawSum) + kongBonus
+  // 纯鸡胡 → 0.5 番落在"支付减半"上；鸡胡+杠 → 倍率就等于杠番本身。
+  const halfPayment = chickenOnly && !kongOnlyChicken && rawSum < 1
+  const patternMultiplier = kongOnlyChicken ? kongBonus : Math.max(1, rawSum) + kongBonus
   const eventMultiplier = config.eventMultipliers[source]
   const ordinary = patternMultiplier * eventMultiplier
   const openingApplied = opening !== null && ordinary < config.openingMinimumMultiplier
