@@ -214,10 +214,11 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
           // 模型没给可用原话时，用血流即时胡牌台词库兜底（按胡法 + 主番档 + 本局胡牌序号轮换）。
           if(selected.action.kind==='win'){
             const score=view.ownScore, rotation=winSequence++
+            // 轮换序号叠加座位号：一炮多响里同批赢家不会说同一句（多响不设专属台词）。
             const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,rotation,
               {}, score ? bloodFlowWinMomentLine({ source: score.source, style: provider.style,
                 ordinal: view.public.seats[view.seat].winCount + 1, tier: bloodFlowWinMomentTier(score),
-                previousSource: previousBloodFlowWinSource(view, view.seat), sequence: rotation }) : undefined)
+                previousSource: previousBloodFlowWinSource(view, view.seat), sequence: rotation + view.seat }) : undefined)
             const urlPromise=getLocalTtsClient().resolveAudioUrl(text,voiceKey,provider.style).catch(()=>null)
             winLines.set(`${view.window!.id}/${view.seat}`,{text,style:provider.style,voiceKey,urlPromise})
           }

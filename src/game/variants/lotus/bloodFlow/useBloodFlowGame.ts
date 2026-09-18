@@ -276,13 +276,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       : source === 'robbed-kong' ? 'robbed-kong-win' : 'discard-win'
     const effectFile = (source: string) => source === 'self-draw' || source === 'kong-bloom' ? 'zimo.mp3' : 'hu.mp3'
     // 未走模型（锁手座位、单候选窗口、模型没给原话）时的胡牌台词：按胡法 + 主番档 +
-    // 同源连胡 + 一炮多响分档，并按跨局序号轮换，避免整局反复同一句。
+    // 同源连胡分档，并按跨局序号轮换，避免整局反复同一句。序号叠加座位号：一炮多响时
+    // 各赢家各说自己的胡牌台词（用户 2026-09-19 决定不设多响专属台词），且不会同拍同句。
     const momentLine = (record: WinBatch['winners'][number], style: LlmStyle) => {
       const sequence = winLineSequences.get(record.winner) ?? 0
       winLineSequences.set(record.winner, sequence + 1)
       return bloodFlowWinMomentLine({ source: record.score.source, style, ordinal: record.ordinal,
-        tier: bloodFlowWinMomentTier(record.score), multiWin: batch.winners.length > 1,
-        previousSource: previousBloodFlowWinSource(snapshot, record.winner, batch.batchId), sequence })
+        tier: bloodFlowWinMomentTier(record.score),
+        previousSource: previousBloodFlowWinSource(snapshot, record.winner, batch.batchId), sequence: sequence + record.winner })
     }
     const tasks: (() => Promise<void>)[] = []
     if (theme === 'llmAnime') {
