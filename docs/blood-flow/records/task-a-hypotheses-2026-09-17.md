@@ -5,7 +5,7 @@
 >
 > 全部**纯本地、零 API**（探针 `tmp/pattern-rate-ab.test.ts`，逐局快照可配对）。
 > 基线/各臂：`tmp/bulk/ab-A-*-*.json`；分析：`node tmp/pattern-ab-analyze.mjs <臂> A-basefix`。
-> 模型的假设原文：`tmp/bulk/A-hypotheses.json`（1 次调用，1,890 输入 + 1,264 输出 token ≈ ¥0.007）。
+> 模型的假设原文：`tmp/bulk/A-hypotheses.json`（**1 次调用**：1,890 输入 + 1,264 输出 = 3,154 token）。
 
 ## 结论：**5 条假设全部否决，一条也没进生产**
 

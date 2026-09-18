@@ -37,7 +37,9 @@ node tmp/llmab-table-compare.mjs expTag baseTag   # 整桌 vs 基线（同种子
 - 进度：`tmp/bulk/llmab-<tag>-*.json.progress`（每 N 局一行；结果 JSON **只在整片跑完后**才写盘，中途别杀）
 - 模型与端点：脚本内**断言必须**是 `https://api.deepseek.com/v1`；官方可用 id 只有 `deepseek-flash`、`deepseek-v4-pro`
   （`deepseek-v4.1-flash` 官方不认；orcaRouter 能服务但它属于**中转**，用户明令不走；GLM 本轮不用）
-- ⛔ **`deepseek-v4-pro` 已停用（2026-09-17 用户决定）**：一次 300 局实测花了 **¥300+**，且**缓存零命中** ✗。
+- ⛔ **`deepseek-v4-pro` 已停用（2026-09-17 用户决定）**：一次 300 局实测的 token 消耗**远超 flash 同规模**
+  （用户当时记为"300+ 元"量级；按本仓库 4,600 token/次实测值折算，对应 **约 6.9 亿输入 token / 约 15 万次请求**），
+  且**缓存零命中** ✗。
   后续所有批次**只用 `deepseek-flash`**；pro 的既有结果仅作历史结论保留，不要再跑。
 - 💡 **缓存为什么打不中（已定位，代码证据；flash 与 pro 一样都打不中）**：`bloodFlowDecisionInput.ts` 的 `state` 由
   `buildPublicDecisionSnapshot()` 打头，而它的**最初几个字段就是每次都变的** `requestId`/`stateVersion` ✗
@@ -57,7 +59,7 @@ node tmp/llmab-table-compare.mjs expTag baseTag   # 整桌 vs 基线（同种子
 
 - 🛑 **硬性花钱上限（已实现）**：`MAX_CALLS=N`（单进程）或 `SHARD_MAX_CALLS=N`（分片批量）—— 达到上限后**不再调用模型** ✓，
   其余窗口自动回落本地 EV ✓，结果 JSON 里带 `budgetExhausted` 与 `calls` ✓。**跑任何付费批次都先设它** ✓。
-  参考量级：1000 局（1 座）实测 **33,197 次调用**、每次约 4.6k token ≈ **1.5 亿输入 token** → 按官方单价自己折算上限 ✓。
+  参考量级：1000 局（1 座）实测 **33,197 次调用**、每次约 **4,600 输入 + 50 输出 token** ≈ **1.5 亿输入 token / 166 万输出 token** ✓。
 - 密钥：读 `tmp/test-api-key.json` 的 `presets`（**不要**打印密钥）
 - 成本量级：提示词瘦身后约 **4.6k token/次**；1000 局（1 座）≈ 47k 次调用
 
@@ -99,9 +101,9 @@ node tmp/llmab-table-compare.mjs expTag baseTag   # 整桌 vs 基线（同种子
 **为什么可用**：价值差大 = 模型怎么选都几乎无差别 → 这些窗口**不必调用模型** ✓；
 价值差小 = 才是模型真正有话语权的地方 ✓。用这个分布即可估算：
 - ε=0.1 / 0.3 / 0.5 时分别能跳过多少比例的调用 ✓
-- 按每调用 4.6k token 折算，能省多少钱 ✓
+- 按每调用 4,650 token（4,600 输入 + 50 输出）折算，能省多少 token ✓
 
-**成本**：0 元（纯本地，1000 局约 20 分钟）✓ —— 这一项的结论直接决定任务 ε 值不值得做、以及怎么做 ✓。
+**成本**：**0 API 请求 / 0 token**（纯本地，1000 局约 20 分钟）✓ —— 这一项的结论直接决定任务 ε 值不值得做、以及怎么做 ✓。
 
 ## 4. 任务 ε：ε-容忍约束实验（产品代码改动，**同时是最大的降本项**）
 
