@@ -47,7 +47,8 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
     expect(BLOOD_FLOW_CONFIG.patterns['concealed-hand']).toMatchObject({ label: '门清', weight: 1 })
     // 十三幺 2026-09-15 由 16 → 32（实测 1200 局仅 4 次，全表最稀有，赔付却低于豪华七对）
     expect(BLOOD_FLOW_CONFIG.patterns.thirteenOrphans.weight).toBe(32)
-    expect(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight).toBe(12)
+    // 豪华七对 2026-09-18 由 12 → 6 番（暂定：12 番时每 12~17 次胡牌就出现一次，赔付却高于清一色 8 番）
+    expect(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight).toBe(6)
     expect(BLOOD_FLOW_CONFIG.patterns).not.toHaveProperty('hard-win')
     expect(BLOOD_FLOW_CONFIG.hardWinMultiplier).toBe(2)
     expect(LOTUS_RULESET.baseScore).toBe(100)

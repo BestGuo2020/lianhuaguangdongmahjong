@@ -77,12 +77,15 @@ describe('豪华七对方向（12 番）与旧口径的对照', () => {
     }
   })
 
-  it('刻子 + 5 对（无精）：豪华方向成为七对路线的**最高档**，权重按 12 番算', () => {
+  it('刻子 + 5 对（无精）：6 番后豪华方向让位于普通七对（四张可达性 0.6 的折扣大于番值优势）', () => {
     const luxury = direction(TRIPLET_PLUS_FIVE_PAIRS, 'luxury-seven-pairs', 'ev')!
     const seven = direction(TRIPLET_PLUS_FIVE_PAIRS, 'sevenPairs', 'ev')!
     expect(luxury.weight).toBe(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight)
     expect(luxury.progress).toBeCloseTo(sevenPairsProgress(TRIPLET_PLUS_FIVE_PAIRS, WILD) * 0.6, 6)
-    expect(luxury.score).toBeGreaterThan(seven.score)
+    // 12 番时代：豪华 12 × 0.6² = 4.32 > 七对 4 → 豪华是最高档；
+    // 2026-09-18 降到 6 番后：6 × 0.6² = 2.16 < 4 → 仅有裸刻子时普通七对方向更值钱。
+    // 只有"精牌可补成四张"（可达性 1）时豪华方向才重新领先，见下一个用例。
+    expect(luxury.score).toBeLessThan(seven.score)
   })
 
   it('5 对 + 3 精（34 种全听）：新模型估值高于旧口径，方向排名不再反向', () => {
@@ -106,12 +109,13 @@ describe('收益估算（连锁期望/改张用）也认得豪华七对', () => 
   /** 对照：6 对 + 1 张精（普通七对，软胡）。 */
   const plainWin: TileType[] = ['m3', 'm3', 's5', 's5', 'p6', 'p6', 'm7', 'm7', 'p8', 'p8', 's9', 's9', 'north', 'red']
 
-  it('豪华七对按 12 番计价（旧口径按 4 番，差 3 倍）', () => {
+  it('豪华七对按 6 番计价（旧口径按 4 番，1.5 倍）', () => {
     const ev = estimateWinIncome(luxuryWin, [] as Meld[], JOKERS, 'self-draw', 'ev')
     const off = estimateWinIncome(luxuryWin, [] as Meld[], JOKERS, 'self-draw', 'off')
     expect(ev.multiplier).toBe(BLOOD_FLOW_CONFIG.patterns['luxury-seven-pairs'].weight * BLOOD_FLOW_CONFIG.eventMultipliers['self-draw'])
     expect(off.multiplier).toBe(BLOOD_FLOW_CONFIG.patterns.sevenPairs.weight * BLOOD_FLOW_CONFIG.eventMultipliers['self-draw'])
-    expect(ev.paymentPerPayer).toBeGreaterThan(off.paymentPerPayer * 2)
+    // 2026-09-18 豪华七对 12 → 6 番：相对普通七对由 3 倍降到 1.5 倍。
+    expect(ev.paymentPerPayer).toBeCloseTo(off.paymentPerPayer * 1.5, 6)
   })
 
   it('普通七对不受影响（两种模式同值）', () => {

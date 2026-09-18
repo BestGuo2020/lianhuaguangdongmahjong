@@ -32,7 +32,7 @@ const patterns = Object.freeze({
   'little-four-winds': pattern('little-four-winds', '小四喜', 16),
   'four-concealed-triplets': pattern('four-concealed-triplets', '四暗刻', 16, ['three-concealed-triplets', 'all-triplets']),
   // 十三幺：2026-09-15 由 16 → **32 番**（用户定案，数据支持）。实测 1200 局 45,637 次胡牌里只出现 4 次
-  // （每百胡 0.01）——全表最稀有的会出现的番种，而单次最高赔付只有 320/家，低于豪华七对(12 番)的 480
+  // （每百胡 0.01）——全表最稀有的会出现的番种，而单次最高赔付只有 320/家，低于当时的豪华七对(12 番) 480
   // 与四暗刻(16 番)的 780。调到 32 与九莲宝灯（同 1200 局出现 0 次）、大四喜、四杠同档。
   thirteenOrphans: pattern('thirteenOrphans', '十三幺', 32,
     ['all-with-terminals', 'mixed-terminals', 'sevenPairs', 'all-triplets']),
@@ -40,7 +40,7 @@ const patterns = Object.freeze({
   // 高番
   'mixed-terminals': pattern('mixed-terminals', '混幺九', 12, ['all-with-terminals', 'all-triplets']),
   'three-kongs': pattern('three-kongs', '三杠', 12),
-  'luxury-seven-pairs': pattern('luxury-seven-pairs', '豪华七对', 12,
+  'luxury-seven-pairs': pattern('luxury-seven-pairs', '豪华七对', 6,
     ['sevenPairs', 'all-triplets', 'three-concealed-triplets', 'four-concealed-triplets', 'one-suit-three-joints', 'one-suit-four-joints']),
   // 中高番
   'pure-suit': pattern('pure-suit', '清一色', 8, ['mixed-suit']),
@@ -231,7 +231,8 @@ export interface BloodFlowAiConfig {
   readonly kongValue: KongValueConfig
   /**
    * 七对潜力模型（2026-09-13 追加）：'off' = 旧口径（七对只按 4 番估、多余精牌直接丢掉；
-   * 经典玩法与旧 A/B 臂逐位一致）；'ev' = 对齐引擎记账 + 新增豪华七对（12 番）方向。
+   * 经典玩法与旧 A/B 臂逐位一致）；'ev' = 对齐引擎记账 + 豪华七对方向
+   * （豪华七对 2026-09-18 由 12 → **6 番** 暂定，见 records/pattern-table-2026-09-18.md）。
    */
   readonly sevenPairsModel: SevenPairsModel
 }
