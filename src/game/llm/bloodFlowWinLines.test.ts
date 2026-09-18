@@ -8,6 +8,9 @@ import {
   type BloodFlowWinMomentGroup,
 } from './bloodFlowWinLines'
 import { winTier } from '../variants/lotus/bloodFlow/presentation'
+import { LLM_DRAW_LINES, LLM_LOSS_LINES, LLM_WIN_LINES } from './winLines'
+import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES } from './bloodFlowRoundLines'
+import { DECISION_SPEECH_LINES } from './decisionSpeech'
 import type { LlmStyle } from './config'
 import type { WinSource } from '../variants/lotus/bloodFlow/types'
 
@@ -43,6 +46,29 @@ it('全库无重复文案（同一次对局不会因串组出现同一句）', (
   expect(new Set(all).size).toBe(all.length)
 })
 
+it('两条文风红线：不重复局末库用滥的收尾套语；话痨不刷同一个语气词', () => {  const all = GROUPS.flatMap(group => STYLES.flatMap(style => [...BLOOD_FLOW_MOMENT_LINES[group][style]]))
+  // 「仅此而已」在 `bloodFlowRoundLines` / `winLines` 的高冷档里已反复出现（2026-09-19 评审点名），本库不得再用。
+  expect(all.filter(line => line.includes('仅此而已'))).toEqual([])
+  const chatty = GROUPS.flatMap(group => [...BLOOD_FLOW_MOMENT_LINES[group]['话痨']])
+  expect(chatty.filter(line => line.includes('啦')).length).toBeLessThanOrEqual(5)
+  // 句首语气词同样要打散：同一个开场字不得覆盖话痨台词的三分之一以上。
+  const openers = chatty.map(line => line.slice(0, 1))
+  const counts = [...new Set(openers)].map(opener => openers.filter(item => item === opener).length)
+  expect(Math.max(...counts)).toBeLessThanOrEqual(Math.floor(chatty.length / 3))
+})
+
+it('与既有三个台词库不重复成句（局末 / 经典 / 通用动作各说各的）', () => {
+  const moment = new Set(GROUPS.flatMap(group => STYLES.flatMap(style => [...BLOOD_FLOW_MOMENT_LINES[group][style]])))
+  const others = [
+    ...Object.values(LLM_WIN_LINES).flatMap(styles => Object.values(styles).flat()),
+    ...Object.values(LLM_LOSS_LINES).flat(), ...Object.values(LLM_DRAW_LINES).flat(),
+    ...Object.values(BLOOD_FLOW_WIN_LINES).flatMap(styles => Object.values(styles).flat()),
+    ...Object.values(BLOOD_FLOW_LOSS_LINES).flat(),
+    ...Object.values(DECISION_SPEECH_LINES).flatMap(styles => Object.values(styles).flat()),
+  ]
+  expect(others.filter(line => moment.has(line))).toEqual([])
+})
+
 it('基础档按胡法分组，不走性格通用库', () => {
   for (const source of SOURCES) {
     for (const style of STYLES) {
@@ -57,8 +83,25 @@ it('基础档按胡法分组，不走性格通用库', () => {
 it('高光档优先级：一炮多响 > 大牌 > 连胡 > 胡法基础档', () => {
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', multiWin: true, tier: 3, ordinal: 9 })).toBe('multi')
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 2, ordinal: 9 })).toBe('big')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 3 })).toBe('streak')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 2 })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 3, previousSource: 'discard' })).toBe('streak')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 2, previousSource: 'discard' })).toBe('discard-win')
+})
+
+it('连胡档只在「第 3 胡起且与上一胡同源」触发，胡法交替时始终保留胡法台词', () => {
+  // 同源连胡 → 连胡语气。
+  expect(bloodFlowWinMomentGroup({ source: 'self-draw', style: '话痨', ordinal: 3, previousSource: 'self-draw' })).toBe('streak')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 7, previousSource: 'discard' })).toBe('streak')
+  // 胡法交替（血流里自摸/吃胡交替是常态）→ 不得吞掉胡法区分。
+  for (const [source, previous] of [['self-draw', 'discard'], ['discard', 'self-draw'],
+    ['robbed-kong', 'discard'], ['kong-bloom', 'self-draw']] as const) {
+    expect(bloodFlowWinMomentGroup({ source, style: '话痨', ordinal: 5, previousSource: previous }),
+      `${previous} → ${source}`).toBe(SOURCE_GROUP[source])
+  }
+  // 本局前两胡即便同源也先说胡法本味（第 3 胡起才算「连」）。
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 2, previousSource: 'discard' })).toBe('discard-win')
+  // 没有上一胡（本局首胡，或跨局后的第一次）→ 基础档。
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 3, previousSource: null })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 3 })).toBe('discard-win')
 })
 
 it('轮换：同组相邻两次不重复，并按序号循环', () => {
@@ -68,7 +111,7 @@ it('轮换：同组相邻两次不重复，并按序号循环', () => {
     { group: 'discard-win', context: sequence => ({ source: 'discard', style, ordinal: 2, sequence }) },
     { group: 'robbed-kong-win', context: sequence => ({ source: 'robbed-kong', style, ordinal: 2, sequence }) },
     { group: 'kong-bloom-win', context: sequence => ({ source: 'kong-bloom', style, ordinal: 2, sequence }) },
-    { group: 'streak', context: sequence => ({ source: 'self-draw', style, ordinal: 3, sequence }) },
+    { group: 'streak', context: sequence => ({ source: 'self-draw', style, ordinal: 3, previousSource: 'self-draw', sequence }) },
     { group: 'big', context: sequence => ({ source: 'self-draw', style, tier: 3, sequence }) },
     { group: 'multi', context: sequence => ({ source: 'discard', style, multiWin: true, sequence }) },
   ]
