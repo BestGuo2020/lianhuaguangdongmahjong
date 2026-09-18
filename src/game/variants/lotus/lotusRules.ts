@@ -428,6 +428,12 @@ export function isWinningHand(hand: TileType[], exposedMeldCount: number, jokers
 
 // ── 番数与收付 ──────────────────────────────────────────────────────
 
+/** 结算底分：H = 底分 × 基础番数（与 LOTUS_RULESET.baseScore 同值）。 */
+export const FAN_UNIT = 100
+
+/** 天胡/地胡固定番数：三家各付「底分 × 10」，不叠加庄家/自摸/点炮者翻倍。 */
+export const OPENING_WIN_FAN = 10
+
 export interface ScoreFlags {
   dealer: boolean
   /** 普通点炮时，出铳者是否为庄家；自摸型结算忽略。 */
@@ -450,6 +456,11 @@ export interface WinSettlement {
   dealerPays: number
   nonDealerPays: number
   total: number
+  /**
+   * 平收番型（天胡/地胡）：未胡三家各付一份，不再按庄/闲身份分档，
+   * 也不把点炮者的那一笔翻倍。
+   */
+  flat?: boolean
 }
 
 export interface FanResult {
@@ -463,13 +474,13 @@ export interface FanResult {
 
 /**
  * 胡牌收付表（§7）：无论点炮还是自摸，未胡三家都要支付。
- * H = 100 × 基础番数。
+ * H = 底分 × 基础番数。
  */
 export function winPayments(
   baseFan: number,
   opts: { winnerIsDealer: boolean; selfDrawStyle: boolean; discarderIsDealer?: boolean },
 ): WinSettlement {
-  const H = 100 * baseFan
+  const H = FAN_UNIT * baseFan
   if (!opts.winnerIsDealer && !opts.selfDrawStyle) {
     // 三家基础共 4H；点炮者那一笔再翻倍：庄点炮 +2H，闲点炮 +1H。
     return { H, dealerPays: 2 * H, nonDealerPays: H, total: (opts.discarderIsDealer ? 6 : 5) * H }
@@ -478,13 +489,23 @@ export function winPayments(
     return { H, dealerPays: 0, nonDealerPays: 2 * H, total: 8 * H }      // 闲点庄：4H + 2H + 2H
   }
   if (!opts.winnerIsDealer && opts.selfDrawStyle) {
-    return { H, dealerPays: 4 * H, nonDealerPays: 2 * H, total: 8 * H }  // 闲自摸/地胡/闲抢杠
+    return { H, dealerPays: 4 * H, nonDealerPays: 2 * H, total: 8 * H }  // 闲自摸/闲抢杠
   }
-  return { H, dealerPays: 0, nonDealerPays: 4 * H, total: 12 * H }       // 庄自摸/天胡
+  return { H, dealerPays: 0, nonDealerPays: 4 * H, total: 12 * H }       // 庄自摸
 }
 
 /**
- * 结算详情。天胡/地胡：平收 8 番，不叠加庄家/自摸等翻倍（文档 §3）。
+ * 天胡/地胡收付表：未胡三家各付一份「底分 × 10」，合计 3H。
+ * 不计庄家 ×2、不计点炮者 ×2，也不叠加自摸/平胡（文档 §3、§7）。
+ */
+export function openingWinPayments(): WinSettlement {
+  const H = FAN_UNIT * OPENING_WIN_FAN
+  return { H, dealerPays: H, nonDealerPays: H, total: 3 * H, flat: true }
+}
+
+/**
+ * 结算详情。天胡/地胡（10 番）：三家各付「底分 × 10」，不计庄家 ×2、不计点炮者 ×2，
+ * 也不叠加自摸/平胡（文档 §3、§7）。
  * 其余：抢杠胡与杠上开花均「加计自摸和庄家」，即自摸 ×2 之外再各自 ×2。
  * 若手牌并非可胡牌型返回 null（调用方应已确认胡牌）。
  */
@@ -499,10 +520,10 @@ export function scoreFan(
   if (flags.tianhu || flags.dihu) {
     const label = flags.tianhu ? '天胡' : '地胡'
     return {
-      fan: 8,
-      baseFan: 8,
-      patterns: [{ label, multiplier: 8 }],
-      settlement: winPayments(8, { winnerIsDealer: flags.tianhu, selfDrawStyle: true }),
+      fan: OPENING_WIN_FAN,
+      baseFan: OPENING_WIN_FAN,
+      patterns: [{ label, multiplier: OPENING_WIN_FAN }],
+      settlement: openingWinPayments(),
     }
   }
   const base = evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers, jokerSubstitutes)
@@ -663,7 +684,7 @@ export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCoun
  */
 export const LOTUS_RULESET: RuleSet = {
   id: 'lotus-legacy',
-  baseScore: 100,
+  baseScore: FAN_UNIT,
   flow: {
     mode: 'single-win',
     continueAfterWin: false,
@@ -735,7 +756,8 @@ export const LOTUS_RULESET: RuleSet = {
       players.forEach((player, index) => {
         if (index === winnerIndex) return
         const basePayment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
-        const payment = index === sourceIndex ? basePayment * 2 : basePayment
+        // 平收番型（天胡/地胡）：点炮者的那一笔不翻倍。
+        const payment = !settlement.flat && index === sourceIndex ? basePayment * 2 : basePayment
         if (payment <= 0) return
         player.score -= payment
         total += payment

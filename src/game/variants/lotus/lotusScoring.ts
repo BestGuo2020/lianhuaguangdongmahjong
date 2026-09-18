@@ -11,6 +11,7 @@ export { applyKongScore }
  * 按收付表向未胡三家收款并计入赢家。
  * settlement 已按赢家身份（庄/闲、自摸/点炮）编码了庄支付额与非庄支付额；
  * 点炮时再由 sourceIndex 标记点炮者，将该玩家的支付额翻倍。
+ * 平收番型（settlement.flat，如天胡/地胡）三家等额，不做点炮者翻倍。
  */
 export function applyWinScore(
   players: GamePlayer[],
@@ -23,7 +24,7 @@ export function applyWinScore(
   players.forEach((player, index) => {
     if (index === winnerIndex) return
     const basePayment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
-    const payment = index === sourceIndex ? basePayment * 2 : basePayment
+    const payment = !settlement.flat && index === sourceIndex ? basePayment * 2 : basePayment
     if (payment <= 0) return
     player.score -= payment
     totalWon += payment

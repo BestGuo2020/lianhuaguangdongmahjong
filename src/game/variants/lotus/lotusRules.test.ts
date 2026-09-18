@@ -217,20 +217,21 @@ describe('番数与收付', () => {
   const pingHu: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east', 'east']
   const sevenPairs: TileType[] = ['m1', 'm1', 'm2', 'm2', 'm3', 'm3', 'p1', 'p1', 'p2', 'p2', 's7', 's7', 'east', 'east']
 
-  it('天胡：平收 8 番，不叠加庄/自摸', () => {
+  it('天胡：10 番，三家各付底分×10，不计庄/自摸', () => {
     const score = scoreFan(pingHu, 0, JOKERS, {
       dealer: true, selfDraw: true, robbedKong: false, kongBloom: false, tianhu: true, dihu: false,
     })!
-    expect(score.fan).toBe(8)
-    expect(score.patterns).toEqual([{ label: '天胡', multiplier: 8 }])
-    expect(score.settlement.total).toBe(9600)
+    expect(score.fan).toBe(10)
+    expect(score.patterns).toEqual([{ label: '天胡', multiplier: 10 }])
+    expect(score.settlement).toEqual({ H: 1000, dealerPays: 1000, nonDealerPays: 1000, total: 3000, flat: true })
   })
-  it('地胡：闲家收 8H', () => {
+  it('地胡：10 番，庄家那一笔也不翻倍（不计点炮者 ×2）', () => {
     const score = scoreFan(pingHu, 0, JOKERS, {
       dealer: false, selfDraw: false, robbedKong: false, kongBloom: false, tianhu: false, dihu: true,
     })!
-    expect(score.fan).toBe(8)
-    expect(score.settlement.total).toBe(6400)
+    expect(score.fan).toBe(10)
+    expect(score.patterns).toEqual([{ label: '地胡', multiplier: 10 }])
+    expect(score.settlement).toEqual({ H: 1000, dealerPays: 1000, nonDealerPays: 1000, total: 3000, flat: true })
   })
   it('收付表四行', () => {
     expect(winPayments(1, { winnerIsDealer: false, selfDrawStyle: false })).toEqual({ H: 100, dealerPays: 200, nonDealerPays: 100, total: 500 })

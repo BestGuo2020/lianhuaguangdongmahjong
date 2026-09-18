@@ -44,6 +44,8 @@ export interface WinSettlement {
   dealerPays: number
   nonDealerPays: number
   total: number
+  /** 平收番型（天胡/地胡）：三家等额，不做庄/闲分档，也不翻倍点炮者那一笔。 */
+  flat?: boolean
 }
 
 export interface WinScoreFlags {
