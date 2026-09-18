@@ -51,6 +51,16 @@
 
 **证据（追加二）**：`pnpm test` 全量通过、`npm run typecheck` 通过、`bloodFlowWinLines.test.ts` **11 项**、e2e `blood-flow.llm.spec.ts` **3 passed**。
 
+### 2026-09-19 追加三：连胡语义补全 + 大牌口径 + 4 条句子（用户评审第三轮）
+
+用户再问「现在觉得这些台词怎么样」，自评后按用户选择「三个一起改」落地：
+
+- **连胡语义补全（本批最主要的规则修正）**：原判据只看「该座位自己上一胡的来源」，不看中间有没有别人胡。探针数据里真的出现过（1 号位第 13 胡之前，0 号位胡过一次），此时仍会说「连着来，一步不乱。」「连胡不停，稳住！」——名不副实。`previousBloodFlowWinSource` 改为 `previousBloodFlowWin(view, seat, excludeBatchId?) → { source, self }`，台词库新增 `previousWasSelf`，连胡需同时满足**第 3 胡起 + 自己上一胡同源 + 全场上一胡也是自己**。副作用是连胡档更稀有（更值钱）。
+- **大牌口径改为取或**：原判据只看主番权重 ≥8（与光束 / 字效同源），导致「权重 4 + 硬胡 + 自摸 = 16 倍」这类大牌听不到大牌台词。新增 `bloodFlowWinMomentIsBig(score)` = 主番权重 ≥8 **或** 最终倍数 ≥8；`BloodFlowWinMomentContext.tier` 换成 `big: boolean`，权重档 `bloodFlowWinMomentTier` 保留（仍与 `presentation.winTier` 同阈值并有等价断言）。
+- **4 条句子替换**：高冷·杠上开花 `开杠赏我一张。`→`开杠还能摸到。`（原句「赏」像别人给的，实际是自己开杠摸的）、高冷·大牌 `这一手，配得上。`→`这手够重，收。`（原句指代悬空）、稳健·大牌 `牌型走通了，收下。`→`牌面凑齐了，收下。`（原句是引擎腔术语）、高冷·连胡 `连着来，也可以。`→`再一手。`（原句像勉为其难）。
+
+**证据（追加三）**：`pnpm test` 全量通过；`npm run typecheck` 通过；`bloodFlowWinLines.test.ts` **12 项**（连胡三条条件各自的反例、大牌取或的 8 组边界、档位集合固定、文风红线、跨库查重）；e2e `blood-flow.llm.spec.ts` **3 passed**（含「一局里至少覆盖两个胡法基础档」）。
+
 
 ## 2026-09-12：AI 真·大牌路线（v4）+ 精牌感知上线（只跑部署自检）
 

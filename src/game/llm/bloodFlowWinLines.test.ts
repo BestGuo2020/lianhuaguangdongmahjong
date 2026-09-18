@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import {
   BLOOD_FLOW_MOMENT_LINES,
   bloodFlowWinMomentGroup,
+  bloodFlowWinMomentIsBig,
   bloodFlowWinMomentLine,
   bloodFlowWinMomentTier,
   type BloodFlowWinMomentContext,
@@ -90,32 +91,39 @@ it('基础档按胡法分组，不走性格通用库', () => {
       expect(bloodFlowWinMomentGroup({ source, style })).toBe(SOURCE_GROUP[source])
       // 首次胡牌、普通番：直接落在该胡法的基础档里。
       expect(BLOOD_FLOW_MOMENT_LINES[SOURCE_GROUP[source]][style]).toContain(
-        bloodFlowWinMomentLine({ source, style, ordinal: 1, tier: 0, sequence: 0 }))
+        bloodFlowWinMomentLine({ source, style, ordinal: 1, big: false, sequence: 0 }))
     }
   }
 })
 
 it('高光档优先级：大牌 > 连胡 > 胡法基础档', () => {
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 3, ordinal: 9, previousSource: 'discard' })).toBe('big')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 2, ordinal: 9 })).toBe('big')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 3, previousSource: 'discard' })).toBe('streak')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 2, previousSource: 'discard' })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', big: true, ordinal: 9,
+    previousSource: 'discard', previousWasSelf: true })).toBe('big')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', ordinal: 3,
+    previousSource: 'discard', previousWasSelf: true })).toBe('streak')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', ordinal: 2,
+    previousSource: 'discard', previousWasSelf: true })).toBe('discard-win')
 })
 
-it('连胡档只在「第 3 胡起且与上一胡同源」触发，胡法交替时始终保留胡法台词', () => {
-  // 同源连胡 → 连胡语气。
-  expect(bloodFlowWinMomentGroup({ source: 'self-draw', style: '话痨', ordinal: 3, previousSource: 'self-draw' })).toBe('streak')
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 7, previousSource: 'discard' })).toBe('streak')
+it('连胡档三个条件：第 3 胡起、与自己上一胡同源、且全场上一胡也是自己', () => {
+  // 真连胡 → 连胡语气。
+  expect(bloodFlowWinMomentGroup({ source: 'self-draw', style: '话痨', ordinal: 3, previousSource: 'self-draw', previousWasSelf: true })).toBe('streak')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 7, previousSource: 'discard', previousWasSelf: true })).toBe('streak')
+  // 中间别人胡过（`previousWasSelf === false`）→ 不得自称「连着来」（2026-09-19 评审二）。
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 7, previousSource: 'discard', previousWasSelf: false })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'self-draw', style: '话痨', ordinal: 4, previousSource: 'self-draw', previousWasSelf: false })).toBe('self-draw')
+  // 缺省 → 保守视为不连胡。
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 7, previousSource: 'discard' })).toBe('discard-win')
   // 胡法交替（血流里自摸/吃胡交替是常态）→ 不得吞掉胡法区分。
   for (const [source, previous] of [['self-draw', 'discard'], ['discard', 'self-draw'],
     ['robbed-kong', 'discard'], ['kong-bloom', 'self-draw']] as const) {
-    expect(bloodFlowWinMomentGroup({ source, style: '话痨', ordinal: 5, previousSource: previous }),
+    expect(bloodFlowWinMomentGroup({ source, style: '话痨', ordinal: 5, previousSource: previous, previousWasSelf: true }),
       `${previous} → ${source}`).toBe(SOURCE_GROUP[source])
   }
   // 本局前两胡即便同源也先说胡法本味（第 3 胡起才算「连」）。
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 2, previousSource: 'discard' })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 2, previousSource: 'discard', previousWasSelf: true })).toBe('discard-win')
   // 没有上一胡（本局首胡，或跨局后的第一次）→ 基础档。
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 3, previousSource: null })).toBe('discard-win')
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 3, previousSource: null, previousWasSelf: false })).toBe('discard-win')
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '话痨', ordinal: 3 })).toBe('discard-win')
 })
 
@@ -126,8 +134,8 @@ it('轮换：同组相邻两次不重复，并按序号循环', () => {
     { group: 'discard-win', context: sequence => ({ source: 'discard', style, ordinal: 2, sequence }) },
     { group: 'robbed-kong-win', context: sequence => ({ source: 'robbed-kong', style, ordinal: 2, sequence }) },
     { group: 'kong-bloom-win', context: sequence => ({ source: 'kong-bloom', style, ordinal: 2, sequence }) },
-    { group: 'streak', context: sequence => ({ source: 'self-draw', style, ordinal: 3, previousSource: 'self-draw', sequence }) },
-    { group: 'big', context: sequence => ({ source: 'self-draw', style, tier: 3, sequence }) },
+    { group: 'streak', context: sequence => ({ source: 'self-draw', style, ordinal: 3, previousSource: 'self-draw', previousWasSelf: true, sequence }) },
+    { group: 'big', context: sequence => ({ source: 'self-draw', style, big: true, sequence }) },
   ]
   for (const { group, context } of cases) {
     const lines = [0, 1, 2, 3, 4].map(sequence => bloodFlowWinMomentLine(context(sequence)))
@@ -151,4 +159,19 @@ it('主番档与牌桌演出的 winTier 同阈值（≥4 / ≥8 / ≥16）', () 
     expect(bloodFlowWinMomentTier(score)).toBe(winTier({ score: { items: [{ weight }] } } as never))
   }
   expect(bloodFlowWinMomentTier({ items: [] })).toBe(0)
+})
+
+it('大牌档取「主番权重 ≥8 或 最终倍数 ≥8」', () => {
+  // 权重够大：无论倍数（低倍也可能出现，如封顶前的小硬胡）都算大牌。
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 8 }], finalMultiplier: 8 })).toBe(true)
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 16 }], finalMultiplier: 2 })).toBe(true)
+  // 权重不够但倍率高（权重 4 + 硬胡 + 自摸 = 16 倍）→ 也算大牌，这是本次口径修正的重点。
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 4 }], finalMultiplier: 16 })).toBe(true)
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 2 }], finalMultiplier: 8 })).toBe(true)
+  // 两个都不够 → 基础档。
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 4 }], finalMultiplier: 4 })).toBe(false)
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 1 }], finalMultiplier: 2 })).toBe(false)
+  // 缺 finalMultiplier 时只看权重（血流 `PublicWinScore` 恒有该字段，这里只作防御）。
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 8 }] })).toBe(true)
+  expect(bloodFlowWinMomentIsBig({ items: [{ weight: 1 }] })).toBe(false)
 })
