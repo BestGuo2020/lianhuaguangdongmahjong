@@ -1,4 +1,6 @@
 import { LLM_WIN_LINES, LLM_LOSS_LINES, LLM_DRAW_LINES } from './winLines'
+import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES } from './bloodFlowRoundLines'
+import { animeVoiceLine } from './animeCharacters'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bloodFlowDecisionBudget, bloodFlowDecisionPrompt, createBloodFlowDecisions, createBloodFlowReactions, remoteVoiceIdentity } from './bloodFlowRuntime'
 import { BloodFlowEngine } from '../variants/lotus/bloodFlow/engine'
@@ -90,6 +92,33 @@ describe('E08 decision and reaction isolation', () => {
       for (const call of emit.mock.calls as any) expect(originalLines).toContain(call[0].text)
     })
   }
+  it('llmAnime uses the seat character result line, other themes keep the style library', async () => {
+    const emit = vi.fn(async () => {})
+    const seatView = view()
+    seatView.public = { ...seatView.public, status: 'settled',
+      batches: [{ winners: [{ winner: 1, ordinal: 1, score: { source: 'discard' } }] }],
+      roundResult: { ...simulateRound(1).result, winCounts: [1, 0, 0, 0], winNet: [100, 0, 0, 0], kongNet: [0, 0, 0, 0] } } as any
+    for (const [theme, character] of [['llmAnime', () => 'deepseek'], ['llm', () => 'deepseek'], ['llmAnime', () => undefined]] as const) {
+      emit.mockClear()
+      const runner = createBloodFlowReactions({ provider: seat => seat > 0 ? provider : null, theme: () => theme,
+        current: () => true, emit, character })
+      await runner.run(seatView)
+      const lines = emit.mock.calls.map((args: any) => args[0])
+      expect(lines.map(line => line.seat), `${theme}`).toEqual([1, 2, 3])
+      if (theme === 'llmAnime' && character() === 'deepseek') {
+        // 赢家（点炮胡）与其余两家分别说角色专属的 win-discard / loss，音色也换成该角色。
+        expect(lines[0].text).toBe(animeVoiceLine('deepseek', 'win-discard'))
+        expect(lines[0].voiceKey).toBe('deepseek')
+        expect(lines[1].text).toBe(animeVoiceLine('deepseek', 'loss'))
+      } else {
+        // 非 llmAnime（含 llm 主题）与没有角色的座位：血流专属局末台词库不变。
+        const fallback = [...Object.values(BLOOD_FLOW_WIN_LINES).flatMap(styles => styles.稳健),
+          ...BLOOD_FLOW_LOSS_LINES.稳健, ...LLM_DRAW_LINES.稳健]
+        for (const line of lines) expect(fallback).toContain(line.text)
+        expect(lines[0].voiceKey).toBe('default')
+      }
+    }
+  })
   it('theme/round cancellation rejects late commentary without cancelling a valid decision', async () => {
     let finishReaction!: (v: any) => void, finishDecision!: (v: any) => void, decisionSignal!: AbortSignal
     const decisions = createBloodFlowDecisions({ provider: () => provider, waits: async () => [],

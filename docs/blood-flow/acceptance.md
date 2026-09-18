@@ -1,6 +1,32 @@
 # 血流验收记录与复测入口
 
-更新日期：2026-09-12。本页维护已有证据和待取得的证据；最新补修为「AI 真·大牌路线（v4）+ 精牌感知上线（按收敛口径只跑部署自检）」。此前补修为「v3 公开番型 + 赌/弃政策（硬约束）上线 + 两场线上整场验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+更新日期：2026-09-19。本页维护已有证据和待取得的证据；最新补修为「血流胡牌瞬间台词与气泡（llm / llmAnime 单调化修复）」。此前补修为「AI 真·大牌路线（v4）+ 精牌感知上线（按收敛口径只跑部署自检）」与「v3 公开番型 + 赌/弃政策（硬约束）上线 + 两场线上整场验收」。早先“仅整理文档”的说明只适用于页末那次整理。任务进度只维护在[当前任务](tasks.md)。
+
+## 2026-09-19：血流胡牌瞬间台词与气泡（llm / llmAnime 单调化修复）
+
+问题（用户反馈）：「血流玩法，llm 主题和 llmAnime 主题吃胡和自摸没有什么台词，就是只有胡、自摸，很单调」。逐条定位到四个通道（纯前端、不新增模型请求——沿用 2026-09-08「胡不新增请求或台词通道」约定）：
+
+- 桌面动作字是静态表：`themeEventPresentation.ts` / `animeActionPresentation.ts` 只有「胡 / 自摸 / 抢杠胡」。
+- llm 主题赢家人声只有两个来源：模型原话（**仅当该窗口有多个候选且模型真的给了合规 message**）与兜底 `decisionSpeech('win')`；而该行**每性格只有一句**（激进「拿下！」/稳健「收下了。」/话痨「这手我拿下啦！」/高冷「胡。」），`sequence++` 轮换实际无效。血流 `decide()` 对**锁手座位直接本地出招**、单候选窗口也直接返回，这两条路径根本不请求模型，而锁手后会连续胡很多次 → 一局里绝大多数胡都落在这句唯一台词上。
+- llmAnime 赢家用角色动作键 `hu` / `zimo` / `qiangganghu`，**每角色每胡法只有一句**；且血流局末感言走通用性格库 `bloodFlowRoundLines.ts`，角色专属的 `win-self-draw` / `win-discard` / `win-robbed-kong` / `loss` / `draw` 在血流里**完全没用上**（经典玩法才用）。
+- 两个主题的赢家台词此前**只有声音、没有气泡**，牌桌上看不到说了什么。
+
+**本批改动**
+
+- 新增 `src/game/llm/bloodFlowWinLines.ts`（与经典 `winLines.ts`、血流局末 `bloodFlowRoundLines.ts` 三库分工：本库只管胡牌**当场**，不提「收官 / 本局结束」）：4 胡法（自摸 / 点炮 / 抢杠 / 杠后自摸）× 4 性格 × 3 变体 + 3 高光档（连胡 / 大牌 / 一炮多响）× 4 性格 × 3 变体，共 84 条；档位优先级 **一炮多响 > 大牌（主番 ≥8）> 连胡（本局第 3 胡起）> 胡法基础档**；同档按跨局序号轮换；主番档阈值与 `presentation.ts:winTier` 同源并有等价断言。
+- 接线：`bloodFlowRuntime.decide()` 的胡牌预合成台词与 `useBloodFlowGame.scheduleWinVoices` 的兜底都改用本库；`resolveDecisionSpeech` 新增可选 fallback 参数，**只替换原兜底句，模型原话仍然优先**。`jade / rosewood / happyMahjong / llm` 四个主题的大模型赢家共用这条通道（此前四主题共用同一句通用 win 台词）。
+- 胡牌瞬间气泡：赢家台词同时落 `actionBubbles`（4s）；本局结算经 `cancelActionSpeech` 清理，局末同拍不补气泡（保证 settle 时动作气泡通道为空）。
+- llmAnime 局末感言改用角色专属结果台词：新增 `bloodFlowAnimeResultKey`（`LlmRoundReaction` → 既有 `AnimeResultVoiceKey`），`createBloodFlowReactions` 新增可选 `character(seat)`；有角色的座位用角色文案 + 角色音色，无角色座位（普通 bot）与其它主题保持原性格台词。**不新增角色合同文案键、不动后端 `anime_characters.py` / `fixed_lines.py`**。
+
+**证据**
+
+- 前端全量 `pnpm test`：**1553 passed / 2 skipped**；`npm run typecheck` 通过。
+- 新增 `bloodFlowWinLines.test.ts` **7 项**：每档三条唯一、≤16 字、无「你/他/她/大家/别人/各位」指代、无幕后词与暗手结构词、全库无重复、胡法分组与高光档优先级、轮换循环、与 `winTier` 同阈值。`bloodFlowRoundLines.test.ts` 新增 anime 结果键映射；`bloodFlowRuntime.test.ts` 新增「llmAnime 用角色结果台词 / 其它主题与无角色座位保持性格库」；`bloodFlowCommonDecision.test.ts` 新增「模型无原话时按胡法兜底且点炮不借用自摸语气」。
+- e2e `blood-flow.llm.spec.ts` **3 passed（jade / llm / llmAnime）**，并**同时修掉一处验收失真**：该用例此前不传 `aiPlayerSeeds`，四个座位全是普通 bot，`isLlmWinner` 恒为 false——赢家既不出声也不出气泡，「大模型赢家有自己的台词」实际只验到 `decide()` 里的**预合成**。本批按 `App.vue` 的真实接入方式补上 3 个大模型座位（`isLlm/playerKind/characterId`）后，才真正验到「胡牌瞬间台词进 TTS（`momentTts > 0`）＋真的显示成气泡（整局气泡文字集合含即时台词库文案）」；llmAnime 局末感言断言改为角色专属文案集合（`animeRoundTts > 0` 且三个气泡文案 ∈ 角色结果台词）。
+- 相关 e2e：先按受影响范围单跑 `blood-flow.reactions` / `tts-midpoint` / `effects` / `local` / `presentation` → **29 passed**；再按本机口径单 worker 顺序跑 `blood-flow.audio` / `flights` / `payments` / `refinement` / `tts-midpoint` → **31 passed / 2 failed**。两条失败（`payments.spec.ts:4` 三响收付、`refinement.spec.ts:100` 十次合并）在**同样命名的干净 HEAD 基线**（`git stash` 后）以完全相同的断言失败复现，属本机既有的时序用例不稳定（`motionScale` 时序 + 负载），与本批改动无关；默认并行度跑全量血流 e2e 为 113 passed / 16 failed，单 worker 复跑后收敛到同一组 2 条。本批不修改这两条既有用例。
+
+**未做**：llmAnime **胡牌瞬间**仍是每角色每胡法一句（`hu` / `zimo` / `qiangganghu`）；扩容需要新增角色固定文案键，属前端 `animeCharacters.ts` 合同 + 缓存版本 + 后端 `app/game/anime_characters.py`、`app/tts/fixed_lines.py` 同步改动（方案 B，本批按用户选择不做）。
+
 
 ## 2026-09-12：AI 真·大牌路线（v4）+ 精牌感知上线（只跑部署自检）
 

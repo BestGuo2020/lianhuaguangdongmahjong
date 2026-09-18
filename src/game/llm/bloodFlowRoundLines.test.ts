@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
-import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES, bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
+import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES, bloodFlowAnimeResultKey, bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { llmRoundReactionLine } from './winLines'
+import { ANIME_RESULT_VOICE_KEYS, animeVoiceLine } from './animeCharacters'
 import type { LlmStyle } from './config'
 import type { LlmWinType } from './winLines'
 
@@ -55,4 +56,20 @@ it('血流赢家台词与共享库不同（专属语境，不误用经典台词�
         .not.toBe(llmRoundReactionLine(reaction, style, 0))
     }
   }
+})
+
+it('llmAnime 局末感言映射到角色专属固定文案键', () => {
+  expect(bloodFlowAnimeResultKey({ outcome: 'draw' })).toBe('draw')
+  expect(bloodFlowAnimeResultKey({ outcome: 'loss' })).toBe('loss')
+  expect(bloodFlowAnimeResultKey({ outcome: 'win', type: 'self-draw' })).toBe('win-self-draw')
+  expect(bloodFlowAnimeResultKey({ outcome: 'win', type: 'discard-win' })).toBe('win-discard')
+  expect(bloodFlowAnimeResultKey({ outcome: 'win', type: 'robbed-kong-win' })).toBe('win-robbed-kong')
+  // 只使用既有结果类键：不新增角色合同文案，也不借用动作类（吃碰杠胡）键。
+  for (const reaction of [{ outcome: 'draw' }, { outcome: 'loss' },
+    ...WIN_TYPES.map(type => ({ outcome: 'win', type } as const))] as const) {
+    expect(ANIME_RESULT_VOICE_KEYS).toContain(bloodFlowAnimeResultKey(reaction))
+  }
+  expect(bloodFlowAnimeResultKey({ outcome: 'win', type: 'self-draw' })).not.toBe('hu')
+  // 每个角色都提供这五条结果台词，因此血流局末感言对任意角色都有专属文案。
+  expect(animeVoiceLine('deepseek', 'win-discard')).toBe('接得漂亮，这一局我赢啦！')
 })

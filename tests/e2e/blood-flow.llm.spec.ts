@@ -1,14 +1,27 @@
 import { expect, test } from '@playwright/test'
 import { LLM_DRAW_LINES } from '../../src/game/llm/winLines'
 import { BLOOD_FLOW_LOSS_LINES, BLOOD_FLOW_WIN_LINES } from '../../src/game/llm/bloodFlowRoundLines'
+import { BLOOD_FLOW_MOMENT_LINES } from '../../src/game/llm/bloodFlowWinLines'
+import { ANIME_CHARACTERS, ANIME_RESULT_VOICE_KEYS } from '../../src/game/llm/animeCharacters'
 // 血流自 2026-09-08 起赢家/输家用血流专属台词库（荒庄仍用共享库），期望集合必须跟着改——
 // 此前这里只取共享 winLines，导致「局末台词 TTS > 0」永远匹配不到（断言过期，非产品问题）。
 const roundLines=new Set([...Object.values(BLOOD_FLOW_WIN_LINES).flatMap(s=>s.稳健),...BLOOD_FLOW_LOSS_LINES.稳健,...LLM_DRAW_LINES.稳健].map(t=>t.normalize('NFKC')))
+// llmAnime 在血流里的局末感言自 2026-09-19 起改用角色专属固定文案（win-self-draw / win-discard /
+// win-robbed-kong / loss / draw），与经典玩法同一批键；期望集合按角色合同生成。
+const animeRoundLines=new Set(ANIME_CHARACTERS.flatMap(character=>ANIME_RESULT_VOICE_KEYS.map(key=>character.lines[key].normalize('NFKC'))))
+// 胡牌瞬间的即时台词库（锁手连胡等未走模型的窗口）：llm 主题赢家至少要说出一句其中的台词。
+const momentLines=new Set(Object.values(BLOOD_FLOW_MOMENT_LINES).flatMap(groups=>Object.values(groups).flat()).map(t=>t.normalize('NFKC')))
+
+// 座位 1-3 按真实接入方式声明为大模型座位（App.vue 传 `localLlmSeeds`）：不传种子时
+// `isLlmWinner` 恒为 false，赢家既不出声也不出气泡，胡牌台词只走到预合成，验收不到真行为。
+const LLM_SEEDS = ['deepseek', 'qwen', 'gpt'].map((characterId, index) => ({
+  name: `Fixture${index + 1}`, avatar: '', isLlm: true, characterId, playerKind: 'llm' as const,
+}))
 
 test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
   test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
-    let decisions = 0, reactions = 0, tts = 0, roundTts = 0, winTts = 0, protectedDecisions = 0
+    let decisions = 0, reactions = 0, tts = 0, roundTts = 0, animeRoundTts = 0, momentTts = 0, protectedDecisions = 0
     const unsafeSpeech: string[] = []
     await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
@@ -37,38 +50,55 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
       }
       if (!available) { await route.fulfill({ status: 503, body: 'offline' }); return }
       const choice = isReaction ? 'COMMENT' : payload.candidates[0].id
+      // 胡牌窗口故意不给 message：真实对局里锁手连胡、单候选窗口同样不请求模型，
+      // 这条路径必须落到血流即时台词库（模型原话优先由单测 `bloodFlowCommonDecision` 锁定）。
+      const message = isReaction ? '这一局结束了，下局再来' : payload.currentWin ? '' : '这张先走。'
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
-        content: JSON.stringify({ choice, message: isReaction ? '这一局结束了，下局再来' : payload.currentWin ? '这把稳了。' : '这张先走。', important: true, mandatory: true }),
+        content: JSON.stringify({ choice, message, important: true, mandatory: true }),
       } }] }) })
     })
     await page.route('**/api/local-tts/synthesize', async route => {
       const body = route.request().postDataJSON()
       tts++
       if (roundLines.has(body.text)) roundTts++
-      if (body.text === '这把稳了。') winTts++
+      if (animeRoundLines.has(body.text)) animeRoundTts++
+      if (momentLines.has(body.text.normalize('NFKC'))) momentTts++
       await route.fulfill({ status: 503, body: 'tts unavailable' })
     })
     await page.goto('/?bloodFlow=1')
-    await page.evaluate(async theme => {
+    await page.evaluate(async ({ theme, seeds }) => {
+      // 记录整局出现过的牌桌气泡文字：胡牌瞬间的即时台词必须真的落到气泡通道
+      // （2026-09-19 之前赢家台词只有声音，牌桌上什么都看不到）。
+      const seen = new Set<string>()
+      ;(window as any).__bfSeenBubbles = seen
+      setInterval(() => {
+        const bubbles = (window as any).__bfLlmPort?.capabilities?.value?.bloodFlow?.actionBubbles
+        if (bubbles) for (const bubble of Object.values(bubbles) as { text: string }[]) seen.add(bubble.text)
+      }, 50)
       const { useBloodFlowGame } = await import('/src/game/variants/lotus/bloodFlow/useBloodFlowGame.ts')
       const { buildRingWall } = await import('/src/game/variants/lotus/lotusWall.ts')
       const { seededRandom } = await import('/src/game/variants/lotus/bloodFlow/simulation.ts')
-      const port = useBloodFlowGame({ autoplay: true, paceMs: 0, getThemeName: () => theme, playSoundAndWait: async () => {} })
+      const port = useBloodFlowGame({ autoplay: true, paceMs: 0, getThemeName: () => theme, playSoundAndWait: async () => {}, aiPlayerSeeds: seeds })
       ;(window as any).__bfLlmPort = port
       await port.startGame('east', { initialWall: buildRingWall(seededRandom(91)), openingDice: [2, 3], openingSecondDice: [1, 4] })
-    }, theme)
+    }, { theme, seeds: LLM_SEEDS })
     await expect.poll(() => page.evaluate(() => (window as any).__bfLlmPort.phase.value), { timeout: 120_000, intervals: [1000] }).toBe('settled')
     expect(decisions).toBeGreaterThan(0)
     expect(protectedDecisions).toBeGreaterThan(0)
-    // 大模型赢家在所有主题都用自己的台词 TTS（对齐非血流，含 jade）；
-    // llmAnime 走角色固定台词（文本不在 winTts 计数内），模型不可用时回退原逻辑。
-    if (available && theme !== 'llmAnime') expect(winTts).toBeGreaterThan(0)
+    // 胡牌窗口台词：llmAnime 走角色固定台词；其余主题的胡牌瞬间必须落在血流即时台词库
+    // （按胡法/档位/序号轮换），并且这句话真的显示成气泡。
+    if (available && theme !== 'llmAnime') {
+      expect(momentTts).toBeGreaterThan(0)
+      const seen = await page.evaluate(() => [...((window as any).__bfSeenBubbles as Set<string>)])
+      expect(seen.some(text => momentLines.has(String(text).normalize('NFKC')))).toBe(true)
+    }
     expect(reactions).toBe(0) // Round lines come from the original library, never COMMENT requests.
     if (theme !== 'jade') {
-      await expect.poll(() => roundTts, { timeout: 20_000 }).toBeGreaterThan(0)
+      const expectedRoundLines = theme === 'llmAnime' ? animeRoundLines : roundLines
+      await expect.poll(() => theme === 'llmAnime' ? animeRoundTts : roundTts, { timeout: 20_000 }).toBeGreaterThan(0)
       const texts = await page.evaluate(() => Object.values((window as any).__bfLlmPort.capabilities.value.bloodFlow.roundBubbles).map((b: any) => b.text))
       expect(texts).toHaveLength(3)
-      for (const text of texts) expect(roundLines.has(String(text).normalize('NFKC'))).toBe(true)
+      for (const text of texts) expect(expectedRoundLines.has(String(text).normalize('NFKC'))).toBe(true)
       expect(await page.evaluate(() => Object.keys((window as any).__bfLlmPort.capabilities.value.bloodFlow.actionBubbles))).toEqual([])
     }
     if (!available) {
