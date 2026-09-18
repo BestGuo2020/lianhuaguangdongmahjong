@@ -31,14 +31,14 @@ import type { NetworkOpening } from './network/protocol'
 import type { HandWaitHints, WaitScores } from '../patterns/handWaits'
 import { createEvaluatorService } from '../patterns/evaluatorService'
 import { createBloodFlowAudioBridge } from './audioBridge'
-import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, previousBloodFlowWinSource, remoteVoiceIdentity, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
+import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, previousBloodFlowWin, remoteVoiceIdentity, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
 import type { LlmStyle, LlmTtsVoiceKey } from '../../../llm/config'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from '../../../llm/localTtsClient'
 import { playLlmAudioGroup } from '../../../core/presentation/llmAudioBus'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 import { createAnimeFixedTtsRequest } from '../../../llm/animeFixedTts'
 import { animeVoiceKeyForTableAction } from '../../../llm/animeFixedTtsExecutor'
-import { bloodFlowWinMomentLine, bloodFlowWinMomentTier } from '../../../llm/bloodFlowWinLines'
+import { bloodFlowWinMomentIsBig, bloodFlowWinMomentLine } from '../../../llm/bloodFlowWinLines'
 import { actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
 import { shouldSuppressLegacyAnimeSpeech } from '../../../core/presentation/animeAudioPolicy'
 import type { BloodFlowWsAudio, BloodFlowWsSpeech } from './ws/authority'
@@ -275,15 +275,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const winType = (source: string): TableActionEvent['type'] => source === 'self-draw' || source === 'kong-bloom' ? 'self-draw'
       : source === 'robbed-kong' ? 'robbed-kong-win' : 'discard-win'
     const effectFile = (source: string) => source === 'self-draw' || source === 'kong-bloom' ? 'zimo.mp3' : 'hu.mp3'
-    // 未走模型（锁手座位、单候选窗口、模型没给原话）时的胡牌台词：按胡法 + 主番档 +
-    // 同源连胡分档，并按跨局序号轮换，避免整局反复同一句。序号叠加座位号：一炮多响时
-    // 各赢家各说自己的胡牌台词（用户 2026-09-19 决定不设多响专属台词），且不会同拍同句。
+    // 未走模型（锁手座位、单候选窗口、模型没给原话）时的胡牌台词：按胡法 + 大牌 + 真连胡分档，
+    // 并按跨局序号轮换，避免整局反复同一句。序号叠加座位号：一炮多响时各赢家各说自己的胡牌
+    // 台词（用户 2026-09-19 决定不设多响专属台词），且不会同拍同句。
     const momentLine = (record: WinBatch['winners'][number], style: LlmStyle) => {
       const sequence = winLineSequences.get(record.winner) ?? 0
       winLineSequences.set(record.winner, sequence + 1)
+      const previous = previousBloodFlowWin(snapshot, record.winner, batch.batchId)
       return bloodFlowWinMomentLine({ source: record.score.source, style, ordinal: record.ordinal,
-        tier: bloodFlowWinMomentTier(record.score),
-        previousSource: previousBloodFlowWinSource(snapshot, record.winner, batch.batchId), sequence: sequence + record.winner })
+        big: bloodFlowWinMomentIsBig(record.score),
+        previousSource: previous.source, previousWasSelf: previous.self, sequence: sequence + record.winner })
     }
     const tasks: (() => Promise<void>)[] = []
     if (theme === 'llmAnime') {

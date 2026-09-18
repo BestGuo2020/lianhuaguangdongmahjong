@@ -19,7 +19,7 @@ import {
   bloodFlowEvGateFromEnv, evaluateEvGate, type BloodFlowEvGateConfig,
 } from '../variants/lotus/bloodFlow/evGate'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
-import { bloodFlowWinMomentLine, bloodFlowWinMomentTier } from './bloodFlowWinLines'
+import { bloodFlowWinMomentIsBig, bloodFlowWinMomentLine } from './bloodFlowWinLines'
 import { animeVoiceLine, isCharacterId, resolveAnimeCharacter } from './animeCharacters'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
@@ -39,16 +39,19 @@ export function localBloodFlowProvider(seat: Seat): LlmProviderPreset | null {
 }
 
 /**
- * 本局该座位**上一胡**的来源；没有上一胡时返回 null。胡牌台词库用它判断「同源连胡」
- * （第 3 胡起且与上一胡同源才升级成连胡语气，避免胡法区分被连胡档吞掉）。
+ * 上一胡信息，供胡牌台词库判断「连胡」：`source` 是该座位自己上一胡的来源，
+ * `self` 表示**全场上一胡也是该座位**（中间没人胡过）。两者缺一都不算连胡。
  * `excludeBatchId` 供确认快照一侧排除「本次刚提交的这一批」。
  */
-export function previousBloodFlowWinSource(view: BloodFlowSeatView, seat: Seat, excludeBatchId?: string): WinSource | null {
-  return view.public.batches
+export function previousBloodFlowWin(view: BloodFlowSeatView, seat: Seat, excludeBatchId?: string):
+{ source: WinSource | null; self: boolean } {
+  const records = view.public.batches
     .filter(batch => batch.batchId !== excludeBatchId)
     .flatMap(batch => batch.winners)
-    .filter(record => record.winner === seat)
-    .at(-1)?.score.source ?? null
+  return {
+    source: records.filter(record => record.winner === seat).at(-1)?.score.source ?? null,
+    self: records.at(-1)?.winner === seat,
+  }
 }
 
 const REMOTE_STYLES: readonly LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
@@ -215,10 +218,11 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
           if(selected.action.kind==='win'){
             const score=view.ownScore, rotation=winSequence++
             // 轮换序号叠加座位号：一炮多响里同批赢家不会说同一句（多响不设专属台词）。
+            const previous=previousBloodFlowWin(view,view.seat)
             const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,rotation,
               {}, score ? bloodFlowWinMomentLine({ source: score.source, style: provider.style,
-                ordinal: view.public.seats[view.seat].winCount + 1, tier: bloodFlowWinMomentTier(score),
-                previousSource: previousBloodFlowWinSource(view, view.seat), sequence: rotation + view.seat }) : undefined)
+                ordinal: view.public.seats[view.seat].winCount + 1, big: bloodFlowWinMomentIsBig(score),
+                previousSource: previous.source, previousWasSelf: previous.self, sequence: rotation + view.seat }) : undefined)
             const urlPromise=getLocalTtsClient().resolveAudioUrl(text,voiceKey,provider.style).catch(()=>null)
             winLines.set(`${view.window!.id}/${view.seat}`,{text,style:provider.style,voiceKey,urlPromise})
           }

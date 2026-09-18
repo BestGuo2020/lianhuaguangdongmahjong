@@ -4,7 +4,7 @@ import {bloodFlowSeatView} from '../variants/lotus/bloodFlow/seatView'
 import {seededRandom} from '../variants/lotus/bloodFlow/simulation'
 import {bloodFlowDecisionBudget,bloodFlowDecisionPrompt,createBloodFlowDecisions} from './bloodFlowRuntime'
 import {buildBloodFlowDecisionInput} from './bloodFlowDecisionInput'
-import {BLOOD_FLOW_MOMENT_LINES,bloodFlowWinMomentLine,bloodFlowWinMomentTier} from './bloodFlowWinLines'
+import {BLOOD_FLOW_MOMENT_LINES,bloodFlowWinMomentIsBig,bloodFlowWinMomentLine} from './bloodFlowWinLines'
 import {scorePatterns} from '../variants/lotus/patterns/score'
 import type {LlmProviderPreset} from './config'
 
@@ -102,7 +102,7 @@ it('falls back to the blood-flow moment line by win source when the model gives 
   // 此前每性格只有一句通用 win 台词（「胡。」「拿下！」），自摸与吃胡听起来一模一样。
   expect(BLOOD_FLOW_MOMENT_LINES['self-draw'][provider.style]).toContain(line?.text)
   expect(bloodFlowWinMomentLine({ source: 'self-draw', style: provider.style, ordinal: 1,
-    tier: bloodFlowWinMomentTier(score), sequence: 0 })).toBe(line?.text)
+    big: bloodFlowWinMomentIsBig(score), sequence: 0 })).toBe(line?.text)
   // 胡法不同 → 台词不同：点炮胡不会借用自摸语气。
   expect(line?.text).not.toBe(bloodFlowWinMomentLine({ source: 'discard', style: provider.style, ordinal: 1, sequence: 0 }))
 })
