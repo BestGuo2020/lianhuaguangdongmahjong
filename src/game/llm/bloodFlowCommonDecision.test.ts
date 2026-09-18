@@ -4,6 +4,8 @@ import {bloodFlowSeatView} from '../variants/lotus/bloodFlow/seatView'
 import {seededRandom} from '../variants/lotus/bloodFlow/simulation'
 import {bloodFlowDecisionBudget,bloodFlowDecisionPrompt,createBloodFlowDecisions} from './bloodFlowRuntime'
 import {buildBloodFlowDecisionInput} from './bloodFlowDecisionInput'
+import {BLOOD_FLOW_MOMENT_LINES,bloodFlowWinMomentLine,bloodFlowWinMomentTier} from './bloodFlowWinLines'
+import {scorePatterns} from '../variants/lotus/patterns/score'
 import type {LlmProviderPreset} from './config'
 
 const provider:LlmProviderPreset={id:'test',name:'test',baseUrl:'https://api.deepseek.com/v1',apiKey:'unit-test-only',
@@ -86,6 +88,23 @@ it('keeps the model own win line for the committed batch and clears on cancel', 
   expect(line?.style).toBe('话痨')
   expect(typeof line?.voiceKey).toBe('string')
   expect(service.takeWinLine(v.window!.id, 0)).toBeNull()
+})
+
+it('falls back to the blood-flow moment line by win source when the model gives no usable speech', async () => {
+  const request = vi.fn(async (o: any) => ({ choice: o.candidateIds[0], message: '' }))
+  const service = createBloodFlowDecisions({ provider: () => provider, waits: async () => [], request, now: () => 0, theme: () => 'llm' })
+  const v = input()
+  v.ownActions = [{ kind: 'win' }, { kind: 'pass' }]
+  const score = scorePatterns(['pinghu'], false, 'self-draw')
+  v.ownScore = score
+  expect(await service.decide(v, () => true)).toEqual({ kind: 'win' })
+  const line = service.takeWinLine(v.window!.id, 0)
+  // 此前每性格只有一句通用 win 台词（「胡。」「拿下！」），自摸与吃胡听起来一模一样。
+  expect(BLOOD_FLOW_MOMENT_LINES['self-draw'][provider.style]).toContain(line?.text)
+  expect(bloodFlowWinMomentLine({ source: 'self-draw', style: provider.style, ordinal: 1,
+    tier: bloodFlowWinMomentTier(score), sequence: 0 })).toBe(line?.text)
+  // 胡法不同 → 台词不同：点炮胡不会借用自摸语气。
+  expect(line?.text).not.toBe(bloodFlowWinMomentLine({ source: 'discard', style: provider.style, ordinal: 1, sequence: 0 }))
 })
 
 it('cancellation clears thinking even when a provider never settles its promise',async()=>{

@@ -90,13 +90,18 @@ export function decisionSpeech(action: CanonicalAction, style: LlmStyle, sequenc
   return variants[Math.abs(sequence) % variants.length]
 }
 
-/** 自由 message 合规则保留；仅缺失或幕后内容回退程序台词。 */
+/**
+ * 自由 message 合规则保留；仅缺失或幕后内容回退程序台词。
+ * `fallback` 供玩法层替换兜底句（如血流按胡法/局势的即时胡牌台词）；
+ * 缺省仍走 `decisionSpeech` 的通用动作台词，非血流调用方行为不变。
+ */
 export function resolveDecisionSpeech(
   message: string,
   action: CanonicalAction,
   style: LlmStyle,
   sequence = 0,
   facts: DecisionSpeechFacts = {},
+  fallback?: string,
 ): string {
   const compact = compactLlmSpeechText(message)
   const deniesDealer = /我(?:可|并)?不是庄家|我非庄家|我不坐庄/.test(compact)
@@ -153,7 +158,7 @@ export function resolveDecisionSpeech(
   if (compact && !contradictsDealer && !contradictsPublicAction && !contradictsCurrentDiscard
     && !contradictsDiscardCommitment && !leaksPrivateStructure && !leaksConcealedTile
     && actionMatchesClaim && kongSubtypeMatches) return compact
-  return decisionSpeech(action, style, sequence)
+  return fallback ?? decisionSpeech(action, style, sequence)
 }
 
 export const DECISION_SPEECH_LINES = LINES

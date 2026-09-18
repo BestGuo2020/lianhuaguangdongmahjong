@@ -1,5 +1,5 @@
 import type { LlmRoundReaction } from './winLines'
-import { bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
+import { bloodFlowAnimeResultKey, bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { reactive } from 'vue'
 import { requestLlmDecision, type LlmDecisionOptions } from './client'
 import { readLlmSettings, presetForSeat, styleForSeat, LLM_TTS_VOICE_OPTIONS, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
@@ -19,6 +19,8 @@ import {
   bloodFlowEvGateFromEnv, evaluateEvGate, type BloodFlowEvGateConfig,
 } from '../variants/lotus/bloodFlow/evGate'
 import {createBloodFlowActionSpeech} from './bloodFlowSpeech'
+import { bloodFlowWinMomentLine, bloodFlowWinMomentTier } from './bloodFlowWinLines'
+import { animeVoiceLine, isCharacterId, resolveAnimeCharacter } from './animeCharacters'
 import {buildBloodFlowDecisionInput, BLOOD_FLOW_PROMPT_RULES, type BloodFlowDecisionMetadata} from './bloodFlowDecisionInput'
 import {buildDecisionSystemPrompt} from './prompt'
 import {configuredDecisionBudget, requestPreparedDecision} from './preparedDecision'
@@ -196,8 +198,13 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
         if(selected){
           speech.plan(requestId,view,selected.action,provider,response.message,requestedTheme)
           // 胡牌窗口：台词立即定稿并预合成，批次提交后赢家用它发声（非血流同行为）。
+          // 模型没给可用原话时，用血流即时胡牌台词库兜底（按胡法 + 主番档 + 本局胡牌序号轮换）。
           if(selected.action.kind==='win'){
-            const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,winSequence++)
+            const score=view.ownScore, rotation=winSequence++
+            const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,rotation,
+              {}, score ? bloodFlowWinMomentLine({ source: score.source, style: provider.style,
+                ordinal: view.public.seats[view.seat].winCount + 1, tier: bloodFlowWinMomentTier(score),
+                sequence: rotation }) : undefined)
             const urlPromise=getLocalTtsClient().resolveAudioUrl(text,voiceKey,provider.style).catch(()=>null)
             winLines.set(`${view.window!.id}/${view.seat}`,{text,style:provider.style,voiceKey,urlPromise})
           }
@@ -230,6 +237,8 @@ export function createBloodFlowReactions(options: {
   provider?: BloodFlowProviderLookup
   /** 联机：座位语音身份（房间快照下发）；返回 null 表示该座位不出声。 */
   voice?: (seat: Seat) => { voiceKey: Exclude<LlmTtsVoiceKey, 'auto'>; style: LlmStyle } | null
+  /** llmAnime：该座位的角色（本机偏好 / 快照下发）。返回未知值时回退性格通用台词。 */
+  character?: (seat: Seat) => unknown
   theme(): string
   current(view: BloodFlowSeatView): boolean
   emit(line: BloodFlowReaction, signal: AbortSignal): void | Promise<void>
@@ -266,11 +275,19 @@ export function createBloodFlowReactions(options: {
                 : record.score.source === 'discard' ? 'discard-win' : 'self-draw' }
               : { outcome: 'loss' }
           const sequence = sequences.get(seat) ?? 0
-          const text = bloodFlowRoundReactionLine(reaction, voice.style, sequence + seat)
           sequences.set(seat, sequence + 1)
+          // llmAnime：角色专属固定文案（与经典玩法同一批键）+ 该角色音色；无角色时保持原性格台词。
+          const characterId = options.character?.(seat)
+          const anime = theme === 'llmAnime' && isCharacterId(characterId)
+          const text = anime
+            ? animeVoiceLine(characterId, bloodFlowAnimeResultKey(reaction))
+            : bloodFlowRoundReactionLine(reaction, voice.style, sequence + seat)
+          const line = anime
+            ? { voiceKey: resolveAnimeCharacter(characterId).voiceKey, style: '稳健' as LlmStyle }
+            : voice
           if (!current() || controller.signal.aborted) return
           await options.emit({ id: `${key}/reaction/${seat}`, authorityEpoch: view.authorityEpoch, roundId: view.roundId,
-            seat, text, voiceKey: voice.voiceKey, style: voice.style, theme: theme as 'llm' | 'llmAnime' }, controller.signal)
+            seat, text, voiceKey: line.voiceKey, style: line.style, theme: theme as 'llm' | 'llmAnime' }, controller.signal)
         } catch { /* one failed playback never blocks later seats or the next round */ }
         finally { controllers.delete(controller) }
       }

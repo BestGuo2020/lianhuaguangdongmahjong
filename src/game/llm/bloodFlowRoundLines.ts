@@ -3,6 +3,7 @@
 // 荒庄沿用共享 winLines 台词库。非血流玩法零改动。
 import type { LlmStyle } from './config'
 import { llmRoundReactionLine, type LlmRoundReaction, type LlmWinType } from './winLines'
+import type { AnimeResultVoiceKey } from './animeFixedTts'
 
 export const BLOOD_FLOW_LOSS_LINES: Record<LlmStyle, readonly string[]> = {
   激进: ['这局是我没跟上，下局打回来！', '输得不冤，我回去就复盘！', '状态没打出来，下局调整到位！'],
@@ -47,4 +48,21 @@ export function bloodFlowRoundReactionLine(
     return variants[Math.abs(sequence) % variants.length]
   }
   return llmRoundReactionLine(reaction, style, sequence)
+}
+
+/**
+ * llmAnime 局末感言改用角色专属固定文案（`llmAnime` 主题的既有合同，与经典玩法同一批
+ * `win-self-draw` / `win-discard` / `win-robbed-kong` / `loss` / `draw` 台词）。
+ * 血流此前的局末感言只走性格通用台词，角色人格在整局里都用不上（2026-09-19 用户反馈
+ * 「只有胡、自摸，很单调」）。非 llmAnime 主题、以及没有角色的座位仍走
+ * `bloodFlowRoundReactionLine`，行为不变。
+ */
+export function bloodFlowAnimeResultKey(reaction: LlmRoundReaction): AnimeResultVoiceKey {
+  if (reaction.outcome === 'draw') return 'draw'
+  if (reaction.outcome === 'loss') return 'loss'
+  switch (reaction.type) {
+    case 'self-draw': return 'win-self-draw'
+    case 'discard-win': return 'win-discard'
+    case 'robbed-kong-win': return 'win-robbed-kong'
+  }
 }

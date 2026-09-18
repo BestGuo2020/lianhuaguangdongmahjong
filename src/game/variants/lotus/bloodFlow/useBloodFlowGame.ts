@@ -38,7 +38,7 @@ import { playLlmAudioGroup } from '../../../core/presentation/llmAudioBus'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 import { createAnimeFixedTtsRequest } from '../../../llm/animeFixedTts'
 import { animeVoiceKeyForTableAction } from '../../../llm/animeFixedTtsExecutor'
-import { decisionSpeech } from '../../../llm/decisionSpeech'
+import { bloodFlowWinMomentLine, bloodFlowWinMomentTier } from '../../../llm/bloodFlowWinLines'
 import { actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
 import { shouldSuppressLegacyAnimeSpeech } from '../../../core/presentation/animeAudioPolicy'
 import type { BloodFlowWsAudio, BloodFlowWsSpeech } from './ws/authority'
@@ -160,6 +160,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const reactions = createBloodFlowReactions({ theme: () => options.getThemeName?.() ?? 'jade',
     current: current => view.value?.authorityEpoch === current.authorityEpoch && view.value?.roundId === current.roundId && !!view.value?.public.roundResult,
     emit: (line, signal) => presentRoundReaction(line, signal),
+    // llmAnime 局末感言：用该座位角色的专属固定文案 + 角色音色（此前血流只用性格通用台词，
+    // 角色人格整局都用不上）。座位没有角色（如普通机器人）时运行时回退通用性格台词。
+    character: (seat: Seat) => state.players[(seat - (view.value?.seat ?? 0) + 4) % 4]?.characterId,
     // 只在联机时传 voice（音色取房间供应商身份，不读本机单机 LLM 设置）。
     // 必须整体缺省而不能返回 null：reactions 一旦拿到 voice 就只用它，返回 null 会让该座位
     // 直接 continue —— 单机局末感言（气泡 + TTS）会全部消失（2026-09-10 由 blood-flow.llm.spec
@@ -232,6 +235,27 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   } })
   const seenWinBatches = new Set<string>()
   const fixedVoiceEvents = new Set<number>()
+  /** 每个座位跨局递增的胡牌台词序号：同组台词相邻两次不重复（不随每局 clear 归零）。 */
+  const winLineSequences = new Map<number, number>()
+  /**
+   * 胡牌瞬间的赢家台词气泡（2026-09-19 用户反馈「只有胡、自摸」）：此前赢家台词只有声音，
+   * 牌桌上什么都看不到。此处与吃碰杠共用同一气泡通道，局末恰好同拍时不补气泡
+   * （结算面板立刻接管，且 settle 时 actionBubbles 必须为空）。
+   */
+  function showWinSpeechBubble(absoluteSeat: number, text: string, epoch: number) {
+    if (!text || epoch !== generation) return
+    const current = view.value
+    if (!current || current.public.roundResult || current.public.status !== 'playing') return
+    const seat = (absoluteSeat - current.seat + 4) % 4, id = ++bubbleSerial
+    actionBubbles.value = { ...actionBubbles.value, [seat]: { text, id, persistent: false } }
+    later(() => {
+      if (actionBubbles.value[seat]?.id === id) {
+        const copy = { ...actionBubbles.value }
+        delete copy[seat]
+        actionBubbles.value = copy
+      }
+    }, 4000)
+  }
   function playEffectUntilEnd(name: string): Promise<void> {
     const element = sound(name) as HTMLAudioElement | null | undefined
     if (!element || typeof (element as { addEventListener?: unknown }).addEventListener !== 'function') return Promise.resolve()
@@ -251,19 +275,27 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const winType = (source: string): TableActionEvent['type'] => source === 'self-draw' || source === 'kong-bloom' ? 'self-draw'
       : source === 'robbed-kong' ? 'robbed-kong-win' : 'discard-win'
     const effectFile = (source: string) => source === 'self-draw' || source === 'kong-bloom' ? 'zimo.mp3' : 'hu.mp3'
+    // 未走模型（锁手座位、单候选窗口、模型没给原话）时的胡牌台词：按胡法 + 主番档 +
+    // 本局第几胡 + 一炮多响分档，并按跨局序号轮换，避免整局反复同一句。
+    const momentLine = (record: WinBatch['winners'][number], style: LlmStyle) => {
+      const sequence = winLineSequences.get(record.winner) ?? 0
+      winLineSequences.set(record.winner, sequence + 1)
+      return bloodFlowWinMomentLine({ source: record.score.source, style, ordinal: record.ordinal,
+        tier: bloodFlowWinMomentTier(record.score), multiWin: batch.winners.length > 1, sequence })
+    }
     const tasks: (() => Promise<void>)[] = []
     if (theme === 'llmAnime') {
       for (const record of batch.winners) {
         const characterId = state.players[toLocal(record.winner)]?.characterId
         tasks.push(characterId ? (async () => {
           const request = createAnimeFixedTtsRequest(characterId, animeVoiceKeyForTableAction(winType(record.score.source)))
+          showWinSpeechBubble(record.winner, request.normalizedText, epoch)
           const url = await getLocalTtsClient().resolveAudioUrl(request.normalizedText, request.voiceKey, request.style, request.cacheIdentity)
           if (url) await playLlmAudioGroup([{ url, seat: record.winner }])
           else await playEffectUntilEnd(effectFile(record.score.source))
         }) : () => playEffectUntilEnd(effectFile(record.score.source)))
       }
     } else {
-      let sequence = 0
       for (const record of batch.winners) {
         const player = state.players[toLocal(record.winner)]
         const isLlmWinner = Boolean(player && (player.playerKind === 'llm' || player.isLlm))
@@ -275,11 +307,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         // 单机：本机 LLM 台词（预合成）+ 本机 TTS；其余赢家播 hu/zimo 效果音。
         const voice = isLlmWinner ? voiceFor(record.winner) : null
         tasks.push(voice ? (async () => {
-          // 台词与合成在模型做出胡牌决定的瞬间已完成（预合成），这里直接取用开播。
+          // 台词与合成在模型做出胡牌决定的瞬间已完成（预合成），这里直接取用开播；
+          // 模型没参与（锁手连胡等）时用血流即时胡牌台词库（按胡法/档位/序号）。
           const own = decisions.takeWinLine(batch.windowId, record.winner)
           const style = own?.style ?? voice.style
           const voiceKey = own?.voiceKey ?? voice.voiceKey
-          const text = own?.text ?? decisionSpeech({ kind: 'win' }, style, sequence++)
+          const text = own?.text ?? momentLine(record, style)
+          showWinSpeechBubble(record.winner, text, epoch)
           const url = own?.urlPromise ? await own.urlPromise : await getLocalTtsClient().resolveAudioUrl(text, voiceKey, style)
           if (url) await playLlmAudioGroup([{ url, seat: record.winner }])
           else await playEffectUntilEnd(effectFile(record.score.source))
@@ -560,6 +594,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   function returnToLobby() {
     decisions.resetReasoning()
     opening.cancel()
+    winLineSequences.clear()
     // The shared cleanup removes players, unmounting the old HUD/3D table.
     // The next lobby start must mount a fresh table and receive its ready event.
     matchLifecycle.returnToLobby()
