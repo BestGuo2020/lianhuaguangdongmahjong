@@ -46,15 +46,30 @@ it('全库无重复文案（同一次对局不会因串组出现同一句）', (
   expect(new Set(all).size).toBe(all.length)
 })
 
-it('两条文风红线：不重复局末库用滥的收尾套语；话痨不刷同一个语气词', () => {  const all = GROUPS.flatMap(group => STYLES.flatMap(style => [...BLOOD_FLOW_MOMENT_LINES[group][style]]))
+it('两条文风红线：不重复局末库用滥的收尾套语；话痨不刷同一个语气词', () => {
+  const all = GROUPS.flatMap(group => STYLES.flatMap(style => [...BLOOD_FLOW_MOMENT_LINES[group][style]]))
   // 「仅此而已」在 `bloodFlowRoundLines` / `winLines` 的高冷档里已反复出现（2026-09-19 评审点名），本库不得再用。
   expect(all.filter(line => line.includes('仅此而已'))).toEqual([])
+  // 一炮三响真实存在，任何档位都不写具体家数（旧「两家齐胡」即此错，2026-09-19 评审点名）。
+  expect(all.filter(line => /两家|三家|四家/.test(line))).toEqual([])
   const chatty = GROUPS.flatMap(group => [...BLOOD_FLOW_MOMENT_LINES[group]['话痨']])
   expect(chatty.filter(line => line.includes('啦')).length).toBeLessThanOrEqual(5)
   // 句首语气词同样要打散：同一个开场字不得覆盖话痨台词的三分之一以上。
   const openers = chatty.map(line => line.slice(0, 1))
   const counts = [...new Set(openers)].map(opener => openers.filter(item => item === opener).length)
   expect(Math.max(...counts)).toBeLessThanOrEqual(Math.floor(chatty.length / 3))
+})
+
+it('档位集合固定为「四胡法 + 连胡 + 大牌」：一炮多响不设专属台词', () => {
+  // 2026-09-19 用户决定：多响批次里各赢家各说自己的胡法 / 连胡台词，不另设一炮多响语气。
+  // 若有人重新加回 multi 档，这条断言会失败，强制重新决策。
+  expect([...GROUPS].sort()).toEqual(['big', 'discard-win', 'kong-bloom-win', 'robbed-kong-win', 'self-draw', 'streak'])
+  expect(GROUPS).not.toContain('multi')
+  // 多响批次用同一种来源逐家取词：同批赢家因序号叠加座位号而拿到不同变体。
+  const first = bloodFlowWinMomentLine({ source: 'discard', style: '稳健', ordinal: 1, sequence: 0 + 1 })
+  const second = bloodFlowWinMomentLine({ source: 'discard', style: '稳健', ordinal: 1, sequence: 0 + 2 })
+  const third = bloodFlowWinMomentLine({ source: 'discard', style: '稳健', ordinal: 1, sequence: 0 + 3 })
+  expect(new Set([first, second, third]).size).toBe(3)
 })
 
 it('与既有三个台词库不重复成句（局末 / 经典 / 通用动作各说各的）', () => {
@@ -80,8 +95,8 @@ it('基础档按胡法分组，不走性格通用库', () => {
   }
 })
 
-it('高光档优先级：一炮多响 > 大牌 > 连胡 > 胡法基础档', () => {
-  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', multiWin: true, tier: 3, ordinal: 9 })).toBe('multi')
+it('高光档优先级：大牌 > 连胡 > 胡法基础档', () => {
+  expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 3, ordinal: 9, previousSource: 'discard' })).toBe('big')
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 2, ordinal: 9 })).toBe('big')
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 3, previousSource: 'discard' })).toBe('streak')
   expect(bloodFlowWinMomentGroup({ source: 'discard', style: '稳健', tier: 1, ordinal: 2, previousSource: 'discard' })).toBe('discard-win')
@@ -113,7 +128,6 @@ it('轮换：同组相邻两次不重复，并按序号循环', () => {
     { group: 'kong-bloom-win', context: sequence => ({ source: 'kong-bloom', style, ordinal: 2, sequence }) },
     { group: 'streak', context: sequence => ({ source: 'self-draw', style, ordinal: 3, previousSource: 'self-draw', sequence }) },
     { group: 'big', context: sequence => ({ source: 'self-draw', style, tier: 3, sequence }) },
-    { group: 'multi', context: sequence => ({ source: 'discard', style, multiWin: true, sequence }) },
   ]
   for (const { group, context } of cases) {
     const lines = [0, 1, 2, 3, 4].map(sequence => bloodFlowWinMomentLine(context(sequence)))
