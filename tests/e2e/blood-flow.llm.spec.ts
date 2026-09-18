@@ -11,6 +11,9 @@ const roundLines=new Set([...Object.values(BLOOD_FLOW_WIN_LINES).flatMap(s=>s.�
 const animeRoundLines=new Set(ANIME_CHARACTERS.flatMap(character=>ANIME_RESULT_VOICE_KEYS.map(key=>character.lines[key].normalize('NFKC'))))
 // 胡牌瞬间的即时台词库（锁手连胡等未走模型的窗口）：llm 主题赢家至少要说出一句其中的台词。
 const momentLines=new Set(Object.values(BLOOD_FLOW_MOMENT_LINES).flatMap(groups=>Object.values(groups).flat()).map(t=>t.normalize('NFKC')))
+// 台词 → 档位：用来验证一局里「自摸 / 吃胡」真的听得出区别（连胡档只在同源连续时才接管）。
+const momentGroupOf=new Map(Object.entries(BLOOD_FLOW_MOMENT_LINES)
+  .flatMap(([group,styles])=>Object.values(styles).flat().map(text=>[text.normalize('NFKC'),group] as const)))
 
 // 座位 1-3 按真实接入方式声明为大模型座位（App.vue 传 `localLlmSeeds`）：不传种子时
 // `isLlmWinner` 恒为 false，赢家既不出声也不出气泡，胡牌台词只走到预合成，验收不到真行为。
@@ -22,6 +25,7 @@ test.setTimeout(180_000)
 for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
   test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
     let decisions = 0, reactions = 0, tts = 0, roundTts = 0, animeRoundTts = 0, momentTts = 0, protectedDecisions = 0
+    const momentTexts = new Set<string>()
     const unsafeSpeech: string[] = []
     await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
@@ -62,7 +66,7 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
       tts++
       if (roundLines.has(body.text)) roundTts++
       if (animeRoundLines.has(body.text)) animeRoundTts++
-      if (momentLines.has(body.text.normalize('NFKC'))) momentTts++
+      if (momentLines.has(body.text.normalize('NFKC'))) { momentTts++; momentTexts.add(body.text.normalize('NFKC')) }
       await route.fulfill({ status: 503, body: 'tts unavailable' })
     })
     await page.goto('/?bloodFlow=1')
@@ -89,6 +93,11 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
     // （按胡法/档位/序号轮换），并且这句话真的显示成气泡。
     if (available && theme !== 'llmAnime') {
       expect(momentTts).toBeGreaterThan(0)
+      // 2026-09-19 评审修正：连胡档曾按胡牌序号直接接管，第 3 胡后自摸/吃胡又听不出区别。
+      // 同源连胡后，一局里必须同时出现至少两个「胡法基础档」的台词（自摸 / 点炮 / 抢杠 / 杠后自摸）。
+      const sourceGroups = new Set([...momentTexts].map(text => momentGroupOf.get(text))
+        .filter(group => group !== undefined && ['self-draw', 'discard-win', 'robbed-kong-win', 'kong-bloom-win'].includes(group)))
+      expect(sourceGroups.size).toBeGreaterThanOrEqual(2)
       const seen = await page.evaluate(() => [...((window as any).__bfSeenBubbles as Set<string>)])
       expect(seen.some(text => momentLines.has(String(text).normalize('NFKC')))).toBe(true)
     }

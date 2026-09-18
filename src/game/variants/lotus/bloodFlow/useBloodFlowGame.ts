@@ -31,7 +31,7 @@ import type { NetworkOpening } from './network/protocol'
 import type { HandWaitHints, WaitScores } from '../patterns/handWaits'
 import { createEvaluatorService } from '../patterns/evaluatorService'
 import { createBloodFlowAudioBridge } from './audioBridge'
-import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, remoteVoiceIdentity, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
+import { createBloodFlowDecisions, createBloodFlowReactions, bloodFlowReactionsAllowed, localBloodFlowProvider, previousBloodFlowWinSource, remoteVoiceIdentity, type BloodFlowReaction } from '../../../llm/bloodFlowRuntime'
 import type { LlmStyle, LlmTtsVoiceKey } from '../../../llm/config'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from '../../../llm/localTtsClient'
 import { playLlmAudioGroup } from '../../../core/presentation/llmAudioBus'
@@ -276,12 +276,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       : source === 'robbed-kong' ? 'robbed-kong-win' : 'discard-win'
     const effectFile = (source: string) => source === 'self-draw' || source === 'kong-bloom' ? 'zimo.mp3' : 'hu.mp3'
     // 未走模型（锁手座位、单候选窗口、模型没给原话）时的胡牌台词：按胡法 + 主番档 +
-    // 本局第几胡 + 一炮多响分档，并按跨局序号轮换，避免整局反复同一句。
+    // 同源连胡 + 一炮多响分档，并按跨局序号轮换，避免整局反复同一句。
     const momentLine = (record: WinBatch['winners'][number], style: LlmStyle) => {
       const sequence = winLineSequences.get(record.winner) ?? 0
       winLineSequences.set(record.winner, sequence + 1)
       return bloodFlowWinMomentLine({ source: record.score.source, style, ordinal: record.ordinal,
-        tier: bloodFlowWinMomentTier(record.score), multiWin: batch.winners.length > 1, sequence })
+        tier: bloodFlowWinMomentTier(record.score), multiWin: batch.winners.length > 1,
+        previousSource: previousBloodFlowWinSource(snapshot, record.winner, batch.batchId), sequence })
     }
     const tasks: (() => Promise<void>)[] = []
     if (theme === 'llmAnime') {

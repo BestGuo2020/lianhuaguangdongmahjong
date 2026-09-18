@@ -9,7 +9,7 @@ import { resolveDecisionSpeech } from './decisionSpeech'
 import type { BloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { visibleTiles } from '../variants/lotus/bloodFlow/seatView'
 import type { BloodFlowAction } from '../variants/lotus/bloodFlow/state'
-import type { Seat } from '../variants/lotus/bloodFlow/types'
+import type { Seat, WinSource } from '../variants/lotus/bloodFlow/types'
 import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorService'
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
@@ -36,6 +36,19 @@ export function localBloodFlowProvider(seat: Seat): LlmProviderPreset | null {
     : presetForSeat(settings, seat) ?? settings.presets[0]
   if (!preset?.apiKey.trim() || !preset.baseUrl.trim() || !preset.model.trim()) return null
   return { ...preset, style: seat === 0 ? preset.style : styleForSeat(settings, seat) ?? preset.style }
+}
+
+/**
+ * 本局该座位**上一胡**的来源；没有上一胡时返回 null。胡牌台词库用它判断「同源连胡」
+ * （第 3 胡起且与上一胡同源才升级成连胡语气，避免胡法区分被连胡档吞掉）。
+ * `excludeBatchId` 供确认快照一侧排除「本次刚提交的这一批」。
+ */
+export function previousBloodFlowWinSource(view: BloodFlowSeatView, seat: Seat, excludeBatchId?: string): WinSource | null {
+  return view.public.batches
+    .filter(batch => batch.batchId !== excludeBatchId)
+    .flatMap(batch => batch.winners)
+    .filter(record => record.winner === seat)
+    .at(-1)?.score.source ?? null
 }
 
 const REMOTE_STYLES: readonly LlmStyle[] = ['激进', '稳健', '话痨', '高冷']
@@ -204,7 +217,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
             const text=resolveDecisionSpeech(response.message??'',{kind:'win'},provider.style,rotation,
               {}, score ? bloodFlowWinMomentLine({ source: score.source, style: provider.style,
                 ordinal: view.public.seats[view.seat].winCount + 1, tier: bloodFlowWinMomentTier(score),
-                sequence: rotation }) : undefined)
+                previousSource: previousBloodFlowWinSource(view, view.seat), sequence: rotation }) : undefined)
             const urlPromise=getLocalTtsClient().resolveAudioUrl(text,voiceKey,provider.style).catch(()=>null)
             winLines.set(`${view.window!.id}/${view.seat}`,{text,style:provider.style,voiceKey,urlPromise})
           }
