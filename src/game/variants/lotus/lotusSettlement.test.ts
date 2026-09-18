@@ -136,3 +136,71 @@ describe('lotusSettlement LLM voice isolation', () => {
     expect(leakedSinglePlayerAnnouncement).not.toHaveBeenCalled()
   })
 })
+
+describe('天地胡收付（10 番 · 每家 底分×10）', () => {
+  const PINGHU: GamePlayer['hand'] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'east', 'east']
+
+  function setupSettlement() {
+    const state = createLotusGameState()
+    state.phase.value = 'thinking'
+    state.dealer.value = 0
+    state.players.push(
+      player(0), player(1), player(2), player(3),
+    )
+    const scheduled: Array<{ callback: () => void; delay: number }> = []
+    const settlement = createLotusSettlement({
+      state,
+      clearTimers: vi.fn(),
+      later: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
+      playSound: vi.fn(),
+      showTableAction: vi.fn(),
+      structuralMeldCount: () => 0,
+      getRoundLabel: () => '东一局',
+    })
+    return { state, scheduled, settlement }
+  }
+
+  async function runToSettled(scheduled: Array<{ callback: () => void; delay: number }>) {
+    await flushPromises()
+    scheduled.find((item) => item.delay === DISCARD_WIN_EFFECT_DELAY)?.callback()
+    startWinEffect(scheduled)
+    scheduled.find((item) => item.delay === WIN_EFFECT_DURATION)!.callback()
+    scheduled.find((item) => item.delay === WIN_REVEAL_DURATION)!.callback()
+    await flushPromises()
+  }
+
+  it('天胡：庄家起手胡，三家各付 1000', async () => {
+    const { state, scheduled, settlement } = setupSettlement()
+    state.players[0].hand = [...PINGHU]
+    state.players[0].drawnTileIndex = PINGHU.length - 1
+
+    settlement.endGame(0, { tianhu: true, selfDraw: true, winHand: [...PINGHU], winTile: 'east' })
+    await runToSettled(scheduled)
+
+    expect(state.phase.value).toBe('settled')
+    expect(state.result.value).toMatchObject({
+      winType: 'tianhu', multiplier: 10, points: 1000, totalWon: 3000,
+      details: [{ label: '天胡', multiplier: 10 }],
+    })
+    expect(state.players.map(({ score }) => score)).toEqual([4000, 0, 0, 0])
+  })
+
+  it('地胡：闲家胡庄家首弃，庄家那一笔不翻倍，三家各付 1000', async () => {
+    const { state, scheduled, settlement } = setupSettlement()
+    // 闲家 1 听 east：10 张面子 + 单张 east。
+    state.players[1].hand = PINGHU.slice(0, 13)
+    state.players[1].drawnTileIndex = -1
+    // 庄家 0 的首弃就是 east（地胡的来源）。
+    state.players[0].discards = ['east']
+
+    settlement.endGame(1, { dihu: true, winTile: 'east', winHand: [...PINGHU], sourceFrom: 0 })
+    await runToSettled(scheduled)
+
+    expect(state.result.value).toMatchObject({
+      winType: 'dihu', multiplier: 10, points: 1000, totalWon: 3000,
+      details: [{ label: '地胡', multiplier: 10 }],
+    })
+    // 庄家（同时是点炮者）只付 1000，没有 ×2。
+    expect(state.players.map(({ score }) => score)).toEqual([0, 4000, 0, 0])
+  })
+})

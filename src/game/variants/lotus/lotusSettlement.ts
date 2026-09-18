@@ -155,6 +155,8 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       )
         ?? { fan: 1, baseFan: 1, patterns: [{ label: '平胡', multiplier: 1 }], settlement: { H: 100, dealerPays: 200, nonDealerPays: 100, total: 400 } }
       // 抢杠胡按自摸型结算；只有普通点炮才对出铳者的那一笔再翻倍。
+      // 天胡/地胡走平收收付表（settlement.flat）：三家各付 底分×10，
+      // 因此即便地胡的 sourceFrom 是庄家，也不会被再翻倍。
       const sourceIndex = !flags.selfDraw && !flags.robbedKong && !flags.kongBloom
         ? (endOptions.sourceFrom ?? null)
         : null

@@ -22,6 +22,9 @@ const PROVIDER_PROFILES: Array<{ pattern: RegExp; folder: string; nickname: stri
   { pattern: /api\.deepseek\.com/i, folder: 'deepseek', nickname: '大肥鱼' },
   { pattern: /api\.moonshot\.cn/i, folder: 'kimi', nickname: 'Kimi月姬' },
   { pattern: /dashscope\.aliyuncs\.com/i, folder: 'qwen', nickname: '千问大小姐' },
+  // 千问 Token Plan：原地址不给浏览器用（CORS 预检 401），线上走自家透传网关；
+  // 两条路径都按千问归档（该套餐以千问为主，其他家模型可在预置里手填昵称/头像文件夹覆盖）。
+  { pattern: /token-plan\.|\.maas\.aliyuncs|llm\/relay\/token-plan/i, folder: 'qwen', nickname: '千问大小姐' },
   { pattern: /volces\.com|ark\.cn-beijing/i, folder: 'doubao', nickname: '豆包学妹' },
   { pattern: /api\.minimax\.chat/i, folder: 'minimax', nickname: 'MiniMax导演' },
   { pattern: /api\.openai\.com/i, folder: 'gpt', nickname: 'GPT龙姬' },

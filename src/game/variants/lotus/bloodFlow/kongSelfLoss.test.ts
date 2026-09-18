@@ -73,11 +73,14 @@ describe('① 豪华七对/七对路线成立 → 不杠', () => {
     expect(sevenPairsRouteValue(LUXURY_ROUTE, melded, JOKERS)).toBe(0)
   })
 
-  it('四张在手（暗杠会拆掉豪华七对）→ 不暗杠', () => {
+  it('四张在手（暗杠会拆掉豪华七对）→ 不暗杠（6 番后单项已低于杠分，但总自手损失仍占优）', () => {
     const hand: TileType[] = ['m3', 'm3', 'm3', 'm3', 'm1', 'm1', 'm2', 'm2', 'p1', 'p1', 's3', 's3', 'p7', 's8']
     const view = turnView(hand, [], [...hand.map((_, index) => ({ kind: 'discard', index }) as const), { kind: 'concealed-kong', tile: 'm3' }])
     const value = bloodFlowKongValue(view, { kind: 'concealed-kong', tile: 'm3' }, BLOOD_FLOW_AI)!
-    expect(value.selfLoss.sevenPairs).toBeGreaterThan(value.gain)
+    // 2026-09-18 豪华七对 12 → 6 番：七对/豪华那一项由约 147 降到约 73.5，**已低于**暗杠即时收益 80；
+    // 但自手总损失还含门清/向听等项，仍然压过杠收益，所以"为保路线不暗杠"的行为未被翻转。
+    expect(value.selfLoss.sevenPairs).toBeLessThan(value.gain)
+    expect(value.selfLoss.total).toBeGreaterThan(value.gain)
     expect(decideBloodFlowActionEv(view, BLOOD_FLOW_AI)?.kind).toBe('discard')
   })
 })

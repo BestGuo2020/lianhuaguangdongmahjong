@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GamePlayer } from '../../core/contracts/types'
 import { applyKongScore, applyWinScore } from './lotusScoring'
-import { winPayments } from './lotusRules'
+import { openingWinPayments, winPayments } from './lotusRules'
 
 function makePlayers(): GamePlayer[] {
   return [0, 1, 2, 3].map((seat) => ({
@@ -80,10 +80,18 @@ describe('胡牌收付（applyWinScore）', () => {
     expect(players.map(({ score }) => score)).toEqual([1800, 1800, 2500, 1900])
   })
 
-  it('天胡（庄家）：三闲各 4H，总分守恒', () => {
+  it('天胡（庄家）：三家各付底分×10（1000），赢家实收 3000', () => {
     const players = makePlayers()
-    applyWinScore(players, 0, winPayments(8, { winnerIsDealer: true, selfDrawStyle: true }), 0)
-    const total = players.reduce((sum, player) => sum + player.score, 0)
-    expect(total).toBe(8000)
+    const totalWon = applyWinScore(players, 0, openingWinPayments(), 0)
+    expect(totalWon).toBe(3000)
+    expect(players.map(({ score }) => score)).toEqual([5000, 1000, 1000, 1000])
+  })
+
+  it('地胡：庄家点炮也不翻倍，庄家那一笔同样只付 1000', () => {
+    const players = makePlayers()
+    // 地胡 = 闲家（1）胡庄家（0）的首弃：dealerIndex 与 sourceIndex 都是 0。
+    const totalWon = applyWinScore(players, 1, openingWinPayments(), 0, 0)
+    expect(totalWon).toBe(3000)
+    expect(players.map(({ score }) => score)).toEqual([1000, 5000, 1000, 1000])
   })
 })
