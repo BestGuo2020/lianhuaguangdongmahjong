@@ -88,11 +88,40 @@ export const DEFAULT_PRESET: Omit<LlmProviderPreset, 'id' | 'name' | 'apiKey'> =
   timeoutEnabled: true,
 }
 
+/**
+ * 单机 LLM 透传网关（自家后端，见 `backend/app/api/llm_relay.py`）。
+ *
+ * 有些供应商端点**不给浏览器用**：千问 Token Plan
+ * （`token-plan.cn-beijing.maas.aliyuncs.com`）、同域名的 Anthropic 兼容路径、
+ * 以及 Coding Plan（`coding.dashscope.aliyuncs.com`）对预检（OPTIONS + Origin）
+ * 一律直接 401、且不带任何 `Access-Control-*` 头，网页直连必被 CORS 拦死
+ * （2026-09-18 实测；对照：按量付费 dashscope 与 api.deepseek.com 都正常回 CORS 头）。
+ * 官方也明确 Token Plan / Coding Plan / 按量付费三套凭证与 Base URL 完全隔离、不可混用，
+ * 所以「换个地址」绕不过去，只能走自家通道：
+ * 浏览器 → 网关（回 CORS 头）→ 供应商。
+ *
+ * 约定：上游由服务端白名单决定，客户端只能选 id；Key 由浏览器自带并原样透传
+ * （服务端不保存、不落日志）。
+ *
+ * 网关地址与 TTS 网关同一个（`localTtsClient.ts` 的 LOCAL_TTS_GATEWAY）；
+ * vibehub 跑在平台域名下、没有自家 origin，只能走这条路。
+ */
+export const LLM_RELAY_GATEWAY = 'https://www.bestguo.top:58000'
+
+/** 透传 Base URL；客户端会自行追加 `/chat/completions`。 */
+export function llmRelayBaseUrl(upstreamId: string): string {
+  return `${LLM_RELAY_GATEWAY}/api/llm/relay/${upstreamId}`
+}
+
+/** 无浏览器 CORS 的供应商：预置直接给透传地址，不给用户留「填原地址」的坑。 */
+export const LLM_RELAY_UPSTREAM_TOKEN_PLAN = 'token-plan'
+
 /** 常用供应商模板（Base URL + 示例模型，模型名需按官方文档核对） */
 export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProviderType; baseUrl: string; model: string }> = [
   { name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   { name: 'Kimi (Moonshot)', providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
   { name: '通义千问 (DashScope)', providerType: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
+  { name: '千问 Token Plan（经网关）', providerType: 'qwen', baseUrl: llmRelayBaseUrl(LLM_RELAY_UPSTREAM_TOKEN_PLAN), model: 'qwen3.6-plus' },
   { name: '豆包 (Volcano Ark)', providerType: 'doubao', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
   { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
   { name: 'OpenAI (GPT)', providerType: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },

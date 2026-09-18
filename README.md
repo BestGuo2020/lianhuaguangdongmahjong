@@ -184,6 +184,17 @@ npm run test:e2e
 手动指定任一网关白名单音色或策略默认音色。此链路位于共享 `game/llm` 与
 `game/core/presentation`，master 与 vibehub 使用同一实现，不依赖 WebSocket/P2P。
 
+无浏览器 CORS 的供应商端点不能从网页直连：千问 Token Plan
+（`token-plan.cn-beijing.maas.aliyuncs.com`）、Coding Plan
+（`coding.dashscope.aliyuncs.com`）对预检一律直接 401、不带任何 `Access-Control-*`
+头（2026-09-18 实测），官方也明确 Token Plan / Coding Plan / 按量付费三套 Base URL
+与凭证完全隔离、不可混用。这类端点走自家后端的白名单透传通道
+`POST /api/llm/relay/<upstream>/chat/completions`（浏览器 → 网关回 CORS 头 →
+供应商，SSE 原样流式回传）。AI 设置中的「千问 Token Plan（经网关）」预置已指向该通道：
+Key 仍是用户自己的 `sk-sp-` Key，由浏览器携带、服务端不保存也不落日志；上游白名单
+在服务端（`backend/app/api/llm_relay.py`），客户端只能选 id。详见
+[docs/llm-relay-gateway.md](./docs/llm-relay-gateway.md)。
+
 ## 目录结构
 
 ```text
