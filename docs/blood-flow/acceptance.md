@@ -61,6 +61,16 @@
 
 **证据（追加三）**：`pnpm test` 全量通过；`npm run typecheck` 通过；`bloodFlowWinLines.test.ts` **12 项**（连胡三条条件各自的反例、大牌取或的 8 组边界、档位集合固定、文风红线、跨库查重）；e2e `blood-flow.llm.spec.ts` **3 passed**（含「一局里至少覆盖两个胡法基础档」）。
 
+### 2026-09-19 追加四：两分支发布记录
+
+本批（四次提交）完成后按用户要求「先提交一版并发布，两分支都要发布」发布：
+
+- **master**：HEAD `7355575`，`npm run build` 通过（typecheck + vite build；产物 `assets/index-G-t13our.js`、`assets/MahjongTable3D-BsX4fnOJ.js` 等，含 500 kB 分块提示属既有）；`git push origin master` → `f39e92a..7355575`。
+- **vibehub**：HEAD `1a11c3e`，工作区 `pnpm deploy:vibehub`（= `npm run build` + `vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist --note-file tmp\vibehub-update-note.txt`）→ **部署成功**：找到 240 个文件、跳过 232 个未变化、删除 7 个旧包（`assets/{MahjongTable3D-BZcG27p3,ReplayViewer-BrhDKkWz,RulesPanel-BeM-vbEy,config-9PzyC8vu,engineWorker-Da0LaY-3,index-cKI7UIZ4,worker-DRu51ALq}.js`）、上传 8 个（`assets/{MahjongTable3D-BxgKskPk,ReplayViewer-X9Dm6QEQ,RulesPanel-B-2xapGm,config-BzScg5h8,engineWorker-CbhOv9Zn,index-BtbYUR1o,worker-Bq4rz0U9}.js` 与 `index.html`）；`git push origin vibehub` → `9754b30..1a11c3e`。线上地址 <https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4>。
+- **部署自检**：再跑一次 `vibehub-windows-x64.exe update --slug B5AJupT1 --dir dist` → **跳过 240 个未变化文件、需要上传 0 个文件**，即线上包与本地 `dist` 逐文件一致（`dist/index.html` 引用的 `assets/index-BtbYUR1o.js` 即本次上传件）。
+- **未做两场线上整场验收**：按 2026-09-12 收敛的触发条件（改动触及 P2P 传输 / 房间 / roster / 重连 / 结算同步时必须上线跑两场），本批是纯前端台词库 + 气泡 + llmAnime 局末音色，**未触及 P2P 链路**，故只做部署与部署自检。
+- 本节文档提交在发布之后（不改变 `dist`，故无需重新部署；同步到 vibehub 后源码目录一致）。
+
 
 ## 2026-09-12：AI 真·大牌路线（v4）+ 精牌感知上线（只跑部署自检）
 
