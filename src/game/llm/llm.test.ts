@@ -254,7 +254,7 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     expect(discard?.features.waits).toEqual(expect.arrayContaining([{ tile: '2条', remaining: 2 }]))
   })
 
-  it('有普通牌时不生成广麻白板或莲花双精/白板弃牌候选', () => {
+  it('保护广麻白板与莲花双精，但允许非精白板候选', () => {
     const classic = buildDecisionRequest(baseInput({ hand: ['white', 'm3', 'm5'] }))
     expect(classic.request?.candidates.map((candidate) => candidate.label)).not.toContain('出白板')
 
@@ -263,16 +263,17 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
       jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
     }))
     expect(legacy.request?.candidates.map((candidate) => candidate.label))
-      .toEqual(expect.not.arrayContaining(['出5万', '出6万', '出白板']))
+      .toEqual(expect.not.arrayContaining(['出5万', '出6万']))
+    expect(legacy.request?.candidates.map(candidate => candidate.label)).toContain('出白板')
   })
 
   it('全手只剩受保护牌时仍生成候选并标记风险', () => {
     const built = buildDecisionRequest(baseInput({
-      ruleCode: 'lotus-legacy', hand: ['m5', 'm6', 'white'],
+      ruleCode: 'lotus-legacy', hand: ['m5', 'm6', 'm5'],
       jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
     }))
     const discards = built.request?.candidates.filter((candidate) => candidate.action.kind === 'discard') ?? []
-    expect(discards).toHaveLength(3)
+    expect(discards).toHaveLength(2)
     expect(discards.every((candidate) => candidate.features.risks.some((risk) => risk.includes('癞子/精牌')))).toBe(true)
   })
 
@@ -295,6 +296,10 @@ describe('isActionLegal：动作合法性复核（§8.2 表）', () => {
   })
 
   it('有普通牌时二次校验拒绝弃癞子或精牌', () => {
+    expect(isActionLegal(baseInput({
+      ruleCode: 'lotus-legacy', hand: ['m5', 'white', 'm3'],
+      jokerTiles: ['m5', 'm6'], wildcardTiles: ['white'],
+    }), { kind: 'discard', handIndex: 1 })).toBe(true)
     expect(isActionLegal(baseInput({ hand: ['white', 'm3'] }), { kind: 'discard', handIndex: 0 })).toBe(false)
     expect(isActionLegal(baseInput({
       ruleCode: 'lotus-legacy', hand: ['m5', 'white', 'm3'],

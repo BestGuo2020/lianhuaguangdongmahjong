@@ -6,6 +6,28 @@ import { waitingTiles, type ChiMeld } from './lotusRules'
 
 const JOKERS: TileType[] = ['white', 'red']
 
+describe('非精白板按牌效取舍', () => {
+  const jokers: TileType[] = ['s8', 's9']
+  it('允许丢白板保留两面听，早巡和中后巡一致', () => {
+    const hand: TileType[] = ['m1','m2','m3','p2','p3','s5','s5','white']
+    for (const wallCount of [90, 40]) {
+      const index = chooseDiscardIndex(hand, jokers, () => 0, { exposedMelds: 2, wallCount })
+      expect(hand[index]).toBe('white')
+      expect(waitingTiles(hand.filter((_, i) => i !== index), 2, jokers)).toEqual(expect.arrayContaining(['p1','p4']))
+    }
+  })
+  it('白板的受限替代能组成面子时保留它', () => {
+    const hand: TileType[] = ['s6','s7','white','p2','p3','s5','s5','east']
+    expect(hand[chooseDiscardIndex(hand, jokers, () => 0, { exposedMelds: 2 })]).toBe('east')
+  })
+  it('白板为精牌时保护，兜底仍可选非精白板', () => {
+    const hand: TileType[] = ['white','m1','s8']
+    expect(lotusDiscardCandidates(hand, jokers).map(c => c.tile)).toEqual(['white','m1'])
+    expect(lotusDiscardCandidates(hand, ['white','red']).map(c => c.tile)).toEqual(['m1','s8'])
+    expect(chooseFallbackDiscardIndex(hand, jokers, [0,2])).toBe(0)
+  })
+})
+
 it('shares the original protective candidates and cheap score with restricted automatic fallbacks', () => {
   const hand:TileType[]=['m1','m2','m5','p9','red','white']
   expect(chooseFallbackDiscardIndex(hand,JOKERS)).toBe(chooseDiscardIndex(hand,JOKERS,()=>0))

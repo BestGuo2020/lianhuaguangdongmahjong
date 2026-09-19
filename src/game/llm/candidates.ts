@@ -85,9 +85,9 @@ function wildcardsOf(input: DecisionInput): TileType[] {
   return input.wildcardTiles ?? (isLotus(input) ? ['white'] : [])
 }
 
-/** 广麻保护白板；莲花麻将保护双精牌和受限替代白板。 */
+/** 广麻保护白板；莲花麻将只硬保护双精牌，受限替代白板参与牌效评估。 */
 export function protectedDiscardTiles(input: DecisionInput): Set<TileType> {
-  return new Set(isLotus(input) ? [...jokersOf(input), ...wildcardsOf(input)] : ['white'])
+  return new Set(isLotus(input) ? jokersOf(input) : ['white'])
 }
 
 function countsOf(input: DecisionInput): Map<TileType, number> {  const map = new Map<TileType, number>()

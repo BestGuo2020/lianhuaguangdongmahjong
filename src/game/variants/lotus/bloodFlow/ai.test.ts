@@ -16,11 +16,26 @@ function view(tiles = hand) {
 }
 afterEach(() => vi.restoreAllMocks())
 
-it('protects both jokers and white before the first win without changing the legal action list', () => {
+it('discards non-joker white to keep a two-sided wait before locking', () => {
+  const v = view(['m1','m2','m3','p2','p3','s5','s5','white'])
+  v.jokers = ['s8','s9']
+  v.players[0].melds = [
+    { type: 'peng', tile: 'm7', tiles: ['m7','m7','m7'] },
+    { type: 'peng', tile: 'p7', tiles: ['p7','p7','p7'] },
+  ]
+  expect(decideBloodFlowAction(v)).toEqual({ kind: 'discard', index: 7 })
+  v.jokers = ['white','red']
+  expect(bloodFlowAiActions(v)).not.toContainEqual({ kind: 'discard', index: 7 })
+  v.public.seats[0].locked = true
+  v.ownActions = [{ kind: 'discard', index: 7 }]
+  expect(decideBloodFlowAction(v)).toEqual({ kind: 'discard', index: 7 })
+})
+
+it('protects only actual jokers before the first win without changing the legal action list', () => {
   const v=view(), original=structuredClone(v.ownActions)
   const safe=bloodFlowAiActions(v)
-  expect(safe).toHaveLength(11)
-  for(const move of safe) if(move.kind==='discard') expect(['red','green','white']).not.toContain(v.players[0].hand[move.index])
+  expect(safe).toHaveLength(12)
+  for(const move of safe) if(move.kind==='discard') expect(['red','green']).not.toContain(v.players[0].hand[move.index])
   const decision=decideBloodFlowAction(v)
   expect(safe).toContainEqual(decision)
   expect(v.ownActions).toEqual(original)
@@ -32,7 +47,7 @@ it.each(['throw','bad-index'] as const)('the %s fallback still protects a joker 
   })
   const v=view(), decision=decideBloodFlowAction(v)
   expect(decision?.kind).toBe('discard')
-  if(decision?.kind==='discard') expect(['red','green','white']).not.toContain(v.players[0].hand[decision.index])
+  if(decision?.kind==='discard') expect(['red','green']).not.toContain(v.players[0].hand[decision.index])
 })
 it('keeps forced locked discards and an all-protected legal hand playable', () => {
   const v=view()
@@ -75,7 +90,7 @@ it('keeps first-win automated discards protected across actual fixed-seed rounds
       const window=engine.window!,seat=SEATS.find(s=>window.options[s].length&&!window.decisions[s])!
       const v=bloodFlowSeatView(engine,seat), action=decideBloodFlowAction(v)!
       if(action.kind==='discard'&&!v.public.seats[seat].locked) {
-        const protectedTiles=[...v.jokers,'white']
+        const protectedTiles=v.jokers
         const hasOrdinary=v.ownActions.some(a=>a.kind==='discard'&&!protectedTiles.includes(v.players[seat].hand[a.index]))
         if(hasOrdinary) { guardedDiscards++; expect(protectedTiles).not.toContain(v.players[seat].hand[action.index]) }
       }

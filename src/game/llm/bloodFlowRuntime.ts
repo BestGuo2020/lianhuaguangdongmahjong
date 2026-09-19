@@ -88,7 +88,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
     publicPlayers: view.players.map(p => ({ seat: p.seat, score: p.score, discards: p.discards.map(tileName), melds: p.melds.map(m => ({ type: m.type, tiles: m.tiles.map(tileName) })) })),
     jokerTiles: view.jokers.map(tileName), wallCount: view.wallCount,
     tileRules: '手中两种精牌可替代其他牌；白板只可替代精面或自身（白板本身翻精时按精牌）。别人打出的精按本张使用。',
-    discardPolicy: '首胡前有普通弃牌可选时，候选已保护精牌和白板；锁手后不能换手，新摸牌不能胡则必须摸切，包括精牌。',
+    discardPolicy: '首胡前有非精弃牌可选时，候选已保护精牌；非精白板按受限替代价值、进张、番型和风险评估，价值相近优先保留。锁手后不能换手，新摸牌不能胡则必须摸切，包括精牌。',
     locked: view.public.seats[view.seat].locked, wins: view.public.seats.map(s => s.winCount),
     opponentRisk: bloodFlowOpponentRisk(view)
       .filter(profile => profile.tier > 0)
