@@ -478,8 +478,10 @@ const {
   toggleReady,
 } = lobbyController
 
+// 联机昵称以登录账号为准：账号给出昵称时始终覆盖昵称框（刷新、切换账号都重算，
+// 本地旧昵称与玩家手输内容不再优先）；账号没有昵称时保留昵称框原值，玩家仍可自己填。
 watch(() => wakuAuth.account.value?.displayName, (displayName) => {
-  if (displayName && !nicknameInput.value.trim()) nicknameInput.value = displayName.slice(0, 12)
+  lobbyController.applyAccountNickname(displayName)
 }, { immediate: true })
 
 const statsOpen = ref(false)

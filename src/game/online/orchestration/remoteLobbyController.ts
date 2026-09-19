@@ -45,6 +45,17 @@ function readStoredNickname() {
   try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
 }
 
+/** 昵称长度上限：与大厅输入框 maxlength 一致（服务端上限 20，前端统一收 12 字）。 */
+export const NICKNAME_MAX_LENGTH = 12
+
+/**
+ * 登录账号昵称 → 联机昵称：去空白并截到 12 字；账号没有昵称时返回空串。
+ * 联机昵称一律以登录账号为准，因此调用方只在非空时覆盖昵称框。
+ */
+export function accountNickname(displayName: string | null | undefined): string {
+  return (displayName ?? '').trim().slice(0, NICKNAME_MAX_LENGTH)
+}
+
 async function copyText(text: string) {
   if (window.isSecureContext && navigator.clipboard) {
     try {
@@ -126,6 +137,16 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     environment.schedule(() => { copied.value = false }, 1600)
   }
 
+  /**
+   * 登录账号昵称 → 昵称框：账号给出昵称就覆盖。
+   * 「每次都以账号昵称为准」——本地旧昵称（lgm_nickname）与玩家手输内容都不再优先；
+   * 账号没有昵称时保留昵称框原值，玩家仍可自己填。
+   */
+  function applyAccountNickname(displayName: string | null | undefined) {
+    const name = accountNickname(displayName)
+    if (name) nicknameInput.value = name
+  }
+
   async function startMatch(llmSeats?: Array<LlmSeatRequest>) {
     matchStarting.value = true
     try {
@@ -193,6 +214,7 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     allOccupiedReady,
     createRoom,
     joinRoom,
+    applyAccountNickname,
     resumeSession,
     copyRoomCode,
     startMatch,

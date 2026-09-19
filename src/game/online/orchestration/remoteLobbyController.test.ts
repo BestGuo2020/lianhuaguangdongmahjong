@@ -1,5 +1,5 @@
 import { nextTick, ref } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteLobbyController, type RemoteLobbyActions } from './remoteLobbyController'
 import type { RoomSeatState } from '../api/roomApi'
 import type { GamePhase } from '../../core/contracts/gamePort'
@@ -16,12 +16,13 @@ function setup() {
   }
   let pendingEntry: (() => void) | null = null
   const alerts: string[] = []
+  const nickname = ref('')
   const controller = createRemoteLobbyController({
     gameMode: ref('local'),
     selectedMatch: ref('hanchan'),
     phase: ref('lobby'),
     roomId: ref(''),
-    nickname: ref(''),
+    nickname,
     playerId: ref('guest-1'),
     roomSeats: ref<Array<RoomSeatState | null>>([
       { seat: 0, nickname: 'A', ready: true, connected: true },
@@ -41,7 +42,7 @@ function setup() {
       schedule: (callback) => callback(),
     },
   })
-  return { controller, actions, alerts, runPending: () => pendingEntry?.() }
+  return { controller, actions, alerts, nickname, runPending: () => pendingEntry?.() }
 }
 
 describe('remoteLobbyController', () => {
@@ -111,5 +112,65 @@ describe('remoteLobbyController', () => {
     const { controller, alerts } = setup()
     await controller.report('违规玩家')
     expect(alerts).toEqual(['举报已提交，感谢反馈'])
+  })
+})
+
+// 「每次都以账号昵称为准」：登录/切换账号时账号昵称始终覆盖昵称框，
+// 本地旧昵称（lgm_nickname）与玩家手输内容都不再优先。
+describe('remoteLobbyController 账号昵称', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  function stubStoredNickname(stored: string) {
+    const data = new Map<string, string>([['lgm_nickname', stored]])
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => { data.set(key, value) },
+      removeItem: (key: string) => { data.delete(key) },
+    })
+  }
+
+  it('账号昵称覆盖本地旧昵称，且覆盖后就是建房用的昵称', () => {
+    stubStoredNickname('老玩家昵称')
+    const { controller, actions, nickname, runPending } = setup()
+    expect(controller.nicknameInput.value).toBe('老玩家昵称')   // 未登录/账号无昵称时的兜底
+    controller.applyAccountNickname('登录昵称')
+    expect(controller.nicknameInput.value).toBe('登录昵称')
+    controller.createRoom()
+    runPending()
+    expect(nickname.value).toBe('登录昵称')
+    expect(actions.createRoom).toHaveBeenCalledOnce()
+  })
+
+  it('覆盖玩家手输内容，并按 12 字截断（与输入框 maxlength 一致）', () => {
+    const { controller } = setup()
+    controller.nicknameInput.value = '手输的昵称'
+    controller.applyAccountNickname('  麻将对局昵称超过十二个字测试  ')
+    expect(controller.nicknameInput.value).toBe('麻将对局昵称超过十二个字')
+  })
+
+  it('切换账号每次都重算，不等同于「只在空的时候填」', () => {
+    const { controller } = setup()
+    controller.applyAccountNickname('第一个账号')
+    expect(controller.nicknameInput.value).toBe('第一个账号')
+    controller.applyAccountNickname('第二个账号')
+    expect(controller.nicknameInput.value).toBe('第二个账号')
+  })
+
+  it('账号没有昵称时保留昵称框原值，玩家仍可自己填', () => {
+    const { controller } = setup()
+    controller.nicknameInput.value = '手输的昵称'
+    controller.applyAccountNickname(null)
+    controller.applyAccountNickname(undefined)
+    controller.applyAccountNickname('   ')
+    expect(controller.nicknameInput.value).toBe('手输的昵称')
+  })
+
+  it('纯函数：去空白、截 12 字、空值返回空串', async () => {
+    const { accountNickname, NICKNAME_MAX_LENGTH } = await import('./remoteLobbyController')
+    expect(NICKNAME_MAX_LENGTH).toBe(12)
+    expect(accountNickname('  阿莲  ')).toBe('阿莲')
+    expect(accountNickname('一二三四五六七八九十十一十二十三')).toHaveLength(12)
+    expect(accountNickname(null)).toBe('')
+    expect(accountNickname('   ')).toBe('')
   })
 })
