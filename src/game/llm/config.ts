@@ -121,6 +121,7 @@ export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProvider
   { name: 'DeepSeek', providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   { name: 'Kimi (Moonshot)', providerType: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
   { name: '通义千问 (DashScope)', providerType: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.7-plus' },
+  { name: '通义千问 开源尺寸 (DashScope)', providerType: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3-32b' },
   { name: '千问 Token Plan（经网关）', providerType: 'qwen', baseUrl: llmRelayBaseUrl(LLM_RELAY_UPSTREAM_TOKEN_PLAN), model: 'qwen3.6-plus' },
   { name: '豆包 (Volcano Ark)', providerType: 'doubao', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-1-5-pro-32k-250115' },
   { name: 'MiniMax', providerType: 'minimax', baseUrl: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
