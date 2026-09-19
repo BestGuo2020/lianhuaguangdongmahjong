@@ -7,6 +7,9 @@ import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_ACTION_PRIORITY } from '../src/game/varia
 import { clusterSummary } from './blood-flow-counterfactual'
 import { pairedContest, type ContestRow } from './blood-flow-route-opportunity'
 import { meldControl, meldFixed, MELD_CONTROL_CONFIG, MELD_FIXED_CONFIG } from './blood-flow-meld-projection-policy'
+import { readyControl, readyCandidate, readyCanDiffer, READY_CONTROL_CONFIG, READY_CANDIDATE_CONFIG } from './blood-flow-ready-net-policy'
+
+const readyStudy = process.env.BF_READY_RUN === '1'
 
 function fingerprint() {
   const files: string[] = []
@@ -16,7 +19,7 @@ function fingerprint() {
     else if (item.name.endsWith('.ts')) files.push(path)
   } }
   visit('src/game')
-  files.push(...['counterfactual', 'route-opportunity', 'meld-projection-policy', 'meld-projection-run.test'].map(s => `scripts/blood-flow-${s}.ts`))
+  files.push(...['counterfactual', 'route-opportunity', 'meld-projection-policy', 'ready-net-policy', 'meld-projection-run.test'].map(s => `scripts/blood-flow-${s}.ts`))
   const hash = createHash('sha256')
   for (const path of files.sort()) hash.update(path.replaceAll('\\', '/')).update('\0').update(readFileSync(path)).update('\0')
   return hash.digest('hex')
@@ -33,23 +36,28 @@ function summary(rows: ContestRow[]) {
     best: [...rows].sort((a,b) => b.deltaVsControl - a.deltaVsControl).slice(0,5).map(r => ({ seed:r.seed, seat:r.seat, delta:r.deltaVsControl })) }
 }
 
-it.skipIf(process.env.BF_MP_RUN !== '1')('compares the corrected projection with current production over complete East matches', () => {
-  const tag = process.env.BF_MP_TAG ?? 'pilot', from = Number(process.env.BF_MP_FROM ?? 1200001), seeds = Number(process.env.BF_MP_SEEDS ?? 4)
+it.skipIf(!readyStudy && process.env.BF_MP_RUN !== '1')('compares an isolated claim-policy change over complete East matches', () => {
+  const prefix = readyStudy ? 'BF_READY' : 'BF_MP'
+  const tag = process.env[`${prefix}_TAG`] ?? 'pilot', from = Number(process.env[`${prefix}_FROM`] ?? (readyStudy ? 1400001 : 1200001)), seeds = Number(process.env[`${prefix}_SEEDS`] ?? 4)
   if (!/^[a-zA-Z0-9_-]+$/.test(tag) || !Number.isSafeInteger(from) || !Number.isSafeInteger(seeds)
     || from < 1 || seeds < 1 || seeds > 1000) throw new Error('Invalid run budget')
-  const dir = `work/blood-flow-meld-projection/${tag}`
+  const dir = `work/blood-flow-${readyStudy ? 'ready-net' : 'meld-projection'}/${tag}`
   if (existsSync(`${dir}/metadata.json`)) throw new Error('Use a fresh tag')
   mkdirSync(dir, { recursive: true })
   const started = Date.now(), sourceFingerprint = fingerprint()
   const metadata = { tag, from, seeds, roundsPerMatch:4, candidateSeatsPerSeed:4,
     startedAt: new Date(started).toISOString(), sourceFingerprint,
     commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(), apiRequests:0,
-    control:MELD_CONTROL_CONFIG, fixed:MELD_FIXED_CONFIG, ruleConfig:BLOOD_FLOW_CONFIG, actionPriority:BLOOD_FLOW_ACTION_PRIORITY,
-    protocol:'Only meld projection differs; opportunity guard stays on in both arms. 1 candidate vs 3 controls, four-seat rotation, score carry across 4 rounds, seed-cluster inference. No hidden-state policy input.' }
+    study: readyStudy ? 'ready-net' : 'meld-projection',
+    control:readyStudy?READY_CONTROL_CONFIG:MELD_CONTROL_CONFIG, fixed:readyStudy?READY_CANDIDATE_CONFIG:MELD_FIXED_CONFIG,
+    ruleConfig:BLOOD_FLOW_CONFIG, actionPriority:BLOOD_FLOW_ACTION_PRIORITY,
+    protocol: (readyStudy ? 'Only the unready-to-ready claim net-score veto differs; opportunity guard and corrected projection both stay on. '
+      : 'Only meld projection differs; opportunity guard stays on in both arms. ')
+      + '1 candidate vs 3 controls, four-seat rotation, score carry across 4 rounds, seed-cluster inference. No hidden-state policy input.' }
   writeFileSync(`${dir}/metadata.json`, JSON.stringify(metadata,null,2))
   const all: ContestRow[] = []
   for (let seed = from; seed < from + seeds; seed++) {
-    const result = pairedContest(seed,4,true,meldFixed,meldControl)
+    const result = pairedContest(seed,4,true,readyStudy?readyCandidate:meldFixed,readyStudy?readyControl:meldControl,readyStudy?readyCanDiffer:undefined)
     all.push(...result.rows)
     writeFileSync(`${dir}/seed-${seed}.json`,JSON.stringify(result,null,2))
     writeFileSync(`${dir}/progress.json`,JSON.stringify({completedSeeds:seed-from+1,matches:all.length,

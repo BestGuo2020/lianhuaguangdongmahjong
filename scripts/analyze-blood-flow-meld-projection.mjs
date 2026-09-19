@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 const tags = process.argv.slice(2)
+const study = tags[0]?.startsWith('--study=') ? tags.shift().slice('--study='.length) : 'meld-projection'
+if (!['meld-projection','ready-net'].includes(study)) throw new Error('Unknown study')
 if (!tags.length || tags.some(t => !/^[a-zA-Z0-9_-]+$/.test(t))) throw new Error('Pass completed batch tags')
 const read = path => JSON.parse(readFileSync(path,'utf8'))
 const mean = values => values.length ? values.reduce((a,b)=>a+b,0)/values.length : null
@@ -24,7 +26,7 @@ function metric(rows, fn) {
 }
 const used=new Set(),settings=new Set()
 const batches=tags.map(tag=>{
-  const dir=`work/blood-flow-meld-projection/${tag}`,metadata=read(`${dir}/metadata.json`),done=read(`${dir}/summary.json`)
+  const dir=`work/blood-flow-${study}/${tag}`,metadata=read(`${dir}/metadata.json`),done=read(`${dir}/summary.json`)
   if(JSON.stringify(metadata)!==JSON.stringify(done.metadata)) throw new Error('Incomplete batch')
   settings.add(JSON.stringify([metadata.sourceFingerprint,metadata.control,metadata.fixed,metadata.ruleConfig,metadata.actionPriority]))
   const results=[]
@@ -37,6 +39,8 @@ const batches=tags.map(tag=>{
     for(const row of result.rows) {
       if(row.roundNet.reduce((a,b)=>a+b,0)!==row.net||row.net-result.controlNet[row.seat]!==row.deltaVsControl
         ||(!row.diverged&&row.deltaVsControl!==0))throw new Error('Invalid paired accounting')
+      if(study==='ready-net'&&row.decisionChanges.some(c=>!['chi','peng'].includes(c.original.kind)||c.chosen.kind!=='pass'))
+        throw new Error('Readiness veto changed behavior outside its registered chi/peng-to-pass scope')
       row.controlRank=1+result.controlNet.filter(v=>v>result.controlNet[row.seat]).length
     }
     results.push(result)
@@ -63,6 +67,6 @@ const result={schema:1,tags,sourceFingerprint:batches[0].metadata.sourceFingerpr
   controlMatches:used.size,controlRounds:used.size*4,apiRequests:0,pooled,
   batches:batches.map(b=>({tag:b.tag,from:b.metadata.from,seeds:b.metadata.seeds,elapsedSeconds:b.elapsedSeconds,
     summary:summarize(b.results.flatMap(r=>r.rows))})),seedResults:batches.flatMap(b=>b.results)}
-const output=`work/blood-flow-meld-projection/analysis-${tags.join('-')}.json`
+const output=`work/blood-flow-${study}/analysis-${tags.join('-')}.json`
 writeFileSync(output,JSON.stringify(result,null,2))
 console.log(JSON.stringify({output,sourceSeeds:used.size,candidateMatches:rows.length,pooled},null,2))

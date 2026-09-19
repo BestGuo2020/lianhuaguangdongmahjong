@@ -377,6 +377,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
       const decision = decideClaim({ ...context, melds, patternBonus: extras.patternBonus, safetyExposure: extras.safetyExposure,
         kongEvaluator: extras.kongEvaluator,
         claimMeldProjection: config.claimMeldProjection === true,
+        claimReadyNetGuard: config.claimReadyNetGuard === true,
         tile: source.tile, from: source.seat, canGang: moves.some(a => a.kind === 'gang'),
         canPeng: moves.some(a => a.kind === 'peng'),
         chiOptions: canChi(hand, source.tile, jokers).filter(m => offered({ kind: 'chi', tiles: m.tiles })),

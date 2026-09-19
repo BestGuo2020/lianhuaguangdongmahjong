@@ -14,7 +14,7 @@ it('production decisions equal the independently validated policy across complet
       if (++steps > 2000) throw new Error('Integration replay stalled')
       const seat = nextSeatToAct(engine), view = bloodFlowSeatView(engine, seat)
       const reference = opportunityPolicy(view)
-      const production = decideBloodFlowActionEv(view, { ...BLOOD_FLOW_AI, routeOpportunityGuard: true, claimMeldProjection: false })
+      const production = decideBloodFlowActionEv(view, { ...BLOOD_FLOW_AI, routeOpportunityGuard: true, claimMeldProjection: false, claimReadyNetGuard: false })
       expect(production).toEqual(reference)
       if (JSON.stringify(production) !== JSON.stringify(baseline(view))) changed++
       decisions++

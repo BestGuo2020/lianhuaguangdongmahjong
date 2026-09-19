@@ -134,6 +134,8 @@ export interface LotusClaimView {
   melds?: Meld[]
   /** 番型估值使用动作后的真实副露；false 仅供旧策略回退／对拍。 */
   claimMeldProjection?: boolean
+  /** 未听→听牌的吃碰仍须综合分严格优于过；缺省保持原有听牌硬优先。 */
+  claimReadyNetGuard?: boolean
   /** 可选：开杠价值（杠收益 − 防守风险 − 自手牌型损失），血流策略注入；不传则用旧启发式。 */
   kongEvaluator?: KongEvaluator
 }
@@ -315,6 +317,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   const best = candidates
     // 未听散手不因一阶估值就贸然开副露；至少动作后听牌，或现状本就听牌，才比较投影。
     .filter((candidate) => (candidate.quality.ready || baseline.ready)
+      && (!view.claimReadyNetGuard || baseline.ready || candidate.quality.netScore > baseline.netScore)
       && compareQuality(candidate.quality, baseline) > 0)
     .sort((a, b) => compareQuality(b.quality, a.quality) || claimActionPriority(a.action) - claimActionPriority(b.action))[0]
   return best?.action ?? { kind: 'pass' }

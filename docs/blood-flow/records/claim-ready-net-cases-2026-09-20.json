@@ -1,0 +1,22 @@
+[
+  {
+    "key": "1100001-peng",
+    "wall": 35,
+    "control": {
+      "kind": "peng"
+    },
+    "candidate": {
+      "kind": "pass"
+    }
+  },
+  {
+    "key": "1100008-peng",
+    "wall": 24,
+    "control": {
+      "kind": "peng"
+    },
+    "candidate": {
+      "kind": "pass"
+    }
+  }
+]
