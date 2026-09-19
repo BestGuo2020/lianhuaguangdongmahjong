@@ -495,6 +495,12 @@ LLM_PROVIDER_KIMI_MODEL=kimi-k2
 - **装配**：`RoomSession` 内存保存 `{seat: providerId}` + 默认提供商（`id=default` 优先，否则注册表第一个）；`_controllers()` 空位按 `LLMPlayer(config=provider.to_config())` 逐座装配（未指定座位 → 默认提供商）；`effectiveLlmEnabled = llm_enabled && 注册表非空`；注册表为空 → 启发式 AIPlayer（静默降级）；
 - **形象**：`_seeds()` 生成 `name = 昵称（策略）` 与 `avatar = img/llm/<供应商英文名>/llm-avatar-<策略>.png`（`app/llm/persona.py`，与前端 persona 规则一致；昵称缺省按 base URL 推导：DeepSeek=大肥鱼等；文件夹：deepseek/kimi/qwen/doubao/minimax/gpt/glm/claude，未知=custom）；
 - **前端**：房主在房间面板为每个空位选择服务端提供商（默认=服务器默认，选项显示「昵称（风格）· 名称 模型」）；右下角「🤖 AI 设置」仅单机显示；设置面板只配置单机人机。
+- **预留座位（2026-09 定稿）**：房主为某空位**显式选择模型** ⇒ 该座**预留给大模型，真人不可占**（加入时被跳过）；改回「自动选择」（`providerId` 省略）= 取消预留，真人可占、空着仍由默认提供商补位。
+  - 写入口：`POST /api/rooms/{id}/llm-seats`，body `{seat, rejoinCode, reserveSeat, providerId?, style?}`（`seat` = 房主自己的座位做身份校验，`reserveSeat` = 目标空位；非房主 → 403 `NOT_CREATOR`；已占座位 → 409 `SEAT_OCCUPIED`；未启用大模型 → 409 `LLM_NOT_ENABLED`；未知 providerId → 409 `INVALID_LLM_SEATS`）。房间信息新增 `reservedSeats: [{seat, providerId, style}]` 统一下发。
+  - 预留是**房间级状态**（`RoomSession.reserved_seats` / `BloodFlowRoomSession.reserved_seats`）：房主刷新、换设备、换房主、开下一局都保留；**不写进 `room.seats`**，所以开局 ready 校验与「全员已准备」判定不受影响。
+  - **真人上限 = capacity − 预留数**：真人没占满但只剩预留座时加入返回 409 `SEATS_RESERVED`（专用码，前端提示「房主已把剩余空位预留给大模型」），不再用笼统的 `ROOM_FULL` 掩盖原因。
+  - 开局装配 = 预留座位 + 开局入参（入参覆盖）：客户端丢状态也不会漏装；`_resolve_llm_seats` 对预留座优先取预留的 provider/style，其余空位仍走服务端默认提供商。
+  - 「1 真人 + 3 大模型」不需要预留（房主一人开局即可）；预留用于「把真人数量卡死」，例如 4 座房预留 2 座 = 固定 2 真人 + 2 大模型。
 
 ---
 

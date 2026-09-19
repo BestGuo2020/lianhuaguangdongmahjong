@@ -1,7 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
+import {
+  isReservationUnavailable,
+  pickValue,
+  pickValueForSeat,
+  reservationFromPick,
+  reservedSeatLabel,
+  seatLlmState,
+  startLlmSeats,
+  stylesForProvider,
+  type SeatLlmReservation,
+} from './roomSeatLlm'
 import type { TableThemeName } from '../table/three/tableTheme'
 import type {
   LlmProviderInfo,
@@ -16,6 +27,11 @@ interface Props {
   /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家在牌桌上「暂离」。 */
   roomStatus?: string
   roomSeats: Array<RoomSeatState | null>
+  /**
+   * 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。
+   * 服务端真值，随房间信息轮询刷新。
+   */
+  reservedSeats: Array<LlmSeatRequest>
   mySeat: number
   isCreator: boolean
   sessionStatus: string
@@ -46,6 +62,8 @@ const emit = defineEmits<{
   copy: []
   toggleReady: []
   start: [payload: { llmSeats: Array<LlmSeatRequest> }]
+  /** 房主改选空位模型（providerId 为空 = 取消预留，该座放开给真人）。 */
+  reserveSeat: [payload: SeatLlmReservation]
   leave: []
   close: []
   resume: []
@@ -58,38 +76,52 @@ const awayFromTable = computed(() => props.roomStatus === 'playing' && props.myS
 const currentCharacter = computed(() => resolveAnimeCharacter(props.characterId))
 const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.characterId))
 
-/** 空位（座位号升序）→ 选择的提供商 id（'' = 服务器默认） */
-const picks = ref<Record<number, string>>({})
+/** 已预留的空位数量（面板提示用）。 */
+const reservedCount = computed(() => props.reservedSeats.filter(
+  (item) => props.roomSeats[item.seat] == null).length)
 
-const ALL_STYLES: ServerLlmStyle[] = ['激进', '稳健', '话痨', '高冷']
-const PICK_SEPARATOR = '::'
+const seatState = (seat: number) => seatLlmState(seat, props.roomSeats, props.reservedSeats)
 
-function stylesFor(provider: LlmProviderInfo): ServerLlmStyle[] {
-  return provider.styles?.length ? provider.styles : (
-    ALL_STYLES.includes(provider.style) ? ALL_STYLES : ['稳健']
-  )
+function reservedAt(seat: number) {
+  return props.reservedSeats.find((item) => item.seat === seat) ?? null
 }
 
-function pickValue(providerId: string, style: ServerLlmStyle): string {
-  return `${providerId}${PICK_SEPARATOR}${style}`
+function pickValueAt(seat: number) {
+  return pickValueForSeat(seat, props.reservedSeats, props.llmProviders)
 }
 
-function parsePick(seat: number, value: string): LlmSeatRequest | null {
-  const separator = value.lastIndexOf(PICK_SEPARATOR)
-  if (separator <= 0) return null
-  const providerId = value.slice(0, separator)
-  const style = value.slice(separator + PICK_SEPARATOR.length) as ServerLlmStyle
-  if (!providerId || !ALL_STYLES.includes(style)) return null
-  return { seat, providerId, style }
+/**
+ * 待定选择：房主刚改了下拉框、服务端响应还没回来时的乐观值。
+ * 服务端预留列表一变（写成功，或写失败后回读房间真值）就清空 → 值重新以服务端为准，
+ * 因此写失败时下拉框不会停在服务端并未接受的选项上。
+ */
+const pendingPicks = ref<Record<number, string>>({})
+watch(() => props.reservedSeats, () => { pendingPicks.value = {} })
+
+function selectValueAt(seat: number) {
+  return pendingPicks.value[seat] ?? pickValueAt(seat)
+}
+
+function reservedLabel(seat: number) {
+  const reserved = reservedAt(seat)
+  return reserved ? reservedSeatLabel(reserved, props.llmProviders) : ''
+}
+
+/** 预留的模型已不在服务端注册表：给房主一个可见选项，便于改回「自动选择」。 */
+function unavailableReservation(seat: number) {
+  const reserved = reservedAt(seat)
+  return reserved ? isReservationUnavailable(reserved, props.llmProviders) : false
+}
+
+function onPickChange(seat: number, event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  pendingPicks.value = { ...pendingPicks.value, [seat]: value }
+  emit('reserveSeat', reservationFromPick(seat, value))
 }
 
 function startPayload() {
   if (!props.effectiveLlmEnabled) return { llmSeats: [] }
-  const llmSeats = Object.entries(picks.value)
-    .filter(([seat, providerId]) => providerId && props.roomSeats[Number(seat)] == null)
-    .map(([seat, value]) => parsePick(Number(seat), value))
-    .filter((item): item is LlmSeatRequest => item !== null)
-  return { llmSeats }
+  return { llmSeats: startLlmSeats(props.roomSeats, props.reservedSeats) }
 }
 </script>
 
@@ -115,6 +147,9 @@ function startPayload() {
     <p v-else-if="llmEnabled && !llmAvailable" class="room-llm-note off">
       已请求大模型补位，但服务器未配置（空位将由普通 AI 代打）
     </p>
+    <p v-if="reservedCount" class="room-llm-note reserved" data-testid="room-llm-reserved-note">
+      <img :src="robotIconUrl" alt="" aria-hidden="true">已预留 {{ reservedCount }} 个空位给大模型（真人不可加入；改回「自动选择」即放开）
+    </p>
     <p v-if="roomTimeLimit" class="room-limit-note">
       房间限时 {{ Math.round(roomTimeLimit / 60) }} 分钟，超时自动解散；房主离开将顺延房主，全员离开或房主关闭才会解散。
     </p>
@@ -134,7 +169,12 @@ function startPayload() {
         v-for="(seat, index) in roomSeats"
         :key="index"
         class="room-seat"
-        :class="{ occupied: !!seat, 'llm-planned': !seat && effectiveLlmEnabled }"
+        :class="{
+          occupied: !!seat,
+          'llm-planned': !seat && effectiveLlmEnabled,
+          'llm-reserved': seatState(index).kind === 'reserved',
+        }"
+        :data-seat-state="seatState(index).kind"
       >
         <span class="room-seat-no">{{ index + 1 }}</span>
         <template v-if="seat">
@@ -149,15 +189,22 @@ function startPayload() {
           <img :src="robotIconUrl" alt="" aria-hidden="true">
           <select
             class="room-seat-provider"
-            :value="picks[index] ?? ''"
-            :aria-label="`空位 ${index + 1} 大模型提供商`"
+            :class="{ reserved: seatState(index).kind === 'reserved' }"
+            :value="selectValueAt(index)"
+            :aria-label="seatState(index).kind === 'reserved'
+              ? `空位 ${index + 1} 已预留给大模型，改回自动选择即放开给真人`
+              : `空位 ${index + 1} 大模型提供商`"
             data-testid="room-llm-pick"
-            @change="picks[index] = ($event.target as HTMLSelectElement).value"
+            @change="onPickChange(index, $event)"
           >
-            <option value="">自动选择</option>
+            <option value="">自动选择（真人可占）</option>
+            <option
+              v-if="unavailableReservation(index)"
+              :value="pickValueAt(index)"
+            >{{ reservedLabel(index) }}</option>
             <template v-for="provider in llmProviders" :key="provider.id">
               <option
-                v-for="style in stylesFor(provider)"
+                v-for="style in stylesForProvider(provider)"
                 :key="`${provider.id}-${style}`"
                 :value="pickValue(provider.id, style)"
               >
@@ -166,6 +213,10 @@ function startPayload() {
             </template>
           </select>
         </span>
+        <span
+          v-else-if="seatState(index).kind === 'reserved'"
+          class="room-seat-reserved"
+        >已预留给 {{ reservedLabel(index) }}</span>
         <b v-else-if="effectiveLlmEnabled">大模型补位</b>
         <b v-else>等待加入…</b>
       </div>
@@ -219,6 +270,17 @@ function startPayload() {
 .room-llm-note img { width: 18px; height: 18px; }
 .room-llm-note.on { color: #4caf50; }
 .room-llm-note.off { color: #e6a23c; }
+/* 预留提示与「空位由大模型代打」区分开：预留是房主显式锁定，真人进不来。 */
+.room-llm-note.reserved {
+  justify-content: flex-start;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #e6c482) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-accent, #e6c482) 9%, transparent);
+  color: var(--theme-accent, #e6c482);
+  font-size: 12px;
+  text-align: left;
+}
 .room-character-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--theme-border) 38%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--theme-panel-elevated) 72%, transparent); color: var(--theme-text); text-align: left; cursor: pointer; }
 .room-character-entry img { width: 32px; height: 32px; border-radius: 8px 8px 3px 3px; object-fit: cover; background: var(--theme-surface); }
 .room-character-entry span { display: grid; min-width: 0; }
@@ -234,6 +296,24 @@ function startPayload() {
   background: color-mix(in srgb, var(--theme-positive) 20%, transparent);
   color: var(--theme-text);
 }
+/* 已预留给大模型的空位：真人不可加入（与「大模型补位」的自动档区分开）。 */
+.room-seat.llm-reserved {
+  border-color: color-mix(in srgb, var(--theme-accent, #e6c482) 55%, transparent);
+  background: color-mix(in srgb, var(--theme-accent, #e6c482) 12%, var(--theme-panel));
+  color: var(--theme-accent, #e6c482);
+}
+.room-seat.llm-reserved .room-seat-no {
+  background: color-mix(in srgb, var(--theme-accent, #e6c482) 26%, transparent);
+  color: var(--theme-text);
+}
+.room-seat-reserved {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-seat-provider.reserved { color: var(--theme-accent, #e6c482); }
 .room-seat-provider {
   flex: 1;
   width: 100%;

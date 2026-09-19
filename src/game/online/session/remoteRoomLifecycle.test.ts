@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteRoomLifecycle, type RemoteRoomApi, type RemoteRoomState } from './remoteRoomLifecycle'
+import type { ServerLlmStyle } from '../api/roomApi'
 import type { StoredSession } from './remoteSessionStore'
 
 function createHarness(savedSession: StoredSession | null = null) {
@@ -15,6 +16,7 @@ function createHarness(savedSession: StoredSession | null = null) {
     creatorSeat: ref(null),
     isCreator: ref(false),
     roomSeats: ref([]),
+    reservedSeats: ref([]),
     roomTimeLimit: ref(null),
     roomStatus: ref('lobby'),
     llmEnabled: ref(false),
@@ -46,12 +48,20 @@ function createHarness(savedSession: StoredSession | null = null) {
       timeLimitSeconds: 3600,
       rulesetId: 'lotus-legacy' as const, seats: [null, null, { seat: 2, nickname: '莲花', ready: false, connected: true }, null],
       llmEnabled: true, effectiveLlmEnabled: true, llmAvailable: true,
+      reservedSeats: [{ seat: 1, providerId: 'kimi', style: '高冷' as const }],
     })),
     joinRoom: vi.fn(async () => ({
       roomId: 'ABC123', seat: 2, nickname: '莲花', rejoinCode: 'AAAA-BBBB',
       playerId: 'guest', rejoin: false,
     })),
     updateCharacter: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, characterId: 'deepseek' })),
+    reserveLlmSeat: vi.fn(async (roomId: string, _seat: number, _code: string,
+      reserveSeat: number, providerId: string | null, style?: ServerLlmStyle | null) => ({
+      roomId,
+      reservedSeats: providerId
+        ? [{ seat: reserveSeat, providerId, ...(style ? { style } : {}) }]
+        : [],
+    })),
     leaveRoom: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, left: true })),
     readyRoom: vi.fn(async () => ({ roomId: 'ABC123', seat: 2, ready: true })),
     startRoom: vi.fn(async () => ({ roomId: 'ABC123', status: 'playing' })),
@@ -124,6 +134,44 @@ describe('remoteRoomLifecycle', () => {
     ]
     await harness.lifecycle.startMatch(seats)
     expect(harness.api.startRoom).toHaveBeenCalledWith('ABC123', seats)
+  })
+
+  it('reads the room-level LLM seat reservations from the authoritative room info', async () => {
+    const harness = createHarness()
+    harness.state.roomId.value = 'ABC123'
+    await harness.lifecycle.refreshRoom()
+    expect(harness.state.reservedSeats.value).toEqual([
+      { seat: 1, providerId: 'kimi', style: '高冷' },
+    ])
+  })
+
+  it('writes and clears the LLM seat reservation through the room API', async () => {
+    const harness = createHarness()
+    harness.state.roomId.value = 'ABC123'
+    harness.state.mySeat.value = 2
+    harness.state.rejoinCode.value = 'AAAA-BBBB'
+
+    await harness.lifecycle.reserveLlmSeat(1, 'kimi', '高冷')
+    expect(harness.api.reserveLlmSeat).toHaveBeenCalledWith(
+      'ABC123', 2, 'AAAA-BBBB', 1, 'kimi', '高冷')
+    expect(harness.state.reservedSeats.value).toEqual([
+      { seat: 1, providerId: 'kimi', style: '高冷' },
+    ])
+
+    // 改回「自动选择」（providerId 为空）= 取消预留：该座立刻放开给真人。
+    await harness.lifecycle.reserveLlmSeat(1, null, null)
+    expect(harness.api.reserveLlmSeat).toHaveBeenLastCalledWith(
+      'ABC123', 2, 'AAAA-BBBB', 1, null, null)
+    expect(harness.state.reservedSeats.value).toEqual([])
+  })
+
+  it('maps the reserved-seat rejection to a readable reason', async () => {
+    const harness = createHarness()
+    harness.api.joinRoom = vi.fn(async () => { throw new Error('SEATS_RESERVED') })
+
+    await expect(harness.lifecycle.joinRoom('ABC123')).rejects.toThrow('SEATS_RESERVED')
+    expect(harness.state.sessionError.value).toContain('预留给大模型')
+    expect(harness.state.sessionStatus.value).toBe('idle')
   })
 
   it('resumes a persisted session without rejoining through REST', async () => {

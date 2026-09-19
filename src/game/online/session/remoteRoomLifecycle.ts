@@ -9,10 +9,12 @@ import {
   joinRoom,
   leaveRoom,
   readyRoom,
+  reserveLlmSeat,
   startRoom,
   updateCharacter,
   type LlmSeatRequest,
   type RoomSeatState,
+  type ServerLlmStyle,
 } from '../api/roomApi'
 import { generateGuestId, type StoredSession } from './remoteSessionStore'
 
@@ -29,6 +31,8 @@ export interface RemoteRoomState {
   creatorSeat: Ref<number | null>
   isCreator: Ref<boolean>
   roomSeats: Ref<Array<RoomSeatState | null>>
+  /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
+  reservedSeats: Ref<Array<LlmSeatRequest>>
   roomTimeLimit: Ref<number | null>
   /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
   roomStatus: Ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>
@@ -51,6 +55,7 @@ export interface RemoteRoomApi {
   getRoom: typeof getRoom
   joinRoom: typeof joinRoom
   updateCharacter: typeof updateCharacter
+  reserveLlmSeat: typeof reserveLlmSeat
   leaveRoom: typeof leaveRoom
   readyRoom: typeof readyRoom
   startRoom: typeof startRoom
@@ -75,13 +80,20 @@ export interface RemoteRoomLifecycleOptions {
 }
 
 const DEFAULT_API: RemoteRoomApi = {
-  createRoom, getRoom, joinRoom, updateCharacter, leaveRoom, readyRoom, startRoom, closeRoom,
+  createRoom, getRoom, joinRoom, updateCharacter, reserveLlmSeat, leaveRoom, readyRoom,
+  startRoom, closeRoom,
 }
 
 const REMOTE_ERROR_TEXT: Record<string, string> = {
   ROOM_LIMIT_REACHED: '房间已满',
   ROOM_FULL: '房间已满',
   ALREADY_IN_ROOM: '你已在房间中，请先离开当前房间',
+  SEATS_RESERVED: '房主已把剩余空位预留给大模型，请让房主改回「自动选择」或换一间房',
+  SEAT_OCCUPIED: '该座位已有真人，不能预留给大模型',
+  INVALID_SEAT: '座位号无效',
+  NOT_CREATOR: '只有房主能设置大模型预留',
+  LLM_NOT_ENABLED: '本房间未启用大模型补位',
+  INVALID_LLM_SEATS: '该模型当前不可用，请让房主改选其他模型',
 }
 
 function readableError(error: unknown, fallback: string): string {
@@ -134,6 +146,7 @@ export function createRemoteRoomLifecycle({
       state.matchType.value = info.mode
       state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
       state.roomSeats.value = info.seats ?? []
+      state.reservedSeats.value = info.reservedSeats ?? []
       state.creatorSeat.value = info.creatorSeat ?? null
       state.isCreator.value = state.creatorSeat.value != null
         && state.mySeat.value === state.creatorSeat.value
@@ -163,6 +176,7 @@ export function createRemoteRoomLifecycle({
     state.sessionStatus.value = 'idle'
     state.phase.value = 'lobby'
     state.roomSeats.value = []
+    state.reservedSeats.value = []
     state.roomStatus.value = 'lobby'
     state.llmEnabled.value = false
     state.effectiveLlmEnabled.value = false
@@ -280,6 +294,27 @@ export function createRemoteRoomLifecycle({
     }
   }
 
+  /**
+   * 房主为某个空位写 / 清大模型预留：`providerId` 为空 = 取消预留（改回「自动选择」）。
+   *
+   * 预留写在服务端房间上：别人 join 时据此跳过该座，房主刷新/换设备也不丢；
+   * 失败时回读房间真值，面板（值由 reservedSeats 驱动）不会停在错误选项上。
+   */
+  async function reserveLlmSeat(reserveSeat: number, providerId: string | null,
+    style: ServerLlmStyle | null) {
+    if (!state.roomId.value || state.mySeat.value < 0 || !state.rejoinCode.value) return
+    state.sessionError.value = ''
+    try {
+      const result = await api.reserveLlmSeat(
+        state.roomId.value, state.mySeat.value, state.rejoinCode.value,
+        reserveSeat, providerId, style)
+      state.reservedSeats.value = result.reservedSeats ?? []
+    } catch (error) {
+      state.sessionError.value = readableError(error, '设置大模型预留失败')
+      await refreshRoom()
+    }
+  }
+
   async function leaveRemoteRoom() {
     stopPolling()
     try {
@@ -326,6 +361,7 @@ export function createRemoteRoomLifecycle({
     state.creatorSeat.value = null
     state.isCreator.value = false
     state.roomSeats.value = []
+    state.reservedSeats.value = []
     state.roomStatus.value = 'lobby'
     // storedSession（含 rejoinCode）保留：大厅据它显示「继续对局」，重进即恢复原座位。
   }
@@ -350,6 +386,7 @@ export function createRemoteRoomLifecycle({
     joinRoom: joinRemoteRoom,
     toggleReady,
     updateCharacter,
+    reserveLlmSeat,
     startMatch,
     leaveRoom: leaveRemoteRoom,
     closeRoom: closeRemoteRoom,

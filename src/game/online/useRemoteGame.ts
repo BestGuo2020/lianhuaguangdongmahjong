@@ -76,7 +76,8 @@ export function useRemoteGame({
   })
   const {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, roomStatus, llmEnabled, effectiveLlmEnabled,
+    creatorSeat, isCreator, roomSeats, reservedSeats, roomTimeLimit, roomStatus, llmEnabled,
+    effectiveLlmEnabled,
     llmAvailable, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, lastDiscardSound, actionPrompt, announcement, tableActionEvent,
@@ -130,7 +131,8 @@ export function useRemoteGame({
   const roomLifecycle = createRemoteRoomLifecycle({
     state: {
       sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-      creatorSeat, isCreator, roomSeats, roomTimeLimit, roomStatus, llmEnabled, effectiveLlmEnabled,
+      creatorSeat, isCreator, roomSeats, reservedSeats, roomTimeLimit, roomStatus, llmEnabled,
+      effectiveLlmEnabled,
       llmAvailable, rulesetId, storedSession,
       phase, matchType, matchFinished, players,
     },
@@ -555,7 +557,8 @@ export function useRemoteGame({
   return defineGamePort({
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, rejoinCode,
-    playerId, isCreator, creatorSeat, roomSeats, roomTimeLimit, roomStatus, waitingNextRound,
+    playerId, isCreator, creatorSeat, roomSeats, reservedSeats, roomTimeLimit, roomStatus,
+    waitingNextRound,
     llmEnabled, effectiveLlmEnabled, llmAvailable,
     rulesetId,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,

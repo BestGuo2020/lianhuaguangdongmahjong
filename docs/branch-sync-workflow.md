@@ -46,7 +46,8 @@
 - `src/game/online/session/remoteRoomLifecycle.{ts,test.ts}`、`session/useRoomAvailability.ts`、`session/useWakuDemoAuth.ts`
 - `src/game/online/transport/roomSocket.{ts,test.ts}`、`src/game/online/useRemoteGame.{ts,test.ts}`
 - `src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`）：血流 **WS** 联机入口，import 了上面这些 WS 模块；vibehub 的 P2P 血流走自己的 `src/game/online/vibe/bloodFlowRoom.ts`
-- `tests/e2e/remote-lotus-legacy.smoke.spec.ts`
+- `src/components/lobby/roomSeatLlm.{ts,test.ts}`：房间面板「预留座位」纯逻辑，import 了 `online/api/roomApi`；vibehub 的房间面板是 keep 文件，不使用它
+- `tests/e2e/remote-lotus-legacy.smoke.spec.ts`、`tests/e2e/llm-seat-reservation.spec.ts`（后者打 REST `/api/rooms/{id}/llm-seats`）
 - 例外：`src/game/variants/lotus/bloodFlow/ws/authority.ts`（+test）**跟随 master**、不要排除 —— `useBloodFlowGame.ts` 里有 `import type { ... } from './ws/authority'`，删掉会破坏 vibehub 的类型检查。
 
 ## 注意

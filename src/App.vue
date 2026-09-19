@@ -22,7 +22,7 @@ import { createActiveGamePort, type GameMode } from './game/core/contracts/activ
 import type { GamePort } from './game/core/contracts/gamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import type { StoredSession } from './game/online/session/remoteSessionStore'
-import { getRoom } from './game/online/api/roomApi'
+import { getRoom, type LlmSeatRequest, type ServerLlmStyle } from './game/online/api/roomApi'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useWakuDemoAuth } from './game/online/session/useWakuDemoAuth'
@@ -330,7 +330,8 @@ const debugPreviewDraw = () => {
 // ── 联机模式状态（远程房间 / WS 连接）──
 // 血流联机房间走自己的会话：以下代理在联机槽切换时读取/写入对应模块的真实 ref。
 const proxyRef = <T,>(name: 'sessionStatus' | 'sessionError' | 'roomId' | 'mySeat' | 'nickname'
-  | 'playerId' | 'isCreator' | 'roomSeats' | 'roomTimeLimit' | 'roomStatus' | 'storedSession'
+  | 'playerId' | 'isCreator' | 'roomSeats' | 'reservedSeats' | 'roomTimeLimit' | 'roomStatus'
+  | 'storedSession'
   | 'llmEnabled' | 'effectiveLlmEnabled' | 'llmAvailable' | 'autoPlay'
   | 'roomTableThemeName') => computed<T>({
   get: () => activeRemote.value[name].value as T,
@@ -344,6 +345,8 @@ const nickname = proxyRef<string>('nickname')
 const playerId = proxyRef<string>('playerId')
 const isCreator = proxyRef<boolean>('isCreator')
 const roomSeats = proxyRef<Array<{ seat: number; nickname: string; ready: boolean; connected: boolean; characterId?: string } | null>>('roomSeats')
+/** 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。 */
+const reservedSeats = proxyRef<Array<LlmSeatRequest>>('reservedSeats')
 const roomTimeLimit = proxyRef<number>('roomTimeLimit')
 /** 服务端房间状态：blood flow 暂离时房间面板据此显示「本场进行中 · 回到牌桌」。 */
 const roomStatus = proxyRef<'lobby' | 'playing' | 'finished' | 'error' | 'closed' | string>('roomStatus')
@@ -378,6 +381,9 @@ const remoteActions = {
   toggleReady: () => activeRemote.value.remoteActions.toggleReady(),
   startMatch: (llmSeats?: Parameters<typeof activeRemote.value.remoteActions.startMatch>[0]) =>
     activeRemote.value.remoteActions.startMatch(llmSeats as never),
+  // 房主为空位选模型 = 该座预留给大模型（真人不可加入）；改回「自动选择」= 取消预留。
+  reserveLlmSeat: (payload: { seat: number; providerId: string | null; style: ServerLlmStyle | null }) =>
+    activeRemote.value.remoteActions.reserveLlmSeat(payload.seat, payload.providerId, payload.style),
   leaveRoom: () => activeRemote.value.remoteActions.leaveRoom(),
   closeRoom: () => activeRemote.value.remoteActions.closeRoom(),
   // 暂离（返回大厅）：保留座位与会话，只断开牌桌连接；退出本场：回主大厅但座位仍保留可重进。
@@ -718,6 +724,7 @@ function changeTableTheme(theme: TableThemeName) {
         :room-time-limit="roomTimeLimit"
         :room-status="roomStatus"
         :room-seats="roomSeats"
+        :reserved-seats="reservedSeats"
         :llm-enabled="llmEnabled"
         :effective-llm-enabled="effectiveLlmEnabled"
         :llm-available="llmAvailable"
@@ -741,6 +748,7 @@ function changeTableTheme(theme: TableThemeName) {
         @copy-room="copyRoomCode"
         @toggle-ready="toggleReady"
         @start-remote="(payload: { llmSeats?: Array<{ seat: number; providerId: string }> }) => startRemoteMatch(payload?.llmSeats)"
+        @reserve-seat="(payload: { seat: number; providerId: string | null; style: ServerLlmStyle | null }) => remoteActions.reserveLlmSeat(payload)"
         @leave-room="leaveRoom"
         @close-room="closeRoom"
         @leave-match="leaveMatchFromPanel"

@@ -128,7 +128,13 @@ try {
     # The keep restore cannot drop master-added files inside a keep directory, so a
     # new master test under src/game/online/presentation/ must be listed here.
     'src/game/online/presentation/useRemoteContinueCountdown.test.ts'
+    # 房间面板「预留座位」纯逻辑模块：import 了 master-only 的 online/api/roomApi，
+    # 且 vibehub 的房间面板（keep 文件）不使用它 → 只能留在 master。
+    'src/components/lobby/roomSeatLlm.ts'
+    'src/components/lobby/roomSeatLlm.test.ts'
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
+    # 预留座位的 e2e：走 REST /api/rooms/{id}/llm-seats（WS 房间管理），vibehub 无此接口。
+    'tests/e2e/llm-seat-reservation.spec.ts'
   )
 
   if ($targetWorktree) {

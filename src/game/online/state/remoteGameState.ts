@@ -1,5 +1,5 @@
 import { reactive, ref, shallowRef } from 'vue'
-import type { RoomSeatState } from '../api/roomApi'
+import type { LlmSeatRequest, RoomSeatState } from '../api/roomApi'
 import type { ActionPrompt, Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
 import type {
   GamePlayer,
@@ -38,6 +38,8 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const creatorSeat = ref<number | null>(null)
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
+  /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
+  const reservedSeats = ref<Array<LlmSeatRequest>>([])
   const roomTimeLimit = ref<number | null>(null)
   /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
   const roomStatus = ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>('lobby')
@@ -92,7 +94,8 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
 
   return {
     sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, roomTimeLimit, roomStatus, llmEnabled, effectiveLlmEnabled,
+    creatorSeat, isCreator, roomSeats, reservedSeats, roomTimeLimit, roomStatus, llmEnabled,
+    effectiveLlmEnabled,
     llmAvailable, rulesetId, autoPlay, storedSession,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
     turnSeconds, lastDiscard, lastDiscardSound, actionPrompt, announcement, tableActionEvent,

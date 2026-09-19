@@ -9,7 +9,7 @@ import { bloodFlowEnabled } from '../../game/variants/lotus/bloodFlow/availabili
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState } from '../../game/online/api/roomApi'
+import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState, ServerLlmStyle } from '../../game/online/api/roomApi'
 import type { StoredSession } from '../../game/online/session/remoteSessionStore'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
 import LobbyThemeVisual from './LobbyThemeVisual.vue'
@@ -34,6 +34,8 @@ interface Props {
   /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌。 */
   roomStatus?: string
   roomSeats: Array<RoomSeatState | null>
+  /** 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。 */
+  reservedSeats: Array<LlmSeatRequest>
   /** 房主请求的空座 AI 补位是否使用大模型 */
   llmEnabled: boolean
   /** 实际生效（请求 && 服务端配置齐全） */
@@ -72,6 +74,8 @@ const emit = defineEmits<{
   copyRoom: []
   toggleReady: []
   startRemote: [payload: { llmSeats: Array<LlmSeatRequest> }]
+  /** 房主改选空位模型（providerId 为空 = 取消预留，该座放开给真人）。 */
+  reserveSeat: [payload: { seat: number; providerId: string | null; style: ServerLlmStyle | null }]
   leaveRoom: []
   closeRoom: []
   /** 退出本场：回主大厅但保留座位（可重新进原座位）。 */
@@ -238,6 +242,7 @@ function toggleWakuDemoAuth() {
             :room-time-limit="roomTimeLimit"
             :room-status="roomStatus"
             :room-seats="roomSeats"
+            :reserved-seats="reservedSeats"
             :llm-enabled="llmEnabled"
             :effective-llm-enabled="effectiveLlmEnabled"
             :llm-available="llmAvailable"
@@ -257,6 +262,7 @@ function toggleWakuDemoAuth() {
             @copy="$emit('copyRoom')"
             @toggle-ready="$emit('toggleReady')"
             @start="$emit('startRemote', $event)"
+            @reserve-seat="$emit('reserveSeat', $event)"
             @leave="$emit('leaveRoom')"
             @close="$emit('closeRoom')"
             @resume="$emit('resumeSession')"

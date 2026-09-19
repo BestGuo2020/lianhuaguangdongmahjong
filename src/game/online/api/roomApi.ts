@@ -24,6 +24,12 @@ export interface RoomInfo {
   effectiveLlmEnabled?: boolean
   /** 服务端是否配置了大模型（llmAvailable） */
   llmAvailable?: boolean
+  /**
+   * 房主预留的空位（大模型专属）：该座位真人不可加入，开局按预留的 providerId/style 装配。
+   * 未列入的空位 = 「自动选择」：真人可占，真人没来则由默认提供商补位。
+   * 注：`style` 为 null 表示沿用该提供商的默认策略。
+   */
+  reservedSeats?: Array<LlmSeatRequest>
   seats: Array<RoomSeatState | null>
 }
 
@@ -147,6 +153,28 @@ export function startRoom(roomId: string, llmSeats?: Array<LlmSeatRequest>): Pro
   return request<StartResult>(`/api/rooms/${encodeURIComponent(roomId)}/start`, {
     method: 'POST',
     body: JSON.stringify(llmSeats && llmSeats.length ? { llmSeats } : {}),
+  })
+}
+
+export interface ReservedSeatsResult {
+  roomId: string
+  reservedSeats: Array<LlmSeatRequest>
+}
+
+/**
+ * 房主为某个空位写 / 清大模型预留：显式选择模型 = 该座预留给大模型（真人不可占）；
+ * `providerId` 为空 = 取消预留（改回「自动选择」，真人可占、空着仍由默认提供商补位）。
+ * 预留是房间级状态，随房间信息 `reservedSeats` 下发，房主刷新/换人都不丢。
+ */
+export function reserveLlmSeat(roomId: string, seat: number, rejoinCode: string,
+  reserveSeat: number, providerId: string | null,
+  style?: ServerLlmStyle | null): Promise<ReservedSeatsResult> {
+  return request<ReservedSeatsResult>(`/api/rooms/${encodeURIComponent(roomId)}/llm-seats`, {
+    method: 'POST',
+    body: JSON.stringify({
+      seat, rejoinCode, reserveSeat,
+      ...(providerId ? { providerId, ...(style ? { style } : {}) } : {}),
+    }),
   })
 }
 

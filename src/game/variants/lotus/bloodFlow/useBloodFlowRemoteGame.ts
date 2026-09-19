@@ -12,7 +12,9 @@ import { API_BASE } from '../../../online/api/httpClient'
 import {
   closeRoom as closeRoomApi, createRoom as createRoomApi, getRoom,
   joinRoom as joinRoomApi, leaveRoom as leaveRoomApi, readyRoom,
+  reserveLlmSeat as reserveLlmSeatApi,
   startRoom, updateCharacter, type LlmSeatRequest, type RoomSeatState,
+  type ServerLlmStyle,
 } from '../../../online/api/roomApi'
 import { createRoomSocketTransport } from '../../../online/transport/roomSocket'
 import { createRemoteSessionStore, generateGuestId, type StoredSession } from '../../../online/session/remoteSessionStore'
@@ -31,6 +33,12 @@ const SESSION_ERROR_TEXT: Record<string, string> = {
   ROOM_LIMIT_REACHED: '房间已满',
   ROOM_FULL: '房间已满',
   ALREADY_IN_ROOM: '你已在房间中，请先离开当前房间',
+  SEATS_RESERVED: '房主已把剩余空位预留给大模型，请让房主改回「自动选择」或换一间房',
+  SEAT_OCCUPIED: '该座位已有真人，不能预留给大模型',
+  INVALID_SEAT: '座位号无效',
+  NOT_CREATOR: '只有房主能设置大模型预留',
+  LLM_NOT_ENABLED: '本房间未启用大模型补位',
+  INVALID_LLM_SEATS: '该模型当前不可用，请让房主改选其他模型',
 }
 
 function readableSessionError(error: unknown, fallback: string): string {
@@ -65,6 +73,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const rejoinCode = ref('')
   const isCreator = ref(false)
   const roomSeats = ref<Array<RoomSeatState | null>>([])
+  /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
+  const reservedSeats = ref<Array<LlmSeatRequest>>([])
   // 房间限时与经典房间同口径（服务端 ROOM_LIFETIME，默认 60 分钟）；仅大厅提示用。
   const roomTimeLimit = ref(3600)
   /** 服务端房间状态：暂离（房间进行中）时房间面板据此显示「回到牌桌」。 */
@@ -165,6 +175,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     if (!roomId.value) return
     const info = await getRoom(roomId.value)
     roomSeats.value = info.seats
+    reservedSeats.value = info.reservedSeats ?? []
     roomStatus.value = info.status
     roomTimeLimit.value = info.timeLimitSeconds ?? 3600
     isCreator.value = info.creatorSeat === mySeat.value
@@ -253,6 +264,24 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     socket.open()
   }
 
+  /**
+   * 房主为某个空位写 / 清大模型预留：`providerId` 为空 = 取消预留（改回「自动选择」）。
+   * 与经典房间同契约：预留写在服务端房间上，别人 join 时据此跳过该座。
+   */
+  async function reserveLlmSeat(reserveSeat: number, providerId: string | null,
+    style: ServerLlmStyle | null) {
+    if (!roomId.value || mySeat.value < 0 || !rejoinCode.value) return
+    sessionError.value = ''
+    try {
+      const result = await reserveLlmSeatApi(roomId.value, mySeat.value, rejoinCode.value,
+        reserveSeat, providerId, style)
+      reservedSeats.value = result.reservedSeats ?? []
+    } catch (error) {
+      sessionError.value = readableSessionError(error, '设置大模型预留失败')
+      await refreshRoom().catch(() => {})
+    }
+  }
+
   async function resumeSession() {
     const session = remoteSessionStore.loadSession()
     if (!session || session.rulesetId !== 'lotus-blood-flow') return
@@ -282,6 +311,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     mySeat.value = -1
     isCreator.value = false
     roomSeats.value = []
+    reservedSeats.value = []
     sessionStatus.value = 'idle'
     sessionError.value = ''
     roomStatus.value = 'lobby'
@@ -333,6 +363,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     mySeat.value = -1
     isCreator.value = false
     roomSeats.value = []
+    reservedSeats.value = []
     roomStatus.value = 'lobby'
     // storedSession（含 rejoinCode）保留：大厅据它显示「继续对局」，重进即恢复原座位。
   }
@@ -391,7 +422,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   const remoteActions = {
     createRoom, joinRoom, toggleReady, startMatch, leaveRoom, closeRoom, resumeSession,
-    stepOutToLobby, leaveMatch,
+    stepOutToLobby, leaveMatch, reserveLlmSeat,
     updateCharacter: updateCharacterRemote,
   }
 
@@ -410,6 +441,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     playerId,
     isCreator,
     roomSeats,
+    reservedSeats,
     roomTimeLimit,
     roomStatus,
     storedSession,
