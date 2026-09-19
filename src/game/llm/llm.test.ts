@@ -716,6 +716,22 @@ describe('testLlmConnection', () => {
     expect(qwenOpenSourceBody.enable_thinking).toBe(false)
     expect(qwenOpenSourceBody.response_format).toEqual({ type: 'json_object' })
 
+    // 深思路径必须去掉 JSON 模式：DashScope 千问「JSON 模式 + 思考」同开时返回空正文。
+    let deepBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      deepBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }] }),
+      }
+    }) as never)
+    await requestLlmDecision({
+      config: qwenOpenSourceConfig, messages: { system: 's', user: 'u' },
+      candidateIds: ['A1'], reasoning: true, deadlineMs: 60_000,
+    })
+    expect(deepBody.enable_thinking).toBe(true)
+    expect(deepBody.response_format).toBeUndefined()
+
     const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1', model: 'gpt-4o-mini' }
     let otherBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {

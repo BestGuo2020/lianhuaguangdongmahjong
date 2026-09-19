@@ -149,7 +149,11 @@ function providerExtraBody(
     && resolved.providerType === 'kimi'
     && /^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(modelName)
     && inferProviderDialect(config.baseUrl) !== 'official'
-  if (structuredOutput && (resolved.providerType === 'qwen'
+  // DashScope 兼容模式：千问「JSON 模式 + 思考」同开时返回空正文（finish=stop、
+  // content 与 reasoning_content 都为空），因此千问深思路径不带 response_format——
+  // 提示词本身已强制 JSON 输出，解析仍走 extractJsonObject。
+  const qwenDeepReasoning = reasoning && resolved.providerType === 'qwen'
+  if (structuredOutput && !qwenDeepReasoning && (resolved.providerType === 'qwen'
     || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
     || relayKimiThinking)) {
     body.response_format = { type: 'json_object' }
