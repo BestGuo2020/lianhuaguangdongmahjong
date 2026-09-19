@@ -10,7 +10,7 @@ import type { Seat } from '../src/game/variants/lotus/bloodFlow/types'
 
 export type Policy = (view: BloodFlowSeatView) => BloodFlowAction | null
 // Preserve the pre-integration control even after the production default changes.
-export const BASELINE_AI = Object.freeze({ ...BLOOD_FLOW_AI, routeOpportunityGuard: false })
+export const BASELINE_AI = Object.freeze({ ...BLOOD_FLOW_AI, routeOpportunityGuard: false, claimMeldProjection: false })
 export const baseline: Policy = view => decideBloodFlowActionEv(view, BASELINE_AI)
 const actionKey = (action: BloodFlowAction) => JSON.stringify(action)
 
