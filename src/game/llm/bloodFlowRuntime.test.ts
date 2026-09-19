@@ -26,8 +26,8 @@ describe('E08 decision and reaction isolation', () => {
     input.ownActions=input.players[0].hand.map((_,index)=>({kind:'discard',index})); input.ownScore=null
     const original=structuredClone(input.ownActions)
     const built=bloodFlowDecisionPrompt(input,[],'test')
-    expect(built.candidates.map(c=>c.action)).toEqual([{kind:'discard',index:0},{kind:'discard',index:1}])
-    expect(JSON.parse(built.messages.user).discardPolicy).toContain('保护精牌和白板')
+    expect(built.candidates.map(c=>c.action)).toEqual([{kind:'discard',index:0},{kind:'discard',index:1},{kind:'discard',index:4}])
+    expect(JSON.parse(built.messages.user).discardPolicy).toContain('非精白板按受限替代价值')
     const request=vi.fn(async()=>({choice:'A4',message:''}))
     const service=createBloodFlowDecisions({provider:()=>provider,waits:async()=>[],request})
     expect(await service.decide(input,()=>true)).toBeNull()

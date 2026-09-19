@@ -15,7 +15,8 @@ function wildcardSet(jokers: readonly TileType[]) {
 
 /** Shared automation candidate policy, also used by blood-flow and deadline fallbacks. */
 export function lotusDiscardCandidates(hand: readonly TileType[], jokers: readonly TileType[], allowedIndices: readonly number[] = hand.map((_, i) => i)) {
-  const protectedTiles = wildcardSet(jokers)
+  // Only actual jokers are protected; a substitute white participates in evaluation.
+  const protectedTiles = new Set(jokers)
   const candidates = [...new Set(allowedIndices)].filter(i => Number.isInteger(i) && i >= 0 && i < hand.length)
     .map(index => ({ index, tile: hand[index] }))
   const ordinary = candidates.filter(({ tile }) => !protectedTiles.has(tile))
@@ -537,7 +538,7 @@ function discardHeuristic(hand: TileType[], discarded: TileType, jokers: TileTyp
     edgePenalty = rank === 1 || rank === 9 ? 0 : 1
   }
   const honorPenalty = suited ? 0 : (earlyRound ? 12 : 3)
-  const jokerPenalty = wildcardSet(jokers).has(discarded) ? 100 : 0
+  const jokerPenalty = jokers.includes(discarded) ? 100 : discarded === 'white' ? 2 : 0
   return same * 4 + neighbors * 2 + edgePenalty + honorPenalty + jokerPenalty
 }
 

@@ -66,7 +66,7 @@ export function projectKongBloom(input: KongProjectionInput): KongProjection {
 
 /** 当前摸牌态是否存在一个合法弃牌可进入听牌。 */
 export function hasReadyDiscard(hand: TileType[], exposedMelds: number, jokers: TileType[]): boolean {
-  const protectedTiles = new Set<TileType>([...jokers, 'white'])
+  const protectedTiles = new Set<TileType>(jokers)
   const hasNatural = hand.some((tile) => !protectedTiles.has(tile))
   return hand.some((tile, index) => {
     if (hasNatural && protectedTiles.has(tile)) return false
