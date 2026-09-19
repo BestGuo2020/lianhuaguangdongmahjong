@@ -624,6 +624,27 @@ describe('testLlmConnection', () => {
     await expect(testLlmConnection(config)).resolves.toMatchObject({ ok: true, message: '连接成功' })
   })
 
+  it('连接测试不接受「只出思考、正文为空」：默认思考型号漏关思考时必须报错', async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"","role":"assistant"},"index":0}]}\n\n',
+      'data: {"choices":[{"delta":{"content":null},"index":0}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens_details":{"reasoning_tokens":12}}}\n\n',
+      'data: [DONE]\n\n',
+    ].join('')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as never)
+    await expect(testLlmConnection({ ...config, providerType: 'qwen', model: 'qwen3-32b' }))
+      .resolves.toMatchObject({ ok: false, message: expect.stringContaining('只返回了思考') })
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )) as never)
+    await expect(testLlmConnection(config))
+      .resolves.toMatchObject({ ok: false, message: expect.stringContaining('空回复') })
+  })
+
   it('GLM-5.3 Flash 连接测试使用 OrcaRouter 支持的 low 与 8 tokens', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
@@ -677,6 +698,23 @@ describe('testLlmConnection', () => {
     expect(effectiveDecisionTimeoutMs(qwenConfig)).toBe(40_000)
     expect(qwenBody.enable_thinking).toBe(false)
     expect(qwenBody.response_format).toEqual({ type: 'json_object' })
+
+    // 千问 3 开源尺寸默认开启思考：漏识别时正文全空（空 content + finish_reason=stop）。
+    const qwenOpenSourceConfig = { ...qwenConfig, model: 'qwen3-32b' }
+    let qwenOpenSourceBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      qwenOpenSourceBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: '{"choice":"A1","message":""}' }, finish_reason: 'stop' }] }),
+      }
+    }) as never)
+    await requestLlmDecision({ config: qwenOpenSourceConfig, messages: { system: 's', user: 'u' }, candidateIds: ['A1'] })
+    expect(isQwenThinkingModel(qwenOpenSourceConfig)).toBe(true)
+    expect(effectiveDecisionTimeoutMs(qwenOpenSourceConfig)).toBe(40_000)
+    expect(qwenOpenSourceBody.model).toBe('qwen3-32b')
+    expect(qwenOpenSourceBody.enable_thinking).toBe(false)
+    expect(qwenOpenSourceBody.response_format).toEqual({ type: 'json_object' })
 
     const otherConfig = { ...config, baseUrl: 'https://api.example.com/v1', model: 'gpt-4o-mini' }
     let otherBody: Record<string, unknown> = {}

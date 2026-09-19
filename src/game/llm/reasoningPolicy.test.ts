@@ -35,7 +35,50 @@ describe('LLM 非思考能力矩阵', () => {
   it('未知自定义代理与未知型号不附加供应商参数', () => {
     expect(resolveReasoningPolicy(config('custom', 'mystery-model')).mode).toBe('unknown')
     expect(resolveReasoningPolicy(config('qwen', 'qwen3.7-plus')).mode).toBe('explicit-off')
-    expect(resolveReasoningPolicy(config('qwen', 'qwen-plus'))).toMatchObject({ mode: 'unknown', requestBody: {} })
+  })
+
+  it.each([
+    'qwen3-32b', 'qwen3-235b-a22b', 'qwen3-30b-a3b', 'qwen3-14b', 'qwen3-8b', 'qwen3-0.6b',
+    'qwen3.8-27b', 'qwen3.7-plus', 'qwen3.7-max', 'qwen3.6-35b-a3b', 'qwen3.5-flash',
+    'qwen3-max', 'qwen3-max-preview', 'qwen3.7-max-preview', 'qwen-max', 'qwen-plus',
+    'qwen-flash', 'qwen-turbo', 'qwen-plus-2025-04-28',
+  ])('混合思考的千问型号 %s 下发 enable_thinking=false（漏识别时正文会全空）', (model) => {
+    expect(resolveReasoningPolicy(config('qwen', model))).toMatchObject({
+      providerType: 'qwen', mode: 'explicit-off', requestBody: { enable_thinking: false },
+    })
+  })
+
+  it.each(['qwen3-32b', 'qwen3-235b-a22b', 'qwen3.8-27b', 'qwen-max', 'qwen3-max'])(
+    '千问开源尺寸与商业系列 %s 条件命中后仍可显式开启思考',
+    (model) => {
+      expect(resolveReasoningPolicy(config('qwen', model), true)).toMatchObject({
+        providerType: 'qwen', mode: 'explicit-on', requestBody: { enable_thinking: true },
+      })
+    },
+  )
+
+  it.each([
+    'qwen3-coder-plus', 'qwen3-coder-480b-a35b', 'qwen3-vl-plus', 'qwen2.5-vl-72b',
+    'qwen3-omni-flash',
+  ])('非思考千问型号 %s 保持普通请求，不附加思考参数', (model) => {
+    expect(resolveReasoningPolicy(config('qwen', model))).toMatchObject({
+      providerType: 'qwen', mode: 'naturally-off', requestBody: {},
+    })
+    expect(resolveReasoningPolicy(config('qwen', model), true).requestBody).toEqual({})
+  })
+
+  it.each([
+    'qwen3.8-2.4t-a95b', 'qwen3-235b-a22b-thinking-2507',
+    'qwen3-next-80b-a3b-thinking', 'qwq-plus',
+  ])('纯思考千问型号 %s 只作识别，不当作可切换型号', (model) => {
+    expect(resolveReasoningPolicy(config('qwen', model))).toMatchObject({
+      providerType: 'qwen', mode: 'reasoning-only', requestBody: {},
+    })
+  })
+  it('能力矩阵外的千问老型号不再误报为可切换，保持未知', () => {
+    expect(resolveReasoningPolicy(config('qwen', 'qwen-long'))).toMatchObject({
+      providerType: 'qwen', mode: 'unknown', requestBody: {},
+    })
   })
 
   it('GLM-5.3 Flash 按官方与 OrcaRouter 方言分别选择疑难强度', () => {

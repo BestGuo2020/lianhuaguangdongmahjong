@@ -438,7 +438,8 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
 
 /** 设置页「测试连接」（§9.1）：探测供应商可用性；Key 不回显、不落日志。
  * 连接测试只看「是否连通且有内容」：finish_reason=length 不算失败
- * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅）。 */
+ * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅），但正文为空必须报错
+ * —— 默认思考的型号没被关掉思考时，流里只有 reasoning_content，对局会一直拿到空回复。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
     const effectiveConfig = {
@@ -453,7 +454,7 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
       (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
       || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
     )
-    await callOnce(
+    const response = await callOnce(
       effectiveConfig,
       [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
@@ -466,6 +467,14 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
         acceptReasoningResponse: true,
       },
     )
+    if (!response.content) {
+      return {
+        ok: false,
+        message: response.reasoningTokens > 0
+          ? '模型只返回了思考、正文为空：该型号默认开启思考，请换用非思考型号'
+          : 'API 返回了空回复（content 为空）',
+      }
+    }
     return { ok: true, message: '连接成功' }
   } catch (error) {
     return {
