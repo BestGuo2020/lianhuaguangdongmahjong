@@ -21,6 +21,7 @@ const hands: TileType[][] = [
   ['m3','m4','m5','m5','m5','p1','p2','p3','s1','s2','s3','east','east'],
 ]
 if(new URLSearchParams(location.search).has('multiChi')) hands[1]=['m3','m4','m5','m5','m5','m6','m7','p1','p2','p3','east','east','east']
+if(new URLSearchParams(location.search).has('kongOnly')) hands[1]=['m5','m5','m5','p1','p4','p7','s1','s4','s7','east','east','north','north']
 // 改张场景：本家 4 副面子 + 单张 s7，牌墙首张为精牌 → 摸到精牌自摸窗口，可改张为单吊任意听。
 if(new URLSearchParams(location.search).has('reform')) {
   hands[1]=['m1','m1','m1','m2','m3','m4','m5','m5','m5','p1','p1','p1','s7']
@@ -46,6 +47,7 @@ const engine = new BloodFlowEngine({ authorityEpoch: 'claims-fixture', roundId: 
   paced: new URLSearchParams(location.search).has('paced'),
   opening: { players, wall: pool, flipTiles, jokers: ['red','green'], headDrawn: 134-pool.length,
     dealerDrawnIndex: 13, flipStack: 0, flipSeat: 0, wallBreakIndex: 2 } })
+if (new URLSearchParams(location.search).has('lockedKong')) engine.seats[1].locked = true
 engine.submit(engine.command(0, {kind:'discard',index:13}))
 const commands: EngineCommand[] = []
 const sounds: string[] = []
