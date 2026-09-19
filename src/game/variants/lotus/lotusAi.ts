@@ -132,6 +132,8 @@ export interface LotusClaimView {
   safetyExposure?: (tile: TileType) => number
   /** 可选：现有副露（供 patternBonus 统计杠/碰）。 */
   melds?: Meld[]
+  /** 番型估值使用动作后的真实副露；false 仅供旧策略回退／对拍。 */
+  claimMeldProjection?: boolean
   /** 可选：开杠价值（杠收益 − 防守风险 − 自手牌型损失），血流策略注入；不传则用旧启发式。 */
   kongEvaluator?: KongEvaluator
 }
@@ -257,6 +259,8 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
   }
 
   const extras: DiscardExtras = { melds: view.melds, patternBonus: view.patternBonus, safetyExposure: view.safetyExposure }
+  const afterClaimExtras = (meld: Meld): DiscardExtras => view.claimMeldProjection === false
+    ? extras : { ...extras, melds: [...(view.melds ?? []), meld] }
   const baseline = currentHandQuality(
     view.hand,
     view.exposedMelds,
@@ -283,7 +287,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.publicTiles,
       view.upperLastDiscard,
       view.wallCount,
-      extras,
+      afterClaimExtras({ type: 'peng', tile: view.tile, tiles: [view.tile, view.tile, view.tile], from: view.from }),
     )
     if (discard) candidates.push({
       action: { kind: 'peng', discardIndex: discard.index },
@@ -303,7 +307,7 @@ export function decideClaim(view: LotusClaimView): LotusClaimAction {
       view.publicTiles,
       view.upperLastDiscard,
       view.wallCount,
-      extras,
+      afterClaimExtras({ type: 'chi', tile: view.tile, tiles: [...meld.tiles], from: view.from }),
     )
     if (discard) candidates.push({ action: { kind: 'chi', meld }, quality: discard.quality })
   }

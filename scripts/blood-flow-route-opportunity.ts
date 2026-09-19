@@ -7,7 +7,7 @@ import { bloodFlowSeatView, type BloodFlowSeatView } from '../src/game/variants/
 import { seededRandom } from '../src/game/variants/lotus/bloodFlow/simulation'
 import { SEATS, vector, type BloodFlowAction } from '../src/game/variants/lotus/bloodFlow/state'
 import type { Seat } from '../src/game/variants/lotus/bloodFlow/types'
-import { baseline, mean, nextSeatToAct, restoreEngine, snapshotEngine, submit, type Policy } from './blood-flow-counterfactual'
+import { BASELINE_AI, baseline, mean, nextSeatToAct, restoreEngine, snapshotEngine, submit, type Policy } from './blood-flow-counterfactual'
 
 export const OPPORTUNITY_SPEC = Object.freeze({
   id: 'first-self-draw-no-deficit-wall-bypass-v1',
@@ -44,8 +44,8 @@ export function opportunityGate(view: BloodFlowSeatView): OpportunityGate | null
   return { route: route.route.id, wallCount: view.wallCount, wallFloor, deficit, heldJokers }
 }
 
-const routeOffConfig = Object.freeze({ ...BLOOD_FLOW_AI,
-  bigHandRoute: Object.freeze({ ...BLOOD_FLOW_AI.bigHandRoute, mode: 'off' as const }) })
+const routeOffConfig = Object.freeze({ ...BASELINE_AI,
+  bigHandRoute: Object.freeze({ ...BASELINE_AI.bigHandRoute, mode: 'off' as const }) })
 
 export function opportunityDecision(view: BloodFlowSeatView, original?: BloodFlowAction | null) {
   const gate = opportunityGate(view)
@@ -72,6 +72,7 @@ export interface ContestRow {
   seed: number; seat: Seat; net: number; deltaVsControl: number; firstPlace: boolean; rank: number
   roundNet: number[]; wins: number; bigDiscardLoss: number; controlBigDiscardLoss: number
   firstWinWall: (number | null)[]; gateEvents: GateEvent[]; diverged: boolean
+  decisionChanges: { round: number; windowId: string; wallCount: number; original: BloodFlowAction; chosen: BloodFlowAction }[]
 }
 
 function metrics(engine: BloodFlowEngine): RoundMetrics {
@@ -94,7 +95,7 @@ function metrics(engine: BloodFlowEngine): RoundMetrics {
  * After divergence the candidate runs at EVERY future decision, with scores carried across rounds.
  * No hidden state reaches either policy. No counterfactual wall sampling or per-window oracle.
  */
-export function pairedContest(seed: number, rounds = 4, optimized = true, candidate: Policy = opportunityPolicy) {
+export function pairedContest(seed: number, rounds = 4, optimized = true, candidate: Policy = opportunityPolicy, control: Policy = baseline) {
   const initial = vector(() => BLOOD_FLOW_CONFIG.initialScore)
   let scores = initial
   const forks = new Map<Seat, Fork>(), baselineMetrics: RoundMetrics[] = []
@@ -108,12 +109,12 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
     let steps = 0
     while (!engine.result) {
       if (++steps > 2000) throw new Error('Control stalled')
-      const seat = nextSeatToAct(engine), view = bloodFlowSeatView(engine, seat), original = baseline(view)
+      const seat = nextSeatToAct(engine), view = bloodFlowSeatView(engine, seat), original = control(view)
       if (!original) throw new Error('Control has no action')
       if (optimized && !forks.has(seat)) {
         const gate = opportunityGate(view)
         // Fast path is safe for this registered policy, or the exact baseline A/A policy.
-        const chosen = candidate === opportunityPolicy ? (gate ? opportunityDecision(view, original).action : original) : candidate(view)
+        const chosen = candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action : original) : candidate(view)
         if (!chosen) throw new Error('Candidate has no action')
         const event: GateEvent = { ...(gate ?? { route: 'other-policy', wallCount: view.wallCount, wallFloor: 0, deficit: 0, heldJokers: 0 }),
           round, windowId: view.window!.id, original, chosen, changed: !sameAction(original, chosen) }
@@ -132,6 +133,7 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
   for (const focal of SEATS) {
     const fork = forks.get(focal)
     let diverged = Boolean(fork)
+    const decisionChanges: ContestRow['decisionChanges'] = []
     let candidateScores = initial
     const candidateMetrics: RoundMetrics[] = [], events: GateEvent[] = []
     if (optimized && !fork) {
@@ -154,14 +156,17 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
           if (++steps > 2000) throw new Error('Candidate stalled')
           const seat = nextSeatToAct(engine), view = bloodFlowSeatView(engine, seat)
           if (view.players.some(p => p.seat !== seat && p.hand.length)) throw new Error('Hidden hand leaked')
-          const original = baseline(view)
+          const original = control(view)
           if (!original) throw new Error('No baseline action')
           let chosen = original
           if (seat === focal) {
             const gate = opportunityGate(view)
-            chosen = candidate === opportunityPolicy ? (gate ? opportunityDecision(view, original).action! : original) : candidate(view)!
+            chosen = candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action! : original) : candidate(view)!
             if (!chosen) throw new Error('No candidate action')
-            if (!sameAction(original, chosen)) diverged = true
+            if (!sameAction(original, chosen)) {
+              diverged = true
+              decisionChanges.push({ round, windowId: view.window!.id, wallCount: view.wallCount, original, chosen })
+            }
             if (gate) events.push({ ...gate, round, windowId: view.window!.id, original, chosen, changed: !sameAction(original, chosen) })
           }
           const before = engine.seats.map(s => s.winCount), beforeWall = engine.wall.length
@@ -179,7 +184,7 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
       bigDiscardLoss: candidateMetrics.reduce((n, m) => n + m.bigDiscardLoss[focal], 0),
       controlBigDiscardLoss: baselineMetrics.reduce((n, m) => n + m.bigDiscardLoss[focal], 0),
       firstWinWall: candidateMetrics.map(m => m.firstWinWall[focal]), gateEvents: events,
-      diverged })
+      diverged, decisionChanges })
   }
   // Seat rotation of a zero-sum all-baseline control makes mean net == mean paired increment.
   if (Math.abs(mean(rows.map(r => r.net))! - mean(rows.map(r => r.deltaVsControl))!) > 1e-9) throw new Error('Paired accounting mismatch')

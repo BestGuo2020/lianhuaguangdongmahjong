@@ -6,8 +6,8 @@ import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from './config'
 import { seededRandom } from './simulation'
 import { SEATS } from './state'
 
-const old = { ...BLOOD_FLOW_AI, routeOpportunityGuard: false }
-const enabled = { ...BLOOD_FLOW_AI, routeOpportunityGuard: true }
+const old = { ...BLOOD_FLOW_AI, routeOpportunityGuard: false, claimMeldProjection: false }
+const enabled = { ...old, routeOpportunityGuard: true }
 const cases = new Map<number, BloodFlowSeatView>()
 beforeAll(() => {
   const engine = new BloodFlowEngine({ authorityEpoch: 'route-regression', roundId: 'case', dealer: 1,

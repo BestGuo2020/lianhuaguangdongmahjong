@@ -1,0 +1,134 @@
+[
+  {
+    "key": "1100001-peng",
+    "decision": {
+      "kind": "peng",
+      "discardIndex": 6
+    },
+    "beforeWaits": [],
+    "afterWaits": [
+      "p4",
+      "p5",
+      "s2",
+      "s8",
+      "west",
+      "red"
+    ],
+    "projectedShapes": [
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      }
+    ],
+    "note": "compareQuality prioritizes ready vs not-ready before comparing netScore; this diagnostic does not test any new policy."
+  },
+  {
+    "key": "1100008-peng",
+    "decision": {
+      "kind": "peng",
+      "discardIndex": 5
+    },
+    "beforeWaits": [],
+    "afterWaits": [
+      "m2",
+      "m5",
+      "p7",
+      "p8",
+      "s7"
+    ],
+    "projectedShapes": [
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      },
+      {
+        "handLength": 10,
+        "meldCount": 1,
+        "effectiveTiles": 13
+      }
+    ],
+    "note": "compareQuality prioritizes ready vs not-ready before comparing netScore; this diagnostic does not test any new policy."
+  }
+]
