@@ -26,7 +26,8 @@ it('discards non-joker white to keep a two-sided wait before locking', () => {
   expect(decideBloodFlowAction(v)).toEqual({ kind: 'discard', index: 7 })
   v.jokers = ['white','red']
   expect(bloodFlowAiActions(v)).not.toContainEqual({ kind: 'discard', index: 7 })
-  v.public.seats[0].locked = true
+  // public.seats[n].locked 是 readonly：按位展开重建，不能就地赋值。
+  v.public = { ...v.public, seats: [{ ...v.public.seats[0], locked: true }, v.public.seats[1], v.public.seats[2], v.public.seats[3]] }
   v.ownActions = [{ kind: 'discard', index: 7 }]
   expect(decideBloodFlowAction(v)).toEqual({ kind: 'discard', index: 7 })
 })
