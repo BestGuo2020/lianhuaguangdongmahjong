@@ -198,7 +198,7 @@ export interface PatternDirection {
  *
  * `model`（2026-09-13 追加，默认 'off' 保持旧口径逐位不变）：
  * 'off' = 七对方向用旧 `sevenPairsPotential`（多余精牌丢掉，没有豪华七对方向）；
- * 'ev'  = 七对方向用对齐引擎记账的 `sevenPairsProgress`，并**新增豪华七对（12 番）方向**
+ * 'ev'  = 七对方向用对齐引擎记账的 `sevenPairsProgress`，并**新增豪华七对方向（2026-09-18 起 6 番）**
  *         （进度 = 七对进度 × 四张可达性）。精牌能补成四张、两张精能自己成对，这两件事只有 'ev' 会算。
  */
 export function patternPotentials(
@@ -322,7 +322,7 @@ export function patternPotentials(
   const orphans = thirteenOrphansPotential(hand, wild)
   if (orphans > 0) add('thirteenOrphans', Math.min(1, orphans / 17))
   if (model === 'ev') {
-    // 对齐引擎记账：多余精牌两两成对不再丢掉；精牌能补成四张时同时给出 12 番的豪华七对方向。
+    // 对齐引擎记账：多余精牌两两成对不再丢掉；精牌能补成四张时同时给出豪华七对方向（6 番）。
     const account = sevenPairsAccount(hand, wild)
     if (account.effectivePairs >= 5) {
       add('sevenPairs', Math.min(1, account.effectivePairs / 7))
