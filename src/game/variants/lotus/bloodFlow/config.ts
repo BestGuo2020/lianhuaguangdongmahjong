@@ -225,6 +225,8 @@ export interface BloodFlowAiConfig {
   readonly defense: DefensePolicyConfig
   /** 真·大牌路线（v4）：只影响 LLM 候选构造，不动引擎/普通 AI。 */
   readonly bigHandRoute: BigHandRouteConfig
+  /** 首胡自摸时，墙余不足不得仅因落后而用大牌路线撤胡；缺省 false 兼容旧评估配置。 */
+  readonly routeOpportunityGuard?: boolean
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
   /** 开杠价值（第 3 步）：杠候选按 收益 − 防守风险 − 自手牌型损失 计分。 */
@@ -277,6 +279,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
    * 改成 `BLOOD_FLOW_BIG_HAND_ROUTE` 即可（一行回退）。
    */
   bigHandRoute: BLOOD_FLOW_BIG_HAND_ROUTE_WIDE,
+  // 已通过四座轮换东风场验证；构建时设 VITE_BLOOD_FLOW_ROUTE_OPPORTUNITY=off 回退。
+  routeOpportunityGuard: (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_ROUTE_OPPORTUNITY !== 'off',
   llmEvFeatures: true,
   kongValue: BLOOD_FLOW_KONG_VALUE,
   /** 七对潜力模型：默认开启（对齐引擎记账 + 豪华七对方向）；改成 'off' 一键回退旧口径做 A/B。 */
@@ -292,6 +296,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
  */
 export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
   ...BLOOD_FLOW_AI,
+  // 本轮只验证普通 AI；LLM 候选层仍使用原有路线政策。
+  routeOpportunityGuard: false,
   bigHandRoute: Object.freeze({ ...BLOOD_FLOW_BIG_HAND_ROUTE_WIDE, mode: 'llm' as const }),
 })
 

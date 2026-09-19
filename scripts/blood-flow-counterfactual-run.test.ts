@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { serialize } from 'node:v8'
 import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLOW_ACTION_PRIORITY } from '../src/game/variants/lotus/bloodFlow/config'
 import { bloodFlowSeatView } from '../src/game/variants/lotus/bloodFlow/seatView'
-import { baseline, clusterSummary, mean, newRound, nextSeatToAct, planWindow, rollout, snapshotEngine,
+import { BASELINE_AI, baseline, clusterSummary, mean, newRound, nextSeatToAct, planWindow, rollout, snapshotEngine,
   submit, type Outcome, type WindowPlan } from './blood-flow-counterfactual'
 
 interface RecordRow { seed: number; step: number; plan: WindowPlan; outcomes: Outcome[]; originalBaselineRemaining: number }
@@ -82,8 +82,8 @@ it.skipIf(process.env.BF_CF_RUN !== '1')('runs first-self-draw-win counterfactua
   const metadata = {
     schema: 1, tag, seedFrom, rounds, samples, startedAt: new Date(started).toISOString(),
     commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sourceFingerprint: fingerprint,
-    configHash: createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BLOOD_FLOW_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex'),
-    ruleConfig: BLOOD_FLOW_CONFIG, aiConfig: BLOOD_FLOW_AI, actionPriority: BLOOD_FLOW_ACTION_PRIORITY,
+    configHash: createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BASELINE_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex'),
+    ruleConfig: BLOOD_FLOW_CONFIG, aiConfig: BASELINE_AI, actionPriority: BLOOD_FLOW_ACTION_PRIORITY,
     apiRequests: 0, sampling: 'First unlocked self-draw win window per seat per baseline round; all four seats; dealer rotates by seed offset.',
     uncertainty: 'Conditional on actual concealed opponent hands AND remaining tile inventory. Only wall order is permuted; not a public-information posterior.',
     policies: 'One forced action, then unchanged local EV for all seats until settlement. Candidate roles are preselected using only seat view.',

@@ -9,7 +9,9 @@ import { SEATS, vector, type BloodFlowAction } from '../src/game/variants/lotus/
 import type { Seat } from '../src/game/variants/lotus/bloodFlow/types'
 
 export type Policy = (view: BloodFlowSeatView) => BloodFlowAction | null
-export const baseline: Policy = view => decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
+// Preserve the pre-integration control even after the production default changes.
+export const BASELINE_AI = Object.freeze({ ...BLOOD_FLOW_AI, routeOpportunityGuard: false })
+export const baseline: Policy = view => decideBloodFlowActionEv(view, BASELINE_AI)
 const actionKey = (action: BloodFlowAction) => JSON.stringify(action)
 
 export function newRound(seed: number, dealer: Seat = 0) {
@@ -141,12 +143,13 @@ export interface Outcome {
   commands: number
 }
 
-export function rollout(checkpoint: Record<string, unknown>, plan: WindowPlan, candidate: Candidate, sample: number, wallSeed: number): Outcome {
+export function rollout(checkpoint: Record<string, unknown>, plan: Pick<WindowPlan, 'seat'>, candidate: Candidate,
+  sample: number, wallSeed: number, policy: Policy = baseline): Outcome {
   const engine = restoreEngine(checkpoint)
   if (sample >= 0) permuteWall(engine, wallSeed)
   const before = engine.players[plan.seat].score, ledgerStart = engine.ledger.length
   submit(engine, plan.seat, candidate.action)
-  const { commands } = finish(engine)
+  const { commands } = finish(engine, SEATS.map(() => policy))
   let grossWinIncome = 0, payments = 0, discardPayments = 0, kongNet = 0, wins = 0
   for (const entry of engine.ledger.slice(ledgerStart)) {
     if (entry.kind === 'kong') { kongNet += entry.deltas[plan.seat]; continue }

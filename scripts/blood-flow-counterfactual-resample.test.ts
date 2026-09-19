@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deserialize } from 'node:v8'
 import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLOW_ACTION_PRIORITY } from '../src/game/variants/lotus/bloodFlow/config'
-import { mean, restoreEngine, rollout, type Outcome, type WindowPlan } from './blood-flow-counterfactual'
+import { BASELINE_AI, mean, restoreEngine, rollout, type Outcome, type WindowPlan } from './blood-flow-counterfactual'
 import { bloodFlowSeatView } from '../src/game/variants/lotus/bloodFlow/seatView'
 import { bloodFlowAiActions, decideBloodFlowActionEv } from '../src/game/variants/lotus/bloodFlow/ai'
 import { narrowActionsToRoute } from '../src/game/variants/lotus/bloodFlow/bigHandRoute'
@@ -44,7 +44,7 @@ it.skipIf(process.env.BF_CF_RESAMPLE !== '1')('resamples selected saved windows 
   const dir = `work/blood-flow-counterfactual/${tag}`
   const metadata = JSON.parse(readFileSync(`${dir}/metadata.json`, 'utf8'))
   expect(currentSourceFingerprint()).toBe(metadata.sourceFingerprint)
-  const configHash = createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BLOOD_FLOW_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex')
+  const configHash = createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BASELINE_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex')
   expect(configHash).toBe(metadata.configHash)
   const cases = keys.map(key => {
     const { checkpoint, plan } = deserialize(readFileSync(`${dir}/window-${key}.bin`)) as { checkpoint: Record<string, unknown>; plan: WindowPlan }

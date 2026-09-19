@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLOW_ACTION_PRIORITY } from '../src/game/variants/lotus/bloodFlow/config'
-import { clusterSummary, mean } from './blood-flow-counterfactual'
+import { BASELINE_AI, clusterSummary, mean } from './blood-flow-counterfactual'
 import { OPPORTUNITY_SPEC, pairedContest, type ContestRow } from './blood-flow-route-opportunity'
 
 function fingerprint() {
@@ -54,8 +54,8 @@ it.skipIf(process.env.BF_OP_RUN !== '1')('evaluates opportunity guard in complet
   const metadata = { schema: 1, tag, seedFrom, seeds, roundsPerMatch: 4, candidateSeatsPerSeed: 4,
     spec: OPPORTUNITY_SPEC, startedAt: new Date(started).toISOString(),
     commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sourceFingerprint,
-    configHash: createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BLOOD_FLOW_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex'),
-    ruleConfig: BLOOD_FLOW_CONFIG, aiConfig: BLOOD_FLOW_AI, actionPriority: BLOOD_FLOW_ACTION_PRIORITY,
+    configHash: createHash('sha256').update(JSON.stringify([BLOOD_FLOW_CONFIG, BASELINE_AI, BLOOD_FLOW_ACTION_PRIORITY])).digest('hex'),
+    ruleConfig: BLOOD_FLOW_CONFIG, aiConfig: BASELINE_AI, actionPriority: BLOOD_FLOW_ACTION_PRIORITY,
     apiRequests: 0, objective: 'Mean net points per candidate seat per four-round East match vs 3 unchanged baseline seats; scores carry between rounds.',
     pairing: 'Same four shuffled deals and dice per seed; candidate in seats 0,1,2,3 separately; all-baseline control. Independent source seeds are clusters.',
     optimization: 'Exact common-prefix reuse until first action divergence, verified against full replay. All future candidate decisions remain active.',

@@ -1,0 +1,2287 @@
+{
+  "metadata": {
+    "tag": "screen-v2",
+    "from": 1100101,
+    "rounds": 24,
+    "samples": 4,
+    "sourceFingerprint": "d82910528abf2ebf56d935ec0888c6688fc7f7b20bb04bd5c5a0841637d300a6",
+    "commit": "8d8c1d03edc6fe262f7201f3aa80873a8978aef1",
+    "aiConfig": {
+      "strategy": "ev",
+      "minimumFirstPayment": 0,
+      "selfDrawWeight": 6,
+      "firstWinFloorEarly": 40,
+      "firstWinFloorMid": 20,
+      "firstWinFloorLate": 10,
+      "lateGameWallCount": 15,
+      "earlyGameWallCount": 40,
+      "potentialFloor": 2,
+      "reformGainRatio": 1.2,
+      "chainHorizon": 8,
+      "safetyCostNone": 0.25,
+      "safetyCostOne": 0.1,
+      "safetyCostSafe": 0,
+      "opponentPatternRisk": "tier",
+      "riskFactorTier1": 4,
+      "riskFactorTier2": 16,
+      "riskFactorTier3": 32,
+      "riskOffSuitFactor": 0.5,
+      "defense": {
+        "foldThreatTier": 3,
+        "ceilingProgress": 0.35,
+        "ceilingWeightFloor": 4,
+        "mode": "hard",
+        "foldDiscardTolerance": 0
+      },
+      "bigHandRoute": {
+        "mode": "bot",
+        "enabled": [
+          "thirteenOrphans",
+          "nineGates",
+          "pureSuit",
+          "mixedSuit",
+          "allTriplets"
+        ],
+        "minOrphanKinds": 12,
+        "minSuitRanks": 9,
+        "minSuitTiles": 12,
+        "pureSuitMinTiles": 10,
+        "pureSuitMaxForeign": 2,
+        "mixedSuitMinTiles": 10,
+        "mixedSuitMaxForeign": 1,
+        "allTripletsMinUnits": 4,
+        "declineWinRatio": 2,
+        "minWallForCommit": 20,
+        "minDeficitForCommit": 300,
+        "minWallForCommitWithJokers": 15,
+        "jokerReliefCount": 2
+      },
+      "routeOpportunityGuard": true,
+      "llmEvFeatures": true,
+      "kongValue": {
+        "mode": "ev",
+        "bonusWeight": 1,
+        "robRisk": 60,
+        "shantenStepLoss": 10,
+        "concealedHandFallback": 0.5
+      },
+      "sevenPairsModel": "ev"
+    },
+    "ruleConfig": {
+      "id": "lotus-blood-flow",
+      "version": "lotus-blood-flow-v1",
+      "label": "莲花麻将·血流",
+      "basePoints": 10,
+      "initialScore": 2000,
+      "maxMultiplierPerPayer": 128,
+      "hardWinMultiplier": 2,
+      "patterns": {
+        "big-four-winds": {
+          "id": "big-four-winds",
+          "label": "大四喜",
+          "weight": 32,
+          "excludes": [
+            "all-triplets",
+            "little-four-winds"
+          ]
+        },
+        "four-kongs": {
+          "id": "four-kongs",
+          "label": "四杠",
+          "weight": 32,
+          "excludes": [
+            "three-kongs"
+          ]
+        },
+        "nine-gates": {
+          "id": "nine-gates",
+          "label": "九莲宝灯",
+          "weight": 32,
+          "excludes": [
+            "pure-suit"
+          ]
+        },
+        "big-three-dragons": {
+          "id": "big-three-dragons",
+          "label": "大三元",
+          "weight": 24,
+          "excludes": [
+            "little-three-dragons"
+          ]
+        },
+        "all-honors": {
+          "id": "all-honors",
+          "label": "字一色",
+          "weight": 24,
+          "excludes": [
+            "mixed-terminals",
+            "all-with-terminals",
+            "all-triplets"
+          ]
+        },
+        "pure-terminals": {
+          "id": "pure-terminals",
+          "label": "清幺九",
+          "weight": 24,
+          "excludes": [
+            "mixed-terminals",
+            "all-with-terminals",
+            "all-triplets"
+          ]
+        },
+        "all-green": {
+          "id": "all-green",
+          "label": "绿一色",
+          "weight": 24,
+          "excludes": []
+        },
+        "little-three-dragons": {
+          "id": "little-three-dragons",
+          "label": "小三元",
+          "weight": 16,
+          "excludes": []
+        },
+        "little-four-winds": {
+          "id": "little-four-winds",
+          "label": "小四喜",
+          "weight": 16,
+          "excludes": []
+        },
+        "four-concealed-triplets": {
+          "id": "four-concealed-triplets",
+          "label": "四暗刻",
+          "weight": 16,
+          "excludes": [
+            "three-concealed-triplets",
+            "all-triplets"
+          ]
+        },
+        "thirteenOrphans": {
+          "id": "thirteenOrphans",
+          "label": "十三幺",
+          "weight": 32,
+          "excludes": [
+            "all-with-terminals",
+            "mixed-terminals",
+            "sevenPairs",
+            "all-triplets"
+          ]
+        },
+        "one-suit-four-joints": {
+          "id": "one-suit-four-joints",
+          "label": "一色四节高",
+          "weight": 16,
+          "excludes": [
+            "one-suit-three-joints",
+            "all-triplets"
+          ]
+        },
+        "mixed-terminals": {
+          "id": "mixed-terminals",
+          "label": "混幺九",
+          "weight": 12,
+          "excludes": [
+            "all-with-terminals",
+            "all-triplets"
+          ]
+        },
+        "three-kongs": {
+          "id": "three-kongs",
+          "label": "三杠",
+          "weight": 12,
+          "excludes": []
+        },
+        "luxury-seven-pairs": {
+          "id": "luxury-seven-pairs",
+          "label": "豪华七对",
+          "weight": 6,
+          "excludes": [
+            "sevenPairs",
+            "all-triplets",
+            "three-concealed-triplets",
+            "four-concealed-triplets",
+            "one-suit-three-joints",
+            "one-suit-four-joints"
+          ]
+        },
+        "pure-suit": {
+          "id": "pure-suit",
+          "label": "清一色",
+          "weight": 8,
+          "excludes": [
+            "mixed-suit"
+          ]
+        },
+        "one-suit-three-joints": {
+          "id": "one-suit-three-joints",
+          "label": "一色三节高",
+          "weight": 8,
+          "excludes": []
+        },
+        "one-suit-four-steps": {
+          "id": "one-suit-four-steps",
+          "label": "一色四步高",
+          "weight": 8,
+          "excludes": [
+            "one-suit-three-steps"
+          ]
+        },
+        "three-concealed-triplets": {
+          "id": "three-concealed-triplets",
+          "label": "三暗刻",
+          "weight": 6,
+          "excludes": []
+        },
+        "qiXing": {
+          "id": "qiXing",
+          "label": "七星十三烂",
+          "weight": 6,
+          "excludes": [
+            "shiSanLan"
+          ]
+        },
+        "pure-straight": {
+          "id": "pure-straight",
+          "label": "清龙",
+          "weight": 6,
+          "excludes": []
+        },
+        "mixed-suit": {
+          "id": "mixed-suit",
+          "label": "混一色",
+          "weight": 4,
+          "excludes": []
+        },
+        "all-triplets": {
+          "id": "all-triplets",
+          "label": "碰碰胡",
+          "weight": 4,
+          "excludes": []
+        },
+        "sevenPairs": {
+          "id": "sevenPairs",
+          "label": "七对",
+          "weight": 4,
+          "excludes": [
+            "all-triplets",
+            "three-concealed-triplets",
+            "four-concealed-triplets",
+            "one-suit-three-joints",
+            "one-suit-four-joints"
+          ]
+        },
+        "one-suit-three-steps": {
+          "id": "one-suit-three-steps",
+          "label": "一色三步高",
+          "weight": 4,
+          "excludes": []
+        },
+        "all-with-terminals": {
+          "id": "all-with-terminals",
+          "label": "全带幺",
+          "weight": 4,
+          "excludes": []
+        },
+        "shiSanLan": {
+          "id": "shiSanLan",
+          "label": "十三烂",
+          "weight": 2,
+          "excludes": []
+        },
+        "all-simples": {
+          "id": "all-simples",
+          "label": "断幺九",
+          "weight": 2,
+          "excludes": [
+            "all-with-terminals",
+            "mixed-terminals",
+            "pure-terminals",
+            "all-honors"
+          ]
+        },
+        "concealed-hand": {
+          "id": "concealed-hand",
+          "label": "门清",
+          "weight": 1,
+          "excludes": []
+        },
+        "pinghu": {
+          "id": "pinghu",
+          "label": "平胡",
+          "weight": 1,
+          "excludes": []
+        },
+        "chicken": {
+          "id": "chicken",
+          "label": "鸡胡",
+          "weight": 0.5,
+          "excludes": []
+        }
+      },
+      "eventMultipliers": {
+        "discard": 1,
+        "self-draw": 2,
+        "robbed-kong": 2,
+        "kong-bloom": 4
+      },
+      "openingMinimumMultiplier": 8,
+      "kongPayments": {
+        "discard": 1,
+        "added": 1,
+        "concealed": 2,
+        "wind": 2
+      },
+      "kongBonus": {
+        "exposed": 1,
+        "concealed": 2,
+        "wind": 1
+      },
+      "rounds": {
+        "east": 4,
+        "hanchan": 8
+      },
+      "lockAfterFirstWin": true,
+      "multipleWinners": true,
+      "allowNegativeScores": true,
+      "alreadyWonPlayersPay": true,
+      "dealerMultiplier": 1,
+      "dealerRotation": "every-round",
+      "crossWindowPassRestriction": false,
+      "extraPayments": []
+    },
+    "actionPriority": "kong-priority",
+    "apiRequests": 0,
+    "sampling": "First accepted chi/peng/gang of each kind per source round, wall <=40, unlocked, pass legal, no own win. Not a frequency-weighted population.",
+    "scope": "Current production AI in all continuations. Opponent hands and unseen inventory fixed; paired future-wall permutations only. Diagnostic, not deployable oracle."
+  },
+  "elapsedSeconds": 246.374,
+  "all": {
+    "passMinusAccept": {
+      "clusters": 10,
+      "observations": 12,
+      "mean": -39.9375,
+      "ci95": [
+        -173.0625,
+        88.125
+      ],
+      "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+    },
+    "positiveWindows": 7,
+    "negativeWindows": 5,
+    "sampleWindows": 12
+  },
+  "byKind": {
+    "chi": {
+      "passMinusAccept": {
+        "clusters": 1,
+        "observations": 1,
+        "mean": 68.75,
+        "ci95": null
+      },
+      "positiveWindows": 1,
+      "negativeWindows": 0,
+      "sampleWindows": 1
+    },
+    "peng": {
+      "passMinusAccept": {
+        "clusters": 8,
+        "observations": 8,
+        "mean": -107.8125,
+        "ci95": [
+          -273.125,
+          50.625
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "positiveWindows": 3,
+      "negativeWindows": 5,
+      "sampleWindows": 8
+    },
+    "gang": {
+      "passMinusAccept": {
+        "clusters": 3,
+        "observations": 3,
+        "mean": 142.5,
+        "ci95": [
+          2.5,
+          415
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "positiveWindows": 3,
+      "negativeWindows": 0,
+      "sampleWindows": 3
+    }
+  },
+  "windows": [
+    {
+      "key": "1100101-peng",
+      "seed": 1100101,
+      "seat": 1,
+      "step": 59,
+      "wall": 34,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 3,
+        "tile": "p9",
+        "id": "counterfactual/seed-1100101/tile/96"
+      },
+      "hand": [
+        "m9",
+        "m7",
+        "m7",
+        "p3",
+        "p9",
+        "p9",
+        "west",
+        "west",
+        "north",
+        "north",
+        "red",
+        "green",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "m8",
+        "m9"
+      ],
+      "scoreBefore": 1930,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -890,
+          "grossWinIncome": 0,
+          "payments": 890,
+          "discardPayments": 310,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 53
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -580,
+          "grossWinIncome": 60,
+          "payments": 640,
+          "discardPayments": 80,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 51
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -140,
+          "grossWinIncome": 280,
+          "payments": 420,
+          "discardPayments": 60,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 62
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -640,
+          "grossWinIncome": 0,
+          "payments": 640,
+          "discardPayments": 80,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 53
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -970,
+          "grossWinIncome": 0,
+          "payments": 970,
+          "discardPayments": 250,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 56
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -530,
+          "grossWinIncome": 60,
+          "payments": 590,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 45
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -820,
+          "grossWinIncome": 0,
+          "payments": 820,
+          "discardPayments": 260,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 58
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -620,
+          "grossWinIncome": 0,
+          "payments": 620,
+          "discardPayments": 180,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 53
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -1070,
+          "grossWinIncome": 0,
+          "payments": 1070,
+          "discardPayments": 410,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 52
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -910,
+          "grossWinIncome": 0,
+          "payments": 910,
+          "discardPayments": 190,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 49
+        }
+      ],
+      "passMinusAccept": 75,
+      "incomeDelta": -55,
+      "paymentDelta": -130,
+      "discardPaymentDelta": -130,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100104-gang",
+      "seed": 1100104,
+      "seat": 3,
+      "step": 91,
+      "wall": 32,
+      "action": {
+        "kind": "gang"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 0,
+        "tile": "west",
+        "id": "counterfactual/seed-1100104/tile/99"
+      },
+      "hand": [
+        "p2",
+        "p3",
+        "p6",
+        "p6",
+        "s2",
+        "s2",
+        "s3",
+        "s5",
+        "west",
+        "west",
+        "west",
+        "north",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "p4",
+        "p5"
+      ],
+      "scoreBefore": 1730,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -1160,
+          "grossWinIncome": 120,
+          "payments": 1300,
+          "discardPayments": 440,
+          "kongNet": 20,
+          "wins": 1,
+          "commands": 75
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -480,
+          "grossWinIncome": 0,
+          "payments": 480,
+          "discardPayments": 180,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 70
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -260,
+          "grossWinIncome": 0,
+          "payments": 280,
+          "discardPayments": 100,
+          "kongNet": 20,
+          "wins": 0,
+          "commands": 71
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -710,
+          "grossWinIncome": 80,
+          "payments": 790,
+          "discardPayments": 210,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 67
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -660,
+          "grossWinIncome": 0,
+          "payments": 680,
+          "discardPayments": 320,
+          "kongNet": 20,
+          "wins": 0,
+          "commands": 68
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -560,
+          "grossWinIncome": 0,
+          "payments": 560,
+          "discardPayments": 140,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 63
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -590,
+          "grossWinIncome": 0,
+          "payments": 600,
+          "discardPayments": 160,
+          "kongNet": 10,
+          "wins": 0,
+          "commands": 69
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -600,
+          "grossWinIncome": 30,
+          "payments": 630,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 65
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -970,
+          "grossWinIncome": 0,
+          "payments": 990,
+          "discardPayments": 410,
+          "kongNet": 20,
+          "wins": 0,
+          "commands": 79
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -600,
+          "grossWinIncome": 0,
+          "payments": 600,
+          "discardPayments": 180,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 71
+        }
+      ],
+      "passMinusAccept": 2.5,
+      "incomeDelta": 27.5,
+      "paymentDelta": 7.5,
+      "discardPaymentDelta": -92.5,
+      "kongNetDelta": -17.5
+    },
+    {
+      "key": "1100104-peng",
+      "seed": 1100104,
+      "seat": 0,
+      "step": 112,
+      "wall": 23,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 1,
+        "tile": "s5",
+        "id": "counterfactual/seed-1100104/tile/116"
+      },
+      "hand": [
+        "p5",
+        "p2",
+        "p2",
+        "p2",
+        "p3",
+        "p3",
+        "s5",
+        "s5",
+        "s6",
+        "south",
+        "south",
+        "south",
+        "green"
+      ],
+      "melds": [],
+      "jokers": [
+        "p4",
+        "p5"
+      ],
+      "scoreBefore": 1530,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": 2280,
+          "grossWinIncome": 2500,
+          "payments": 220,
+          "discardPayments": 40,
+          "kongNet": 0,
+          "wins": 10,
+          "commands": 54
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": 115,
+          "grossWinIncome": 705,
+          "payments": 590,
+          "discardPayments": 170,
+          "kongNet": 0,
+          "wins": 3,
+          "commands": 58
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -430,
+          "grossWinIncome": 70,
+          "payments": 500,
+          "discardPayments": 120,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 47
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -250,
+          "grossWinIncome": 170,
+          "payments": 420,
+          "discardPayments": 160,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 50
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": 730,
+          "grossWinIncome": 1280,
+          "payments": 550,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 12,
+          "commands": 58
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": 955,
+          "grossWinIncome": 1405,
+          "payments": 450,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 5,
+          "commands": 51
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": 2180,
+          "grossWinIncome": 2400,
+          "payments": 220,
+          "discardPayments": 40,
+          "kongNet": 0,
+          "wins": 9,
+          "commands": 51
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": 90,
+          "grossWinIncome": 700,
+          "payments": 610,
+          "discardPayments": 150,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 50
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": 330,
+          "grossWinIncome": 800,
+          "payments": 470,
+          "discardPayments": 110,
+          "kongNet": 0,
+          "wins": 3,
+          "commands": 51
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": 335,
+          "grossWinIncome": 735,
+          "payments": 400,
+          "discardPayments": 60,
+          "kongNet": 0,
+          "wins": 4,
+          "commands": 56
+        }
+      ],
+      "passMinusAccept": -420,
+      "incomeDelta": -385,
+      "paymentDelta": 35,
+      "discardPaymentDelta": 25,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100109-peng",
+      "seed": 1100109,
+      "seat": 3,
+      "step": 57,
+      "wall": 39,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 2,
+        "tile": "m4",
+        "id": "counterfactual/seed-1100109/tile/86"
+      },
+      "hand": [
+        "m2",
+        "m4",
+        "m4",
+        "m6",
+        "m7",
+        "m8",
+        "m9",
+        "p4",
+        "p4",
+        "west",
+        "west",
+        "red",
+        "red"
+      ],
+      "melds": [],
+      "jokers": [
+        "m1",
+        "m2"
+      ],
+      "scoreBefore": 2000,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -240,
+          "grossWinIncome": 680,
+          "payments": 900,
+          "discardPayments": 200,
+          "kongNet": -20,
+          "wins": 3,
+          "commands": 62
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -520,
+          "grossWinIncome": 0,
+          "payments": 520,
+          "discardPayments": 160,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 63
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -570,
+          "grossWinIncome": 0,
+          "payments": 570,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 68
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -270,
+          "grossWinIncome": 70,
+          "payments": 340,
+          "discardPayments": 60,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 65
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -310,
+          "grossWinIncome": 110,
+          "payments": 420,
+          "discardPayments": 170,
+          "kongNet": 0,
+          "wins": 3,
+          "commands": 70
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": 170,
+          "grossWinIncome": 600,
+          "payments": 430,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 7,
+          "commands": 71
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -750,
+          "grossWinIncome": 0,
+          "payments": 750,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 61
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -650,
+          "grossWinIncome": 0,
+          "payments": 640,
+          "discardPayments": 160,
+          "kongNet": -10,
+          "wins": 0,
+          "commands": 63
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -390,
+          "grossWinIncome": 40,
+          "payments": 430,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 66
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -410,
+          "grossWinIncome": 0,
+          "payments": 440,
+          "discardPayments": 200,
+          "kongNet": 30,
+          "wins": 0,
+          "commands": 67
+        }
+      ],
+      "passMinusAccept": 215,
+      "incomeDelta": 130,
+      "paymentDelta": -80,
+      "discardPaymentDelta": 17.5,
+      "kongNetDelta": 5
+    },
+    {
+      "key": "1100111-peng",
+      "seed": 1100111,
+      "seat": 1,
+      "step": 126,
+      "wall": 5,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 2,
+        "tile": "m9",
+        "id": "counterfactual/seed-1100111/tile/145"
+      },
+      "hand": [
+        "m9",
+        "m9",
+        "p2",
+        "s3",
+        "s7",
+        "s7",
+        "east",
+        "west",
+        "north",
+        "red",
+        "red",
+        "white",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "s4",
+        "s5"
+      ],
+      "scoreBefore": -1120,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -830,
+          "grossWinIncome": 0,
+          "payments": 830,
+          "discardPayments": 490,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 18
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -870,
+          "grossWinIncome": 0,
+          "payments": 870,
+          "discardPayments": 190,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -1210,
+          "grossWinIncome": 0,
+          "payments": 1210,
+          "discardPayments": 530,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 15
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -1030,
+          "grossWinIncome": 0,
+          "payments": 1030,
+          "discardPayments": 230,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 11
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -1290,
+          "grossWinIncome": 0,
+          "payments": 1290,
+          "discardPayments": 490,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 14
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -910,
+          "grossWinIncome": 0,
+          "payments": 910,
+          "discardPayments": 230,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -1060,
+          "grossWinIncome": 0,
+          "payments": 1060,
+          "discardPayments": 600,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 17
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -870,
+          "grossWinIncome": 0,
+          "payments": 870,
+          "discardPayments": 190,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 13
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -870,
+          "grossWinIncome": 0,
+          "payments": 870,
+          "discardPayments": 530,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 18
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -990,
+          "grossWinIncome": 0,
+          "payments": 990,
+          "discardPayments": 190,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 11
+        }
+      ],
+      "passMinusAccept": 157.5,
+      "incomeDelta": 0,
+      "paymentDelta": -157.5,
+      "discardPaymentDelta": -327.5,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100115-peng",
+      "seed": 1100115,
+      "seat": 0,
+      "step": 95,
+      "wall": 17,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 3,
+        "tile": "s4",
+        "id": "counterfactual/seed-1100115/tile/130"
+      },
+      "hand": [
+        "s7",
+        "m1",
+        "m2",
+        "m3",
+        "m4",
+        "m5",
+        "p4",
+        "s1",
+        "s3",
+        "s4",
+        "s4",
+        "red",
+        "red"
+      ],
+      "melds": [],
+      "jokers": [
+        "s6",
+        "s7"
+      ],
+      "scoreBefore": 1230,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -825,
+          "grossWinIncome": 35,
+          "payments": 860,
+          "discardPayments": 120,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 37
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -750,
+          "grossWinIncome": 0,
+          "payments": 750,
+          "discardPayments": 250,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 38
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -710,
+          "grossWinIncome": 0,
+          "payments": 710,
+          "discardPayments": 270,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 40
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -610,
+          "grossWinIncome": 0,
+          "payments": 610,
+          "discardPayments": 230,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 37
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -990,
+          "grossWinIncome": 0,
+          "payments": 990,
+          "discardPayments": 370,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 40
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -900,
+          "grossWinIncome": 0,
+          "payments": 880,
+          "discardPayments": 140,
+          "kongNet": -20,
+          "wins": 0,
+          "commands": 31
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -650,
+          "grossWinIncome": 0,
+          "payments": 630,
+          "discardPayments": 270,
+          "kongNet": -20,
+          "wins": 0,
+          "commands": 38
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -1110,
+          "grossWinIncome": 0,
+          "payments": 1110,
+          "discardPayments": 510,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 35
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -730,
+          "grossWinIncome": 0,
+          "payments": 730,
+          "discardPayments": 170,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 40
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -1370,
+          "grossWinIncome": 0,
+          "payments": 1370,
+          "discardPayments": 390,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 35
+        }
+      ],
+      "passMinusAccept": -227.5,
+      "incomeDelta": 0,
+      "paymentDelta": 227.5,
+      "discardPaymentDelta": 47.5,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100117-gang",
+      "seed": 1100117,
+      "seat": 3,
+      "step": 83,
+      "wall": 27,
+      "action": {
+        "kind": "gang"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 1,
+        "tile": "s6",
+        "id": "counterfactual/seed-1100117/tile/112"
+      },
+      "hand": [
+        "east",
+        "p5",
+        "p6",
+        "s4",
+        "s4",
+        "s6",
+        "s6",
+        "s6",
+        "s8",
+        "s8"
+      ],
+      "melds": [
+        {
+          "type": "peng",
+          "tile": "m5",
+          "tiles": [
+            "m5",
+            "m5",
+            "m5"
+          ],
+          "from": 0
+        }
+      ],
+      "jokers": [
+        "north",
+        "east"
+      ],
+      "scoreBefore": 2000,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": 180,
+          "grossWinIncome": 240,
+          "payments": 70,
+          "discardPayments": 10,
+          "kongNet": 10,
+          "wins": 3,
+          "commands": 38
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -1060,
+          "grossWinIncome": 120,
+          "payments": 1180,
+          "discardPayments": 320,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 49
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": 200,
+          "grossWinIncome": 270,
+          "payments": 80,
+          "discardPayments": 0,
+          "kongNet": 10,
+          "wins": 4,
+          "commands": 45
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": 40,
+          "grossWinIncome": 280,
+          "payments": 240,
+          "discardPayments": 80,
+          "kongNet": 0,
+          "wins": 4,
+          "commands": 44
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": 350,
+          "grossWinIncome": 420,
+          "payments": 50,
+          "discardPayments": 10,
+          "kongNet": -20,
+          "wins": 4,
+          "commands": 40
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": 1540,
+          "grossWinIncome": 1580,
+          "payments": 20,
+          "discardPayments": 0,
+          "kongNet": -20,
+          "wins": 4,
+          "commands": 43
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": 80,
+          "grossWinIncome": 630,
+          "payments": 560,
+          "discardPayments": 20,
+          "kongNet": 10,
+          "wins": 3,
+          "commands": 47
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": 50,
+          "grossWinIncome": 720,
+          "payments": 670,
+          "discardPayments": 350,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 53
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -830,
+          "grossWinIncome": 0,
+          "payments": 840,
+          "discardPayments": 260,
+          "kongNet": 10,
+          "wins": 0,
+          "commands": 43
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -170,
+          "grossWinIncome": 20,
+          "payments": 190,
+          "discardPayments": 150,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 48
+        }
+      ],
+      "passMinusAccept": 415,
+      "incomeDelta": 320,
+      "paymentDelta": -102.5,
+      "discardPaymentDelta": 72.5,
+      "kongNetDelta": -7.5
+    },
+    {
+      "key": "1100117-chi",
+      "seed": 1100117,
+      "seat": 0,
+      "step": 101,
+      "wall": 14,
+      "action": {
+        "kind": "chi",
+        "tiles": [
+          "red",
+          "green",
+          "white"
+        ]
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 3,
+        "tile": "green",
+        "id": "counterfactual/seed-1100117/tile/138"
+      },
+      "hand": [
+        "east",
+        "m2",
+        "m2",
+        "m6",
+        "m6",
+        "m6",
+        "m8",
+        "m8",
+        "m8",
+        "s8",
+        "red",
+        "red",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "north",
+        "east"
+      ],
+      "scoreBefore": 1940,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -140,
+          "grossWinIncome": 0,
+          "payments": 140,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 20
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -170,
+          "grossWinIncome": 70,
+          "payments": 240,
+          "discardPayments": 80,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 27
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -430,
+          "grossWinIncome": 40,
+          "payments": 470,
+          "discardPayments": 90,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 29
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -100,
+          "grossWinIncome": 0,
+          "payments": 100,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 21
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -295,
+          "grossWinIncome": 65,
+          "payments": 360,
+          "discardPayments": 30,
+          "kongNet": 0,
+          "wins": 3,
+          "commands": 28
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -380,
+          "grossWinIncome": 0,
+          "payments": 380,
+          "discardPayments": 180,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 25
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -210,
+          "grossWinIncome": 0,
+          "payments": 210,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 31
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -230,
+          "grossWinIncome": 0,
+          "payments": 230,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 27
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -130,
+          "grossWinIncome": 60,
+          "payments": 190,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 24
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -80,
+          "grossWinIncome": 0,
+          "payments": 80,
+          "discardPayments": 40,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 23
+        }
+      ],
+      "passMinusAccept": 68.75,
+      "incomeDelta": -41.25,
+      "paymentDelta": -110,
+      "discardPaymentDelta": 27.5,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100118-peng",
+      "seed": 1100118,
+      "seat": 0,
+      "step": 101,
+      "wall": 8,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 2,
+        "tile": "white",
+        "id": "counterfactual/seed-1100118/tile/145"
+      },
+      "hand": [
+        "m5",
+        "s3",
+        "s3",
+        "s3",
+        "s5",
+        "s6",
+        "s6",
+        "s6",
+        "s9",
+        "s9",
+        "north",
+        "white",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "m5",
+        "m6"
+      ],
+      "scoreBefore": 1600,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -20,
+          "grossWinIncome": 0,
+          "payments": 20,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 14
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -10,
+          "grossWinIncome": 0,
+          "payments": 10,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -10,
+          "grossWinIncome": 0,
+          "payments": 10,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 14
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -20,
+          "grossWinIncome": 0,
+          "payments": 20,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -10,
+          "grossWinIncome": 0,
+          "payments": 10,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 13
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -30,
+          "grossWinIncome": 0,
+          "payments": 30,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -10,
+          "grossWinIncome": 0,
+          "payments": 10,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 14
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -20,
+          "grossWinIncome": 0,
+          "payments": 20,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -30,
+          "grossWinIncome": 0,
+          "payments": 30,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 13
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -10,
+          "grossWinIncome": 0,
+          "payments": 10,
+          "discardPayments": 10,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 12
+        }
+      ],
+      "passMinusAccept": -5,
+      "incomeDelta": 0,
+      "paymentDelta": 5,
+      "discardPaymentDelta": 5,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100119-peng",
+      "seed": 1100119,
+      "seat": 3,
+      "step": 109,
+      "wall": 25,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 2,
+        "tile": "p7",
+        "id": "counterfactual/seed-1100119/tile/103"
+      },
+      "hand": [
+        "north",
+        "p4",
+        "p4",
+        "p4",
+        "p6",
+        "p7",
+        "p7",
+        "p9",
+        "p9",
+        "p9",
+        "east",
+        "red",
+        "green"
+      ],
+      "melds": [],
+      "jokers": [
+        "west",
+        "north"
+      ],
+      "scoreBefore": 330,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -1100,
+          "grossWinIncome": 240,
+          "payments": 1340,
+          "discardPayments": 400,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 47
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -1810,
+          "grossWinIncome": 0,
+          "payments": 1810,
+          "discardPayments": 550,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 47
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -1000,
+          "grossWinIncome": 480,
+          "payments": 1480,
+          "discardPayments": 440,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 47
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -1820,
+          "grossWinIncome": 0,
+          "payments": 1820,
+          "discardPayments": 620,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 51
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": -1270,
+          "grossWinIncome": 240,
+          "payments": 1510,
+          "discardPayments": 390,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 45
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -1100,
+          "grossWinIncome": 90,
+          "payments": 1190,
+          "discardPayments": 370,
+          "kongNet": 0,
+          "wins": 4,
+          "commands": 48
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -850,
+          "grossWinIncome": 480,
+          "payments": 1330,
+          "discardPayments": 410,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 49
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -2220,
+          "grossWinIncome": 0,
+          "payments": 2220,
+          "discardPayments": 840,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 56
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -1760,
+          "grossWinIncome": 240,
+          "payments": 2000,
+          "discardPayments": 560,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 49
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -1220,
+          "grossWinIncome": 0,
+          "payments": 1220,
+          "discardPayments": 400,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 50
+        }
+      ],
+      "passMinusAccept": -370,
+      "incomeDelta": -337.5,
+      "paymentDelta": 32.5,
+      "discardPaymentDelta": 107.5,
+      "kongNetDelta": 0
+    },
+    {
+      "key": "1100120-gang",
+      "seed": 1100120,
+      "seat": 0,
+      "step": 88,
+      "wall": 14,
+      "action": {
+        "kind": "gang"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 3,
+        "tile": "p7",
+        "id": "counterfactual/seed-1100120/tile/132"
+      },
+      "hand": [
+        "p7",
+        "p7",
+        "p7",
+        "p8",
+        "p8",
+        "south",
+        "south",
+        "south",
+        "west",
+        "west"
+      ],
+      "melds": [
+        {
+          "type": "peng",
+          "tile": "m1",
+          "tiles": [
+            "m1",
+            "m1",
+            "m1"
+          ],
+          "from": 3
+        }
+      ],
+      "jokers": [
+        "m4",
+        "m5"
+      ],
+      "scoreBefore": 1260,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": -40,
+          "grossWinIncome": 300,
+          "payments": 350,
+          "discardPayments": 70,
+          "kongNet": 10,
+          "wins": 1,
+          "commands": 20
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": -270,
+          "grossWinIncome": 0,
+          "payments": 270,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 25
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": -790,
+          "grossWinIncome": 0,
+          "payments": 800,
+          "discardPayments": 120,
+          "kongNet": 10,
+          "wins": 0,
+          "commands": 20
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": -1330,
+          "grossWinIncome": 0,
+          "payments": 1330,
+          "discardPayments": 510,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 25
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": 70,
+          "grossWinIncome": 300,
+          "payments": 240,
+          "discardPayments": 100,
+          "kongNet": 10,
+          "wins": 1,
+          "commands": 23
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": -230,
+          "grossWinIncome": 0,
+          "payments": 230,
+          "discardPayments": 30,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 25
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -570,
+          "grossWinIncome": 0,
+          "payments": 580,
+          "discardPayments": 240,
+          "kongNet": 10,
+          "wins": 0,
+          "commands": 23
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": -550,
+          "grossWinIncome": 0,
+          "payments": 550,
+          "discardPayments": 70,
+          "kongNet": 0,
+          "wins": 0,
+          "commands": 23
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": -800,
+          "grossWinIncome": 0,
+          "payments": 810,
+          "discardPayments": 150,
+          "kongNet": 10,
+          "wins": 0,
+          "commands": 22
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": 60,
+          "grossWinIncome": 600,
+          "payments": 540,
+          "discardPayments": 140,
+          "kongNet": 0,
+          "wins": 1,
+          "commands": 20
+        }
+      ],
+      "passMinusAccept": 10,
+      "incomeDelta": 75,
+      "paymentDelta": 55,
+      "discardPaymentDelta": 35,
+      "kongNetDelta": -10
+    },
+    {
+      "key": "1100122-peng",
+      "seed": 1100122,
+      "seat": 2,
+      "step": 64,
+      "wall": 37,
+      "action": {
+        "kind": "peng"
+      },
+      "source": {
+        "kind": "discard",
+        "seat": 1,
+        "tile": "m5",
+        "id": "counterfactual/seed-1100122/tile/90"
+      },
+      "hand": [
+        "p3",
+        "p3",
+        "m3",
+        "m4",
+        "m5",
+        "m5",
+        "m7",
+        "m7",
+        "s2",
+        "s3",
+        "s6",
+        "green",
+        "white"
+      ],
+      "melds": [],
+      "jokers": [
+        "p2",
+        "p3"
+      ],
+      "scoreBefore": 2000,
+      "outcomes": [
+        {
+          "candidateId": "accept",
+          "sample": -1,
+          "net": 200,
+          "grossWinIncome": 360,
+          "payments": 190,
+          "discardPayments": 50,
+          "kongNet": 30,
+          "wins": 2,
+          "commands": 56
+        },
+        {
+          "candidateId": "pass",
+          "sample": -1,
+          "net": 120,
+          "grossWinIncome": 240,
+          "payments": 120,
+          "discardPayments": 120,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 51
+        },
+        {
+          "candidateId": "accept",
+          "sample": 0,
+          "net": 1320,
+          "grossWinIncome": 1320,
+          "payments": 0,
+          "discardPayments": 0,
+          "kongNet": 0,
+          "wins": 7,
+          "commands": 74
+        },
+        {
+          "candidateId": "pass",
+          "sample": 0,
+          "net": 620,
+          "grossWinIncome": 920,
+          "payments": 300,
+          "discardPayments": 120,
+          "kongNet": 0,
+          "wins": 8,
+          "commands": 71
+        },
+        {
+          "candidateId": "accept",
+          "sample": 1,
+          "net": 25,
+          "grossWinIncome": 25,
+          "payments": 0,
+          "discardPayments": 0,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 55
+        },
+        {
+          "candidateId": "pass",
+          "sample": 1,
+          "net": 320,
+          "grossWinIncome": 400,
+          "payments": 80,
+          "discardPayments": 0,
+          "kongNet": 0,
+          "wins": 3,
+          "commands": 54
+        },
+        {
+          "candidateId": "accept",
+          "sample": 2,
+          "net": -75,
+          "grossWinIncome": 35,
+          "payments": 110,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 2,
+          "commands": 70
+        },
+        {
+          "candidateId": "pass",
+          "sample": 2,
+          "net": 160,
+          "grossWinIncome": 180,
+          "payments": 20,
+          "discardPayments": 20,
+          "kongNet": 0,
+          "wins": 5,
+          "commands": 61
+        },
+        {
+          "candidateId": "accept",
+          "sample": 3,
+          "net": 950,
+          "grossWinIncome": 1120,
+          "payments": 200,
+          "discardPayments": 0,
+          "kongNet": 30,
+          "wins": 13,
+          "commands": 68
+        },
+        {
+          "candidateId": "pass",
+          "sample": 3,
+          "net": -30,
+          "grossWinIncome": 170,
+          "payments": 200,
+          "discardPayments": 0,
+          "kongNet": 0,
+          "wins": 6,
+          "commands": 66
+        }
+      ],
+      "passMinusAccept": -287.5,
+      "incomeDelta": -207.5,
+      "paymentDelta": 72.5,
+      "discardPaymentDelta": 30,
+      "kongNetDelta": -7.5
+    }
+  ]
+}
