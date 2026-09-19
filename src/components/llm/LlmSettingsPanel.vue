@@ -42,6 +42,11 @@ const selectedUsesDivergentGlmRelay = computed(() => {
   const model = preset.model.trim().toLowerCase().split('/').pop() ?? ''
   return selectedReasoningPolicy.value?.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(model)
 })
+const selectedUnknownModelWarning = computed(
+  () => selectedReasoningPolicy.value?.mode === 'unknown'
+    ? '不在能力矩阵内的型号：无法自动关闭思考；若该型号默认思考，回复正文会为空'
+    : null,
+)
 function load() {
   settings.value = readLlmSettings()
   selectedId.value = settings.value.activeId ?? settings.value.presets[0]?.id ?? null
@@ -286,6 +291,10 @@ function presetName(id: string | null): string {
           v-else-if="selectedReasoningPolicy?.mode === 'always-on'"
           class="llm-provider-warning" data-testid="llm-always-thinking-warning"
         >该模型始终思考</p>
+        <p
+          v-else-if="selectedUnknownModelWarning"
+          class="llm-provider-warning" data-testid="llm-unknown-model-warning"
+        >{{ selectedUnknownModelWarning }}</p>
         <label class="llm-row">
           <span>牌桌超时</span>
           <span class="llm-timeout-toggle">
