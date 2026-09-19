@@ -167,6 +167,16 @@ describe('LLM 非思考能力矩阵', () => {
     })
   })
 
+  it('千问预置（含开源尺寸）都在能力矩阵内，预置不会重现空正文故障', () => {
+    const qwenTemplates = PROVIDER_TEMPLATES.filter((template) => template.providerType === 'qwen')
+    expect(qwenTemplates).toContainEqual(expect.objectContaining({ model: 'qwen3-32b' }))
+    for (const template of qwenTemplates) {
+      expect(resolveReasoningPolicy({
+        baseUrl: template.baseUrl, model: template.model, providerType: template.providerType,
+      })).toMatchObject({ mode: 'explicit-off', requestBody: { enable_thinking: false } })
+    }
+  })
+
   it('GLM 新增预设只推荐官方端点，不再推荐行为异常的 OrcaRouter 型号', () => {
     expect(PROVIDER_TEMPLATES).toContainEqual(expect.objectContaining({
       providerType: 'glm', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash',
