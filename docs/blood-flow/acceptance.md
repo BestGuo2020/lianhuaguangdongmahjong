@@ -86,6 +86,31 @@
 
 **证据（追加五）**：`pnpm test` 全量通过（`bloodFlowWinLines.test.ts` **13 项**）；`npm run typecheck` 通过；e2e `blood-flow.llm.spec.ts` **3 passed**；vibehub 重新部署（见下）。
 
+### 2026-09-19 追加六：llmAnime 角色固定文案体检（12 角色 × 14 条）
+
+用户追问「anime 角色库那批也是怪怪的，确认一下这些是不是同样也是台词」。核实结果：**是台词，而且是血流里被念得最频繁的一批**——
+
+| 什么时候念 | 代码路径 | 键 |
+|---|---|---|
+| 血流每次胡牌（自摸/点炮/抢杠） | `useBloodFlowGame.scheduleWinVoices` → `animeVoiceKeyForTableAction` | `zimo` / `hu` / `qiangganghu` |
+| 血流每次吃碰杠 | `audioBridge.present` → `executeAction` | `chi` / `peng` / `gang` |
+| 血流局末感言 | `createBloodFlowReactions` → `animeVoiceLine` | `win-self-draw` / `win-discard` / `win-robbed-kong` / `loss` / `draw` |
+| 经典玩法 / 联机 | `useGame` / `lotusGame` / `useRemoteGame` 的 `executeAction`/`executeRound`；联机另走服务端 `ensure_fixed_line_audio` | 同上 |
+
+顺手核对：前端 132 条与后端 `anime_characters.py` **逐条一致 0 差异**（人工同步，无测试保障）。
+
+**本批改动（前后端同步）**
+
+- **键位 11 → 14**：`hu` / `zimo` / `qiangganghu` 各加第二变体 `hu-2` / `zimo-2` / `qiangganghu-2`；血流赢家瞬间按座位序号在两个变体间轮换（`animeWinActionVoiceKey`，新增 `animeWinVoiceSequences`），吃碰杠与经典玩法不做变体（一局只出现一次）。结构问题（同句反复念）比措辞问题更严重，这是主因修复。
+- **去报告腔**：glm 原有 6 条动作台词全是汇报腔（「碰，验证通过。」「杠，推演完成。」「胡，结论成立。」「自摸，命中最优。」「抢杠，判断成立。」「算清了，吃。」）→ 保留"算"的人格但改成牌桌口语（`算到了，我吃。`／`碰，正好凑齐。`／`胡了，正如我算。`／`自摸，全在算中。`／`抢杠，早算到了。`），局末 5 条同样改写（去掉"最优解/计算完成/判断成立/误差已记录/样本不足"）。gpt `胡了，完成。`→`胡了，稳稳的。`，claude `结论是，胡了。`→`这一章，胡了。`。
+- **去「某某成某」**：gemini `星光成胡！`→`两星合胡！`、muse `一曲成胡。`→`这一曲，胡了。`／`抢杠成章。`→`杠声起，我接上。`／局末 `我已抢胡成章`→`这一节归我`、claude 局末 `自摸成章…`→`自摸收尾，这一章圆满了。`、kimi 局末 `自摸成局。`→`自摸到手。`、mistral 局末 `这张正好成胡。`→`这张正好。`
+- **保留双关人设**：书页／乐章／星轨／月色／风／镜头／大鱼等意象全部保留（`这一页，我吃。`、`碰出灵感！`、`两星合胡！`、`月下悄悄自摸。`、`乘风截这一杠。`、`这条，我留下！`、`胡到嘴里啦！`）。动作台词仍满足 ≤8 字合同。
+- **合同与版本**：后端新增显式 `ANIME_ACTION_LINE_KEYS` / `ANIME_RESULT_LINE_KEYS` 并取消 `ANIME_VOICE_LINE_KEYS[:6]` 位置切片；`ANIME_CHARACTER_SCHEMA_VERSION` 1→2；前端补 `ANIME_ACTION_FALLBACK_AUDIO` 的新键（共用原 mp3 兜底）。
+- **顺手排掉一个线上雷（本批最重要的意外收获）**：前端 `ANIME_FIXED_TTS_CACHE_VERSION` 原本按"文案变化就递增"的约定要 1→2，但后端 `/api/local-tts/synthesize` 的 `cacheIdentity` 校验器**硬编码要求 `parts[1]===1 && parts[2]===1`**——一旦前端递增版本，**线上全部 llmAnime 固定台词合成会被 422 拒掉**，而前端单测完全发现不了（只有真实后端才暴露）。处理：① 前端**不动**该版本号（纯文案改动本来就由身份第 7 段 `normalizedText` 自动失效缓存，无需递增），并在常量注释里写明"改这个数前必须先部署后端"；② 后端校验器放宽为**形状校验**（12 段 + 约定标记 + 版本段是 1..1000 的正整数），并补测试：版本递增必须继续 200，非正整数/字符串/布尔/错标记/段数不足仍 422。这样新版前端对**现任线上后端**也安全，后端则对未来递增免疫。
+- **新增核对脚本** `scripts/check-anime-lines-sync.mjs`：两处字面量此前没有任何测试能发现不一致，改动前后各跑一次。
+
+**证据（追加六）**：前端 `pnpm test` **1566 passed / 2 skipped**、`npm run typecheck` 通过（`animeCharacters.test.ts` 新增 14 键/168 条/≤8 字合同、报告腔与「某某成某」红线、变体轮换断言）；后端 `pytest tests/test_anime_characters.py tests/test_tts.py tests/test_llm.py` **140 passed**（新增同一组红线断言与显式键集合断言）、`pytest tests/test_api.py -k local_tts` **2 passed**（新增版本递增接受 + 5 类非法身份拒绝）；`node scripts/check-anime-lines-sync.mjs` → **168/168 逐条一致**；e2e `blood-flow.llm.spec` / `blood-flow.effects.spec` / `theme-presentation.smoke.spec` 单 worker **15 passed**。后端全量 `pytest tests` 有 **7 项既有失败**在 `test_blood_flow_seven_pairs_model.py`（七对潜力模型数值），已用 `git stash` 在干净基线上复现同样失败，与本批无关。
+
 
 ## 2026-09-12：AI 真·大牌路线（v4）+ 精牌感知上线（只跑部署自检）
 

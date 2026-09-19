@@ -16,9 +16,9 @@ import {
 } from './animeFixedTts'
 
 describe('llmAnime fixed TTS contract', () => {
-  it('把六个动作与五个结果 key 完整、互斥地分类', () => {
+  it('把九个动作与五个结果 key 完整、互斥地分类', () => {
     expect(ANIME_VOICE_KEYS.filter(isAnimeActionVoiceKey)).toEqual([
-      'chi', 'peng', 'gang', 'hu', 'zimo', 'qiangganghu',
+      'chi', 'peng', 'gang', 'hu', 'zimo', 'qiangganghu', 'hu-2', 'zimo-2', 'qiangganghu-2',
     ])
     expect(ANIME_VOICE_KEYS.filter(isAnimeResultVoiceKey)).toEqual([
       'win-self-draw', 'win-discard', 'win-robbed-kong', 'loss', 'draw',
@@ -66,13 +66,13 @@ describe('llmAnime fixed TTS contract', () => {
     ])
   })
 
-  it('12×11 个固定组合都有唯一、可重复的 cache identity', () => {
+  it('12×14 个固定组合都有唯一、可重复的 cache identity', () => {
     const requests = ANIME_CHARACTERS.flatMap(({ id }) => (
       ANIME_VOICE_KEYS.map((key) => createAnimeFixedTtsRequest(id, key))
     ))
-    expect(requests).toHaveLength(132)
-    expect(new Set(requests.map(({ cacheIdentity }) => cacheIdentity)).size).toBe(132)
-    expect(new Set(requests.map(({ singleFlightKey }) => singleFlightKey)).size).toBe(132)
+    expect(requests).toHaveLength(168)
+    expect(new Set(requests.map(({ cacheIdentity }) => cacheIdentity)).size).toBe(168)
+    expect(new Set(requests.map(({ singleFlightKey }) => singleFlightKey)).size).toBe(168)
     for (const request of requests) {
       expect(request.normalizedText).not.toBe('')
       expect(request.style).toBe('稳健')

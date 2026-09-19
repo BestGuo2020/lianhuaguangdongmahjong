@@ -30,6 +30,11 @@ export const ANIME_VOICE_KEYS = [
   'hu',
   'zimo',
   'qiangganghu',
+  // 血流高频动作的第二变体（2026-09-19）：一局要胡十几次，单条会让同一句被反复念；
+  // 血流赢家瞬间按座位在两个变体间轮换（`animeWinActionVoiceKey`）。
+  'hu-2',
+  'zimo-2',
+  'qiangganghu-2',
   'win-self-draw',
   'win-discard',
   'win-robbed-kong',
@@ -46,6 +51,9 @@ export const ANIME_ACTION_VOICE_KEYS = [
   'hu',
   'zimo',
   'qiangganghu',
+  'hu-2',
+  'zimo-2',
+  'qiangganghu-2',
 ] as const satisfies readonly AnimeVoiceKey[]
 
 export const ANIME_RESULT_VOICE_KEYS = [
@@ -139,16 +147,19 @@ const profile = (
   ttsStyle: '稳健',
 })
 
-/** 角色、替代音色与 11 条固定文案的唯一前端合同。 */
+/** 角色、替代音色与 14 条固定文案的唯一前端合同。 */
 export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
   profile('claude', '克劳德书姬', ['claude', 'anthropic'], 'claude', 'default', {
     chi: '这一页，我吃。',
     peng: '线索碰上了。',
     gang: '这杠记下了。',
-    hu: '结论是，胡了。',
+    hu: '这一章，胡了。',
     zimo: '答案自己来了。',
-    qiangganghu: '这杠有解，胡。',
-    'win-self-draw': '自摸成章，故事圆满收束。',
+    qiangganghu: '这杠，我读到了。',
+    'hu-2': '这一段，我收尾。',
+    'zimo-2': '这一页，到我了。',
+    'qiangganghu-2': '你开杠，我读牌。',
+    'win-self-draw': '自摸收尾，这一章圆满了。',
     'win-discard': '借你一牌，写下本局结尾。',
     'win-robbed-kong': '识破杠意，这一章由我收尾。',
     loss: '这页失手，翻篇再读。',
@@ -161,6 +172,9 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '胡啦！',
     zimo: '自摸啦！',
     qiangganghu: '这杠我抢啦！',
+    'hu-2': '胡到嘴里啦！',
+    'zimo-2': '又摸到一条！',
+    'qiangganghu-2': '这杠归我啦！',
     'win-self-draw': '自摸到手，大肥鱼也会翻身！',
     'win-discard': '接得漂亮，这一局我赢啦！',
     'win-robbed-kong': '杠上开花？这张我先胡啦！',
@@ -174,6 +188,9 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '胡啦胡啦！',
     zimo: '自摸到啦！',
     qiangganghu: '抢杠成功！',
+    'hu-2': '胡啦，超开心！',
+    'zimo-2': '自己摸到啦！',
+    'qiangganghu-2': '诶，抢到了！',
     'win-self-draw': '自摸成功，今天手气真甜！',
     'win-discard': '谢谢这张牌，我就胡啦！',
     'win-robbed-kong': '嘿嘿，这个杠我抢到啦！',
@@ -184,9 +201,12 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     chi: '双星来吃！',
     peng: '双星相碰！',
     gang: '星轨开杠！',
-    hu: '星光成胡！',
+    hu: '两星合胡！',
     zimo: '双星自摸！',
     qiangganghu: '星隙抢杠胡！',
+    'hu-2': '星轨对上了！',
+    'zimo-2': '星光归我。',
+    'qiangganghu-2': '星隙里截胡！',
     'win-self-draw': '双星汇聚，自摸落定。',
     'win-discard': '借你一张，让星局完整。',
     'win-robbed-kong': '看见杠隙，双星先胡一步。',
@@ -194,26 +214,32 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     draw: '星河未决，下一局再会。',
   }),
   profile('glm', '智谱狐姬', ['glm', 'zhipu', 'bigmodel'], 'glm', 'default', {
-    chi: '算清了，吃。',
-    peng: '碰，验证通过。',
-    gang: '杠，推演完成。',
-    hu: '胡，结论成立。',
-    zimo: '自摸，命中最优。',
-    qiangganghu: '抢杠，判断成立。',
-    'win-self-draw': '推演命中，自摸是最优解。',
-    'win-discard': '收到关键牌，本局计算完成。',
-    'win-robbed-kong': '杠中有隙，抢胡判断成立。',
-    loss: '本轮误差已记录，下局修正。',
-    draw: '样本不足，下一局继续推演。',
+    chi: '算到了，我吃。',
+    peng: '碰，正好凑齐。',
+    gang: '这一杠，算到了。',
+    hu: '胡了，正如我算。',
+    zimo: '自摸，全在算中。',
+    qiangganghu: '抢杠，早算到了。',
+    'hu-2': '这一步，算准了。',
+    'zimo-2': '自己摸的，更准。',
+    'qiangganghu-2': '杠一响，我出手。',
+    'win-self-draw': '推演命中，自摸到手。',
+    'win-discard': '关键牌到了，这一局归我。',
+    'win-robbed-kong': '杠中有隙，我先胡一步。',
+    loss: '这局算漏了，下局补上。',
+    draw: '这局没算完，下一局继续。',
   }),
   profile('gpt', 'GPT龙姬', ['gpt', 'openai'], 'gpt', 'relay_gpt', {
     chi: '这张，我吃。',
     peng: '好牌，碰了。',
     gang: '机会正好，杠。',
-    hu: '胡了，完成。',
+    hu: '胡了，稳稳的。',
     zimo: '自摸，漂亮。',
     qiangganghu: '抢杠胡，拿下。',
-    'win-self-draw': '自摸完成，这轮发挥不错。',
+    'hu-2': '这一手，成了。',
+    'zimo-2': '手到牌来，不错。',
+    'qiangganghu-2': '杠口我收了。',
+    'win-self-draw': '自摸到手，这轮稳了。',
     'win-discard': '感谢关键牌，胜局已经锁定。',
     'win-robbed-kong': '抓住杠口，这局由我拿下。',
     loss: '这次判断失误，下局调整。',
@@ -226,6 +252,9 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '胡了，惊喜吧！',
     zimo: '自摸，气不气？',
     qiangganghu: '敢杠？我抢胡！',
+    'hu-2': '胡了，没想到吧？',
+    'zimo-2': '手气在我这边。',
+    'qiangganghu-2': '这杠，我截啦！',
     'win-self-draw': '自摸登场，今天我就是运气。',
     'win-discard': '送牌这么客气，那我收下啦！',
     'win-robbed-kong': '当面开杠？当然要抢胡啦！',
@@ -236,10 +265,13 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     chi: '月光引牌，吃。',
     peng: '碰，月色正好。',
     gang: '月下开杠。',
-    hu: '月光照胡。',
-    zimo: '月来，自摸。',
-    qiangganghu: '月影抢杠胡。',
-    'win-self-draw': '月光送来好牌，自摸成局。',
+    hu: '月光落到手边。',
+    zimo: '月来了，自摸。',
+    qiangganghu: '月影一闪，抢。',
+    'hu-2': '这一张，月光送。',
+    'zimo-2': '月下悄悄自摸。',
+    'qiangganghu-2': '趁月色抢了。',
+    'win-self-draw': '月光送来好牌，自摸到手。',
     'win-discard': '借你一张牌，今晚月色正好。',
     'win-robbed-kong': '杠影一闪，正好让我抢胡。',
     loss: '今夜月色稍淡，下局再来。',
@@ -252,6 +284,9 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '胡了，收工！',
     zimo: '自摸，一条过！',
     qiangganghu: '抢杠胡，卡！',
+    'hu-2': '这条，我留下！',
+    'zimo-2': '自摸，正好一条。',
+    'qiangganghu-2': '这杠，我抢镜。',
     'win-self-draw': '一条自摸，这局完美收工。',
     'win-discard': '接住这张，胜利镜头拍好了。',
     'win-robbed-kong': '抢杠成功，这段就是高光。',
@@ -265,8 +300,11 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '风定，胡了。',
     zimo: '好风自摸。',
     qiangganghu: '风口抢杠胡。',
+    'hu-2': '借风胡一张。',
+    'zimo-2': '风送来的，收。',
+    'qiangganghu-2': '乘风截这一杠。',
     'win-self-draw': '顺风自摸，胜局自然抵达。',
-    'win-discard': '借一阵东风，这张正好成胡。',
+    'win-discard': '借一阵东风，这张正好。',
     'win-robbed-kong': '杠风露隙，我便顺势抢胡。',
     loss: '风向有变，下一局再追。',
     draw: '风停牌尽，来局再起。',
@@ -275,12 +313,15 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     chi: '灵感来了，吃。',
     peng: '碰出灵感！',
     gang: '灵感开杠。',
-    hu: '一曲成胡。',
+    hu: '这一曲，胡了。',
     zimo: '自摸如歌。',
-    qiangganghu: '抢杠成章。',
+    qiangganghu: '杠声起，我接上。',
+    'hu-2': '灵感到了，胡。',
+    'zimo-2': '这一摸，合拍。',
+    'qiangganghu-2': '抢一个高音。',
     'win-self-draw': '灵感自来，这一局写成了。',
     'win-discard': '借你一音，正好谱成胜曲。',
-    'win-robbed-kong': '杠声未落，我已抢胡成章。',
+    'win-robbed-kong': '杠声未落，这一节归我。',
     loss: '这一曲有遗憾，下局再写。',
     draw: '余音未定，下一局续篇。',
   }),
@@ -291,6 +332,9 @@ export const ANIME_CHARACTERS: readonly AnimeCharacterProfile[] = [
     hu: '胡了，请承让。',
     zimo: '自摸，刚刚好。',
     qiangganghu: '抢杠胡，失礼了。',
+    'hu-2': '这一张，我收下。',
+    'zimo-2': '自摸，恰好如意。',
+    'qiangganghu-2': '失礼，我先胡。',
     'win-self-draw': '自摸如期而至，承让了。',
     'win-discard': '一张定局，多谢你的好牌。',
     'win-robbed-kong': '此杠有隙，我便收下胜局。',
@@ -348,4 +392,23 @@ export function resolveAnimeCharacterForProvider(provider: unknown): AnimeCharac
 
 export function animeVoiceLine(character: unknown, voiceKey: AnimeVoiceKey): string {
   return resolveAnimeCharacter(character).lines[voiceKey]
+}
+
+export type AnimeActionVoiceKey = typeof ANIME_ACTION_VOICE_KEYS[number]
+
+/** 有第二变体的高频动作键（血流一局要胡十几次，单条会让同一句被反复念）。 */
+const ANIME_WIN_ACTION_VARIANTS: Partial<Record<AnimeActionVoiceKey, readonly AnimeActionVoiceKey[]>> = {
+  hu: ['hu', 'hu-2'],
+  zimo: ['zimo', 'zimo-2'],
+  qiangganghu: ['qiangganghu', 'qiangganghu-2'],
+}
+
+/**
+ * 血流赢家瞬间的动作键：`hu` / `zimo` / `qiangganghu` 按 `rotation` 在两个变体间轮换，
+ * 其余键原样返回（吃碰杠与经典玩法一局只出现一次，不需要变体）。
+ */
+export function animeWinActionVoiceKey(key: AnimeActionVoiceKey, rotation: number): AnimeActionVoiceKey {
+  const variants = ANIME_WIN_ACTION_VARIANTS[key]
+  if (!variants) return key
+  return variants[Math.abs(Math.trunc(rotation)) % variants.length]
 }

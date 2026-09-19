@@ -10,7 +10,14 @@ import {
 
 /** 请求结构变化时递增；用于识别调用方理解的合同版本。 */
 export const ANIME_FIXED_TTS_SCHEMA_VERSION = 1 as const
-/** 文案、音色或 cache identity 规则变化时递增，主动失效旧缓存。 */
+/**
+ * 文案、音色或 cache identity 规则变化时递增，主动失效旧缓存。
+ *
+ * ⚠️ 改这个数字前先看后端：`backend/app/api/local_tts.py` 的 cacheIdentity 校验器会解析这条
+ * 12 段身份。它早先硬编码要求 schema/cache 版本都等于 1（2026-09-19 已放宽为正整数形状校验，
+ * 但**线上后端必须先部署**），否则新版前端的所有固定台词合成会被 422 拒掉。
+ * 纯文案改动不需要动它：`normalizedText` 本身就在身份里（第 7 段），改文案会自动产生新身份。
+ */
 export const ANIME_FIXED_TTS_CACHE_VERSION = 1 as const
 
 export type AnimeFixedTtsKind = 'action' | 'result'

@@ -38,6 +38,7 @@ import { playLlmAudioGroup } from '../../../core/presentation/llmAudioBus'
 import { canPlayLocalLlmAudio } from '../../../core/presentation/llmAudioBus'
 import { createAnimeFixedTtsRequest } from '../../../llm/animeFixedTts'
 import { animeVoiceKeyForTableAction } from '../../../llm/animeFixedTtsExecutor'
+import { animeWinActionVoiceKey, type AnimeActionVoiceKey } from '../../../llm/animeCharacters'
 import { bloodFlowWinMomentIsBig, bloodFlowWinMomentLine } from '../../../llm/bloodFlowWinLines'
 import { actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloodFlowSpeech'
 import { shouldSuppressLegacyAnimeSpeech } from '../../../core/presentation/animeAudioPolicy'
@@ -237,6 +238,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const fixedVoiceEvents = new Set<number>()
   /** 每个座位跨局递增的胡牌台词序号：同组台词相邻两次不重复（不随每局 clear 归零）。 */
   const winLineSequences = new Map<number, number>()
+  /** llmAnime 赢家动作台词的变体序号：同座位相邻两次胡牌换一个变体（`hu` / `hu-2` 等）。 */
+  const animeWinVoiceSequences = new Map<number, number>()
   /**
    * 胡牌瞬间的赢家台词气泡（2026-09-19 用户反馈「只有胡、自摸」）：此前赢家台词只有声音，
    * 牌桌上什么都看不到。此处与吃碰杠共用同一气泡通道，局末恰好同拍时不补气泡
@@ -290,8 +293,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (theme === 'llmAnime') {
       for (const record of batch.winners) {
         const characterId = state.players[toLocal(record.winner)]?.characterId
+        // 同座位相邻两次胡牌换一个动作变体（一局要胡十几次，单条会被反复念）。
+        const rotation = animeWinVoiceSequences.get(record.winner) ?? 0
+        animeWinVoiceSequences.set(record.winner, rotation + 1)
         tasks.push(characterId ? (async () => {
-          const request = createAnimeFixedTtsRequest(characterId, animeVoiceKeyForTableAction(winType(record.score.source)))
+          const request = createAnimeFixedTtsRequest(characterId, animeWinActionVoiceKey(
+            animeVoiceKeyForTableAction(winType(record.score.source)) as AnimeActionVoiceKey, rotation))
           showWinSpeechBubble(record.winner, request.normalizedText, epoch)
           const url = await getLocalTtsClient().resolveAudioUrl(request.normalizedText, request.voiceKey, request.style, request.cacheIdentity)
           if (url) await playLlmAudioGroup([{ url, seat: record.winner }])
@@ -598,6 +605,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     decisions.resetReasoning()
     opening.cancel()
     winLineSequences.clear()
+    animeWinVoiceSequences.clear()
     // The shared cleanup removes players, unmounting the old HUD/3D table.
     // The next lobby start must mount a fresh table and receive its ready event.
     matchLifecycle.returnToLobby()

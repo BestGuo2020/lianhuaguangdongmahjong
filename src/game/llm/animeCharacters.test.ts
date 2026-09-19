@@ -10,6 +10,7 @@ import {
   ANIME_VOICE_KEYS,
   DEFAULT_ANIME_CHARACTER_ID,
   animeVoiceLine,
+  animeWinActionVoiceKey,
   isCharacterId,
   resolveAnimeCharacter,
   resolveAnimeCharacterForProvider,
@@ -43,9 +44,9 @@ describe('llmAnime character contract', () => {
     expect(new Set(ANIME_CHARACTER_IDS).size).toBe(12)
   })
 
-  it('每个角色完整定义 11 个固定文案，动作和结果均满足长度合同', () => {
-    expect(ANIME_VOICE_KEYS).toHaveLength(11)
-    expect(ANIME_ACTION_VOICE_KEYS).toHaveLength(6)
+  it('每个角色完整定义 14 个固定文案，动作和结果均满足长度合同', () => {
+    expect(ANIME_VOICE_KEYS).toHaveLength(14)
+    expect(ANIME_ACTION_VOICE_KEYS).toHaveLength(9)
     expect(ANIME_RESULT_VOICE_KEYS).toHaveLength(5)
 
     for (const character of ANIME_CHARACTERS) {
@@ -64,7 +65,42 @@ describe('llmAnime character contract', () => {
     expect(ANIME_CHARACTERS.reduce(
       (total, character) => total + Object.keys(character.lines).length,
       0,
-    )).toBe(132)
+    )).toBe(168)
+  })
+
+  it('固定文案不写报告腔与「某某成某」（用户 2026-09-19 评审）', () => {
+    // 报告/汇报腔：任务完成、判断成立、样本、误差、记录这类"交代工作"的词。
+    // `推演`（智谱狐姬人设）与 `判断失误`（自然自责）不在红线内。
+    const reportStyle = /完成|成立|结论|验证|样本|误差|记录|最优|计算/
+    // 「某某成某」：成胡 / 成局 / 成杠 / 成章；口语的「成了」不算。
+    const becomesY = /成(?:胡|局|杠|章|牌|和)/
+    const offenders = ANIME_CHARACTERS.flatMap(character => (
+      ANIME_VOICE_KEYS
+        .filter(key => reportStyle.test(character.lines[key]) || becomesY.test(character.lines[key]))
+        .map(key => `${character.id}.${key}=${character.lines[key]}`)
+    ))
+    expect(offenders).toEqual([])
+    expect(reportStyle.test('这一手，成了。')).toBe(false)
+    expect(becomesY.test('这一手，成了。')).toBe(false)
+    expect(becomesY.test('这一局，自摸成局。')).toBe(true)
+  })
+
+  it('血流高频动作键按序号在两个变体间轮换，其余键不变', () => {
+    expect(animeWinActionVoiceKey('hu', 0)).toBe('hu')
+    expect(animeWinActionVoiceKey('hu', 1)).toBe('hu-2')
+    expect(animeWinActionVoiceKey('hu', 2)).toBe('hu')
+    expect(animeWinActionVoiceKey('zimo', 1)).toBe('zimo-2')
+    expect(animeWinActionVoiceKey('qiangganghu', 1)).toBe('qiangganghu-2')
+    // 吃碰杠与经典玩法一局只出现一次，不做变体。
+    for (const key of ['chi', 'peng', 'gang'] as const) {
+      expect(animeWinActionVoiceKey(key, 5)).toBe(key)
+    }
+    // 变体键本身也能取到文案（不会落到 undefined）。
+    for (const character of ANIME_CHARACTERS) {
+      for (const key of ['hu-2', 'zimo-2', 'qiangganghu-2'] as const) {
+        expect(character.lines[key].length, `${character.id}.${key}`).toBeGreaterThan(1)
+      }
+    }
   })
 
   it('只使用现有 TTS 白名单，并冻结无原生 voice 角色的替代音色', () => {
