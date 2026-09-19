@@ -107,7 +107,7 @@ chainFactor = min(1, chainHorizon / max(1, wallCount / 4))
 防守风险 = 仅补杠：抢杠风险（未见张 100% / 见 1 张 35% / ≥2 张 15% × robRisk=60 点）
 自手牌型损失 =
    ① 七对 / 豪华七对潜力损失 = (路线价值(杠前) − 路线价值(杠后)) × 底分
-      路线价值 = Σ 番值 × 接近度²（七对 4、豪华七对 12；接近度 = 对子数/7，
+      路线价值 = Σ 番值 × 接近度²（七对 4、豪华七对 6；接近度 = 对子数/7，
       豪华再加"已有刻子/四张或精牌可补成四张"的四张进度）；任何副露 → 路线价值 0
    ② 明杠破坏门清平胡 = 2 番 × 底分 × 门清平胡接近度 × concealedHandFallback(0.5)
       （门清平胡是**兜底本体**，只有别的番种都不成立时才兑现，因此折价；已有副露时为 0）
@@ -121,17 +121,17 @@ chainFactor = min(1, chainHorizon / max(1, wallCount / 4))
 - **只有杠候选受这条约束**：碰/吃的候选质量比较（`compareQuality`）不变；明杠窗口里"碰"本来就被 `dropDominatedPeng` 撤掉，所以不杠 = 过。
 - **自摸胡不再被杠候选顶掉**（kong-priority 臂的关键修复）：`applyActionPriority` 原来只要存在杠/碰/吃候选就撤掉"胡"候选。手上四张（豪华七对成立）时**必然**存在暗杠候选 → 胡候选被撤 → AI 打掉胡牌张。现在撤胡之前先算 `kongsOutweighWin`：最优杠候选的净值必须超过胡的即时收 + 连锁期望才会压胡，否则保留胡候选。
 - **门槛与口径**：杠收益按"即时杠分 + 一份倍率加成"计，不做胡牌概率折现；抢杠风险按公开张数分档（与旧 `shouldTakeAddedKong` 的档位一致）；门清平胡按兜底折价。四项常数都在 `BLOOD_FLOW_KONG_VALUE` 里，可单独调。
-- **后端镜像（WS 联机的机器人走这份）**：`backend/app/core/blood_flow/kong_value.py`（同公式同常数）+ `config.py` 的 `KongValueConfig` + `lotus_ai.py` 的 `_accepts_kong` 钩子 + `blood_flow/ai.py` 注入 `kongEvaluator`；`backend/tests/test_blood_flow_kong_value.py` 里有一条**跨语言数值护栏**（收益 20/40/80/80、七对损失 42.4/160.0、门清 10.0/6.0、净值 −38.4/−96.0 与前端逐位一致）。注意后端**没有** kong-priority 开关，所以"撤胡候选"那条修复在后端不适用（那边本来就不会撤胡）。
-- **LLM 接线**：杠候选新增 `features.kongValue{gain,risk,selfLoss{total,sevenPairs,concealedHand,shanten},net,reasons}`（前后端同源，规则摘要逐字一致由 `backend/tests/test_blood_flow_llm.py::test_prompt_rules_mirror_frontend_literal` 守着），候选摘要渲染 `开杠价值：-38（收益20−风险0−自损58）｜开杠代价：拆掉七对/豪华七对路线（-42）…`；规则摘要补一句"net ≤ 0 表示这一杠会拆掉自己的七对/豪华七对、破坏门清平胡或让向听变差，默认建议不会是杠"。
+- **后端镜像（WS 联机的机器人走这份）**：`backend/app/core/blood_flow/kong_value.py`（同公式同常数）+ `config.py` 的 `KongValueConfig` + `lotus_ai.py` 的 `_accepts_kong` 钩子 + `blood_flow/ai.py` 注入 `kongEvaluator`；`backend/tests/test_blood_flow_kong_value.py` 与 `backend/tests/test_blood_flow_seven_pairs_model.py` 里有**跨语言数值护栏**，前端同一组数字在 `src/game/variants/lotus/bloodFlow/crossLanguageNumbers.test.ts`（**两侧数字必须同时更新**，2026-09-18 番值改动时只改了前端一侧，后端镜像静默失效 9 例）：收益 20/40/80/70、七对损失 31.43/100.0、门清听牌 5.0、净值 −24.43/−30.0（见下表）。注意后端**没有** kong-priority 开关，所以"撤胡候选"那条修复在后端不适用（那边本来就不会撤胡）。
+- **LLM 接线**：杠候选新增 `features.kongValue{gain,risk,selfLoss{total,sevenPairs,concealedHand,shanten},net,reasons}`（前后端同源，规则摘要逐字一致由 `backend/tests/test_blood_flow_llm.py::test_prompt_rules_mirror_frontend_literal` 守着），候选摘要渲染 `开杠价值：-24（收益20−风险0−自损44）｜开杠代价：拆掉七对/豪华七对路线（-31）、破坏门清（-3）、向听恶化 1 档（-10）`；规则摘要补一句"net ≤ 0 表示这一杠会拆掉自己的七对/豪华七对、破坏门清平胡或让向听变差，默认建议不会是杠"。
 
 #### 具体数字（`tmp/kong-value-examples.test.ts` 打印）
 
-数字随番表口径变化：**2026-09-15** 把「门清平胡 2 番」拆成门清(1 番)+平胡(1 番)后，「破坏门清」的自损项减半（10 → 5），下表是当前值。
+数字随番表口径变化：**2026-09-15** 把「门清平胡 2 番」拆成门清(1 番)+平胡(1 番)后「破坏门清」自损减半（10 → 5）、暗杠不再计这一项；**2026-09-18** 豪华七对 12 → 6 番后七对/豪华两项减半（42.4 → 31.43、160 → 100）。下表是当前值（与 `backend/tests/test_blood_flow_kong_value.py` 的同一组 fixtures 一致）。
 
 | 局面 | 收益 | 七对损失 | 门清损失 | 向听损失 | 净值 | 结论 |
 |---|---|---|---|---|---|---|
-| 明杠 m3：手上三张 + 四对两散 | 20 | 42.4 | 3.0 | 10.0 | **−35.45** | 不杠 |
-| 暗杠 m3：已经四张 + 五对（豪华七对成立） | 80 | 160.0 | 3.0 | 10.0 | **−93.0** | 不杠 |
+| 明杠 m3：手上三张 + 四对两散 | 20 | 31.43 | 3.0 | 10.0 | **−24.43** | 不杠 |
+| 暗杠 m3：已经四张 + 五对（豪华七对成立） | 80 | 100.0 | 0 | 10.0 | **−30.0** | 不杠 |
 | 明杠 m5：只有三对（七对已废） | 20 | 0 | 3.0 | 0 | +17.0 | 开杠 |
 | 明杠 m5：门清听牌 | 20 | 0 | 5.0 | 0 | +15.0 | 开杠 |
 | 明杠 m5：同一手但已有副露 | 20 | 0 | 0 | 0 | +20.0 | 开杠 |

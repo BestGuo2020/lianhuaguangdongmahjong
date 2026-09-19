@@ -1,4 +1,6 @@
-// 七对潜力模型 v2（2026-09-13，用户定案）：对齐引擎 isSevenPairs 的记账 + 新增豪华七对（12 番）方向。
+// 七对潜力模型 v2（2026-09-13，用户定案）：对齐引擎 isSevenPairs 的记账 + 新增豪华七对方向
+// （2026-09-18 起 6 番；此前 12 番）。跨语言数值护栏见 crossLanguageNumbers.test.ts
+// （与后端 backend/tests/test_blood_flow_seven_pairs_model.py 共用同一组数字）。
 //
 // 背景（引擎实测，见 tmp/luxury-seven-pairs-analysis.test.ts）：
 //   · 精牌能把刻子/对子补成四张 → 豪华七对根本不用等第四张（3 张实体 + 1 精即成立）；
@@ -67,7 +69,7 @@ describe('四张可达性（豪华七对的第二半）', () => {
   })
 })
 
-describe('豪华七对方向（12 番）与旧口径的对照', () => {
+describe('豪华七对方向（6 番）与旧口径的对照', () => {
   it("'off' 不含豪华方向，且七对进度与旧 sevenPairsPotential 逐位一致", () => {
     for (const hand of [TRIPLET_PLUS_FIVE_PAIRS, FIVE_PAIRS_THREE_JOKERS, SIX_PAIRS_ONE_SINGLE]) {
       const directions = patternPotentials(hand, [], JOKERS, 'off')
