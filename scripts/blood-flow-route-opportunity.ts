@@ -95,7 +95,8 @@ function metrics(engine: BloodFlowEngine): RoundMetrics {
  * After divergence the candidate runs at EVERY future decision, with scores carried across rounds.
  * No hidden state reaches either policy. No counterfactual wall sampling or per-window oracle.
  */
-export function pairedContest(seed: number, rounds = 4, optimized = true, candidate: Policy = opportunityPolicy, control: Policy = baseline) {
+export function pairedContest(seed: number, rounds = 4, optimized = true, candidate: Policy = opportunityPolicy, control: Policy = baseline,
+  canDiffer?: (view: BloodFlowSeatView) => boolean) {
   const initial = vector(() => BLOOD_FLOW_CONFIG.initialScore)
   let scores = initial
   const forks = new Map<Seat, Fork>(), baselineMetrics: RoundMetrics[] = []
@@ -114,7 +115,8 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
       if (optimized && !forks.has(seat)) {
         const gate = opportunityGate(view)
         // Fast path is safe for this registered policy, or the exact baseline A/A policy.
-        const chosen = candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action : original) : candidate(view)
+        const chosen = canDiffer && !canDiffer(view) ? original
+          : candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action : original) : candidate(view)
         if (!chosen) throw new Error('Candidate has no action')
         const event: GateEvent = { ...(gate ?? { route: 'other-policy', wallCount: view.wallCount, wallFloor: 0, deficit: 0, heldJokers: 0 }),
           round, windowId: view.window!.id, original, chosen, changed: !sameAction(original, chosen) }
@@ -161,7 +163,8 @@ export function pairedContest(seed: number, rounds = 4, optimized = true, candid
           let chosen = original
           if (seat === focal) {
             const gate = opportunityGate(view)
-            chosen = candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action! : original) : candidate(view)!
+            chosen = canDiffer && !canDiffer(view) ? original
+              : candidate === opportunityPolicy && control === baseline ? (gate ? opportunityDecision(view, original).action! : original) : candidate(view)!
             if (!chosen) throw new Error('No candidate action')
             if (!sameAction(original, chosen)) {
               diverged = true

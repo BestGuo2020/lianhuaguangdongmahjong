@@ -229,6 +229,8 @@ export interface BloodFlowAiConfig {
   readonly routeOpportunityGuard?: boolean
   /** 吃／碰候选的番型估值纳入新副露；缺省 false 保留旧评估配置。 */
   readonly claimMeldProjection?: boolean
+  /** 吃碰由未听变听时，仍需综合分优于过；缺省 false 保持旧评估配置。 */
+  readonly claimReadyNetGuard?: boolean
   /** LLM 候选注入同源 EV 特征并以其为默认推荐（模型可覆盖、要理由）；关闭则回退旧提示词。 */
   readonly llmEvFeatures: boolean
   /** 开杠价值（第 3 步）：杠候选按 收益 − 防守风险 − 自手牌型损失 计分。 */
@@ -284,6 +286,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   // 已通过四座轮换东风场验证；构建时设 VITE_BLOOD_FLOW_ROUTE_OPPORTUNITY=off 回退。
   routeOpportunityGuard: (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_ROUTE_OPPORTUNITY !== 'off',
   claimMeldProjection: (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_CLAIM_MELD_PROJECTION !== 'off',
+  // 128 种子四座轮换验证通过；独立回退不关闭其他已接入的修复。
+  claimReadyNetGuard: (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_CLAIM_READY_NET_GUARD !== 'off',
   llmEvFeatures: true,
   kongValue: BLOOD_FLOW_KONG_VALUE,
   /** 七对潜力模型：默认开启（对齐引擎记账 + 豪华七对方向）；改成 'off' 一键回退旧口径做 A/B。 */
@@ -302,6 +306,7 @@ export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
   // 本轮只验证普通 AI；LLM 候选层仍使用原有路线政策。
   routeOpportunityGuard: false,
   claimMeldProjection: false,
+  claimReadyNetGuard: false,
   bigHandRoute: Object.freeze({ ...BLOOD_FLOW_BIG_HAND_ROUTE_WIDE, mode: 'llm' as const }),
 })
 
