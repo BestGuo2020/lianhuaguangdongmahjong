@@ -60,7 +60,7 @@ export interface BloodFlowGameOptions {
   animeFixedTts?: AnimeFixedTtsExecutor
   humanPlayerSeed?: PlayerSeed
   aiPlayerSeeds?: PlayerSeed[]
-  /** 本家胡牌锁手后，回合窗口开放超过该毫秒数自动打掉摸上来的那张（摸打；默认 800ms；<=0 关闭）。 */
+  /** 胡后无杠可选时的自动胡/摸打/过延迟（默认 800ms；<=0 关闭）；有杠则等完整决策窗口。 */
   lockedAutoPlayMs?: number
   /** Explicit test option: authority still uses the actual worker and rules engine. */
   autoplay?: boolean
@@ -201,6 +201,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const observe = options.lockedAutoPlayMs ?? 800
     const opensIn = window.opensAt - Date.now()
     return options.externalAuthority ? Math.max(0, opensIn) + observe : Math.max(0, opensIn + observe)
+  }
+  function hasKongChoice(actions: readonly { kind: string }[]) {
+    return actions.some(a => a.kind === 'gang' || a.kind === 'concealed-kong'
+      || a.kind === 'added-kong' || a.kind === 'wind-kong')
   }
   function clear() {
     // 重开一局/离开牌桌都要回到默认 BGM，避免「多胡」曲目残留到下一局或大厅。
@@ -389,16 +393,17 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     } : null
     // 血流不设服务端公告（单机与联机一致；抢杠胡红字公告是经典玩法专属，2026-09-09 用户确认移除）。
     // 本地开局公告（翻精/开牌）由 transient.announce 自己的 1.5s 定时清除。
-    // 锁手自动摸打：本家胡牌锁手后全自动——只处理自己摸的牌（自摸可再胡 / 摸切），
-    // 别人打出的牌不再进入响应窗口，因此这里不会有弃牌响应分支；窗口约 lockedAutoPlayMs 毫秒后执行。
+    // 胡后有杠可选时留给玩家完整决策时间，包括同时可胡的窗口。
+    // 无杠时才快速自动胡 / 摸切 / 过；到期兜底仍由权威引擎处理。
     if (w && next.public.status === 'playing' && next.public.seats[next.seat].locked && !options.autoplay
+      && !hasKongChoice(moves)
       && (options.lockedAutoPlayMs ?? 800) > 0 && w.id !== lockedAutoWindow) {
       lockedAutoWindow = w.id
       later(() => {
         if (lockedAutoWindow !== w.id) return
         const cur = view.value
         if (!cur || cur.window?.id !== w.id || cur.public.status !== 'playing') return
-        if (!cur.public.seats[cur.seat].locked) return
+        if (!cur.public.seats[cur.seat].locked || hasKongChoice(cur.ownActions)) return
         if (cur.ownActions.some(a => a.kind === 'win')) send({ kind: 'win' })
         else if (w.kind === 'turn') {
           const drawn = cur.players[cur.seat].drawnTileIndex
