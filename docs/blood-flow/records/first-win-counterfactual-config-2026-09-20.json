@@ -1,0 +1,359 @@
+{
+  "schema": 1,
+  "tag": "discovery",
+  "seedFrom": 960001,
+  "rounds": 12,
+  "samples": 4,
+  "startedAt": "2026-09-19T16:17:45.284Z",
+  "commit": "c364c547ff0482bfa62599e4fc574e242a5203cf",
+  "sourceFingerprint": "0389b616fdc1a986f3b4f5cad67767644185d28af6dd2a2f1e35d1415c64491e",
+  "configHash": "db725b1b6e793666d423f0d50aaa40f45826ce6856b45f90a10ea881acf3a737",
+  "ruleConfig": {
+    "id": "lotus-blood-flow",
+    "version": "lotus-blood-flow-v1",
+    "label": "莲花麻将·血流",
+    "basePoints": 10,
+    "initialScore": 2000,
+    "maxMultiplierPerPayer": 128,
+    "hardWinMultiplier": 2,
+    "patterns": {
+      "big-four-winds": {
+        "id": "big-four-winds",
+        "label": "大四喜",
+        "weight": 32,
+        "excludes": [
+          "all-triplets",
+          "little-four-winds"
+        ]
+      },
+      "four-kongs": {
+        "id": "four-kongs",
+        "label": "四杠",
+        "weight": 32,
+        "excludes": [
+          "three-kongs"
+        ]
+      },
+      "nine-gates": {
+        "id": "nine-gates",
+        "label": "九莲宝灯",
+        "weight": 32,
+        "excludes": [
+          "pure-suit"
+        ]
+      },
+      "big-three-dragons": {
+        "id": "big-three-dragons",
+        "label": "大三元",
+        "weight": 24,
+        "excludes": [
+          "little-three-dragons"
+        ]
+      },
+      "all-honors": {
+        "id": "all-honors",
+        "label": "字一色",
+        "weight": 24,
+        "excludes": [
+          "mixed-terminals",
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "pure-terminals": {
+        "id": "pure-terminals",
+        "label": "清幺九",
+        "weight": 24,
+        "excludes": [
+          "mixed-terminals",
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "all-green": {
+        "id": "all-green",
+        "label": "绿一色",
+        "weight": 24,
+        "excludes": []
+      },
+      "little-three-dragons": {
+        "id": "little-three-dragons",
+        "label": "小三元",
+        "weight": 16,
+        "excludes": []
+      },
+      "little-four-winds": {
+        "id": "little-four-winds",
+        "label": "小四喜",
+        "weight": 16,
+        "excludes": []
+      },
+      "four-concealed-triplets": {
+        "id": "four-concealed-triplets",
+        "label": "四暗刻",
+        "weight": 16,
+        "excludes": [
+          "three-concealed-triplets",
+          "all-triplets"
+        ]
+      },
+      "thirteenOrphans": {
+        "id": "thirteenOrphans",
+        "label": "十三幺",
+        "weight": 32,
+        "excludes": [
+          "all-with-terminals",
+          "mixed-terminals",
+          "sevenPairs",
+          "all-triplets"
+        ]
+      },
+      "one-suit-four-joints": {
+        "id": "one-suit-four-joints",
+        "label": "一色四节高",
+        "weight": 16,
+        "excludes": [
+          "one-suit-three-joints",
+          "all-triplets"
+        ]
+      },
+      "mixed-terminals": {
+        "id": "mixed-terminals",
+        "label": "混幺九",
+        "weight": 12,
+        "excludes": [
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "three-kongs": {
+        "id": "three-kongs",
+        "label": "三杠",
+        "weight": 12,
+        "excludes": []
+      },
+      "luxury-seven-pairs": {
+        "id": "luxury-seven-pairs",
+        "label": "豪华七对",
+        "weight": 6,
+        "excludes": [
+          "sevenPairs",
+          "all-triplets",
+          "three-concealed-triplets",
+          "four-concealed-triplets",
+          "one-suit-three-joints",
+          "one-suit-four-joints"
+        ]
+      },
+      "pure-suit": {
+        "id": "pure-suit",
+        "label": "清一色",
+        "weight": 8,
+        "excludes": [
+          "mixed-suit"
+        ]
+      },
+      "one-suit-three-joints": {
+        "id": "one-suit-three-joints",
+        "label": "一色三节高",
+        "weight": 8,
+        "excludes": []
+      },
+      "one-suit-four-steps": {
+        "id": "one-suit-four-steps",
+        "label": "一色四步高",
+        "weight": 8,
+        "excludes": [
+          "one-suit-three-steps"
+        ]
+      },
+      "three-concealed-triplets": {
+        "id": "three-concealed-triplets",
+        "label": "三暗刻",
+        "weight": 6,
+        "excludes": []
+      },
+      "qiXing": {
+        "id": "qiXing",
+        "label": "七星十三烂",
+        "weight": 6,
+        "excludes": [
+          "shiSanLan"
+        ]
+      },
+      "pure-straight": {
+        "id": "pure-straight",
+        "label": "清龙",
+        "weight": 6,
+        "excludes": []
+      },
+      "mixed-suit": {
+        "id": "mixed-suit",
+        "label": "混一色",
+        "weight": 4,
+        "excludes": []
+      },
+      "all-triplets": {
+        "id": "all-triplets",
+        "label": "碰碰胡",
+        "weight": 4,
+        "excludes": []
+      },
+      "sevenPairs": {
+        "id": "sevenPairs",
+        "label": "七对",
+        "weight": 4,
+        "excludes": [
+          "all-triplets",
+          "three-concealed-triplets",
+          "four-concealed-triplets",
+          "one-suit-three-joints",
+          "one-suit-four-joints"
+        ]
+      },
+      "one-suit-three-steps": {
+        "id": "one-suit-three-steps",
+        "label": "一色三步高",
+        "weight": 4,
+        "excludes": []
+      },
+      "all-with-terminals": {
+        "id": "all-with-terminals",
+        "label": "全带幺",
+        "weight": 4,
+        "excludes": []
+      },
+      "shiSanLan": {
+        "id": "shiSanLan",
+        "label": "十三烂",
+        "weight": 2,
+        "excludes": []
+      },
+      "all-simples": {
+        "id": "all-simples",
+        "label": "断幺九",
+        "weight": 2,
+        "excludes": [
+          "all-with-terminals",
+          "mixed-terminals",
+          "pure-terminals",
+          "all-honors"
+        ]
+      },
+      "concealed-hand": {
+        "id": "concealed-hand",
+        "label": "门清",
+        "weight": 1,
+        "excludes": []
+      },
+      "pinghu": {
+        "id": "pinghu",
+        "label": "平胡",
+        "weight": 1,
+        "excludes": []
+      },
+      "chicken": {
+        "id": "chicken",
+        "label": "鸡胡",
+        "weight": 0.5,
+        "excludes": []
+      }
+    },
+    "eventMultipliers": {
+      "discard": 1,
+      "self-draw": 2,
+      "robbed-kong": 2,
+      "kong-bloom": 4
+    },
+    "openingMinimumMultiplier": 8,
+    "kongPayments": {
+      "discard": 1,
+      "added": 1,
+      "concealed": 2,
+      "wind": 2
+    },
+    "kongBonus": {
+      "exposed": 1,
+      "concealed": 2,
+      "wind": 1
+    },
+    "rounds": {
+      "east": 4,
+      "hanchan": 8
+    },
+    "lockAfterFirstWin": true,
+    "multipleWinners": true,
+    "allowNegativeScores": true,
+    "alreadyWonPlayersPay": true,
+    "dealerMultiplier": 1,
+    "dealerRotation": "every-round",
+    "crossWindowPassRestriction": false,
+    "extraPayments": []
+  },
+  "aiConfig": {
+    "strategy": "ev",
+    "minimumFirstPayment": 0,
+    "selfDrawWeight": 6,
+    "firstWinFloorEarly": 40,
+    "firstWinFloorMid": 20,
+    "firstWinFloorLate": 10,
+    "lateGameWallCount": 15,
+    "earlyGameWallCount": 40,
+    "potentialFloor": 2,
+    "reformGainRatio": 1.2,
+    "chainHorizon": 8,
+    "safetyCostNone": 0.25,
+    "safetyCostOne": 0.1,
+    "safetyCostSafe": 0,
+    "opponentPatternRisk": "tier",
+    "riskFactorTier1": 4,
+    "riskFactorTier2": 16,
+    "riskFactorTier3": 32,
+    "riskOffSuitFactor": 0.5,
+    "defense": {
+      "foldThreatTier": 3,
+      "ceilingProgress": 0.35,
+      "ceilingWeightFloor": 4,
+      "mode": "hard",
+      "foldDiscardTolerance": 0
+    },
+    "bigHandRoute": {
+      "mode": "bot",
+      "enabled": [
+        "thirteenOrphans",
+        "nineGates",
+        "pureSuit",
+        "mixedSuit",
+        "allTriplets"
+      ],
+      "minOrphanKinds": 12,
+      "minSuitRanks": 9,
+      "minSuitTiles": 12,
+      "pureSuitMinTiles": 10,
+      "pureSuitMaxForeign": 2,
+      "mixedSuitMinTiles": 10,
+      "mixedSuitMaxForeign": 1,
+      "allTripletsMinUnits": 4,
+      "declineWinRatio": 2,
+      "minWallForCommit": 20,
+      "minDeficitForCommit": 300,
+      "minWallForCommitWithJokers": 15,
+      "jokerReliefCount": 2
+    },
+    "llmEvFeatures": true,
+    "kongValue": {
+      "mode": "ev",
+      "bonusWeight": 1,
+      "robRisk": 60,
+      "shantenStepLoss": 10,
+      "concealedHandFallback": 0.5
+    },
+    "sevenPairsModel": "ev"
+  },
+  "actionPriority": "kong-priority",
+  "apiRequests": 0,
+  "sampling": "First unlocked self-draw win window per seat per baseline round; all four seats; dealer rotates by seed offset.",
+  "uncertainty": "Conditional on actual concealed opponent hands AND remaining tile inventory. Only wall order is permuted; not a public-information posterior.",
+  "policies": "One forced action, then unchanged local EV for all seats until settlement. Candidate roles are preselected using only seat view.",
+  "interval": "Seed-cluster bootstrap over mean paired permutation deltas; original wall excluded from inference. Exploratory, not multiplicity-adjusted."
+}
