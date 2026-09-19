@@ -1,0 +1,171 @@
+[
+  {
+    "key": "1100001-peng",
+    "decision": {
+      "kind": "peng",
+      "discardIndex": 6
+    },
+    "calls": [
+      {
+        "handLength": 13,
+        "meldCount": 0,
+        "effectiveTiles": 13,
+        "originalValue": 1031.694239826108,
+        "withNewMeldValue": 1031.694239826108
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1072.0926303854876,
+        "withNewMeldValue": 914.4926303854877
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1040.8926303854876,
+        "withNewMeldValue": 914.4926303854877
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 978.8055555555557,
+        "withNewMeldValue": 866.8055555555555
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 978.8055555555557,
+        "withNewMeldValue": 866.8055555555555
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1068.6204081632652,
+        "withNewMeldValue": 911.0204081632653
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1006.6722222222222,
+        "withNewMeldValue": 863.4722222222223
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1006.6722222222222,
+        "withNewMeldValue": 863.4722222222223
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 1037.4204081632654,
+        "withNewMeldValue": 911.0204081632653
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 516.4444444444443,
+        "withNewMeldValue": 404.44444444444446
+      }
+    ],
+    "malformedProjectedCalls": 9,
+    "caveat": "Structural callback audit only; the alternative values do not prove that correcting meld projection improves full-game net."
+  },
+  {
+    "key": "1100008-peng",
+    "decision": {
+      "kind": "peng",
+      "discardIndex": 5
+    },
+    "calls": [
+      {
+        "handLength": 13,
+        "meldCount": 0,
+        "effectiveTiles": 13,
+        "originalValue": 435.7607105958754,
+        "withNewMeldValue": 435.7607105958754
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 394.84444444444443,
+        "withNewMeldValue": 300.0444444444445
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 394.84444444444443,
+        "withNewMeldValue": 300.0444444444445
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 394.84444444444443,
+        "withNewMeldValue": 300.0444444444445
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 394.84444444444443,
+        "withNewMeldValue": 300.0444444444445
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 385.6444444444444,
+        "withNewMeldValue": 314.44444444444446
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 385.6444444444444,
+        "withNewMeldValue": 314.44444444444446
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 412.0444444444444,
+        "withNewMeldValue": 314.44444444444446
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 196.31111111111113,
+        "withNewMeldValue": 131.11111111111111
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 196.31111111111113,
+        "withNewMeldValue": 131.11111111111111
+      },
+      {
+        "handLength": 10,
+        "meldCount": 0,
+        "effectiveTiles": 10,
+        "originalValue": 196.31111111111113,
+        "withNewMeldValue": 131.11111111111111
+      }
+    ],
+    "malformedProjectedCalls": 10,
+    "caveat": "Structural callback audit only; the alternative values do not prove that correcting meld projection improves full-game net."
+  }
+]

@@ -301,7 +301,7 @@ function narrowRoutesForBot(
   }
   const player = view.players[view.seat]
   const top = Math.max(...view.players.filter(other => other.seat !== view.seat).map(other => other.score))
-  return narrowActionsToRoute(player.hand, player.melds, view.jokers, actions, {
+  const plan = narrowActionsToRoute(player.hand, player.melds, view.jokers, actions, {
     config: config.bigHandRoute,
     basePoints: BLOOD_FLOW_CONFIG.basePoints,
     immediateWinPayment: view.ownScore?.paymentPerPayer ?? 0,
@@ -309,6 +309,17 @@ function narrowRoutesForBot(
     scoreDeficit: Math.max(0, top - player.score),
     claimedTile: view.window?.source.kind === 'discard' ? view.window.source.tile : undefined,
   })
+  // 只释放已验证的首胡自摸窗口；仍由下游 EV 选择胡/改张，不强制胡。
+  // 使用已算出的路线和合法候选，不能恢复被杠优先等其他政策撤掉的胡。
+  if (config.routeOpportunityGuard && plan.collapsed && !view.public.seats[view.seat].locked
+    && view.window?.kind === 'turn' && view.window.source.kind === 'draw'
+    && actions.some(action => action.kind === 'win') && !plan.actions.some(action => action.kind === 'win')) {
+    const heldJokers = player.hand.filter(tile => tile === 'white' || view.jokers.includes(tile)).length
+    const wallFloor = heldJokers >= config.bigHandRoute.jokerReliefCount
+      ? config.bigHandRoute.minWallForCommitWithJokers : config.bigHandRoute.minWallForCommit
+    if (view.wallCount < wallFloor) return { ...plan, actions, collapsed: false }
+  }
+  return plan
 }
 
 /**
