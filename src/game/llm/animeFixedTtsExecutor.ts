@@ -45,6 +45,10 @@ export const ANIME_ACTION_FALLBACK_AUDIO: Readonly<Record<AnimeActionVoiceKey, s
   hu: 'hu.mp3',
   zimo: 'zimo.mp3',
   qiangganghu: 'hu.mp3',
+  // 第二变体与主变体共用同一条本地回退音（合成失败时的兜底人声）。
+  'hu-2': 'hu.mp3',
+  'zimo-2': 'zimo.mp3',
+  'qiangganghu-2': 'hu.mp3',
 }
 
 export function animeVoiceKeyForTableAction(type: TableActionType): AnimeActionVoiceKey {
