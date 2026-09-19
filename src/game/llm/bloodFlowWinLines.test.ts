@@ -61,6 +61,29 @@ it('两条文风红线：不重复局末库用滥的收尾套语；话痨不刷�
   expect(Math.max(...counts)).toBeLessThanOrEqual(Math.floor(chatty.length / 3))
 })
 
+it('禁止「某某成某」结构：书面 / 战报腔不是牌桌上会说的话', () => {
+  // 2026-09-19 用户评审三：「等到了，正好成胡。」这种「X 成 Y」不像人说的。
+  // 放行口语化的「成了 / 做成了 / 成功」，只拦「成 + 胡/局/杠/章/牌/和」这种结果名词结构。
+  // 覆盖四个可自由改写的台词库（anime 角色固定文案是刻意双关的人设，且与后端同源，不在此列）。
+  const spokenLibraries: Record<string, readonly string[]> = {
+    血流即时库: GROUPS.flatMap(group => STYLES.flatMap(style => [...BLOOD_FLOW_MOMENT_LINES[group][style]])),
+    血流局末赢家: Object.values(BLOOD_FLOW_WIN_LINES).flatMap(styles => Object.values(styles).flat()),
+    血流局末输家: Object.values(BLOOD_FLOW_LOSS_LINES).flat(),
+    经典共享库: [...Object.values(LLM_WIN_LINES).flatMap(styles => Object.values(styles).flat()),
+      ...Object.values(LLM_LOSS_LINES).flat(), ...Object.values(LLM_DRAW_LINES).flat()],
+    通用动作库: Object.values(DECISION_SPEECH_LINES).flatMap(styles => Object.values(styles).flat()),
+  }
+  const X_BECOMES_Y = /成(?:胡|局|杠|章|牌|和)/
+  for (const [name, lines] of Object.entries(spokenLibraries)) {
+    expect(lines.filter(line => X_BECOMES_Y.test(line)), name).toEqual([])
+  }
+  // 反例自检：口语化的「成了」与成语不在这条红线里。
+  expect(X_BECOMES_Y.test('抢杠，成了。')).toBe(false)
+  expect(X_BECOMES_Y.test('这一手，做成了。')).toBe(false)
+  expect(X_BECOMES_Y.test('自摸，水到渠成。')).toBe(false)
+  expect(X_BECOMES_Y.test('等到了，正好成胡。')).toBe(true)
+})
+
 it('档位集合固定为「四胡法 + 连胡 + 大牌」：一炮多响不设专属台词', () => {
   // 2026-09-19 用户决定：多响批次里各赢家各说自己的胡法 / 连胡台词，不另设一炮多响语气。
   // 若有人重新加回 multi 档，这条断言会失败，强制重新决策。
