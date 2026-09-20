@@ -1,0 +1,288 @@
+{
+  "modelHash": "6ceb6d54932097bcfb47b01cc48e1d93105b43fd88ba76c498d01ed640afb86c",
+  "scope": "Additional fixed-baseline diagnostics of already-frozen predictions; no refitting or model selection.",
+  "immediateVsNewScalar": {
+    "maeGain": {
+      "sourceWindows": 25,
+      "mean": 4.538675028081436,
+      "ci95": [
+        2.154441534600668,
+        7.122403934719562
+      ]
+    },
+    "mseGain": {
+      "sourceWindows": 25,
+      "mean": 177.1004470343006,
+      "ci95": [
+        -38.47533015417502,
+        433.4147730552013
+      ]
+    }
+  },
+  "originalFull": {
+    "sourceWindows": 25,
+    "mean": -39,
+    "ci95": [
+      -190,
+      93
+    ]
+  },
+  "permutedFull": {
+    "sourceWindows": 25,
+    "mean": 41.075,
+    "ci95": [
+      -56.7,
+      177.225
+    ]
+  },
+  "originalTailReversals": [
+    {
+      "seed": 321251,
+      "horizon": 120,
+      "tail": -130,
+      "full": -10
+    }
+  ],
+  "heldoutTailWindows": 12,
+  "largestTailErrors": [
+    {
+      "seed": 321227,
+      "wall": 55,
+      "predicted": 3.828972149611981,
+      "actual": -356.25,
+      "original": -150
+    },
+    {
+      "seed": 321006,
+      "wall": 58,
+      "predicted": -8.956943275622296,
+      "actual": 206.25,
+      "original": 200
+    },
+    {
+      "seed": 321022,
+      "wall": 52,
+      "predicted": -29.512647928617884,
+      "actual": 116.25,
+      "original": 0
+    }
+  ],
+  "laterCoefficients": [
+    {
+      "feature": "riskProxy/100",
+      "standardizedWeight": -3.029465203158814
+    },
+    {
+      "feature": "lockedOpponents/3",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "publicCopies/4",
+      "standardizedWeight": -1.438839342158776
+    },
+    {
+      "feature": "ownCopies/4",
+      "standardizedWeight": -0.515931900218747
+    },
+    {
+      "feature": "sameSuitMeldTiles/12",
+      "standardizedWeight": -2.656521541649167
+    },
+    {
+      "feature": "maxPublicTier/3",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "wildcardFace",
+      "standardizedWeight": 0.9206714793989275
+    },
+    {
+      "feature": "honor",
+      "standardizedWeight": -0.3811171813330224
+    },
+    {
+      "feature": "terminal",
+      "standardizedWeight": -2.5655936591118684
+    },
+    {
+      "feature": "wall/84",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "grossH8/1000",
+      "standardizedWeight": 0.6993123373054606
+    },
+    {
+      "feature": "tailGross/1000",
+      "standardizedWeight": 0.521912589680745
+    },
+    {
+      "feature": "selfWaitMass",
+      "standardizedWeight": -0.515931900218747
+    },
+    {
+      "feature": "wildcardsAfter/4",
+      "standardizedWeight": -0.9206714793989274
+    }
+  ],
+  "tailCoefficients": [
+    {
+      "feature": "riskProxy/100",
+      "standardizedWeight": 26.40207014752425
+    },
+    {
+      "feature": "lockedOpponents/3",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "publicCopies/4",
+      "standardizedWeight": 0.13093221215404088
+    },
+    {
+      "feature": "ownCopies/4",
+      "standardizedWeight": 0.07460977917590937
+    },
+    {
+      "feature": "sameSuitMeldTiles/12",
+      "standardizedWeight": -1.6731258168648901
+    },
+    {
+      "feature": "maxPublicTier/3",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "wildcardFace",
+      "standardizedWeight": -0.2776333970570216
+    },
+    {
+      "feature": "honor",
+      "standardizedWeight": 0.8475936819026817
+    },
+    {
+      "feature": "terminal",
+      "standardizedWeight": 0.6644648566482265
+    },
+    {
+      "feature": "wall/84",
+      "standardizedWeight": 0
+    },
+    {
+      "feature": "grossH8/1000",
+      "standardizedWeight": -0.2830398838254177
+    },
+    {
+      "feature": "tailGross/1000",
+      "standardizedWeight": 0.5311471191140409
+    },
+    {
+      "feature": "selfWaitMass",
+      "standardizedWeight": 0.07460977917590936
+    },
+    {
+      "feature": "wildcardsAfter/4",
+      "standardizedWeight": 0.27763339705702156
+    }
+  ],
+  "shadowDiagnostics": [
+    {
+      "name": "frozenImmediate",
+      "changedWindows": 1,
+      "permutedGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 3.6,
+        "ci95": [
+          0,
+          10.8
+        ]
+      },
+      "originalGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 4,
+        "ci95": [
+          0,
+          12
+        ]
+      }
+    },
+    {
+      "name": "refitImmediate",
+      "changedWindows": 1,
+      "permutedGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 3.6,
+        "ci95": [
+          0,
+          10.8
+        ]
+      },
+      "originalGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 4,
+        "ci95": [
+          0,
+          12
+        ]
+      }
+    },
+    {
+      "name": "publicImmediate",
+      "changedWindows": 3,
+      "permutedGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 3.15,
+        "ci95": [
+          -2.35,
+          11.3
+        ]
+      },
+      "originalGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 14.4,
+        "ci95": [
+          0,
+          31.2
+        ]
+      }
+    },
+    {
+      "name": "publicH8",
+      "changedWindows": 4,
+      "permutedGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 13.15,
+        "ci95": [
+          -1.4,
+          34.6
+        ]
+      },
+      "originalGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 1.6,
+        "ci95": [
+          -30.4,
+          28.8
+        ]
+      }
+    },
+    {
+      "name": "allComponents",
+      "changedWindows": 7,
+      "permutedGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 16.1,
+        "ci95": [
+          -1.25,
+          39.4
+        ]
+      },
+      "originalGainVsAlwaysNew": {
+        "sourceWindows": 25,
+        "mean": 12.8,
+        "ci95": [
+          -44.4,
+          74
+        ]
+      }
+    }
+  ]
+}
