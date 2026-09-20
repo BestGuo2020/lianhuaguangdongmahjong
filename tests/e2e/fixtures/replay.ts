@@ -8,6 +8,9 @@ import { useBloodFlowGame } from '../../../src/game/variants/lotus/bloodFlow/use
 import { getRuleVariant, type RuleVariant } from '../../../src/game/core/rules/ruleVariants'
 import { createReplayStorage } from '../../../src/game/replay/storage'
 import { useReplayRecorder } from '../../../src/game/replay/useReplayRecorder'
+import { createAnalysisStorage } from '../../../src/game/replay/analysis/storage'
+import { createAnalysisSession } from '../../../src/game/replay/analysis/session'
+import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_AI } from '../../../src/game/variants/lotus/bloodFlow/config'
 import type { ReplayRecorderHooks } from '../../../src/game/replay/types'
 import type { TableThemeName } from '../../../src/theme/themeIdentity'
 
@@ -33,6 +36,8 @@ export interface ReplayFixtureMatch {
 export interface ReplayFixtureStatus {
   matches: ReplayFixtureMatch[]
   errors: string[]
+  /** AI 分析录制的收尾结果（启用时才会有实际 matchId）。 */
+  analysis?: { matchId: string; status: string; bytes: number; enabled: boolean }
 }
 
 const status: ReplayFixtureStatus = { matches: [], errors: [] }
@@ -117,14 +122,39 @@ async function record(rulesetId: RuleVariant, themeName: TableThemeName) {
     countdownEnabled: true,
     recorder: tracedHooks,
   }
+  // AI 分析记录（方案 §3、§7）：只对血流开一场，跑完后由 e2e 从分析库读回并解码校验。
+  // 会话给引擎的是稳定代理；未启用时（?analysis=0）为 null，整条路径零成本。
+  const analysis = createAnalysisSession({
+    enabled: new URLSearchParams(location.search).get('analysis') !== '0',
+    storage: createAnalysisStorage(),
+    onError: (detail) => status.errors.push(`分析记录：${detail}`),
+  })
+  if (analysis.enabled() && rulesetId === 'lotus-blood-flow') {
+    analysis.start({
+      rulesetId: 'lotus-blood-flow',
+      rules: BLOOD_FLOW_CONFIG,
+      rulesVersion: BLOOD_FLOW_CONFIG.version,
+      aiConfig: { local: BLOOD_FLOW_AI },
+      aiStrategy: 'source-v2',
+      seatControl: ['human', 'local-ai', 'local-ai', 'local-ai'],
+      engineBuild: 'e2e-fixture',
+    })
+  }
   const game = rulesetId === 'lotus-legacy'
     ? useLotusGame(common)
     : rulesetId === 'lotus-blood-flow'
       // 血流权威引擎跑在 worker 里（真实 worker + 真实规则引擎），autoplay 让本家座位也自动打。
-      ? useBloodFlowGame({ ...common, autoplay: true, paceMs: 0 })
+      ? useBloodFlowGame({ ...common, autoplay: true, paceMs: 0, analysis: analysis.port })
       : useGame(common)
   const finished = await playMatch(game as unknown as PlayablePort)
   if (!finished) status.errors.push(`${rulesetId} 对局未打完：phase=${game.phase.value} round=${game.round.value}`)
+  // 分析记录收尾：刷队列并落库（关闭时是空操作）。
+  if (analysis.active()) {
+    const analysisResult = await analysis.finish()
+    status.analysis = { ...analysisResult, enabled: true }
+  } else {
+    status.analysis = { matchId: '', status: 'disabled', bytes: 0, enabled: analysis.enabled() }
+  }
   const match = replay.finishAuto(game.standings.value.map((entry) => ({
     seat: entry.playerIndex,
     name: entry.name,
