@@ -97,7 +97,25 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect(analysisMatch.parts).toBeGreaterThan(0)
     expect(analysisMatch.blockCount).toBeGreaterThan(0)
     expect(analysisMatch.storedBytes).toBeGreaterThan(0)
-    expect(analysisMatch.configIds.length).toBeGreaterThan(0)
+    // §9.4：引用登记的权威来源是 owners 表（元数据里的 configIds 只是顺带记录，
+    // 且引用登记发生在元数据创建之前，拿它当依据会误判成"没登记"）。
+    const configRecords = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('lianhua-guangma-analysis')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const records = await new Promise<Array<{ id: string; owners: string[] }>>((resolve, reject) => {
+        const tx = db.transaction('configs', 'readonly')
+        const request = tx.objectStore('configs').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return records
+    })
+    expect(configRecords.length, '真实运行应登记配置引用（owners 表）').toBeGreaterThan(0)
+    expect(configRecords[0].owners.length, '引用应指向本场').toBeGreaterThan(0)
     expect(probe.codecs).toContain('gzip')
     expect(probe.compressed, '落库应为压缩后的二进制块').toBe(true)
 
