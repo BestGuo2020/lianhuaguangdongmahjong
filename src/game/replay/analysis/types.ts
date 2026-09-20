@@ -27,6 +27,8 @@ export type AnalysisChoiceSource =
 
 /** 提交结果：选择不等于执行（§3.4）。 */
 export type AnalysisExecutionStatus =
+  /** 已提交，但尚未观察到执行回执（不能当成执行成功，§10.2）。 */
+  | 'pending'
   | 'executed'
   | 'overridden'      // 已接受但被更高优先级动作压过
   | 'window-expired'
@@ -183,6 +185,8 @@ export interface AnalysisDecision {
     commandId?: string
     status: AnalysisExecutionStatus
     eventId?: string
+    /** 引擎最终实际执行的动作：可能不是选择里的那个（被更高优先级压过）。 */
+    executedLegalActionId?: string
     /** 原因以实际运行分支为准。 */
     detail?: string
   }

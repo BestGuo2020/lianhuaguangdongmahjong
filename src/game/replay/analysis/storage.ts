@@ -39,9 +39,20 @@ export interface AnalysisStorageOptions {
   onError?: (detail: string) => void
 }
 
-export type AnalysisWriteResult =
-  | { ok: true; storedBytes: number; blocks: number; paused: false }
-  | { ok: false; reason: 'unavailable' | 'budget' | 'raw-budget' | 'empty'; storedBytes: 0; blocks: 0; paused: boolean }
+/** 写入失败原因。 */
+export type AnalysisWriteFailure = 'unavailable' | 'budget' | 'raw-budget' | 'empty'
+
+/**
+ * 写入结果：单一形状（不用判别联合）——本工具链对 await 之后的联合收窄不可靠。
+ * ok=false 时 reason 必填，ok=true 时 reason 为 null。
+ */
+export interface AnalysisWriteResult {
+  ok: boolean
+  reason: AnalysisWriteFailure | null
+  storedBytes: number
+  blocks: number
+  paused: boolean
+}
 
 export interface AnalysisStorage {
   /** 分析区是否可用（浏览器不支持、驱动缺失或已因失败停用时为 false）。 */
@@ -166,7 +177,8 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
 
     async write(matchId, info, parts) {
       if (!driver || broken || !parts.length) {
-        return { ok: false, reason: broken || !driver ? 'unavailable' : 'empty', storedBytes: 0, blocks: 0, paused: paused.has(matchId) }
+        const reason: AnalysisWriteFailure = broken || !driver ? 'unavailable' : 'empty'
+        return { ok: false, reason, storedBytes: 0, blocks: 0, paused: paused.has(matchId) }
       }
       if (paused.has(matchId)) return { ok: false, reason: 'budget', storedBytes: 0, blocks: 0, paused: true }
 
@@ -195,7 +207,7 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
         updatedAt: now(),
       }
       await putMeta(updated)
-      return { ok: true, storedBytes, blocks, paused: false }
+      return { ok: true, reason: null, storedBytes, blocks, paused: false }
 
       /**
        * 刷一块：先做预算与 raw 判定，再不可变追加；任一步失败即留痕并暂停该场。
@@ -218,7 +230,6 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
           await putMeta(next)
           return { meta: next, storedBytes: 0, blocks: 0, failure: { ok: false, reason: 'raw-budget', storedBytes: 0, blocks: 0, paused: true } }
         }
-
         // 字节预算：先按 §9.4 顺序淘汰其它分析区，再决定是否暂停本场
         const used = await totalBytes()
         if (used + block.storedBytes > maxBytes) {
