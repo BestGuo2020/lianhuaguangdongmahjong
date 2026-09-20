@@ -14,7 +14,7 @@ const seen=new Set(),fingerprints=new Set(),models=new Set()
 const runs=tags.map(tag=>{
   const dir=`work/blood-flow-opportunity/${tag}`,done=read(`${dir}/summary.json`),m=read(`${dir}/metadata.json`)
   if(JSON.stringify(m)!==JSON.stringify(done.metadata))throw new Error('Mismatched metadata')
-  fingerprints.add(m.sourceFingerprint);models.add(JSON.stringify(m.candidateConfig.opportunityCalibration))
+  fingerprints.add(m.sourceFingerprint);models.add(JSON.stringify([m.candidateConfig.opportunityCalibration,m.candidateConfig.conditionalRon]))
   if(done.rows.length!==m.seeds*4)throw new Error('Missing rows')
   for(let seed=m.from;seed<m.from+m.seeds;seed++) {
     const key=`${m.mode}/${m.ratio}/${m.panel}/${seed}`

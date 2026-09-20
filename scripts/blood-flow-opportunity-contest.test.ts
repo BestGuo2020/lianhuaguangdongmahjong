@@ -17,11 +17,12 @@ function fingerprint(){
 it.skipIf(process.env.BF_SOURCE_RUN!=='1')('tests a frozen source model and reform threshold',()=>{
   const ratio=Number(process.env.BF_SOURCE_RATIO??1.2),from=Number(process.env.BF_SOURCE_FROM??271001),seeds=Number(process.env.BF_SOURCE_SEEDS??4)
   const panel=(process.env.BF_SOURCE_PANEL??'mixed') as PanelId,mode=process.env.BF_SOURCE_MODE??'threshold'
-  if(![1,1.2,1.5].includes(ratio)||!['mixed','defensive'].includes(panel)||!['threshold','production'].includes(mode)
+  if(![1,1.2,1.5].includes(ratio)||!['mixed','defensive'].includes(panel)||!['threshold','production','conditional'].includes(mode)
     ||!Number.isSafeInteger(from)||from<1||!Number.isSafeInteger(seeds)||seeds<1||seeds>64)throw new Error('Invalid run')
   const calibration=JSON.parse(readFileSync('docs/blood-flow/records/opportunity-calibration-2026-09-20.json','utf8')).calibration
   const base={...PANEL_CURRENT_CONFIG,chainForecast:'source-v2' as const,opportunityCalibration:calibration}
-  const candidateConfig={...base,reformGainRatio:ratio},controlConfig=mode==='threshold'?{...base,reformGainRatio:1.2}:PANEL_CURRENT_CONFIG
+  const conditionalRon=mode==='conditional'?JSON.parse(readFileSync('work/blood-flow-conditional/model.json','utf8')).model:undefined
+  const candidateConfig={...base,reformGainRatio:ratio,...(conditionalRon?{conditionalRon}:{})},controlConfig=mode==='production'?PANEL_CURRENT_CONFIG:{...base,reformGainRatio:1.2}
   const candidate=(view:BloodFlowSeatView)=>decideBloodFlowActionEv(view,candidateConfig)
   const control=(view:BloodFlowSeatView)=>decideBloodFlowActionEv(view,controlConfig)
   const dir=`work/blood-flow-opportunity/${mode}-${panel}-${ratio}-${from}`

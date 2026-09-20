@@ -212,6 +212,8 @@ export interface BloodFlowAiConfig {
   /** 实验：规范计分 × 正常轮转自摸机会；未标定点炮/鸣牌，不默认推广。 */
   readonly chainForecast?: 'legacy' | 'self-draw-v1' | 'source-v2'
   readonly opportunityCalibration?: { readonly drawScale: number; readonly discardScale: number; readonly selfYield: number; readonly ronYield: number }
+  /** Optional trained category composition; absent preserves source-v2. */
+  readonly conditionalRon?: import('./conditionalRon').ConditionalRonModel
   /** 弃牌放炮成本档位（公开 0 张 / 1 张 / ≥2 张）。 */
   readonly safetyCostNone: number
   readonly safetyCostOne: number
