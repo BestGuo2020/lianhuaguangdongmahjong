@@ -40,11 +40,12 @@ export interface AnalysisStorageOptions {
 }
 
 /** 写入失败原因。 */
-export type AnalysisWriteFailure = 'unavailable' | 'budget' | 'raw-budget' | 'empty'
+export type AnalysisWriteFailure = 'unavailable' | 'budget' | 'raw-budget' | 'empty' | 'paused'
 
 /**
  * 写入结果：单一形状（不用判别联合）——本工具链对 await 之后的联合收窄不可靠。
- * ok=false 时 reason 必填，ok=true 时 reason 为 null。
+ * ok=false 时 reason 必填，ok=true 时 reason 为 null；`detail` 说明**最初**是哪一步把这场暂停的
+ * （否则只会看到笼统的 'paused'，线上实测时就吃过这个亏）。
  */
 export interface AnalysisWriteResult {
   ok: boolean
@@ -52,6 +53,7 @@ export interface AnalysisWriteResult {
   storedBytes: number
   blocks: number
   paused: boolean
+  detail?: string
 }
 
 export interface AnalysisStorage {
@@ -103,8 +105,12 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
   let maxBytes = Math.max(0, options.maxBytes ?? ANALYSIS_DEFAULT_BUDGET_BYTES)
   const rawBudgetBytes = Math.max(0, options.rawBudgetBytes ?? ANALYSIS_DEFAULT_RAW_BUDGET_BYTES)
   let broken = false
-  /** 因预算/raw 限制而暂停的场次：暂停后不再尝试写入，只继续展示回放（§9.3、§9.4）。 */
-  const paused = new Set<string>()
+  /** 因预算/raw 限制或写入失败而暂停的场次；同时记住**最初**的原因（诊断必需）。 */
+  const paused = new Map<string, string>()
+
+  function pause(matchId: string, detail: string) {
+    if (!paused.has(matchId)) paused.set(matchId, detail)
+  }
 
   function report(detail: string) {
     try { options.onError?.(detail) } catch { /* 失败通知自身也必须安全（§9.5） */ }
@@ -178,9 +184,10 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
     async write(matchId, info, parts) {
       if (!driver || broken || !parts.length) {
         const reason: AnalysisWriteFailure = broken || !driver ? 'unavailable' : 'empty'
-        return { ok: false, reason, storedBytes: 0, blocks: 0, paused: paused.has(matchId) }
+        return { ok: false, reason, storedBytes: 0, blocks: 0, paused: paused.has(matchId), detail: paused.get(matchId) }
       }
-      if (paused.has(matchId)) return { ok: false, reason: 'budget', storedBytes: 0, blocks: 0, paused: true }
+      const pausedDetail = paused.get(matchId)
+      if (pausedDetail) return { ok: false, reason: 'paused', storedBytes: 0, blocks: 0, paused: true, detail: pausedDetail }
 
       let meta = await readMeta(matchId) ?? emptyMeta(matchId, info.rulesetId, now())
       const writer = createAnalysisBlockWriter()
@@ -220,15 +227,25 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
         const block = await target.flush(current.nextSequence)
         if (!block) return { meta: current, storedBytes: 0, blocks: 0, failure: null }
 
-        // 压缩不可用/失败时退化为 raw：**只有 raw 块**才受 raw 预算限制（§9.3）
-        if (block.codec === 'raw' && !mayStoreRawBlock(block, { rawBudgetBytes })) {
-          paused.add(matchId)
-          const gap: AnalysisGapRecord = { scope: 'analysis', reason: 'raw-block-over-budget' }
+        const pauseWith = async (detail: string, extraGap: AnalysisGapRecord) => {
+          pause(matchId, detail)
           const next: AnalysisMatchMeta = {
-            ...current, status: 'partial' as AnalysisCompleteness, updatedAt: now(), gaps: [...current.gaps, gap],
+            ...current, status: 'partial' as AnalysisCompleteness, updatedAt: now(),
+            gaps: [...current.gaps, extraGap],
           }
           await putMeta(next)
-          return { meta: next, storedBytes: 0, blocks: 0, failure: { ok: false, reason: 'raw-budget', storedBytes: 0, blocks: 0, paused: true } }
+          return {
+            meta: next, storedBytes: 0, blocks: 0,
+            failure: { ok: false, reason: 'paused' as AnalysisWriteFailure, storedBytes: 0, blocks: 0, paused: true, detail },
+          }
+        }
+
+        // 压缩不可用/失败时退化为 raw：**只有 raw 块**才受 raw 预算限制（§9.3）
+        if (block.codec === 'raw' && !mayStoreRawBlock(block, { rawBudgetBytes })) {
+          return await pauseWith(
+            `raw-block-over-budget(block=${block.storedBytes},rawBudget=${rawBudgetBytes})`,
+            { scope: 'analysis', reason: 'raw-block-over-budget' },
+          )
         }
         // 字节预算：先按 §9.4 顺序淘汰其它分析区，再决定是否暂停本场
         const used = await totalBytes()
@@ -236,13 +253,11 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
           await evictToBudget({ protect: [matchId] })
           const after = await totalBytes()
           if (after + block.storedBytes > maxBytes) {
-            paused.add(matchId)
-            const gap: AnalysisGapRecord = { scope: 'analysis', reason: 'budget-exceeded' }
-            const next: AnalysisMatchMeta = {
-              ...current, status: 'partial' as AnalysisCompleteness, updatedAt: now(), gaps: [...current.gaps, gap],
-            }
-            await putMeta(next)
-            return { meta: next, storedBytes: 0, blocks: 0, failure: { ok: false, reason: 'budget', storedBytes: 0, blocks: 0, paused: true } }
+            // 记下当时的数字：只报"预算不足"没法判断是账本异常还是真的满了
+            return await pauseWith(
+              `budget-exceeded(used=${after},budget=${maxBytes},block=${block.storedBytes})`,
+              { scope: 'analysis', reason: 'budget-exceeded' },
+            )
           }
         }
 
@@ -258,15 +273,13 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
           payload: block.payload,
         }), false)
         if (!appended) {
-          // 驱动失败（已停用）或序号已被占用：都算这一块没落成功，留痕并暂停本场（§9.5）
+          // 驱动失败（已停用）或序号已被占用：都算这一块没落成功，留痕并暂停本场（§9.5）。
+          // 这两种情况必须分开报：序号冲突通常意味着元数据没写进去（序号没前进），而不是空间问题。
           const reason = broken ? 'write-failed' : 'sequence-occupied'
-          paused.add(matchId)
-          const next: AnalysisMatchMeta = {
-            ...current, status: 'partial' as AnalysisCompleteness, updatedAt: now(),
-            gaps: [...current.gaps, { scope: 'analysis', reason, from: block.sequence }],
-          }
-          await putMeta(next)
-          return { meta: next, storedBytes: 0, blocks: 0, failure: { ok: false, reason: broken ? 'unavailable' : 'budget', storedBytes: 0, blocks: 0, paused: true } }
+          return await pauseWith(
+            broken ? `write-failed(sequence=${block.sequence})` : `sequence-occupied(sequence=${block.sequence})`,
+            { scope: 'analysis', reason, from: block.sequence },
+          )
         }
 
         const next: AnalysisMatchMeta = {
@@ -278,6 +291,14 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
           updatedAt: now(),
         }
         await putMeta(next)
+        // 元数据没写成功 ⇒ 序号不会前进，下一次会撞同一个序号（线上实测的"暂停"根因之一）：
+        // 这里必须当场暂停，而不是带着过期序号继续写（§9.5：失败要留痕，不能静默截断）。
+        if (broken) {
+          return await pauseWith(
+            `meta-write-failed(sequence=${block.sequence})`,
+            { scope: 'analysis', reason: 'meta-write-failed', from: block.sequence },
+          )
+        }
         return { meta: next, storedBytes: block.storedBytes, blocks: 1, failure: null }
       }
     },

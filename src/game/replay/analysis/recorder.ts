@@ -206,7 +206,7 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
     const result = await storage.write(options.matchId, { rulesetId: options.rulesetId }, parts)
     if (!result.ok) {
       paused = true
-      report(`分析落库失败（${reason}）：${result.reason}`)
+      report(`分析落库失败（${reason}）：${result.reason}${result.detail ? ` ${result.detail}` : ''}`)
       await storage.noteGap(options.matchId, { scope: 'analysis', reason: `write-${result.reason}` })
     }
   }

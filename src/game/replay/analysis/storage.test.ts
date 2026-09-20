@@ -104,7 +104,9 @@ describe('分析区存储', () => {
     withoutCompression()
     const storage = makeStorage({ rawBudgetBytes: 10 })
     const result = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(10))
-    expect(result).toEqual({ ok: false, reason: 'raw-budget', storedBytes: 0, blocks: 0, paused: true })
+    // 失败原因统一为 'paused'，而 detail 写明**最初**是哪一步暂停的（否则线上只能看到笼统的 budget）
+    expect(result).toMatchObject({ ok: false, reason: 'paused', storedBytes: 0, blocks: 0, paused: true })
+    expect(result.detail).toContain('raw-block-over-budget')
     const read = await storage.read('m1')
     expect(read.parts).toHaveLength(0)
     expect(read.meta?.status).toBe('partial')
@@ -131,7 +133,10 @@ describe('分析区存储', () => {
     // 当前正在写入的场次受保护：预算不足时暂停它自己，而不是删掉它
     storage.setBudget(10)
     const paused = await storage.write('recent', { rulesetId: 'lotus-blood-flow' }, parts(40))
-    expect(paused).toMatchObject({ ok: false, reason: 'budget', paused: true })
+    expect(paused).toMatchObject({ ok: false, reason: 'paused', paused: true })
+    // detail 必须带上当时的账本数字：只报"预算不足"无法区分账本异常与真的满了
+    expect(paused.detail).toContain('budget-exceeded')
+    expect(paused.detail).toContain('budget=')
     const meta = (await storage.read('recent')).meta
     expect(meta?.status).toBe('partial')
     expect(meta?.gaps.map((gap) => gap.reason)).toContain('budget-exceeded')
