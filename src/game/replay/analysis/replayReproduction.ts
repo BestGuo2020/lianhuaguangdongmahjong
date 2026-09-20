@@ -166,6 +166,15 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       }
       // 对照实验（第 61 轮）：曾试过"下一条真命令能落在当前窗口上就跳过这条 expire"，
       // 结果第 1 局从复现成功退回失败 ⇒ 记录里的 expire 是必需的，不能按这个规则跳过。已回退。
+      // 相对编号判定：两侧窗口 id 末尾都是单调递增的编号（记录 round-1/window/39、重放 verify/1/window/42），
+      // 因此用编号判断"这条 expire 说的是不是已经走过的窗口"。若它属于更早的窗口（编号更小），
+      // 说明重放已经推进过它了，再应用一次就会多走窗口（此前观测到的 +3/+5 累积偏移）。
+      const recordNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
+      const replayNo = Number(String(current.id).split('/').pop())
+      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo < replayNo) {
+        cursor += 1
+        continue
+      }
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
       cursor += 1
