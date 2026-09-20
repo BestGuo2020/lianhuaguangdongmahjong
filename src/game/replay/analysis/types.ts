@@ -309,9 +309,11 @@ export interface AnalysisReproduction {
      * 这条记录是怎么产生的：
      * - `command`（默认）：真实提交的动作，可复现；
      * - `auto`：该窗口没有本端决策（无 provider / 超时），由权威机器人代决 ——
-     *   记录里不含它的选择，因此重跑时必须如实报"无法复现"，而不是笼统说"命令不足"。
+     *   记录里不含它的选择，因此重跑时必须如实报"无法复现"，而不是笼统说"命令不足"；
+     * - `expire`：该窗口**没人决定**，靠超时推进 —— 重跑时要把时钟推过截止时间再推进，
+     *   否则状态会与当时分叉（实测过：重放到第 N 条就报"该座位此刻没有合法动作"）。
      */
-    resolution?: 'command' | 'auto'
+    resolution?: 'command' | 'auto' | 'expire'
     tile?: string
     handIndex?: number
     from?: number | null

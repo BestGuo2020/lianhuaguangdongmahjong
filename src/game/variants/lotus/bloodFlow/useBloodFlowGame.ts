@@ -370,8 +370,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const analysisRoundCommands: Array<{
     seat: number; kind: string; at: number
     legalActionId?: string; tile?: string; handIndex?: number; from?: number | null; meldIndex?: number
-    /** 'auto' 表示该窗口当时没有本端决策（权威机器人/超时代决）——复现时必须能识别。 */
-    resolution?: 'command' | 'auto'
+    /** 'auto' 表示该窗口当时没有本端决策（权威机器人代决）；'expire' 表示没人决定、靠超时推进。 */
+    resolution?: 'command' | 'auto' | 'expire'
   }> = []
   /**
    * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
@@ -596,7 +596,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (epoch === generation && view.value?.window?.id === w.id) void actBot(bot, w.id, epoch)
     }, options.paceMs ?? 650)
     if (w.deadlineAt < Number.MAX_SAFE_INTEGER) later(() => {
-      if (view.value?.window?.id === w.id) void request({ kind: 'expire', windowId: w.id })
+      if (view.value?.window?.id === w.id) {
+        // 分析记录（§6）：该窗口没人决定、靠超时推进 —— 不记这条，重跑会与当时分叉
+        // （seat 用 -1 表示"不是某个座位的决定"；校验器遇到 expire 只推时钟并推进窗口）。
+        if (options.analysis) analysisRoundCommands.push({ seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire' })
+        void request({ kind: 'expire', windowId: w.id })
+      }
     }, Math.max(0, w.deadlineAt - Date.now()))
   }
   async function actBot(seat: 0 | 1 | 2 | 3, windowId: string, epoch: number) {
