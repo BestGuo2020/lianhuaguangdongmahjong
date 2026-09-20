@@ -123,4 +123,15 @@ describe('赛后复现校验（§10.6）', () => {
     expect(result.ok).toBe(false)
     expect(result.reason).toContain('initialHands')
   })
+
+  it('auto 标记（权威机器人/超时代决）必须给出确切原因，而不是笼统的命令不足', () => {
+    const { record, commands, scores } = playAndRecord()
+    const marked = commands.map((command, index) => (index === 1
+      ? { seat: command.seat, kind: 'auto', resolution: 'auto' as const }
+      : command))
+    const result = replayReproduction({ reproduction: record, commands: marked, expectedScores: scores })
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('auto')
+    expect(result.reason, '不能只说命令不足，要说清是权威机器人代决').toContain('权威机器人')
+  })
 })

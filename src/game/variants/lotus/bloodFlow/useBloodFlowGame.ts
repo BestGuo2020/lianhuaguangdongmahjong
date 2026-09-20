@@ -370,6 +370,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const analysisRoundCommands: Array<{
     seat: number; kind: string; at: number
     legalActionId?: string; tile?: string; handIndex?: number; from?: number | null; meldIndex?: number
+    /** 'auto' 表示该窗口当时没有本端决策（权威机器人/超时代决）——复现时必须能识别。 */
+    resolution?: 'command' | 'auto'
   }> = []
   /**
    * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
@@ -634,6 +636,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       // 分析记录（§6）：机器人/模型座位的命令同样入序列（否则只有牌墙、无法精确复现）。
       if (options.analysis && action) {
         analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined))
+      } else if (options.analysis) {
+        // 本端没有决策（无 provider ⇒ 交给权威机器人）：如实标记，重跑时才能说清"为什么复现不了"
+        analysisRoundCommands.push({ seat, kind: 'auto', at: Date.now(), resolution: 'auto' })
       }
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
       // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。

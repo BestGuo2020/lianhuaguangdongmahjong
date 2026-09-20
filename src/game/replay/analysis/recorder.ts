@@ -189,7 +189,25 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
     if (pendingBytes >= queueLimit) void flush('queue-limit')
   }
 
+  /**
+   * 写入串行化：并发 flush 会各自读到同一个 nextSequence，后写的块被判 sequence-occupied。
+   * 真实浏览器 e2e 实测到过 `paused sequence-occupied(sequence=13)`（队列自动刷盘与场末收尾撞在一起）。
+   * 所有写入按调用顺序排队，前一次落库完成后才开始下一次。
+   */
+  let flushChain: Promise<void> = Promise.resolve()
   async function flush(reason = 'manual'): Promise<void> {
+    const previous = flushChain
+    let release: () => void = () => {}
+    flushChain = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try {
+      await flushOnce(reason)
+    } finally {
+      release()
+    }
+  }
+
+  async function flushOnce(reason = 'manual'): Promise<void> {
     if (!enabled || paused || !pending.length) return
     const storage = options.storage
     if (!storage || !storage.available()) {
@@ -259,6 +277,10 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
         ...(input.models ? { models: structuredClone(input.models) } : {}),
         ...(input.promptTemplates ? { promptTemplates: structuredClone(input.promptTemplates) } : {}),
       }
+      // §9.4：登记配置引用。此前只有单测调用过 retainConfig，生产路径从未接线，
+      // 于是「A、B 两场共享同一模板 → 只存一份 → 零引用才回收」这套机制实际是死代码。
+      void Promise.resolve(options.storage?.retainConfig(options.matchId, { id: configId, value: record }))
+        .catch(() => { /* 引用登记失败不影响录制本身（§9.5 独立失败域） */ })
       push('config', record)
       return configId
     },

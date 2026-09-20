@@ -305,6 +305,13 @@ export interface AnalysisReproduction {
     at: number
     /** 窗口内稳定 ID（与决策/候选对齐；缺失说明该命令未接线到合法动作集）。 */
     legalActionId?: string
+    /**
+     * 这条记录是怎么产生的：
+     * - `command`（默认）：真实提交的动作，可复现；
+     * - `auto`：该窗口没有本端决策（无 provider / 超时），由权威机器人代决 ——
+     *   记录里不含它的选择，因此重跑时必须如实报"无法复现"，而不是笼统说"命令不足"。
+     */
+    resolution?: 'command' | 'auto'
     tile?: string
     handIndex?: number
     from?: number | null

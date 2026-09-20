@@ -23,6 +23,8 @@ export interface ReproductionCommand {
   handIndex?: number
   from?: number | null
   meldIndex?: number
+  /** 见 AnalysisReproduction.commands：'auto' 表示当时由权威机器人/超时代决。 */
+  resolution?: 'command' | 'auto'
 }
 
 export interface ReplayVerification {
@@ -87,6 +89,13 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       }
     }
     const seat = command.seat as Seat
+    if (command.resolution === 'auto') {
+      // 该窗口当时由权威机器人（或超时）代决，记录里不含它的选择：说清原因，不笼统报"命令不足"
+      return {
+        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+        reason: `第 ${cursor + 1} 条记录标记为 auto：该窗口当时没有本端决策（由权威机器人或超时决定），记录不含其选择，无法复现`,
+      }
+    }
     if (!SEATS.includes(seat)) {
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,

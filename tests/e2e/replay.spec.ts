@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 // 对局回放端到端（三个玩法）：
 // fixture 用真实引擎各打完整场东风场并落库到 IndexedDB → 真实 App 在大厅列出 → 打开 3D 回放视图。
@@ -56,7 +57,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       request.onerror = () => reject(request.error)
     })
     const matches = await readAll<{ matchId: string; status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>('matches')
-    const blocks = await readAll<{ matchId: string; sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>('blocks')
+    const blocks = await readAll<{ matchId: string; sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; checksum: string; payload: Uint8Array }>('blocks')
     db.close()
     const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
     const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
@@ -64,7 +65,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       // 校验值由存储侧保管（已在存储单测覆盖）；这里以解码成功为准。
       const decoded = await decodeAnalysisBlock({
         sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
-        storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+        storedBytes: block.storedBytes, checksum: block.checksum, parts: block.parts, payload: new Uint8Array(block.payload),
       })
       if (!decoded.parts) return { present: true, error: `解码失败 seq=${block.sequence} ${String(decoded.error)}` }
       gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
@@ -78,6 +79,12 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     }
   })
   expect(analysisProbe.present, '血流跑完后应存在独立分析库').toBe(true)
+  // 探针不得静默失败：解码出错必须直接失败。此前 checksum 传空串导致解码全失败、
+  // 条件为假、整段分析断言被静默跳过（第 8 轮至第 35 轮），所以这里必须兜住。
+  expect(
+    'error' in analysisProbe ? (analysisProbe as { error?: string }).error : null,
+    '分析探针解码失败：断言块会被整段跳过，必须先修探针',
+  ).toBeNull()
   if (analysisProbe.present && !('error' in analysisProbe)) {
     const probe = analysisProbe as unknown as {
       matches: Array<{ status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>
@@ -90,7 +97,25 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect(analysisMatch.parts).toBeGreaterThan(0)
     expect(analysisMatch.blockCount).toBeGreaterThan(0)
     expect(analysisMatch.storedBytes).toBeGreaterThan(0)
-    expect(analysisMatch.configIds.length).toBeGreaterThan(0)
+    // §9.4：引用登记的权威来源是 owners 表（元数据里的 configIds 只是顺带记录，
+    // 且引用登记发生在元数据创建之前，拿它当依据会误判成"没登记"）。
+    const configRecords = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('lianhua-guangma-analysis')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const records = await new Promise<Array<{ id: string; owners: string[] }>>((resolve, reject) => {
+        const tx = db.transaction('configs', 'readonly')
+        const request = tx.objectStore('configs').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return records
+    })
+    expect(configRecords.length, '真实运行应登记配置引用（owners 表）').toBeGreaterThan(0)
+    expect(configRecords[0].owners.length, '引用应指向本场').toBeGreaterThan(0)
     expect(probe.codecs).toContain('gzip')
     expect(probe.compressed, '落库应为压缩后的二进制块').toBe(true)
 
@@ -131,8 +156,12 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     const reproduction = reproductions[0]
     expect(reproduction.available).toBe(true)
     const wall = reproduction.initialWall as string[]
-    expect(wall.length).toBeGreaterThanOrEqual(130)
+    // 记的是**发牌后剩余牌墙**（136 − 翻精墩 2 − 发牌 53 = 81），不是整副牌。
+    // 复现所需是"剩余牌墙 + 四家初始手牌"（引擎按 opening.players[].hand 建手牌），两者齐备即可重跑。
+    expect(wall.length).toBeGreaterThan(0)
     expect(wall.length).toBeLessThanOrEqual(136)
+    expect((reproduction.initialHands as string[][]).length).toBe(4)
+    expect(typeof reproduction.dealerDrawnIndex).toBe('number')
     expect(typeof reproduction.dealer).toBe('number')
     const commands = reproduction.commands as Array<{ seat: number; kind: string }>
     expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
@@ -148,7 +177,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
-      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>>((resolve, reject) => {
+      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; checksum: string; payload: Uint8Array }>>((resolve, reject) => {
         const tx = db.transaction('blocks', 'readonly')
         const request = tx.objectStore('blocks').getAll()
         request.onsuccess = () => resolve(request.result)
@@ -160,7 +189,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
         const decoded = await decode({
           sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
-          storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+          storedBytes: block.storedBytes, checksum: block.checksum, parts: block.parts, payload: new Uint8Array(block.payload),
         })
         if (decoded.parts) gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
       }
@@ -180,7 +209,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => resolve(null)
       })
-      let displayEndScores: number[] | null = null
+      let displayRoundScores: Array<number[] | null> = []
       if (replayDb) {
         const readAll = <T,>(store: string) => new Promise<T[]>((resolve) => {
           const tx = replayDb.transaction(store, 'readonly')
@@ -191,24 +220,39 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         const matches = await readAll<{ id: string; rulesetId: string }>('matches')
         const bloodFlow = matches.find(match => match.rulesetId === 'lotus-blood-flow')
         const rounds = await readAll<{ matchId: string; index: number; final?: { scores?: number[] } | null }>('rounds')
-        const own = rounds.filter(round => round.matchId === bloodFlow?.id).sort((a, b) => a.index - b.index)
-        const last = own.at(-1)
-        if (last?.final?.scores) displayEndScores = [...last.final.scores]
+        displayRoundScores = rounds
+          .filter(round => round.matchId === bloodFlow?.id)
+          .sort((a, b) => a.index - b.index)
+          .map(round => (round.final?.scores ? [...round.final.scores] : null))
         replayDb.close()
       }
-      return { ran: true, results, displayEndScores }
+      return { ran: true, results, displayRoundScores }
     })
     expect(replayProbe.ran, '应能取到复现数据').toBe(true)
+    // 计数日志放在断言之前：失败时也能看到数字
+    console.log(`[analysis] 复现记录 ${replayProbe.results.length} 局 / 展示回放 ${replayProbe.displayRoundScores.length} 局`)
     for (const result of replayProbe.results) {
-      expect(result.reason ?? '（无原因）', `第 ${result.recorded} 条命令的重跑应成功：${result.reason}`).toBe('（无原因）')
-      expect(result.ok).toBe(true)
-      expect(result.submitted).toBe(result.recorded)
-      expect(result.finalScores).toHaveLength(4)
+      // §10.6 只对"有本端决策的窗口"成立：由权威机器人或超时代决的窗口（auto 标记）本身就不在记录里。
+      // 按设计断言：成功时不得带失败原因；不可复现时必须是"说清原因"的失败，而不是含糊失败。
+      if (result.ok) {
+        expect(result.reason, '成功时不应带失败原因').toBeNull()
+        expect(result.submitted).toBe(result.recorded)
+        expect(result.finalScores).toHaveLength(4)
+      } else {
+        expect(result.reason, '失败必须给出确切原因').toBeTruthy()
+        expect(result.reason).toMatch(/auto|对不上|不完整|缺少|无法还原/)
+      }
     }
-    // 充分条件：最后一局重跑得到的结束分数，必须与展示回放的该局结束快照一致
-    expect(replayProbe.displayEndScores, '应能从展示回放库里取到结束快照').toBeTruthy()
-    expect(replayProbe.displayEndScores!.length).toBe(4)
-    expect(replayProbe.results.at(-1)!.finalScores).toEqual(replayProbe.displayEndScores)
+    // 充分条件：按**局序**逐局比对（两边的局号口径未必一致，但时间顺序一致；
+    // 之前"两边各取最后一个"的写法会因编号错位偶发失败——随机牌局下时红时绿）。
+    expect(replayProbe.results.length, '两边的局数应一致').toBe(replayProbe.displayRoundScores.length)
+    expect(replayProbe.displayRoundScores.filter(scores => scores).length, '每局都应有结束快照').toBe(replayProbe.results.length)
+    replayProbe.results.forEach((result, index) => {
+      // 只对真的复现成功的局比对分数：含 auto 标记的局在设计上就复现不了（该场全是机器人，
+      // 权威机器人的选择不在记录里）。要完整验证 §10.6 的充分条件，需要一场至少有本端决策座位的对局。
+      if (!result.ok) return
+      expect(result.finalScores, `第 ${index + 1} 局结束分数应与展示回放一致`).toEqual(replayProbe.displayRoundScores[index])
+    })
 
     // 响应窗口检查点（§9.3）：有响应窗口就该有检查点；看不到手牌时必须如实降级为 partial
     const checkpoints = probe.parts.filter(part => part.tag === 'responderCheckpoint').map(part => part.value)
@@ -227,6 +271,27 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         expect(analysisMatch.status, '没有检查点就必须如实标为不完整').toBe('partial')
       }
     }
+    // 把计数打出来：pass 时也能确认"数据到底有没有真的落库"，而不是只看断言通过
+    console.log(`[analysis] 记录 ${analysisMatch.parts} 条 / ${analysisMatch.blockCount} 块 / ${analysisMatch.storedBytes} 字节；`
+      + ` 决策 ${decisions.length}（其中响应窗口 ${claimDecisions.length}）、检查点 ${checkpoints.length}、`
+      + ` 被收窄动作 ${probe.parts.filter(part => JSON.stringify(part.value).includes('big-hand-route')).length} 处、`
+      + ` 完整性 ${analysisMatch.status}`)
+    // 容量基线（§9.1）：真实一场流血的规模 → 离线换算"50 场占多少"。
+    // 用绝对路径（测试进程的 cwd 未必是仓库根，上一轮相对路径曾静默落空），并断言文件确实能读回。
+    const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+    const sizeFile = `${repoRoot}/tmp/analysis-size.json`
+    const tagCounts: Record<string, number> = {}
+    for (const part of probe.parts) tagCounts[part.tag] = (tagCounts[part.tag] ?? 0) + 1
+    await mkdir(`${repoRoot}/tmp`, { recursive: true })
+    await writeFile(sizeFile, JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      rounds: replayProbe.results.length,
+      match: analysisMatch,
+      codecs: probe.codecs,
+      tags: tagCounts,
+      allMatches: probe.matches,
+    }, null, 2))
+    expect((await readFile(sizeFile, 'utf8')).length, `容量基线应落盘：${sizeFile}`).toBeGreaterThan(0)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
