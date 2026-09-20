@@ -1,0 +1,3962 @@
+{
+  "tags": [
+    "311001",
+    "311129"
+  ],
+  "modelHash": "15a2d892a31d8f8b6c8128120b8f6c34c9f9b59bfc5ab01397a1d8fa8b8a389d",
+  "coefficients": {
+    "immediate": {
+      "value": 0.07705203029926735,
+      "denominator": 644240,
+      "varyingFeatures": 41,
+      "nonzeroLabels": 6,
+      "boundary": false
+    },
+    "horizonDiscard": {
+      "value": 0,
+      "denominator": 37904,
+      "varyingFeatures": 8,
+      "nonzeroLabels": 4,
+      "boundary": true
+    }
+  },
+  "summary": {
+    "windows": 20,
+    "scannedRounds": 256,
+    "originalHorizon": {
+      "gross": {
+        "sourceWindows": 20,
+        "mean": 77.5,
+        "ci95": [
+          -56,
+          251
+        ],
+        "min": -600,
+        "max": 1360
+      },
+      "discardPaid": {
+        "sourceWindows": 20,
+        "mean": -7,
+        "ci95": [
+          -31.5,
+          10.5
+        ],
+        "min": -210,
+        "max": 70
+      },
+      "otherWinPaid": {
+        "sourceWindows": 20,
+        "mean": 0,
+        "ci95": [
+          -29,
+          27
+        ],
+        "min": -160,
+        "max": 140
+      },
+      "kongNet": {
+        "sourceWindows": 20,
+        "mean": -0.5,
+        "ci95": [
+          -1.5,
+          0
+        ],
+        "min": -10,
+        "max": 0
+      },
+      "immediateDiscardPaid": {
+        "sourceWindows": 20,
+        "mean": 7,
+        "ci95": [
+          0,
+          17.5
+        ],
+        "min": 0,
+        "max": 70
+      },
+      "net": {
+        "sourceWindows": 20,
+        "mean": 84,
+        "ci95": [
+          -67,
+          286
+        ],
+        "min": -600,
+        "max": 1570
+      }
+    },
+    "permutedHorizon": {
+      "gross": {
+        "sourceWindows": 20,
+        "mean": 59.625,
+        "ci95": [
+          4.5625,
+          144
+        ],
+        "min": -150,
+        "max": 735
+      },
+      "discardPaid": {
+        "sourceWindows": 20,
+        "mean": -0.0625,
+        "ci95": [
+          -11.1875,
+          10.5
+        ],
+        "min": -76.25,
+        "max": 70
+      },
+      "otherWinPaid": {
+        "sourceWindows": 20,
+        "mean": -4.3125,
+        "ci95": [
+          -20.25,
+          14.875
+        ],
+        "min": -63.75,
+        "max": 122.5
+      },
+      "kongNet": {
+        "sourceWindows": 20,
+        "mean": -0.375,
+        "ci95": [
+          -1.875,
+          0.75
+        ],
+        "min": -12.5,
+        "max": 5
+      },
+      "immediateDiscardPaid": {
+        "sourceWindows": 20,
+        "mean": 7,
+        "ci95": [
+          0,
+          17.5
+        ],
+        "min": 0,
+        "max": 70
+      },
+      "net": {
+        "sourceWindows": 20,
+        "mean": 63.625,
+        "ci95": [
+          2.25,
+          156.0625
+        ],
+        "min": -150,
+        "max": 811.25
+      }
+    },
+    "originalFull": {
+      "sourceWindows": 20,
+      "mean": -124,
+      "ci95": [
+        -374.5,
+        83.5
+      ],
+      "min": -1770,
+      "max": 400
+    },
+    "permutedFull": {
+      "sourceWindows": 20,
+      "mean": 52.75,
+      "ci95": [
+        -9.1875,
+        138.625
+      ],
+      "min": -150,
+      "max": 706.25
+    },
+    "predictedGrossGap": {
+      "sourceWindows": 20,
+      "mean": 23.137433595504966,
+      "ci95": [
+        12.649143750875279,
+        36.36870739881857
+      ],
+      "min": 1.322665542417326,
+      "max": 106.74973193569622
+    },
+    "riskGap": {
+      "sourceWindows": 20,
+      "mean": -2.7199999999999998,
+      "ci95": [
+        -16,
+        9.76
+      ],
+      "min": -64,
+      "max": 57.6
+    },
+    "immediateInvariant": true
+  },
+  "evaluation": {
+    "discardCost": {
+      "zeroDifferenceMAE": 7.5625,
+      "rawProxyMAE": 24.0425,
+      "calibratedMAE": 7.5625,
+      "maeGain": {
+        "sourceWindows": 20,
+        "mean": 16.48,
+        "ci95": [
+          6.4,
+          28
+        ],
+        "min": 0,
+        "max": 64
+      }
+    },
+    "immediate": {
+      "rawMAE": 67.84,
+      "calibratedMAE": 11.6640531478952,
+      "zero": {
+        "mae": 13,
+        "rmse": 24.899799195977465,
+        "bias": -13
+      },
+      "trainConstant": {
+        "value": 8.636363636363637,
+        "mae": 15.590909090909088,
+        "rmse": 21.68043639583967,
+        "bias": -4.363636363636364
+      },
+      "raw": {
+        "mae": 67.84,
+        "rmse": 87.14713994159533,
+        "bias": 66.16
+      },
+      "calibrated": {
+        "mae": 11.6640531478952,
+        "rmse": 20.026747196421077,
+        "bias": -6.900561281509996
+      },
+      "mseGainVsZero": {
+        "sourceWindows": 20,
+        "mean": 218.92939673064066,
+        "ci95": [
+          72.54794363980872,
+          392.33317600081125
+        ],
+        "min": -60.79503742196955,
+        "max": 1080.8448912333538
+      }
+    },
+    "omittedNetComponents": {
+      "sourceWindows": 20,
+      "mean": 3.9375,
+      "ci95": [
+        -15.25,
+        20.25
+      ],
+      "min": -122.5,
+      "max": 63.75
+    },
+    "partialNetMAE": 78.43036978160004,
+    "fullNetMAE": 84.69663729207223,
+    "grossOnlyFullNetMAE": 84.69663729207223,
+    "shadow": {
+      "switched": 0,
+      "meanNetVsOld": {
+        "sourceWindows": 20,
+        "mean": 63.625,
+        "ci95": [
+          2.25,
+          156.0625
+        ],
+        "min": -150,
+        "max": 811.25
+      },
+      "meanNetVsAlwaysNew": {
+        "sourceWindows": 20,
+        "mean": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "seed": 311003,
+      "seat": 1,
+      "wall": 29,
+      "old": {
+        "index": 5,
+        "tile": "p6",
+        "grossPrediction": 2978.4654140565435,
+        "riskProxy": 6.4
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 2998.140918930097,
+        "riskProxy": 64
+      },
+      "predictedGrossGap": 19.675504873553564,
+      "riskGap": 57.6,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3020,
+            "discardPaid": 40,
+            "otherWinPaid": 1200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 40,
+            "net": 1780
+          },
+          "proposed": {
+            "gross": 3040,
+            "discardPaid": 40,
+            "otherWinPaid": 1200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 40,
+            "net": 1800
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3020,
+            "discardPaid": 40,
+            "otherWinPaid": 1200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 40,
+            "net": 1780
+          },
+          "proposed": {
+            "gross": 3040,
+            "discardPaid": 40,
+            "otherWinPaid": 1200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 40,
+            "net": 1800
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3142.5,
+            "discardPaid": 40,
+            "otherWinPaid": 172.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 40,
+            "net": 2925
+          },
+          "proposed": {
+            "gross": 3117.5,
+            "discardPaid": 40,
+            "otherWinPaid": 108.75,
+            "kongNet": -5,
+            "immediateDiscardPaid": 40,
+            "net": 2963.75
+          },
+          "delta": {
+            "gross": -25,
+            "discardPaid": 0,
+            "otherWinPaid": -63.75,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 38.75
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3142.5,
+            "discardPaid": 40,
+            "otherWinPaid": 172.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 40,
+            "net": 2925
+          },
+          "proposed": {
+            "gross": 3117.5,
+            "discardPaid": 40,
+            "otherWinPaid": 108.75,
+            "kongNet": -5,
+            "immediateDiscardPaid": 40,
+            "net": 2963.75
+          },
+          "delta": {
+            "gross": -25,
+            "discardPaid": 0,
+            "otherWinPaid": -63.75,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 38.75
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 500,
+          "fullNetGap": 500,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -150,
+          "fullNetGap": -150,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -120,
+          "fullNetGap": -120,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": -50,
+          "fullNetGap": -50,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 130,
+          "fullNetGap": 130,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311016,
+      "seat": 2,
+      "wall": 55,
+      "old": {
+        "index": 9,
+        "tile": "north",
+        "grossPrediction": 3419.926712821036,
+        "riskProxy": 4
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 3433.591375497611,
+        "riskProxy": 4
+      },
+      "predictedGrossGap": 13.664662676575063,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3840,
+            "discardPaid": 0,
+            "otherWinPaid": 100,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3720
+          },
+          "proposed": {
+            "gross": 3900,
+            "discardPaid": 0,
+            "otherWinPaid": 180,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3700
+          },
+          "delta": {
+            "gross": 60,
+            "discardPaid": 0,
+            "otherWinPaid": 80,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6200,
+            "discardPaid": 0,
+            "otherWinPaid": 300,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 5880
+          },
+          "proposed": {
+            "gross": 5570,
+            "discardPaid": 0,
+            "otherWinPaid": 1000,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 4550
+          },
+          "delta": {
+            "gross": -630,
+            "discardPaid": 0,
+            "otherWinPaid": 700,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -1330
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3806.25,
+            "discardPaid": 0,
+            "otherWinPaid": 475,
+            "kongNet": -7.5,
+            "immediateDiscardPaid": 0,
+            "net": 3323.75
+          },
+          "proposed": {
+            "gross": 3890,
+            "discardPaid": 0,
+            "otherWinPaid": 422.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 3462.5
+          },
+          "delta": {
+            "gross": 83.75,
+            "discardPaid": 0,
+            "otherWinPaid": -52.5,
+            "kongNet": 2.5,
+            "immediateDiscardPaid": 0,
+            "net": 138.75
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 5937.5,
+            "discardPaid": 0,
+            "otherWinPaid": 1010,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 4917.5
+          },
+          "proposed": {
+            "gross": 6041.25,
+            "discardPaid": 0,
+            "otherWinPaid": 1002.5,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 5028.75
+          },
+          "delta": {
+            "gross": 103.75,
+            "discardPaid": 0,
+            "otherWinPaid": -7.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 111.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -20,
+          "fullNetGap": -1330,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 160,
+          "fullNetGap": 160,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 100,
+          "fullNetGap": -500,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 40,
+          "fullNetGap": 60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 40,
+          "fullNetGap": 60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 40,
+          "fullNetGap": -210,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -110,
+          "fullNetGap": 10,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 800,
+          "fullNetGap": 1270,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311027,
+      "seat": 1,
+      "wall": 21,
+      "old": {
+        "index": 4,
+        "tile": "m6",
+        "grossPrediction": 2166.587842273517,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 2181.0795727573095,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 14.491730483792708,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 2330,
+            "discardPaid": 0,
+            "otherWinPaid": 20,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2310
+          },
+          "proposed": {
+            "gross": 2260,
+            "discardPaid": 70,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 2030
+          },
+          "delta": {
+            "gross": -70,
+            "discardPaid": 70,
+            "otherWinPaid": 140,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": -280
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2330,
+            "discardPaid": 0,
+            "otherWinPaid": 20,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2310
+          },
+          "proposed": {
+            "gross": 2260,
+            "discardPaid": 70,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 2030
+          },
+          "delta": {
+            "gross": -70,
+            "discardPaid": 70,
+            "otherWinPaid": 140,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": -280
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 2367.5,
+            "discardPaid": 0,
+            "otherWinPaid": 385,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 1982.5
+          },
+          "proposed": {
+            "gross": 2411.25,
+            "discardPaid": 70,
+            "otherWinPaid": 327.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 2013.75
+          },
+          "delta": {
+            "gross": 43.75,
+            "discardPaid": 70,
+            "otherWinPaid": -57.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 31.25
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2367.5,
+            "discardPaid": 0,
+            "otherWinPaid": 385,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 1982.5
+          },
+          "proposed": {
+            "gross": 2411.25,
+            "discardPaid": 70,
+            "otherWinPaid": 327.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 2013.75
+          },
+          "delta": {
+            "gross": 43.75,
+            "discardPaid": 70,
+            "otherWinPaid": -57.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 31.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -280,
+          "fullNetGap": -280,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -380,
+          "fullNetGap": -380,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 410,
+          "fullNetGap": 410,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 30,
+          "fullNetGap": 30,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 70,
+          "fullNetGap": 70,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -50,
+          "fullNetGap": -50,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 460,
+          "fullNetGap": 460,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -200,
+          "fullNetGap": -200,
+          "horizonDiscardGap": 70
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": -90,
+          "fullNetGap": -90,
+          "horizonDiscardGap": 70
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311064,
+      "seat": 0,
+      "wall": 41,
+      "old": {
+        "index": 8,
+        "tile": "s2",
+        "grossPrediction": 5124.000122068128,
+        "riskProxy": 64
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 5214.314543178736,
+        "riskProxy": 32
+      },
+      "predictedGrossGap": 90.31442111060824,
+      "riskGap": -32,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 4940,
+            "discardPaid": 0,
+            "otherWinPaid": 300,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4640
+          },
+          "proposed": {
+            "gross": 4940,
+            "discardPaid": 0,
+            "otherWinPaid": 300,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4640
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 0
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6830,
+            "discardPaid": 0,
+            "otherWinPaid": 380,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6450
+          },
+          "proposed": {
+            "gross": 6830,
+            "discardPaid": 0,
+            "otherWinPaid": 380,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6450
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 0
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 5622.5,
+            "discardPaid": 0,
+            "otherWinPaid": 120,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5502.5
+          },
+          "proposed": {
+            "gross": 5622.5,
+            "discardPaid": 0,
+            "otherWinPaid": 170,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5452.5
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": 50,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -50
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6761.25,
+            "discardPaid": 0,
+            "otherWinPaid": 172.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6588.75
+          },
+          "proposed": {
+            "gross": 6738.75,
+            "discardPaid": 0,
+            "otherWinPaid": 250,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6488.75
+          },
+          "delta": {
+            "gross": -22.5,
+            "discardPaid": 0,
+            "otherWinPaid": 77.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -100
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -700,
+          "fullNetGap": -500,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 600,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 0,
+          "fullNetGap": 600,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -500,
+          "fullNetGap": -500,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": -600,
+          "fullNetGap": -1200,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 100,
+          "fullNetGap": 100,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 700,
+          "fullNetGap": 700,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311086,
+      "seat": 3,
+      "wall": 48,
+      "old": {
+        "index": 8,
+        "tile": "m6",
+        "grossPrediction": 3426.5016829059177,
+        "riskProxy": 64
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 3443.946601348477,
+        "riskProxy": 32
+      },
+      "predictedGrossGap": 17.444918442559356,
+      "riskGap": -32,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 4030,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4030
+          },
+          "proposed": {
+            "gross": 4080,
+            "discardPaid": 0,
+            "otherWinPaid": 100,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3980
+          },
+          "delta": {
+            "gross": 50,
+            "discardPaid": 0,
+            "otherWinPaid": 100,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -50
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 5530,
+            "discardPaid": 0,
+            "otherWinPaid": 300,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5230
+          },
+          "proposed": {
+            "gross": 5620,
+            "discardPaid": 0,
+            "otherWinPaid": 100,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5520
+          },
+          "delta": {
+            "gross": 90,
+            "discardPaid": 0,
+            "otherWinPaid": -200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 290
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3922.5,
+            "discardPaid": 0,
+            "otherWinPaid": 187.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3735
+          },
+          "proposed": {
+            "gross": 3978.75,
+            "discardPaid": 0,
+            "otherWinPaid": 185,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3793.75
+          },
+          "delta": {
+            "gross": 56.25,
+            "discardPaid": 0,
+            "otherWinPaid": -2.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 58.75
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 5533.75,
+            "discardPaid": 0,
+            "otherWinPaid": 310,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 5221.25
+          },
+          "proposed": {
+            "gross": 5601.25,
+            "discardPaid": 0,
+            "otherWinPaid": 367.5,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 5231.25
+          },
+          "delta": {
+            "gross": 67.5,
+            "discardPaid": 0,
+            "otherWinPaid": 57.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 10
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -50,
+          "fullNetGap": 290,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 160,
+          "fullNetGap": -310,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 0,
+          "fullNetGap": 320,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 20,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 90,
+          "fullNetGap": 480,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 140,
+          "fullNetGap": 160,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 20,
+          "fullNetGap": -630,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 20,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311116,
+      "seat": 0,
+      "wall": 58,
+      "old": {
+        "index": 8,
+        "tile": "s8",
+        "grossPrediction": 3440.9991007491662,
+        "riskProxy": 4
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 3455.668635163379,
+        "riskProxy": 4
+      },
+      "predictedGrossGap": 14.669534414212649,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3790,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3790
+          },
+          "proposed": {
+            "gross": 3830,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3830
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6600,
+            "discardPaid": 0,
+            "otherWinPaid": 320,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6280
+          },
+          "proposed": {
+            "gross": 6500,
+            "discardPaid": 0,
+            "otherWinPaid": 320,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6180
+          },
+          "delta": {
+            "gross": -100,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -100
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 4020,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 4017.5
+          },
+          "proposed": {
+            "gross": 4077.5,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 4075
+          },
+          "delta": {
+            "gross": 57.5,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 57.5
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6886.25,
+            "discardPaid": 0,
+            "otherWinPaid": 20,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 6861.25
+          },
+          "proposed": {
+            "gross": 6915,
+            "discardPaid": 0,
+            "otherWinPaid": 20,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 6890
+          },
+          "delta": {
+            "gross": 28.75,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 28.75
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 40,
+          "fullNetGap": -100,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 140,
+          "fullNetGap": 160,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 140,
+          "fullNetGap": -90,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 120,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 120,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": -80,
+          "fullNetGap": -60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": -100,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311124,
+      "seat": 3,
+      "wall": 38,
+      "old": {
+        "index": 11,
+        "tile": "green",
+        "grossPrediction": 3497.668076251771,
+        "riskProxy": 32
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 3541.372986713839,
+        "riskProxy": 32
+      },
+      "predictedGrossGap": 43.704910462068256,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3790,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3790
+          },
+          "proposed": {
+            "gross": 4090,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4090
+          },
+          "delta": {
+            "gross": 300,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 300
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4210,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4210
+          },
+          "proposed": {
+            "gross": 4490,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4490
+          },
+          "delta": {
+            "gross": 280,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 280
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3863.75,
+            "discardPaid": 0,
+            "otherWinPaid": 175,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 3683.75
+          },
+          "proposed": {
+            "gross": 3976.25,
+            "discardPaid": 0,
+            "otherWinPaid": 297.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 3673.75
+          },
+          "delta": {
+            "gross": 112.5,
+            "discardPaid": 0,
+            "otherWinPaid": 122.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -10
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4280,
+            "discardPaid": 0,
+            "otherWinPaid": 212.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 4062.5
+          },
+          "proposed": {
+            "gross": 4383.75,
+            "discardPaid": 0,
+            "otherWinPaid": 347.5,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 4031.25
+          },
+          "delta": {
+            "gross": 103.75,
+            "discardPaid": 0,
+            "otherWinPaid": 135,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -31.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 300,
+          "fullNetGap": 280,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 300,
+          "fullNetGap": 320,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 300,
+          "fullNetGap": 300,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 300,
+          "fullNetGap": 300,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": -190,
+          "fullNetGap": -40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -820,
+          "fullNetGap": -990,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": -70,
+          "fullNetGap": -70,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 100,
+          "fullNetGap": -70,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311126,
+      "seat": 1,
+      "wall": 48,
+      "old": {
+        "index": 8,
+        "tile": "p8",
+        "grossPrediction": 1213.4262717089218,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 1,
+        "tile": "p1",
+        "grossPrediction": 1320.176003644618,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 106.74973193569622,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 0,
+            "discardPaid": 280,
+            "otherWinPaid": 700,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -980
+          },
+          "proposed": {
+            "gross": 1360,
+            "discardPaid": 70,
+            "otherWinPaid": 700,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 590
+          },
+          "delta": {
+            "gross": 1360,
+            "discardPaid": -210,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 1570
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4050,
+            "discardPaid": 330,
+            "otherWinPaid": 700,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3020
+          },
+          "proposed": {
+            "gross": 2020,
+            "discardPaid": 70,
+            "otherWinPaid": 700,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 1250
+          },
+          "delta": {
+            "gross": -2030,
+            "discardPaid": -260,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": -1770
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 697.5,
+            "discardPaid": 146.25,
+            "otherWinPaid": 375,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 176.25
+          },
+          "proposed": {
+            "gross": 1432.5,
+            "discardPaid": 70,
+            "otherWinPaid": 375,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 987.5
+          },
+          "delta": {
+            "gross": 735,
+            "discardPaid": -76.25,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 811.25
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1496.25,
+            "discardPaid": 187.5,
+            "otherWinPaid": 492.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 816.25
+          },
+          "proposed": {
+            "gross": 2067.5,
+            "discardPaid": 70,
+            "otherWinPaid": 475,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 1522.5
+          },
+          "delta": {
+            "gross": 571.25,
+            "discardPaid": -117.5,
+            "otherWinPaid": -17.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 70,
+            "net": 706.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 1570,
+          "fullNetGap": -1770,
+          "horizonDiscardGap": -210
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 1300,
+          "fullNetGap": 1770,
+          "horizonDiscardGap": -140
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 1130,
+          "fullNetGap": 710,
+          "horizonDiscardGap": -70
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 400,
+          "fullNetGap": 750,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 210,
+          "fullNetGap": -130,
+          "horizonDiscardGap": -140
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 590,
+          "fullNetGap": 590,
+          "horizonDiscardGap": -70
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 870,
+          "fullNetGap": 1490,
+          "horizonDiscardGap": -50
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 850,
+          "fullNetGap": 640,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 1140,
+          "fullNetGap": -170,
+          "horizonDiscardGap": -140
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311131,
+      "seat": 3,
+      "wall": 21,
+      "old": {
+        "index": 4,
+        "tile": "p1",
+        "grossPrediction": 2143.1435615547243,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 2149.4661586399984,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 6.322597085274083,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 2000,
+            "discardPaid": 10,
+            "otherWinPaid": 120,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 1870
+          },
+          "proposed": {
+            "gross": 2040,
+            "discardPaid": 10,
+            "otherWinPaid": 120,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 1910
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2000,
+            "discardPaid": 10,
+            "otherWinPaid": 120,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 1870
+          },
+          "proposed": {
+            "gross": 2040,
+            "discardPaid": 10,
+            "otherWinPaid": 120,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 1910
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 2181.25,
+            "discardPaid": 10,
+            "otherWinPaid": 107.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 2063.75
+          },
+          "proposed": {
+            "gross": 2253.75,
+            "discardPaid": 10,
+            "otherWinPaid": 107.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 2136.25
+          },
+          "delta": {
+            "gross": 72.5,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 72.5
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2181.25,
+            "discardPaid": 10,
+            "otherWinPaid": 107.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 2063.75
+          },
+          "proposed": {
+            "gross": 2253.75,
+            "discardPaid": 10,
+            "otherWinPaid": 107.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 10,
+            "net": 2136.25
+          },
+          "delta": {
+            "gross": 72.5,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 72.5
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 140,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 140,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 140,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311156,
+      "seat": 3,
+      "wall": 38,
+      "old": {
+        "index": 5,
+        "tile": "s5",
+        "grossPrediction": 3458.3327460669043,
+        "riskProxy": 32
+      },
+      "proposed": {
+        "index": 10,
+        "tile": "green",
+        "grossPrediction": 3460.0593458239537,
+        "riskProxy": 64
+      },
+      "predictedGrossGap": 1.726599757049371,
+      "riskGap": 32,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3840,
+            "discardPaid": 0,
+            "otherWinPaid": 40,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3800
+          },
+          "proposed": {
+            "gross": 3820,
+            "discardPaid": 0,
+            "otherWinPaid": 40,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3780
+          },
+          "delta": {
+            "gross": -20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4360,
+            "discardPaid": 0,
+            "otherWinPaid": 40,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4320
+          },
+          "proposed": {
+            "gross": 4340,
+            "discardPaid": 0,
+            "otherWinPaid": 40,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 4300
+          },
+          "delta": {
+            "gross": -20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -20
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3946.25,
+            "discardPaid": 0,
+            "otherWinPaid": 112.5,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 3823.75
+          },
+          "proposed": {
+            "gross": 3910,
+            "discardPaid": 0,
+            "otherWinPaid": 112.5,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 3787.5
+          },
+          "delta": {
+            "gross": -36.25,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -36.25
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4308.75,
+            "discardPaid": 0,
+            "otherWinPaid": 125,
+            "kongNet": -12.5,
+            "immediateDiscardPaid": 0,
+            "net": 4171.25
+          },
+          "proposed": {
+            "gross": 4275,
+            "discardPaid": 0,
+            "otherWinPaid": 125,
+            "kongNet": -12.5,
+            "immediateDiscardPaid": 0,
+            "net": 4137.5
+          },
+          "delta": {
+            "gross": -33.75,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -33.75
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -40,
+          "fullNetGap": -40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": -60,
+          "fullNetGap": -40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -90,
+          "fullNetGap": -90,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -60,
+          "fullNetGap": -60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311161,
+      "seat": 2,
+      "wall": 19,
+      "old": {
+        "index": 11,
+        "tile": "s6",
+        "grossPrediction": 1810.6398379669845,
+        "riskProxy": 128
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 1824.2493023285715,
+        "riskProxy": 64
+      },
+      "predictedGrossGap": 13.609464361587015,
+      "riskGap": -64,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 1700,
+            "discardPaid": 0,
+            "otherWinPaid": 560,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 1120
+          },
+          "proposed": {
+            "gross": 1740,
+            "discardPaid": 0,
+            "otherWinPaid": 560,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 1160
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1700,
+            "discardPaid": 0,
+            "otherWinPaid": 560,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 1120
+          },
+          "proposed": {
+            "gross": 1740,
+            "discardPaid": 0,
+            "otherWinPaid": 560,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 1160
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 1770,
+            "discardPaid": 0,
+            "otherWinPaid": 427.5,
+            "kongNet": -15,
+            "immediateDiscardPaid": 0,
+            "net": 1327.5
+          },
+          "proposed": {
+            "gross": 1771.25,
+            "discardPaid": 0,
+            "otherWinPaid": 440,
+            "kongNet": -15,
+            "immediateDiscardPaid": 0,
+            "net": 1316.25
+          },
+          "delta": {
+            "gross": 1.25,
+            "discardPaid": 0,
+            "otherWinPaid": 12.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -11.25
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1770,
+            "discardPaid": 0,
+            "otherWinPaid": 427.5,
+            "kongNet": -15,
+            "immediateDiscardPaid": 0,
+            "net": 1327.5
+          },
+          "proposed": {
+            "gross": 1771.25,
+            "discardPaid": 0,
+            "otherWinPaid": 440,
+            "kongNet": -15,
+            "immediateDiscardPaid": 0,
+            "net": 1316.25
+          },
+          "delta": {
+            "gross": 1.25,
+            "discardPaid": 0,
+            "otherWinPaid": 12.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -11.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -130,
+          "fullNetGap": -130,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311168,
+      "seat": 3,
+      "wall": 46,
+      "old": {
+        "index": 7,
+        "tile": "s3",
+        "grossPrediction": 3467.448433414074,
+        "riskProxy": 16
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "green",
+        "grossPrediction": 3468.898643072125,
+        "riskProxy": 64
+      },
+      "predictedGrossGap": 1.4502096580513353,
+      "riskGap": 48,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3760,
+            "discardPaid": 0,
+            "otherWinPaid": 540,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3200
+          },
+          "proposed": {
+            "gross": 3780,
+            "discardPaid": 0,
+            "otherWinPaid": 540,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3220
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4860,
+            "discardPaid": 0,
+            "otherWinPaid": 920,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3920
+          },
+          "proposed": {
+            "gross": 4900,
+            "discardPaid": 0,
+            "otherWinPaid": 920,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3960
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3691.25,
+            "discardPaid": 0,
+            "otherWinPaid": 450,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 3238.75
+          },
+          "proposed": {
+            "gross": 3751.25,
+            "discardPaid": 0,
+            "otherWinPaid": 415,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 3333.75
+          },
+          "delta": {
+            "gross": 60,
+            "discardPaid": 0,
+            "otherWinPaid": -35,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 95
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 4885,
+            "discardPaid": 0,
+            "otherWinPaid": 765,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 4117.5
+          },
+          "proposed": {
+            "gross": 4968.75,
+            "discardPaid": 0,
+            "otherWinPaid": 677.5,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 4288.75
+          },
+          "delta": {
+            "gross": 83.75,
+            "discardPaid": 0,
+            "otherWinPaid": -87.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 171.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 20,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 520,
+          "fullNetGap": 1110,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 120,
+          "fullNetGap": 120,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 20,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -20,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 120,
+          "fullNetGap": 120,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 0,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311171,
+      "seat": 0,
+      "wall": 57,
+      "old": {
+        "index": 7,
+        "tile": "s8",
+        "grossPrediction": 3426.2022592775916,
+        "riskProxy": 4
+      },
+      "proposed": {
+        "index": 10,
+        "tile": "red",
+        "grossPrediction": 3427.524924820009,
+        "riskProxy": 4
+      },
+      "predictedGrossGap": 1.322665542417326,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3910,
+            "discardPaid": 0,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3750
+          },
+          "proposed": {
+            "gross": 3880,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 3870
+          },
+          "delta": {
+            "gross": -30,
+            "discardPaid": 0,
+            "otherWinPaid": -160,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 120
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6470,
+            "discardPaid": 0,
+            "otherWinPaid": 320,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 6150
+          },
+          "proposed": {
+            "gross": 6490,
+            "discardPaid": 0,
+            "otherWinPaid": 40,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 6440
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": -280,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": 290
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3722.5,
+            "discardPaid": 0,
+            "otherWinPaid": 130,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3592.5
+          },
+          "proposed": {
+            "gross": 3752.5,
+            "discardPaid": 0,
+            "otherWinPaid": 137.5,
+            "kongNet": -12.5,
+            "immediateDiscardPaid": 0,
+            "net": 3602.5
+          },
+          "delta": {
+            "gross": 30,
+            "discardPaid": 0,
+            "otherWinPaid": 7.5,
+            "kongNet": -12.5,
+            "immediateDiscardPaid": 0,
+            "net": 10
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6421.25,
+            "discardPaid": 0,
+            "otherWinPaid": 285,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 6133.75
+          },
+          "proposed": {
+            "gross": 6411.25,
+            "discardPaid": 0,
+            "otherWinPaid": 363.75,
+            "kongNet": -12.5,
+            "immediateDiscardPaid": 0,
+            "net": 6035
+          },
+          "delta": {
+            "gross": -10,
+            "discardPaid": 0,
+            "otherWinPaid": 78.75,
+            "kongNet": -10,
+            "immediateDiscardPaid": 0,
+            "net": -98.75
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 120,
+          "fullNetGap": 290,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -20,
+          "fullNetGap": -350,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": -250,
+          "fullNetGap": -780,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -70,
+          "fullNetGap": -390,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 20,
+          "fullNetGap": 640,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 490,
+          "fullNetGap": 810,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": -40,
+          "fullNetGap": -480,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -60,
+          "fullNetGap": -340,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 10,
+          "fullNetGap": 100,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311179,
+      "seat": 2,
+      "wall": 18,
+      "old": {
+        "index": 9,
+        "tile": "s6",
+        "grossPrediction": 1743.0690311942724,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 1764.3740497526228,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 21.30501855835041,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 1840,
+            "discardPaid": 50,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1550
+          },
+          "proposed": {
+            "gross": 1840,
+            "discardPaid": 50,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1550
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 0
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1840,
+            "discardPaid": 50,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1550
+          },
+          "proposed": {
+            "gross": 1840,
+            "discardPaid": 50,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1550
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 0
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 1875,
+            "discardPaid": 50,
+            "otherWinPaid": 250,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1575
+          },
+          "proposed": {
+            "gross": 1895,
+            "discardPaid": 50,
+            "otherWinPaid": 250,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1595
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1875,
+            "discardPaid": 50,
+            "otherWinPaid": 250,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1575
+          },
+          "proposed": {
+            "gross": 1895,
+            "discardPaid": 50,
+            "otherWinPaid": 250,
+            "kongNet": 0,
+            "immediateDiscardPaid": 50,
+            "net": 1595
+          },
+          "delta": {
+            "gross": 20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 120,
+          "fullNetGap": 120,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311194,
+      "seat": 1,
+      "wall": 23,
+      "old": {
+        "index": 8,
+        "tile": "red",
+        "grossPrediction": 496.6113685825249,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 9,
+        "tile": "white",
+        "grossPrediction": 527.8393956396674,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 31.22802705714247,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 640,
+            "discardPaid": 50,
+            "otherWinPaid": 280,
+            "kongNet": 60,
+            "immediateDiscardPaid": 50,
+            "net": 370
+          },
+          "proposed": {
+            "gross": 560,
+            "discardPaid": 50,
+            "otherWinPaid": 280,
+            "kongNet": 60,
+            "immediateDiscardPaid": 50,
+            "net": 290
+          },
+          "delta": {
+            "gross": -80,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -80
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 640,
+            "discardPaid": 50,
+            "otherWinPaid": 280,
+            "kongNet": 60,
+            "immediateDiscardPaid": 50,
+            "net": 370
+          },
+          "proposed": {
+            "gross": 560,
+            "discardPaid": 50,
+            "otherWinPaid": 280,
+            "kongNet": 60,
+            "immediateDiscardPaid": 50,
+            "net": 290
+          },
+          "delta": {
+            "gross": -80,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -80
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 1330,
+            "discardPaid": 76.25,
+            "otherWinPaid": 295,
+            "kongNet": -3.75,
+            "immediateDiscardPaid": 50,
+            "net": 955
+          },
+          "proposed": {
+            "gross": 1395,
+            "discardPaid": 81.25,
+            "otherWinPaid": 292.5,
+            "kongNet": 1.25,
+            "immediateDiscardPaid": 50,
+            "net": 1022.5
+          },
+          "delta": {
+            "gross": 65,
+            "discardPaid": 5,
+            "otherWinPaid": -2.5,
+            "kongNet": 5,
+            "immediateDiscardPaid": 0,
+            "net": 67.5
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1330,
+            "discardPaid": 76.25,
+            "otherWinPaid": 295,
+            "kongNet": -3.75,
+            "immediateDiscardPaid": 50,
+            "net": 955
+          },
+          "proposed": {
+            "gross": 1395,
+            "discardPaid": 81.25,
+            "otherWinPaid": 292.5,
+            "kongNet": 1.25,
+            "immediateDiscardPaid": 50,
+            "net": 1022.5
+          },
+          "delta": {
+            "gross": 65,
+            "discardPaid": 5,
+            "otherWinPaid": -2.5,
+            "kongNet": 5,
+            "immediateDiscardPaid": 0,
+            "net": 67.5
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -80,
+          "fullNetGap": -80,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 710,
+          "fullNetGap": 710,
+          "horizonDiscardGap": 40
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": -60,
+          "fullNetGap": -60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -110,
+          "fullNetGap": -110,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311224,
+      "seat": 1,
+      "wall": 32,
+      "old": {
+        "index": 11,
+        "tile": "s8",
+        "grossPrediction": 3330.608439709984,
+        "riskProxy": 128
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 3348.096887425067,
+        "riskProxy": 64
+      },
+      "predictedGrossGap": 17.48844771508311,
+      "riskGap": -64,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3310,
+            "discardPaid": 0,
+            "otherWinPaid": 140,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3150
+          },
+          "proposed": {
+            "gross": 3570,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3550
+          },
+          "delta": {
+            "gross": 260,
+            "discardPaid": 0,
+            "otherWinPaid": -140,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 400
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3310,
+            "discardPaid": 0,
+            "otherWinPaid": 140,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3150
+          },
+          "proposed": {
+            "gross": 3570,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -20,
+            "immediateDiscardPaid": 0,
+            "net": 3550
+          },
+          "delta": {
+            "gross": 260,
+            "discardPaid": 0,
+            "otherWinPaid": -140,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 400
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3747.5,
+            "discardPaid": 0,
+            "otherWinPaid": 85,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 3660
+          },
+          "proposed": {
+            "gross": 3780,
+            "discardPaid": 0,
+            "otherWinPaid": 80,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 3695
+          },
+          "delta": {
+            "gross": 32.5,
+            "discardPaid": 0,
+            "otherWinPaid": -5,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 35
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3747.5,
+            "discardPaid": 0,
+            "otherWinPaid": 85,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 3660
+          },
+          "proposed": {
+            "gross": 3780,
+            "discardPaid": 0,
+            "otherWinPaid": 80,
+            "kongNet": -5,
+            "immediateDiscardPaid": 0,
+            "net": 3695
+          },
+          "delta": {
+            "gross": 32.5,
+            "discardPaid": 0,
+            "otherWinPaid": -5,
+            "kongNet": -2.5,
+            "immediateDiscardPaid": 0,
+            "net": 35
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 400,
+          "fullNetGap": 400,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -150,
+          "fullNetGap": -150,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": -130,
+          "fullNetGap": -130,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 50,
+          "fullNetGap": 50,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -10,
+          "fullNetGap": -10,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 610,
+          "fullNetGap": 610,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -70,
+          "fullNetGap": -70,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311227,
+      "seat": 2,
+      "wall": 57,
+      "old": {
+        "index": 7,
+        "tile": "s7",
+        "grossPrediction": 3442.692499620327,
+        "riskProxy": 4
+      },
+      "proposed": {
+        "index": 8,
+        "tile": "east",
+        "grossPrediction": 3444.0234660506726,
+        "riskProxy": 4
+      },
+      "predictedGrossGap": 1.3309664303455975,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3990,
+            "discardPaid": 0,
+            "otherWinPaid": 360,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3630
+          },
+          "proposed": {
+            "gross": 3850,
+            "discardPaid": 0,
+            "otherWinPaid": 360,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3490
+          },
+          "delta": {
+            "gross": -140,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -140
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6550,
+            "discardPaid": 0,
+            "otherWinPaid": 1520,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5030
+          },
+          "proposed": {
+            "gross": 6530,
+            "discardPaid": 0,
+            "otherWinPaid": 1520,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 5010
+          },
+          "delta": {
+            "gross": -20,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -20
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3961.25,
+            "discardPaid": 0,
+            "otherWinPaid": 52.5,
+            "kongNet": -7.5,
+            "immediateDiscardPaid": 0,
+            "net": 3901.25
+          },
+          "proposed": {
+            "gross": 3988.75,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": -7.5,
+            "immediateDiscardPaid": 0,
+            "net": 3981.25
+          },
+          "delta": {
+            "gross": 27.5,
+            "discardPaid": 0,
+            "otherWinPaid": -52.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 80
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 6555,
+            "discardPaid": 0,
+            "otherWinPaid": 220,
+            "kongNet": -7.5,
+            "immediateDiscardPaid": 0,
+            "net": 6327.5
+          },
+          "proposed": {
+            "gross": 6613.75,
+            "discardPaid": 0,
+            "otherWinPaid": 105,
+            "kongNet": -7.5,
+            "immediateDiscardPaid": 0,
+            "net": 6501.25
+          },
+          "delta": {
+            "gross": 58.75,
+            "discardPaid": 0,
+            "otherWinPaid": -115,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 173.75
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -140,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": -20,
+          "fullNetGap": -160,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 640,
+          "fullNetGap": 1360,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -20,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": -140,
+          "fullNetGap": -90,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 0,
+          "fullNetGap": -60,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 140,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 140,
+          "fullNetGap": 160,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 40,
+          "fullNetGap": 40,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311241,
+      "seat": 3,
+      "wall": 22,
+      "old": {
+        "index": 11,
+        "tile": "s8",
+        "grossPrediction": 2229.3864213989345,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 2267.9553881185584,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 38.56896671962386,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 2070,
+            "discardPaid": 20,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1810
+          },
+          "proposed": {
+            "gross": 2370,
+            "discardPaid": 20,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 2110
+          },
+          "delta": {
+            "gross": 300,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 300
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2070,
+            "discardPaid": 20,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1810
+          },
+          "proposed": {
+            "gross": 2370,
+            "discardPaid": 20,
+            "otherWinPaid": 240,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 2110
+          },
+          "delta": {
+            "gross": 300,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 300
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 2156.25,
+            "discardPaid": 20,
+            "otherWinPaid": 280,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1856.25
+          },
+          "proposed": {
+            "gross": 2196.25,
+            "discardPaid": 20,
+            "otherWinPaid": 280,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1896.25
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 2156.25,
+            "discardPaid": 20,
+            "otherWinPaid": 280,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1856.25
+          },
+          "proposed": {
+            "gross": 2196.25,
+            "discardPaid": 20,
+            "otherWinPaid": 280,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1896.25
+          },
+          "delta": {
+            "gross": 40,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 40
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 300,
+          "fullNetGap": 300,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": 300,
+          "fullNetGap": 300,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311248,
+      "seat": 2,
+      "wall": 30,
+      "old": {
+        "index": 6,
+        "tile": "s6",
+        "grossPrediction": 3131.4002111494447,
+        "riskProxy": 4
+      },
+      "proposed": {
+        "index": 8,
+        "tile": "red",
+        "grossPrediction": 3135.6857232809725,
+        "riskProxy": 4
+      },
+      "predictedGrossGap": 4.285512131527867,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 3060,
+            "discardPaid": 0,
+            "otherWinPaid": 820,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2240
+          },
+          "proposed": {
+            "gross": 3060,
+            "discardPaid": 0,
+            "otherWinPaid": 800,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2260
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": -20,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3060,
+            "discardPaid": 0,
+            "otherWinPaid": 820,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2240
+          },
+          "proposed": {
+            "gross": 3060,
+            "discardPaid": 0,
+            "otherWinPaid": 800,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 2260
+          },
+          "delta": {
+            "gross": 0,
+            "discardPaid": 0,
+            "otherWinPaid": -20,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 20
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 3265,
+            "discardPaid": 0,
+            "otherWinPaid": 200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3065
+          },
+          "proposed": {
+            "gross": 3231.25,
+            "discardPaid": 0,
+            "otherWinPaid": 192.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3038.75
+          },
+          "delta": {
+            "gross": -33.75,
+            "discardPaid": 0,
+            "otherWinPaid": -7.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -26.25
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 3265,
+            "discardPaid": 0,
+            "otherWinPaid": 200,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3065
+          },
+          "proposed": {
+            "gross": 3231.25,
+            "discardPaid": 0,
+            "otherWinPaid": 192.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": 3038.75
+          },
+          "delta": {
+            "gross": -33.75,
+            "discardPaid": 0,
+            "otherWinPaid": -7.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -26.25
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": 20,
+          "fullNetGap": 20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": -20,
+          "fullNetGap": -20,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 50,
+          "fullNetGap": 50,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": -50,
+          "fullNetGap": -50,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 50,
+          "fullNetGap": 50,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -350,
+          "fullNetGap": -350,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": 110,
+          "fullNetGap": 110,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    },
+    {
+      "seed": 311256,
+      "seat": 2,
+      "wall": 15,
+      "old": {
+        "index": 11,
+        "tile": "north",
+        "grossPrediction": 1422.8335910599149,
+        "riskProxy": 160
+      },
+      "proposed": {
+        "index": 12,
+        "tile": "white",
+        "grossPrediction": 1426.2283735544956,
+        "riskProxy": 160
+      },
+      "predictedGrossGap": 3.394782494580795,
+      "riskGap": 0,
+      "original": {
+        "horizon": {
+          "old": {
+            "gross": 1920,
+            "discardPaid": 20,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1740
+          },
+          "proposed": {
+            "gross": 1320,
+            "discardPaid": 20,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1140
+          },
+          "delta": {
+            "gross": -600,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -600
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1920,
+            "discardPaid": 20,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1740
+          },
+          "proposed": {
+            "gross": 1320,
+            "discardPaid": 20,
+            "otherWinPaid": 160,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1140
+          },
+          "delta": {
+            "gross": -600,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -600
+          }
+        }
+      },
+      "permuted": {
+        "horizon": {
+          "old": {
+            "gross": 1531.25,
+            "discardPaid": 20,
+            "otherWinPaid": 167.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1343.75
+          },
+          "proposed": {
+            "gross": 1381.25,
+            "discardPaid": 20,
+            "otherWinPaid": 167.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1193.75
+          },
+          "delta": {
+            "gross": -150,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -150
+          }
+        },
+        "full": {
+          "old": {
+            "gross": 1531.25,
+            "discardPaid": 20,
+            "otherWinPaid": 167.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1343.75
+          },
+          "proposed": {
+            "gross": 1381.25,
+            "discardPaid": 20,
+            "otherWinPaid": 167.5,
+            "kongNet": 0,
+            "immediateDiscardPaid": 20,
+            "net": 1193.75
+          },
+          "delta": {
+            "gross": -150,
+            "discardPaid": 0,
+            "otherWinPaid": 0,
+            "kongNet": 0,
+            "immediateDiscardPaid": 0,
+            "net": -150
+          }
+        }
+      },
+      "samples": [
+        {
+          "sample": -1,
+          "horizonNetGap": -600,
+          "fullNetGap": -600,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 0,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 1,
+          "horizonNetGap": -300,
+          "fullNetGap": -300,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 2,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 3,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 4,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 5,
+          "horizonNetGap": 0,
+          "fullNetGap": 0,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 6,
+          "horizonNetGap": -600,
+          "fullNetGap": -600,
+          "horizonDiscardGap": 0
+        },
+        {
+          "sample": 7,
+          "horizonNetGap": -300,
+          "fullNetGap": -300,
+          "horizonDiscardGap": 0
+        }
+      ],
+      "immediateInvariant": true
+    }
+  ]
+}

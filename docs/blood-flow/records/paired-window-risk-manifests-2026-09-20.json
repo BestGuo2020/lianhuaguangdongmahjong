@@ -1,0 +1,740 @@
+[
+  {
+    "metadata": {
+      "from": 310001,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "base": {
+        "strategy": "ev",
+        "minimumFirstPayment": 0,
+        "selfDrawWeight": 6,
+        "firstWinFloorEarly": 40,
+        "firstWinFloorMid": 20,
+        "firstWinFloorLate": 10,
+        "lateGameWallCount": 15,
+        "earlyGameWallCount": 40,
+        "potentialFloor": 2,
+        "reformGainRatio": 1.2,
+        "chainHorizon": 8,
+        "chainForecast": "source-v2",
+        "safetyCostNone": 0.25,
+        "safetyCostOne": 0.1,
+        "safetyCostSafe": 0,
+        "opponentPatternRisk": "tier",
+        "riskFactorTier1": 4,
+        "riskFactorTier2": 16,
+        "riskFactorTier3": 32,
+        "riskOffSuitFactor": 0.5,
+        "defense": {
+          "foldThreatTier": 3,
+          "ceilingProgress": 0.35,
+          "ceilingWeightFloor": 4,
+          "mode": "hard",
+          "foldDiscardTolerance": 0
+        },
+        "bigHandRoute": {
+          "mode": "bot",
+          "enabled": [
+            "thirteenOrphans",
+            "nineGates",
+            "pureSuit",
+            "mixedSuit",
+            "allTriplets"
+          ],
+          "minOrphanKinds": 12,
+          "minSuitRanks": 9,
+          "minSuitTiles": 12,
+          "pureSuitMinTiles": 10,
+          "pureSuitMaxForeign": 2,
+          "mixedSuitMinTiles": 10,
+          "mixedSuitMaxForeign": 1,
+          "allTripletsMinUnits": 4,
+          "declineWinRatio": 2,
+          "minWallForCommit": 20,
+          "minDeficitForCommit": 300,
+          "minWallForCommitWithJokers": 15,
+          "jokerReliefCount": 2
+        },
+        "routeOpportunityGuard": true,
+        "claimMeldProjection": true,
+        "claimReadyNetGuard": true,
+        "llmEvFeatures": true,
+        "kongValue": {
+          "mode": "ev",
+          "bonusWeight": 1,
+          "robRisk": 60,
+          "shantenStepLoss": 10,
+          "concealedHandFallback": 0.5
+        },
+        "sevenPairsModel": "ev",
+        "opportunityCalibration": {
+          "drawScale": 0.9975786924939467,
+          "discardScale": 0.8990627253064167,
+          "selfYield": 0.8478712071537614,
+          "ronYield": 0.9877357078236184
+        }
+      },
+      "model": {
+        "version": 1,
+        "weights": {
+          "global": {
+            "wildcard-face": 0.03969575903638709,
+            "honor": 0.564607168271524,
+            "terminal": 1,
+            "middle": 0.7027106615711017
+          },
+          "false": {
+            "wildcard-face": 0.01150572420931798,
+            "honor": 0.5680607000419352,
+            "terminal": 1,
+            "middle": 0.6930751484261005
+          },
+          "false/low-1-40": {
+            "wildcard-face": 0.013820746757967042,
+            "honor": 0.529960350891283,
+            "terminal": 1,
+            "middle": 0.72366907862938
+          },
+          "false/mid-40-160": {
+            "wildcard-face": 0.008318089718268994,
+            "honor": 0.608650447602147,
+            "terminal": 1,
+            "middle": 0.6676605137533529
+          },
+          "true": {
+            "wildcard-face": 0.06215905442333147,
+            "honor": 0.5409826836741746,
+            "terminal": 1,
+            "middle": 0.7132906838228376
+          },
+          "true/low-1-40": {
+            "wildcard-face": 0.08362862568814261,
+            "honor": 0.4850882541617401,
+            "terminal": 1,
+            "middle": 0.6661042123514104
+          },
+          "true/mid-40-160": {
+            "wildcard-face": 0.04498430184195604,
+            "honor": 0.6005454314020906,
+            "terminal": 1,
+            "middle": 0.7614692584966799
+          }
+        }
+      },
+      "scope": "All four seats use frozen source-v2. First qualified ranking disagreement per source round only. Candidate actions and public features frozen before rollout. No outcome-dependent filtering."
+    },
+    "manifest": {
+      "from": 310001,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "windows": [
+        {
+          "seed": 310010,
+          "seat": 1,
+          "checkpointHash": "2b0675be8fdde344345da086ed856444ea988979f5d60543d5ef483b499712a6"
+        },
+        {
+          "seed": 310016,
+          "seat": 0,
+          "checkpointHash": "293c68591c6ca640f6828dcbd66618b47b692eb6d6409608dac9047006d8b6b4"
+        },
+        {
+          "seed": 310039,
+          "seat": 3,
+          "checkpointHash": "9a08ed5a1b635947e046ec4368231141e666907c4b1a51bb8023f4d83cef944a"
+        },
+        {
+          "seed": 310045,
+          "seat": 2,
+          "checkpointHash": "fb403dcbc9464af6f735825e67e37d17d13942a775853df78657de7fbd08d95e"
+        },
+        {
+          "seed": 310057,
+          "seat": 0,
+          "checkpointHash": "5609eea830190a993a9d009bb81ab4aaad724547102465b468dd533a3ed8f0f3"
+        },
+        {
+          "seed": 310059,
+          "seat": 2,
+          "checkpointHash": "c97ff843d11cb32f683a0a61054dc71b110f83713632d4bc90487535fc0c2939"
+        },
+        {
+          "seed": 310075,
+          "seat": 3,
+          "checkpointHash": "e3f0ad875d8f95f3c49df7b8f08c528c1c0851e84fe2e5e09ca0fd14be2f66fa"
+        },
+        {
+          "seed": 310076,
+          "seat": 2,
+          "checkpointHash": "f13bdecacefe36927d675ca3e1d37f5042ca349363238c71e177c9ad46714037"
+        },
+        {
+          "seed": 310094,
+          "seat": 2,
+          "checkpointHash": "34fc1570735c4d96d1238e6187e2e972d7a914fb91667711c9fe325dd76153ed"
+        },
+        {
+          "seed": 310113,
+          "seat": 1,
+          "checkpointHash": "c36b60df2a63eae6cabe4162efc69c9d7e307454f81d41f08a24b98c08122764"
+        },
+        {
+          "seed": 310127,
+          "seat": 3,
+          "checkpointHash": "95a12921fd2f42a8a397e5d2c4e7d7c5e8029b66d83872f184f28a023ac5c6ea"
+        }
+      ]
+    }
+  },
+  {
+    "metadata": {
+      "from": 310129,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "base": {
+        "strategy": "ev",
+        "minimumFirstPayment": 0,
+        "selfDrawWeight": 6,
+        "firstWinFloorEarly": 40,
+        "firstWinFloorMid": 20,
+        "firstWinFloorLate": 10,
+        "lateGameWallCount": 15,
+        "earlyGameWallCount": 40,
+        "potentialFloor": 2,
+        "reformGainRatio": 1.2,
+        "chainHorizon": 8,
+        "chainForecast": "source-v2",
+        "safetyCostNone": 0.25,
+        "safetyCostOne": 0.1,
+        "safetyCostSafe": 0,
+        "opponentPatternRisk": "tier",
+        "riskFactorTier1": 4,
+        "riskFactorTier2": 16,
+        "riskFactorTier3": 32,
+        "riskOffSuitFactor": 0.5,
+        "defense": {
+          "foldThreatTier": 3,
+          "ceilingProgress": 0.35,
+          "ceilingWeightFloor": 4,
+          "mode": "hard",
+          "foldDiscardTolerance": 0
+        },
+        "bigHandRoute": {
+          "mode": "bot",
+          "enabled": [
+            "thirteenOrphans",
+            "nineGates",
+            "pureSuit",
+            "mixedSuit",
+            "allTriplets"
+          ],
+          "minOrphanKinds": 12,
+          "minSuitRanks": 9,
+          "minSuitTiles": 12,
+          "pureSuitMinTiles": 10,
+          "pureSuitMaxForeign": 2,
+          "mixedSuitMinTiles": 10,
+          "mixedSuitMaxForeign": 1,
+          "allTripletsMinUnits": 4,
+          "declineWinRatio": 2,
+          "minWallForCommit": 20,
+          "minDeficitForCommit": 300,
+          "minWallForCommitWithJokers": 15,
+          "jokerReliefCount": 2
+        },
+        "routeOpportunityGuard": true,
+        "claimMeldProjection": true,
+        "claimReadyNetGuard": true,
+        "llmEvFeatures": true,
+        "kongValue": {
+          "mode": "ev",
+          "bonusWeight": 1,
+          "robRisk": 60,
+          "shantenStepLoss": 10,
+          "concealedHandFallback": 0.5
+        },
+        "sevenPairsModel": "ev",
+        "opportunityCalibration": {
+          "drawScale": 0.9975786924939467,
+          "discardScale": 0.8990627253064167,
+          "selfYield": 0.8478712071537614,
+          "ronYield": 0.9877357078236184
+        }
+      },
+      "model": {
+        "version": 1,
+        "weights": {
+          "global": {
+            "wildcard-face": 0.03969575903638709,
+            "honor": 0.564607168271524,
+            "terminal": 1,
+            "middle": 0.7027106615711017
+          },
+          "false": {
+            "wildcard-face": 0.01150572420931798,
+            "honor": 0.5680607000419352,
+            "terminal": 1,
+            "middle": 0.6930751484261005
+          },
+          "false/low-1-40": {
+            "wildcard-face": 0.013820746757967042,
+            "honor": 0.529960350891283,
+            "terminal": 1,
+            "middle": 0.72366907862938
+          },
+          "false/mid-40-160": {
+            "wildcard-face": 0.008318089718268994,
+            "honor": 0.608650447602147,
+            "terminal": 1,
+            "middle": 0.6676605137533529
+          },
+          "true": {
+            "wildcard-face": 0.06215905442333147,
+            "honor": 0.5409826836741746,
+            "terminal": 1,
+            "middle": 0.7132906838228376
+          },
+          "true/low-1-40": {
+            "wildcard-face": 0.08362862568814261,
+            "honor": 0.4850882541617401,
+            "terminal": 1,
+            "middle": 0.6661042123514104
+          },
+          "true/mid-40-160": {
+            "wildcard-face": 0.04498430184195604,
+            "honor": 0.6005454314020906,
+            "terminal": 1,
+            "middle": 0.7614692584966799
+          }
+        }
+      },
+      "scope": "All four seats use frozen source-v2. First qualified ranking disagreement per source round only. Candidate actions and public features frozen before rollout. No outcome-dependent filtering."
+    },
+    "manifest": {
+      "from": 310129,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "windows": [
+        {
+          "seed": 310137,
+          "seat": 0,
+          "checkpointHash": "d2b81aabc840c8cdcce03e2df925e8f3e6be67475aaac4d5e2581d170ca533e3"
+        },
+        {
+          "seed": 310138,
+          "seat": 1,
+          "checkpointHash": "084ff86cd93a3fec98cf78365e56a643919044973760db781aaa57f56dba7323"
+        },
+        {
+          "seed": 310148,
+          "seat": 3,
+          "checkpointHash": "c21edfdd4cf4a181aa006a2a86de3ae5e266b3cd2802ea8ea8a3cca7611cbbe8"
+        },
+        {
+          "seed": 310149,
+          "seat": 3,
+          "checkpointHash": "d3f88518a39dc128e44693c8d4f1c298f5a4cf519a039d1372b6b74fe99d8293"
+        },
+        {
+          "seed": 310167,
+          "seat": 3,
+          "checkpointHash": "5fea37e729efedf6f6d27c6ca9a60205ab39f6c704885521e57367a2a559f328"
+        },
+        {
+          "seed": 310191,
+          "seat": 2,
+          "checkpointHash": "e4d723dc8d0382557fa133af612249aaff75b32d9a6a7cc7eb3199ec38385374"
+        },
+        {
+          "seed": 310195,
+          "seat": 0,
+          "checkpointHash": "9775e11cf0582d9b0b9b77359100189d63926b211bc9321b4c360fc3fb9e3a35"
+        },
+        {
+          "seed": 310200,
+          "seat": 1,
+          "checkpointHash": "498cb4c1e86a47ae5635f6adf77254403e3a2ca873897230aeb6ce8b1422120e"
+        },
+        {
+          "seed": 310205,
+          "seat": 3,
+          "checkpointHash": "bad6003d755de5ef9a002fb8a889f9fdf15dbda3ffc76310affe753d672e8e26"
+        },
+        {
+          "seed": 310232,
+          "seat": 2,
+          "checkpointHash": "767ffe5c86ee228c5c8df2985f47b44f2ce13594714c16016aa3196ad16d8154"
+        },
+        {
+          "seed": 310233,
+          "seat": 3,
+          "checkpointHash": "fbe13c9afb1aa742b741eb32b994f41f5a18b6a8bb7b861d3728145d6202211d"
+        }
+      ]
+    }
+  },
+  {
+    "metadata": {
+      "from": 311001,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "base": {
+        "strategy": "ev",
+        "minimumFirstPayment": 0,
+        "selfDrawWeight": 6,
+        "firstWinFloorEarly": 40,
+        "firstWinFloorMid": 20,
+        "firstWinFloorLate": 10,
+        "lateGameWallCount": 15,
+        "earlyGameWallCount": 40,
+        "potentialFloor": 2,
+        "reformGainRatio": 1.2,
+        "chainHorizon": 8,
+        "chainForecast": "source-v2",
+        "safetyCostNone": 0.25,
+        "safetyCostOne": 0.1,
+        "safetyCostSafe": 0,
+        "opponentPatternRisk": "tier",
+        "riskFactorTier1": 4,
+        "riskFactorTier2": 16,
+        "riskFactorTier3": 32,
+        "riskOffSuitFactor": 0.5,
+        "defense": {
+          "foldThreatTier": 3,
+          "ceilingProgress": 0.35,
+          "ceilingWeightFloor": 4,
+          "mode": "hard",
+          "foldDiscardTolerance": 0
+        },
+        "bigHandRoute": {
+          "mode": "bot",
+          "enabled": [
+            "thirteenOrphans",
+            "nineGates",
+            "pureSuit",
+            "mixedSuit",
+            "allTriplets"
+          ],
+          "minOrphanKinds": 12,
+          "minSuitRanks": 9,
+          "minSuitTiles": 12,
+          "pureSuitMinTiles": 10,
+          "pureSuitMaxForeign": 2,
+          "mixedSuitMinTiles": 10,
+          "mixedSuitMaxForeign": 1,
+          "allTripletsMinUnits": 4,
+          "declineWinRatio": 2,
+          "minWallForCommit": 20,
+          "minDeficitForCommit": 300,
+          "minWallForCommitWithJokers": 15,
+          "jokerReliefCount": 2
+        },
+        "routeOpportunityGuard": true,
+        "claimMeldProjection": true,
+        "claimReadyNetGuard": true,
+        "llmEvFeatures": true,
+        "kongValue": {
+          "mode": "ev",
+          "bonusWeight": 1,
+          "robRisk": 60,
+          "shantenStepLoss": 10,
+          "concealedHandFallback": 0.5
+        },
+        "sevenPairsModel": "ev",
+        "opportunityCalibration": {
+          "drawScale": 0.9975786924939467,
+          "discardScale": 0.8990627253064167,
+          "selfYield": 0.8478712071537614,
+          "ronYield": 0.9877357078236184
+        }
+      },
+      "model": {
+        "version": 1,
+        "weights": {
+          "global": {
+            "wildcard-face": 0.03969575903638709,
+            "honor": 0.564607168271524,
+            "terminal": 1,
+            "middle": 0.7027106615711017
+          },
+          "false": {
+            "wildcard-face": 0.01150572420931798,
+            "honor": 0.5680607000419352,
+            "terminal": 1,
+            "middle": 0.6930751484261005
+          },
+          "false/low-1-40": {
+            "wildcard-face": 0.013820746757967042,
+            "honor": 0.529960350891283,
+            "terminal": 1,
+            "middle": 0.72366907862938
+          },
+          "false/mid-40-160": {
+            "wildcard-face": 0.008318089718268994,
+            "honor": 0.608650447602147,
+            "terminal": 1,
+            "middle": 0.6676605137533529
+          },
+          "true": {
+            "wildcard-face": 0.06215905442333147,
+            "honor": 0.5409826836741746,
+            "terminal": 1,
+            "middle": 0.7132906838228376
+          },
+          "true/low-1-40": {
+            "wildcard-face": 0.08362862568814261,
+            "honor": 0.4850882541617401,
+            "terminal": 1,
+            "middle": 0.6661042123514104
+          },
+          "true/mid-40-160": {
+            "wildcard-face": 0.04498430184195604,
+            "honor": 0.6005454314020906,
+            "terminal": 1,
+            "middle": 0.7614692584966799
+          }
+        }
+      },
+      "scope": "All four seats use frozen source-v2. First qualified ranking disagreement per source round only. Candidate actions and public features frozen before rollout. No outcome-dependent filtering."
+    },
+    "manifest": {
+      "from": 311001,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "windows": [
+        {
+          "seed": 311003,
+          "seat": 1,
+          "checkpointHash": "b856e88ee8de8e789716aecf956bf00d15bb36230f9e59ebe67e039d249eaaa1"
+        },
+        {
+          "seed": 311016,
+          "seat": 2,
+          "checkpointHash": "32fb1ef087552f44aeab5a2d99a2147bd4a41e10f8bde3377309044ed08b0299"
+        },
+        {
+          "seed": 311027,
+          "seat": 1,
+          "checkpointHash": "1d150126374db09b2f8028eb11a8ed570938a9db647d4398d4cd1518e0ee4e9d"
+        },
+        {
+          "seed": 311064,
+          "seat": 0,
+          "checkpointHash": "bd316abd34fbbe0e0277cb85253c802b00ae89449f135d7f38abad8ead85990f"
+        },
+        {
+          "seed": 311086,
+          "seat": 3,
+          "checkpointHash": "9e77a2bcb592e90b5bbd809d09bd0fc807194fb551f3903946664e170a65e190"
+        },
+        {
+          "seed": 311116,
+          "seat": 0,
+          "checkpointHash": "7cde750dfbbf325b290bf85e500782196d22f5a92c8acd7a382de015b27f10ef"
+        },
+        {
+          "seed": 311124,
+          "seat": 3,
+          "checkpointHash": "32eb72fe79e91cee9be3b7b24af31dd2f0f75756f3496d8fa60da76169d459ad"
+        },
+        {
+          "seed": 311126,
+          "seat": 1,
+          "checkpointHash": "1bf96052c84df91f4c48f576025b0dca517c5c9fe5191c6d81c4648b5720877b"
+        }
+      ]
+    }
+  },
+  {
+    "metadata": {
+      "from": 311129,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "base": {
+        "strategy": "ev",
+        "minimumFirstPayment": 0,
+        "selfDrawWeight": 6,
+        "firstWinFloorEarly": 40,
+        "firstWinFloorMid": 20,
+        "firstWinFloorLate": 10,
+        "lateGameWallCount": 15,
+        "earlyGameWallCount": 40,
+        "potentialFloor": 2,
+        "reformGainRatio": 1.2,
+        "chainHorizon": 8,
+        "chainForecast": "source-v2",
+        "safetyCostNone": 0.25,
+        "safetyCostOne": 0.1,
+        "safetyCostSafe": 0,
+        "opponentPatternRisk": "tier",
+        "riskFactorTier1": 4,
+        "riskFactorTier2": 16,
+        "riskFactorTier3": 32,
+        "riskOffSuitFactor": 0.5,
+        "defense": {
+          "foldThreatTier": 3,
+          "ceilingProgress": 0.35,
+          "ceilingWeightFloor": 4,
+          "mode": "hard",
+          "foldDiscardTolerance": 0
+        },
+        "bigHandRoute": {
+          "mode": "bot",
+          "enabled": [
+            "thirteenOrphans",
+            "nineGates",
+            "pureSuit",
+            "mixedSuit",
+            "allTriplets"
+          ],
+          "minOrphanKinds": 12,
+          "minSuitRanks": 9,
+          "minSuitTiles": 12,
+          "pureSuitMinTiles": 10,
+          "pureSuitMaxForeign": 2,
+          "mixedSuitMinTiles": 10,
+          "mixedSuitMaxForeign": 1,
+          "allTripletsMinUnits": 4,
+          "declineWinRatio": 2,
+          "minWallForCommit": 20,
+          "minDeficitForCommit": 300,
+          "minWallForCommitWithJokers": 15,
+          "jokerReliefCount": 2
+        },
+        "routeOpportunityGuard": true,
+        "claimMeldProjection": true,
+        "claimReadyNetGuard": true,
+        "llmEvFeatures": true,
+        "kongValue": {
+          "mode": "ev",
+          "bonusWeight": 1,
+          "robRisk": 60,
+          "shantenStepLoss": 10,
+          "concealedHandFallback": 0.5
+        },
+        "sevenPairsModel": "ev",
+        "opportunityCalibration": {
+          "drawScale": 0.9975786924939467,
+          "discardScale": 0.8990627253064167,
+          "selfYield": 0.8478712071537614,
+          "ronYield": 0.9877357078236184
+        }
+      },
+      "model": {
+        "version": 1,
+        "weights": {
+          "global": {
+            "wildcard-face": 0.03969575903638709,
+            "honor": 0.564607168271524,
+            "terminal": 1,
+            "middle": 0.7027106615711017
+          },
+          "false": {
+            "wildcard-face": 0.01150572420931798,
+            "honor": 0.5680607000419352,
+            "terminal": 1,
+            "middle": 0.6930751484261005
+          },
+          "false/low-1-40": {
+            "wildcard-face": 0.013820746757967042,
+            "honor": 0.529960350891283,
+            "terminal": 1,
+            "middle": 0.72366907862938
+          },
+          "false/mid-40-160": {
+            "wildcard-face": 0.008318089718268994,
+            "honor": 0.608650447602147,
+            "terminal": 1,
+            "middle": 0.6676605137533529
+          },
+          "true": {
+            "wildcard-face": 0.06215905442333147,
+            "honor": 0.5409826836741746,
+            "terminal": 1,
+            "middle": 0.7132906838228376
+          },
+          "true/low-1-40": {
+            "wildcard-face": 0.08362862568814261,
+            "honor": 0.4850882541617401,
+            "terminal": 1,
+            "middle": 0.6661042123514104
+          },
+          "true/mid-40-160": {
+            "wildcard-face": 0.04498430184195604,
+            "honor": 0.6005454314020906,
+            "terminal": 1,
+            "middle": 0.7614692584966799
+          }
+        }
+      },
+      "scope": "All four seats use frozen source-v2. First qualified ranking disagreement per source round only. Candidate actions and public features frozen before rollout. No outcome-dependent filtering."
+    },
+    "manifest": {
+      "from": 311129,
+      "rounds": 128,
+      "fingerprint": "ceb4113861e518994fa9540201d1567c571a0cc64f81655adc88e6bc16903dfa",
+      "windows": [
+        {
+          "seed": 311131,
+          "seat": 3,
+          "checkpointHash": "8421c8fd540888f357f954fc11fccd5eacb2869d7594f39f3689f32f509bd850"
+        },
+        {
+          "seed": 311156,
+          "seat": 3,
+          "checkpointHash": "1a6fa36779edaf5ced4b7f1f5aa3c0ce4ef775c2a7787a9306ac1341f9b44eee"
+        },
+        {
+          "seed": 311161,
+          "seat": 2,
+          "checkpointHash": "c20f0fed38ab556a86a1b3d0ad06cb263ea26934494e25b23ba5c8542f1e43ae"
+        },
+        {
+          "seed": 311168,
+          "seat": 3,
+          "checkpointHash": "93dc8be3eaba5467c670739fa2575aaccd938a17f3cd8156dec8f352bcca5474"
+        },
+        {
+          "seed": 311171,
+          "seat": 0,
+          "checkpointHash": "ca87521f5a27d6f50d69280bcba4051364a517970b7120c107ac3111a2713a3f"
+        },
+        {
+          "seed": 311179,
+          "seat": 2,
+          "checkpointHash": "5d2b085c75d6dcff7cf61d74535beec52a2acc19db7473c351c6e44ad354cafd"
+        },
+        {
+          "seed": 311194,
+          "seat": 1,
+          "checkpointHash": "d43a75dc936def318baf97101404f148670e5250c8e3364215a7f9b622da3fca"
+        },
+        {
+          "seed": 311224,
+          "seat": 1,
+          "checkpointHash": "c75edc79cbd1db63c6048de9b32f82e003805d9dddd2d6348774a7b95e1492a4"
+        },
+        {
+          "seed": 311227,
+          "seat": 2,
+          "checkpointHash": "9d3d708a15cc61831883c55cfd063f37451df63cb0a77aeac2ff3e90498fec4b"
+        },
+        {
+          "seed": 311241,
+          "seat": 3,
+          "checkpointHash": "34566f8c01286dcdc095288896a18bededca976e8eb8b12fed79dfbc3181f607"
+        },
+        {
+          "seed": 311248,
+          "seat": 2,
+          "checkpointHash": "b1931436bf29a4cdd111f53527622fa10c91c98ca9b490422a896b5be6e9ee0a"
+        },
+        {
+          "seed": 311256,
+          "seat": 2,
+          "checkpointHash": "d35097b838296b56b7b0869258115ff6ffa25ef66525200ea71a085904791e52"
+        }
+      ]
+    }
+  }
+]
