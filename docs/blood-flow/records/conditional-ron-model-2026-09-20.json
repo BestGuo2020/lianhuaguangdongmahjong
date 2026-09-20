@@ -1,0 +1,106 @@
+{
+  "model": {
+    "version": 1,
+    "weights": {
+      "global": {
+        "wildcard-face": 0.03969575903638709,
+        "honor": 0.564607168271524,
+        "terminal": 1,
+        "middle": 0.7027106615711017
+      },
+      "false": {
+        "wildcard-face": 0.01150572420931798,
+        "honor": 0.5680607000419352,
+        "terminal": 1,
+        "middle": 0.6930751484261005
+      },
+      "false/low-1-40": {
+        "wildcard-face": 0.013820746757967042,
+        "honor": 0.529960350891283,
+        "terminal": 1,
+        "middle": 0.72366907862938
+      },
+      "false/mid-40-160": {
+        "wildcard-face": 0.008318089718268994,
+        "honor": 0.608650447602147,
+        "terminal": 1,
+        "middle": 0.6676605137533529
+      },
+      "true": {
+        "wildcard-face": 0.06215905442333147,
+        "honor": 0.5409826836741746,
+        "terminal": 1,
+        "middle": 0.7132906838228376
+      },
+      "true/low-1-40": {
+        "wildcard-face": 0.08362862568814261,
+        "honor": 0.4850882541617401,
+        "terminal": 1,
+        "middle": 0.6661042123514104
+      },
+      "true/mid-40-160": {
+        "wildcard-face": 0.04498430184195604,
+        "honor": 0.6005454314020906,
+        "terminal": 1,
+        "middle": 0.7614692584966799
+      }
+    }
+  },
+  "tags": [
+    "mixed-290001",
+    "defensive-290101"
+  ],
+  "observations": 3390,
+  "sourceSeeds": 62,
+  "groups": [
+    {
+      "key": "false/no-live-ron",
+      "observations": 6,
+      "seeds": 3,
+      "fallback": true
+    },
+    {
+      "key": "false/low-1-40",
+      "observations": 1161,
+      "seeds": 46,
+      "fallback": false
+    },
+    {
+      "key": "false/mid-40-160",
+      "observations": 1196,
+      "seeds": 51,
+      "fallback": false
+    },
+    {
+      "key": "false/high-over-160",
+      "observations": 2,
+      "seeds": 1,
+      "fallback": true
+    },
+    {
+      "key": "true/no-live-ron",
+      "observations": 8,
+      "seeds": 2,
+      "fallback": true
+    },
+    {
+      "key": "true/low-1-40",
+      "observations": 468,
+      "seeds": 38,
+      "fallback": false
+    },
+    {
+      "key": "true/mid-40-160",
+      "observations": 545,
+      "seeds": 45,
+      "fallback": false
+    },
+    {
+      "key": "true/high-over-160",
+      "observations": 4,
+      "seeds": 1,
+      "fallback": true
+    }
+  ],
+  "protocol": "Train category labels only; 200 fixed proportional-fit steps; 64 parent pseudo exposures; cells need 8 source seeds. No income fitting. Fixed source-v2 coefficients, ratio 1.2. Holdout not loaded."
+}

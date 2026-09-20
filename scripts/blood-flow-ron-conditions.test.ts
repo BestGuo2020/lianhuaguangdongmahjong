@@ -50,6 +50,7 @@ it.skipIf(process.env.BF_RON_RUN!=='1')('records pre-discard features and source
         pending.push({seed,actor,target,opponentLocked:view.public.seats[actor].locked,valueBand:features.valueBand,
           waitValue:features.waitValue,category,predicted:features.predicted,
           conditionalPrediction:bucket.mass?bucket.income/bucket.mass*calibration.ronYield:0,
+          categoryValues:Object.fromEntries(Object.entries(features.buckets).map(([k,b])=>[k,b.mass?b.income/b.mass:0])),
           categoryProbabilities:Object.fromEntries(Object.entries(features.buckets).map(([k,b])=>[k,features.mass?b.mass/features.mass:0])),
           legalIncome,realized:0,wall:view.wallCount})
       }

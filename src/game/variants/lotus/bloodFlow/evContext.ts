@@ -6,6 +6,7 @@ import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import { forecastSelfDrawIncome, forecastCalibratedIncome } from './incomeForecast'
+import { forecastConditionalIncome } from './conditionalRon'
 import {
   chainEvEst, patternPotentialEv, patternPotentialTotal, patternPotentials,
   waitingTilesCached, type PatternDirection,
@@ -67,7 +68,10 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const sourceSeat = view.window?.source.seat ?? view.seat
   const drawOffset = ((view.seat - sourceSeat + 4) % 4) || 4
   const chain = (tiles: readonly TileType[], offset = drawOffset) => config.chainForecast === 'source-v2' && config.opportunityCalibration
-    ? forecastCalibratedIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset, config.opportunityCalibration)
+    ? config.conditionalRon
+      ? forecastConditionalIncome(tiles,melds,jokers,visible,wallCount,config.chainHorizon,offset,config.opportunityCalibration,
+        view.seat,view.public.seats.map(s=>s.locked),config.conditionalRon)
+      : forecastCalibratedIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset, config.opportunityCalibration)
     : config.chainForecast === 'self-draw-v1'
     ? forecastSelfDrawIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset)
     : chainEvEst(tiles, melds, jokers, visible, wallCount, config.sevenPairsModel, config)

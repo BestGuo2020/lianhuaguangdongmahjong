@@ -1,0 +1,784 @@
+{
+  "scope": "Selected post-holdout diagnostic, not independent confirmation or fitting input.",
+  "result": {
+    "panel": "mixed",
+    "seed": 292006,
+    "focal": 0,
+    "rounds": 4,
+    "controlNet": 7200,
+    "currentNet": 445,
+    "delta": -6755,
+    "controlRank": 1,
+    "currentRank": 3,
+    "changed": true,
+    "changes": [
+      {
+        "round": 1,
+        "wall": 44,
+        "from": {
+          "kind": "discard",
+          "index": 2
+        },
+        "to": {
+          "kind": "discard",
+          "index": 9
+        }
+      }
+    ],
+    "calibration": [],
+    "actualCommands": 743
+  },
+  "first": {
+    "view": {
+      "kongEvents": [
+        {
+          "kind": "kong",
+          "authorityEpoch": "opponent-panel",
+          "roundId": "292006/1",
+          "sequence": 1,
+          "id": "292006/1/kong/1",
+          "actor": 0,
+          "kongKind": "concealed",
+          "sourceSeat": null,
+          "deltas": [
+            60,
+            -20,
+            -20,
+            -20
+          ],
+          "scoresAfter": [
+            2260,
+            2180,
+            1790,
+            1770
+          ]
+        },
+        {
+          "kind": "kong",
+          "authorityEpoch": "opponent-panel",
+          "roundId": "292006/1",
+          "sequence": 2,
+          "id": "292006/1/kong/2",
+          "actor": 1,
+          "kongKind": "discard",
+          "sourceSeat": 0,
+          "deltas": [
+            -10,
+            10,
+            0,
+            0
+          ],
+          "scoresAfter": [
+            2250,
+            2190,
+            1790,
+            1770
+          ]
+        },
+        {
+          "kind": "kong",
+          "authorityEpoch": "opponent-panel",
+          "roundId": "292006/1",
+          "sequence": 3,
+          "id": "292006/1/kong/3",
+          "actor": 1,
+          "kongKind": "concealed",
+          "sourceSeat": null,
+          "deltas": [
+            -20,
+            60,
+            -20,
+            -20
+          ],
+          "scoresAfter": [
+            2230,
+            2250,
+            1770,
+            1750
+          ]
+        }
+      ],
+      "authorityEpoch": "opponent-panel",
+      "roundId": "292006/1",
+      "version": 53,
+      "seat": 0,
+      "players": [
+        {
+          "name": "玩家1",
+          "avatar": "",
+          "seat": 0,
+          "score": 2230,
+          "hand": [
+            "p2",
+            "p2",
+            "m3",
+            "m4",
+            "p5",
+            "p5",
+            "p9",
+            "p9",
+            "s3",
+            "s5",
+            "p5"
+          ],
+          "melds": [
+            {
+              "type": "angang",
+              "tile": "white",
+              "tiles": [
+                "white",
+                "white",
+                "white",
+                "white"
+              ]
+            }
+          ],
+          "discards": [
+            "p1",
+            "s7",
+            "p4",
+            "m5",
+            "p4",
+            "west",
+            "s7"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": 10,
+          "concealedTileCount": 11
+        },
+        {
+          "name": "玩家2",
+          "avatar": "",
+          "seat": 1,
+          "score": 2250,
+          "hand": [],
+          "melds": [
+            {
+              "type": "gang",
+              "tile": "s9",
+              "tiles": [
+                "s9",
+                "s9",
+                "s9",
+                "s9"
+              ],
+              "from": 0
+            },
+            {
+              "type": "angang",
+              "tile": "m1",
+              "tiles": [
+                "m1",
+                "m1",
+                "m1",
+                "m1"
+              ]
+            }
+          ],
+          "discards": [
+            "p1",
+            "p9",
+            "m7",
+            "m5",
+            "m2",
+            "m6",
+            "s8",
+            "west",
+            "p8"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 7
+        },
+        {
+          "name": "玩家3",
+          "avatar": "",
+          "seat": 2,
+          "score": 1770,
+          "hand": [],
+          "melds": [],
+          "discards": [
+            "p1",
+            "p8",
+            "s7",
+            "m5",
+            "m2",
+            "p4",
+            "m8",
+            "west",
+            "m3"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 13
+        },
+        {
+          "name": "玩家4",
+          "avatar": "",
+          "seat": 3,
+          "score": 1750,
+          "hand": [],
+          "melds": [],
+          "discards": [
+            "p1",
+            "m7",
+            "p4",
+            "p7",
+            "p7",
+            "m8",
+            "m2",
+            "s8",
+            "m5"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 13
+        }
+      ],
+      "currentPlayer": 0,
+      "wallCount": 44,
+      "headDrawn": 87,
+      "flipTile": "p2",
+      "jokers": [
+        "p2",
+        "p3"
+      ],
+      "flipStack": 59,
+      "flipSeat": 1,
+      "wallBreakIndex": 8,
+      "window": {
+        "id": "292006/1/window/53",
+        "version": 53,
+        "kind": "turn",
+        "deadlineAt": 15000,
+        "opensAt": 0,
+        "source": {
+          "kind": "draw",
+          "seat": 0,
+          "tile": "p5",
+          "id": "opponent-panel/292006/1/tile/73"
+        }
+      },
+      "ownActions": [
+        {
+          "kind": "win"
+        },
+        {
+          "kind": "pass"
+        },
+        {
+          "kind": "discard",
+          "index": 0
+        },
+        {
+          "kind": "discard",
+          "index": 1
+        },
+        {
+          "kind": "discard",
+          "index": 2
+        },
+        {
+          "kind": "discard",
+          "index": 3
+        },
+        {
+          "kind": "discard",
+          "index": 4
+        },
+        {
+          "kind": "discard",
+          "index": 5
+        },
+        {
+          "kind": "discard",
+          "index": 6
+        },
+        {
+          "kind": "discard",
+          "index": 7
+        },
+        {
+          "kind": "discard",
+          "index": 8
+        },
+        {
+          "kind": "discard",
+          "index": 9
+        },
+        {
+          "kind": "discard",
+          "index": 10
+        }
+      ],
+      "ownScore": {
+        "items": [
+          {
+            "id": "concealed-hand",
+            "label": "门清",
+            "weight": 1
+          }
+        ],
+        "excluded": [],
+        "hardWin": false,
+        "source": "self-draw",
+        "opening": null,
+        "patternMultiplier": 3,
+        "eventMultiplier": 2,
+        "kongBonus": 2,
+        "halfPayment": false,
+        "openingApplied": false,
+        "uncappedMultiplier": 6,
+        "finalMultiplier": 6,
+        "capped": false,
+        "paymentPerPayer": 60
+      },
+      "waitingSeats": [
+        0
+      ],
+      "public": {
+        "ruleVersion": "lotus-blood-flow-v1",
+        "roundId": "292006/1",
+        "status": "playing",
+        "seats": [
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          }
+        ],
+        "batches": [],
+        "roundResult": null
+      },
+      "actionEvents": [
+        {
+          "id": 1,
+          "type": "concealed-gang",
+          "actorIndex": 0,
+          "sourceIndex": null,
+          "tile": "white",
+          "meldIndex": 0
+        },
+        {
+          "id": 2,
+          "type": "discard-gang",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "s9",
+          "meldIndex": 0
+        },
+        {
+          "id": 3,
+          "type": "concealed-gang",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "m1",
+          "meldIndex": 1
+        }
+      ],
+      "lastDiscardAction": {
+        "kind": "discard",
+        "seat": 3,
+        "tile": "m5",
+        "id": "opponent-panel/292006/1/tile/72"
+      }
+    },
+    "chosen": {
+      "kind": "discard",
+      "index": 9
+    },
+    "old": {
+      "kind": "discard",
+      "index": 2
+    },
+    "oldEv": {
+      "locked": false,
+      "wallCount": 44,
+      "drawnIndex": 10,
+      "hand": [
+        "p2",
+        "p2",
+        "m3",
+        "m4",
+        "p5",
+        "p5",
+        "p9",
+        "p9",
+        "s3",
+        "s5",
+        "p5"
+      ],
+      "melds": [
+        {
+          "type": "angang",
+          "tile": "white",
+          "tiles": [
+            "white",
+            "white",
+            "white",
+            "white"
+          ]
+        }
+      ],
+      "jokers": [
+        "p2",
+        "p3"
+      ],
+      "winOffered": true,
+      "immediateTotal": 180,
+      "chainAfterWin": 251.9346860294238,
+      "winEv": 431.9346860294238,
+      "floor": 40,
+      "floorStage": "early",
+      "potentialTotal": 77.97830374753451,
+      "topDirections": [
+        {
+          "id": "big-three-dragons",
+          "weight": 24,
+          "progress": 1,
+          "score": 24
+        },
+        {
+          "id": "little-three-dragons",
+          "weight": 16,
+          "progress": 1,
+          "score": 16
+        },
+        {
+          "id": "four-concealed-triplets",
+          "weight": 16,
+          "progress": 0.75,
+          "score": 9
+        }
+      ],
+      "developEv": 779.783037475345,
+      "reformCandidates": [
+        {
+          "index": 2,
+          "tile": "m3",
+          "ev": 960.8934256431019,
+          "anyWait": false,
+          "waitCount": 9,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 9,
+          "tile": "s5",
+          "ev": 960.8934256431019,
+          "anyWait": false,
+          "waitCount": 10,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 8,
+          "tile": "s3",
+          "ev": 886.382359112344,
+          "anyWait": false,
+          "waitCount": 10,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 3,
+          "tile": "m4",
+          "ev": 836.7083147585055,
+          "anyWait": false,
+          "waitCount": 9,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 4,
+          "tile": "p5",
+          "ev": 251.9346860294238,
+          "anyWait": false,
+          "waitCount": 7,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 5,
+          "tile": "p5",
+          "ev": 251.9346860294238,
+          "anyWait": false,
+          "waitCount": 7,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 6,
+          "tile": "p9",
+          "ev": 227.09766385250455,
+          "anyWait": false,
+          "waitCount": 6,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 7,
+          "tile": "p9",
+          "ev": 227.09766385250455,
+          "anyWait": false,
+          "waitCount": 6,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 0,
+          "tile": "p2",
+          "ev": 202.26064167558525,
+          "anyWait": false,
+          "waitCount": 5,
+          "patterns": [
+            "大三元",
+            "四暗刻",
+            "小三元"
+          ]
+        },
+        {
+          "index": 1,
+          "tile": "p2",
+          "ev": 202.26064167558525,
+          "anyWait": false,
+          "waitCount": 5,
+          "patterns": [
+            "大三元",
+            "四暗刻",
+            "小三元"
+          ]
+        }
+      ],
+      "robEv": null
+    },
+    "newEv": {
+      "locked": false,
+      "wallCount": 44,
+      "drawnIndex": 10,
+      "hand": [
+        "p2",
+        "p2",
+        "m3",
+        "m4",
+        "p5",
+        "p5",
+        "p9",
+        "p9",
+        "s3",
+        "s5",
+        "p5"
+      ],
+      "melds": [
+        {
+          "type": "angang",
+          "tile": "white",
+          "tiles": [
+            "white",
+            "white",
+            "white",
+            "white"
+          ]
+        }
+      ],
+      "jokers": [
+        "p2",
+        "p3"
+      ],
+      "winOffered": true,
+      "immediateTotal": 180,
+      "chainAfterWin": 262.26159158485154,
+      "winEv": 442.26159158485154,
+      "floor": 40,
+      "floorStage": "early",
+      "potentialTotal": 77.97830374753451,
+      "topDirections": [
+        {
+          "id": "big-three-dragons",
+          "weight": 24,
+          "progress": 1,
+          "score": 24
+        },
+        {
+          "id": "little-three-dragons",
+          "weight": 16,
+          "progress": 1,
+          "score": 16
+        },
+        {
+          "id": "four-concealed-triplets",
+          "weight": 16,
+          "progress": 0.75,
+          "score": 9
+        }
+      ],
+      "developEv": 779.783037475345,
+      "reformCandidates": [
+        {
+          "index": 9,
+          "tile": "s5",
+          "ev": 992.4409625402143,
+          "anyWait": false,
+          "waitCount": 10,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 2,
+          "tile": "m3",
+          "ev": 973.518153329918,
+          "anyWait": false,
+          "waitCount": 9,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 8,
+          "tile": "s3",
+          "ev": 898.1612983651341,
+          "anyWait": false,
+          "waitCount": 10,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 3,
+          "tile": "m4",
+          "ev": 847.9233950552783,
+          "anyWait": false,
+          "waitCount": 9,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 4,
+          "tile": "p5",
+          "ev": 262.26159158485154,
+          "anyWait": false,
+          "waitCount": 7,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 5,
+          "tile": "p5",
+          "ev": 262.26159158485154,
+          "anyWait": false,
+          "waitCount": 7,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 6,
+          "tile": "p9",
+          "ev": 236.50263973062542,
+          "anyWait": false,
+          "waitCount": 6,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 7,
+          "tile": "p9",
+          "ev": 236.50263973062542,
+          "anyWait": false,
+          "waitCount": 6,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        {
+          "index": 0,
+          "tile": "p2",
+          "ev": 206.87029006211952,
+          "anyWait": false,
+          "waitCount": 5,
+          "patterns": [
+            "大三元",
+            "四暗刻",
+            "小三元"
+          ]
+        },
+        {
+          "index": 1,
+          "tile": "p2",
+          "ev": 206.87029006211952,
+          "anyWait": false,
+          "waitCount": 5,
+          "patterns": [
+            "大三元",
+            "四暗刻",
+            "小三元"
+          ]
+        }
+      ],
+      "robEv": null
+    }
+  }
+}
