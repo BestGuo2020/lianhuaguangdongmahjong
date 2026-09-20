@@ -355,11 +355,10 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
     },
 
     async readConfigs(matchId) {
-      const meta = await readMeta(matchId)
-      if (!meta) return []
+      // 按 owners 表取：那才是引用关系的**权威来源**。元数据里的 configIds 只是顺带记录，
+      // 而引用登记常常发生在元数据创建之前（beginMatch 早于任何分块写入），按清单取会漏。
       const configs: AnalysisStoredConfig[] = await guard('读取配置区', (d) => d.listConfigs(), [])
-      const wanted = new Set(meta.configIds)
-      return configs.filter((config) => wanted.has(config.id)).map((config) => config.value)
+      return configs.filter((config) => config.owners.includes(matchId)).map((config) => config.value)
     },
 
     async markViewed(matchId) {

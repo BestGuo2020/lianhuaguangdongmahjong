@@ -293,10 +293,7 @@ describe('分析录制核心（P0）', () => {
     expect(finished.status).toBe('complete')
   })
 
-  // 待办（下一轮）：接线已完成（beginMatch 会登记引用），但断言的读取路径还不对——
-  // storage.readConfigs 目前按**元数据里的清单**取，而引用登记发生在元数据创建之前（beginMatch 早于任何分块写入），
-  // 于是清单里没有它。修法：readConfigs 改为按 owners 表取（那才是引用关系的权威来源）。改完把 it.skip 换回 it。
-  it.skip('beginMatch 会登记配置引用（§9.4）——待 readConfigs 改为按 owners 取', async () => {
+  it('beginMatch 会登记配置引用（§9.4 的引用计数在生产路径上真正生效）', async () => {
     const { recorder, storage } = setup()
     recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
     await new Promise(resolve => setTimeout(resolve, 0))
