@@ -28,6 +28,14 @@ export interface ReproductionOpeningResult {
   opening: BloodFlowOpeningState | null
   /** 无法还原的原因；null 表示成功。 */
   reason: string | null
+  /**
+   * 开局分数来自哪里：
+   * - `record`：记录里带了 `openingScores`（唯一能与结束分数比对的口径）；
+   * - `base`：调用方显式给了基准分；
+   * - `missing`：两者都没有，只能退回初始分 —— **此时结束分数不可比对**，调用方必须如实说明，
+   *   不能拿"从初始分起步的结果"去和记录比（实测第 2 局以后必然不一致）。
+   */
+  scoresSource: 'record' | 'base' | 'missing'
 }
 
 export interface ReproductionOpeningOptions {
@@ -55,11 +63,13 @@ export function openingFromReproduction(
   if (typeof record.flipStack !== 'number') missing.push('flipStack')
   if (typeof record.flipSeat !== 'number') missing.push('flipSeat')
   if (typeof record.wallBreakIndex !== 'number') missing.push('wallBreakIndex')
-  if (missing.length) return { opening: null, reason: `复现数据不完整，缺少：${missing.join('、')}` }
+  if (missing.length) return { opening: null, reason: `复现数据不完整，缺少：${missing.join('、')}`, scoresSource: 'missing' }
 
   try {
     const recordedScores = (record as { openingScores?: number[] }).openingScores
     const scores = options.baseScores ?? recordedScores ?? [2000, 2000, 2000, 2000]
+    const scoresSource: ReproductionOpeningResult['scoresSource'] = options.baseScores
+      ? 'base' : recordedScores?.length === 4 ? 'record' : 'missing'
     const players = SEATS.map((seat): GamePlayer => ({
       seat,
       name: options.playerNames?.[seat] ?? `P${seat}`,
@@ -85,8 +95,9 @@ export function openingFromReproduction(
         wallBreakIndex: record.wallBreakIndex!,
       },
       reason: null,
+      scoresSource,
     }
   } catch (error) {
-    return { opening: null, reason: `复现数据无法还原成开局：${String(error).slice(0, 120)}` }
+    return { opening: null, reason: `复现数据无法还原成开局：${String(error).slice(0, 120)}`, scoresSource: 'missing' }
   }
 }
