@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 // 对局回放端到端（三个玩法）：
 // fixture 用真实引擎各打完整场东风场并落库到 IndexedDB → 真实 App 在大厅列出 → 打开 3D 回放视图。
@@ -238,6 +239,22 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       + ` 决策 ${decisions.length}（其中响应窗口 ${claimDecisions.length}）、检查点 ${checkpoints.length}、`
       + ` 被收窄动作 ${probe.parts.filter(part => JSON.stringify(part.value).includes('big-hand-route')).length} 处、`
       + ` 完整性 ${analysisMatch.status}`)
+    // 容量基线（§9.1）：真实一场流血的规模 → 离线换算"50 场占多少"。
+    // 用绝对路径（测试进程的 cwd 未必是仓库根，上一轮相对路径曾静默落空），并断言文件确实能读回。
+    const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+    const sizeFile = `${repoRoot}/tmp/analysis-size.json`
+    const tagCounts: Record<string, number> = {}
+    for (const part of probe.parts) tagCounts[part.tag] = (tagCounts[part.tag] ?? 0) + 1
+    await mkdir(`${repoRoot}/tmp`, { recursive: true })
+    await writeFile(sizeFile, JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      rounds: replayProbe.results.length,
+      match: analysisMatch,
+      codecs: probe.codecs,
+      tags: tagCounts,
+      allMatches: probe.matches,
+    }, null, 2))
+    expect((await readFile(sizeFile, 'utf8')).length, `容量基线应落盘：${sizeFile}`).toBeGreaterThan(0)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
