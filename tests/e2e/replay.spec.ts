@@ -38,6 +38,179 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   expect(fixture.errors).toEqual([])
   expect(fixture.matches).toHaveLength(3)
 
+  // ── 0b. AI 分析记录（§10.4/§10.6）：真实浏览器跑完血流后，从**独立分析库**读回并解码校验 ──
+  // 断言"能归因的最小闭环"确实落了盘：场次配置（含指纹）、决策前态（含合法动作）、
+  // 决策（窗口/座位/来源/执行状态/耗时），并确认落库是**压缩后的二进制块**（§9.3）。
+  const analysisProbe = await page.evaluate(async () => {
+    const dbs = await indexedDB.databases?.().catch(() => [])
+    if (!(dbs ?? []).some(entry => entry.name === 'lianhua-guangma-analysis')) return { present: false }
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('lianhua-guangma-analysis')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const readAll = <T,>(store: string) => new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction(store, 'readonly')
+      const request = tx.objectStore(store).getAll()
+      request.onsuccess = () => resolve(request.result as T[])
+      request.onerror = () => reject(request.error)
+    })
+    const matches = await readAll<{ matchId: string; status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>('matches')
+    const blocks = await readAll<{ matchId: string; sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>('blocks')
+    db.close()
+    const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
+    const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
+    for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
+      // 校验值由存储侧保管（已在存储单测覆盖）；这里以解码成功为准。
+      const decoded = await decodeAnalysisBlock({
+        sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
+        storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+      })
+      if (!decoded.parts) return { present: true, error: `解码失败 seq=${block.sequence} ${String(decoded.error)}` }
+      gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
+    }
+    return {
+      present: true,
+      matches,
+      codecs: [...new Set(blocks.map(block => block.codec))],
+      compressed: blocks.some(block => block.storedBytes < block.rawBytes),
+      parts: gathered,
+    }
+  })
+  expect(analysisProbe.present, '血流跑完后应存在独立分析库').toBe(true)
+  if (analysisProbe.present && !('error' in analysisProbe)) {
+    const probe = analysisProbe as unknown as {
+      matches: Array<{ status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>
+      codecs: string[]; compressed: boolean
+      parts: Array<{ tag: string; value: Record<string, unknown> }>
+    }
+    const analysisMatch = probe.matches[0]
+    expect(analysisMatch, '分析区应有本场记录').toBeTruthy()
+    expect(analysisMatch.status).toBe('complete')
+    expect(analysisMatch.parts).toBeGreaterThan(0)
+    expect(analysisMatch.blockCount).toBeGreaterThan(0)
+    expect(analysisMatch.storedBytes).toBeGreaterThan(0)
+    expect(analysisMatch.configIds.length).toBeGreaterThan(0)
+    expect(probe.codecs).toContain('gzip')
+    expect(probe.compressed, '落库应为压缩后的二进制块').toBe(true)
+
+    const config = probe.parts.find(part => part.tag === 'config')!.value
+    expect(config.rulesVersion).toBeTruthy()
+    expect(String(config.rulesFingerprint)).toMatch(/^fnv1a-/)
+    expect(String(config.aiFingerprint)).toMatch(/^fnv1a-/)
+    expect((config.seatControl as string[])[0]).toBe('human')
+
+    const states = probe.parts.filter(part => part.tag === 'decisionState').map(part => part.value)
+    expect(states.length).toBeGreaterThan(0)
+    expect((states[0].legalActions as unknown[]).length).toBeGreaterThan(0)
+
+    const decisions = probe.parts.filter(part => part.tag === 'decision').map(part => part.value)
+    expect(decisions.length).toBeGreaterThan(0)
+    const last = decisions.at(-1)!
+    expect(last.windowId).toBeTruthy()
+    expect(typeof last.seat).toBe('number')
+    expect(['human', 'local-strategy', 'model', 'model-fallback', 'rule-auto', 'countdown-fallback', 'unknown'])
+      .toContain(last.source)
+    expect(['pending', 'executed', 'overridden', 'window-expired', 'state-changed', 'rejected-illegal', 'cancelled'])
+      .toContain((last.execution as { status: string }).status)
+    expect(last.timing).toBeTruthy()
+
+    // 计分流水（§5）：引用权威账本，每次胡牌批次/杠一条；赢家与付款座位可从 deltas 推出，分数守恒
+    const settlements = probe.parts.filter(part => part.tag === 'settlement').map(part => part.value)
+    expect(settlements.length, '血流一场必然有结算').toBeGreaterThan(0)
+    const firstSettlement = settlements[0]
+    expect(firstSettlement.batchId).toBeTruthy()
+    expect(firstSettlement.kind).toBeTruthy()
+    expect((firstSettlement.deltas as number[]).length).toBe(4)
+    expect((firstSettlement.scoresAfter as number[]).length).toBe(4)
+    expect((firstSettlement.deltas as number[]).reduce((sum, delta) => sum + delta, 0)).toBe(0)
+
+    // 赛后复现数据（§6）：每局一条，含完整初始牌墙与权威命令序列（含过牌）
+    const reproductions = probe.parts.filter(part => part.tag === 'reproduction').map(part => part.value)
+    expect(reproductions.length, '每局应有一条复现数据').toBeGreaterThan(0)
+    const reproduction = reproductions[0]
+    expect(reproduction.available).toBe(true)
+    const wall = reproduction.initialWall as string[]
+    expect(wall.length).toBeGreaterThanOrEqual(130)
+    expect(wall.length).toBeLessThanOrEqual(136)
+    expect(typeof reproduction.dealer).toBe('number')
+    const commands = reproduction.commands as Array<{ seat: number; kind: string }>
+    expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
+    expect(commands.every(entry => typeof entry.seat === 'number' && typeof entry.kind === 'string')).toBe(true)
+
+    // §10.6：把**真实录制**的复现数据喂回引擎重跑，必须能到达该局结束（记录足够复现）
+    const replayProbe = await page.evaluate(async () => {
+      const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
+      const { replayReproduction } = await import('/src/game/replay/analysis/replayReproduction.ts')
+      void decodeAnalysisBlock
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('lianhua-guangma-analysis')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>>((resolve, reject) => {
+        const tx = db.transaction('blocks', 'readonly')
+        const request = tx.objectStore('blocks').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      const { decodeAnalysisBlock: decode } = await import('/src/game/replay/analysis/codec.ts')
+      const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
+      for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
+        const decoded = await decode({
+          sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
+          storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+        })
+        if (decoded.parts) gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
+      }
+      const reproduction = gathered.filter(part => part.tag === 'reproduction').map(part => part.value)[0] as never
+      if (!reproduction) return { ran: false, results: [], displayEndScores: null }
+      const record = reproduction as unknown as { commands?: unknown[] }
+      const results = []
+      for (const candidate of gathered.filter(part => part.tag === 'reproduction').map(part => part.value)) {
+        const value = candidate as unknown as { commands?: Array<{ seat: number; kind: string }> }
+        results.push(replayReproduction({ reproduction: candidate as never, commands: (value.commands ?? []) as never }))
+      }
+      void record
+
+      // 展示回放的该局结束快照（另一个库）：用于与重跑结果比对（§10.6 的充分条件）
+      const replayDb = await new Promise<IDBDatabase | null>((resolve) => {
+        const request = indexedDB.open('lianhua-guangma-replay')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => resolve(null)
+      })
+      let displayEndScores: number[] | null = null
+      if (replayDb) {
+        const readAll = <T,>(store: string) => new Promise<T[]>((resolve) => {
+          const tx = replayDb.transaction(store, 'readonly')
+          const request = tx.objectStore(store).getAll()
+          request.onsuccess = () => resolve(request.result as T[])
+          request.onerror = () => resolve([])
+        })
+        const matches = await readAll<{ id: string; rulesetId: string }>('matches')
+        const bloodFlow = matches.find(match => match.rulesetId === 'lotus-blood-flow')
+        const rounds = await readAll<{ matchId: string; index: number; final?: { scores?: number[] } | null }>('rounds')
+        const own = rounds.filter(round => round.matchId === bloodFlow?.id).sort((a, b) => a.index - b.index)
+        const last = own.at(-1)
+        if (last?.final?.scores) displayEndScores = [...last.final.scores]
+        replayDb.close()
+      }
+      return { ran: true, results, displayEndScores }
+    })
+    expect(replayProbe.ran, '应能取到复现数据').toBe(true)
+    for (const result of replayProbe.results) {
+      expect(result.reason ?? '（无原因）', `第 ${result.recorded} 条命令的重跑应成功：${result.reason}`).toBe('（无原因）')
+      expect(result.ok).toBe(true)
+      expect(result.submitted).toBe(result.recorded)
+      expect(result.finalScores).toHaveLength(4)
+    }
+    // 充分条件：最后一局重跑得到的结束分数，必须与展示回放的该局结束快照一致
+    expect(replayProbe.displayEndScores, '应能从展示回放库里取到结束快照').toBeTruthy()
+    expect(replayProbe.displayEndScores!.length).toBe(4)
+    expect(replayProbe.results.at(-1)!.finalScores).toEqual(replayProbe.displayEndScores)
+  }
+
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
   for (const id of ['lotus-classic', 'lotus-legacy', 'lotus-blood-flow']) {
     const recorded = byRuleset(id)

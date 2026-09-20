@@ -48,6 +48,13 @@ import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
 import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 import { createBloodFlowRecordState, recordBloodFlowSettle, recordBloodFlowView, type BloodFlowRecordContext } from '../../../replay/bloodFlowRecorder'
 import type { ReplayRecorderHooks } from '../../../replay/types'
+import {
+  choiceTookEffect, decisionStateOf, legalActionId, seatLegalActions, settlementsFromView, windowKindOf,
+  type BloodFlowLedgerViewLike,
+  type BloodFlowViewLike,
+} from '../../../replay/analysis/bloodFlowAdapter'
+import type { AnalysisRecorder } from '../../../replay/analysis/recorder'
+import { createBloodFlowDecisionSink } from '../../../replay/analysis/decisionSink'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -68,6 +75,11 @@ export interface BloodFlowGameOptions {
   countdownEnabled?: boolean
   /** 对局回放录制钩子（可选；不传时零行为变化，且不会请求旁观视角）。 */
   recorder?: ReplayRecorderHooks
+  /**
+   * AI 分析记录（可选；方案 docs/blood-flow/design/replay-ai-analysis-recording.md）。
+   * 只旁路采集当时已有的信息：不传时零成本空转，不影响策略动作与对局结果（§10.1、§10.7）。
+   */
+  analysis?: AnalysisRecorder | null
   externalAuthority?: {
     send(command: EngineCommand): void
     nextRound(): void
@@ -128,6 +140,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const thinkingIds = new Map<string,number>()
   const thinkingSequences = new Map<number,number>()
   const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade',
+    // AI 分析记录接缝（可选）：把候选/推荐/请求生命周期/来源接进录制器；不传时零成本。
+    analysis: options.analysis ? createBloodFlowDecisionSink({ recorder: options.analysis }) : null,
     // LLM 座位启用"真·大牌路线"（候选层收窄）；普通 AI 座位不走这条路径，行为不变。
     aiConfig: BLOOD_FLOW_LLM_AI,
     metadata:()=>({roundIndex:state.round.value,dealerIndex:state.dealer.value}),
@@ -341,6 +355,36 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech();cancelActionSpeech();decisions.cancelSpeech() } })
 
+  /** 分析记录（§6）：本局的完整初始物理牌墙与开局参数（局末随该局落库，仅本地保存）。 */
+  let analysisRoundOpening: {
+    roundIndex: number; wall: TileType[]; dealer: number
+    flipTile: TileType | null; flipStack: number | null
+    /** 四家初始手牌与庄家第 14 张下标：引擎据此建立手牌，不能从牌墙推出。 */
+    hands: string[][]; dealerDrawnIndex: number
+    /** 开局必需字段（引擎 opening 需要）。 */
+    jokers: string[]; flipSeat: number; wallBreakIndex: number
+    /** 两个翻精（第二个由牌墙环推出，直接记下来，避免事后重现推算规则）。 */
+    flipTiles: string[]
+  } | null = null
+  /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
+  const analysisRoundCommands: Array<{
+    seat: number; kind: string; at: number
+    legalActionId?: string; tile?: string; handIndex?: number; from?: number | null; meldIndex?: number
+  }> = []
+  /**
+   * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
+   * 只记 kind 的话赛后无法重跑复现（§6、§10.6）。
+   */
+  function analysisCommandEntry(seat: number, action: BloodFlowAction, legalActionId?: string) {
+    const entry: (typeof analysisRoundCommands)[number] = { seat, kind: action.kind, at: Date.now() }
+    if (legalActionId) entry.legalActionId = legalActionId
+    const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number }
+    if (record.tile !== undefined) entry.tile = record.tile
+    if (record.index !== undefined) entry.handIndex = record.index
+    if (record.from !== undefined) entry.from = record.from
+    if (record.meldIndex !== undefined) entry.meldIndex = record.meldIndex
+    return entry
+  }
   function apply(next: BloodFlowWorkerView) {
     const previous = view.value
     view.value = next
@@ -349,7 +393,38 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (options.recorder) {
       // 先补事件流水（含该局最后一张弃牌与鸣牌），再收尾；收尾幂等。
       if (next.replay) recordReplaySpectator(next.replay)
-      if (next.public.roundResult) recordReplaySettle(next)
+      if (next.public.roundResult) {
+      recordReplaySettle(next)
+      // 分析记录（§6）：局末一次性落库本局的**完整初始牌墙**与开局参数。
+      // 只本地保存：联机时普通客户端本就不该拿到牌墙，权威端才有（这里就是本地权威）。
+      if (options.analysis && analysisRoundOpening) {
+        options.analysis.reproduction({
+          roundIndex: analysisRoundOpening.roundIndex,
+          available: true,
+          initialWall: analysisRoundOpening.wall.map((tile) => tileName(tile)),
+          // 开局手牌不能由牌墙推出（引擎取 opening.players[].hand），因此必须单独记（§6）。
+          initialHands: analysisRoundOpening.hands.map(hand => [...hand]),
+          dealerDrawnIndex: analysisRoundOpening.dealerDrawnIndex,
+          flipTiles: [...analysisRoundOpening.flipTiles],
+          jokers: [...analysisRoundOpening.jokers],
+          flipSeat: analysisRoundOpening.flipSeat,
+          wallBreakIndex: analysisRoundOpening.wallBreakIndex,
+          dealer: analysisRoundOpening.dealer,
+          ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
+          flipStack: analysisRoundOpening.flipStack,
+          // 完整权威命令序列（含过牌）+ 执行顺序：只有牌墙与展示步骤不足以精确复现（§6）。
+          commands: analysisRoundCommands.map((entry) => ({ ...entry })),
+        })
+        analysisRoundCommands.length = 0
+        analysisRoundOpening = null
+      }
+    }
+    }
+    // 分析记录（§5）：权威账本的新结算也在这里入账 —— 与录制共用同一汇聚点，绕过 request 的路径同样覆盖。
+    if (options.analysis) {
+      for (const settlement of settlementsFromView(next as unknown as BloodFlowLedgerViewLike, state.round.value, analysisSettlementsSeen)) {
+        options.analysis.settlement(settlement)
+      }
     }
     // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（淡出→换曲→淡入在音频层）。
     winMusic.update(winMusicState)
@@ -531,8 +606,22 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     try {
       const own = await active.request<BloodFlowWorkerView>({ kind: 'view', seat, replay: Boolean(options.recorder) })
       if (!current() || own.window?.id !== windowId) return
+      // 分析记录：窗口与前态（含该座位的合法动作）。只读视角，不参与决策（§3.2、§10.1）。
+      const actions = seatLegalActions(own, seat)
+      const analysisMono = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+      options.analysis?.windowOpened({
+        windowId, seat, windowKind: windowKindOf(actions),
+        roundIndex: state.round.value, authorityEpoch: own.authorityEpoch, stateVersion: own.window?.version ?? 0,
+        state: decisionStateOf(own, seat), openedAt: analysisMono(),
+      })
       const action = await decisions.decide(own, current)
       if (!current()) return
+      // 分析记录：选择与来源。来源（本地策略／模型／回退）由 LLM 运行时在下一层补充，这里先如实标 unknown。
+      const pickedIndex = action ? actions.findIndex(move => JSON.stringify(move) === JSON.stringify(action)) : -1
+      options.analysis?.chosen({
+        windowId, seat, source: action ? 'unknown' : 'rule-auto',
+        legalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : null, at: analysisMono(),
+      })
       if(action?.kind==='discard'){
         const line=decisions.prepareDiscard(own,action)
         if(line)await presentDiscardSpeech(line,current)
@@ -542,7 +631,20 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const next = await active.request<BloodFlowWorkerView>(action ? { kind: 'command', command: {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
       }, replay: Boolean(options.recorder) } : { kind: 'bot', seat, windowId, replay: Boolean(options.recorder) })
+      // 分析记录（§6）：机器人/模型座位的命令同样入序列（否则只有牌墙、无法精确复现）。
+      if (options.analysis && action) {
+        analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined))
+      }
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
+      // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。
+      if (action) {
+        options.analysis?.receipt({
+          windowId, seat,
+          status: choiceTookEffect(own as BloodFlowViewLike, next as BloodFlowViewLike, seat, action) ? 'executed' : 'state-changed',
+          eventId: `${next.roundId ?? own.roundId}/${windowId}`,
+          executedLegalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined,
+        })
+      }
     } catch {
       if (epoch === generation) {
         clear(); transient.announce('对局已中断，请返回大厅重开', 'red')
@@ -559,16 +661,68 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (submittedWindowId.value === w.id) return
     submittedWindowId.value = w.id
     state.actionPrompt.value = null
+    // 分析记录：人类决策（窗口、前态与合法动作、选择）。回执由下面的 watcher 在窗口推进时补（§3.4）。
+    if (options.analysis) {
+      const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
+      options.analysis.windowOpened({
+        windowId: w.id, seat: current.seat, windowKind: windowKindOf(current.ownActions),
+        roundIndex: state.round.value, authorityEpoch: current.authorityEpoch, stateVersion: w.version,
+        state: decisionStateOf(current as BloodFlowViewLike, current.seat),
+      })
+      options.analysis.chosen({
+        windowId: w.id, seat: current.seat, source: 'human',
+        legalActionId: index >= 0 ? legalActionId(w.id, index) : null,
+      })
+      pendingHumanChoice = { windowId: w.id, seat: current.seat, action, before: current as BloodFlowViewLike }
+    }
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
+    // 分析记录（§6）：人类命令入序列（含过牌），带动作载荷以便赛后重跑复现。
+    if (options.analysis) {
+      const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
+      analysisRoundCommands.push(analysisCommandEntry(
+        current.seat, action, index >= 0 ? legalActionId(w.id, index) : undefined,
+      ))
+    }
     if (options.externalAuthority) options.externalAuthority.send(command)
     else void request({ kind: 'command', command })
   }
+  /** 分析记录：已入账的结算（胡牌批次/杠）id，视角是累计的，同一结算只记一次引用（§5）。 */
+  const analysisSettlementsSeen = new Set<string>()
+  /**
+   * 人类提交后的执行回执：窗口推进时才判定（§3.4、§10.2）。
+   * 只有该座位出现可见变化才算 executed，否则记 state-changed —— 不能因为"请求发出去了"就算执行成功。
+   */
+  let pendingHumanChoice: { windowId: string; seat: number; action: BloodFlowAction; before: BloodFlowViewLike } | null = null
+  watch(() => view.value?.window?.id ?? '', (nextWindowId) => {
+    const pending = pendingHumanChoice
+    const next = view.value
+    if (!pending || !next || nextWindowId === pending.windowId) return
+    pendingHumanChoice = null
+    options.analysis?.receipt({
+      windowId: pending.windowId, seat: pending.seat,
+      status: choiceTookEffect(pending.before, next as BloodFlowViewLike, pending.seat, pending.action) ? 'executed' : 'state-changed',
+      detail: 'window-advanced',
+    })
+  })
   async function beginEngine() {
     if (!dealerTile || !state.players.length) return
     const dealer = state.players[state.dealer.value]
     const dealerDrawnIndex = dealer.hand.lastIndexOf(dealerTile)
-    const opening: BloodFlowOpeningState = {
+    analysisRoundOpening = {
+    roundIndex: state.round.value,
+    wall: [...state.wall.value],
+    dealer: state.dealer.value,
+    flipTile: state.flipTile.value ?? null,
+    flipStack: state.flipStack.value ?? null,
+    hands: state.players.map(player => [...player.hand]),
+    dealerDrawnIndex,
+    jokers: state.jokerTiles.value.map(tile => tileName(tile)),
+    flipSeat: state.dealer.value,
+    wallBreakIndex: state.flipStack.value ?? 0,
+    flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]].map(tile => tileName(tile)),
+  }
+  const opening: BloodFlowOpeningState = {
       players: state.players.map(p => structuredClone(toRaw(p))), wall: [...state.wall.value],
       flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]], jokers: [...state.jokerTiles.value],
       headDrawn: state.wallHeadDrawn.value, dealerDrawnIndex, flipStack: state.flipStack.value!,
