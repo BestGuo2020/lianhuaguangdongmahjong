@@ -355,6 +355,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   }
   watch(() => options.getThemeName?.(), () => { if (view.value) { actionAudio.reset(); presentationSerial.value++; reactions.cancel(); cancelReactionSpeech();cancelActionSpeech();decisions.cancelSpeech() } })
 
+  /** 分析记录（§6）：本局的完整初始物理牌墙与开局参数（局末随该局落库，仅本地保存）。 */
+  let analysisRoundOpening: {
+    roundIndex: number; wall: TileType[]; dealer: number
+    flipTile: TileType | null; flipStack: number | null
+  } | null = null
   function apply(next: BloodFlowWorkerView) {
     const previous = view.value
     view.value = next
@@ -363,7 +368,22 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (options.recorder) {
       // 先补事件流水（含该局最后一张弃牌与鸣牌），再收尾；收尾幂等。
       if (next.replay) recordReplaySpectator(next.replay)
-      if (next.public.roundResult) recordReplaySettle(next)
+      if (next.public.roundResult) {
+      recordReplaySettle(next)
+      // 分析记录（§6）：局末一次性落库本局的**完整初始牌墙**与开局参数。
+      // 只本地保存：联机时普通客户端本就不该拿到牌墙，权威端才有（这里就是本地权威）。
+      if (options.analysis && analysisRoundOpening) {
+        options.analysis.reproduction({
+          roundIndex: analysisRoundOpening.roundIndex,
+          available: true,
+          initialWall: analysisRoundOpening.wall.map((tile) => tileName(tile)),
+          dealer: analysisRoundOpening.dealer,
+          ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
+          flipStack: analysisRoundOpening.flipStack,
+        })
+        analysisRoundOpening = null
+      }
+    }
     }
     // 分析记录（§5）：权威账本的新结算也在这里入账 —— 与录制共用同一汇聚点，绕过 request 的路径同样覆盖。
     if (options.analysis) {
@@ -643,7 +663,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (!dealerTile || !state.players.length) return
     const dealer = state.players[state.dealer.value]
     const dealerDrawnIndex = dealer.hand.lastIndexOf(dealerTile)
-    const opening: BloodFlowOpeningState = {
+    analysisRoundOpening = {
+    roundIndex: state.round.value,
+    wall: [...state.wall.value],
+    dealer: state.dealer.value,
+    flipTile: state.flipTile.value ?? null,
+    flipStack: state.flipStack.value ?? null,
+  }
+  const opening: BloodFlowOpeningState = {
       players: state.players.map(p => structuredClone(toRaw(p))), wall: [...state.wall.value],
       flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]], jokers: [...state.jokerTiles.value],
       headDrawn: state.wallHeadDrawn.value, dealerDrawnIndex, flipStack: state.flipStack.value!,
