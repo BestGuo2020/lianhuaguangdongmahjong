@@ -140,6 +140,8 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
           reason: `第 ${cursor + 1} 条记录标记为 expire，但当前没有窗口可推进（记录与实际不符）`,
         }
       }
+      // 对照实验（第 61 轮）：曾试过"下一条真命令能落在当前窗口上就跳过这条 expire"，
+      // 结果第 1 局从复现成功退回失败 ⇒ 记录里的 expire 是必需的，不能按这个规则跳过。已回退。
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
       cursor += 1
