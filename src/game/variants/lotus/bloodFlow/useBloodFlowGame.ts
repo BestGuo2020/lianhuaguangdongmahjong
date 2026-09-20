@@ -53,6 +53,7 @@ import {
   type BloodFlowViewLike,
 } from '../../../replay/analysis/bloodFlowAdapter'
 import type { AnalysisRecorder } from '../../../replay/analysis/recorder'
+import { createBloodFlowDecisionSink } from '../../../replay/analysis/decisionSink'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -138,6 +139,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const thinkingIds = new Map<string,number>()
   const thinkingSequences = new Map<number,number>()
   const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade',
+    // AI 分析记录接缝（可选）：把候选/推荐/请求生命周期/来源接进录制器；不传时零成本。
+    analysis: options.analysis ? createBloodFlowDecisionSink({ recorder: options.analysis }) : null,
     // LLM 座位启用"真·大牌路线"（候选层收窄）；普通 AI 座位不走这条路径，行为不变。
     aiConfig: BLOOD_FLOW_LLM_AI,
     metadata:()=>({roundIndex:state.round.value,dealerIndex:state.dealer.value}),

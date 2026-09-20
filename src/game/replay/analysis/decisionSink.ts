@@ -57,8 +57,8 @@ export interface BloodFlowDecisionSink {
     fallback?: { reason: string; strategy: string; legalActionId?: string }
     usage?: Record<string, number>
   }): void
-  /** 这一手的来源：本地 AI／模型／模型失败后的本地回退（§3.4）。 */
-  source(input: { windowId: string; seat: number; source: 'local-ai' | 'model' | 'model-fallback' }): void
+  /** 这一手的来源：本地策略／模型／模型失败后的本地回退（§3.4）。 */
+  source(input: { windowId: string; seat: number; source: 'local-strategy' | 'model' | 'model-fallback' }): void
 }
 
 /** 运行时需要的分析记录能力（由 createAnalysisRecorder 提供，这里只取用到的部分）。 */
@@ -81,7 +81,7 @@ export interface DecisionAnalysisRecorder {
     usage?: Record<string, number>
   }): void
   /** 运行时确定的来源；之后的 chosen() 不得用 'unknown' 覆盖它（§3.4）。 */
-  source(input: { windowId: string; seat: number; source: 'local-ai' | 'model' | 'model-fallback' }): void
+  source(input: { windowId: string; seat: number; source: 'local-strategy' | 'model' | 'model-fallback' }): void
 }
 
 export interface DecisionSinkOptions {
