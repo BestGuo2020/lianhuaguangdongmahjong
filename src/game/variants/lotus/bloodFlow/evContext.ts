@@ -5,6 +5,7 @@ import type { BloodFlowAiConfig } from './config'
 import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
+import { forecastSelfDrawIncome } from './incomeForecast'
 import {
   chainEvEst, patternPotentialEv, patternPotentialTotal, patternPotentials,
   waitingTilesCached, type PatternDirection,
@@ -63,6 +64,11 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const jokers = view.jokers
   const visible = visibleTiles(view)
   const wallCount = view.wallCount
+  const sourceSeat = view.window?.source.seat ?? view.seat
+  const drawOffset = ((view.seat - sourceSeat + 4) % 4) || 4
+  const chain = (tiles: readonly TileType[], offset = drawOffset) => config.chainForecast === 'self-draw-v1'
+    ? forecastSelfDrawIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset)
+    : chainEvEst(tiles, melds, jokers, visible, wallCount, config.sevenPairsModel, config)
   const drawnIndex = player.drawnTileIndex
   const window = view.window
   const winOffered = view.ownActions.some(action => action.kind === 'win')
@@ -72,7 +78,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   // 自摸胡后摸牌归档：锁手形态 = 手牌去掉摸牌位；点炮/抢杠形态 = 当前 13 张。
   const lockedHand = window?.kind === 'turn' && drawnIndex >= 0
     ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
-  const chainAfterWin = winOffered ? chainEvEst(lockedHand, melds, jokers, visible, wallCount, config.sevenPairsModel, config) : 0
+  const chainAfterWin = winOffered ? chain(lockedHand) : 0
   const winEv = immediateTotal + chainAfterWin
   const floor = firstWinFloor(wallCount, config)
   const floorStage: EvFloorStage = wallCount <= config.lateGameWallCount ? 'late'
@@ -92,7 +98,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
       reformCandidates.push({
         index: action.index,
         tile: hand[action.index],
-        ev: chainEvEst(after, melds, jokers, visible, wallCount, config.sevenPairsModel, config),
+        ev: chain(after),
         anyWait: waits.length >= 34,
         waitCount: waits.length,
         patterns: [...patternPotentials(after, melds, jokers, config.sevenPairsModel)]
@@ -108,7 +114,8 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
     const kongFee = BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.kongPayments.added
     robEv = {
       winEv,
-      passEv: -kongFee + chainEvEst(hand, melds, jokers, visible, wallCount, config.sevenPairsModel, config)
+      // 过抢杠后杠家先补摸一张；抢胡则从其下家继续。
+      passEv: -kongFee + chain(hand, drawOffset + 1)
         + patternPotentialEv(hand, melds, jokers, wallCount, config.sevenPairsModel, config),
     }
   }
