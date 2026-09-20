@@ -178,7 +178,9 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       // 说明重放已经推进过它了，再应用一次就会多走窗口（此前观测到的 +3/+5 累积偏移）。
       const recordNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
       const replayNo = Number(String(current.id).split('/').pop())
-      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo < replayNo) {
+      // 只应用"正好属于当前窗口"的 expire：编号更小 ⇒ 已经走过；**编号更大 ⇒ 属于还没走到的窗口**，
+      // 提前应用会把引擎向前推（实测这正是残余偏移与提前胡牌的来源：重放比记录多走窗口）。
+      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo !== replayNo) {
         expireSkippedByNumber += 1
         cursor += 1
         continue
