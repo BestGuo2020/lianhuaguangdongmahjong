@@ -180,7 +180,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => resolve(null)
       })
-      let displayEndScores: number[] | null = null
+      let displayRoundScores: Array<number[] | null> = []
       if (replayDb) {
         const readAll = <T,>(store: string) => new Promise<T[]>((resolve) => {
           const tx = replayDb.transaction(store, 'readonly')
@@ -191,24 +191,30 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         const matches = await readAll<{ id: string; rulesetId: string }>('matches')
         const bloodFlow = matches.find(match => match.rulesetId === 'lotus-blood-flow')
         const rounds = await readAll<{ matchId: string; index: number; final?: { scores?: number[] } | null }>('rounds')
-        const own = rounds.filter(round => round.matchId === bloodFlow?.id).sort((a, b) => a.index - b.index)
-        const last = own.at(-1)
-        if (last?.final?.scores) displayEndScores = [...last.final.scores]
+        displayRoundScores = rounds
+          .filter(round => round.matchId === bloodFlow?.id)
+          .sort((a, b) => a.index - b.index)
+          .map(round => (round.final?.scores ? [...round.final.scores] : null))
         replayDb.close()
       }
-      return { ran: true, results, displayEndScores }
+      return { ran: true, results, displayRoundScores }
     })
     expect(replayProbe.ran, '应能取到复现数据').toBe(true)
+    // 计数日志放在断言之前：失败时也能看到数字
+    console.log(`[analysis] 复现记录 ${replayProbe.results.length} 局 / 展示回放 ${replayProbe.displayRoundScores.length} 局`)
     for (const result of replayProbe.results) {
       expect(result.reason ?? '（无原因）', `第 ${result.recorded} 条命令的重跑应成功：${result.reason}`).toBe('（无原因）')
       expect(result.ok).toBe(true)
       expect(result.submitted).toBe(result.recorded)
       expect(result.finalScores).toHaveLength(4)
     }
-    // 充分条件：最后一局重跑得到的结束分数，必须与展示回放的该局结束快照一致
-    expect(replayProbe.displayEndScores, '应能从展示回放库里取到结束快照').toBeTruthy()
-    expect(replayProbe.displayEndScores!.length).toBe(4)
-    expect(replayProbe.results.at(-1)!.finalScores).toEqual(replayProbe.displayEndScores)
+    // 充分条件：按**局序**逐局比对（两边的局号口径未必一致，但时间顺序一致；
+    // 之前"两边各取最后一个"的写法会因编号错位偶发失败——随机牌局下时红时绿）。
+    expect(replayProbe.results.length, '两边的局数应一致').toBe(replayProbe.displayRoundScores.length)
+    expect(replayProbe.displayRoundScores.filter(scores => scores).length, '每局都应有结束快照').toBe(replayProbe.results.length)
+    replayProbe.results.forEach((result, index) => {
+      expect(result.finalScores, `第 ${index + 1} 局结束分数应与展示回放一致`).toEqual(replayProbe.displayRoundScores[index])
+    })
 
     // 响应窗口检查点（§9.3）：有响应窗口就该有检查点；看不到手牌时必须如实降级为 partial
     const checkpoints = probe.parts.filter(part => part.tag === 'responderCheckpoint').map(part => part.value)
