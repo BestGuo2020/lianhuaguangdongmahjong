@@ -218,8 +218,11 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
       // 状态分叉诊断：打印重放当时该座位的手牌与副露，便于与记录期望的动作对照
       // （记录里这一手的 index/tile 如果根本不在手牌里，说明状态在更早处已经分叉，而不是匹配不精确）。
-      const seatHand = (view as { hand?: string[] }).hand ?? []
-      const seatMelds = (view as { melds?: unknown[] }).melds?.length ?? 0
+      // 注意：座位视图只在 revealAll/engine.result 时暴露**他人**手牌，且顶层没有 hand 字段——
+      // 此前读顶层 hand 恒为 0，产生过一次假信号（"该座位手牌 0 张"）。本家手牌在 players[seat].hand。
+      const seatPlayer = (view as { players?: Array<{ hand?: string[]; melds?: unknown[] }> }).players?.[command.seat]
+      const seatHand = seatPlayer?.hand ?? []
+      const seatMelds = seatPlayer?.melds?.length ?? 0
       // 分叉点上下文：把"重放窗口"摊开，便于判断是窗口归属不同还是推进语义不同
       const current = engine.window
       const context = current
