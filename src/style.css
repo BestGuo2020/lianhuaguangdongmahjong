@@ -465,6 +465,7 @@ button { font: inherit; }
 }
 .table-action-cue::after { inset: 1%; border-width: 1px; border-color: rgba(255, 202, 77, .32); }
 .table-action-cue span {
+  white-space: nowrap;
   color: #ffe5a1;
   font: 900 clamp(34px, 4.3vw, 66px) "Noto Serif SC", serif;
   line-height: 1;
@@ -589,7 +590,7 @@ button { font: inherit; }
 .action-bar { display: flex; gap: 9px; align-items: center; }
 .autoplay-action.active { border-color: #d2aa58; background: radial-gradient(circle at 42% 33%, #b98737, #6e4f1e 69%, #241a08); color: #ffe6a5; box-shadow: 0 4px 10px rgba(0,0,0,.48), 0 0 12px rgba(239,190,75,.35), inset 0 0 0 2px rgba(255,255,255,.05); }
 .action { min-width: 61px; height: 52px; padding: 5px 12px; border: 1px solid var(--theme-border); border-radius: 50%; background: radial-gradient(circle at 42% 33%, color-mix(in srgb, var(--theme-accent) 32%, var(--theme-surface)), var(--theme-panel) 72%); color: var(--theme-text); box-shadow: 0 4px 10px rgba(0,0,0,.48), inset 0 0 0 2px rgba(255,255,255,.05); cursor: pointer; }
-.action b { display: block; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
+.action b { display: block; white-space: nowrap; font: 900 clamp(19px, 1.65vw, 26px) "Noto Serif SC", serif; }.action span { display: block; font-size: clamp(10px, .8vw, 13px); color: #d4bd7c; }
 .action:hover { transform: translateY(-2px); filter: brightness(1.2); }.action:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 .action.hu { border-color: #c94e45; background: radial-gradient(circle at 40% 30%, #a13c36, #511c1b 65%, #180908); color: #ffdda0; }
 .action.pass, .discard-action { border-radius: 25px; border-color: #52675c; background: rgba(7,19,14,.85); color: #c6d0c9; }
@@ -2983,7 +2984,9 @@ button { font: inherit; }
 .table-action-cue.action-win { --event-primary: var(--theme-accent); --event-secondary: var(--theme-negative); }
 .table-action-cue.strength-medium.table-action-enter-active { animation: theme-action-medium-in .52s cubic-bezier(.18,.86,.24,1.12) both; }
 .table-action-cue.strength-strong.table-action-enter-active { animation: theme-action-strong-in .72s cubic-bezier(.14,.9,.22,1.16) both; }
-.table-action-cue.strength-climax.table-action-enter-active { animation: theme-action-climax-in .88s cubic-bezier(.12,.88,.2,1.12) both; }
+/* Wins already own win-cue-serial. An enter-only animation would be replaced
+   when Vue removes the transition class, replaying the same win a second time. */
+.table-action-cue.strength-climax:not(.win).table-action-enter-active { animation: theme-action-climax-in .88s cubic-bezier(.12,.88,.2,1.12) both; }
 .table-action-cue.strength-strong { filter: drop-shadow(0 9px 16px rgba(0,0,0,.58)) saturate(1.1); }
 .table-action-cue.strength-climax { filter: drop-shadow(0 12px 22px rgba(0,0,0,.62)) saturate(1.16); }
 

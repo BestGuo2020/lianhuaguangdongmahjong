@@ -196,15 +196,13 @@ const actionCueLabEvent = computed<TableActionEvent | null>(() => (
     ? { id: actionCueLabId.value, type: actionCueLabType.value, actorIndex: actionCueLabActor.value, sourceIndex: null, tile: 'p5', meldIndex: -1 }
     : null
 ))
-// Win batches own every blood-flow winner (including restored/queued records).
-// Ordinary terminal effects own their win event once their timeline starts.
-const tableActionOwner = computed(() => {
+// Blood-flow batches own their winner cues. Ordinary wins still need the DOM
+// cue while winEffect runs: Three.js only draws the tile/light, not the portrait.
+// Remote win_effect can arrive before table_action, so it must not hide the cue.
+const presentedTableActionEvent = computed(() => {
   const event = props.tableActionEvent ?? actionCueLabEvent.value
-  if (!event || !winActionTypes.has(event.type)) return 'table'
-  return props.bloodFlow ? 'win-batch' : props.winEffect ? 'terminal-effect' : 'table'
+  return props.bloodFlow && event && winActionTypes.has(event.type) ? null : event
 })
-const presentedTableActionEvent = computed(() => tableActionOwner.value === 'table'
-  ? props.tableActionEvent ?? actionCueLabEvent.value : null)
 const presentedLlmBubbles = computed(() => props.bloodFlow
   ? ['llm','llmAnime'].includes(props.themeName)?props.bloodFlow.roundResult?(settlementVisible.value?undefined:props.bloodFlow.roundBubbles):props.bloodFlow.actionBubbles:undefined
   : bubbleLabEnabled
