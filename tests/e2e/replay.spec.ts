@@ -137,6 +137,51 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     const commands = reproduction.commands as Array<{ seat: number; kind: string }>
     expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
     expect(commands.every(entry => typeof entry.seat === 'number' && typeof entry.kind === 'string')).toBe(true)
+
+    // §10.6：把**真实录制**的复现数据喂回引擎重跑，必须能到达该局结束（记录足够复现）
+    const replayProbe = await page.evaluate(async () => {
+      const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
+      const { replayReproduction } = await import('/src/game/replay/analysis/replayReproduction.ts')
+      void decodeAnalysisBlock
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('lianhua-guangma-analysis')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>>((resolve, reject) => {
+        const tx = db.transaction('blocks', 'readonly')
+        const request = tx.objectStore('blocks').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      const { decodeAnalysisBlock: decode } = await import('/src/game/replay/analysis/codec.ts')
+      const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
+      for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
+        const decoded = await decode({
+          sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
+          storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+        })
+        if (decoded.parts) gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
+      }
+      const reproduction = gathered.filter(part => part.tag === 'reproduction').map(part => part.value)[0] as never
+      if (!reproduction) return { ran: false, results: [] }
+      const record = reproduction as unknown as { commands?: unknown[] }
+      const results = []
+      for (const candidate of gathered.filter(part => part.tag === 'reproduction').map(part => part.value)) {
+        const value = candidate as unknown as { commands?: Array<{ seat: number; kind: string }> }
+        results.push(replayReproduction({ reproduction: candidate as never, commands: (value.commands ?? []) as never }))
+      }
+      void record
+      return { ran: true, results }
+    })
+    expect(replayProbe.ran, '应能取到复现数据').toBe(true)
+    for (const result of replayProbe.results) {
+      expect(result.reason ?? '（无原因）', `第 ${result.recorded} 条命令的重跑应成功：${result.reason}`).toBe('（无原因）')
+      expect(result.ok).toBe(true)
+      expect(result.submitted).toBe(result.recorded)
+      expect(result.finalScores).toHaveLength(4)
+    }
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
