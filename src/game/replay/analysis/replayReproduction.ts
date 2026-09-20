@@ -214,6 +214,10 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const action = view.ownActions.find(candidate => actionMatches(candidate as never, command))
     if (!action) {
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
+      // 状态分叉诊断：打印重放当时该座位的手牌与副露，便于与记录期望的动作对照
+      // （记录里这一手的 index/tile 如果根本不在手牌里，说明状态在更早处已经分叉，而不是匹配不精确）。
+      const seatHand = (view as { hand?: string[] }).hand ?? []
+      const seatMelds = (view as { melds?: unknown[] }).melds?.length ?? 0
       // 分叉点上下文：把"重放窗口"摊开，便于判断是窗口归属不同还是推进语义不同
       const current = engine.window
       const context = current
@@ -222,7 +226,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；该座位手牌(${seatHand.length}张)=[${seatHand.join(' ')}] 副露=${seatMelds}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
         const nowNo = engine.window ? Number(String(engine.window.id).split('/').pop()) : Number.NaN
         const owned = Number.isFinite(nowNo)
           ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
