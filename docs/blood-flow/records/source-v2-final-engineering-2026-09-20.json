@@ -1,0 +1,42 @@
+{
+  "fingerprint": "66e56b9a799a78a2786edaa134b9389d5d46a963bbb588aaa763d46ec00bdcb2",
+  "pass": true,
+  "medianP95Ratio": 1.0115477436241835,
+  "limit": 1.5,
+  "repetitions": [
+    {
+      "rep": 0,
+      "uniqueDecisions": 508,
+      "controlP95": 105.78689999999915,
+      "candidateP95": 107.00849999999627,
+      "ratio": 1.0115477436241835,
+      "controlMax": 264.33989999999903,
+      "candidateMax": 341.8098999999929,
+      "node": "v24.19.0",
+      "cpu": "Intel(R) Core(TM) Ultra 5 225H"
+    },
+    {
+      "rep": 1,
+      "uniqueDecisions": 508,
+      "controlP95": 103.15779999999359,
+      "candidateP95": 120.31450000000041,
+      "ratio": 1.166315101718027,
+      "controlMax": 221.7058999999863,
+      "candidateMax": 255.59189999999944,
+      "node": "v24.19.0",
+      "cpu": "Intel(R) Core(TM) Ultra 5 225H"
+    },
+    {
+      "rep": 2,
+      "uniqueDecisions": 508,
+      "controlP95": 105.92470000000321,
+      "candidateP95": 104.42160000000149,
+      "ratio": 0.9858097308748415,
+      "controlMax": 285.7537999999986,
+      "candidateMax": 308.73730000000796,
+      "node": "v24.19.0",
+      "cpu": "Intel(R) Core(TM) Ultra 5 225H"
+    }
+  ],
+  "decision": "Proceed to the locked 256 source seeds"
+}
