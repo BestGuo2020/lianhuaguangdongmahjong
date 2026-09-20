@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inferLlmProviderType, PROVIDER_TEMPLATES, type LlmProviderConfig, type LlmProviderType } from './config'
-import { inferProviderDialect, resolveReasoningPolicy } from './reasoningPolicy'
+import { dashScopeThinkingBody, inferProviderDialect, isDashScopeEndpoint, resolveReasoningPolicy } from './reasoningPolicy'
 
 function config(providerType: LlmProviderType, model: string): LlmProviderConfig {
   return {
@@ -209,5 +209,30 @@ describe('LLM 非思考能力矩阵', () => {
     expect(inferLlmProviderType('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3.7-plus')).toBe('qwen')
     expect(inferLlmProviderType('https://proxy.local/v1', 'kimi-k2.6')).toBe('kimi')
     expect(inferLlmProviderType('https://api.example.com/v1', 'mystery-model')).toBe('custom')
+  })
+
+  it('DashScope 上的别家模型按型号识别，不被地址带成千问', () => {
+    const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    expect(inferLlmProviderType(dash, 'glm-4.7')).toBe('glm')
+    expect(inferLlmProviderType(dash, 'kimi-k2.6')).toBe('kimi')
+    expect(inferLlmProviderType(dash, 'deepseek-v4-flash')).toBe('deepseek')
+    expect(inferLlmProviderType(dash, 'qwen3-32b')).toBe('qwen')
+    // 型号无名厂指纹时仍按地址兜底成千问
+    expect(inferLlmProviderType(dash, 'some-new-model')).toBe('qwen')
+  })
+
+  it('DashScope 上改用统一开关 enable_thinking（各家原生参数实测无效）', () => {
+    const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    const glm = { baseUrl: dash, model: 'glm-4.7', providerType: 'glm' as const }
+    expect(resolveReasoningPolicy(glm).mode).toBe('explicit-off')
+    expect(dashScopeThinkingBody(resolveReasoningPolicy(glm).mode)).toEqual({ enable_thinking: false })
+    expect(dashScopeThinkingBody(resolveReasoningPolicy(glm, true).mode)).toEqual({ enable_thinking: true })
+    // 原生端点仍保留各家方言
+    const nativeGlm = { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7', providerType: 'glm' as const }
+    expect(resolveReasoningPolicy(nativeGlm).requestBody).toEqual({ thinking: { type: 'disabled' } })
+    expect(isDashScopeEndpoint(nativeGlm.baseUrl)).toBe(false)
+    expect(isDashScopeEndpoint(dash)).toBe(true)
+    // token-plan 是百炼的另一个接入点，同样按 DashScope 处理
+    expect(isDashScopeEndpoint('https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1')).toBe(true)
   })
 })

@@ -5,7 +5,7 @@ import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
-import { inferProviderDialect, resolveReasoningPolicy } from './reasoningPolicy'
+import { dashScopeThinkingBody, inferProviderDialect, isDashScopeEndpoint, resolveReasoningPolicy } from './reasoningPolicy'
 import {
   adaptiveReasoningBudget, isReasoningTemporarilySuppressed,
   recordReasoningLength, recordReasoningSuccess,
@@ -298,6 +298,10 @@ async function callOnce(
   const omitDefaultSampling = (resolvedProvider === 'claude'
     && /^claude-sonnet-5(?:[.-]|$)/.test(modelName))
     || (resolvedProvider === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
+  // DashScope 上别家模型（glm / kimi / deepseek…）的原生思考参数无效，统一改用 enable_thinking。
+  const dashScopeThinking = isDashScopeEndpoint(config.baseUrl)
+    ? dashScopeThinkingBody(resolveReasoningPolicy(config, options.allowReasoning === true).mode)
+    : null
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -316,6 +320,7 @@ async function callOnce(
         stream: true,
         n: 1,
         ...(options.extraBody ?? {}),
+        ...(dashScopeThinking ?? {}),
       }),
       signal: controller.signal,
     })

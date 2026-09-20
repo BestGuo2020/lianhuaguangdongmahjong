@@ -131,16 +131,30 @@ export const PROVIDER_TEMPLATES: Array<{ name: string; providerType: LlmProvider
   { name: '自定义', providerType: 'custom', baseUrl: '', model: '' },
 ]
 
+/**
+ * 型号名里的厂商指纹优先于地址指纹：DashScope/百炼这类聚合端点也托管别家模型
+ * （`glm-4.7`、`kimi-k2.6`、`deepseek-v4-flash` 等），只看地址会把它们误判成千问，
+ * 进而下发千问专属参数、关闭思考失效（实测 glm-4.7 因此每次都思考 2.8k 字、单次 25s）。
+ * 地址兜底仍保留：`dashscope|aliyuncs|qwen` 继续把纯千问接入点判成 qwen。
+ */
+const MODEL_PROVIDER_RULES: Array<[RegExp, LlmProviderType]> = [
+  [/deepseek/, 'deepseek'],
+  [/(?:qwen|qwq)/, 'qwen'],
+  [/(?:moonshot|kimi)/, 'kimi'],
+  [/(?:volces|volcengine|doubao)/, 'doubao'],
+  [/minimax/, 'minimax'],
+  [/(?:api\.openai\.com|\bgpt-|\bo[134](?:[.-]|\s|$))/, 'openai'],
+  [/(?:bigmodel|\bglm-)/, 'glm'],
+  [/(?:anthropic|\bclaude)/, 'claude'],
+]
+
 export function inferLlmProviderType(baseUrl: string, model: string): LlmProviderType {
-  const source = `${baseUrl} ${model}`.toLowerCase()
-  if (/deepseek/.test(source)) return 'deepseek'
+  const modelName = model.toLowerCase()
+  for (const [pattern, providerType] of MODEL_PROVIDER_RULES) {
+    if (pattern.test(modelName)) return providerType
+  }
+  const source = `${baseUrl} ${modelName}`
   if (/(?:dashscope|\.maas\.aliyuncs|qwen|qwq)/.test(source)) return 'qwen'
-  if (/(?:moonshot|kimi)/.test(source)) return 'kimi'
-  if (/(?:volces|volcengine|doubao)/.test(source)) return 'doubao'
-  if (/minimax/.test(source)) return 'minimax'
-  if (/(?:api\.openai\.com|\bgpt-|\bo[134](?:[.-]|\s|$))/.test(source)) return 'openai'
-  if (/(?:bigmodel|\bglm-)/.test(source)) return 'glm'
-  if (/(?:anthropic|\bclaude)/.test(source)) return 'claude'
   return 'custom'
 }
 
