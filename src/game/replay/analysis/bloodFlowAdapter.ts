@@ -5,7 +5,7 @@
 //
 // 约定：**窗口内稳定 ID = `${windowId}/${index}`**（index 是该座位在窗口 options 里的下标）。
 // 同一窗口内下标稳定，因此 windowOpened / candidates / chosen / receipt 四处用同一套 ID 对得上。
-import type { AnalysisLegalAction, AnalysisWindowKind } from './types'
+import type { AnalysisLegalAction, AnalysisSettlement, AnalysisWindowKind } from './types'
 
 /** 血流动作的最小形状（与 BloodFlowAction 结构兼容，不直接依赖玩法类型）。 */
 export interface BloodFlowActionLike {
@@ -119,6 +119,81 @@ export function decisionStateOf(view: BloodFlowViewLike, seat: number): {
     melds: player?.melds?.length ?? 0,
     legalActions: legalActionsOf(windowId, options),
   }
+}
+
+/**
+ * 从血流权威账本派生结算流水（§5）：每次胡牌批次 / 每次杠记一条，**只记引用不复制明细**。
+ * 视图里的 batches 与 kongEvents 都是累计的，因此用已见集合去重（同一结算只记一次）。
+ * 同一张牌的一炮多响保留同一 batchId（同源关系不丢）。
+ */
+export interface BloodFlowBatchLike {
+  batchId: string
+  source?: { id?: string; tile?: string; seat?: number; kind?: string }
+  winners?: ReadonlyArray<{ winner: number; deltas?: readonly number[] }>
+  deltas?: readonly number[]
+  scoresAfter?: readonly number[]
+}
+export interface BloodFlowKongLike {
+  id: string
+  actor: number
+  kongKind?: string
+  sourceSeat?: number | null
+  deltas?: readonly number[]
+  scoresAfter?: readonly number[]
+}
+export interface BloodFlowLedgerViewLike {
+  roundId?: string
+  public?: { batches?: ReadonlyArray<BloodFlowBatchLike> }
+  kongEvents?: ReadonlyArray<BloodFlowKongLike>
+}
+
+export function settlementsFromView(
+  view: BloodFlowLedgerViewLike,
+  roundIndex: number,
+  seen: Set<string>,
+): AnalysisSettlement[] {
+  const out: AnalysisSettlement[] = []
+  const roundId = view.roundId ?? 'round'
+  for (const batch of view.public?.batches ?? []) {
+    const key = `win/${batch.batchId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const winners = (batch.winners ?? []).map((record) => record.winner)
+    // 付款座位：自摸是全桌（除赢家），点炮是放炮者 —— 由 deltas 的负号侧决定，天然与账本一致。
+    const deltas = [...(batch.deltas ?? [])]
+    const payers = deltas.map((delta, seat) => (delta < 0 ? seat : -1)).filter((seat) => seat >= 0)
+    out.push({
+      id: `settlement/${roundId}/${batch.batchId}`,
+      roundIndex,
+      roundId,
+      sourceEventId: batch.source?.id ?? '',
+      kind: batch.source?.kind === 'draw' ? 'self-draw' : 'win',
+      winners,
+      payers,
+      deltas,
+      scoresAfter: [...(batch.scoresAfter ?? [])],
+      batchId: batch.batchId,
+    })
+  }
+  for (const kong of view.kongEvents ?? []) {
+    const key = `kong/${kong.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const deltas = [...(kong.deltas ?? [])]
+    out.push({
+      id: `settlement/${roundId}/${kong.id}`,
+      roundIndex,
+      roundId,
+      sourceEventId: kong.id,
+      kind: `kong-${kong.kongKind ?? 'unknown'}`,
+      winners: kong.deltas && kong.deltas[kong.actor] > 0 ? [kong.actor] : [],
+      payers: deltas.map((delta, seat) => (delta < 0 ? seat : -1)).filter((seat) => seat >= 0),
+      deltas,
+      scoresAfter: [...(kong.scoresAfter ?? [])],
+      batchId: kong.id,
+    })
+  }
+  return out
 }
 
 /**

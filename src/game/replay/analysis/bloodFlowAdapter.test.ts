@@ -7,7 +7,9 @@ import {
   legalActionsOf,
   normalizeAction,
   seatLegalActions,
+  settlementsFromView,
   windowKindOf,
+  type BloodFlowLedgerViewLike,
   type BloodFlowViewLike,
 } from './bloodFlowAdapter'
 
@@ -100,6 +102,41 @@ describe('血流适配层', () => {
     expect(other.drawnTileIndex).toBe(-1)
     expect(other.melds).toBe(1)
     expect(other.legalActions.map((action) => action.kind)).toEqual(['peng', 'pass'])
+  })
+
+  it('结算流水从权威账本派生：批次与杠各一条、同源多响保留同一 batchId、去重后不重复记（§5）', () => {
+    const view: BloodFlowLedgerViewLike = {
+      roundId: 'epoch/round/1',
+      public: { batches: [
+        { batchId: 'b1', source: { id: 's1', tile: 'm5', seat: 1, kind: 'discard' },
+          winners: [{ winner: 0 }, { winner: 2 }], deltas: [60, -30, 60, -90], scoresAfter: [2060, 1970, 2060, 1910] },
+      ] },
+      kongEvents: [
+        { id: 'k1', actor: 3, kongKind: 'concealed', deltas: [0, 0, -30, 90], scoresAfter: [2060, 1970, 2030, 2000] },
+      ],
+    }
+    const seen = new Set<string>()
+    const first = settlementsFromView(view, 1, seen)
+    expect(first).toHaveLength(2)
+    expect(first[0]).toMatchObject({
+      id: 'settlement/epoch/round/1/b1', roundIndex: 1, sourceEventId: 's1', kind: 'win',
+      winners: [0, 2], payers: [1, 3], batchId: 'b1',
+    })
+    expect(first[0].scoresAfter).toEqual([2060, 1970, 2060, 1910])
+    expect(first[1]).toMatchObject({ kind: 'kong-concealed', winners: [3], payers: [2], batchId: 'k1' })
+
+    // 视角是累计的：同一批次/杠再来一次不得重复记
+    expect(settlementsFromView(view, 1, seen)).toEqual([])
+    // 新增一条才继续记（每次结算只保存一次引用）
+    const more: BloodFlowLedgerViewLike = {
+      roundId: 'epoch/round/1',
+      public: { batches: [...(view.public!.batches!), { batchId: 'b2', source: { id: 's2', tile: 'p9', seat: 0, kind: 'draw' },
+        winners: [{ winner: 1 }], deltas: [-20, 60, -20, -20], scoresAfter: [2040, 2030, 2010, 1980] }] },
+      kongEvents: view.kongEvents,
+    }
+    const second = settlementsFromView(more, 1, seen)
+    expect(second).toHaveLength(1)
+    expect(second[0]).toMatchObject({ id: 'settlement/epoch/round/1/b2', kind: 'self-draw', winners: [1] })
   })
 
   it('执行回执口径：只看该座位自己的可见变化，看不见就不算执行成功', () => {
