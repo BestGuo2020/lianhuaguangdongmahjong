@@ -102,12 +102,18 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   let cursor = 0
   let steps = 0
   const scoresNow = () => engine.players.map(player => player.score)
+  // 窗口轨迹对照：重放实际见过的窗口集合 vs 已消费记录里涉及的窗口集合
+  const seenWindows = new Set<string>()
+  const recordedWindowsUpTo = (upTo: number) => new Set(
+    commands.slice(0, upTo).map(entry => entry.windowId).filter((id): id is string => Boolean(id)),
+  )
 
   while (!engine.result && steps < maxSteps) {
     steps += 1
     // 转场（结算演出等）会挡住下一个窗口：它不是隐藏信息，可由引擎状态推出，直接推进即可 ——
     // 否则重放会卡在转场里，下一条命令就报"该座位此刻没有合法动作"（实测四局都停在第 3 条）。
     if (!engine.window && engine.transition) { engine.advance(engine.transition.id); continue }
+    if (engine.window) seenWindows.add(engine.window.id)
     const command = commands[cursor]
     if (!command) {
       return {
@@ -155,7 +161,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口）`,
       }
     }
     engine.submit(engine.command(seat, action))
