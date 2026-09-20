@@ -209,7 +209,7 @@ export interface BloodFlowAiConfig {
   readonly reformGainRatio: number
   /** 锁手后连锁期望的展望巡数。 */
   readonly chainHorizon: number
-  /** 实验：规范计分 × 正常轮转自摸机会；未标定点炮/鸣牌，不默认推广。 */
+  /** 连锁收入预测；source-v2 使用规范计分与已校准的自摸／点炮机会。 */
   readonly chainForecast?: 'legacy' | 'self-draw-v1' | 'source-v2'
   readonly opportunityCalibration?: { readonly drawScale: number; readonly discardScale: number; readonly selfYield: number; readonly ronYield: number }
   /** Optional trained category composition; absent preserves source-v2. */
@@ -262,6 +262,15 @@ export const BLOOD_FLOW_DEFENSE: Readonly<DefensePolicyConfig> = Object.freeze({
   foldDiscardTolerance: 0,
 })
 
+// 256 个新源种子的四座轮换东风场验收通过；构建时设为 off 可独立回退。
+const sourceForecastEnabled = (import.meta as { env?: Record<string, string> }).env?.VITE_BLOOD_FLOW_SOURCE_FORECAST !== 'off'
+const sourceOpportunityCalibration = Object.freeze({
+  drawScale: 0.9975786924939467,
+  discardScale: 0.8990627253064167,
+  selfYield: 0.8478712071537614,
+  ronYield: 0.9877357078236184,
+})
+
 export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   minimumFirstPayment: 0,
   selfDrawWeight: 6,
@@ -273,7 +282,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   potentialFloor: 2,
   reformGainRatio: 1.2,
   chainHorizon: 8,
-  chainForecast: 'legacy',
+  chainForecast: sourceForecastEnabled ? 'source-v2' : 'legacy',
+  ...(sourceForecastEnabled ? { opportunityCalibration: sourceOpportunityCalibration } : {}),
   safetyCostNone: 0.25,
   safetyCostOne: 0.1,
   safetyCostSafe: 0,
@@ -309,6 +319,8 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
  */
 export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
   ...BLOOD_FLOW_AI,
+  chainForecast: 'legacy',
+  opportunityCalibration: undefined,
   // 本轮只验证普通 AI；LLM 候选层仍使用原有路线政策。
   routeOpportunityGuard: false,
   claimMeldProjection: false,

@@ -1,0 +1,951 @@
+{
+  "version": 1,
+  "baselineCommit": "728ed400a952802474791ebe8788d4c0e1844917",
+  "fingerprint": "66e56b9a799a78a2786edaa134b9389d5d46a963bbb588aaa763d46ec00bdcb2",
+  "control": {
+    "strategy": "ev",
+    "minimumFirstPayment": 0,
+    "selfDrawWeight": 6,
+    "firstWinFloorEarly": 40,
+    "firstWinFloorMid": 20,
+    "firstWinFloorLate": 10,
+    "lateGameWallCount": 15,
+    "earlyGameWallCount": 40,
+    "potentialFloor": 2,
+    "reformGainRatio": 1.2,
+    "chainHorizon": 8,
+    "chainForecast": "legacy",
+    "safetyCostNone": 0.25,
+    "safetyCostOne": 0.1,
+    "safetyCostSafe": 0,
+    "opponentPatternRisk": "tier",
+    "riskFactorTier1": 4,
+    "riskFactorTier2": 16,
+    "riskFactorTier3": 32,
+    "riskOffSuitFactor": 0.5,
+    "defense": {
+      "foldThreatTier": 3,
+      "ceilingProgress": 0.35,
+      "ceilingWeightFloor": 4,
+      "mode": "hard",
+      "foldDiscardTolerance": 0
+    },
+    "bigHandRoute": {
+      "mode": "bot",
+      "enabled": [
+        "thirteenOrphans",
+        "nineGates",
+        "pureSuit",
+        "mixedSuit",
+        "allTriplets"
+      ],
+      "minOrphanKinds": 12,
+      "minSuitRanks": 9,
+      "minSuitTiles": 12,
+      "pureSuitMinTiles": 10,
+      "pureSuitMaxForeign": 2,
+      "mixedSuitMinTiles": 10,
+      "mixedSuitMaxForeign": 1,
+      "allTripletsMinUnits": 4,
+      "declineWinRatio": 2,
+      "minWallForCommit": 20,
+      "minDeficitForCommit": 300,
+      "minWallForCommitWithJokers": 15,
+      "jokerReliefCount": 2
+    },
+    "routeOpportunityGuard": true,
+    "claimMeldProjection": true,
+    "claimReadyNetGuard": true,
+    "llmEvFeatures": true,
+    "kongValue": {
+      "mode": "ev",
+      "bonusWeight": 1,
+      "robRisk": 60,
+      "shantenStepLoss": 10,
+      "concealedHandFallback": 0.5
+    },
+    "sevenPairsModel": "ev"
+  },
+  "candidate": {
+    "strategy": "ev",
+    "minimumFirstPayment": 0,
+    "selfDrawWeight": 6,
+    "firstWinFloorEarly": 40,
+    "firstWinFloorMid": 20,
+    "firstWinFloorLate": 10,
+    "lateGameWallCount": 15,
+    "earlyGameWallCount": 40,
+    "potentialFloor": 2,
+    "reformGainRatio": 1.2,
+    "chainHorizon": 8,
+    "chainForecast": "source-v2",
+    "safetyCostNone": 0.25,
+    "safetyCostOne": 0.1,
+    "safetyCostSafe": 0,
+    "opponentPatternRisk": "tier",
+    "riskFactorTier1": 4,
+    "riskFactorTier2": 16,
+    "riskFactorTier3": 32,
+    "riskOffSuitFactor": 0.5,
+    "defense": {
+      "foldThreatTier": 3,
+      "ceilingProgress": 0.35,
+      "ceilingWeightFloor": 4,
+      "mode": "hard",
+      "foldDiscardTolerance": 0
+    },
+    "bigHandRoute": {
+      "mode": "bot",
+      "enabled": [
+        "thirteenOrphans",
+        "nineGates",
+        "pureSuit",
+        "mixedSuit",
+        "allTriplets"
+      ],
+      "minOrphanKinds": 12,
+      "minSuitRanks": 9,
+      "minSuitTiles": 12,
+      "pureSuitMinTiles": 10,
+      "pureSuitMaxForeign": 2,
+      "mixedSuitMinTiles": 10,
+      "mixedSuitMaxForeign": 1,
+      "allTripletsMinUnits": 4,
+      "declineWinRatio": 2,
+      "minWallForCommit": 20,
+      "minDeficitForCommit": 300,
+      "minWallForCommitWithJokers": 15,
+      "jokerReliefCount": 2
+    },
+    "routeOpportunityGuard": true,
+    "claimMeldProjection": true,
+    "claimReadyNetGuard": true,
+    "llmEvFeatures": true,
+    "kongValue": {
+      "mode": "ev",
+      "bonusWeight": 1,
+      "robRisk": 60,
+      "shantenStepLoss": 10,
+      "concealedHandFallback": 0.5
+    },
+    "sevenPairsModel": "ev",
+    "opportunityCalibration": {
+      "drawScale": 0.9975786924939467,
+      "discardScale": 0.8990627253064167,
+      "selfYield": 0.8478712071537614,
+      "ronYield": 0.9877357078236184
+    }
+  },
+  "rules": {
+    "id": "lotus-blood-flow",
+    "version": "lotus-blood-flow-v1",
+    "label": "莲花麻将·血流",
+    "basePoints": 10,
+    "initialScore": 2000,
+    "maxMultiplierPerPayer": 128,
+    "hardWinMultiplier": 2,
+    "patterns": {
+      "big-four-winds": {
+        "id": "big-four-winds",
+        "label": "大四喜",
+        "weight": 32,
+        "excludes": [
+          "all-triplets",
+          "little-four-winds"
+        ]
+      },
+      "four-kongs": {
+        "id": "four-kongs",
+        "label": "四杠",
+        "weight": 32,
+        "excludes": [
+          "three-kongs"
+        ]
+      },
+      "nine-gates": {
+        "id": "nine-gates",
+        "label": "九莲宝灯",
+        "weight": 32,
+        "excludes": [
+          "pure-suit"
+        ]
+      },
+      "big-three-dragons": {
+        "id": "big-three-dragons",
+        "label": "大三元",
+        "weight": 24,
+        "excludes": [
+          "little-three-dragons"
+        ]
+      },
+      "all-honors": {
+        "id": "all-honors",
+        "label": "字一色",
+        "weight": 24,
+        "excludes": [
+          "mixed-terminals",
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "pure-terminals": {
+        "id": "pure-terminals",
+        "label": "清幺九",
+        "weight": 24,
+        "excludes": [
+          "mixed-terminals",
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "all-green": {
+        "id": "all-green",
+        "label": "绿一色",
+        "weight": 24,
+        "excludes": []
+      },
+      "little-three-dragons": {
+        "id": "little-three-dragons",
+        "label": "小三元",
+        "weight": 16,
+        "excludes": []
+      },
+      "little-four-winds": {
+        "id": "little-four-winds",
+        "label": "小四喜",
+        "weight": 16,
+        "excludes": []
+      },
+      "four-concealed-triplets": {
+        "id": "four-concealed-triplets",
+        "label": "四暗刻",
+        "weight": 16,
+        "excludes": [
+          "three-concealed-triplets",
+          "all-triplets"
+        ]
+      },
+      "thirteenOrphans": {
+        "id": "thirteenOrphans",
+        "label": "十三幺",
+        "weight": 32,
+        "excludes": [
+          "all-with-terminals",
+          "mixed-terminals",
+          "sevenPairs",
+          "all-triplets"
+        ]
+      },
+      "one-suit-four-joints": {
+        "id": "one-suit-four-joints",
+        "label": "一色四节高",
+        "weight": 16,
+        "excludes": [
+          "one-suit-three-joints",
+          "all-triplets"
+        ]
+      },
+      "mixed-terminals": {
+        "id": "mixed-terminals",
+        "label": "混幺九",
+        "weight": 12,
+        "excludes": [
+          "all-with-terminals",
+          "all-triplets"
+        ]
+      },
+      "three-kongs": {
+        "id": "three-kongs",
+        "label": "三杠",
+        "weight": 12,
+        "excludes": []
+      },
+      "luxury-seven-pairs": {
+        "id": "luxury-seven-pairs",
+        "label": "豪华七对",
+        "weight": 6,
+        "excludes": [
+          "sevenPairs",
+          "all-triplets",
+          "three-concealed-triplets",
+          "four-concealed-triplets",
+          "one-suit-three-joints",
+          "one-suit-four-joints"
+        ]
+      },
+      "pure-suit": {
+        "id": "pure-suit",
+        "label": "清一色",
+        "weight": 8,
+        "excludes": [
+          "mixed-suit"
+        ]
+      },
+      "one-suit-three-joints": {
+        "id": "one-suit-three-joints",
+        "label": "一色三节高",
+        "weight": 8,
+        "excludes": []
+      },
+      "one-suit-four-steps": {
+        "id": "one-suit-four-steps",
+        "label": "一色四步高",
+        "weight": 8,
+        "excludes": [
+          "one-suit-three-steps"
+        ]
+      },
+      "three-concealed-triplets": {
+        "id": "three-concealed-triplets",
+        "label": "三暗刻",
+        "weight": 6,
+        "excludes": []
+      },
+      "qiXing": {
+        "id": "qiXing",
+        "label": "七星十三烂",
+        "weight": 6,
+        "excludes": [
+          "shiSanLan"
+        ]
+      },
+      "pure-straight": {
+        "id": "pure-straight",
+        "label": "清龙",
+        "weight": 6,
+        "excludes": []
+      },
+      "mixed-suit": {
+        "id": "mixed-suit",
+        "label": "混一色",
+        "weight": 4,
+        "excludes": []
+      },
+      "all-triplets": {
+        "id": "all-triplets",
+        "label": "碰碰胡",
+        "weight": 4,
+        "excludes": []
+      },
+      "sevenPairs": {
+        "id": "sevenPairs",
+        "label": "七对",
+        "weight": 4,
+        "excludes": [
+          "all-triplets",
+          "three-concealed-triplets",
+          "four-concealed-triplets",
+          "one-suit-three-joints",
+          "one-suit-four-joints"
+        ]
+      },
+      "one-suit-three-steps": {
+        "id": "one-suit-three-steps",
+        "label": "一色三步高",
+        "weight": 4,
+        "excludes": []
+      },
+      "all-with-terminals": {
+        "id": "all-with-terminals",
+        "label": "全带幺",
+        "weight": 4,
+        "excludes": []
+      },
+      "shiSanLan": {
+        "id": "shiSanLan",
+        "label": "十三烂",
+        "weight": 2,
+        "excludes": []
+      },
+      "all-simples": {
+        "id": "all-simples",
+        "label": "断幺九",
+        "weight": 2,
+        "excludes": [
+          "all-with-terminals",
+          "mixed-terminals",
+          "pure-terminals",
+          "all-honors"
+        ]
+      },
+      "concealed-hand": {
+        "id": "concealed-hand",
+        "label": "门清",
+        "weight": 1,
+        "excludes": []
+      },
+      "pinghu": {
+        "id": "pinghu",
+        "label": "平胡",
+        "weight": 1,
+        "excludes": []
+      },
+      "chicken": {
+        "id": "chicken",
+        "label": "鸡胡",
+        "weight": 0.5,
+        "excludes": []
+      }
+    },
+    "eventMultipliers": {
+      "discard": 1,
+      "self-draw": 2,
+      "robbed-kong": 2,
+      "kong-bloom": 4
+    },
+    "openingMinimumMultiplier": 8,
+    "kongPayments": {
+      "discard": 1,
+      "added": 1,
+      "concealed": 2,
+      "wind": 2
+    },
+    "kongBonus": {
+      "exposed": 1,
+      "concealed": 2,
+      "wind": 1
+    },
+    "rounds": {
+      "east": 4,
+      "hanchan": 8
+    },
+    "lockAfterFirstWin": true,
+    "multipleWinners": true,
+    "allowNegativeScores": true,
+    "alreadyWonPlayersPay": true,
+    "dealerMultiplier": 1,
+    "dealerRotation": "every-round",
+    "crossWindowPassRestriction": false,
+    "extraPayments": []
+  },
+  "actionPriority": "kong-priority",
+  "opponents": {
+    "legacy": "Existing heuristic, minimum first payment 0",
+    "attack": {
+      "strategy": "ev",
+      "minimumFirstPayment": 0,
+      "selfDrawWeight": 6,
+      "firstWinFloorEarly": 0,
+      "firstWinFloorMid": 0,
+      "firstWinFloorLate": 0,
+      "lateGameWallCount": 15,
+      "earlyGameWallCount": 40,
+      "potentialFloor": 2,
+      "reformGainRatio": 1.2,
+      "chainHorizon": 8,
+      "chainForecast": "legacy",
+      "safetyCostNone": 0,
+      "safetyCostOne": 0,
+      "safetyCostSafe": 0,
+      "opponentPatternRisk": "off",
+      "riskFactorTier1": 4,
+      "riskFactorTier2": 16,
+      "riskFactorTier3": 32,
+      "riskOffSuitFactor": 0.5,
+      "defense": {
+        "foldThreatTier": 3,
+        "ceilingProgress": 0.35,
+        "ceilingWeightFloor": 4,
+        "mode": "off",
+        "foldDiscardTolerance": 0
+      },
+      "bigHandRoute": {
+        "mode": "off",
+        "enabled": [
+          "thirteenOrphans",
+          "nineGates",
+          "pureSuit",
+          "mixedSuit",
+          "allTriplets"
+        ],
+        "minOrphanKinds": 12,
+        "minSuitRanks": 9,
+        "minSuitTiles": 12,
+        "pureSuitMinTiles": 10,
+        "pureSuitMaxForeign": 2,
+        "mixedSuitMinTiles": 10,
+        "mixedSuitMaxForeign": 1,
+        "allTripletsMinUnits": 4,
+        "declineWinRatio": 2,
+        "minWallForCommit": 20,
+        "minDeficitForCommit": 300,
+        "minWallForCommitWithJokers": 15,
+        "jokerReliefCount": 2
+      },
+      "routeOpportunityGuard": true,
+      "claimMeldProjection": true,
+      "claimReadyNetGuard": true,
+      "llmEvFeatures": true,
+      "kongValue": {
+        "mode": "ev",
+        "bonusWeight": 1,
+        "robRisk": 60,
+        "shantenStepLoss": 10,
+        "concealedHandFallback": 0.5
+      },
+      "sevenPairsModel": "ev"
+    },
+    "defensive": {
+      "strategy": "ev",
+      "minimumFirstPayment": 0,
+      "selfDrawWeight": 6,
+      "firstWinFloorEarly": 40,
+      "firstWinFloorMid": 20,
+      "firstWinFloorLate": 10,
+      "lateGameWallCount": 15,
+      "earlyGameWallCount": 40,
+      "potentialFloor": 2,
+      "reformGainRatio": 1.2,
+      "chainHorizon": 8,
+      "chainForecast": "legacy",
+      "safetyCostNone": 0.5,
+      "safetyCostOne": 0.2,
+      "safetyCostSafe": 0,
+      "opponentPatternRisk": "tier",
+      "riskFactorTier1": 8,
+      "riskFactorTier2": 32,
+      "riskFactorTier3": 64,
+      "riskOffSuitFactor": 0.5,
+      "defense": {
+        "foldThreatTier": 3,
+        "ceilingProgress": 0.35,
+        "ceilingWeightFloor": 4,
+        "mode": "hard",
+        "foldDiscardTolerance": 0
+      },
+      "bigHandRoute": {
+        "mode": "bot",
+        "enabled": [
+          "thirteenOrphans",
+          "nineGates",
+          "pureSuit",
+          "mixedSuit",
+          "allTriplets"
+        ],
+        "minOrphanKinds": 12,
+        "minSuitRanks": 9,
+        "minSuitTiles": 12,
+        "pureSuitMinTiles": 10,
+        "pureSuitMaxForeign": 2,
+        "mixedSuitMinTiles": 10,
+        "mixedSuitMaxForeign": 1,
+        "allTripletsMinUnits": 4,
+        "declineWinRatio": 2,
+        "minWallForCommit": 20,
+        "minDeficitForCommit": 300,
+        "minWallForCommitWithJokers": 15,
+        "jokerReliefCount": 2
+      },
+      "routeOpportunityGuard": true,
+      "claimMeldProjection": true,
+      "claimReadyNetGuard": true,
+      "llmEvFeatures": true,
+      "kongValue": {
+        "mode": "ev",
+        "bonusWeight": 1,
+        "robRisk": 60,
+        "shantenStepLoss": 10,
+        "concealedHandFallback": 0.5
+      },
+      "sevenPairsModel": "ev"
+    },
+    "mixed": "Existing seed-rotated mixture"
+  },
+  "matches": [
+    {
+      "panel": "legacy",
+      "seeds": [
+        4100001,
+        4100002,
+        4100003,
+        4100004,
+        4100005,
+        4100006,
+        4100007,
+        4100008,
+        4100009,
+        4100010,
+        4100011,
+        4100012,
+        4100013,
+        4100014,
+        4100015,
+        4100016,
+        4100017,
+        4100018,
+        4100019,
+        4100020,
+        4100021,
+        4100022,
+        4100023,
+        4100024,
+        4100025,
+        4100026,
+        4100027,
+        4100028,
+        4100029,
+        4100030,
+        4100031,
+        4100032,
+        4100033,
+        4100034,
+        4100035,
+        4100036,
+        4100037,
+        4100038,
+        4100039,
+        4100040,
+        4100041,
+        4100042,
+        4100043,
+        4100044,
+        4100045,
+        4100046,
+        4100047,
+        4100048,
+        4100049,
+        4100050,
+        4100051,
+        4100052,
+        4100053,
+        4100054,
+        4100055,
+        4100056,
+        4100057,
+        4100058,
+        4100059,
+        4100060,
+        4100061,
+        4100062,
+        4100063,
+        4100064
+      ]
+    },
+    {
+      "panel": "attack",
+      "seeds": [
+        4101001,
+        4101002,
+        4101003,
+        4101004,
+        4101005,
+        4101006,
+        4101007,
+        4101008,
+        4101009,
+        4101010,
+        4101011,
+        4101012,
+        4101013,
+        4101014,
+        4101015,
+        4101016,
+        4101017,
+        4101018,
+        4101019,
+        4101020,
+        4101021,
+        4101022,
+        4101023,
+        4101024,
+        4101025,
+        4101026,
+        4101027,
+        4101028,
+        4101029,
+        4101030,
+        4101031,
+        4101032,
+        4101033,
+        4101034,
+        4101035,
+        4101036,
+        4101037,
+        4101038,
+        4101039,
+        4101040,
+        4101041,
+        4101042,
+        4101043,
+        4101044,
+        4101045,
+        4101046,
+        4101047,
+        4101048,
+        4101049,
+        4101050,
+        4101051,
+        4101052,
+        4101053,
+        4101054,
+        4101055,
+        4101056,
+        4101057,
+        4101058,
+        4101059,
+        4101060,
+        4101061,
+        4101062,
+        4101063,
+        4101064
+      ]
+    },
+    {
+      "panel": "defensive",
+      "seeds": [
+        4102001,
+        4102002,
+        4102003,
+        4102004,
+        4102005,
+        4102006,
+        4102007,
+        4102008,
+        4102009,
+        4102010,
+        4102011,
+        4102012,
+        4102013,
+        4102014,
+        4102015,
+        4102016,
+        4102017,
+        4102018,
+        4102019,
+        4102020,
+        4102021,
+        4102022,
+        4102023,
+        4102024,
+        4102025,
+        4102026,
+        4102027,
+        4102028,
+        4102029,
+        4102030,
+        4102031,
+        4102032,
+        4102033,
+        4102034,
+        4102035,
+        4102036,
+        4102037,
+        4102038,
+        4102039,
+        4102040,
+        4102041,
+        4102042,
+        4102043,
+        4102044,
+        4102045,
+        4102046,
+        4102047,
+        4102048,
+        4102049,
+        4102050,
+        4102051,
+        4102052,
+        4102053,
+        4102054,
+        4102055,
+        4102056,
+        4102057,
+        4102058,
+        4102059,
+        4102060,
+        4102061,
+        4102062,
+        4102063,
+        4102064
+      ]
+    },
+    {
+      "panel": "mixed",
+      "seeds": [
+        4103001,
+        4103002,
+        4103003,
+        4103004,
+        4103005,
+        4103006,
+        4103007,
+        4103008,
+        4103009,
+        4103010,
+        4103011,
+        4103012,
+        4103013,
+        4103014,
+        4103015,
+        4103016,
+        4103017,
+        4103018,
+        4103019,
+        4103020,
+        4103021,
+        4103022,
+        4103023,
+        4103024,
+        4103025,
+        4103026,
+        4103027,
+        4103028,
+        4103029,
+        4103030,
+        4103031,
+        4103032,
+        4103033,
+        4103034,
+        4103035,
+        4103036,
+        4103037,
+        4103038,
+        4103039,
+        4103040,
+        4103041,
+        4103042,
+        4103043,
+        4103044,
+        4103045,
+        4103046,
+        4103047,
+        4103048,
+        4103049,
+        4103050,
+        4103051,
+        4103052,
+        4103053,
+        4103054,
+        4103055,
+        4103056,
+        4103057,
+        4103058,
+        4103059,
+        4103060,
+        4103061,
+        4103062,
+        4103063,
+        4103064
+      ]
+    }
+  ],
+  "engineering": {
+    "warmupSeeds": [
+      4300001,
+      4300002,
+      4300003,
+      4300004
+    ],
+    "seeds": [
+      {
+        "seed": 4200001,
+        "panel": "legacy",
+        "focal": 0,
+        "dealer": 0
+      },
+      {
+        "seed": 4200002,
+        "panel": "legacy",
+        "focal": 1,
+        "dealer": 0
+      },
+      {
+        "seed": 4200003,
+        "panel": "legacy",
+        "focal": 2,
+        "dealer": 0
+      },
+      {
+        "seed": 4200004,
+        "panel": "legacy",
+        "focal": 3,
+        "dealer": 0
+      },
+      {
+        "seed": 4200005,
+        "panel": "attack",
+        "focal": 0,
+        "dealer": 1
+      },
+      {
+        "seed": 4200006,
+        "panel": "attack",
+        "focal": 1,
+        "dealer": 1
+      },
+      {
+        "seed": 4200007,
+        "panel": "attack",
+        "focal": 2,
+        "dealer": 1
+      },
+      {
+        "seed": 4200008,
+        "panel": "attack",
+        "focal": 3,
+        "dealer": 1
+      },
+      {
+        "seed": 4200009,
+        "panel": "defensive",
+        "focal": 0,
+        "dealer": 2
+      },
+      {
+        "seed": 4200010,
+        "panel": "defensive",
+        "focal": 1,
+        "dealer": 2
+      },
+      {
+        "seed": 4200011,
+        "panel": "defensive",
+        "focal": 2,
+        "dealer": 2
+      },
+      {
+        "seed": 4200012,
+        "panel": "defensive",
+        "focal": 3,
+        "dealer": 2
+      },
+      {
+        "seed": 4200013,
+        "panel": "mixed",
+        "focal": 0,
+        "dealer": 3
+      },
+      {
+        "seed": 4200014,
+        "panel": "mixed",
+        "focal": 1,
+        "dealer": 3
+      },
+      {
+        "seed": 4200015,
+        "panel": "mixed",
+        "focal": 2,
+        "dealer": 3
+      },
+      {
+        "seed": 4200016,
+        "panel": "mixed",
+        "focal": 3,
+        "dealer": 3
+      }
+    ],
+    "repetitions": 3,
+    "p95RatioLimit": 1.5,
+    "method": "Three predeclared SERIAL fresh Node runs. Warm up on four disjoint seeds, then clear forecast/wait caches. Generate formal and candidate trajectories on 16 matched new deals. Time both policies on each unique public focal view, alternating call order (and reversing parity between repeats). Exclude view construction, hashing and engine submit from timers. P95 nearest-rank per policy; gate is median of three paired P95 ratios. No selected worst-case windows, no reruns except identified tool errors."
+  },
+  "thresholds": {
+    "meanNetGainMin": 50,
+    "meanNetGainCI95LowerGreaterThan": 0,
+    "firstPlacePointDeltaMin": 0,
+    "firstPlaceCI95LowerMin": -0.02,
+    "severeLossNetAtMost": -1000,
+    "severeLossRateIncreaseMax": 0.01
+  },
+  "inference": "256 independent source seeds stratified equally across four profiles; four focal seats per source and four rounds with carried scores. Paired source-seed bootstrap, 10000 replicates, fixed RNG seed 912701. Ties count as first place, consistent with the existing harness.",
+  "stopping": "Correctness or latency failure => reject and stop before payoff matches. Otherwise run all 256 seeds once. Any unmet/uncertain required threshold => reject, keep formal default, archive. No parameter/opponent/sample/metric changes to chase acceptance. Only an evidenced test-tool error permits a documented rerun."
+}

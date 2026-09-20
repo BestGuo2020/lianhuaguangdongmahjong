@@ -10,7 +10,8 @@ import { SEATS, vector, type BloodFlowAction } from '../src/game/variants/lotus/
 import type { Seat } from '../src/game/variants/lotus/bloodFlow/types'
 import { BASELINE_AI, baseline, nextSeatToAct, restoreEngine, snapshotEngine, submit, type Policy } from './blood-flow-counterfactual'
 
-export const PANEL_CURRENT_CONFIG = Object.freeze({ ...BLOOD_FLOW_AI, routeOpportunityGuard:true, claimMeldProjection:true, claimReadyNetGuard:true })
+// Historical panel/control/opponents stay at the accepted experiment's pre-promotion policy.
+export const PANEL_CURRENT_CONFIG = Object.freeze({ ...BLOOD_FLOW_AI, chainForecast:'legacy' as const, opportunityCalibration:undefined, routeOpportunityGuard:true, claimMeldProjection:true, claimReadyNetGuard:true })
 export const panelCurrent: Policy = view => decideBloodFlowActionEv(view,PANEL_CURRENT_CONFIG)
 export const PANEL_BASE_CONFIG = BASELINE_AI
 export const ATTACK_CONFIG: BloodFlowAiConfig = Object.freeze({ ...PANEL_CURRENT_CONFIG,

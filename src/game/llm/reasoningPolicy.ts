@@ -18,10 +18,31 @@ export function inferProviderDialect(baseUrl: string): ProviderDialect {
   let host = ''
   try { host = new URL(baseUrl).hostname.toLowerCase() } catch { return 'compatible' }
   if (host === 'api.orcarouter.ai') return 'orcarouter'
-  if (/^(?:api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.moonshot\.(?:cn|ai)|ark\.[^.]+\.volces\.com|api\.minimax\.(?:chat|io)|api\.openai\.com|open\.bigmodel\.cn|api\.z\.ai|api\.anthropic\.com)$/.test(host)) {
+  // token-plan 是百炼的另一个官方接入点，与 dashscope 同方言。
+  if (/^(?:api\.deepseek\.com|dashscope\.aliyuncs\.com|token-plan\.cn-beijing\.maas\.aliyuncs\.com|api\.moonshot\.(?:cn|ai)|ark\.[^.]+\.volces\.com|api\.minimax\.(?:chat|io)|api\.openai\.com|open\.bigmodel\.cn|api\.z\.ai|api\.anthropic\.com)$/.test(host)) {
     return 'official'
   }
   return 'compatible'
+}
+
+/** DashScope/百炼托管端点：千问与别家模型（glm / kimi / deepseek…）都挂在这里。 */
+export function isDashScopeEndpoint(baseUrl: string): boolean {
+  let host = ''
+  try { host = new URL(baseUrl).hostname.toLowerCase() } catch { return false }
+  return /(?:^|\.)dashscope\.aliyuncs\.com$/.test(host)
+    || /^token-plan\.[a-z0-9-]+\.maas\.aliyuncs\.com$/.test(host)
+}
+
+/**
+ * DashScope 端点上开关思考的统一参数是 `enable_thinking`；各家原生参数
+ * （`thinking`、`reasoning_effort`）在这里实测无效——`glm-4.7` 收到
+ * `thinking:{type:disabled}` 仍思考 2.8k 字、单次 25s，换成 `enable_thinking:false` 后 0.8s。
+ * 因此托管在 DashScope 的别家模型统一改用 `enable_thinking`。
+ */
+export function dashScopeThinkingBody(mode: ReasoningPolicyMode): Record<string, unknown> | null {
+  if (mode === 'explicit-off') return { enable_thinking: false }
+  if (mode === 'explicit-on' || mode === 'always-on') return { enable_thinking: true }
+  return null
 }
 
 function policy(
@@ -173,9 +194,14 @@ export function resolveReasoningPolicy(
         })
       }
       if (/^glm-(?:4\.(?:5|6|7)|5)(?:[.-]|$)/.test(model)) {
-        return policy(providerType, 'explicit-off', '已强制关闭 GLM 思考模式', {
-          thinking: { type: 'disabled' },
-        })
+        // 与 DeepSeek 分支一致：条件命中时才开启思考，普通决策显式关闭。
+        return reasoning
+          ? policy(providerType, 'explicit-on', '已开启 GLM 条件思考', {
+            thinking: { type: 'enabled' },
+          })
+          : policy(providerType, 'explicit-off', '已强制关闭 GLM 思考模式', {
+            thinking: { type: 'disabled' },
+          })
       }
       if (/^glm-4(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'naturally-off', '该 GLM 型号本身不是思考模型')

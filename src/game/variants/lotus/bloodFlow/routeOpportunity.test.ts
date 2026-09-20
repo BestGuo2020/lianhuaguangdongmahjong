@@ -6,7 +6,9 @@ import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from './config'
 import { seededRandom } from './simulation'
 import { SEATS } from './state'
 
-const old = { ...BLOOD_FLOW_AI, routeOpportunityGuard: false, claimMeldProjection: false, claimReadyNetGuard: false }
+// Reproduce the historical trajectory with its original forecast, independent of production upgrades.
+const old = { ...BLOOD_FLOW_AI, chainForecast: 'legacy' as const, opportunityCalibration: undefined,
+  routeOpportunityGuard: false, claimMeldProjection: false, claimReadyNetGuard: false }
 const enabled = { ...old, routeOpportunityGuard: true }
 const cases = new Map<number, BloodFlowSeatView>()
 beforeAll(() => {
@@ -44,6 +46,13 @@ it('preserves enough-wall, locked, non-win and claim behavior', () => {
     { ...view, window: { ...view.window!, kind: 'win', source: { ...view.window!.source, kind: 'discard' } } },
   ]
   for (const variant of variants) expect(decideBloodFlowActionEv(variant, enabled)).toEqual(decideBloodFlowActionEv(variant, old))
+})
+
+it('also releases the late win to the current forecast instead of forcing a route discard', () => {
+  for (const view of cases.values()) {
+    const withoutRoute = { ...BLOOD_FLOW_AI, bigHandRoute: { ...BLOOD_FLOW_AI.bigHandRoute, mode: 'off' as const } }
+    expect(decideBloodFlowActionEv(view, BLOOD_FLOW_AI)).toEqual(decideBloodFlowActionEv(view, withoutRoute))
+  }
 })
 
 it('keeps the unvalidated LLM configuration opted out and honors the build rollback', () => {
