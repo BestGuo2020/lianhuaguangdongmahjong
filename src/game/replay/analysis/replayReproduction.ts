@@ -180,7 +180,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；重放尾部轨迹=[${windowTrace.slice(-12).join(' ')}]；记录尾部=[${commands.slice(Math.max(0, cursor - 8), cursor + 1).map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ')}]）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；重放开头轨迹=[${windowTrace.slice(0, 40).join(' ')}]；记录开头=[${commands.slice(0, 40).map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
