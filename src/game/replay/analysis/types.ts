@@ -320,6 +320,8 @@ export interface AnalysisReproduction {
      */
     resolution?: 'command' | 'auto' | 'expire'
     tile?: string
+    /** 吃/杠等组合动作的牌集合：这类动作在引擎里不带单张 `tile`，只比 kind 会吃错组合。 */
+    tiles?: string[]
     handIndex?: number
     from?: number | null
     meldIndex?: number

@@ -369,7 +369,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
   const analysisRoundCommands: Array<{
     seat: number; kind: string; at: number
-    legalActionId?: string; windowId?: string; tile?: string; handIndex?: number; from?: number | null; meldIndex?: number
+    legalActionId?: string; windowId?: string; tile?: string; tiles?: string[]; handIndex?: number; from?: number | null; meldIndex?: number
     /** 'auto' 表示该窗口当时没有本端决策（权威机器人代决）；'expire' 表示没人决定、靠超时推进。 */
     resolution?: 'command' | 'auto' | 'expire'
   }> = []
@@ -383,8 +383,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const entry: (typeof analysisRoundCommands)[number] = { seat, kind: action.kind, at: Date.now() }
     if (legalActionId) entry.legalActionId = legalActionId
     if (windowId) { entry.windowId = windowId; analysisWindowsWithCommand.add(windowId) }
-    const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number }
+    const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number; tiles?: string[]; meld?: string[] }
     if (record.tile !== undefined) entry.tile = record.tile
+    // 吃/杠不带单张 tile，必须把组合记下来，否则复现时只能按 kind 取第一个候选（实测会吃错组合）
+    const combination = record.tiles ?? record.meld
+    if (combination?.length) entry.tiles = combination.map(tile => tileName(tile as never))
     if (record.index !== undefined) entry.handIndex = record.index
     if (record.from !== undefined) entry.from = record.from
     if (record.meldIndex !== undefined) entry.meldIndex = record.meldIndex

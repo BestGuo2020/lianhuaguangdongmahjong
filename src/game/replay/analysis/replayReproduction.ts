@@ -20,6 +20,8 @@ export interface ReproductionCommand {
   seat: number
   kind: string
   tile?: string
+  /** 吃/杠等组合动作的牌集合（与记录一致，做集合比较）。 */
+  tiles?: string[]
   handIndex?: number
   from?: number | null
   meldIndex?: number
@@ -62,6 +64,19 @@ function actionMatches(
       ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
     ]
     if (candidates.length && !candidates.includes(command.tile)) return false
+  }
+  // 组合动作（吃/杠）：记录里有牌集合时，候选的牌集合必须完全一致（顺序无关），
+  // 否则只能按 kind 取第一个候选 —— 实测会吃错组合、牌型走偏、重放提前二十步胡牌。
+  if (command.tiles?.length) {
+    const candidateTiles = [
+      ...(Array.isArray(action.tiles) ? (action.tiles as unknown[]).map(entry => tileName(entry as never)) : []),
+      ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
+    ]
+    if (candidateTiles.length) {
+      const wanted = [...command.tiles].sort().join(',')
+      const offered = [...candidateTiles].sort().join(',')
+      if (wanted !== offered) return false
+    }
   }
   if (command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
   if (command.from !== undefined && command.from !== null && action.from !== undefined && action.from !== command.from) return false
