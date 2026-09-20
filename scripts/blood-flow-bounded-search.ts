@@ -7,11 +7,14 @@ import { visibleTiles, type BloodFlowSeatView } from '../src/game/variants/lotus
 import { waitingTilesCached } from '../src/game/variants/lotus/bloodFlow/patternPotentials'
 import { PANEL_CURRENT_CONFIG } from './blood-flow-opponent-panel'
 import type { TileType } from '../src/game/core/contracts/types'
+import { BLOOD_FLOW_CONFIG } from '../src/game/variants/lotus/bloodFlow/config'
+import { TILE_TYPES } from '../src/game/core/rules/tiles'
+import { isWinningHand } from '../src/game/variants/lotus/lotusRules'
 
 export const FORECAST_CONFIG = Object.freeze({ ...PANEL_CURRENT_CONFIG, chainForecast: 'self-draw-v1' as const })
 export const forecastPolicy = (view: BloodFlowSeatView) => decideBloodFlowActionEv(view, FORECAST_CONFIG)
 
-export function boundedSearch(view: BloodFlowSeatView) {
+export function boundedSearch(view: BloodFlowSeatView, prune = true) {
   const fallback = forecastPolicy(view)
   const p = view.players[view.seat]
   if (view.public.seats[view.seat].locked || view.window?.kind !== 'turn'
@@ -27,10 +30,21 @@ export function boundedSearch(view: BloodFlowSeatView) {
   const unseen = counts.reduce((n, e) => n + e.count, 0)
   if (!unseen) return { action: fallback, nodes: 0 }
   let nodes = 0, value = 0
+  // Incoming A then B and incoming B then A complete the same 14-tile hand.
+  // Reuse legality across those branches, not just identical 13-tile waits.
+  const complete = new Map<string,boolean>()
+  const searchWaits = (after: TileType[]) => !prune ? waitingTilesCached(after,p.melds.length,view.jokers)
+    : TILE_TYPES.filter(tile=>{
+      const full=[...after,tile],key=[...full].sort().join(',')
+      let legal=complete.get(key)
+      if(legal===undefined){legal=isWinningHand(full,p.melds.length,[...view.jokers],[],['white']);complete.set(key,legal)}
+      return legal
+    })
   const remainingHorizon = FORECAST_CONFIG.chainHorizon - 1
   for (const { tile, count } of counts) {
     if (!count) continue
     const nextVisible = [...visible, tile], drawn = [...hand, tile]
+    const nextCounts = unseenCounts(nextVisible)
     const leaf = (after: readonly TileType[]) => {
       nodes++
       return forecastSelfDrawIncome(after, p.melds, view.jokers, nextVisible,
@@ -45,11 +59,18 @@ export function boundedSearch(view: BloodFlowSeatView) {
       if (discard === tile || seen.has(discard)) return []
       seen.add(discard)
       const after = drawn.filter((_, i) => i !== index)
-      const waits = waitingTilesCached(after, p.melds.length, view.jokers)
-      const mass = unseenCounts(nextVisible).reduce((n, e) => n + (waits.includes(e.tile) ? e.count : 0), 0)
+      const waits = searchWaits(after)
+      const mass = nextCounts.reduce((n, e) => n + (waits.includes(e.tile) ? e.count : 0), 0)
       return mass ? [{ after, mass, index }] : []
     }).sort((a, b) => b.mass - a.mass || a.index - b.index)
-    if (exchanges[0]) best = Math.max(best, leaf(exchanges[0].after))
+    if (exchanges[0]) {
+      // An admissible bound: every possible wait pays the per-payer rule cap.
+      // Only skip exact scoring when even that cannot beat the incumbent.
+      const upper = ownDrawOpportunities(view.wallCount - 4, remainingHorizon)
+        * exchanges[0].mass / Math.max(1, unseen - 1)
+        * BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.maxMultiplierPerPayer * 3
+      if (!prune || upper > best) best = Math.max(best, leaf(exchanges[0].after))
+    }
     value += count / unseen * best
   }
   // At most 34 chance outcomes * 2 terminal hands; no partial-tree promotion.
