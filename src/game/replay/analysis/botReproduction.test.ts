@@ -44,12 +44,7 @@ function asRecord(opening: BloodFlowOpeningState): AnalysisReproduction {
 }
 
 describe('权威机器人代决的对局也能复现（§10.6）', () => {
-  // 待办：观察钩子已生效（机器人命令能被记录并重放，本用例推进到第 34 条命令），
-  // 但**超时推进的窗口没有进命令序列** ⇒ 重放状态分叉，报"该座位此刻没有合法动作"。
-  // 修法（两处）：① 录制侧在超时推进窗口时压入一条 expire 记录；
-  //             ② 校验侧遇到 expire 记录时把时钟推过截止时间并调用 engine.expire，再继续。
-  // 这正是第 33 轮 auto 标记之外还差的另一半（auto 管"权威机器人choice"，expire 管"没人决定"）。
-  it.skip('用 BotCommandObserver 记录机器人命令后，重跑能与结束分数一致', async () => {
+  it('用 BotCommandObserver 记录机器人命令后，重跑能与结束分数一致', async () => {
     const opening = buildOpening()
     const record = asRecord(opening)
     const commands: ReproductionCommand[] = []
@@ -79,13 +74,19 @@ describe('权威机器人代决的对局也能复现（§10.6）', () => {
         if (!window) break
         const seat = SEATS.find(candidate => window.options[candidate].length > 0)
         if (seat === undefined) {
-          if (engine.window) { clock = engine.window.deadlineAt + 1; engine.expire(clock, engine.window.id) }
+          // 没人有合法动作 ⇒ 靠超时推进：如实记一条 expire（否则重跑会分叉）
+          if (engine.window) {
+            commands.push({ seat: 0, kind: 'expire', resolution: 'expire' })
+            clock = engine.window.deadlineAt + 1
+            engine.expire(clock, engine.window.id)
+          }
           continue
         }
         const before = engine.window?.id
         await backend.bot(seat, window.id)
-        // 机器人可能不提交（例如它选择过）⇒ 把时钟推过截止时间再超时推进（真实流程里由主线程的计时器做）
+        // 机器人可能不提交（例如它选择过）⇒ 同样记 expire 再推进（真实流程里由主线程的计时器做）
         if (engine.window && engine.window.id === before) {
+          commands.push({ seat, kind: 'expire', resolution: 'expire' })
           clock = engine.window.deadlineAt + 1
           engine.expire(clock, engine.window.id)
         }

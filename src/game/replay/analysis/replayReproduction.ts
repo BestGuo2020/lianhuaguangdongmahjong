@@ -23,8 +23,8 @@ export interface ReproductionCommand {
   handIndex?: number
   from?: number | null
   meldIndex?: number
-  /** 见 AnalysisReproduction.commands：'auto' 表示当时由权威机器人/超时代决。 */
-  resolution?: 'command' | 'auto'
+  /** 见 AnalysisReproduction.commands：'auto' 权威机器人代决、'expire' 靠超时推进。 */
+  resolution?: 'command' | 'auto' | 'expire'
 }
 
 export interface ReplayVerification {
@@ -66,11 +66,13 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     return { ok: false, reason: restored.reason, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null }
   }
 
+  // 时钟必须可推进：expire 记录要把"当时靠超时推进"这件事重演出来
+  let clock = 0
   const engine = new BloodFlowEngine({
     authorityEpoch: 'verify',
     roundId: `verify/${input.reproduction.roundIndex}`,
     opening: restored.opening,
-    now: () => 0,
+    now: () => clock,
     winBeatMs: 0,
   })
 
@@ -89,6 +91,20 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       }
     }
     const seat = command.seat as Seat
+    if (command.resolution === 'expire') {
+      // 该窗口没人决定、靠超时推进：把时钟推过截止时间再推进，否则状态会与当时分叉
+      const current = engine.window
+      if (!current) {
+        return {
+          ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+          reason: `第 ${cursor + 1} 条记录标记为 expire，但当前没有窗口可推进（记录与实际不符）`,
+        }
+      }
+      clock = current.deadlineAt + 1
+      engine.expire(clock, current.id)
+      cursor += 1
+      continue
+    }
     if (command.resolution === 'auto') {
       // 该窗口当时由权威机器人（或超时）代决，记录里不含它的选择：说清原因，不笼统报"命令不足"
       return {
