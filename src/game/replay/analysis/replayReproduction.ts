@@ -68,13 +68,23 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
 
   // 时钟必须可推进：expire 记录要把"当时靠超时推进"这件事重演出来
   let clock = 0
-  const engine = new BloodFlowEngine({
-    authorityEpoch: 'verify',
-    roundId: `verify/${input.reproduction.roundIndex}`,
-    opening: restored.opening,
-    now: () => clock,
-    winBeatMs: 0,
-  })
+  let engine: BloodFlowEngine
+  try {
+    engine = new BloodFlowEngine({
+      authorityEpoch: 'verify',
+      roundId: `verify/${input.reproduction.roundIndex}`,
+      opening: restored.opening,
+      now: () => clock,
+      winBeatMs: 0,
+    })
+  } catch (error) {
+    // 开局数据不合格（例如庄家第 14 张的下标与手牌不一致、有效牌数不对）：
+    // 引擎会拒绝重建 —— 这里如实报告原因，绝不让异常逃出去（校验器的职责是给出结论，不是抛错）。
+    return {
+      ok: false, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null,
+      reason: `开局数据不合格，引擎拒绝重建：${String(error).slice(0, 140)}`,
+    }
+  }
 
   const maxSteps = Math.max(1, input.maxSteps ?? 20_000)
   let cursor = 0
