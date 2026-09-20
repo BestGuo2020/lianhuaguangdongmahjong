@@ -6,14 +6,22 @@
 import { SEATS } from '../../variants/lotus/bloodFlow/state'
 import type { BloodFlowOpeningState } from '../../variants/lotus/bloodFlow/state'
 import type { GamePlayer, Meld, TileType } from '../../core/contracts/types'
-import { TILE_TYPES } from '../../core/rules/tiles'
+import { TILE_META, TILE_TYPES } from '../../core/rules/tiles'
 import type { AnalysisReproduction } from './types'
 
-/** 牌名 → 牌型；未知牌名直接抛错（不静默跳过，避免悄悄改变开局）。 */
+/**
+ * 牌名 → 牌型。两种写法都认：
+ * - 牌码（`m1`/`east`）：决策前态里的手牌就是这种写法；
+ * - 中文显示名（`tileName('m1')` 得到的是「一万」）：复现数据里的牌墙/翻精是这种写法。
+ * 两种混用是记录格式的既有事实，这里兼容而不是要求上游统一（统一另开一事，见提交说明）。
+ * 未知牌名直接抛错，不静默跳过。
+ */
 export function tileFromName(name: string): TileType {
-  const found = TILE_TYPES.find(tile => tile === name)
-  if (!found) throw new Error(`未知牌名：${name}`)
-  return found
+  const code = TILE_TYPES.find(tile => tile === name)
+  if (code) return code
+  const byDisplay = TILE_TYPES.find(tile => TILE_META[tile]?.name === name)
+  if (byDisplay) return byDisplay
+  throw new Error(`未知牌名：${name}`)
 }
 
 export interface ReproductionOpeningResult {
