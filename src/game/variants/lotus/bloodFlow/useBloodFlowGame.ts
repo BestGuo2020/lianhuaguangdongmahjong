@@ -359,6 +359,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   let analysisRoundOpening: {
     roundIndex: number; wall: TileType[]; dealer: number
     flipTile: TileType | null; flipStack: number | null
+    /** 四家初始手牌与庄家第 14 张下标：引擎据此建立手牌，不能从牌墙推出。 */
+    hands: string[][]; dealerDrawnIndex: number
   } | null = null
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
   const analysisRoundCommands: Array<{
@@ -396,6 +398,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           roundIndex: analysisRoundOpening.roundIndex,
           available: true,
           initialWall: analysisRoundOpening.wall.map((tile) => tileName(tile)),
+          // 开局手牌不能由牌墙推出（引擎取 opening.players[].hand），因此必须单独记（§6）。
+          initialHands: analysisRoundOpening.hands.map(hand => [...hand]),
+          dealerDrawnIndex: analysisRoundOpening.dealerDrawnIndex,
           dealer: analysisRoundOpening.dealer,
           ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
           flipStack: analysisRoundOpening.flipStack,
@@ -702,6 +707,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     dealer: state.dealer.value,
     flipTile: state.flipTile.value ?? null,
     flipStack: state.flipStack.value ?? null,
+    hands: state.players.map(player => [...player.hand]),
+    dealerDrawnIndex,
   }
   const opening: BloodFlowOpeningState = {
       players: state.players.map(p => structuredClone(toRaw(p))), wall: [...state.wall.value],

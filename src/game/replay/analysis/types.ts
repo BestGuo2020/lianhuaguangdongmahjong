@@ -272,6 +272,13 @@ export interface AnalysisReproduction {
   available: boolean
   /** 优先保存完整初始物理牌墙，而不是只存随机种子（算法变化会让同种子产生不同牌局）。 */
   initialWall?: string[]
+  /**
+   * 四家初始手牌与庄家第 14 张的下标。
+   * **必须记**：引擎走 `opening.players[].hand` 建立手牌（`options.opening ?? this.deal()`），
+   * 手牌并非由 `initialWall` 推出，只记牌墙无法重建开局（§6、§10.6）。
+   */
+  initialHands?: string[][]
+  dealerDrawnIndex?: number
   dealer?: number
   dice?: { first?: number[]; second?: number[] }
   flipTile?: string | null
