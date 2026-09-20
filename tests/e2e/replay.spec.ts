@@ -167,6 +167,36 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
     expect(commands.every(entry => typeof entry.seat === 'number' && typeof entry.kind === 'string')).toBe(true)
 
+    // 诊断**先落盘**（放在任何可能失败的断言之前）：每局开局的原始数字 + 命令来源计数。
+    // 之前的顺序错了——写盘在 §10.6 断言之后，断言一失败就什么都拿不到。
+    const diagRoot = fileURLToPath(new URL('../..', import.meta.url))
+    const diagFile = `${diagRoot}/tmp/analysis-diagnostics.json`
+    await mkdir(`${diagRoot}/tmp`, { recursive: true })
+    await writeFile(diagFile, JSON.stringify({
+      reproductions: probe.parts.filter(part => part.tag === 'reproduction').map(part => {
+        const value = part.value as {
+          roundIndex?: number; initialHands?: string[][]; dealerDrawnIndex?: number
+          initialWall?: string[]; commands?: Array<{ resolution?: string }>
+        }
+        const resolutions: Record<string, number> = {}
+        for (const entry of value.commands ?? []) {
+          const key = entry.resolution ?? 'command'
+          resolutions[key] = (resolutions[key] ?? 0) + 1
+        }
+        return {
+          roundIndex: value.roundIndex,
+          handSizes: (value.initialHands ?? []).map(hand => hand.length),
+          dealerDrawnIndex: value.dealerDrawnIndex,
+          wallSize: (value.initialWall ?? []).length,
+          commands: (value.commands ?? []).length,
+          resolutions,
+        }
+      }),
+      analysisStatus: analysisMatch.status,
+      storedBytes: analysisMatch.storedBytes,
+    }, null, 2))
+    expect((await readFile(diagFile, 'utf8')).length, '诊断应落盘').toBeGreaterThan(0)
+
     // §10.6：把**真实录制**的复现数据喂回引擎重跑，必须能到达该局结束（记录足够复现）
     const replayProbe = await page.evaluate(async () => {
       const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
@@ -283,12 +313,35 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     const tagCounts: Record<string, number> = {}
     for (const part of probe.parts) tagCounts[part.tag] = (tagCounts[part.tag] ?? 0) + 1
     await mkdir(`${repoRoot}/tmp`, { recursive: true })
+    // 命令来源计数：command=可复现（本端决策或权威机器人回传）、auto=不可复现（选择不在记录里）、expire=超时推进
+    const commandResolutions: Record<string, number> = {}
+    for (const part of probe.parts) {
+      if (part.tag !== 'reproduction') continue
+      for (const command of ((part.value as { commands?: Array<{ resolution?: string }> }).commands ?? [])) {
+        const key = command.resolution ?? 'command'
+        commandResolutions[key] = (commandResolutions[key] ?? 0) + 1
+      }
+    }
     await writeFile(sizeFile, JSON.stringify({
       capturedAt: new Date().toISOString(),
       rounds: replayProbe.results.length,
       match: analysisMatch,
       codecs: probe.codecs,
       tags: tagCounts,
+      commandResolutions,
+      replayOk: replayProbe.results.map(result => result.ok),
+      // 每局开局的原始数字：用来核对"庄家第 14 张"这件事（引擎会先按该下标删一张再校验）
+      reproductions: probe.parts.filter(part => part.tag === 'reproduction').map(part => {
+        const value = part.value as { roundIndex?: number; initialHands?: string[][]; dealerDrawnIndex?: number; initialWall?: string[]; commands?: unknown[] }
+        return {
+          roundIndex: value.roundIndex,
+          handSizes: (value.initialHands ?? []).map(hand => hand.length),
+          dealerDrawnIndex: value.dealerDrawnIndex,
+          wallSize: (value.initialWall ?? []).length,
+          commands: (value.commands ?? []).length,
+        }
+      }),
+      replayReasons: replayProbe.results.map(result => result.reason),
       allMatches: probe.matches,
     }, null, 2))
     expect((await readFile(sizeFile, 'utf8')).length, `容量基线应落盘：${sizeFile}`).toBeGreaterThan(0)

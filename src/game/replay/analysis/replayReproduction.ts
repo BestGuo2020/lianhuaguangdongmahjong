@@ -74,6 +74,9 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       authorityEpoch: 'verify',
       roundId: `verify/${input.reproduction.roundIndex}`,
       opening: restored.opening,
+      // 庄家是构造参数（引擎是 options.dealer ?? 0）：不传就"默认庄家 0"，
+      // 于是引擎会把真庄家的第 14 张下标从座位 0 的手里删掉（实测报 Seat 0 has 12 effective tiles）。
+      dealer: (input.reproduction.dealer ?? 0) as never,
       now: () => clock,
       winBeatMs: 0,
     })
