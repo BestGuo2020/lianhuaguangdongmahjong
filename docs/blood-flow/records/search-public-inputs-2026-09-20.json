@@ -1,0 +1,1117 @@
+{
+  "scope": "Public seat observations only; no future outcomes, opponent policy labels, original seeds, hidden hands or wall order. Selected audit/training cases, NOT an untouched validation set.",
+  "inputs": [
+    {
+      "caseId": "public-01689b18987c2cfd",
+      "view": {
+        "kongEvents": [],
+        "authorityEpoch": "opponent-panel",
+        "roundId": "public-01689b18987c2cfd/1",
+        "version": 19,
+        "seat": 2,
+        "players": [
+          {
+            "name": "玩家1",
+            "avatar": "",
+            "seat": 0,
+            "score": 1730,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p2",
+              "s8"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家2",
+            "avatar": "",
+            "seat": 1,
+            "score": 1605,
+            "hand": [],
+            "melds": [
+              {
+                "type": "chi",
+                "tile": "m4",
+                "tiles": [
+                  "m3",
+                  "m4",
+                  "m5"
+                ],
+                "from": 0
+              }
+            ],
+            "discards": [
+              "s1",
+              "m9",
+              "m9",
+              "s3"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 10
+          },
+          {
+            "name": "玩家3",
+            "avatar": "",
+            "seat": 2,
+            "score": 2180,
+            "hand": [
+              "s5",
+              "p7",
+              "p8",
+              "p9",
+              "s7",
+              "s8",
+              "s9",
+              "south",
+              "west",
+              "north",
+              "red",
+              "green",
+              "white",
+              "s7"
+            ],
+            "melds": [],
+            "discards": [
+              "p2",
+              "p5",
+              "north"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": 13,
+            "concealedTileCount": 14
+          },
+          {
+            "name": "玩家4",
+            "avatar": "",
+            "seat": 3,
+            "score": 2485,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p2",
+              "p5",
+              "p2"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          }
+        ],
+        "currentPlayer": 2,
+        "wallCount": 69,
+        "headDrawn": 65,
+        "flipTile": "s4",
+        "jokers": [
+          "s4",
+          "s5"
+        ],
+        "flipStack": 59,
+        "flipSeat": 1,
+        "wallBreakIndex": 134,
+        "window": {
+          "id": "public-01689b18987c2cfd/1/window/19",
+          "version": 19,
+          "kind": "turn",
+          "deadlineAt": 15000,
+          "opensAt": 0,
+          "source": {
+            "kind": "draw",
+            "seat": 2,
+            "tile": "s7",
+            "id": "opponent-panel/public-01689b18987c2cfd/1/tile/27"
+          }
+        },
+        "ownActions": [
+          {
+            "kind": "win"
+          },
+          {
+            "kind": "pass"
+          },
+          {
+            "kind": "discard",
+            "index": 0
+          },
+          {
+            "kind": "discard",
+            "index": 1
+          },
+          {
+            "kind": "discard",
+            "index": 2
+          },
+          {
+            "kind": "discard",
+            "index": 3
+          },
+          {
+            "kind": "discard",
+            "index": 4
+          },
+          {
+            "kind": "discard",
+            "index": 5
+          },
+          {
+            "kind": "discard",
+            "index": 6
+          },
+          {
+            "kind": "discard",
+            "index": 7
+          },
+          {
+            "kind": "discard",
+            "index": 8
+          },
+          {
+            "kind": "discard",
+            "index": 9
+          },
+          {
+            "kind": "discard",
+            "index": 10
+          },
+          {
+            "kind": "discard",
+            "index": 11
+          },
+          {
+            "kind": "discard",
+            "index": 12
+          },
+          {
+            "kind": "discard",
+            "index": 13
+          }
+        ],
+        "ownScore": {
+          "items": [
+            {
+              "id": "concealed-hand",
+              "label": "门清",
+              "weight": 1
+            },
+            {
+              "id": "pinghu",
+              "label": "平胡",
+              "weight": 1
+            }
+          ],
+          "excluded": [],
+          "hardWin": false,
+          "source": "self-draw",
+          "opening": null,
+          "patternMultiplier": 2,
+          "eventMultiplier": 2,
+          "kongBonus": 0,
+          "halfPayment": false,
+          "openingApplied": false,
+          "uncappedMultiplier": 4,
+          "finalMultiplier": 4,
+          "capped": false,
+          "paymentPerPayer": 40
+        },
+        "waitingSeats": [
+          2
+        ],
+        "public": {
+          "ruleVersion": "lotus-blood-flow-v1",
+          "roundId": "public-01689b18987c2cfd/1",
+          "status": "playing",
+          "seats": [
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            }
+          ],
+          "batches": [],
+          "roundResult": null
+        },
+        "actionEvents": [
+          {
+            "id": 1,
+            "type": "chi",
+            "actorIndex": 1,
+            "sourceIndex": 0,
+            "tile": "m4",
+            "meldIndex": 0
+          }
+        ],
+        "lastDiscardAction": {
+          "kind": "discard",
+          "seat": 1,
+          "tile": "s3",
+          "id": "opponent-panel/public-01689b18987c2cfd/1/tile/26"
+        }
+      }
+    },
+    {
+      "caseId": "public-b76602f2e29d9c92",
+      "view": {
+        "kongEvents": [],
+        "authorityEpoch": "opponent-panel",
+        "roundId": "public-b76602f2e29d9c92/2",
+        "version": 41,
+        "seat": 2,
+        "players": [
+          {
+            "name": "玩家1",
+            "avatar": "",
+            "seat": 0,
+            "score": 750,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "west",
+              "red",
+              "m4",
+              "p7",
+              "p1",
+              "p6",
+              "p6"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家2",
+            "avatar": "",
+            "seat": 1,
+            "score": 335,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "west",
+              "red",
+              "m6",
+              "p7",
+              "s9",
+              "m6",
+              "s5"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家3",
+            "avatar": "",
+            "seat": 2,
+            "score": 7230,
+            "hand": [
+              "m7",
+              "m7",
+              "m8",
+              "m1",
+              "m5",
+              "m9",
+              "p5",
+              "s1",
+              "s6",
+              "s9",
+              "south",
+              "green",
+              "white",
+              "p8"
+            ],
+            "melds": [],
+            "discards": [
+              "p6",
+              "p6",
+              "m4",
+              "p4",
+              "s2",
+              "p3",
+              "m4"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": 13,
+            "concealedTileCount": 14
+          },
+          {
+            "name": "玩家4",
+            "avatar": "",
+            "seat": 3,
+            "score": -315,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "south",
+              "p9",
+              "m4",
+              "p7",
+              "p1",
+              "p1",
+              "p3"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          }
+        ],
+        "currentPlayer": 2,
+        "wallCount": 53,
+        "headDrawn": 81,
+        "flipTile": "m7",
+        "jokers": [
+          "m7",
+          "m8"
+        ],
+        "flipStack": 38,
+        "flipSeat": 2,
+        "wallBreakIndex": 84,
+        "window": {
+          "id": "public-b76602f2e29d9c92/2/window/41",
+          "version": 41,
+          "kind": "turn",
+          "deadlineAt": 15000,
+          "opensAt": 0,
+          "source": {
+            "kind": "draw",
+            "seat": 2,
+            "tile": "p8",
+            "id": "opponent-panel/public-b76602f2e29d9c92/2/tile/57"
+          }
+        },
+        "ownActions": [
+          {
+            "kind": "win"
+          },
+          {
+            "kind": "pass"
+          },
+          {
+            "kind": "discard",
+            "index": 0
+          },
+          {
+            "kind": "discard",
+            "index": 1
+          },
+          {
+            "kind": "discard",
+            "index": 2
+          },
+          {
+            "kind": "discard",
+            "index": 3
+          },
+          {
+            "kind": "discard",
+            "index": 4
+          },
+          {
+            "kind": "discard",
+            "index": 5
+          },
+          {
+            "kind": "discard",
+            "index": 6
+          },
+          {
+            "kind": "discard",
+            "index": 7
+          },
+          {
+            "kind": "discard",
+            "index": 8
+          },
+          {
+            "kind": "discard",
+            "index": 9
+          },
+          {
+            "kind": "discard",
+            "index": 10
+          },
+          {
+            "kind": "discard",
+            "index": 11
+          },
+          {
+            "kind": "discard",
+            "index": 12
+          },
+          {
+            "kind": "discard",
+            "index": 13
+          }
+        ],
+        "ownScore": {
+          "items": [
+            {
+              "id": "concealed-hand",
+              "label": "门清",
+              "weight": 1
+            },
+            {
+              "id": "shiSanLan",
+              "label": "十三烂",
+              "weight": 2
+            }
+          ],
+          "excluded": [],
+          "hardWin": false,
+          "source": "self-draw",
+          "opening": null,
+          "patternMultiplier": 3,
+          "eventMultiplier": 2,
+          "kongBonus": 0,
+          "halfPayment": false,
+          "openingApplied": false,
+          "uncappedMultiplier": 6,
+          "finalMultiplier": 6,
+          "capped": false,
+          "paymentPerPayer": 60
+        },
+        "waitingSeats": [
+          2
+        ],
+        "public": {
+          "ruleVersion": "lotus-blood-flow-v1",
+          "roundId": "public-b76602f2e29d9c92/2",
+          "status": "playing",
+          "seats": [
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            }
+          ],
+          "batches": [],
+          "roundResult": null
+        },
+        "actionEvents": [],
+        "lastDiscardAction": {
+          "kind": "discard",
+          "seat": 1,
+          "tile": "s5",
+          "id": "opponent-panel/public-b76602f2e29d9c92/2/tile/56"
+        }
+      }
+    },
+    {
+      "caseId": "public-e17f50bdccbd5afe",
+      "view": {
+        "kongEvents": [],
+        "authorityEpoch": "opponent-panel",
+        "roundId": "public-e17f50bdccbd5afe/3",
+        "version": 93,
+        "seat": 3,
+        "players": [
+          {
+            "name": "玩家1",
+            "avatar": "",
+            "seat": 0,
+            "score": 2880,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "north",
+              "m3",
+              "m7",
+              "m3",
+              "m5",
+              "m1",
+              "m1",
+              "s8",
+              "m2",
+              "p2",
+              "p9",
+              "p8",
+              "p8",
+              "p7",
+              "s9",
+              "s6",
+              "s2"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家2",
+            "avatar": "",
+            "seat": 1,
+            "score": 1760,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p7",
+              "p1",
+              "m7",
+              "p2",
+              "p8",
+              "s8",
+              "m6",
+              "s7",
+              "s5",
+              "p9",
+              "p8",
+              "m6",
+              "s9",
+              "s5",
+              "s6",
+              "m2",
+              "s3"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家3",
+            "avatar": "",
+            "seat": 2,
+            "score": 2140,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p1",
+              "m4",
+              "m1",
+              "m2",
+              "m6",
+              "s8",
+              "s7",
+              "s1",
+              "m8",
+              "m5",
+              "s4",
+              "p7",
+              "m6",
+              "north",
+              "s6",
+              "m5",
+              "s2"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家4",
+            "avatar": "",
+            "seat": 3,
+            "score": 1220,
+            "hand": [
+              "east",
+              "east",
+              "south",
+              "p3",
+              "p4",
+              "p5",
+              "p6",
+              "p6",
+              "p7",
+              "p9",
+              "white",
+              "white",
+              "white",
+              "s5"
+            ],
+            "melds": [],
+            "discards": [
+              "north",
+              "m3",
+              "m7",
+              "p1",
+              "m5",
+              "s7",
+              "s4",
+              "m8",
+              "m1",
+              "m7",
+              "s4",
+              "m2",
+              "p1",
+              "m4",
+              "m3",
+              "s5",
+              "s2"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": 13,
+            "concealedTileCount": 14
+          }
+        ],
+        "currentPlayer": 3,
+        "wallCount": 13,
+        "headDrawn": 121,
+        "flipTile": "east",
+        "jokers": [
+          "east",
+          "south"
+        ],
+        "flipStack": 57,
+        "flipSeat": 1,
+        "wallBreakIndex": 124,
+        "window": {
+          "id": "public-e17f50bdccbd5afe/3/window/93",
+          "version": 93,
+          "kind": "turn",
+          "deadlineAt": 15000,
+          "opensAt": 0,
+          "source": {
+            "kind": "draw",
+            "seat": 3,
+            "tile": "s5",
+            "id": "opponent-panel/public-e17f50bdccbd5afe/3/tile/137"
+          }
+        },
+        "ownActions": [
+          {
+            "kind": "win"
+          },
+          {
+            "kind": "pass"
+          },
+          {
+            "kind": "discard",
+            "index": 0
+          },
+          {
+            "kind": "discard",
+            "index": 1
+          },
+          {
+            "kind": "discard",
+            "index": 2
+          },
+          {
+            "kind": "discard",
+            "index": 3
+          },
+          {
+            "kind": "discard",
+            "index": 4
+          },
+          {
+            "kind": "discard",
+            "index": 5
+          },
+          {
+            "kind": "discard",
+            "index": 6
+          },
+          {
+            "kind": "discard",
+            "index": 7
+          },
+          {
+            "kind": "discard",
+            "index": 8
+          },
+          {
+            "kind": "discard",
+            "index": 9
+          },
+          {
+            "kind": "discard",
+            "index": 10
+          },
+          {
+            "kind": "discard",
+            "index": 11
+          },
+          {
+            "kind": "discard",
+            "index": 12
+          },
+          {
+            "kind": "discard",
+            "index": 13
+          }
+        ],
+        "ownScore": {
+          "items": [
+            {
+              "id": "concealed-hand",
+              "label": "门清",
+              "weight": 1
+            }
+          ],
+          "excluded": [],
+          "hardWin": false,
+          "source": "self-draw",
+          "opening": null,
+          "patternMultiplier": 1,
+          "eventMultiplier": 2,
+          "kongBonus": 0,
+          "halfPayment": false,
+          "openingApplied": false,
+          "uncappedMultiplier": 2,
+          "finalMultiplier": 2,
+          "capped": false,
+          "paymentPerPayer": 20
+        },
+        "waitingSeats": [
+          3
+        ],
+        "public": {
+          "ruleVersion": "lotus-blood-flow-v1",
+          "roundId": "public-e17f50bdccbd5afe/3",
+          "status": "playing",
+          "seats": [
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            }
+          ],
+          "batches": [],
+          "roundResult": null
+        },
+        "actionEvents": [],
+        "lastDiscardAction": {
+          "kind": "discard",
+          "seat": 2,
+          "tile": "s2",
+          "id": "opponent-panel/public-e17f50bdccbd5afe/3/tile/136"
+        }
+      }
+    },
+    {
+      "caseId": "public-64a6c6a98f52f2e0",
+      "view": {
+        "kongEvents": [],
+        "authorityEpoch": "opponent-panel",
+        "roundId": "public-64a6c6a98f52f2e0/0",
+        "version": 56,
+        "seat": 1,
+        "players": [
+          {
+            "name": "玩家1",
+            "avatar": "",
+            "seat": 0,
+            "score": 2000,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p2",
+              "s9",
+              "s8",
+              "p7",
+              "west",
+              "s7",
+              "m5",
+              "p7",
+              "p6",
+              "p1",
+              "west"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家2",
+            "avatar": "",
+            "seat": 1,
+            "score": 2000,
+            "hand": [
+              "m1",
+              "m1",
+              "m2",
+              "m2",
+              "m3",
+              "m4",
+              "m5",
+              "m6",
+              "m9",
+              "m9",
+              "s5",
+              "s5",
+              "white",
+              "m9"
+            ],
+            "melds": [],
+            "discards": [
+              "p5",
+              "s9",
+              "p7",
+              "south",
+              "s3",
+              "m8",
+              "p2",
+              "p4",
+              "s7",
+              "s7"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": 13,
+            "concealedTileCount": 14
+          },
+          {
+            "name": "玩家3",
+            "avatar": "",
+            "seat": 2,
+            "score": 2000,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "p5",
+              "s9",
+              "p1",
+              "south",
+              "p6",
+              "s8",
+              "m7",
+              "s6",
+              "s2",
+              "east"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          },
+          {
+            "name": "玩家4",
+            "avatar": "",
+            "seat": 3,
+            "score": 2000,
+            "hand": [],
+            "melds": [],
+            "discards": [
+              "s9",
+              "p1",
+              "p6",
+              "p9",
+              "m8",
+              "p5",
+              "p3",
+              "s6",
+              "p4",
+              "s1"
+            ],
+            "redCount": 0,
+            "drawnTileIndex": -1,
+            "concealedTileCount": 13
+          }
+        ],
+        "currentPlayer": 1,
+        "wallCount": 40,
+        "headDrawn": 94,
+        "flipTile": "m1",
+        "jokers": [
+          "m1",
+          "m2"
+        ],
+        "flipStack": 24,
+        "flipSeat": 3,
+        "wallBreakIndex": 58,
+        "window": {
+          "id": "public-64a6c6a98f52f2e0/0/window/56",
+          "version": 56,
+          "kind": "turn",
+          "deadlineAt": 15000,
+          "opensAt": 0,
+          "source": {
+            "kind": "draw",
+            "seat": 1,
+            "tile": "m9",
+            "id": "opponent-panel/public-64a6c6a98f52f2e0/0/tile/83"
+          }
+        },
+        "ownActions": [
+          {
+            "kind": "win"
+          },
+          {
+            "kind": "pass"
+          },
+          {
+            "kind": "discard",
+            "index": 0
+          },
+          {
+            "kind": "discard",
+            "index": 1
+          },
+          {
+            "kind": "discard",
+            "index": 2
+          },
+          {
+            "kind": "discard",
+            "index": 3
+          },
+          {
+            "kind": "discard",
+            "index": 4
+          },
+          {
+            "kind": "discard",
+            "index": 5
+          },
+          {
+            "kind": "discard",
+            "index": 6
+          },
+          {
+            "kind": "discard",
+            "index": 7
+          },
+          {
+            "kind": "discard",
+            "index": 8
+          },
+          {
+            "kind": "discard",
+            "index": 9
+          },
+          {
+            "kind": "discard",
+            "index": 10
+          },
+          {
+            "kind": "discard",
+            "index": 11
+          },
+          {
+            "kind": "discard",
+            "index": 12
+          },
+          {
+            "kind": "discard",
+            "index": 13
+          }
+        ],
+        "ownScore": {
+          "items": [
+            {
+              "id": "concealed-hand",
+              "label": "门清",
+              "weight": 1
+            },
+            {
+              "id": "pure-straight",
+              "label": "清龙",
+              "weight": 6
+            }
+          ],
+          "excluded": [],
+          "hardWin": false,
+          "source": "self-draw",
+          "opening": null,
+          "patternMultiplier": 7,
+          "eventMultiplier": 2,
+          "kongBonus": 0,
+          "halfPayment": false,
+          "openingApplied": false,
+          "uncappedMultiplier": 14,
+          "finalMultiplier": 14,
+          "capped": false,
+          "paymentPerPayer": 140
+        },
+        "waitingSeats": [
+          1
+        ],
+        "public": {
+          "ruleVersion": "lotus-blood-flow-v1",
+          "roundId": "public-64a6c6a98f52f2e0/0",
+          "status": "playing",
+          "seats": [
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            },
+            {
+              "winCount": 0,
+              "locked": false,
+              "firstWinSequence": null,
+              "recordIds": []
+            }
+          ],
+          "batches": [],
+          "roundResult": null
+        },
+        "actionEvents": [],
+        "lastDiscardAction": {
+          "kind": "discard",
+          "seat": 0,
+          "tile": "west",
+          "id": "opponent-panel/public-64a6c6a98f52f2e0/0/tile/82"
+        }
+      }
+    }
+  ]
+}

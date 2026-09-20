@@ -1,0 +1,37 @@
+{
+  "scope": "Replay index only. Must not be consumed by a decision policy. These source seeds are now used for analysis; validate a future search policy on new seeds.",
+  "index": [
+    {
+      "caseId": "public-01689b18987c2cfd",
+      "panel": "mixed",
+      "seed": 1530016,
+      "focal": 2,
+      "round": 1,
+      "windowId": "1530016/1/window/19"
+    },
+    {
+      "caseId": "public-b76602f2e29d9c92",
+      "panel": "attack",
+      "seed": 1510016,
+      "focal": 2,
+      "round": 2,
+      "windowId": "1510016/2/window/41"
+    },
+    {
+      "caseId": "public-e17f50bdccbd5afe",
+      "panel": "legacy",
+      "seed": 1500009,
+      "focal": 3,
+      "round": 3,
+      "windowId": "1500009/3/window/93"
+    },
+    {
+      "caseId": "public-64a6c6a98f52f2e0",
+      "panel": "legacy",
+      "seed": 1500014,
+      "focal": 1,
+      "round": 0,
+      "windowId": "1500014/0/window/56"
+    }
+  ]
+}
