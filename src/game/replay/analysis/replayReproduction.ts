@@ -78,7 +78,10 @@ function actionMatches(
       if (wanted !== offered) return false
     }
   }
-  if (command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
+  // 组合动作（暗杠/吃等）在引擎里按"牌集合"枚举，同一组牌可能有多个 index 写法 ⇒ 有牌集合时不比 index，
+  // 否则会假性失配（实测：concealed-kong tile=s6 明明在候选里、手里也有三张 s6，却被判对不上）。
+  const isCombination = Array.isArray(action.tiles) || Array.isArray(action.meld)
+  if (!isCombination && command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
   if (command.from !== undefined && command.from !== null && action.from !== undefined && action.from !== command.from) return false
   if (command.meldIndex !== undefined && action.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
   return true
