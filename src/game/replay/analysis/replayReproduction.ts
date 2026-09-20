@@ -62,7 +62,8 @@ function actionMatches(
 
 export function replayReproduction(input: ReplayReproductionInput): ReplayVerification {
   // 顺序消歧：同一窗口若既有 expire 又有真命令，以命令为准 —— 机器人命令要等权威回传才知道内容，
-  // 可能排在超时计时器压入的 expire 之后（真实 e2e 实测：第 3 条命令因此对不上）。
+  // 可能排在超时计时器压入的 expire 之后。
+  // 对照实验（第 56 轮）：去掉这个过滤后失败点立刻退回"第 3 条"，证明它确实必要（不是分叉源）。
   const windowsWithCommand = new Set(
     input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
   )
