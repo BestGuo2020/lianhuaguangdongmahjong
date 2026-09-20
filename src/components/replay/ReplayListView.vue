@@ -11,6 +11,7 @@ import {
   analysisExportFilename, analysisFormatReadable, buildAnalysisExport, downloadAnalysisExport,
 } from '../../game/replay/analysis/export'
 import type { AnalysisStorage } from '../../game/replay/analysis/storage'
+import { analysisAreaLabel, analysisHasRecords } from '../../game/replay/analysis/status'
 import type { AnalysisAreaStatus } from '../../game/replay/analysis/types'
 import type { ReplayStorage } from '../../game/replay/storage'
 import type { ReplayMatch } from '../../game/replay/types'
@@ -173,21 +174,14 @@ const hasMatches = computed(() => matches.value.length > 0)
 
 /**
  * 行内分析状态文案（§9.2 的四态 + 旧录像）。
- * 「未开启」与「缺失」必须分开：前者是当时没开录制，后者是开了但这段没落下来。
+ * 判定规则在 `analysis/status.ts` 里（纯函数、有单测）：这里只负责取状态。
  */
 function analysisLabel(match: ReplayMatch): string {
-  const status = analysisStatus.value[match.id]
-  if (!status) return '分析：不可用'          // 分析区不可用（无 IndexedDB／驱动因失败停用）
-  if (status === 'complete') return '分析：完整'
-  if (status === 'partial') return '分析：部分缺失'
-  if (status === 'deleted') return '分析：已删除'
-  if (status === 'missing') return '分析：缺少决策分析记录'
-  return '分析：未开启'
+  return analysisAreaLabel(match, analysisStatus.value[match.id])
 }
 
 function hasAnalysisRecords(match: ReplayMatch): boolean {
-  const status = analysisStatus.value[match.id]
-  return status === 'complete' || status === 'partial'
+  return analysisHasRecords(analysisStatus.value[match.id])
 }
 </script>
 

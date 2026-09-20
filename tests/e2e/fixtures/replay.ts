@@ -99,6 +99,8 @@ async function record(rulesetId: RuleVariant, themeName: TableThemeName) {
       rulesetName: getRuleVariant(rulesetId).name,
       themeName,
       humanSeat: 0,
+      // 本场是否开着分析录制（§10.7）：只有血流那场是 true，另外两场应显示「分析：未开启」
+      analysisRecorded: analysis.active(),
     }),
     storage,
   })

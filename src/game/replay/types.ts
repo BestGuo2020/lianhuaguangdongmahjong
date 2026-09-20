@@ -153,6 +153,11 @@ export interface ReplayMatch {
   myScore?: number
   finalStandings?: ReplayStanding[]
   summary: string
+  /**
+   * 本场录制时是否开着分析录制（§9.2、§10.7）。
+   * 旧记录没有这个字段（undefined）：列表据此标「缺少决策分析记录」而不是「未开启」。
+   */
+  analysisRecorded?: boolean
 }
 
 /**

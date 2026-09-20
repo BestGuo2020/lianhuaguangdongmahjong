@@ -449,9 +449,9 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   // ── 2d. 独立分析区（§9.2、§10.7）：行内状态 / 自包含分析包 / 只删分析保留牌谱 ──
   const bloodRow = rowOf('莲花麻将·血流')
   await expect(bloodRow.getByTestId('replay-analysis-status')).toHaveText('分析：完整')
-  // 另外两场没有分析记录：要显示「未开启」而不是「完整」——四态不能混为一谈
-  await expect(rowOf('莲花广麻').getByTestId('replay-analysis-status')).toHaveText(/分析：(未开启|不可用)/)
-  await expect(rowOf('莲花麻将 · 东风场').getByTestId('replay-analysis-status')).toHaveText(/分析：(未开启|不可用)/)
+  // 另外两场录制时分析没开：必须显示「未开启」，与「缺少决策分析记录」（旧录像）区分开（§10.7）
+  await expect(rowOf('莲花广麻').getByTestId('replay-analysis-status')).toHaveText('分析：未开启')
+  await expect(rowOf('莲花麻将 · 东风场').getByTestId('replay-analysis-status')).toHaveText('分析：未开启')
 
   // 导出分析包：必须**自包含**（记录 + 被引用的配置 + 展示回放），并如实标注能否精确复现
   const [analysisDownload] = await Promise.all([

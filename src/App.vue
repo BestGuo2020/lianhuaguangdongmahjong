@@ -226,6 +226,8 @@ const replay = useReplayRecorder({
     rulesetName: getRuleVariant(selectedRule.value).name,
     themeName: tableThemeName.value,
     humanSeat: 0,
+    // 本场是否开着分析录制：列表据此区分「分析：未开启」与「分析：缺少决策分析记录」（§10.7）
+    analysisRecorded: analysis.active(),
   }),
 })
 
