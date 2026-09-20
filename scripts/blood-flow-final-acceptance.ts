@@ -6,7 +6,7 @@ import {decideBloodFlowActionEv} from '../src/game/variants/lotus/bloodFlow/ai'
 import {ATTACK_CONFIG,DEFENSIVE_CONFIG,type PanelId} from './blood-flow-opponent-panel'
 export const ACCEPTANCE_DIR='work/source-v2-final'
 export const PANELS:PanelId[]=['legacy','attack','defensive','mixed']
-export const CONTROL:BloodFlowAiConfig=Object.freeze({...BLOOD_FLOW_AI})
+export const CONTROL:BloodFlowAiConfig=Object.freeze({...BLOOD_FLOW_AI,chainForecast:'legacy',opportunityCalibration:undefined})
 export const CANDIDATE:BloodFlowAiConfig=Object.freeze({...CONTROL,chainForecast:'source-v2',reformGainRatio:1.2,
   opportunityCalibration:JSON.parse(readFileSync('docs/blood-flow/records/opportunity-calibration-2026-09-20.json','utf8')).calibration})
 export const controlPolicy=(view:Parameters<typeof decideBloodFlowActionEv>[0])=>decideBloodFlowActionEv(view,CONTROL)
