@@ -42,7 +42,8 @@ it.skipIf(process.env.BF_PAIR_COLLECT!=='1')('freezes first eligible disagreemen
         windows.push({seed,seat,checkpointHash:createHash('sha256').update(checkpoint).digest('hex')})
         break
       }
-      const action=windowPolicy(view);if(!action)throw new Error('Missing action');submit(e,seat,action)
+      // rankingDecision already computed the same frozen source-v2 action.
+      const action=decision.original;if(!action)throw new Error('Missing action');submit(e,seat,action)
     }
     writeFileSync(`${dir}/progress.json`,JSON.stringify({completed:seed-from+1,rounds,windows:windows.length,seconds:(Date.now()-started)/1000}))
   }
