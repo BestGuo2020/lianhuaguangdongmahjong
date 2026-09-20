@@ -279,6 +279,10 @@ export interface AnalysisReproduction {
    */
   initialHands?: string[][]
   dealerDrawnIndex?: number
+  /** 开局必需但记录里曾遗漏的字段（引擎的 opening 需要它们，缺一不可）。 */
+  jokers?: string[]
+  flipSeat?: number
+  wallBreakIndex?: number
   dealer?: number
   dice?: { first?: number[]; second?: number[] }
   flipTile?: string | null

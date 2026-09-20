@@ -361,6 +361,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     flipTile: TileType | null; flipStack: number | null
     /** 四家初始手牌与庄家第 14 张下标：引擎据此建立手牌，不能从牌墙推出。 */
     hands: string[][]; dealerDrawnIndex: number
+    /** 开局必需字段（引擎 opening 需要）。 */
+    jokers: string[]; flipSeat: number; wallBreakIndex: number
   } | null = null
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
   const analysisRoundCommands: Array<{
@@ -709,6 +711,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     flipStack: state.flipStack.value ?? null,
     hands: state.players.map(player => [...player.hand]),
     dealerDrawnIndex,
+    jokers: state.jokerTiles.value.map(tile => tileName(tile)),
+    flipSeat: state.dealer.value,
+    wallBreakIndex: state.flipStack.value ?? 0,
   }
   const opening: BloodFlowOpeningState = {
       players: state.players.map(p => structuredClone(toRaw(p))), wall: [...state.wall.value],
