@@ -605,9 +605,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (view.value?.window?.id === w.id) {
         // 分析记录（§6）：该窗口没人决定、靠超时推进 —— 不记这条，重跑会与当时分叉
         // （seat 用 -1 表示"不是某个座位的决定"；校验器遇到 expire 只推时钟并推进窗口）。
-        // 该窗口已有命令 ⇒ 不记 expire：主线程的计时器常为已被解决的窗口补记，
-        // 重放会据此盲目推进（实测每局 381 条 expire、重放比记录多 3 个窗口、并提前二十步出现胡牌）。
-        if (options.analysis && !analysisWindowsWithCommand.has(w.id)) {
+        // 注意：这里不再做"该窗口已有命令就不记 expire"的过滤 —— 第 63 轮加过，但它假设
+        // "出现过命令 ⇒ 窗口已闭合"，在多人认领窗口上不成立（有人出命令、其余人到点静默），
+        // 会导致窗口的闭合方式彻底缺失、重放错开一位。录制侧一律如实记录，交由重放侧按序处理。
+        if (options.analysis) {
           analysisRoundCommands.push({ seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire', windowId: w.id })
         }
         void request({ kind: 'expire', windowId: w.id })
@@ -622,7 +623,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       && Date.now() < view.value.window.deadlineAt
     try {
       const own = await active.request<BloodFlowWorkerView>({ kind: 'view', seat, replay: Boolean(options.recorder) })
-      if (!current() || own.window?.id !== windowId) return
+      if (!current() || own.window?.id !== windowId) {
+        // 到点或已不再等待：本端没有作出决定，该窗口会按超时闭合。必须如实记一条 expire，
+        // 否则这个座位在记录里凭空消失，重放会与记录错开一位（配对轨迹实测到过）。
+        if (options.analysis) {
+          analysisRoundCommands.push({ seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire', windowId })
+        }
+        return
+      }
       // 分析记录：窗口与前态（含该座位的合法动作）。只读视角，不参与决策（§3.2、§10.1）。
       const actions = seatLegalActions(own, seat)
       const analysisMono = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
