@@ -93,6 +93,10 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   )
   const commands = input.commands.filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
   const recorded = commands.length
+  /** expire 判定计数：应用 / 因编号更小丢弃 / 因同窗口有命令被前置过滤丢弃。 */
+  let expireApplied = 0
+  let expireSkippedByNumber = 0
+  const expireSkippedByFilter = input.commands.length - commands.length
   const expected = input.expectedScores && input.expectedScores.length === 4 ? [...input.expectedScores] : null
   const restored = openingFromReproduction(input.reproduction)
   if (!restored.opening) {
@@ -172,9 +176,11 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       const recordNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
       const replayNo = Number(String(current.id).split('/').pop())
       if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo < replayNo) {
+        expireSkippedByNumber += 1
         cursor += 1
         continue
       }
+      expireApplied += 1
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
       cursor += 1
@@ -205,7 +211,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
