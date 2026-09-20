@@ -113,6 +113,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   const scoresNow = () => engine.players.map(player => player.score)
   // 窗口轨迹对照：重放实际见过的窗口集合 vs 已消费记录里涉及的窗口集合
   const seenWindows = new Set<string>()
+  const windowTrace: string[] = []
   const recordedWindowsUpTo = (upTo: number) => new Set(
     commands.slice(0, upTo).map(entry => entry.windowId).filter((id): id is string => Boolean(id)),
   )
@@ -122,7 +123,14 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     // 转场（结算演出等）会挡住下一个窗口：它不是隐藏信息，可由引擎状态推出，直接推进即可 ——
     // 否则重放会卡在转场里，下一条命令就报"该座位此刻没有合法动作"（实测四局都停在第 3 条）。
     if (!engine.window && engine.transition) { engine.advance(engine.transition.id); continue }
-    if (engine.window) seenWindows.add(engine.window.id)
+    if (engine.window) {
+      seenWindows.add(engine.window.id)
+      // 逐窗口轨迹（kind + 有合法动作的座位）：用来定位"重放在哪一步多推进了一次"
+      if (windowTrace.length < 400) {
+        const current = engine.window
+        windowTrace.push(`${(current as { kind?: string }).kind ?? '?'}[${SEATS.filter(seat => current.options[seat].length > 0).join('')}]`)
+      }
+    }
     const command = commands[cursor]
     if (!command) {
       return {
@@ -172,7 +180,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；重放尾部轨迹=[${windowTrace.slice(-12).join(' ')}]；记录尾部=[${commands.slice(Math.max(0, cursor - 8), cursor + 1).map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
