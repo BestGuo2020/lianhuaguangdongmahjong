@@ -48,6 +48,11 @@ import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
 import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 import { createBloodFlowRecordState, recordBloodFlowSettle, recordBloodFlowView, type BloodFlowRecordContext } from '../../../replay/bloodFlowRecorder'
 import type { ReplayRecorderHooks } from '../../../replay/types'
+import {
+  choiceTookEffect, decisionStateOf, legalActionId, seatLegalActions, windowKindOf,
+  type BloodFlowViewLike,
+} from '../../../replay/analysis/bloodFlowAdapter'
+import type { AnalysisRecorder } from '../../../replay/analysis/recorder'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -68,6 +73,11 @@ export interface BloodFlowGameOptions {
   countdownEnabled?: boolean
   /** 对局回放录制钩子（可选；不传时零行为变化，且不会请求旁观视角）。 */
   recorder?: ReplayRecorderHooks
+  /**
+   * AI 分析记录（可选；方案 docs/blood-flow/design/replay-ai-analysis-recording.md）。
+   * 只旁路采集当时已有的信息：不传时零成本空转，不影响策略动作与对局结果（§10.1、§10.7）。
+   */
+  analysis?: AnalysisRecorder | null
   externalAuthority?: {
     send(command: EngineCommand): void
     nextRound(): void
@@ -531,8 +541,22 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     try {
       const own = await active.request<BloodFlowWorkerView>({ kind: 'view', seat, replay: Boolean(options.recorder) })
       if (!current() || own.window?.id !== windowId) return
+      // 分析记录：窗口与前态（含该座位的合法动作）。只读视角，不参与决策（§3.2、§10.1）。
+      const actions = seatLegalActions(own, seat)
+      const analysisMono = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+      options.analysis?.windowOpened({
+        windowId, seat, windowKind: windowKindOf(actions),
+        roundIndex: state.round.value, authorityEpoch: own.authorityEpoch, stateVersion: own.window?.version ?? 0,
+        state: decisionStateOf(own, seat), openedAt: analysisMono(),
+      })
       const action = await decisions.decide(own, current)
       if (!current()) return
+      // 分析记录：选择与来源。来源（本地策略／模型／回退）由 LLM 运行时在下一层补充，这里先如实标 unknown。
+      const pickedIndex = action ? actions.findIndex(move => JSON.stringify(move) === JSON.stringify(action)) : -1
+      options.analysis?.chosen({
+        windowId, seat, source: action ? 'unknown' : 'rule-auto',
+        legalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : null, at: analysisMono(),
+      })
       if(action?.kind==='discard'){
         const line=decisions.prepareDiscard(own,action)
         if(line)await presentDiscardSpeech(line,current)
@@ -543,6 +567,15 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
       }, replay: Boolean(options.recorder) } : { kind: 'bot', seat, windowId, replay: Boolean(options.recorder) })
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
+      // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。
+      if (action) {
+        options.analysis?.receipt({
+          windowId, seat,
+          status: choiceTookEffect(own as BloodFlowViewLike, next as BloodFlowViewLike, seat, action) ? 'executed' : 'state-changed',
+          eventId: `${next.roundId ?? own.roundId}/${windowId}`,
+          executedLegalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined,
+        })
+      }
     } catch {
       if (epoch === generation) {
         clear(); transient.announce('对局已中断，请返回大厅重开', 'red')
@@ -559,11 +592,41 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (submittedWindowId.value === w.id) return
     submittedWindowId.value = w.id
     state.actionPrompt.value = null
+    // 分析记录：人类决策（窗口、前态与合法动作、选择）。回执由下面的 watcher 在窗口推进时补（§3.4）。
+    if (options.analysis) {
+      const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
+      options.analysis.windowOpened({
+        windowId: w.id, seat: current.seat, windowKind: windowKindOf(current.ownActions),
+        roundIndex: state.round.value, authorityEpoch: current.authorityEpoch, stateVersion: w.version,
+        state: decisionStateOf(current as BloodFlowViewLike, current.seat),
+      })
+      options.analysis.chosen({
+        windowId: w.id, seat: current.seat, source: 'human',
+        legalActionId: index >= 0 ? legalActionId(w.id, index) : null,
+      })
+      pendingHumanChoice = { windowId: w.id, seat: current.seat, action, before: current as BloodFlowViewLike }
+    }
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
     if (options.externalAuthority) options.externalAuthority.send(command)
     else void request({ kind: 'command', command })
   }
+  /**
+   * 人类提交后的执行回执：窗口推进时才判定（§3.4、§10.2）。
+   * 只有该座位出现可见变化才算 executed，否则记 state-changed —— 不能因为"请求发出去了"就算执行成功。
+   */
+  let pendingHumanChoice: { windowId: string; seat: number; action: BloodFlowAction; before: BloodFlowViewLike } | null = null
+  watch(() => view.value?.window?.id ?? '', (nextWindowId) => {
+    const pending = pendingHumanChoice
+    const next = view.value
+    if (!pending || !next || nextWindowId === pending.windowId) return
+    pendingHumanChoice = null
+    options.analysis?.receipt({
+      windowId: pending.windowId, seat: pending.seat,
+      status: choiceTookEffect(pending.before, next as BloodFlowViewLike, pending.seat, pending.action) ? 'executed' : 'state-changed',
+      detail: 'window-advanced',
+    })
+  })
   async function beginEngine() {
     if (!dealerTile || !state.players.length) return
     const dealer = state.players[state.dealer.value]

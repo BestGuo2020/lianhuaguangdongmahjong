@@ -173,8 +173,8 @@ export interface AnalysisDecision {
   sourceEventId?: string
   /** 决策前态引用（§3.2）。 */
   stateId: string
-  /** 策略候选与被限制的动作（§3.3）。 */
-  candidates: AnalysisCandidate[]
+  /** 策略候选与被限制的动作（§3.3）；未接线时保持**未定义**，与"候选集为空"区分开。 */
+  candidates?: AnalysisCandidate[]
   restricted?: Array<{ legalActionId: string; reason: string }>
   /** 当时给出的推荐（LLM 座位必须记录**真正发给该次请求的**推荐，不能用新版补算）。 */
   recommended?: AnalysisMaybe<{ legalActionId: string; note?: string }>

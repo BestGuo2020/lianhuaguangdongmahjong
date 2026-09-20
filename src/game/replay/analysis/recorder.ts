@@ -54,6 +54,8 @@ export interface AnalysisWindowInput {
     winScores?: AnalysisMaybe<Record<string, number>>
     locks?: Record<string, unknown>
     responderCheckpoint?: { seat: number; hand: string[]; drawnTileIndex: number }
+    /** 该座位此刻的合法动作（§3.2：前态必须包含"当前合法动作"）。 */
+    legalActions?: AnalysisLegalAction[]
   }
   /** 窗口开放时刻：**本进程单调时钟**（§3.5）。 */
   openedAt?: number
@@ -221,7 +223,6 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       seat,
       windowKind: 'other',
       stateId: '',
-      candidates: [],
       choice: UNKNOWN,
       source: 'unknown',
       execution: { status: 'pending' },
@@ -275,7 +276,9 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       const state: AnalysisDecisionState = {
         id: input.state.id,
         fingerprint: input.state.fingerprint ?? '',
-        legalActions: [],
+        legalActions: (input.state.legalActions ?? []).map((action) => ({
+          ...action, ...(action.meld ? { meld: [...action.meld] } : {}),
+        })),
         ...(input.state.replay ? { replay: { ...input.state.replay } } : {}),
         ...(input.state.hand ? { hand: [...input.state.hand] } : {}),
         ...(input.state.drawnTileIndex !== undefined ? { drawnTileIndex: input.state.drawnTileIndex } : {}),
