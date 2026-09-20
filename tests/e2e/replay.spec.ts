@@ -446,6 +446,53 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await keepSelect.selectOption('50')
   await expect(keepSelect).toHaveValue('50')
 
+  // ── 2d. 独立分析区（§9.2、§10.7）：行内状态 / 自包含分析包 / 只删分析保留牌谱 ──
+  const bloodRow = rowOf('莲花麻将·血流')
+  await expect(bloodRow.getByTestId('replay-analysis-status')).toHaveText('分析：完整')
+  // 另外两场没有分析记录：要显示「未开启」而不是「完整」——四态不能混为一谈
+  await expect(rowOf('莲花广麻').getByTestId('replay-analysis-status')).toHaveText(/分析：(未开启|不可用)/)
+  await expect(rowOf('莲花麻将 · 东风场').getByTestId('replay-analysis-status')).toHaveText(/分析：(未开启|不可用)/)
+
+  // 导出分析包：必须**自包含**（记录 + 被引用的配置 + 展示回放），并如实标注能否精确复现
+  const [analysisDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    bloodRow.getByTestId('replay-analysis-export').click(),
+  ])
+  expect(analysisDownload.suggestedFilename()).toMatch(/^analysis-lotus-blood-flow-\d{8}-\d{4}-[0-9a-z]{0,8}\.json$/)
+  const analysisPath = await analysisDownload.path()
+  expect(analysisPath).toBeTruthy()
+  const pack = JSON.parse(await readFile(analysisPath!, 'utf8')) as {
+    kind: string
+    schemaVersion: number
+    reproductionCapable: boolean
+    manifest: { recordsTotal: number; configurations: number; includesReplay: boolean; configReferencesClosed: boolean; missing: string[] }
+    configurations: unknown[]
+    records: Array<{ tag: string }>
+    replay: { rounds: Array<{ steps: unknown[] }> }
+  }
+  expect(pack.kind).toBe('lianhua-analysis')
+  expect(pack.schemaVersion).toBeGreaterThan(0)
+  expect(pack.records.length, '分析包应带上全部分析记录').toBeGreaterThan(100)
+  expect(pack.configurations.length, '被引用的配置必须随包带走').toBeGreaterThan(0)
+  expect(pack.manifest.configReferencesClosed, '引用要闭合：不能只有 id 没有正文').toBe(true)
+  expect(pack.manifest.includesReplay, '公开字段的唯一来源是展示回放，必须随包带走').toBe(true)
+  expect(pack.replay.rounds).toHaveLength(4)
+  expect(pack.replay.rounds.every(round => round.steps.length > 0)).toBe(true)
+  expect(pack.reproductionCapable, '完整录像的分析包应可用于精确复现（§10.6）').toBe(true)
+  expect(pack.manifest.missing).toEqual([])
+  await expect(page.getByTestId('replay-hint')).toContainText('已导出分析包')
+
+  // 只删分析、保留可观看回放（§9.2）：状态变「已删除」，牌谱不受影响（下面第 3 节会真的打开它看）
+  page.once('dialog', (dialog) => void dialog.accept())
+  await bloodRow.getByTestId('replay-analysis-remove').click()
+  await expect(bloodRow.getByTestId('replay-analysis-status')).toHaveText('分析：已删除')
+  await expect(page.getByTestId('replay-hint')).toContainText('牌谱仍可观看')
+  // 删除后不能再导出分析（否则会产出空壳包还说是完整的）
+  await expect(bloodRow.getByTestId('replay-analysis-export')).toBeDisabled()
+  await expect(bloodRow.getByTestId('replay-analysis-remove')).toBeDisabled()
+  // 牌谱本身仍在（行还在、导出牌谱仍可用）
+  await expect(bloodRow.getByTestId('replay-export')).toBeEnabled()
+
   const viewer = page.getByTestId('replay-viewer')
   async function openReplay(label: string) {
     // 列表可能已经打开（首次进入时就是打开的），只在关闭状态下点大厅入口。

@@ -13,7 +13,7 @@ import type {
   AnalysisLlmOutcome, AnalysisMaybe, AnalysisReproduction, AnalysisSeatControl, AnalysisSettlement,
   AnalysisWindowKind,
 } from './types'
-import { UNKNOWN } from './types'
+import { ANALYSIS_FORMAT_VERSION, UNKNOWN } from './types'
 
 /** 队列上限：超过即刷盘；写失败则暂停分析并留痕，不无限堆积内存（§9.5）。 */
 export const ANALYSIS_QUEUE_LIMIT_BYTES = 256 * 1024
@@ -264,7 +264,8 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       configId = `config/${options.matchId}/${++sequence}`
       const record: AnalysisConfigRecord = {
         id: configId,
-        formatVersion: 1,
+        // 用常量而不是字面量：§9.5 的版本检查必须以同一处声明为准，散落的字面量会让"升版本"变成漏改。
+        formatVersion: ANALYSIS_FORMAT_VERSION,
         effectiveFromRound: 1,
         engineBuild: input.engineBuild,
         rulesVersion: input.rulesVersion,
