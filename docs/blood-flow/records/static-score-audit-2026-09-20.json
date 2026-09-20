@@ -1,0 +1,2306 @@
+[
+  {
+    "caseId": "public-01689b18987c2cfd",
+    "wall": 69,
+    "concealed": [
+      "s5",
+      "p7",
+      "p8",
+      "p9",
+      "s7",
+      "s8",
+      "s9",
+      "south",
+      "west",
+      "north",
+      "red",
+      "green",
+      "white"
+    ],
+    "melds": [],
+    "jokers": [
+      "s4",
+      "s5"
+    ],
+    "matrix": [
+      {
+        "tile": "m1",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m2",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m4",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m5",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m6",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m7",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m8",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m9",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p1",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p3",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p4",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p5",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p6",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p7",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p8",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p9",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s1",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s2",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s4",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s5",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 40,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s6",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s7",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s8",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s9",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "east",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "south",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "west",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "north",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "red",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "green",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "white",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 60,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 10,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "全带幺",
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      }
+    ],
+    "scope": "Public own-hand static scoring only. No future draws/opponent hands used; not a policy-strength experiment."
+  },
+  {
+    "caseId": "public-b76602f2e29d9c92",
+    "wall": 53,
+    "concealed": [
+      "m7",
+      "m7",
+      "m8",
+      "m1",
+      "m5",
+      "m9",
+      "p5",
+      "s1",
+      "s6",
+      "s9",
+      "south",
+      "green",
+      "white"
+    ],
+    "melds": [],
+    "jokers": [
+      "m7",
+      "m8"
+    ],
+    "matrix": [
+      {
+        "tile": "m7",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 0,
+          "exactPatterns": [],
+          "legal": false
+        }
+      },
+      {
+        "tile": "m8",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 0,
+          "exactPatterns": [],
+          "legal": false
+        }
+      },
+      {
+        "tile": "p1",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 180,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 30,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p2",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 180,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 30,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p8",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 180,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 30,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p9",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 180,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 30,
+          "exactPatterns": [
+            "门清",
+            "十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "east",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "west",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "north",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "red",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 120,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 20,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "七星十三烂"
+          ],
+          "legal": true
+        }
+      }
+    ],
+    "scope": "Public own-hand static scoring only. No future draws/opponent hands used; not a policy-strength experiment."
+  },
+  {
+    "caseId": "public-e17f50bdccbd5afe",
+    "wall": 13,
+    "concealed": [
+      "east",
+      "east",
+      "south",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p6",
+      "p7",
+      "p9",
+      "white",
+      "white",
+      "white"
+    ],
+    "melds": [],
+    "jokers": [
+      "east",
+      "south"
+    ],
+    "matrix": [
+      {
+        "tile": "m4",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m8",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m9",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p2",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 2280,
+          "exactTotal": 660,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 380,
+          "exactTotal": 110,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 840,
+          "exactTotal": 300,
+          "exactPatterns": [
+            "门清",
+            "混一色"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 140,
+          "exactTotal": 50,
+          "exactPatterns": [
+            "门清",
+            "混一色"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p4",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 840,
+          "exactTotal": 540,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "一色三步高"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 140,
+          "exactTotal": 90,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "一色三步高"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p5",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 840,
+          "exactTotal": 540,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "一色三步高"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 140,
+          "exactTotal": 90,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "一色三步高"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p6",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 840,
+          "exactTotal": 660,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 140,
+          "exactTotal": 110,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p9",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 2280,
+          "exactTotal": 660,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "三暗刻"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 380,
+          "exactTotal": 110,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "三暗刻"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s1",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s2",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s4",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s6",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s7",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s8",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s9",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "east",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 2280,
+          "exactTotal": 660,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 380,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "south",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 2280,
+          "exactTotal": 660,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 380,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "west",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 600,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 100,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "north",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 600,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 100,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "red",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 600,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 100,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "green",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 600,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 100,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "white",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 2280,
+          "exactTotal": 360,
+          "exactPatterns": [
+            "门清",
+            "混一色",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 380,
+          "exactTotal": 50,
+          "exactPatterns": [
+            "门清",
+            "混一色"
+          ],
+          "legal": true
+        }
+      }
+    ],
+    "scope": "Public own-hand static scoring only. No future draws/opponent hands used; not a policy-strength experiment."
+  },
+  {
+    "caseId": "public-64a6c6a98f52f2e0",
+    "wall": 40,
+    "concealed": [
+      "m1",
+      "m1",
+      "m2",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m9",
+      "m9",
+      "s5",
+      "s5",
+      "white"
+    ],
+    "melds": [],
+    "jokers": [
+      "m1",
+      "m2"
+    ],
+    "matrix": [
+      {
+        "tile": "m1",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 480,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 80,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m2",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 480,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 80,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m4",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 300,
+          "exactPatterns": [
+            "门清",
+            "一色三步高"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 50,
+          "exactPatterns": [
+            "门清",
+            "一色三步高"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m5",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m6",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m7",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 480,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 80,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m8",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 480,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 80,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "m9",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p1",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p2",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p4",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p5",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p6",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p7",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p8",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "p9",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s1",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s2",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s3",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s4",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s5",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 420,
+          "exactPatterns": [
+            "门清",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "清龙"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s6",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s7",
+        "remaining": 1,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 120,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 20,
+          "exactPatterns": [
+            "门清",
+            "平胡"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "s8",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "east",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "south",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "west",
+        "remaining": 2,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "north",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "red",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "green",
+        "remaining": 4,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 60,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 10,
+          "exactPatterns": [
+            "门清"
+          ],
+          "legal": true
+        }
+      },
+      {
+        "tile": "white",
+        "remaining": 3,
+        "self-draw": {
+          "estimatedTotal": 360,
+          "exactTotal": 480,
+          "exactPatterns": [
+            "门清",
+            "平胡",
+            "清龙"
+          ],
+          "legal": true
+        },
+        "discard": {
+          "estimatedTotal": 60,
+          "exactTotal": 70,
+          "exactPatterns": [
+            "门清",
+            "三暗刻"
+          ],
+          "legal": true
+        }
+      }
+    ],
+    "scope": "Public own-hand static scoring only. No future draws/opponent hands used; not a policy-strength experiment."
+  }
+]
