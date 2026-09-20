@@ -6,6 +6,16 @@ import { BLOOD_FLOW_AI } from '../config'
 import { createBloodFlowWorkerClient } from '../workerClient'
 import type { BloodFlowAuthorityBackend } from './authority'
 
+/**
+ * 权威机器人命令的观察钩子（分析与测试用）。
+ * 机器人由权威侧就地决定并提交，**选择本身不回传主线程** ⇒ 分析记录里只能落 auto 标记、
+ * 该局也就无法复现（§10.6）。这个钩子把"权威实际提交了什么"暴露出来，
+ * 让录制与离线校验拿到真实命令（含牌种/索引等载荷）。
+ */
+export type BotCommandObserver = (seat: number, action: unknown, windowId: string | undefined) => void
+let botCommandObserver: BotCommandObserver | null = null
+export function setBotCommandObserver(observer: BotCommandObserver | null) { botCommandObserver = observer }
+
 /** In-process backend for deterministic simulations. Browser hosts use worker backend. */
 export function createDirectAuthorityBackend(now: () => number = Date.now, testTiming: { winBeatMs?: number } = {}) {
   let engine: BloodFlowEngine | null = null
@@ -23,7 +33,11 @@ export function createDirectAuthorityBackend(now: () => number = Date.now, testT
       const action = BLOOD_FLOW_AI.strategy === 'legacy'
         ? decideBloodFlowAction(view, BLOOD_FLOW_AI.minimumFirstPayment)
         : decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
-      if (action) get().submit(get().command(seat, action))
+      if (action) {
+        // 通知观察者（分析记录/测试）：权威实际提交的动作与所属窗口
+        botCommandObserver?.(seat, action, windowId)
+        get().submit(get().command(seat, action))
+      }
     },
     expire: async id => { get().expire(now(), id) },
     pause: async () => { get().pause() }, resume: async () => { get().resume() },
