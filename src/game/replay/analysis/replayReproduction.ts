@@ -25,6 +25,8 @@ export interface ReproductionCommand {
   meldIndex?: number
   /** 见 AnalysisReproduction.commands：'auto' 权威机器人代决、'expire' 靠超时推进。 */
   resolution?: 'command' | 'auto' | 'expire'
+  /** 所属窗口：用于消解记录顺序（同窗口有真命令时丢弃过期的 expire）。 */
+  windowId?: string
 }
 
 export interface ReplayVerification {
@@ -59,7 +61,13 @@ function actionMatches(
 }
 
 export function replayReproduction(input: ReplayReproductionInput): ReplayVerification {
-  const recorded = input.commands.length
+  // 顺序消歧：同一窗口若既有 expire 又有真命令，以命令为准 —— 机器人命令要等权威回传才知道内容，
+  // 可能排在超时计时器压入的 expire 之后（真实 e2e 实测：第 3 条命令因此对不上）。
+  const windowsWithCommand = new Set(
+    input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
+  )
+  const commands = input.commands.filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+  const recorded = commands.length
   const expected = input.expectedScores && input.expectedScores.length === 4 ? [...input.expectedScores] : null
   const restored = openingFromReproduction(input.reproduction)
   if (!restored.opening) {

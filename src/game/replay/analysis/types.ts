@@ -306,6 +306,11 @@ export interface AnalysisReproduction {
     /** 窗口内稳定 ID（与决策/候选对齐；缺失说明该命令未接线到合法动作集）。 */
     legalActionId?: string
     /**
+     * 所属窗口：用于消解记录顺序的歧义 —— 机器人命令要等权威回传才知道内容，
+     * 可能排在超时计时器压入的 expire 之后；校验时以"该窗口有真命令"为准丢弃过期的 expire。
+     */
+    windowId?: string
+    /**
      * 这条记录是怎么产生的：
      * - `command`（默认）：真实提交的动作，可复现；
      * - `auto`：该窗口没有本端决策（无 provider / 超时），由权威机器人代决 ——
