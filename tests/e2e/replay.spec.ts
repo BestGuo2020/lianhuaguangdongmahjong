@@ -57,7 +57,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       request.onerror = () => reject(request.error)
     })
     const matches = await readAll<{ matchId: string; status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>('matches')
-    const blocks = await readAll<{ matchId: string; sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>('blocks')
+    const blocks = await readAll<{ matchId: string; sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; checksum: string; payload: Uint8Array }>('blocks')
     db.close()
     const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
     const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
@@ -65,7 +65,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       // 校验值由存储侧保管（已在存储单测覆盖）；这里以解码成功为准。
       const decoded = await decodeAnalysisBlock({
         sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
-        storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+        storedBytes: block.storedBytes, checksum: block.checksum, parts: block.parts, payload: new Uint8Array(block.payload),
       })
       if (!decoded.parts) return { present: true, error: `解码失败 seq=${block.sequence} ${String(decoded.error)}` }
       gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
@@ -79,6 +79,12 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     }
   })
   expect(analysisProbe.present, '血流跑完后应存在独立分析库').toBe(true)
+  // 探针不得静默失败：解码出错必须直接失败。此前 checksum 传空串导致解码全失败、
+  // 条件为假、整段分析断言被静默跳过（第 8 轮至第 35 轮），所以这里必须兜住。
+  expect(
+    'error' in analysisProbe ? (analysisProbe as { error?: string }).error : null,
+    '分析探针解码失败：断言块会被整段跳过，必须先修探针',
+  ).toBeNull()
   if (analysisProbe.present && !('error' in analysisProbe)) {
     const probe = analysisProbe as unknown as {
       matches: Array<{ status: string; parts: number; storedBytes: number; blockCount: number; configIds: string[] }>
@@ -149,7 +155,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
-      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; payload: Uint8Array }>>((resolve, reject) => {
+      const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; checksum: string; payload: Uint8Array }>>((resolve, reject) => {
         const tx = db.transaction('blocks', 'readonly')
         const request = tx.objectStore('blocks').getAll()
         request.onsuccess = () => resolve(request.result)
@@ -161,7 +167,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
         const decoded = await decode({
           sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
-          storedBytes: block.storedBytes, checksum: '', parts: block.parts, payload: new Uint8Array(block.payload),
+          storedBytes: block.storedBytes, checksum: block.checksum, parts: block.parts, payload: new Uint8Array(block.payload),
         })
         if (decoded.parts) gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
       }
