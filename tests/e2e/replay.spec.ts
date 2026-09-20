@@ -156,8 +156,12 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     const reproduction = reproductions[0]
     expect(reproduction.available).toBe(true)
     const wall = reproduction.initialWall as string[]
-    expect(wall.length).toBeGreaterThanOrEqual(130)
+    // 记的是**发牌后剩余牌墙**（136 − 翻精墩 2 − 发牌 53 = 81），不是整副牌。
+    // 复现所需是"剩余牌墙 + 四家初始手牌"（引擎按 opening.players[].hand 建手牌），两者齐备即可重跑。
+    expect(wall.length).toBeGreaterThan(0)
     expect(wall.length).toBeLessThanOrEqual(136)
+    expect((reproduction.initialHands as string[][]).length).toBe(4)
+    expect(typeof reproduction.dealerDrawnIndex).toBe('number')
     expect(typeof reproduction.dealer).toBe('number')
     const commands = reproduction.commands as Array<{ seat: number; kind: string }>
     expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
