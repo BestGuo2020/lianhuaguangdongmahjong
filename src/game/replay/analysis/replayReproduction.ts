@@ -3,10 +3,13 @@
 // 做法：复现数据 → 引擎开局（openingFromReproduction，缺字段直接失败）→ 依序把记录里的命令
 // 还原成当时的合法动作并提交 → 读结束分数与记录比对。
 //
-// 三条不许含糊的原则：
+// 四条不许含糊的原则：
 // 1. 命令与当时的合法动作对不上 ⇒ 报"对不上"，绝不跳过这条命令继续跑；
 // 2. 命令用尽而牌局未结束 ⇒ 报"记录不足"（当时可能有窗口靠超时推进），绝不假装成功；
-// 3. 记录里没有期望分数时，`scoresMatch` 返回 null（只证明"能跑完"，不谎称"结果一致"）。
+// 3. 记录里没有期望分数时，`scoresMatch` 返回 null（只证明"能跑完"，不谎称"结果一致"）；
+//    记录缺**当局开局分数**（`openingScores`）时连比都不能比 ⇒ 直接报缺字段（§6）。
+// 4. 每条记录条目都拿「记录侧同编号窗口的 kind」与「重放当前窗口的 kind」对照（§11）：
+//    两侧窗口序列一旦错位就能被量化（`kindMismatches`），而不是只表现为"某条命令对不上"。
 import { SEATS } from '../../variants/lotus/bloodFlow/state'
 /** 座位类型从真实常量派生，避免依赖某个未导出的类型名。 */
 type Seat = (typeof SEATS)[number]
@@ -29,6 +32,10 @@ export interface ReproductionCommand {
   resolution?: 'command' | 'auto' | 'expire'
   /** 所属窗口：用于消解记录顺序（同窗口有真命令时丢弃过期的 expire）。 */
   windowId?: string
+  /** 记录侧看到的该窗口类型（§11）：与重放同编号窗口的 kind 对照，定位"两侧窗口序列不对应"。 */
+  windowKind?: string
+  /** `expire` 条目专用：当时的等待座位。 */
+  waitingSeats?: number[]
 }
 
 export interface ReplayVerification {
@@ -40,6 +47,25 @@ export interface ReplayVerification {
   expectedScores: number[] | null
   /** null = 没有可比对的期望分数（只验证能跑完）。 */
   scoresMatch: boolean | null
+  /**
+   * 两侧窗口类型不一致的次数（§11）：记录的同编号窗口 kind ≠ 重放当时的 kind。
+   * 0 表示两侧窗口序列逐点对应（剩下的失败只能是状态分叉）；>0 直接量出"错位有多早、有多密"。
+   */
+  kindMismatches: number
+  /**
+   * 推进来源计数（§11）：`expire` 的应用／丢弃数，以及无窗口归属的命令条目数。
+   * 成功时也应可观测 —— 否则"这局到底靠命令还是靠超时跑完的"永远说不清。
+   */
+  metrics: {
+    /** 真正按记录推进的 expire 数（该窗口记录里没有任何命令）。 */
+    expireApplied: number
+    /** 因窗口编号与重放当前位置不符而丢弃的 expire 数（记录与重放不同步的量化）。 */
+    expireSkippedByNumber: number
+    /** 因"同窗口已有真命令"被前置过滤丢弃的 expire 数（记录侧的计时器噪声）。 */
+    expireSkippedByFilter: number
+    /** 缺 windowId 的命令条目数（排序会把它甩到序列末尾，属于记录缺陷）。 */
+    withoutWindowId: number
+  }
 }
 
 export interface ReplayReproductionInput {
@@ -49,6 +75,17 @@ export interface ReplayReproductionInput {
   /** 推进上限，避免畸形数据把校验挂住。 */
   maxSteps?: number
 }
+
+/**
+ * 牌名归一：记录与候选两侧的牌有**两种写法** —— 牌码（`south`，录制侧直接存动作载荷）与中文显示名
+ * （`南风`，另一条路径经 `tileName` 转换）。`tileName` 对牌码是幂等的（`TILE_META` 只以牌码为键，
+ * 认不出就原样返回），因此用它把两侧都归一后再比较。
+ *
+ * 不归一就会出现「同类候选与记录一模一样却被判对不上」：实测 `round-1/window/33` 的暗杠
+ * `{"kind":"concealed-kong","tile":"south"}` 就在合法动作里，却因为拿 `tileName('south')='南风'`
+ * 去比记录里的 `'south'` 而整局中止 —— 这是 §10.6 里最贵的一处假性失配。
+ */
+const normalizeTile = (tile: string) => tileName(tile as never)
 
 function actionMatches(
   action: { kind: string; tile?: unknown; index?: unknown; from?: unknown; meldIndex?: unknown; tiles?: unknown; meld?: unknown },
@@ -63,7 +100,7 @@ function actionMatches(
       ...(Array.isArray(action.tiles) ? (action.tiles as unknown[]).map(entry => tileName(entry as never)) : []),
       ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
     ]
-    if (candidates.length && !candidates.includes(command.tile)) return false
+    if (candidates.length && !candidates.includes(normalizeTile(command.tile))) return false
   }
   // 组合动作（吃/杠）：记录里有牌集合时，候选的牌集合必须完全一致（顺序无关），
   // 否则只能按 kind 取第一个候选 —— 实测会吃错组合、牌型走偏、重放提前二十步胡牌。
@@ -73,12 +110,15 @@ function actionMatches(
       ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
     ]
     if (candidateTiles.length) {
-      const wanted = [...command.tiles].sort().join(',')
+      const wanted = command.tiles.map(normalizeTile).sort().join(',')
       const offered = [...candidateTiles].sort().join(',')
       if (wanted !== offered) return false
     }
   }
-  if (command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
+  // 组合动作（暗杠/吃等）在引擎里按"牌集合"枚举，同一组牌可能有多个 index 写法 ⇒ 有牌集合时不比 index，
+  // 否则会假性失配（实测：concealed-kong tile=s6 明明在候选里、手里也有三张 s6，却被判对不上）。
+  const isCombination = Array.isArray(action.tiles) || Array.isArray(action.meld)
+  if (!isCombination && command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
   if (command.from !== undefined && command.from !== null && action.from !== undefined && action.from !== command.from) return false
   if (command.meldIndex !== undefined && action.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
   return true
@@ -92,18 +132,64 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   const windowsWithCommand = new Set(
     input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
   )
-  const commands = input.commands.filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+  // 关键：**按窗口编号稳定排序后再消费**。记录是异步压入的（机器人动作要等权威回传），
+  // 因此条目顺序与引擎的窗口顺序并不一致（实测：窗口 77 的座位 1 弃牌被排在座位 0 的后续动作之后）。
+  // 同窗口内保持原有相对顺序（稳定排序），编号缺失的排在最后。
+  const commands = input.commands
+    .filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+    .map((entry, index) => ({ entry, index, no: entry.windowId ? Number(entry.windowId.split('/').pop()) : Number.NaN }))
+    .sort((a, b) => {
+      const an = Number.isFinite(a.no) ? a.no : Number.MAX_SAFE_INTEGER
+      const bn = Number.isFinite(b.no) ? b.no : Number.MAX_SAFE_INTEGER
+      return an - bn || a.index - b.index
+    })
+    .map(item => item.entry)
   const recorded = commands.length
-  /** expire 判定计数：应用 / 因编号更小丢弃 / 因同窗口有命令被前置过滤丢弃。 */
-  let expireApplied = 0
-  let expireSkippedByNumber = 0
+  /** expire 判定计数：应用 / 因编号不符丢弃 / 因同窗口有命令被前置过滤丢弃（返回给调用方做观测）。 */
+  const metrics = { expireApplied: 0, expireSkippedByNumber: 0, expireSkippedByFilter: input.commands.length - commands.length, withoutWindowId: 0 }
   /** 已经推进过的窗口编号：同一窗口常有多条 expire（主线程按计时器各压一条），只允许推进一次。 */
   let lastExpiredNo = Number.NaN
-  const expireSkippedByFilter = input.commands.length - commands.length
+  /**
+   * 记录侧给出的「窗口编号 → 窗口类型」对照（§11）：与重放**同编号窗口**的 kind 逐点比对。
+   * 两侧窗口编号都是各自引擎的自增版本号，只有 kind 对上才能说明窗口序列真的对应；
+   * 实测失败现场就是"同一编号在重放里是 win、在记录里却是 peng"。
+   */
+  const recordedKinds = new Map<number, Set<string>>()
+  for (const entry of input.commands) {
+    if (!entry.windowId || !entry.windowKind) continue
+    const no = Number(entry.windowId.split('/').pop())
+    if (!Number.isFinite(no)) continue
+    const kinds = recordedKinds.get(no) ?? new Set<string>()
+    kinds.add(entry.windowKind)
+    recordedKinds.set(no, kinds)
+  }
+  const recordedKindAt = (no: number) => [...(recordedKinds.get(no) ?? [])].join('/') || '（记录未提供 kind）'
+  const kindsNear = (no: number) => [no - 2, no - 1, no, no + 1, no + 2]
+    .filter(n => n > 0 && recordedKinds.has(n)).map(n => `${n}:${recordedKindAt(n)}`).join(' ') || '（无）'
+  /** 重放当前窗口与记录同编号窗口 kind 不一致的次数（两侧窗口序列不对应的直接证据）。 */
+  let kindMismatches = 0
+  let lastKindMismatch = ''
+  const noteKindMismatch = (no: number, replayKind: string | undefined) => {
+    const recorded = recordedKinds.get(no)
+    if (!recorded?.size || !replayKind || recorded.has(replayKind)) return
+    kindMismatches += 1
+    lastKindMismatch = `窗口 ${no}：重放 kind=${replayKind} vs 记录 kind=${recordedKindAt(no)}`
+  }
+  /** 没有窗口归属的命令条目（记录侧漏传 windowId 时会出现）：会让排序把它甩到序列末尾。 */
+  metrics.withoutWindowId = input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && !entry.windowId).length
   const expected = input.expectedScores && input.expectedScores.length === 4 ? [...input.expectedScores] : null
   const restored = openingFromReproduction(input.reproduction)
   if (!restored.opening) {
-    return { ok: false, reason: restored.reason, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null }
+    return { ok: false, reason: restored.reason, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null, kindMismatches, metrics }
+  }
+  // 记录没带开局分数时，重跑只能从初始分起步 ⇒ 结束分数与记录**不可比对**。
+  // 这时必须如实说"缺开局分数"，不能拿跑出来的数字去比（实测第 2 局以后必然不一致，
+  // 会被误读成"牌流复现失败"，而这四局的逐家净变化其实完全一致）。
+  if (expected && restored.scoresSource === 'missing') {
+    return {
+      ok: false, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
+      reason: '复现数据缺少 openingScores（当局开局分数）：重跑只能从初始分起步，结束分数无从比对（不宣称精确复现）',
+    }
   }
 
   // 时钟必须可推进：expire 记录要把"当时靠超时推进"这件事重演出来
@@ -124,7 +210,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     // 开局数据不合格（例如庄家第 14 张的下标与手牌不一致、有效牌数不对）：
     // 引擎会拒绝重建 —— 这里如实报告原因，绝不让异常逃出去（校验器的职责是给出结论，不是抛错）。
     return {
-      ok: false, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null,
+      ok: false, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
       reason: `开局数据不合格，引擎拒绝重建：${String(error).slice(0, 140)}`,
     }
   }
@@ -137,6 +223,9 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   const seenWindows = new Set<string>()
   const windowTrace: string[] = []
   const pairedTrace: string[] = []
+  /** 每个窗口编号被"进入"的次数：>1 说明重放在该窗口上多推进了一次（+1 偏移的直接证据）。 */
+  const windowEntries = new Map<number, number>()
+  let lastEntryNo = Number.NaN
   const recordedWindowsUpTo = (upTo: number) => new Set(
     commands.slice(0, upTo).map(entry => entry.windowId).filter((id): id is string => Boolean(id)),
   )
@@ -148,6 +237,11 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     if (!engine.window && engine.transition) { engine.advance(engine.transition.id); continue }
     if (engine.window) {
       seenWindows.add(engine.window.id)
+      const noNow = Number(String(engine.window.id).split('/').pop())
+      if (noNow !== lastEntryNo) {
+        lastEntryNo = noNow
+        if (Number.isFinite(noNow)) windowEntries.set(noNow, (windowEntries.get(noNow) ?? 0) + 1)
+      }
       // 逐窗口轨迹（kind + 有合法动作的座位）：用来定位"重放在哪一步多推进了一次"
       if (windowTrace.length < 400) {
         const current = engine.window
@@ -157,17 +251,32 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const command = commands[cursor]
     if (!command) {
       return {
-        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
         reason: `命令序列不完整：牌局未结束但已无第 ${cursor + 1} 条命令（当时可能有窗口靠超时推进，记录不足以精确复现）`,
       }
     }
     const seat = command.seat as Seat
+    // §11 对照：记录的同编号窗口类型 vs 重放当前窗口类型。两侧窗口序列一旦错位，这里就会记上，
+    // 失败信息里直接给出"是 kind 对不上（序列错位）"还是"kind 一致但动作对不上（状态分叉）"。
+    {
+      const replayWindow = engine.window
+      const replayNoNow = replayWindow ? Number(String(replayWindow.id).split('/').pop()) : Number.NaN
+      const replayKindNow = (replayWindow as { kind?: string } | null)?.kind
+      const entryNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
+      if (Number.isFinite(entryNo) && entryNo === replayNoNow) noteKindMismatch(replayNoNow, replayKindNow)
+      // expire 条目自带当时的 kind：它说的就是"这个编号的窗口当时是哪一类"，与上面同源但更早生效
+      if (command.resolution === 'expire' && command.windowKind && replayKindNow && command.windowKind !== replayKindNow
+        && Number.isFinite(entryNo) && entryNo === replayNoNow) {
+        kindMismatches += 1
+        lastKindMismatch = `窗口 ${entryNo}（expire 条目自带）：重放 kind=${replayKindNow} vs 记录 kind=${command.windowKind}`
+      }
+    }
     if (command.resolution === 'expire') {
       // 该窗口没人决定、靠超时推进：把时钟推过截止时间再推进，否则状态会与当时分叉
       const current = engine.window
       if (!current) {
         return {
-          ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+          ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
           reason: `第 ${cursor + 1} 条记录标记为 expire，但当前没有窗口可推进（记录与实际不符）`,
         }
       }
@@ -178,20 +287,25 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       // 说明重放已经推进过它了，再应用一次就会多走窗口（此前观测到的 +3/+5 累积偏移）。
       const recordNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
       const replayNo = Number(String(current.id).split('/').pop())
-      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo < replayNo) {
-        expireSkippedByNumber += 1
+      // 只应用"正好属于当前窗口"的 expire：编号更小 ⇒ 已经走过；**编号更大 ⇒ 属于还没走到的窗口**，
+      // 提前应用会把引擎向前推（实测这正是残余偏移与提前胡牌的来源：重放比记录多走窗口）。
+      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo !== replayNo) {
+        metrics.expireSkippedByNumber += 1
         cursor += 1
         continue
       }
+      // 对照实验（第 98 轮，两次复跑）：曾试过"记录里若还有当前窗口的条目就丢弃这条 expire"，
+      // 结果 replayProgress 明显变差（12%~20%，此前为 47%~94%）⇒ 该规则是退步，expire 必须被应用。
+      // 与第 61 轮的实验结论一致：任何"跳过 expire"的规则都会让窗口停止推进、与记录错得更远。
       // 同一窗口的重复 expire 只能推进一次：记录里常有三条（按座位/计时器各压一条），
       // 逐条应用会把引擎连推多次（实测残余偏移即此）。
       if (Number.isFinite(recordNo) && recordNo === lastExpiredNo) {
-        expireSkippedByNumber += 1
+        metrics.expireSkippedByNumber += 1
         cursor += 1
         continue
       }
       if (Number.isFinite(recordNo)) lastExpiredNo = recordNo
-      expireApplied += 1
+      metrics.expireApplied += 1
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
       cursor += 1
@@ -200,13 +314,13 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     if (command.resolution === 'auto') {
       // 该窗口当时由权威机器人（或超时）代决，记录里不含它的选择：说清原因，不笼统报"命令不足"
       return {
-        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
         reason: `第 ${cursor + 1} 条记录标记为 auto：该窗口当时没有本端决策（由权威机器人或超时决定），记录不含其选择，无法复现`,
       }
     }
     if (!SEATS.includes(seat)) {
       return {
-        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
+        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
         reason: `第 ${cursor + 1} 条命令的座位非法：${command.seat}`,
       }
     }
@@ -214,21 +328,36 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const action = view.ownActions.find(candidate => actionMatches(candidate as never, command))
     if (!action) {
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
+      // 同 kind 候选的完整字段：直接看出是哪一项判否（tile/tiles/index/from/meldIndex），不再猜
+      const sameKind = view.ownActions.filter(candidate => (candidate as { kind?: string }).kind === command.kind)
+      const sameKindDump = sameKind.length
+        ? sameKind.slice(0, 3).map(candidate => JSON.stringify(candidate)).join(' | ')
+        : '（无同类候选）'
+      // 状态分叉诊断：打印重放当时该座位的手牌与副露，便于与记录期望的动作对照
+      // （记录里这一手的 index/tile 如果根本不在手牌里，说明状态在更早处已经分叉，而不是匹配不精确）。
+      // 注意：座位视图只在 revealAll/engine.result 时暴露**他人**手牌，且顶层没有 hand 字段——
+      // 此前读顶层 hand 恒为 0，产生过一次假信号（"该座位手牌 0 张"）。本家手牌在 players[seat].hand。
+      const seatPlayer = (view as { players?: Array<{ hand?: string[]; melds?: unknown[] }> }).players?.[command.seat]
+      const seatHand = seatPlayer?.hand ?? []
+      const seatMelds = seatPlayer?.melds?.length ?? 0
       // 分叉点上下文：把"重放窗口"摊开，便于判断是窗口归属不同还是推进语义不同
       const current = engine.window
+      const nowNo = current ? Number(String(current.id).split('/').pop()) : Number.NaN
+      const nowKind = (current as { kind?: string } | null)?.kind
       const context = current
-        ? ` 当前窗口 kind=${(current as { kind?: string }).kind ?? '?'} id=${current.id}`
+        ? ` 当前窗口 kind=${nowKind ?? '?'} id=${current.id}`
           + ` 有合法动作的座位=[${SEATS.filter(candidate => current.options[candidate].length > 0).join(',')}]`
         : ' 当前没有窗口（可能处在转场中）'
+      // 记录侧对同一个窗口编号的说法（§11）：kind 对不上 ⇒ 两侧窗口序列错位；kind 一致 ⇒ 状态分叉。
+      const recordSays = current
+        ? ` 记录说该编号是 kind=${recordedKindAt(nowNo)}（附近：${kindsNear(nowNo)}）`
+          + ` 该编号的条目=[${commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
+            .map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}${entry.windowKind ? `[${entry.windowKind}]` : ''}${entry.waitingSeats?.length ? ` 等待=[${entry.waitingSeats.join(',')}]` : ''}`)
+            .join(' ') || '（空）'}]`
+        : ''
       return {
-        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
-        const nowNo = engine.window ? Number(String(engine.window.id).split('/').pop()) : Number.NaN
-        const owned = Number.isFinite(nowNo)
-          ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
-          : []
-        return owned.length ? owned.map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ') : '（空）'
-      })()}]；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
+        ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；同类候选=${sameKindDump}；记录条目=${JSON.stringify(command)}；该座位手牌(${seatHand.length}张)=[${seatHand.join(' ')}] 副露=${seatMelds}；${context}；${recordSays}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${metrics.expireApplied} / 编号更小丢弃 ${metrics.expireSkippedByNumber} / 前置过滤丢弃 ${metrics.expireSkippedByFilter}；无窗口归属条目 ${metrics.withoutWindowId}；kind 不一致 ${kindMismatches} 次${lastKindMismatch ? `（最近：${lastKindMismatch}）` : ''}；重入窗口=[${[...windowEntries].filter(([, count]) => count > 1).map(([no, count]) => `${no}×${count}`).join(' ') || '无'}]；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
@@ -247,13 +376,23 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   const finalScores = scoresNow()
   if (!engine.result) {
     return {
-      ok: false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch: null,
+      ok: false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
       reason: `推进超过上限 ${maxSteps}，牌局仍未结束`,
+    }
+  }
+  // 提前终局：牌局结束了却还有未消费的记录条目 ⇒ 与记录不一致，不能算复现成功
+  // （此前这种情况可能被判为 ok=true，只因"跑完了"；这在语义上是错的）。
+  if (cursor < commands.length) {
+    return {
+      ok: false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch: null, kindMismatches, metrics,
+      reason: `重放提前结束：只消费了 ${cursor}/${recorded} 条记录；牌墙剩余 ${engine.wall.length}，终局=${Boolean(engine.result)}；`
+        + `expire 判定：应用 ${metrics.expireApplied} / 编号丢弃 ${metrics.expireSkippedByNumber} / 前置过滤丢弃 ${metrics.expireSkippedByFilter}；`
+        + `无窗口归属条目 ${metrics.withoutWindowId}；kind 不一致 ${kindMismatches} 次${lastKindMismatch ? `（最近：${lastKindMismatch}）` : ''}`,
     }
   }
   const scoresMatch = expected ? expected.every((score, seat) => score === finalScores[seat]) : null
   return {
-    ok: scoresMatch !== false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch,
+    ok: scoresMatch !== false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch, kindMismatches, metrics,
     reason: scoresMatch === false ? `结束分数不一致：记录 ${expected!.join('/')} ≠ 重跑 ${finalScores.join('/')}` : null,
   }
 }

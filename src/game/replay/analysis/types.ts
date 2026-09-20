@@ -319,6 +319,14 @@ export interface AnalysisReproduction {
      *   否则状态会与当时分叉（实测过：重放到第 N 条就报"该座位此刻没有合法动作"）。
      */
     resolution?: 'command' | 'auto' | 'expire'
+    /**
+     * 该条目所属窗口的类型（`turn`／`meld`／`win`…）。§11：只有把两侧**同编号窗口的 kind** 对照，
+     * 才能区分「记录侧多压/少压 expire」与「权威端推进方式与记录不一致」——
+     * 实测失败现场出现过"同一编号在重放里是 win、在记录里却是 peng"这类错位。
+     */
+    windowKind?: string
+    /** `expire` 条目专用：当时的等待座位（谁的响应本该出现）。 */
+    waitingSeats?: number[]
     tile?: string
     /** 吃/杠等组合动作的牌集合：这类动作在引擎里不带单张 `tile`，只比 kind 会吃错组合。 */
     tiles?: string[]

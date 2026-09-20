@@ -163,9 +163,17 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect((reproduction.initialHands as string[][]).length).toBe(4)
     expect(typeof reproduction.dealerDrawnIndex).toBe('number')
     expect(typeof reproduction.dealer).toBe('number')
-    const commands = reproduction.commands as Array<{ seat: number; kind: string }>
+    // §6：当局开局分数必须落库（缺了它重跑只能从初始分起步，第 2 局以后的结束分数不可比对）
+    expect((reproduction.openingScores as number[] | undefined)?.length, '每局都应记录开局分数').toBe(4)
+    const commands = reproduction.commands as Array<{ seat: number; kind: string; resolution?: string; windowId?: string; windowKind?: string }>
     expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
     expect(commands.every(entry => typeof entry.seat === 'number' && typeof entry.kind === 'string')).toBe(true)
+    // 记录格式自洽（回归护栏）：真实命令必须带窗口归属与窗口类型 ——
+    // 缺 windowId 会被校验器排到序列末尾（重放错开一个窗口），缺 windowKind 则无法做 §11 的两侧对照。
+    const realCommands = commands.filter(entry => (entry.resolution ?? 'command') === 'command')
+    expect(realCommands.length, '应有真实命令条目').toBeGreaterThan(0)
+    expect(realCommands.filter(entry => !entry.windowId), '真实命令必须带 windowId').toEqual([])
+    expect(realCommands.filter(entry => !entry.windowKind), '真实命令必须带 windowKind（记录的窗口类型）').toEqual([])
 
     // 诊断**先落盘**（放在任何可能失败的断言之前）：每局开局的原始数字 + 命令来源计数。
     // 之前的顺序错了——写盘在 §10.6 断言之后，断言一失败就什么都拿不到。
@@ -226,14 +234,10 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       const reproduction = gathered.filter(part => part.tag === 'reproduction').map(part => part.value)[0] as never
       if (!reproduction) return { ran: false, results: [], displayEndScores: null }
       const record = reproduction as unknown as { commands?: unknown[] }
-      const results = []
-      for (const candidate of gathered.filter(part => part.tag === 'reproduction').map(part => part.value)) {
-        const value = candidate as unknown as { commands?: Array<{ seat: number; kind: string }> }
-        results.push(replayReproduction({ reproduction: candidate as never, commands: (value.commands ?? []) as never }))
-      }
       void record
 
-      // 展示回放的该局结束快照（另一个库）：用于与重跑结果比对（§10.6 的充分条件）
+      // 展示回放的该局结束快照（另一个库）：既是 §10.6 的期望分数，也用于与重跑结果比对。
+      // **必须先读**：把期望分数喂给校验器，`scoresMatch` 才有意义（否则 ok 只证明"能跑完"）。
       const replayDb = await new Promise<IDBDatabase | null>((resolve) => {
         const request = indexedDB.open('lianhua-guangma-replay')
         request.onsuccess = () => resolve(request.result)
@@ -256,31 +260,39 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
           .map(round => (round.final?.scores ? [...round.final.scores] : null))
         replayDb.close()
       }
+
+      const reproductions = gathered.filter(part => part.tag === 'reproduction').map(part => part.value)
+      const results = reproductions.map((candidate, index) => {
+        const value = candidate as unknown as { commands?: Array<{ seat: number; kind: string }> }
+        return replayReproduction({
+          reproduction: candidate as never,
+          commands: (value.commands ?? []) as never,
+          // 逐局喂期望分数：§10.6 的"同一结束状态"包含分数，没有期望分数的 ok 只等于"能跑完"。
+          ...(displayRoundScores[index] ? { expectedScores: displayRoundScores[index]! } : {}),
+        })
+      })
       return { ran: true, results, displayRoundScores }
     })
     expect(replayProbe.ran, '应能取到复现数据').toBe(true)
     // 计数日志放在断言之前：失败时也能看到数字
     console.log(`[analysis] 复现记录 ${replayProbe.results.length} 局 / 展示回放 ${replayProbe.displayRoundScores.length} 局`)
+    // §10.6 断言已**收紧**（2026-09-21）：真实录像必须逐局复现成功，不再允许"失败但原因确切" ——
+    // 那种写法会掩盖真实缺陷（此前四局都停在命令不匹配处，却一直"通过"）。
+    // 唯一设计上不可复现的情形是记录里的 `auto` 标记（权威机器人代决且未回传选择），
+    // 本 path（autoplay 本地对局 + worker 回传 botAction）不会产生 auto，因此这里要求全部成功。
     for (const result of replayProbe.results) {
-      // §10.6 只对"有本端决策的窗口"成立：由权威机器人或超时代决的窗口（auto 标记）本身就不在记录里。
-      // 按设计断言：成功时不得带失败原因；不可复现时必须是"说清原因"的失败，而不是含糊失败。
-      if (result.ok) {
-        expect(result.reason, '成功时不应带失败原因').toBeNull()
-        expect(result.submitted).toBe(result.recorded)
-        expect(result.finalScores).toHaveLength(4)
-      } else {
-        expect(result.reason, '失败必须给出确切原因').toBeTruthy()
-        expect(result.reason).toMatch(/auto|对不上|不完整|缺少|无法还原/)
-      }
+      expect(result.reason, '真实录像的每一局都应复现成功').toBeNull()
+      expect(result.submitted, '记录条目必须被逐条消费完').toBe(result.recorded)
+      expect(result.finalScores).toHaveLength(4)
+      expect(result.scoresMatch, '喂了期望分数时，结束分数必须逐家一致').toBe(true)
+      expect(result.kindMismatches, '两侧同编号窗口的类型应逐点对应（§11）').toBe(0)
     }
     // 充分条件：按**局序**逐局比对（两边的局号口径未必一致，但时间顺序一致；
     // 之前"两边各取最后一个"的写法会因编号错位偶发失败——随机牌局下时红时绿）。
     expect(replayProbe.results.length, '两边的局数应一致').toBe(replayProbe.displayRoundScores.length)
     expect(replayProbe.displayRoundScores.filter(scores => scores).length, '每局都应有结束快照').toBe(replayProbe.results.length)
     replayProbe.results.forEach((result, index) => {
-      // 只对真的复现成功的局比对分数：含 auto 标记的局在设计上就复现不了（该场全是机器人，
-      // 权威机器人的选择不在记录里）。要完整验证 §10.6 的充分条件，需要一场至少有本端决策座位的对局。
-      if (!result.ok) return
+      // 逐局都要比对（上面已要求全部 ok）；展示回放快照是 §9.3 的公开字段唯一来源，两边必须一致。
       expect(result.finalScores, `第 ${index + 1} 局结束分数应与展示回放一致`).toEqual(replayProbe.displayRoundScores[index])
     })
 
@@ -330,15 +342,29 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       tags: tagCounts,
       commandResolutions,
       replayOk: replayProbe.results.map(result => result.ok),
+      // 每局的复现进度：submitted/recorded —— 量化"离跑完全部记录还差多少"，
+      // 也让"跑到终局但未消费完（提前结束）"与"中途卡住"两类失败可区分。
+      replayProgress: replayProbe.results.map(result => `${result.submitted}/${result.recorded}`),
+      // §11：两侧同编号窗口类型不一致的次数（0 = 窗口序列逐点对应）
+      kindMismatches: replayProbe.results.map(result => result.kindMismatches),
+      // §11：推进来源（expire 应用/丢弃、无窗口归属条目）—— 成功时也要能看出"靠命令还是靠超时跑完"
+      expireMetrics: replayProbe.results.map(result => result.metrics),
+      scoresMatch: replayProbe.results.map(result => result.scoresMatch),
       // 每局开局的原始数字：用来核对"庄家第 14 张"这件事（引擎会先按该下标删一张再校验）
       reproductions: probe.parts.filter(part => part.tag === 'reproduction').map(part => {
-        const value = part.value as { roundIndex?: number; initialHands?: string[][]; dealerDrawnIndex?: number; initialWall?: string[]; commands?: unknown[] }
+        const value = part.value as { roundIndex?: number; initialHands?: string[][]; dealerDrawnIndex?: number; initialWall?: string[]; commands?: unknown[]; openingScores?: number[] }
+        const commands = (value.commands ?? []) as Array<{ resolution?: string; windowId?: string; windowKind?: string }>
         return {
           roundIndex: value.roundIndex,
           handSizes: (value.initialHands ?? []).map(hand => hand.length),
           dealerDrawnIndex: value.dealerDrawnIndex,
           wallSize: (value.initialWall ?? []).length,
-          commands: (value.commands ?? []).length,
+          // §6：当局开局分数必须落库，否则第 2 局以后的结束分数不可比对
+          openingScores: value.openingScores ?? null,
+          commands: commands.length,
+          // 记录格式自洽性：命令条目必须带窗口归属与窗口类型（缺 windowId 会被排到序列末尾）
+          commandsWithoutWindowId: commands.filter(entry => (entry.resolution ?? 'command') === 'command' && !entry.windowId).length,
+          commandsWithoutWindowKind: commands.filter(entry => (entry.resolution ?? 'command') === 'command' && !entry.windowKind).length,
         }
       }),
       replayReasons: replayProbe.results.map(result => result.reason),
