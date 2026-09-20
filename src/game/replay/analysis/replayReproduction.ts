@@ -49,14 +49,23 @@ export interface ReplayReproductionInput {
 }
 
 function actionMatches(
-  action: { kind: string; tile?: unknown; index?: unknown; from?: unknown; meldIndex?: unknown },
+  action: { kind: string; tile?: unknown; index?: unknown; from?: unknown; meldIndex?: unknown; tiles?: unknown; meld?: unknown },
   command: ReproductionCommand,
 ): boolean {
   if (action.kind !== command.kind) return false
-  if (command.tile !== undefined && tileName(action.tile as never) !== command.tile) return false
-  if (command.handIndex !== undefined && action.index !== command.handIndex) return false
-  if (command.from !== undefined && command.from !== null && action.from !== command.from) return false
-  if (command.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
+  // 牌种：候选动作不带单张牌时（暗杠/吃等由 meld/tiles 表达）不做比较，否则会假性不匹配
+  // —— 实测暗杠 `concealed-kong tile=m7` 明明在合法动作里却被判"对不上"。
+  if (command.tile !== undefined) {
+    const candidates = [
+      ...(action.tile !== undefined ? [tileName(action.tile as never)] : []),
+      ...(Array.isArray(action.tiles) ? (action.tiles as unknown[]).map(entry => tileName(entry as never)) : []),
+      ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
+    ]
+    if (candidates.length && !candidates.includes(command.tile)) return false
+  }
+  if (command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
+  if (command.from !== undefined && command.from !== null && action.from !== undefined && action.from !== command.from) return false
+  if (command.meldIndex !== undefined && action.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
   return true
 }
 
