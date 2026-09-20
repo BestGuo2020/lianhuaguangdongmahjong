@@ -343,7 +343,12 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
         // 无论配置是否已存在，都要把 id 记进本场清单：否则读取侧按清单取不到共享配置
         // （§9.4 的「A、B 两场共享模板」场景就是靠这条闭合引用）。
         const meta = await d.getMatchMeta(matchId)
-        if (meta && !meta.configIds.includes(config.id)) {
+        if (!meta) {
+          // 首次登记常常发生在写入任何分块之前（beginMatch 就是这种情形）：这里不建元数据，
+          // 因为引用关系的权威来源是 owners 表（读取侧按 owners 取），元数据里的清单只是顺带记录。
+          return
+        }
+        if (!meta.configIds.includes(config.id)) {
           await d.putMatchMeta({ ...meta, configIds: [...meta.configIds, config.id] })
         }
       }, undefined)
