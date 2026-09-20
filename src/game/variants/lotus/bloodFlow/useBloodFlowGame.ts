@@ -642,8 +642,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (options.analysis && action) {
         analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined))
       } else if (options.analysis) {
-        // 本端没有决策（无 provider ⇒ 交给权威机器人）：如实标记，重跑时才能说清"为什么复现不了"
-        analysisRoundCommands.push({ seat, kind: 'auto', at: Date.now(), resolution: 'auto' })
+        // 本端没有决策（无 provider ⇒ 权威机器人代决）：权威若回传了它实际提交的动作，
+        // 就落成真命令（可复现）；否则如实落 auto（重跑时会说明"该窗口不是本端决定"）。
+        const botAction = (next as { botAction?: BloodFlowAction }).botAction
+        if (botAction) analysisRoundCommands.push(analysisCommandEntry(seat, botAction))
+        else analysisRoundCommands.push({ seat, kind: 'auto', at: Date.now(), resolution: 'auto' })
       }
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
       // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。

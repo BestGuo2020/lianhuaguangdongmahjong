@@ -18,7 +18,8 @@ export interface BloodFlowAuthorityBackend {
    */
   spectator(): Promise<BloodFlowSeatView>
   command(command: EngineCommand): Promise<void>
-  bot(seat: Seat, windowId: string): Promise<void>
+  /** 机器人代决；返回权威实际提交的动作（旧实现可能返回 void，调用方需容错）。 */
+  bot(seat: Seat, windowId: string): Promise<unknown | void>
   expire(windowId: string): Promise<void>
   pause(): Promise<void>
   resume(): Promise<void>
@@ -284,7 +285,8 @@ export class BloodFlowAuthority {
             await this.opBounded('command', () => this.options.backend.command({ authorityEpoch: choice.own!.authorityEpoch,
               roundId: choice.own!.roundId, windowId, stateVersion: choice.own!.window!.version, seat: choice.seat, action: choice.action! }))
           }
-          else await this.opBounded('bot', () => this.options.backend.bot(choice.seat, windowId))
+          // 权威编排层不需要机器人提交的动作（分析记录只用本地路径的返回值）：显式丢弃，保持 void
+          else await this.opBounded('bot', async () => { await this.options.backend.bot(choice.seat, windowId) })
           await this.publish()
           // 停滞取证（2026-09-14）：机器人动作"执行了"不等于"局面推进了"。
           // 这里记录动作后的窗口，若窗口没变，就是引擎把这一手吞了（而不是链被堵住）。
