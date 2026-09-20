@@ -85,9 +85,10 @@ function actionMatches(
 }
 
 export function replayReproduction(input: ReplayReproductionInput): ReplayVerification {
-  // 顺序消歧：同一窗口若既有 expire 又有真命令，以命令为准 —— 机器人命令要等权威回传才知道内容，
-  // 可能排在超时计时器压入的 expire 之后。
-  // 对照实验（第 56 轮）：去掉这个过滤后失败点立刻退回"第 3 条"，证明它确实必要（不是分叉源）。
+  // 顺序消歧：同一窗口若既有 expire 又有真命令，以命令为准（机器人命令要等权威回传才知道内容，
+  // 可能排在超时计时器压入的 expire 之后）。
+  // 对照实验记录：第 56 轮（单次运行）与第 72 轮（两次运行，且已有编号相对判定）各测过一次"停用本过滤"，
+  // 两次都未改善 ⇒ 保留。若未来要再动它，务必按 2~3 次复跑判定（每次 e2e 都是不同的随机牌局）。
   const windowsWithCommand = new Set(
     input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
   )
@@ -211,7 +212,13 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
+        const nowNo = engine.window ? Number(String(engine.window.id).split('/').pop()) : Number.NaN
+        const owned = Number.isFinite(nowNo)
+          ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
+          : []
+        return owned.length ? owned.map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ') : '（空）'
+      })()}]；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
