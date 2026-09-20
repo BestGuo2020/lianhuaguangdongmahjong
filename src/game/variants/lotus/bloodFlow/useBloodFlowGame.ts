@@ -377,10 +377,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
    * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
    * 只记 kind 的话赛后无法重跑复现（§6、§10.6）。
    */
+  /** 已有命令的窗口：录制侧据此避免为**已被解决**的窗口补记 expire（实测每局曾出现 381 条 expire）。 */
+  const analysisWindowsWithCommand = new Set<string>()
   function analysisCommandEntry(seat: number, action: BloodFlowAction, legalActionId?: string, windowId?: string) {
     const entry: (typeof analysisRoundCommands)[number] = { seat, kind: action.kind, at: Date.now() }
     if (legalActionId) entry.legalActionId = legalActionId
-    if (windowId) entry.windowId = windowId
+    if (windowId) { entry.windowId = windowId; analysisWindowsWithCommand.add(windowId) }
     const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number }
     if (record.tile !== undefined) entry.tile = record.tile
     if (record.index !== undefined) entry.handIndex = record.index
@@ -600,7 +602,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (view.value?.window?.id === w.id) {
         // 分析记录（§6）：该窗口没人决定、靠超时推进 —— 不记这条，重跑会与当时分叉
         // （seat 用 -1 表示"不是某个座位的决定"；校验器遇到 expire 只推时钟并推进窗口）。
-        if (options.analysis) analysisRoundCommands.push({ seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire', windowId: w.id })
+        // 该窗口已有命令 ⇒ 不记 expire：主线程的计时器常为已被解决的窗口补记，
+        // 重放会据此盲目推进（实测每局 381 条 expire、重放比记录多 3 个窗口、并提前二十步出现胡牌）。
+        if (options.analysis && !analysisWindowsWithCommand.has(w.id)) {
+          analysisRoundCommands.push({ seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire', windowId: w.id })
+        }
         void request({ kind: 'expire', windowId: w.id })
       }
     }, Math.max(0, w.deadlineAt - Date.now()))
