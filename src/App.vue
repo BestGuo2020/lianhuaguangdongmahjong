@@ -51,6 +51,10 @@ import { defaultAvatarForSeat } from './game/core/presentation/avatar'
 import { preloadAnimeCharacterAssets } from './game/core/presentation/llmAnimeAssets'
 import type { PlayerSeed } from './game/shared/runtime/localOpening'
 import { useReplayRecorder } from './game/replay/useReplayRecorder'
+import { createAnalysisStorage } from './game/replay/analysis/storage'
+import { createAnalysisSession, reconcileAnalysisWithReplay } from './game/replay/analysis/session'
+import type { AnalysisSeatControl } from './game/replay/analysis/types'
+import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from './game/variants/lotus/bloodFlow/config'
 import type { ReplayMatch, ReplayRound } from './game/replay/types'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -203,6 +207,19 @@ const llmStats = computed<LlmControllerStats>(() => ({
 }))
 // ── 对局回放（只存本机 IndexedDB，不上服务器）──
 // 录制器在三个单机引擎之间共享：同一时刻只有所选玩法的引擎在跑，局序不会交错。
+// ── AI 分析记录（方案 docs/blood-flow/design/replay-ai-analysis-recording.md）──
+// 独立分析区（自己的数据库与失败域，§9.2/§9.5）；默认关闭，dev 打开以便本地验证。
+// 开关只影响分析录制，不改变任何策略动作或对局结果（§10.1、§10.7）。
+const analysisStorage = createAnalysisStorage()
+const analysisEnabled = ref(import.meta.env.DEV
+  ? localStorage.getItem('lgm_analysis_enabled') !== '0'
+  : localStorage.getItem('lgm_analysis_enabled') === '1')
+const analysis = createAnalysisSession({
+  enabled: analysisEnabled.value,
+  storage: analysisStorage,
+  onError: (detail) => console.warn('[analysis]', detail),
+})
+
 const replay = useReplayRecorder({
   meta: () => ({
     rulesetId: selectedRule.value,
@@ -250,7 +267,9 @@ const remoteGame = useRemoteGame({
 const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
   countdownEnabled: false,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
-  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds, recorder: replay.hooks })
+  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds, recorder: replay.hooks,
+  // AI 分析记录：引擎拿到的是一个稳定代理（换场只换内部录制器）；关闭时为 null，零成本。
+  analysis: analysis.port })
 const bloodFlowRemoteGame = useBloodFlowRemoteGame({ playSound: playEffect,
   playSoundAndWait: playEffectAndWait, playLlmAudio,
   getCharacterId: () => animeCharacterId.value,
@@ -526,7 +545,30 @@ watch(matchFinished, (finished) => {
     score: entry.score,
     rank: entry.rank,
   })))
+  // 分析记录收尾：刷队列 → 返回分析区状态 → 按展示回放清单回收悬空分析区（§9.2、§9.5）。
+  void analysis.finish().then(async (result) => {
+    if (result.matchId && result.status !== 'complete') {
+      console.warn('[analysis] 本场分析不完整（可在分析区查看缺失原因）', result)
+    }
+    await reconcileAnalysisWithReplay(analysisStorage, (await replay.storage.list()).map((match) => match.id))
+  })
 })
+// 分析录制开局：本地血流对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
+watch(() => (gameMode.value === 'local' && selectedRule.value === 'lotus-blood-flow' ? phase.value : null), (value) => {
+  if (value !== 'opening' || analysis.active()) return
+  analysis.start({
+    rulesetId: 'lotus-blood-flow',
+    rules: BLOOD_FLOW_CONFIG,
+    rulesVersion: BLOOD_FLOW_CONFIG.version,
+    // 本地 AI 与 LLM 两套配置都记下来：分析时要能分辨某一手是谁在什么配置下决定的（§3.1）。
+    aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI },
+    aiStrategy: 'source-v2',
+    // 本地单机的本家固定是 0 号座（与展示回放的 humanSeat 口径一致）。
+    seatControl: players.value.map((player, seat): AnalysisSeatControl => (
+      seat === 0 ? 'human' : (player?.playerKind === 'llm' || player?.isLlm) ? 'llm' : 'local-ai'
+    )),
+  })
+}, { immediate: true })
 watch(showLobby, (lobby) => {
   if (lobby) replay.finishAuto()
 })

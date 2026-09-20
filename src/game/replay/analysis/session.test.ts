@@ -23,7 +23,8 @@ function setup(options: { enabled?: boolean; storage?: ReturnType<typeof createA
 const config = {
   rulesetId: 'lotus-blood-flow', rules: { rounds: 4 }, rulesVersion: 'lotus-blood-flow-v1',
   aiConfig: { bigHandRoute: true }, aiStrategy: 'source-v2',
-  seatControl: ['human', 'llm', 'llm', 'local-ai'] as const,   // 座位控制词表：human/local-ai/llm
+  // 座位控制词表：human / local-ai / llm（与"选择来源"词表是两套，别混用）
+  seatControl: ['human', 'llm', 'llm', 'local-ai'] as const,
 }
 
 describe('分析录制会话', () => {
@@ -73,7 +74,7 @@ describe('分析录制会话', () => {
     expect(next.parts.some((part: AnalysisBlockPart) => (part.value as { id?: string }).id === 'sB')).toBe(true)
   })
 
-  it('场末收尾后代理仍在但不误写新场（finish 幂等、未开新场时写入安全空转）', async () => {
+  it('场末收尾后代理仍在但不误写新场（收尾之后迟到回执安全空转）', async () => {
     const { session, storage } = setup()
     session.start({ ...config, seatControl: [...config.seatControl] })
     session.port!.windowOpened({ windowId: 'w1', seat: 0, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'e1', stateVersion: 1, state: { id: 's1' } })
@@ -113,7 +114,7 @@ describe('分析录制会话', () => {
     const dangling = session.matchId()
     await session.finish()
 
-    const removed = await reconcileAnalysisWithReplay(storage, [{ matchId: kept }])
+    const removed = await reconcileAnalysisWithReplay(storage, [kept])
     expect(removed).toEqual([dangling])
     expect(await storage.status(kept)).toBe('complete')
     expect(await storage.status(dangling)).toBe('disabled')

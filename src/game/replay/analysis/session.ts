@@ -8,7 +8,6 @@
 // 以及"分析关闭时零成本"（enabled=false 时所有调用直接空转，不产生任何分配与写入）。
 import { fingerprintOf } from './codec'
 import { createAnalysisRecorder, type AnalysisMatchInput, type AnalysisRecorder } from './recorder'
-import type { AnalysisMatchMeta } from './idb'
 import type { AnalysisStorage } from './storage'
 import type { AnalysisAreaStatus, AnalysisSeatControl } from './types'
 
@@ -133,8 +132,9 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
 /** 场次完成后按展示回放清单回收悬空分析区（§9.2：分析不得比展示回放活得更久）。 */
 export async function reconcileAnalysisWithReplay(
   storage: AnalysisStorage | null | undefined,
-  replayMatches: ReadonlyArray<Pick<AnalysisMatchMeta, 'matchId'>>,
+  /** 仍然存在的展示回放场次 id。 */
+  replayMatchIds: readonly string[],
 ): Promise<string[]> {
   if (!storage?.available()) return []
-  return storage.reconcileLifecycle(replayMatches.map((match) => match.matchId))
+  return storage.reconcileLifecycle([...replayMatchIds])
 }
