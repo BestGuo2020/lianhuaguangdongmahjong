@@ -209,6 +209,24 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect(replayProbe.displayEndScores, '应能从展示回放库里取到结束快照').toBeTruthy()
     expect(replayProbe.displayEndScores!.length).toBe(4)
     expect(replayProbe.results.at(-1)!.finalScores).toEqual(replayProbe.displayEndScores)
+
+    // 响应窗口检查点（§9.3）：有响应窗口就该有检查点；看不到手牌时必须如实降级为 partial
+    const checkpoints = probe.parts.filter(part => part.tag === 'responderCheckpoint').map(part => part.value)
+    const claimDecisions = decisions.filter(decision => decision.windowKind === 'claim')
+    if (claimDecisions.length > 0) {
+      if (checkpoints.length > 0) {
+        const checkpoint = checkpoints[0]
+        expect(typeof checkpoint.seat).toBe('number')
+        expect(Array.isArray(checkpoint.hand)).toBe(true)
+        expect((checkpoint.hand as string[]).length).toBeGreaterThan(0)
+        expect(typeof checkpoint.drawnTileIndex).toBe('number')
+        // 检查点必须能关联回某个决策
+        expect(decisions.some(decision => decision.id === checkpoint.decisionId)).toBe(true)
+      } else {
+        // 一个检查点都没有 ⇒ 该场的响应窗口手牌确实看不到，必须如实标为 partial
+        expect(analysisMatch.status, '没有检查点就必须如实标为不完整').toBe('partial')
+      }
+    }
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!

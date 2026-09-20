@@ -295,6 +295,29 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       }
       // 合法动作随后由 candidates() 补齐到同一份状态上（stateId 相同即同一份）
       push('decisionState', state)
+
+      // 响应窗口检查点（§9.3 的格式缺口）：
+      // 展示回放的步骤流只含**行动者**视角，响应座位（吃碰杠胡/过）当时的手牌无法从中还原，
+      // 因此"按当时所见"必须依赖这里显式记下的检查点。
+      // 只有真的看到该座位手牌时才写检查点；看不到就记缺失原因，**绝不**凭空补一份。
+      if (input.windowKind === 'claim') {
+        const hand = input.state.hand ?? []
+        if (hand.length) {
+          // 检查点作为独立记录落库（用 decisionId 与决策关联），而不是塞进决策对象：
+          // 它是"当时该座位看到了什么"的独立事实，与决策本身分开存更好审阅。
+          push('responderCheckpoint', {
+            decisionId: `decision/${options.matchId}/${input.windowId}/${input.seat}`,
+            windowId: input.windowId,
+            seat: input.seat,
+            roundIndex: input.roundIndex,
+            hand: [...hand],
+            drawnTileIndex: input.state.drawnTileIndex ?? -1,
+          })
+        } else {
+          // 看不到该座位手牌（视角不含别家手牌）⇒ 留痕，不凭空补
+          gaps.push({ scope: 'responder-checkpoint', from: input.roundIndex, reason: '响应窗口缺少该座位手牌（视角不含别家手牌）' })
+        }
+      }
     },
 
     candidates(input) {

@@ -242,6 +242,57 @@ describe('分析录制核心（P0）', () => {
     expect(result.status).toBe('disabled')
   })
 
+  it('响应窗口检查点（§9.3）：看得见手牌就落检查点，看不见就留痕且不凭空补', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+
+    // 情形一：拿到了该座位的手牌（本地 AI/LLM/人类都能看到自己的手）= 落检查点
+    recorder.windowOpened({
+      windowId: 'w1', seat: 1, windowKind: 'claim', roundIndex: 2, authorityEpoch: 'e1', stateVersion: 4,
+      state: { id: 'claim-state', hand: ['m5', 'm5', 'p2', 's3'], drawnTileIndex: 3 },
+    })
+    recorder.candidates({ windowId: 'w1', seat: 1, legalActions: [{ id: 'w1/0', kind: 'peng' }], candidates: [] })
+    recorder.chosen({ windowId: 'w1', seat: 1, legalActionId: 'w1/0', source: 'model' })
+    await recorder.flush()
+    const decisions = await readParts(storage, 'decision') as AnalysisDecision[]
+    const claim = decisions.find(item => item.windowId === 'w1')!
+    expect(claim.source).toBe('model')
+    // 检查点作为独立记录落库，用 decisionId 与决策关联
+    const checkpoints = await readParts(storage, 'responderCheckpoint') as Array<{ decisionId: string; seat: number; hand: string[]; drawnTileIndex: number }>
+    expect(checkpoints).toHaveLength(1)
+    expect(checkpoints[0]).toMatchObject({ seat: 1, hand: ['m5', 'm5', 'p2', 's3'], drawnTileIndex: 3 })
+    expect(checkpoints[0].decisionId).toBe(claim.id)
+
+    // 情形二：视角里没有该座位手牌 = 如实记缺失，不写假检查点
+    recorder.windowOpened({
+      windowId: 'w2', seat: 2, windowKind: 'claim', roundIndex: 2, authorityEpoch: 'e1', stateVersion: 5,
+      state: { id: 'claim-state-2' },
+    })
+    recorder.candidates({ windowId: 'w2', seat: 2, legalActions: [{ id: 'w2/0', kind: 'pass' }], candidates: [] })
+    recorder.chosen({ windowId: 'w2', seat: 2, legalActionId: 'w2/0', source: 'human' })
+    await recorder.flush()
+    const after = await readParts(storage, 'decision') as AnalysisDecision[]
+    const blind = after.filter(item => item.windowId === 'w2').at(-1)!
+    expect(blind.source).toBe('human')
+    // 没有第二份检查点（看不见就不写），且完整性降为 partial
+    expect(await readParts(storage, 'responderCheckpoint')).toHaveLength(1)
+    expect(await recorder.finish()).toMatchObject({ status: 'partial' })
+  })
+
+  it('非响应窗口不写检查点（摸牌回合的手牌本来就是前态本身）', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+    recorder.windowOpened({
+      windowId: 'w1', seat: 0, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'e1', stateVersion: 1,
+      state: { id: 'turn-state', hand: ['m1', 'm2'], drawnTileIndex: 1 },
+    })
+    await recorder.flush()
+    const states = await readParts(storage, 'decisionState') as AnalysisDecisionState[]
+    expect(states[0].hand).toEqual(['m1', 'm2'])
+    const finished = await recorder.finish()
+    expect(finished.status).toBe('complete')
+  })
+
   it('finish() 如实报告完整性：有缺失即 partial', async () => {
     const { recorder } = setup()
     recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
