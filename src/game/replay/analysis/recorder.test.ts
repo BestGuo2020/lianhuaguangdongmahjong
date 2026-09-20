@@ -293,6 +293,19 @@ describe('分析录制核心（P0）', () => {
     expect(finished.status).toBe('complete')
   })
 
+  it('beginMatch 会登记配置引用（§9.4 的引用计数在生产路径上真正生效）', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+    // 引用登记是 fire-and-forget（不阻塞录制），等一个宏任务再断言
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const configs = await storage.readConfigs('m1') as Array<{ rulesVersion?: string; aiStrategy?: string }>
+    expect(configs).toHaveLength(1)
+    expect(configs[0].rulesVersion).toBe('lotus-blood-flow-v1')
+    expect(configs[0].aiStrategy).toBe('source-v2')
+    // 本场元数据里也要带上这份引用（否则读取侧按清单取不到共享配置）
+    expect((await storage.read('m1')).meta?.configIds).toHaveLength(1)
+  })
+
   it('finish() 如实报告完整性：有缺失即 partial', async () => {
     const { recorder } = setup()
     recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })

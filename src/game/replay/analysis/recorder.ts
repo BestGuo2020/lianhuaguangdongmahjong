@@ -259,6 +259,10 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
         ...(input.models ? { models: structuredClone(input.models) } : {}),
         ...(input.promptTemplates ? { promptTemplates: structuredClone(input.promptTemplates) } : {}),
       }
+      // §9.4：登记配置引用。此前只有单测调用过 retainConfig，生产路径从未接线，
+      // 于是「A、B 两场共享同一模板 → 只存一份 → 零引用才回收」这套机制实际是死代码。
+      void Promise.resolve(options.storage?.retainConfig(options.matchId, { id: configId, value: record }))
+        .catch(() => { /* 引用登记失败不影响录制本身（§9.5 独立失败域） */ })
       push('config', record)
       return configId
     },
