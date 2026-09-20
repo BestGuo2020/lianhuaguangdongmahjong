@@ -282,6 +282,11 @@ export interface AnalysisReproduction {
   /** 开局必需但记录里曾遗漏的字段（引擎的 opening 需要它们，缺一不可）。 */
   jokers?: string[]
   flipSeat?: number
+  /**
+   * **两个**翻精（引擎 opening.flipTiles 是二元组）。
+   * 第二个由牌墙环按 flipStack 推出，推算规则容易随实现漂移，所以直接记下来而不是事后算。
+   */
+  flipTiles?: string[]
   dealer?: number
   dice?: { first?: number[]; second?: number[] }
   flipTile?: string | null

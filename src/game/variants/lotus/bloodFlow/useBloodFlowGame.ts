@@ -363,6 +363,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     hands: string[][]; dealerDrawnIndex: number
     /** 开局必需字段（引擎 opening 需要）。 */
     jokers: string[]; flipSeat: number; wallBreakIndex: number
+    /** 两个翻精（第二个由牌墙环推出，直接记下来，避免事后重现推算规则）。 */
+    flipTiles: string[]
   } | null = null
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
   const analysisRoundCommands: Array<{
@@ -403,6 +405,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           // 开局手牌不能由牌墙推出（引擎取 opening.players[].hand），因此必须单独记（§6）。
           initialHands: analysisRoundOpening.hands.map(hand => [...hand]),
           dealerDrawnIndex: analysisRoundOpening.dealerDrawnIndex,
+          flipTiles: [...analysisRoundOpening.flipTiles],
+          jokers: [...analysisRoundOpening.jokers],
+          flipSeat: analysisRoundOpening.flipSeat,
+          wallBreakIndex: analysisRoundOpening.wallBreakIndex,
           dealer: analysisRoundOpening.dealer,
           ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
           flipStack: analysisRoundOpening.flipStack,
@@ -714,6 +720,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     jokers: state.jokerTiles.value.map(tile => tileName(tile)),
     flipSeat: state.dealer.value,
     wallBreakIndex: state.flipStack.value ?? 0,
+    flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]].map(tile => tileName(tile)),
   }
   const opening: BloodFlowOpeningState = {
       players: state.players.map(p => structuredClone(toRaw(p))), wall: [...state.wall.value],
