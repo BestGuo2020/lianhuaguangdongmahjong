@@ -302,6 +302,20 @@ describe('分析录制核心（P0）', () => {
     expect(configs[0].rulesVersion).toBe('lotus-blood-flow-v1')
   })
 
+  it('并发 flush 串行化：不会出现序号冲突（真实浏览器实测过 sequence-occupied）', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+    recorder.windowOpened({ windowId: 'w1', seat: 0, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'e1', stateVersion: 1, state: { id: 's1' } })
+    recorder.candidates({ windowId: 'w1', seat: 0, legalActions: legalActions(), candidates: [] })
+    recorder.chosen({ windowId: 'w1', seat: 0, legalActionId: 'discard-3', source: 'human' })
+    // 同一批数据触发多次并发写入（队列自动刷盘与场末收尾会这样撞在一起）
+    await Promise.all([recorder.flush(), recorder.flush(), recorder.flush()])
+    const read = await storage.read('m1')
+    expect(read.parts.length).toBeGreaterThan(0)
+    expect(recorder.paused(), '并发写入不得把录制暂停').toBe(false)
+    expect(read.meta?.status).toBe('complete')
+  })
+
   it('finish() 如实报告完整性：有缺失即 partial', async () => {
     const { recorder } = setup()
     recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
