@@ -112,7 +112,8 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
           .map(direction => BLOOD_FLOW_CONFIG.patterns[direction.id].label),
       })
     }
-    reformCandidates.sort((a, b) => b.ev - a.ev)
+    // Exact ties must not depend on the caller's legal-action enumeration order.
+    reformCandidates.sort((a, b) => b.ev - a.ev || a.index - b.index)
   }
 
   let robEv: BloodFlowEvContext['robEv'] = null

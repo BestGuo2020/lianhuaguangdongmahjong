@@ -1,0 +1,533 @@
+{
+  "scope": "Selected historical position, fixed opponent hidden hands, paired uniform remaining-wall permutations, rest-of-round only, common frozen continuation. Sensitivity probe NOT a posterior over all hidden worlds or independent strength evidence.",
+  "rows": [
+    {
+      "sample": -1,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 6200,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": -560,
+          "discardPayments": 470
+        }
+      ],
+      "delta": -6760
+    },
+    {
+      "sample": 0,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 970,
+          "discardPayments": 60
+        },
+        {
+          "index": 9,
+          "net": 1500,
+          "discardPayments": 10
+        }
+      ],
+      "delta": 530
+    },
+    {
+      "sample": 1,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 3670,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 930,
+          "discardPayments": 140
+        }
+      ],
+      "delta": -2740
+    },
+    {
+      "sample": 2,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 910,
+          "discardPayments": 180
+        },
+        {
+          "index": 9,
+          "net": 300,
+          "discardPayments": 290
+        }
+      ],
+      "delta": -610
+    },
+    {
+      "sample": 3,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -720,
+          "discardPayments": 480
+        },
+        {
+          "index": 9,
+          "net": -400,
+          "discardPayments": 430
+        }
+      ],
+      "delta": 320
+    },
+    {
+      "sample": 4,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1130,
+          "discardPayments": 350
+        },
+        {
+          "index": 9,
+          "net": 760,
+          "discardPayments": 370
+        }
+      ],
+      "delta": -370
+    },
+    {
+      "sample": 5,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 8020,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 8020,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 0
+    },
+    {
+      "sample": 6,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 880,
+          "discardPayments": 90
+        },
+        {
+          "index": 9,
+          "net": 1060,
+          "discardPayments": 60
+        }
+      ],
+      "delta": 180
+    },
+    {
+      "sample": 7,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -80,
+          "discardPayments": 390
+        },
+        {
+          "index": 9,
+          "net": 1490,
+          "discardPayments": 10
+        }
+      ],
+      "delta": 1570
+    },
+    {
+      "sample": 8,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 9240,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 7960,
+          "discardPayments": 0
+        }
+      ],
+      "delta": -1280
+    },
+    {
+      "sample": 9,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1520,
+          "discardPayments": 150
+        },
+        {
+          "index": 9,
+          "net": 530,
+          "discardPayments": 150
+        }
+      ],
+      "delta": -990
+    },
+    {
+      "sample": 10,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 570,
+          "discardPayments": 290
+        },
+        {
+          "index": 9,
+          "net": 240,
+          "discardPayments": 240
+        }
+      ],
+      "delta": -330
+    },
+    {
+      "sample": 11,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -570,
+          "discardPayments": 360
+        },
+        {
+          "index": 9,
+          "net": -260,
+          "discardPayments": 350
+        }
+      ],
+      "delta": 310
+    },
+    {
+      "sample": 12,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1950,
+          "discardPayments": 60
+        },
+        {
+          "index": 9,
+          "net": 8530,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 6580
+    },
+    {
+      "sample": 13,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1130,
+          "discardPayments": 20
+        },
+        {
+          "index": 9,
+          "net": 1310,
+          "discardPayments": 20
+        }
+      ],
+      "delta": 180
+    },
+    {
+      "sample": 14,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 910,
+          "discardPayments": 150
+        },
+        {
+          "index": 9,
+          "net": -1000,
+          "discardPayments": 450
+        }
+      ],
+      "delta": -1910
+    },
+    {
+      "sample": 15,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1190,
+          "discardPayments": 210
+        },
+        {
+          "index": 9,
+          "net": 5760,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 4570
+    },
+    {
+      "sample": 16,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 380,
+          "discardPayments": 150
+        },
+        {
+          "index": 9,
+          "net": 130,
+          "discardPayments": 150
+        }
+      ],
+      "delta": -250
+    },
+    {
+      "sample": 17,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -630,
+          "discardPayments": 470
+        },
+        {
+          "index": 9,
+          "net": 230,
+          "discardPayments": 210
+        }
+      ],
+      "delta": 860
+    },
+    {
+      "sample": 18,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -300,
+          "discardPayments": 70
+        },
+        {
+          "index": 9,
+          "net": -30,
+          "discardPayments": 70
+        }
+      ],
+      "delta": 270
+    },
+    {
+      "sample": 19,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 110,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 930,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 820
+    },
+    {
+      "sample": 20,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 6500,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 1240,
+          "discardPayments": 120
+        }
+      ],
+      "delta": -5260
+    },
+    {
+      "sample": 21,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 890,
+          "discardPayments": 220
+        },
+        {
+          "index": 9,
+          "net": 1550,
+          "discardPayments": 170
+        }
+      ],
+      "delta": 660
+    },
+    {
+      "sample": 22,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 230,
+          "discardPayments": 100
+        },
+        {
+          "index": 9,
+          "net": 1470,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 1240
+    },
+    {
+      "sample": 23,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 7530,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 1310,
+          "discardPayments": 70
+        }
+      ],
+      "delta": -6220
+    },
+    {
+      "sample": 24,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 960,
+          "discardPayments": 100
+        },
+        {
+          "index": 9,
+          "net": 650,
+          "discardPayments": 150
+        }
+      ],
+      "delta": -310
+    },
+    {
+      "sample": 25,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1360,
+          "discardPayments": 50
+        },
+        {
+          "index": 9,
+          "net": 350,
+          "discardPayments": 430
+        }
+      ],
+      "delta": -1010
+    },
+    {
+      "sample": 26,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -820,
+          "discardPayments": 400
+        },
+        {
+          "index": 9,
+          "net": -210,
+          "discardPayments": 300
+        }
+      ],
+      "delta": 610
+    },
+    {
+      "sample": 27,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1350,
+          "discardPayments": 40
+        },
+        {
+          "index": 9,
+          "net": -810,
+          "discardPayments": 490
+        }
+      ],
+      "delta": -2160
+    },
+    {
+      "sample": 28,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": -700,
+          "discardPayments": 490
+        },
+        {
+          "index": 9,
+          "net": 1240,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 1940
+    },
+    {
+      "sample": 29,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 2330,
+          "discardPayments": 0
+        },
+        {
+          "index": 9,
+          "net": 7500,
+          "discardPayments": 0
+        }
+      ],
+      "delta": 5170
+    },
+    {
+      "sample": 30,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 910,
+          "discardPayments": 180
+        },
+        {
+          "index": 9,
+          "net": 820,
+          "discardPayments": 480
+        }
+      ],
+      "delta": -90
+    },
+    {
+      "sample": 31,
+      "outcomes": [
+        {
+          "index": 2,
+          "net": 1110,
+          "discardPayments": 270
+        },
+        {
+          "index": 9,
+          "net": 8240,
+          "discardPayments": 50
+        }
+      ],
+      "delta": 7130
+    }
+  ]
+}
