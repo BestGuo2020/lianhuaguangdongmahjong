@@ -147,9 +147,15 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const action = view.ownActions.find(candidate => actionMatches(candidate as never, command))
     if (!action) {
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
+      // 分叉点上下文：把"重放窗口"摊开，便于判断是窗口归属不同还是推进语义不同
+      const current = engine.window
+      const context = current
+        ? ` 当前窗口 kind=${(current as { kind?: string }).kind ?? '?'} id=${current.id}`
+          + ` 有合法动作的座位=[${SEATS.filter(candidate => current.options[candidate].length > 0).join(',')}]`
+        : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}；当时的合法动作：${offered}）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}）`,
       }
     }
     engine.submit(engine.command(seat, action))
