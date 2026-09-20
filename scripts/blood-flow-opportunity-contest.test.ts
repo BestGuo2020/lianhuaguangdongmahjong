@@ -19,7 +19,7 @@ it.skipIf(process.env.BF_SOURCE_RUN!=='1')('tests a frozen source model and refo
   const panel=(process.env.BF_SOURCE_PANEL??'mixed') as PanelId,mode=process.env.BF_SOURCE_MODE??'threshold'
   if(![1,1.2,1.5].includes(ratio)||!['mixed','defensive'].includes(panel)||!['threshold','production'].includes(mode)
     ||!Number.isSafeInteger(from)||from<1||!Number.isSafeInteger(seeds)||seeds<1||seeds>64)throw new Error('Invalid run')
-  const calibration=JSON.parse(readFileSync('work/blood-flow-opportunity/calibration.json','utf8')).calibration
+  const calibration=JSON.parse(readFileSync('docs/blood-flow/records/opportunity-calibration-2026-09-20.json','utf8')).calibration
   const base={...PANEL_CURRENT_CONFIG,chainForecast:'source-v2' as const,opportunityCalibration:calibration}
   const candidateConfig={...base,reformGainRatio:ratio},controlConfig=mode==='threshold'?{...base,reformGainRatio:1.2}:PANEL_CURRENT_CONFIG
   const candidate=(view:BloodFlowSeatView)=>decideBloodFlowActionEv(view,candidateConfig)
