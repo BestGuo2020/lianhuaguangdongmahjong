@@ -227,6 +227,11 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         expect(analysisMatch.status, '没有检查点就必须如实标为不完整').toBe('partial')
       }
     }
+    // 把计数打出来：pass 时也能确认"数据到底有没有真的落库"，而不是只看断言通过
+    console.log(`[analysis] 记录 ${analysisMatch.parts} 条 / ${analysisMatch.blockCount} 块 / ${analysisMatch.storedBytes} 字节；`
+      + ` 决策 ${decisions.length}（其中响应窗口 ${claimDecisions.length}）、检查点 ${checkpoints.length}、`
+      + ` 被收窄动作 ${probe.parts.filter(part => JSON.stringify(part.value).includes('big-hand-route')).length} 处、`
+      + ` 完整性 ${analysisMatch.status}`)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
