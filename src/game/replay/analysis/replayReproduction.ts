@@ -287,6 +287,14 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
       reason: `推进超过上限 ${maxSteps}，牌局仍未结束`,
     }
   }
+  // 提前终局：牌局结束了却还有未消费的记录条目 ⇒ 与记录不一致，不能算复现成功
+  // （此前这种情况可能被判为 ok=true，只因"跑完了"；这在语义上是错的）。
+  if (cursor < commands.length) {
+    return {
+      ok: false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch: null,
+      reason: `重放提前结束：只消费了 ${cursor}/${recorded} 条记录；牌墙剩余 ${engine.wall.length}，终局=${Boolean(engine.result)}`,
+    }
+  }
   const scoresMatch = expected ? expected.every((score, seat) => score === finalScores[seat]) : null
   return {
     ok: scoresMatch !== false, submitted: cursor, recorded, finalScores, expectedScores: expected, scoresMatch,
