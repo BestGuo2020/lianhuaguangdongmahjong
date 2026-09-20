@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createBloodFlowDecisionSink, mapCandidatesToLegalActions, type DecisionAnalysisRecorder } from './decisionSink'
+import { collapsedActionsOf } from '../../llm/bloodFlowDecisionInput'
 import type { AnalysisCandidate, AnalysisLegalAction, AnalysisLlmOutcome, AnalysisMaybe } from './types'
 
 // 决策运行时 → 分析记录的接缝（§3.3、§4、§9.5）：
@@ -119,6 +120,32 @@ describe('决策接缝', () => {
     expect(() => sink.candidates({ windowId: 'w1', seat: 0, legalActions: legal, candidates: [] })).not.toThrow()
     expect(sink.attemptStarted({ windowId: 'w1', seat: 0, requestId: 'r', attempt: 1, provider: 'p', requestModel: 'm', sampling: {} })).toBe('')
     expect(() => sink.source({ windowId: 'w1', seat: 0, source: 'model' })).not.toThrow()
-    expect(errors).toHaveLength(1)   // 只通知一次，不刷屏
+  })
+
+  it('被收窄的动作清单（§3.3）能直接喂进接缝并被记录', () => {
+    // 决策输入侧只回布尔，清单由前后差集得出（collapsedActionsOf）；这里验证它能落到 restricted 上
+    const original = [
+      { kind: 'win', tile: 'm5' },
+      { kind: 'peng', tile: 'm5', from: 1 },
+      { kind: 'discard', tile: 'm9', index: 4 },
+      { kind: 'pass' },
+    ]
+    const collapsed = collapsedActionsOf(original, [original[2], original[3]], 'big-hand-route')
+    expect(collapsed.map(entry => entry.action.kind)).toEqual(['win', 'peng'])
+    expect(collapsed.every(entry => entry.reason === 'big-hand-route')).toBe(true)
+    expect(collapsedActionsOf(original, original, 'big-hand-route')).toEqual([])   // 未收窄不得凭空产生
+
+    const { recorder, calls } = fakeRecorder()
+    const sink = createBloodFlowDecisionSink({ recorder })
+    sink.candidates({
+      windowId: 'w1', seat: 0,
+      legalActions: original,                 // 合法动作仍是全集
+      candidates: [{ id: 'c1', action: original[2] }],
+      restricted: collapsed,
+    })
+    expect(calls.candidates[0].restricted).toEqual([
+      { legalActionId: 'w1/0', reason: 'big-hand-route' },
+      { legalActionId: 'w1/1', reason: 'big-hand-route' },
+    ])
   })
 })

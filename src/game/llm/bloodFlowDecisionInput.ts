@@ -41,6 +41,21 @@ function narrowToBigHandRoute(view:BloodFlowSeatView,actions:readonly BloodFlowA
 }
 
 /** Adapt authoritative candidates, never re-enumerate or prune them using old end-of-round rules. */
+/**
+ * 被收窄掉的动作与原因（§3.3）：narrowActionsToRoute 只返回布尔，清单由**前后差集**得出。
+ * 原因即这次收窄的依据本身（大牌路线承诺），不另编造说法。
+ */
+export function collapsedActionsOf<T extends { kind: string }>(
+  original: readonly T[],
+  kept: readonly T[],
+  reason: string,
+): Array<{ action: T; reason: string }> {
+  const keep = new Set(kept.map(action => JSON.stringify(action)))
+  return original
+    .filter(action => !keep.has(JSON.stringify(action)))
+    .map(action => ({ action, reason }))
+}
+
 export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:string,metadata:BloodFlowDecisionMetadata={},aiConfig:BloodFlowAiConfig=BLOOD_FLOW_AI) {
   const player=view.players[view.seat],actions=bloodFlowAiActions(view,aiConfig),source=view.window?.source
   // 真·大牌路线：只在 LLM 候选层收窄（引擎/普通 AI 仍用 actions 原样）。
@@ -117,5 +132,7 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   const state={...buildPublicDecisionSnapshot(input),ruleCode:'lotus-blood-flow' as const}
   const request={ruleCode:'lotus-blood-flow',state,candidates:candidates.map(c=>c.canonical),
     engineSuggestion:candidates.find(c=>JSON.stringify(c.action)===JSON.stringify(recommended))?.id??candidates[0]?.id}
-  return {candidates,request,bigHandRoute:routePlan.route,collapsedByRoute:routePlan.collapsed}
+  return {candidates,request,bigHandRoute:routePlan.route,collapsedByRoute:routePlan.collapsed,
+    // 被收窄动作的清单（§3.3）：给分析记录用，让"这一手为什么只有这些选项"可解释
+    collapsedActions: collapsedActionsOf(actions, routePlan.actions, 'big-hand-route')}
 }
