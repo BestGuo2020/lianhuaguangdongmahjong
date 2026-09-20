@@ -165,7 +165,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         if (decoded.parts) gathered.push(...(decoded.parts as Array<{ tag: string; value: Record<string, unknown> }>))
       }
       const reproduction = gathered.filter(part => part.tag === 'reproduction').map(part => part.value)[0] as never
-      if (!reproduction) return { ran: false, results: [] }
+      if (!reproduction) return { ran: false, results: [], displayEndScores: null }
       const record = reproduction as unknown as { commands?: unknown[] }
       const results = []
       for (const candidate of gathered.filter(part => part.tag === 'reproduction').map(part => part.value)) {
@@ -173,7 +173,30 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
         results.push(replayReproduction({ reproduction: candidate as never, commands: (value.commands ?? []) as never }))
       }
       void record
-      return { ran: true, results }
+
+      // 展示回放的该局结束快照（另一个库）：用于与重跑结果比对（§10.6 的充分条件）
+      const replayDb = await new Promise<IDBDatabase | null>((resolve) => {
+        const request = indexedDB.open('lianhua-guangma-replay')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => resolve(null)
+      })
+      let displayEndScores: number[] | null = null
+      if (replayDb) {
+        const readAll = <T,>(store: string) => new Promise<T[]>((resolve) => {
+          const tx = replayDb.transaction(store, 'readonly')
+          const request = tx.objectStore(store).getAll()
+          request.onsuccess = () => resolve(request.result as T[])
+          request.onerror = () => resolve([])
+        })
+        const matches = await readAll<{ id: string; rulesetId: string }>('matches')
+        const bloodFlow = matches.find(match => match.rulesetId === 'lotus-blood-flow')
+        const rounds = await readAll<{ matchId: string; index: number; final?: { scores?: number[] } | null }>('rounds')
+        const own = rounds.filter(round => round.matchId === bloodFlow?.id).sort((a, b) => a.index - b.index)
+        const last = own.at(-1)
+        if (last?.final?.scores) displayEndScores = [...last.final.scores]
+        replayDb.close()
+      }
+      return { ran: true, results, displayEndScores }
     })
     expect(replayProbe.ran, '应能取到复现数据').toBe(true)
     for (const result of replayProbe.results) {
@@ -182,6 +205,10 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       expect(result.submitted).toBe(result.recorded)
       expect(result.finalScores).toHaveLength(4)
     }
+    // 充分条件：最后一局重跑得到的结束分数，必须与展示回放的该局结束快照一致
+    expect(replayProbe.displayEndScores, '应能从展示回放库里取到结束快照').toBeTruthy()
+    expect(replayProbe.displayEndScores!.length).toBe(4)
+    expect(replayProbe.results.at(-1)!.finalScores).toEqual(replayProbe.displayEndScores)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
