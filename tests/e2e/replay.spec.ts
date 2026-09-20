@@ -330,6 +330,9 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
       tags: tagCounts,
       commandResolutions,
       replayOk: replayProbe.results.map(result => result.ok),
+      // 每局的复现进度：submitted/recorded —— 量化"离跑完全部记录还差多少"，
+      // 也让"跑到终局但未消费完（提前结束）"与"中途卡住"两类失败可区分。
+      replayProgress: replayProbe.results.map(result => `${result.submitted}/${result.recorded}`),
       // 每局开局的原始数字：用来核对"庄家第 14 张"这件事（引擎会先按该下标删一张再校验）
       reproductions: probe.parts.filter(part => part.tag === 'reproduction').map(part => {
         const value = part.value as { roundIndex?: number; initialHands?: string[][]; dealerDrawnIndex?: number; initialWall?: string[]; commands?: unknown[] }
