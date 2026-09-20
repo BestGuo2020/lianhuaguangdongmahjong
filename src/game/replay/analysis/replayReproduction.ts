@@ -207,6 +207,9 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         cursor += 1
         continue
       }
+      // 对照实验（第 98 轮，两次复跑）：曾试过"记录里若还有当前窗口的条目就丢弃这条 expire"，
+      // 结果 replayProgress 明显变差（12%~20%，此前为 47%~94%）⇒ 该规则是退步，expire 必须被应用。
+      // 与第 61 轮的实验结论一致：任何"跳过 expire"的规则都会让窗口停止推进、与记录错得更远。
       // 同一窗口的重复 expire 只能推进一次：记录里常有三条（按座位/计时器各压一条），
       // 逐条应用会把引擎连推多次（实测残余偏移即此）。
       if (Number.isFinite(recordNo) && recordNo === lastExpiredNo) {
