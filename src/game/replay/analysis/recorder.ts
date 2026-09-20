@@ -122,6 +122,8 @@ export interface AnalysisRecorder {
   windowOpened(input: AnalysisWindowInput): void
   candidates(input: AnalysisCandidatesInput): void
   chosen(input: AnalysisChoiceInput): void
+  /** 运行时确定的来源（本地 AI／模型／回退）：chosen() 不得用 'unknown' 覆盖它（§3.4）。 */
+  source(input: { windowId: string; seat: number; source: AnalysisChoiceSource }): void
   receipt(input: AnalysisReceiptInput): void
   attemptStarted(input: AnalysisAttemptStartInput): string
   attemptFinished(attemptId: string, input: AnalysisAttemptFinishInput): void
@@ -169,6 +171,8 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
   let pending: AnalysisBlockPart[] = []
   let pendingBytes = 0
   const stateIds = new Set<string>()
+  /** 运行时（决策运行时）确定的来源：优先级高于调用方在 chosen() 里报的 'unknown'。 */
+  const runtimeSources = new Map<string, AnalysisChoiceSource>()
   const decisions = new Map<string, AnalysisDecision>()
   const attempts = new Map<string, AnalysisLlmAttempt>()
   const gaps: Array<{ scope: string; from?: number; to?: number; reason: string }> = []
@@ -309,6 +313,12 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
         input.legalActions.map((action) => ({ ...action, ...(action.meld ? { meld: [...action.meld] } : {}) }))
     },
 
+    source(input) {
+      runtimeSources.set(key(input.windowId, input.seat), input.source)
+      const decision = decisions.get(key(input.windowId, input.seat))
+      if (decision) decision.source = input.source
+    },
+
     chosen(input) {
       const decision = decisionFor(input.windowId, input.seat)
       if (!decision) return
@@ -320,7 +330,10 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       // 已经出现过带回退链的尝试时，即使调用方报的是 'model' 也要记成回退：
       // 否则"本地兜底的动作"会被归因成模型的选择（§4、§10.1）。
       const hadFallback = (decision.llmAttemptIds ?? []).some((id) => Boolean(attempts.get(id)?.fallback))
-      decision.source = input.source === 'model' && hadFallback ? 'model-fallback' : input.source
+      const runtime = runtimeSources.get(key(input.windowId, input.seat))
+      decision.source = runtime && input.source === 'unknown'
+        ? runtime
+        : input.source === 'model' && hadFallback ? 'model-fallback' : input.source
       if (input.commandId !== undefined) decision.execution.commandId = input.commandId
       decision.timing.submittedAt = input.at ?? monotonic()
       decision.timing.startedAt ??= decision.timing.windowOpenedAt
