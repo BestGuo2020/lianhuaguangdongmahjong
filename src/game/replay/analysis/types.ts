@@ -306,6 +306,11 @@ export interface AnalysisReproduction {
     /** 窗口内稳定 ID（与决策/候选对齐；缺失说明该命令未接线到合法动作集）。 */
     legalActionId?: string
     /**
+     * 所属窗口：用于消解记录顺序的歧义 —— 机器人命令要等权威回传才知道内容，
+     * 可能排在超时计时器压入的 expire 之后；校验时以"该窗口有真命令"为准丢弃过期的 expire。
+     */
+    windowId?: string
+    /**
      * 这条记录是怎么产生的：
      * - `command`（默认）：真实提交的动作，可复现；
      * - `auto`：该窗口没有本端决策（无 provider / 超时），由权威机器人代决 ——
@@ -315,6 +320,8 @@ export interface AnalysisReproduction {
      */
     resolution?: 'command' | 'auto' | 'expire'
     tile?: string
+    /** 吃/杠等组合动作的牌集合：这类动作在引擎里不带单张 `tile`，只比 kind 会吃错组合。 */
+    tiles?: string[]
     handIndex?: number
     from?: number | null
     meldIndex?: number

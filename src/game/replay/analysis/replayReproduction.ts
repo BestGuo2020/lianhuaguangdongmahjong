@@ -20,11 +20,15 @@ export interface ReproductionCommand {
   seat: number
   kind: string
   tile?: string
+  /** 吃/杠等组合动作的牌集合（与记录一致，做集合比较）。 */
+  tiles?: string[]
   handIndex?: number
   from?: number | null
   meldIndex?: number
   /** 见 AnalysisReproduction.commands：'auto' 权威机器人代决、'expire' 靠超时推进。 */
   resolution?: 'command' | 'auto' | 'expire'
+  /** 所属窗口：用于消解记录顺序（同窗口有真命令时丢弃过期的 expire）。 */
+  windowId?: string
 }
 
 export interface ReplayVerification {
@@ -47,19 +51,53 @@ export interface ReplayReproductionInput {
 }
 
 function actionMatches(
-  action: { kind: string; tile?: unknown; index?: unknown; from?: unknown; meldIndex?: unknown },
+  action: { kind: string; tile?: unknown; index?: unknown; from?: unknown; meldIndex?: unknown; tiles?: unknown; meld?: unknown },
   command: ReproductionCommand,
 ): boolean {
   if (action.kind !== command.kind) return false
-  if (command.tile !== undefined && tileName(action.tile as never) !== command.tile) return false
-  if (command.handIndex !== undefined && action.index !== command.handIndex) return false
-  if (command.from !== undefined && command.from !== null && action.from !== command.from) return false
-  if (command.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
+  // 牌种：候选动作不带单张牌时（暗杠/吃等由 meld/tiles 表达）不做比较，否则会假性不匹配
+  // —— 实测暗杠 `concealed-kong tile=m7` 明明在合法动作里却被判"对不上"。
+  if (command.tile !== undefined) {
+    const candidates = [
+      ...(action.tile !== undefined ? [tileName(action.tile as never)] : []),
+      ...(Array.isArray(action.tiles) ? (action.tiles as unknown[]).map(entry => tileName(entry as never)) : []),
+      ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
+    ]
+    if (candidates.length && !candidates.includes(command.tile)) return false
+  }
+  // 组合动作（吃/杠）：记录里有牌集合时，候选的牌集合必须完全一致（顺序无关），
+  // 否则只能按 kind 取第一个候选 —— 实测会吃错组合、牌型走偏、重放提前二十步胡牌。
+  if (command.tiles?.length) {
+    const candidateTiles = [
+      ...(Array.isArray(action.tiles) ? (action.tiles as unknown[]).map(entry => tileName(entry as never)) : []),
+      ...(Array.isArray(action.meld) ? (action.meld as unknown[]).map(entry => tileName(entry as never)) : []),
+    ]
+    if (candidateTiles.length) {
+      const wanted = [...command.tiles].sort().join(',')
+      const offered = [...candidateTiles].sort().join(',')
+      if (wanted !== offered) return false
+    }
+  }
+  if (command.handIndex !== undefined && action.index !== undefined && action.index !== command.handIndex) return false
+  if (command.from !== undefined && command.from !== null && action.from !== undefined && action.from !== command.from) return false
+  if (command.meldIndex !== undefined && action.meldIndex !== undefined && action.meldIndex !== command.meldIndex) return false
   return true
 }
 
 export function replayReproduction(input: ReplayReproductionInput): ReplayVerification {
-  const recorded = input.commands.length
+  // 顺序消歧：同一窗口若既有 expire 又有真命令，以命令为准（机器人命令要等权威回传才知道内容，
+  // 可能排在超时计时器压入的 expire 之后）。
+  // 对照实验记录：第 56 轮（单次运行）与第 72 轮（两次运行，且已有编号相对判定）各测过一次"停用本过滤"，
+  // 两次都未改善 ⇒ 保留。若未来要再动它，务必按 2~3 次复跑判定（每次 e2e 都是不同的随机牌局）。
+  const windowsWithCommand = new Set(
+    input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
+  )
+  const commands = input.commands.filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+  const recorded = commands.length
+  /** expire 判定计数：应用 / 因编号更小丢弃 / 因同窗口有命令被前置过滤丢弃。 */
+  let expireApplied = 0
+  let expireSkippedByNumber = 0
+  const expireSkippedByFilter = input.commands.length - commands.length
   const expected = input.expectedScores && input.expectedScores.length === 4 ? [...input.expectedScores] : null
   const restored = openingFromReproduction(input.reproduction)
   if (!restored.opening) {
@@ -68,22 +106,53 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
 
   // 时钟必须可推进：expire 记录要把"当时靠超时推进"这件事重演出来
   let clock = 0
-  const engine = new BloodFlowEngine({
-    authorityEpoch: 'verify',
-    roundId: `verify/${input.reproduction.roundIndex}`,
-    opening: restored.opening,
-    now: () => clock,
-    winBeatMs: 0,
-  })
+  let engine: BloodFlowEngine
+  try {
+    engine = new BloodFlowEngine({
+      authorityEpoch: 'verify',
+      roundId: `verify/${input.reproduction.roundIndex}`,
+      opening: restored.opening,
+      // 庄家是构造参数（引擎是 options.dealer ?? 0）：不传就"默认庄家 0"，
+      // 于是引擎会把真庄家的第 14 张下标从座位 0 的手里删掉（实测报 Seat 0 has 12 effective tiles）。
+      dealer: (input.reproduction.dealer ?? 0) as never,
+      now: () => clock,
+      winBeatMs: 0,
+    })
+  } catch (error) {
+    // 开局数据不合格（例如庄家第 14 张的下标与手牌不一致、有效牌数不对）：
+    // 引擎会拒绝重建 —— 这里如实报告原因，绝不让异常逃出去（校验器的职责是给出结论，不是抛错）。
+    return {
+      ok: false, submitted: 0, recorded, finalScores: [], expectedScores: expected, scoresMatch: null,
+      reason: `开局数据不合格，引擎拒绝重建：${String(error).slice(0, 140)}`,
+    }
+  }
 
   const maxSteps = Math.max(1, input.maxSteps ?? 20_000)
   let cursor = 0
   let steps = 0
   const scoresNow = () => engine.players.map(player => player.score)
+  // 窗口轨迹对照：重放实际见过的窗口集合 vs 已消费记录里涉及的窗口集合
+  const seenWindows = new Set<string>()
+  const windowTrace: string[] = []
+  const pairedTrace: string[] = []
+  const recordedWindowsUpTo = (upTo: number) => new Set(
+    commands.slice(0, upTo).map(entry => entry.windowId).filter((id): id is string => Boolean(id)),
+  )
 
   while (!engine.result && steps < maxSteps) {
     steps += 1
-    const command = input.commands[cursor]
+    // 转场（结算演出等）会挡住下一个窗口：它不是隐藏信息，可由引擎状态推出，直接推进即可 ——
+    // 否则重放会卡在转场里，下一条命令就报"该座位此刻没有合法动作"（实测四局都停在第 3 条）。
+    if (!engine.window && engine.transition) { engine.advance(engine.transition.id); continue }
+    if (engine.window) {
+      seenWindows.add(engine.window.id)
+      // 逐窗口轨迹（kind + 有合法动作的座位）：用来定位"重放在哪一步多推进了一次"
+      if (windowTrace.length < 400) {
+        const current = engine.window
+        windowTrace.push(`${(current as { kind?: string }).kind ?? '?'}[${SEATS.filter(seat => current.options[seat].length > 0).join('')}]`)
+      }
+    }
+    const command = commands[cursor]
     if (!command) {
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
@@ -100,6 +169,19 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
           reason: `第 ${cursor + 1} 条记录标记为 expire，但当前没有窗口可推进（记录与实际不符）`,
         }
       }
+      // 对照实验（第 61 轮）：曾试过"下一条真命令能落在当前窗口上就跳过这条 expire"，
+      // 结果第 1 局从复现成功退回失败 ⇒ 记录里的 expire 是必需的，不能按这个规则跳过。已回退。
+      // 相对编号判定：两侧窗口 id 末尾都是单调递增的编号（记录 round-1/window/39、重放 verify/1/window/42），
+      // 因此用编号判断"这条 expire 说的是不是已经走过的窗口"。若它属于更早的窗口（编号更小），
+      // 说明重放已经推进过它了，再应用一次就会多走窗口（此前观测到的 +3/+5 累积偏移）。
+      const recordNo = command.windowId ? Number(command.windowId.split('/').pop()) : Number.NaN
+      const replayNo = Number(String(current.id).split('/').pop())
+      if (Number.isFinite(recordNo) && Number.isFinite(replayNo) && recordNo < replayNo) {
+        expireSkippedByNumber += 1
+        cursor += 1
+        continue
+      }
+      expireApplied += 1
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
       cursor += 1
@@ -122,12 +204,30 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const action = view.ownActions.find(candidate => actionMatches(candidate as never, command))
     if (!action) {
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
+      // 分叉点上下文：把"重放窗口"摊开，便于判断是窗口归属不同还是推进语义不同
+      const current = engine.window
+      const context = current
+        ? ` 当前窗口 kind=${(current as { kind?: string }).kind ?? '?'} id=${current.id}`
+          + ` 有合法动作的座位=[${SEATS.filter(candidate => current.options[candidate].length > 0).join(',')}]`
+        : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}；当时的合法动作：${offered}）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
+        const nowNo = engine.window ? Number(String(engine.window.id).split('/').pop()) : Number.NaN
+        const owned = Number.isFinite(nowNo)
+          ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
+          : []
+        return owned.length ? owned.map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ') : '（空）'
+      })()}]；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
+    // 配对轨迹：记录条目 → 应用时重放所处的窗口（kind + 有合法动作的座位）。人眼对齐两侧轨迹太慢，
+    // 这里直接成对记录，失败时输出开头若干对，第一条对不上的地方就是偏移起点。
+    if (pairedTrace.length < 60) {
+      const current = engine.window
+      pairedTrace.push(`${command.seat}:${command.kind}→${current ? `${(current as { kind?: string }).kind ?? '?'}[${SEATS.filter(s => current.options[s].length > 0).join('')}]` : 'none'}`)
+    }
     cursor += 1
     // 把可能的窗口过期交给引擎，避免在同一个窗口上死等
     const windowId = view.window?.id ?? engine.window?.id

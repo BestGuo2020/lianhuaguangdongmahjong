@@ -30,13 +30,15 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     if (data.kind === 'start') engine = new BloodFlowEngine(data.options)
     if (!engine) throw new Error('No active blood-flow engine')
     let result: unknown
+    /** 权威机器人实际提交的动作：随回复回传，供分析记录落成真命令（§6/§10.6）。 */
+    let botAction: unknown = null
     if (data.kind === 'command') engine.submit(data.command)
     if (data.kind === 'bot' && engine.window?.id === data.windowId) {
       const view = bloodFlowSeatView(engine, data.seat)
       const action = BLOOD_FLOW_AI.strategy === 'legacy'
         ? decideBloodFlowAction(view, BLOOD_FLOW_AI.minimumFirstPayment)
         : decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
-      if (action) engine.submit(engine.command(data.seat, action))
+      if (action) { botAction = action; engine.submit(engine.command(data.seat, action)) }
     }
     if (data.kind === 'expire') engine.expire(Date.now(), data.windowId)
     if (data.kind === 'advance') engine.advance(data.transitionId)
@@ -55,9 +57,10 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     }
     if (viewSeat !== null) {
       const view = bloodFlowSeatView(engine, viewSeat)
-      result = data.replay
+      const base = data.replay
         ? { ...view, replay: bloodFlowSeatView(engine, 0, { revealAll: true, includeDiscards: true }) }
         : view
+      result = botAction ? { ...base, botAction } : base
     }
     self.postMessage({ id: data.id, result })
   } catch (error) {

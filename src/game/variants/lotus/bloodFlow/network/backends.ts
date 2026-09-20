@@ -57,7 +57,12 @@ export function createWorkerAuthorityBackend(): BloodFlowAuthorityBackend {
       return view.replay ?? view
     },
     command: async command => { await client.request({ kind: 'command', command }) },
-    bot: async (seat, windowId) => { await client.request({ kind: 'bot', seat, windowId }) },
+    bot: async (seat, windowId) => {
+      // 权威机器人实际提交的动作随回复回传（供分析记录落成真命令，§6/§10.6）；
+      // 旧 worker 没有该字段时退回 undefined，由调用方如实落 auto 标记。
+      const reply = await client.request<BloodFlowSeatView & { botAction?: unknown }>({ kind: 'bot', seat, windowId })
+      return reply?.botAction
+    },
     expire: async windowId => { await client.request({ kind: 'expire', windowId }) },
     pause: async () => { await client.request({ kind: 'pause' }) }, resume: async () => { await client.request({ kind: 'resume' }) },
     close: client.close,
