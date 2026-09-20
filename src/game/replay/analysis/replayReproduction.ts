@@ -104,7 +104,10 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
 
   while (!engine.result && steps < maxSteps) {
     steps += 1
-    const command = input.commands[cursor]
+    // 转场（结算演出等）会挡住下一个窗口：它不是隐藏信息，可由引擎状态推出，直接推进即可 ——
+    // 否则重放会卡在转场里，下一条命令就报"该座位此刻没有合法动作"（实测四局都停在第 3 条）。
+    if (!engine.window && engine.transition) { engine.advance(engine.transition.id); continue }
+    const command = commands[cursor]
     if (!command) {
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
