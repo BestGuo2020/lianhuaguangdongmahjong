@@ -704,7 +704,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (options.analysis) {
       const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
       analysisRoundCommands.push(analysisCommandEntry(
-        current.seat, action, index >= 0 ? legalActionId(w.id, index) : undefined,
+        current.seat, action, index >= 0 ? legalActionId(w.id, index) : undefined, w.id,
       ))
     }
     if (options.externalAuthority) options.externalAuthority.send(command)
