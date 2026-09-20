@@ -37,7 +37,7 @@ export function replayExportFilename(match: ReplayMatch, exportedAt = Date.now()
 }
 
 /** 触发浏览器下载；无 DOM 环境（测试/SSR）时静默跳过。 */
-export function downloadReplayExport(payload: ReplayExportPayload, filename: string): boolean {
+export function downloadJsonFile(payload: unknown, filename: string): boolean {
   if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof Blob === 'undefined') return false
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -51,4 +51,9 @@ export function downloadReplayExport(payload: ReplayExportPayload, filename: str
   // 交给下一轮事件循环再回收，避免部分浏览器下载未开始就失效。
   globalThis.setTimeout(() => URL.revokeObjectURL(url), 0)
   return true
+}
+
+/** 触发展示回放（牌谱）下载；分析包导出复用同一实现（`downloadJsonFile`）。 */
+export function downloadReplayExport(payload: ReplayExportPayload, filename: string): boolean {
+  return downloadJsonFile(payload, filename)
 }

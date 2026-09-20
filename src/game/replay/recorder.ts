@@ -51,6 +51,14 @@ export interface ReplayRecorder {
   finishAuto(standings?: ReplayStanding[]): ReplayMatch | null
   /** 是否有进行中的场次。 */
   active(): boolean
+  /**
+   * 取得本场次 id（场次尚未开始则先预留，`roundStart` 建场时复用它）。
+   *
+   * 存在的理由：分析区（§9.2）与展示回放必须用**同一把钥匙**才能互相对账 ——
+   * 分析录制在 `phase=opening` 就开一场，而展示回放的场次记录要到 `roundStart` 才建立；
+   * 若两边各自生成 id，分析数据在"按展示回放清单回收"时会被当成悬空数据整场删掉（实测）。
+   */
+  ensureMatchId(): string
   /** 当前内存中的记录快照（测试与调试用）。 */
   snapshot(): { match: ReplayMatch | null; rounds: ReplayRound[]; stats: ReplayRecorderStats }
 }
@@ -165,12 +173,15 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
   let match: ReplayMatch | null = null
   let round: ReplayRound | null = null
   let knownScores: number[] = []
+  /** 已预留但尚未建场的场次 id（见 `ensureMatchId`）。 */
+  let reservedMatchId: string | null = null
   const stats: ReplayRecorderStats = { roundStarts: 0, roundEnds: 0, roundEndsSkipped: 0, matchesFinalized: 0 }
 
   function newMatch(frame: ReplayFrameSource) {
     const meta = options.meta()
     match = {
-      id: createId(),
+      // 预留过就用预留的：分析区与展示回放共用同一个 id（§9.2 的对账前提）
+      id: reservedMatchId ?? createId(),
       schemaVersion: REPLAY_SCHEMA_VERSION,
       rulesetId: meta.rulesetId,
       rulesetName: meta.rulesetName,
@@ -186,6 +197,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       roundCount: 0,
       summary: '',
     }
+    reservedMatchId = null
   }
 
   function pushStep(draft: ReplayStepDraft, frame: ReplayFrameSource) {
@@ -384,6 +396,11 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     },
     active() {
       return match !== null
+    },
+    ensureMatchId() {
+      if (match) return match.id
+      reservedMatchId ??= createId()
+      return reservedMatchId
     },
     snapshot() {
       return { match, rounds: [...rounds], stats: { ...stats } }

@@ -63,8 +63,46 @@ function harness(sink?: Partial<ReplaySink>) {
   return { recorder, saved }
 }
 
-describe('录制器：桌动作映射', () => {
-  it('10 种动作全部落成正确的事件类型与鸣牌种类', () => {
+// 场次 id 必须与分析区共用（§9.2）：分析录制在 phase=opening 开一场，而展示回放的场次记录
+// 要到 roundStart 才建立；两边各自生成 id 的话，分析数据会在"按展示回放清单回收"时被整场删掉。
+describe('录制器：场次 id 预留（与分析区共用同一把钥匙）', () => {
+  it('先预留、后建场：场次 id 就是预留的那个', () => {
+    const { recorder } = harness()
+    const reserved = recorder.ensureMatchId()
+    expect(reserved).toBe('match-1')
+    // 预留不建场：此时还没有进行中的场次
+    expect(recorder.active()).toBe(false)
+    expect(recorder.snapshot().match).toBeNull()
+    recorder.hooks.roundStart(makeFrame())
+    expect(recorder.snapshot().match?.id, 'roundStart 建场时必须复用预留 id').toBe(reserved)
+  })
+
+  it('重复调用返回同一个 id（不会每次换一把钥匙）', () => {
+    const { recorder } = harness()
+    expect(recorder.ensureMatchId()).toBe(recorder.ensureMatchId())
+  })
+
+  it('场次进行中调用返回当前场次 id，不另开一场', () => {
+    const { recorder } = harness()
+    recorder.hooks.roundStart(makeFrame())
+    const live = recorder.snapshot().match!.id
+    expect(recorder.ensureMatchId()).toBe(live)
+    expect(recorder.snapshot().stats.roundStarts).toBe(1)
+  })
+
+  it('下一场重新预留：不会沿用上一场的 id', () => {
+    const { recorder } = harness()
+    recorder.hooks.roundStart(makeFrame())
+    const first = recorder.snapshot().match!.id
+    recorder.finishAuto()
+    const second = recorder.ensureMatchId()
+    expect(second).not.toBe(first)
+    recorder.hooks.roundStart(makeFrame())
+    expect(recorder.snapshot().match?.id).toBe(second)
+  })
+})
+
+describe('录制器：桌动作映射', () => {  it('10 种动作全部落成正确的事件类型与鸣牌种类', () => {
     const { recorder } = harness()
     const frame = makeFrame()
     recorder.hooks.roundStart(frame)

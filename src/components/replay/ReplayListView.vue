@@ -1,10 +1,17 @@
 <script setup lang="ts">
 // 对局回放列表：一行 = 一整场（玩法 / 场次 / 对局日期 / 位次 / 主题），提供「查看 / 导出 / 删除」。
 // 底部提供保留策略（本机偏好）与全部清空。
+// AI 分析记录（方案 §9.2）：每行显示分析区状态（未开启／完整／部分缺失／已删除），
+// 并提供「导出分析包」与「只删分析、保留牌谱」两个独立入口 —— 两者互不影响。
 import { computed, ref, watch } from 'vue'
 import { formatMatchDate, formatRank, gameModeLabel, matchSubtitle } from '../../game/replay/format'
 import { buildReplayExport, downloadReplayExport, replayExportFilename } from '../../game/replay/export'
 import { REPLAY_KEEP_OPTIONS, readReplayKeepCount, saveReplayKeepCount } from '../../game/replay/preferences'
+import {
+  analysisExportFilename, analysisFormatReadable, buildAnalysisExport, downloadAnalysisExport,
+} from '../../game/replay/analysis/export'
+import type { AnalysisStorage } from '../../game/replay/analysis/storage'
+import type { AnalysisAreaStatus } from '../../game/replay/analysis/types'
 import type { ReplayStorage } from '../../game/replay/storage'
 import type { ReplayMatch } from '../../game/replay/types'
 import { tableThemeIdentity } from '../../theme/themeIdentity'
@@ -15,6 +22,8 @@ const props = defineProps<{
   storage: ReplayStorage
   /** 本地存储可用（无 IndexedDB / 隐私模式 / 写入失败）。 */
   available: boolean
+  /** 独立分析区（§9.2）；未接线（联机或旧调用方）时为 null，行内不显示分析入口。 */
+  analysis?: AnalysisStorage | null
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +36,8 @@ const loading = ref(false)
 const busy = ref(false)
 const hint = ref('')
 const keepCount = ref(readReplayKeepCount())
+/** 每场的分析区状态：undefined = 还没有这个场的任何分析数据（旧录像或未开启）。 */
+const analysisStatus = ref<Record<string, AnalysisAreaStatus>>({})
 let hintTimer: number | null = null
 
 function flashHint(text: string) {
@@ -38,6 +49,11 @@ function flashHint(text: string) {
 async function reload() {
   loading.value = true
   matches.value = await props.storage.list()
+  const statuses: Record<string, AnalysisAreaStatus> = {}
+  if (props.analysis?.available()) {
+    for (const match of matches.value) statuses[match.id] = await props.analysis.status(match.id)
+  }
+  analysisStatus.value = statuses
   loading.value = false
 }
 
@@ -52,14 +68,37 @@ async function removeMatch(match: ReplayMatch) {
   if (!window.confirm(`删除这场回放？${match.rulesetName} · ${match.matchName}（${formatMatchDate(match.startedAt)}）`)) return
   busy.value = true
   await props.storage.remove(match.id)
+  // §9.2：分析区不得比它引用的展示回放活得更久 ⇒ 删场次时同步删除分析数据
+  // （不依赖"下一场结束时对账"，否则中途关页会留下悬空引用）。
+  if (props.analysis?.available() && analysisStatus.value[match.id]) {
+    await props.analysis.removeAnalysis(match.id)
+  }
   await reload()
   busy.value = false
+}
+
+/** 只删分析、保留可观看回放（§9.2）：删除后明确失去哪些能力，且牌谱不受影响。 */
+async function removeAnalysisOnly(match: ReplayMatch) {
+  const status = analysisStatus.value[match.id]
+  if (!status || status === 'deleted') return
+  if (!window.confirm('删除这场对局的分析记录？牌谱（可观看回放）会保留；'
+    + '删除后将失去决策前态、合法/策略候选、动作来源、LLM 请求与回答、计分流水与赛后精确复现能力，且不可恢复。')) return
+  busy.value = true
+  try {
+    await props.analysis!.removeAnalysis(match.id)
+    await reload()
+    flashHint('已删除该场分析记录，牌谱仍可观看')
+  } finally {
+    busy.value = false
+  }
 }
 
 async function clearAll() {
   if (!window.confirm('清空全部对局回放？此操作不可恢复。')) return
   busy.value = true
   await props.storage.clearAll()
+  // 清空展示回放后，分析区按清单回收（§9.2/§9.4）
+  if (props.analysis?.available()) await props.analysis.reconcileLifecycle([])
   await reload()
   busy.value = false
 }
@@ -81,6 +120,45 @@ async function exportMatch(match: ReplayMatch) {
   }
 }
 
+/**
+ * 导出**自包含**分析包（§9.2、§9.3）：分析记录 + 被引用的配置 + 展示回放一起带走。
+ * 页面只显示提示，不在客户端做"补齐" —— 缺什么就如实说缺什么。
+ */
+async function exportAnalysis(match: ReplayMatch) {
+  busy.value = true
+  try {
+    const storage = props.analysis
+    if (!storage?.available()) {
+      flashHint('当前环境不支持分析区存储')
+      return
+    }
+    const [read, rounds, configurations, status] = await Promise.all([
+      storage.read(match.id), props.storage.loadRounds(match.id), storage.readConfigs(match.id), storage.status(match.id),
+    ])
+    if (!read.parts.length) {
+      flashHint('这场没有分析记录可导出（未开启录制或已删除）')
+      return
+    }
+    const readable = analysisFormatReadable(read.parts)
+    if (!readable.readable) {
+      // §9.5：版本不认识就明确拒绝，不按当前格式硬解（硬解会把新字段悄悄丢掉）
+      flashHint(readable.reason ?? '分析区格式版本无法识别')
+      return
+    }
+    const meta = read.meta
+    const payload = buildAnalysisExport({
+      match, rounds, parts: read.parts, configurations, status,
+      ...(meta?.gaps ? { gaps: meta.gaps } : {}),
+    })
+    const written = downloadAnalysisExport(payload, analysisExportFilename(match, payload.exportedAt))
+    flashHint(written
+      ? `已导出分析包（${payload.manifest.recordsTotal} 条记录${payload.reproductionCapable ? '，可精确复现' : '，不完整／不可精确复现'}）`
+      : '当前环境不支持下载')
+  } finally {
+    busy.value = false
+  }
+}
+
 async function changeKeepCount(event: Event) {
   const next = saveReplayKeepCount(Number((event.target as HTMLSelectElement).value))
   keepCount.value = next
@@ -92,6 +170,25 @@ async function changeKeepCount(event: Event) {
 const themeLabel = (name: ReplayMatch['themeName']) => tableThemeIdentity(name).label
 const themeAccent = (name: ReplayMatch['themeName']) => themePresentationByName(name).palette.accent
 const hasMatches = computed(() => matches.value.length > 0)
+
+/**
+ * 行内分析状态文案（§9.2 的四态 + 旧录像）。
+ * 「未开启」与「缺失」必须分开：前者是当时没开录制，后者是开了但这段没落下来。
+ */
+function analysisLabel(match: ReplayMatch): string {
+  const status = analysisStatus.value[match.id]
+  if (!status) return '分析：不可用'          // 分析区不可用（无 IndexedDB／驱动因失败停用）
+  if (status === 'complete') return '分析：完整'
+  if (status === 'partial') return '分析：部分缺失'
+  if (status === 'deleted') return '分析：已删除'
+  if (status === 'missing') return '分析：缺少决策分析记录'
+  return '分析：未开启'
+}
+
+function hasAnalysisRecords(match: ReplayMatch): boolean {
+  const status = analysisStatus.value[match.id]
+  return status === 'complete' || status === 'partial'
+}
 </script>
 
 <template>
@@ -126,6 +223,12 @@ const hasMatches = computed(() => matches.value.length > 0)
               <span class="replay-row-theme-name" :title="`对局使用主题：${themeLabel(match.themeName)}`">
                 主题 {{ themeLabel(match.themeName) }}
               </span>
+              <span
+                v-if="analysis"
+                class="replay-row-analysis"
+                :data-analysis-status="analysisStatus[match.id] ?? 'none'"
+                data-testid="replay-analysis-status"
+              >{{ analysisLabel(match) }}</span>
             </div>
             <div class="replay-row-rank" :class="`rank-${match.myRank ?? 'none'}`">
               {{ formatRank(match.myRank) }}
@@ -133,6 +236,22 @@ const hasMatches = computed(() => matches.value.length > 0)
             <div class="replay-row-actions">
               <button type="button" data-action-role="primary" @click="emit('view', match.id)">查看</button>
               <button type="button" data-action-role="secondary" data-testid="replay-export" :disabled="busy" @click="exportMatch(match)">导出</button>
+              <button
+                v-if="analysis"
+                type="button"
+                data-action-role="secondary"
+                data-testid="replay-analysis-export"
+                :disabled="busy || !hasAnalysisRecords(match)"
+                @click="exportAnalysis(match)"
+              >导出分析</button>
+              <button
+                v-if="analysis"
+                type="button"
+                data-action-role="secondary"
+                data-testid="replay-analysis-remove"
+                :disabled="busy || !hasAnalysisRecords(match)"
+                @click="removeAnalysisOnly(match)"
+              >删分析</button>
               <button type="button" data-action-role="secondary" :disabled="busy" @click="removeMatch(match)">删除</button>
             </div>
           </li>
@@ -192,6 +311,13 @@ const hasMatches = computed(() => matches.value.length > 0)
 .replay-row-meta { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .replay-row-date { color: var(--theme-text); font-size: 12px; }
 .replay-row-theme-name { overflow: hidden; color: var(--theme-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+/* 分析区状态（§9.2）：用颜色区分四态，避免"未开启"与"缺失"看起来一样 */
+.replay-row-analysis { color: var(--theme-text-muted); font-size: 11px; }
+.replay-row-analysis[data-analysis-status="complete"] { color: var(--theme-accent); }
+.replay-row-analysis[data-analysis-status="partial"] { color: #e0a94a; }
+.replay-row-analysis[data-analysis-status="deleted"],
+.replay-row-analysis[data-analysis-status="missing"],
+.replay-row-analysis[data-analysis-status="none"] { color: var(--theme-text-muted); }
 .replay-row-rank { color: var(--theme-text-muted); font-size: 15px; text-align: center; }
 .replay-row-rank.rank-1 { color: var(--theme-accent); }
 .replay-row-actions { display: flex; gap: 6px; }

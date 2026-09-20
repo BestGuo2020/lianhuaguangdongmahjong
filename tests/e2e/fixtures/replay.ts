@@ -131,6 +131,9 @@ async function record(rulesetId: RuleVariant, themeName: TableThemeName) {
   })
   if (analysis.enabled() && rulesetId === 'lotus-blood-flow') {
     analysis.start({
+      // 与展示回放共用同一个场次 id（§9.2）：分析区要能按同一把钥匙与牌谱对账，
+      // 否则列表显示不出状态、回收时还会被当成悬空数据删掉。
+      matchId: replay.ensureMatchId(),
       rulesetId: 'lotus-blood-flow',
       rules: BLOOD_FLOW_CONFIG,
       rulesVersion: BLOOD_FLOW_CONFIG.version,

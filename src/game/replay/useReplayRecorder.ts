@@ -24,6 +24,11 @@ export interface ReplayRecording {
   /** 场末或退出时自动判定状态与名次。 */
   finishAuto(standings?: ReplayStanding[]): ReplayMatch | null
   active(): boolean
+  /**
+   * 取得本场次 id（场次尚未开始则先预留）。
+   * 分析区（§9.2）必须用它开一场，才能与展示回放按同一 id 对账、被回收时同步删除。
+   */
+  ensureMatchId(): string
   /** 当前内存记录与计数（诊断/测试用）。 */
   snapshot(): ReturnType<ReplayRecorder['snapshot']>
 }
@@ -66,6 +71,9 @@ export function useReplayRecorder(options: UseReplayRecorderOptions): ReplayReco
     },
     active() {
       return recorder.active()
+    },
+    ensureMatchId() {
+      return recorder.ensureMatchId()
     },
     snapshot() {
       return recorder.snapshot()

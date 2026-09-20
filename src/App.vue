@@ -557,6 +557,9 @@ watch(matchFinished, (finished) => {
 watch(() => (gameMode.value === 'local' && selectedRule.value === 'lotus-blood-flow' ? phase.value : null), (value) => {
   if (value !== 'opening' || analysis.active()) return
   analysis.start({
+    // 与展示回放**共用同一个场次 id**（§9.2）：否则分析数据在"按展示回放清单回收"时会被当成
+    // 悬空数据整场删掉，列表也无从显示这场是「完整」还是「已删除」。
+    matchId: replay.ensureMatchId(),
     rulesetId: 'lotus-blood-flow',
     rules: BLOOD_FLOW_CONFIG,
     rulesVersion: BLOOD_FLOW_CONFIG.version,
@@ -831,6 +834,7 @@ function changeTableTheme(theme: TableThemeName) {
         v-model:open="replayOpen"
         :storage="replay.storage"
         :available="replay.available.value"
+        :analysis="analysisStorage"
         @view="openReplay"
       />
       <DisclaimerDialog
