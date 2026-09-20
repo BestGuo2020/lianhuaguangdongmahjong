@@ -231,7 +231,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         const owned = Number.isFinite(nowNo)
           ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
           : []
-        return owned.length ? owned.map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ') : '（空）'
+        return owned.length ? owned.map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}@${entry.windowId}`).join(' ') : '（空）'
       })()}]；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
