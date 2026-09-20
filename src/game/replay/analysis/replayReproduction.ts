@@ -95,7 +95,18 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   const windowsWithCommand = new Set(
     input.commands.filter(entry => (entry.resolution ?? 'command') === 'command' && entry.windowId).map(entry => entry.windowId!),
   )
-  const commands = input.commands.filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+  // 关键：**按窗口编号稳定排序后再消费**。记录是异步压入的（机器人动作要等权威回传），
+  // 因此条目顺序与引擎的窗口顺序并不一致（实测：窗口 77 的座位 1 弃牌被排在座位 0 的后续动作之后）。
+  // 同窗口内保持原有相对顺序（稳定排序），编号缺失的排在最后。
+  const commands = input.commands
+    .filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
+    .map((entry, index) => ({ entry, index, no: entry.windowId ? Number(entry.windowId.split('/').pop()) : Number.NaN }))
+    .sort((a, b) => {
+      const an = Number.isFinite(a.no) ? a.no : Number.MAX_SAFE_INTEGER
+      const bn = Number.isFinite(b.no) ? b.no : Number.MAX_SAFE_INTEGER
+      return an - bn || a.index - b.index
+    })
+    .map(item => item.entry)
   const recorded = commands.length
   /** expire 判定计数：应用 / 因编号更小丢弃 / 因同窗口有命令被前置过滤丢弃。 */
   let expireApplied = 0
@@ -219,6 +230,11 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     const action = view.ownActions.find(candidate => actionMatches(candidate as never, command))
     if (!action) {
       const offered = view.ownActions.map(candidate => candidate.kind).join('/') || '（该座位此刻没有合法动作）'
+      // 同 kind 候选的完整字段：直接看出是哪一项判否（tile/tiles/index/from/meldIndex），不再猜
+      const sameKind = view.ownActions.filter(candidate => (candidate as { kind?: string }).kind === command.kind)
+      const sameKindDump = sameKind.length
+        ? sameKind.slice(0, 3).map(candidate => JSON.stringify(candidate)).join(' | ')
+        : '（无同类候选）'
       // 状态分叉诊断：打印重放当时该座位的手牌与副露，便于与记录期望的动作对照
       // （记录里这一手的 index/tile 如果根本不在手牌里，说明状态在更早处已经分叉，而不是匹配不精确）。
       // 注意：座位视图只在 revealAll/engine.result 时暴露**他人**手牌，且顶层没有 hand 字段——
@@ -234,7 +250,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；该座位手牌(${seatHand.length}张)=[${seatHand.join(' ')}] 副露=${seatMelds}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；同类候选=${sameKindDump}；该座位手牌(${seatHand.length}张)=[${seatHand.join(' ')}] 副露=${seatMelds}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；expire 判定：应用 ${expireApplied} / 编号更小丢弃 ${expireSkippedByNumber} / 前置过滤丢弃 ${expireSkippedByFilter}；该窗口在记录中的条目=[${(() => {
         const nowNo = engine.window ? Number(String(engine.window.id).split('/').pop()) : Number.NaN
         const owned = Number.isFinite(nowNo)
           ? commands.filter(entry => entry.windowId && Number(entry.windowId.split('/').pop()) === nowNo)
