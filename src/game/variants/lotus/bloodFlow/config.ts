@@ -209,6 +209,8 @@ export interface BloodFlowAiConfig {
   readonly reformGainRatio: number
   /** 锁手后连锁期望的展望巡数。 */
   readonly chainHorizon: number
+  /** 实验：规范计分 × 正常轮转自摸机会；未标定点炮/鸣牌，不默认推广。 */
+  readonly chainForecast?: 'legacy' | 'self-draw-v1'
   /** 弃牌放炮成本档位（公开 0 张 / 1 张 / ≥2 张）。 */
   readonly safetyCostNone: number
   readonly safetyCostOne: number
@@ -268,6 +270,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
   potentialFloor: 2,
   reformGainRatio: 1.2,
   chainHorizon: 8,
+  chainForecast: 'legacy',
   safetyCostNone: 0.25,
   safetyCostOne: 0.1,
   safetyCostSafe: 0,
