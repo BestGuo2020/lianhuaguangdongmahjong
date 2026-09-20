@@ -361,7 +361,24 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     flipTile: TileType | null; flipStack: number | null
   } | null = null
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
-  const analysisRoundCommands: Array<{ seat: number; kind: string; at: number }> = []
+  const analysisRoundCommands: Array<{
+    seat: number; kind: string; at: number
+    legalActionId?: string; tile?: string; handIndex?: number; from?: number | null; meldIndex?: number
+  }> = []
+  /**
+   * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
+   * 只记 kind 的话赛后无法重跑复现（§6、§10.6）。
+   */
+  function analysisCommandEntry(seat: number, action: BloodFlowAction, legalActionId?: string) {
+    const entry: (typeof analysisRoundCommands)[number] = { seat, kind: action.kind, at: Date.now() }
+    if (legalActionId) entry.legalActionId = legalActionId
+    const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number }
+    if (record.tile !== undefined) entry.tile = record.tile
+    if (record.index !== undefined) entry.handIndex = record.index
+    if (record.from !== undefined) entry.from = record.from
+    if (record.meldIndex !== undefined) entry.meldIndex = record.meldIndex
+    return entry
+  }
   function apply(next: BloodFlowWorkerView) {
     const previous = view.value
     view.value = next
@@ -602,7 +619,9 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
       }, replay: Boolean(options.recorder) } : { kind: 'bot', seat, windowId, replay: Boolean(options.recorder) })
       // 分析记录（§6）：机器人/模型座位的命令同样入序列（否则只有牌墙、无法精确复现）。
-      if (options.analysis && action) analysisRoundCommands.push({ seat, kind: action.kind, at: Date.now() })
+      if (options.analysis && action) {
+        analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined))
+      }
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
       // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。
       if (action) {
@@ -645,8 +664,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
-    // 分析记录（§6）：人类命令入序列（含过牌），供赛后精确复现。
-    if (options.analysis) analysisRoundCommands.push({ seat: current.seat, kind: action.kind, at: Date.now() })
+    // 分析记录（§6）：人类命令入序列（含过牌），带动作载荷以便赛后重跑复现。
+    if (options.analysis) {
+      const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
+      analysisRoundCommands.push(analysisCommandEntry(
+        current.seat, action, index >= 0 ? legalActionId(w.id, index) : undefined,
+      ))
+    }
     if (options.externalAuthority) options.externalAuthority.send(command)
     else void request({ kind: 'command', command })
   }

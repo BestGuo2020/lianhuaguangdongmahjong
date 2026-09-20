@@ -279,7 +279,22 @@ export interface AnalysisReproduction {
   wallBreakIndex?: number
   openingScores?: number[]
   /** 完整权威命令（含过牌）与执行顺序：仅有牌墙和展示步骤不足以精确复现。 */
-  commands?: Array<{ seat: number; legalActionId?: string; kind: string; at: number }>
+  /**
+   * 完整权威命令（含过牌）与执行顺序。
+   * **必须带动作载荷**：只有 kind 无法重跑（例如 discard 需要牌种与当时手牌索引），
+   * 这正是 §10.6「完整记录可重放到同一结束状态」的前提。
+   */
+  commands?: Array<{
+    seat: number
+    kind: string
+    at: number
+    /** 窗口内稳定 ID（与决策/候选对齐；缺失说明该命令未接线到合法动作集）。 */
+    legalActionId?: string
+    tile?: string
+    handIndex?: number
+    from?: number | null
+    meldIndex?: number
+  }>
   /** 其他随机决策的算法版本与种子。 */
   randomSources?: Array<{ scope: string; algorithm: string; seed: string }>
   /** 无法提供时的原因（不能猜测补齐）。 */
