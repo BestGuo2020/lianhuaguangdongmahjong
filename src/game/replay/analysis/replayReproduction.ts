@@ -97,6 +97,8 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   /** expire 判定计数：应用 / 因编号更小丢弃 / 因同窗口有命令被前置过滤丢弃。 */
   let expireApplied = 0
   let expireSkippedByNumber = 0
+  /** 已经推进过的窗口编号：同一窗口常有多条 expire（主线程按计时器各压一条），只允许推进一次。 */
+  let lastExpiredNo = Number.NaN
   const expireSkippedByFilter = input.commands.length - commands.length
   const expected = input.expectedScores && input.expectedScores.length === 4 ? [...input.expectedScores] : null
   const restored = openingFromReproduction(input.reproduction)
@@ -181,6 +183,14 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         cursor += 1
         continue
       }
+      // 同一窗口的重复 expire 只能推进一次：记录里常有三条（按座位/计时器各压一条），
+      // 逐条应用会把引擎连推多次（实测残余偏移即此）。
+      if (Number.isFinite(recordNo) && recordNo === lastExpiredNo) {
+        expireSkippedByNumber += 1
+        cursor += 1
+        continue
+      }
+      if (Number.isFinite(recordNo)) lastExpiredNo = recordNo
       expireApplied += 1
       clock = current.deadlineAt + 1
       engine.expire(clock, current.id)
