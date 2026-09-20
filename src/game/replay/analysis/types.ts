@@ -40,6 +40,9 @@ export type AnalysisWindowKind = 'draw-turn' | 'claim' | 'rob-kong' | 'other'
 /** 记录完整性：缺失必须留痕，不能静默截断后仍声称可复现（§9.5）。 */
 export type AnalysisCompleteness = 'complete' | 'partial' | 'missing'
 
+/** 落库的状态：在完整性之外多一个「已删除」墓碑，供列表显示（§9.2）。 */
+export type AnalysisStoredStatus = AnalysisCompleteness | 'deleted'
+
 /** 成本/缺失都留痕的三态值：没有计算过就是缺失，不填 0（§3.3）。 */
 export type AnalysisMaybe<T> = { known: true; value: T } | { known: false }
 
@@ -299,4 +302,4 @@ export interface AnalysisMatchBlock {
 }
 
 /** 分析区的落库状态（§9.2：未开启／完整／部分缺失／已删除）。 */
-export type AnalysisAreaStatus = 'disabled' | AnalysisCompleteness | 'deleted'
+export type AnalysisAreaStatus = 'disabled' | AnalysisStoredStatus

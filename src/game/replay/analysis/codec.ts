@@ -143,9 +143,17 @@ export function createAnalysisBlockWriter(options: { targetBytes?: number } = {}
   }
 }
 
-export type AnalysisDecodeResult =
-  | { ok: true; parts: AnalysisBlockPart[] }
-  | { ok: false; reason: 'checksum-mismatch' | 'codec-unsupported' | 'too-large' | 'parse-failed' }
+/** 解码失败原因。 */
+export type AnalysisDecodeError = 'checksum-mismatch' | 'codec-unsupported' | 'too-large' | 'parse-failed'
+
+/**
+ * 解码结果：成功时 parts 有效、error 为 null；失败时相反。
+ * 刻意不用判别联合：本工具链对 `await` 之后的联合收窄不可靠（仓库里 transfer.ts 同此约定）。
+ */
+export interface AnalysisDecodeResult {
+  parts: AnalysisBlockPart[] | null
+  error: AnalysisDecodeError | null
+}
 
 export function verifyAnalysisBlock(block: AnalysisBlock): boolean {
   return block.payload.byteLength === block.storedBytes && fnv1a(block.payload) === block.checksum
@@ -161,22 +169,22 @@ export async function decodeAnalysisBlock(
   options: { limitBytes?: number } = {},
 ): Promise<AnalysisDecodeResult> {
   const limit = Math.max(1, options.limitBytes ?? ANALYSIS_DECOMPRESS_LIMIT_BYTES)
-  if (!verifyAnalysisBlock(block)) return { ok: false, reason: 'checksum-mismatch' }
+  if (!verifyAnalysisBlock(block)) return { parts: null, error: 'checksum-mismatch' }
   // raw 块本来就要读进内存，超限直接拒绝；gzip 块在流式解压时按 limit 截断。
-  if (block.rawBytes > ANALYSIS_MAX_RAW_BYTES) return { ok: false, reason: 'too-large' }
-  if (block.codec === 'raw' && block.payload.byteLength > limit) return { ok: false, reason: 'too-large' }
+  if (block.rawBytes > ANALYSIS_MAX_RAW_BYTES) return { parts: null, error: 'too-large' }
+  if (block.codec === 'raw' && block.payload.byteLength > limit) return { parts: null, error: 'too-large' }
   let raw: Uint8Array | null = block.payload
   if (block.codec === 'gzip') {
     raw = await gunzipBytes(block.payload, limit)
-    if (!raw) return { ok: false, reason: compressionAvailable() ? 'too-large' : 'codec-unsupported' }
+    if (!raw) return { parts: null, error: compressionAvailable() ? 'too-large' : 'codec-unsupported' }
   }
-  if (raw.byteLength !== block.rawBytes) return { ok: false, reason: 'checksum-mismatch' }
+  if (raw.byteLength !== block.rawBytes) return { parts: null, error: 'checksum-mismatch' }
   try {
     const parsed = JSON.parse(new TextDecoder().decode(raw)) as unknown
-    if (!Array.isArray(parsed)) return { ok: false, reason: 'parse-failed' }
-    return { ok: true, parts: parsed as AnalysisBlockPart[] }
+    if (!Array.isArray(parsed)) return { parts: null, error: 'parse-failed' }
+    return { parts: parsed as AnalysisBlockPart[], error: null }
   } catch {
-    return { ok: false, reason: 'parse-failed' }
+    return { parts: null, error: 'parse-failed' }
   }
 }
 

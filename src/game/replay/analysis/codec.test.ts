@@ -25,11 +25,13 @@ function withoutCompression() {
   ;(globalThis as { DecompressionStream?: unknown }).DecompressionStream = undefined
 }
 
-const decisionPart = (index: number) => ({
+const decisionPart = (index: number): { tag: string; value: unknown } => ({
   tag: 'decision',
   value: {
     id: `d${index}`, seat: index % 4, windowKind: 'draw-turn',
-    candidates: Array.from({ length: 8 }, (_, k) => ({ legalActionId: `a${k}`, action: { id: `a${k}`, kind: 'discard', tile: 'm5', handIndex: k } })),
+    candidates: Array.from({ length: 8 }, (_, k) => ({
+      legalActionId: `a${k}`, action: { id: `a${k}`, kind: 'discard', tile: 'm5', handIndex: k },
+    })),
   },
 })
 
@@ -57,7 +59,7 @@ describe('分析块编码', () => {
     expect(ANALYSIS_BLOCK_TARGET_BYTES).toBeLessThanOrEqual(64 * 1024)
   })
 
-  it('往返一致：记录顺序与内容不变，且 compressed 不大于原始字节', async () => {
+  it('往返一致：记录顺序与内容不变，且压缩后不大于原始字节', async () => {
     const writer = createAnalysisBlockWriter()
     for (let index = 0; index < 40; index += 1) writer.push(decisionPart(index))
     writer.push({ tag: 'config', value: { id: 'c1', rulesVersion: 'lotus-blood-flow-v1', seatControl: ['human', 'llm', 'llm', 'local-ai'] } })
@@ -65,12 +67,11 @@ describe('分析块编码', () => {
     expect(['gzip', 'raw']).toContain(block.codec)
     expect(block.storedBytes).toBeLessThanOrEqual(block.rawBytes)
     const decoded = await decodeAnalysisBlock(block)
-    expect(decoded.ok).toBe(true)
-    if (!decoded.ok) return
+    expect(decoded.error).toBeNull()
     expect(decoded.parts).toHaveLength(41)
-    expect(decoded.parts[0]).toMatchObject({ tag: 'decision' })
-    expect(decoded.parts[40]).toMatchObject({ tag: 'config' })
-    expect((decoded.parts[39].value as { id: string }).id).toBe('d39')
+    expect(decoded.parts![0]).toMatchObject({ tag: 'decision' })
+    expect(decoded.parts![40]).toMatchObject({ tag: 'config' })
+    expect((decoded.parts![39].value as { id: string }).id).toBe('d39')
   })
 
   it('字节记账用 UTF-8 字节数，不是字符串长度（中文/表情）', () => {
@@ -86,24 +87,26 @@ describe('分析块编码', () => {
     const block = await writer.flush(1) as AnalysisBlock
     expect(verifyAnalysisBlock(block)).toBe(true)
 
-    const tampered: AnalysisBlock = { ...block, payload: Uint8Array.from([...block.payload].map((byte, index) => index === 2 ? byte ^ 0xff : byte)) }
+    const tampered: AnalysisBlock = {
+      ...block,
+      payload: Uint8Array.from([...block.payload].map((byte, index) => index === 2 ? byte ^ 0xff : byte)),
+    }
     expect(verifyAnalysisBlock(tampered)).toBe(false)
-    expect(await decodeAnalysisBlock(tampered)).toEqual({ ok: false, reason: 'checksum-mismatch' })
+    expect((await decodeAnalysisBlock(tampered)).error).toBe('checksum-mismatch')
 
     const truncated: AnalysisBlock = { ...block, payload: block.payload.subarray(0, Math.max(1, block.payload.byteLength - 3)) }
     expect(verifyAnalysisBlock(truncated)).toBe(false)
-    expect(await decodeAnalysisBlock(truncated)).toEqual({ ok: false, reason: 'checksum-mismatch' })
+    expect((await decodeAnalysisBlock(truncated)).error).toBe('checksum-mismatch')
   })
 
-  it('压缩不可用时退化为 raw 块，且只在预算内才允许保存', async () => {
+  it('压缩不可用时退化为 raw 块，且只有 raw 块受 raw 预算判定约束', async () => {
     withoutCompression()
     const writer = createAnalysisBlockWriter()
     writer.push(decisionPart(1))
     const block = await writer.flush(3) as AnalysisBlock
     expect(block.codec).toBe('raw')
     expect(block.rawBytes).toBe(block.storedBytes)
-    const decoded = await decodeAnalysisBlock(block)
-    expect(decoded.ok).toBe(true)
+    expect((await decodeAnalysisBlock(block)).error).toBeNull()
     // raw 块只在字节预算内允许保存：超预算时必须由调用方暂停分析录制（§9.3）
     expect(mayStoreRawBlock(block, { rawBudgetBytes: block.storedBytes + 10 })).toBe(true)
     expect(mayStoreRawBlock(block, { rawBudgetBytes: block.storedBytes - 1 })).toBe(false)
@@ -117,7 +120,7 @@ describe('分析块编码', () => {
     const block = await writer.flush(1) as AnalysisBlock
     if (block.codec !== 'gzip') return   // 环境本就没有压缩能力时该用例不适用
     ;(globalThis as { DecompressionStream?: unknown }).DecompressionStream = undefined
-    expect(await decodeAnalysisBlock(block)).toEqual({ ok: false, reason: 'codec-unsupported' })
+    expect((await decodeAnalysisBlock(block)).error).toBe('codec-unsupported')
   })
 
   it('解压输出超限时拒绝，不把内存打爆', async () => {
@@ -127,11 +130,11 @@ describe('分析块编码', () => {
     const block = await writer.flush(1) as AnalysisBlock
     expect(block.rawBytes).toBeGreaterThan(100_000)
     // 正常上限下可读
-    expect((await decodeAnalysisBlock(block)).ok).toBe(true)
+    expect((await decodeAnalysisBlock(block)).error).toBeNull()
     // 收紧上限到远小于解压长度：必须拒绝，且原因明确（不是静默返回空记录）
-    expect(await decodeAnalysisBlock(block, { limitBytes: 10_000 })).toEqual({ ok: false, reason: 'too-large' })
+    expect((await decodeAnalysisBlock(block, { limitBytes: 10_000 })).error).toBe('too-large')
     if (block.codec === 'raw') return
     // 上限刚好等于原始长度时仍可读（边界）
-    expect((await decodeAnalysisBlock(block, { limitBytes: block.rawBytes })).ok).toBe(true)
+    expect((await decodeAnalysisBlock(block, { limitBytes: block.rawBytes })).error).toBeNull()
   })
 })
