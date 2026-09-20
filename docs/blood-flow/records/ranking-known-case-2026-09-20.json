@@ -1,0 +1,31 @@
+{
+  "scope": "Previously selected diagnostic; excluded from new validation.",
+  "result": {
+    "original": {
+      "kind": "discard",
+      "index": 2
+    },
+    "raw": {
+      "kind": "discard",
+      "index": 9
+    },
+    "robust": {
+      "kind": "discard",
+      "index": 2
+    },
+    "eligible": true,
+    "gap": 18.922809210296236,
+    "relativeGap": 0.01943755146791129,
+    "lower": 10.783538087680654,
+    "positiveFraction": 1,
+    "oldValue": 960.8934256431019,
+    "newOldValue": 973.518153329918,
+    "newValue": 992.4409625402143,
+    "parameterStable": true,
+    "accept": false
+  },
+  "existingSafetyHeuristic": {
+    "m3": 0,
+    "s5": 64
+  }
+}

@@ -1,0 +1,3013 @@
+{
+  "scope": "Parameter resampling only; not future-wall uncertainty or a calibrated return confidence interval. Original training source seeds including empty games; no held-out labels.",
+  "models": [
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.041768654292105675,
+          "honor": 0.5597355213401812,
+          "terminal": 1,
+          "middle": 0.7304422322376212
+        },
+        "false": {
+          "wildcard-face": 0.009688648319832316,
+          "honor": 0.5584415926380929,
+          "terminal": 1,
+          "middle": 0.7541612655210146
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.015431636656311401,
+          "honor": 0.5299450594830516,
+          "terminal": 1,
+          "middle": 0.8468315147478456
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004170317045629608,
+          "honor": 0.5907838274506574,
+          "terminal": 1,
+          "middle": 0.6954521074395137
+        },
+        "true": {
+          "wildcard-face": 0.0608755150843524,
+          "honor": 0.5487937910497347,
+          "terminal": 1,
+          "middle": 0.6847940543003636
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08699401745823677,
+          "honor": 0.5726279154349676,
+          "terminal": 1,
+          "middle": 0.7312481634198288
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.043792880272676006,
+          "honor": 0.5449048800310505,
+          "terminal": 1,
+          "middle": 0.6458127518364253
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.043640747854800294,
+          "honor": 0.5669605400443292,
+          "terminal": 1,
+          "middle": 0.7467408924186799
+        },
+        "false": {
+          "wildcard-face": 0.009937906246121442,
+          "honor": 0.5814112119695469,
+          "terminal": 1,
+          "middle": 0.7425123257169636
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.00834150259311112,
+          "honor": 0.5530177495191745,
+          "terminal": 1,
+          "middle": 0.7426274530579915
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010116073916746121,
+          "honor": 0.6258741182617814,
+          "terminal": 1,
+          "middle": 0.7449583512145354
+        },
+        "true": {
+          "wildcard-face": 0.07610885898257283,
+          "honor": 0.5175661269790826,
+          "terminal": 1,
+          "middle": 0.7459433818918882
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.09167247780755136,
+          "honor": 0.4708275452554645,
+          "terminal": 1,
+          "middle": 0.621034979763931
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05948601132590909,
+          "honor": 0.5691360436440212,
+          "terminal": 1,
+          "middle": 0.9100570132672885
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.040713490414286686,
+          "honor": 0.5710006095963963,
+          "terminal": 1,
+          "middle": 0.6522064952297195
+        },
+        "false": {
+          "wildcard-face": 0.016143540908227103,
+          "honor": 0.5478672460484332,
+          "terminal": 1,
+          "middle": 0.6040076319861416
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.02579171720418923,
+          "honor": 0.4606906823540863,
+          "terminal": 1,
+          "middle": 0.6298781258170518
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.007488698097453294,
+          "honor": 0.6262229897914121,
+          "terminal": 1,
+          "middle": 0.5800750626920087
+        },
+        "true": {
+          "wildcard-face": 0.066367044669583,
+          "honor": 0.6237598507141533,
+          "terminal": 1,
+          "middle": 0.7796145178217643
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0684019129960019,
+          "honor": 0.4959163898450542,
+          "terminal": 1,
+          "middle": 0.6759376667524971
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.06832751217048814,
+          "honor": 0.7550554690106956,
+          "terminal": 1,
+          "middle": 0.8924281826705716
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04283597547034131,
+          "honor": 0.5470916049505522,
+          "terminal": 1,
+          "middle": 0.6999452078284366
+        },
+        "false": {
+          "wildcard-face": 0.016465905190418493,
+          "honor": 0.5496271064191521,
+          "terminal": 1,
+          "middle": 0.6614058370470219
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.022529683253299498,
+          "honor": 0.4850365360484645,
+          "terminal": 1,
+          "middle": 0.6686738383464216
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010935953527667268,
+          "honor": 0.6099282330492671,
+          "terminal": 1,
+          "middle": 0.6545456290426834
+        },
+        "true": {
+          "wildcard-face": 0.061194496975184184,
+          "honor": 0.5330705456256923,
+          "terminal": 1,
+          "middle": 0.7660787899220686
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07278337856936144,
+          "honor": 0.46649661939450016,
+          "terminal": 1,
+          "middle": 0.6954952982752037
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05271348516246334,
+          "honor": 0.608816929970879,
+          "terminal": 1,
+          "middle": 0.8421415140473415
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03528367130273385,
+          "honor": 0.5009026163200475,
+          "terminal": 1,
+          "middle": 0.6605887071114716
+        },
+        "false": {
+          "wildcard-face": 0.008248434127357622,
+          "honor": 0.5202129233758158,
+          "terminal": 1,
+          "middle": 0.6611661680416048
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.014681033645207921,
+          "honor": 0.49352857694785757,
+          "terminal": 1,
+          "middle": 0.6737252394471919
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.000410424571357786,
+          "honor": 0.5592964165589261,
+          "terminal": 1,
+          "middle": 0.6518934629489692
+        },
+        "true": {
+          "wildcard-face": 0.05902480566328529,
+          "honor": 0.43650203667946497,
+          "terminal": 1,
+          "middle": 0.646045914656657
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0629586875363428,
+          "honor": 0.41644987419266893,
+          "terminal": 1,
+          "middle": 0.5621506037910474
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.057072163922159504,
+          "honor": 0.45141960188850483,
+          "terminal": 1,
+          "middle": 0.7329938792262585
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03946303866267844,
+          "honor": 0.5592898857424338,
+          "terminal": 1,
+          "middle": 0.7119351473809047
+        },
+        "false": {
+          "wildcard-face": 0.015864617236935618,
+          "honor": 0.5556823916608891,
+          "terminal": 1,
+          "middle": 0.6748994480992758
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.016171410559692245,
+          "honor": 0.5571367595284085,
+          "terminal": 1,
+          "middle": 0.6543522398230893
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.014722300339658953,
+          "honor": 0.5566841049383656,
+          "terminal": 1,
+          "middle": 0.6860321169508764
+        },
+        "true": {
+          "wildcard-face": 0.05562121149900924,
+          "honor": 0.5510050576614852,
+          "terminal": 1,
+          "middle": 0.7973500054289164
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07039996227583387,
+          "honor": 0.4272466198251136,
+          "terminal": 1,
+          "middle": 0.5910735626499571
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.036271128824053825,
+          "honor": 0.6602059129738092,
+          "terminal": 0.9441484997291304,
+          "middle": 1
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03676098537687775,
+          "honor": 0.5408755226642431,
+          "terminal": 1,
+          "middle": 0.6771600497753995
+        },
+        "false": {
+          "wildcard-face": 0.011221881389560076,
+          "honor": 0.5407834709240235,
+          "terminal": 1,
+          "middle": 0.6502468438699796
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.016426755653728416,
+          "honor": 0.515346382965941,
+          "terminal": 1,
+          "middle": 0.6677298831585969
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004674733337681353,
+          "honor": 0.5699379116612233,
+          "terminal": 1,
+          "middle": 0.6350346312620871
+        },
+        "true": {
+          "wildcard-face": 0.056546196723988626,
+          "honor": 0.5274826963558273,
+          "terminal": 1,
+          "middle": 0.7306150128396843
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08512785766767343,
+          "honor": 0.42581911827450963,
+          "terminal": 1,
+          "middle": 0.6870186436960798
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03034904863422059,
+          "honor": 0.632480142802601,
+          "terminal": 1,
+          "middle": 0.7758985511491762
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03354204498900362,
+          "honor": 0.5407313351681303,
+          "terminal": 1,
+          "middle": 0.657239355316274
+        },
+        "false": {
+          "wildcard-face": 0.006996040455163063,
+          "honor": 0.548545113934765,
+          "terminal": 1,
+          "middle": 0.6628127057366164
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.009371141042955052,
+          "honor": 0.4916072098666728,
+          "terminal": 1,
+          "middle": 0.6855882116575055
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.003916704835990387,
+          "honor": 0.5998074581537253,
+          "terminal": 1,
+          "middle": 0.6443936082033759
+        },
+        "true": {
+          "wildcard-face": 0.05145987341245189,
+          "honor": 0.5074424090076086,
+          "terminal": 1,
+          "middle": 0.6320250005437688
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.063641448915585,
+          "honor": 0.42997526567508737,
+          "terminal": 1,
+          "middle": 0.575231782447634
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.042682118234126265,
+          "honor": 0.5721599178983903,
+          "terminal": 1,
+          "middle": 0.6756705762303697
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.054484045680184306,
+          "honor": 0.5018408432568512,
+          "terminal": 1,
+          "middle": 0.7080019256115299
+        },
+        "false": {
+          "wildcard-face": 0.015402973805467061,
+          "honor": 0.4920799521828144,
+          "terminal": 1,
+          "middle": 0.6971228734623711
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.01766622449610533,
+          "honor": 0.4688165586099264,
+          "terminal": 1,
+          "middle": 0.7525735121661246
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.011694925829597991,
+          "honor": 0.514227406270556,
+          "terminal": 1,
+          "middle": 0.64729236436002
+        },
+        "true": {
+          "wildcard-face": 0.1008675538911464,
+          "honor": 0.5049609593143752,
+          "terminal": 1,
+          "middle": 0.7201820562986074
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.16344676194854302,
+          "honor": 0.45764780242672,
+          "terminal": 1,
+          "middle": 0.6618309508735842
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.041344531810695355,
+          "honor": 0.5630192350191086,
+          "terminal": 1,
+          "middle": 0.7720865639063895
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03357650999555584,
+          "honor": 0.5201567030033233,
+          "terminal": 1,
+          "middle": 0.7185960607746703
+        },
+        "false": {
+          "wildcard-face": 0.012396306638823537,
+          "honor": 0.48619719019110563,
+          "terminal": 1,
+          "middle": 0.665509004545059
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.011707530401735123,
+          "honor": 0.4372808656481021,
+          "terminal": 1,
+          "middle": 0.7204357819658989
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.012400869912236337,
+          "honor": 0.5309789058320727,
+          "terminal": 1,
+          "middle": 0.6375947758804981
+        },
+        "true": {
+          "wildcard-face": 0.0405956300881804,
+          "honor": 0.584569726337985,
+          "terminal": 1,
+          "middle": 0.8422979873031199
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05660177159216613,
+          "honor": 0.5471019181301472,
+          "terminal": 1,
+          "middle": 0.7957993740732054
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.030849796743255338,
+          "honor": 0.6384671869672108,
+          "terminal": 1,
+          "middle": 0.919914135094032
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04032906232517338,
+          "honor": 0.5355416767727232,
+          "terminal": 1,
+          "middle": 0.6886117109206311
+        },
+        "false": {
+          "wildcard-face": 0.019447091401414995,
+          "honor": 0.49754365499808423,
+          "terminal": 1,
+          "middle": 0.6233155779000511
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.017032027570261062,
+          "honor": 0.45419745978091813,
+          "terminal": 1,
+          "middle": 0.6290312036289546
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.02076708354711998,
+          "honor": 0.5386858722439536,
+          "terminal": 1,
+          "middle": 0.6126356988938145
+        },
+        "true": {
+          "wildcard-face": 0.05375069890394962,
+          "honor": 0.6238496536093215,
+          "terminal": 1,
+          "middle": 0.8711714329522929
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0792541060489498,
+          "honor": 0.5095834830948955,
+          "terminal": 1,
+          "middle": 0.7253792665672569
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.027772496320358515,
+          "honor": 0.7270710029450169,
+          "terminal": 0.9717668272727837,
+          "middle": 1
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.05575226937537197,
+          "honor": 0.528597779704284,
+          "terminal": 1,
+          "middle": 0.7311601895780988
+        },
+        "false": {
+          "wildcard-face": 0.017578692469581787,
+          "honor": 0.5202373576984879,
+          "terminal": 1,
+          "middle": 0.7173178360825126
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.024876548180126797,
+          "honor": 0.555357850452299,
+          "terminal": 1,
+          "middle": 0.8275379023718216
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010744901978528433,
+          "honor": 0.48848834886826337,
+          "terminal": 1,
+          "middle": 0.6244282540861322
+        },
+        "true": {
+          "wildcard-face": 0.10586282637185408,
+          "honor": 0.5307870687242895,
+          "terminal": 1,
+          "middle": 0.7550175541671795
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.171709382274595,
+          "honor": 0.49499520253839163,
+          "terminal": 1,
+          "middle": 0.6566562720135817
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04659635280257592,
+          "honor": 0.5716479003797719,
+          "terminal": 1,
+          "middle": 0.8604105626562624
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.023819955869844027,
+          "honor": 0.5818619801399013,
+          "terminal": 1,
+          "middle": 0.717816121533447
+        },
+        "false": {
+          "wildcard-face": 0.007459564174510446,
+          "honor": 0.5669087729657768,
+          "terminal": 1,
+          "middle": 0.7082712358775999
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.010525752694023319,
+          "honor": 0.6003604318420909,
+          "terminal": 1,
+          "middle": 0.7865230724646876
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004353297374254623,
+          "honor": 0.544359022912049,
+          "terminal": 1,
+          "middle": 0.644466037964517
+        },
+        "true": {
+          "wildcard-face": 0.020816727246870316,
+          "honor": 0.5976893761487266,
+          "terminal": 1,
+          "middle": 0.7282552478054165
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.023968673327023838,
+          "honor": 0.5790580806793483,
+          "terminal": 1,
+          "middle": 0.6644835342894106
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.017594272181930052,
+          "honor": 0.634791908447323,
+          "terminal": 1,
+          "middle": 0.7968892786077485
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.05446720317944151,
+          "honor": 0.614894703802248,
+          "terminal": 1,
+          "middle": 0.7557203006030473
+        },
+        "false": {
+          "wildcard-face": 0.015886068849031078,
+          "honor": 0.6065938584090348,
+          "terminal": 1,
+          "middle": 0.7741214015747512
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.01474589161185694,
+          "honor": 0.5468593896275763,
+          "terminal": 1,
+          "middle": 0.7615584128893328
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.01510088111868059,
+          "honor": 0.6662591234754278,
+          "terminal": 1,
+          "middle": 0.7867553518801845
+        },
+        "true": {
+          "wildcard-face": 0.09780871020989688,
+          "honor": 0.6143808338683117,
+          "terminal": 1,
+          "middle": 0.6930598759899196
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.12436398007192756,
+          "honor": 0.4603455944548712,
+          "terminal": 1,
+          "middle": 0.6214384476131316
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0715928050640861,
+          "honor": 0.8051546167721649,
+          "terminal": 1,
+          "middle": 0.7705357885343359
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04003953079332341,
+          "honor": 0.5450265662073428,
+          "terminal": 1,
+          "middle": 0.6907901411295573
+        },
+        "false": {
+          "wildcard-face": 0.012636110189752128,
+          "honor": 0.5533760672653141,
+          "terminal": 1,
+          "middle": 0.6848438069610236
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.013556209680928267,
+          "honor": 0.5182904325754667,
+          "terminal": 1,
+          "middle": 0.7277930625242245
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010726722309305808,
+          "honor": 0.5807458377805035,
+          "terminal": 1,
+          "middle": 0.6473694930278836
+        },
+        "true": {
+          "wildcard-face": 0.06453524978954207,
+          "honor": 0.509654376532305,
+          "terminal": 1,
+          "middle": 0.692996620803283
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0744948951307884,
+          "honor": 0.4375995096681696,
+          "terminal": 1,
+          "middle": 0.6461649717723494
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05739797729053527,
+          "honor": 0.5745543947276054,
+          "terminal": 1,
+          "middle": 0.7317932137014644
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03204735099975091,
+          "honor": 0.5197854958184668,
+          "terminal": 1,
+          "middle": 0.6603491236169517
+        },
+        "false": {
+          "wildcard-face": 0.009011978035757484,
+          "honor": 0.539830448902719,
+          "terminal": 1,
+          "middle": 0.6755943627566545
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.012981396010707573,
+          "honor": 0.5008907919137416,
+          "terminal": 1,
+          "middle": 0.7183712696123503
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00435207646461911,
+          "honor": 0.5883173539757194,
+          "terminal": 1,
+          "middle": 0.6430024878571805
+        },
+        "true": {
+          "wildcard-face": 0.04083832079709234,
+          "honor": 0.4698629212335684,
+          "terminal": 1,
+          "middle": 0.6221409492011538
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07440964004989378,
+          "honor": 0.4273777387488345,
+          "terminal": 1,
+          "middle": 0.6491180286132068
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.01879079355523444,
+          "honor": 0.5121411926073741,
+          "terminal": 1,
+          "middle": 0.5977039798969871
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.030600818518280892,
+          "honor": 0.5297893260065605,
+          "terminal": 1,
+          "middle": 0.7140007550922771
+        },
+        "false": {
+          "wildcard-face": 0.006344079344356599,
+          "honor": 0.5274558912534573,
+          "terminal": 1,
+          "middle": 0.6952164610849101
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.012053861367801465,
+          "honor": 0.48742496344828473,
+          "terminal": 1,
+          "middle": 0.7280120218660141
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0002967157861863805,
+          "honor": 0.5682213360667521,
+          "terminal": 1,
+          "middle": 0.6608723375255218
+        },
+        "true": {
+          "wildcard-face": 0.05112736828243205,
+          "honor": 0.5191587610643638,
+          "terminal": 1,
+          "middle": 0.7517094852212252
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.050730320738009274,
+          "honor": 0.3956938477782096,
+          "terminal": 1,
+          "middle": 0.614591050968479
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05389813171647309,
+          "honor": 0.6894558886900585,
+          "terminal": 1,
+          "middle": 0.9379417094487628
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.0289572189222311,
+          "honor": 0.575294549997931,
+          "terminal": 1,
+          "middle": 0.6672000947474063
+        },
+        "false": {
+          "wildcard-face": 0.004604954397595612,
+          "honor": 0.5758699786679417,
+          "terminal": 1,
+          "middle": 0.6622666180227587
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.007992949642870098,
+          "honor": 0.49956330002389904,
+          "terminal": 1,
+          "middle": 0.6540398979950592
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00023108840617066547,
+          "honor": 0.6725225962028628,
+          "terminal": 1,
+          "middle": 0.6799030483980251
+        },
+        "true": {
+          "wildcard-face": 0.04352522509109738,
+          "honor": 0.5610081713870954,
+          "terminal": 1,
+          "middle": 0.6666234544850952
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0434646678343666,
+          "honor": 0.5192111568216833,
+          "terminal": 1,
+          "middle": 0.6037259243366988
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04605127261430523,
+          "honor": 0.6061503786796023,
+          "terminal": 1,
+          "middle": 0.7264641982363413
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.041116194951630526,
+          "honor": 0.5846991456313785,
+          "terminal": 1,
+          "middle": 0.7560424570832787
+        },
+        "false": {
+          "wildcard-face": 0.007159871349129018,
+          "honor": 0.5789291532721642,
+          "terminal": 1,
+          "middle": 0.7300494709309828
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.007682875976171885,
+          "honor": 0.4534878157098486,
+          "terminal": 1,
+          "middle": 0.6819799392030573
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004900784634414601,
+          "honor": 0.7422271546153739,
+          "terminal": 1,
+          "middle": 0.7902482233120414
+        },
+        "true": {
+          "wildcard-face": 0.08961280664164863,
+          "honor": 0.5797432325119576,
+          "terminal": 1,
+          "middle": 0.8200171535990081
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.11407537482554561,
+          "honor": 0.5769361508188658,
+          "terminal": 1,
+          "middle": 0.8514009905416657
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0772956813037114,
+          "honor": 0.586026794103685,
+          "terminal": 1,
+          "middle": 0.797380177957108
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04259814892056818,
+          "honor": 0.5953957975117258,
+          "terminal": 1,
+          "middle": 0.727761253333268
+        },
+        "false": {
+          "wildcard-face": 0.010794650474092395,
+          "honor": 0.6242498752197262,
+          "terminal": 1,
+          "middle": 0.7372824293776952
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.006296025706689447,
+          "honor": 0.683127506793497,
+          "terminal": 1,
+          "middle": 0.853966003800511
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.012291611384860186,
+          "honor": 0.5760803777111482,
+          "terminal": 1,
+          "middle": 0.6436526107157167
+        },
+        "true": {
+          "wildcard-face": 0.06607713799954099,
+          "honor": 0.5116829259814516,
+          "terminal": 1,
+          "middle": 0.6919181080313114
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08025839127466033,
+          "honor": 0.43772920353010325,
+          "terminal": 1,
+          "middle": 0.6136313987096317
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05371935456945293,
+          "honor": 0.5909827047186864,
+          "terminal": 1,
+          "middle": 0.7646505295889487
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04132979724987767,
+          "honor": 0.612206183943671,
+          "terminal": 1,
+          "middle": 0.7259283779950197
+        },
+        "false": {
+          "wildcard-face": 0.005752638065258259,
+          "honor": 0.634446200846768,
+          "terminal": 1,
+          "middle": 0.7232964873947829
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.008335858941138778,
+          "honor": 0.4921343289748379,
+          "terminal": 1,
+          "middle": 0.6931215644128158
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00036399886120308224,
+          "honor": 0.8230767210031641,
+          "terminal": 1,
+          "middle": 0.7539217289247832
+        },
+        "true": {
+          "wildcard-face": 0.0818680304269509,
+          "honor": 0.5390262828942552,
+          "terminal": 1,
+          "middle": 0.7194382358807768
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.12263645256076751,
+          "honor": 0.5011037212852131,
+          "terminal": 1,
+          "middle": 0.7154514657715821
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04883418457125838,
+          "honor": 0.569992154775113,
+          "terminal": 1,
+          "middle": 0.708179887489219
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03529888679010682,
+          "honor": 0.5170174255742621,
+          "terminal": 1,
+          "middle": 0.6379467596305921
+        },
+        "false": {
+          "wildcard-face": 0.006790966675728058,
+          "honor": 0.5101362186997291,
+          "terminal": 1,
+          "middle": 0.6347120274618702
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.00393362632398071,
+          "honor": 0.5028371093361865,
+          "terminal": 1,
+          "middle": 0.6545778920772237
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.008691287948539838,
+          "honor": 0.5287336177827888,
+          "terminal": 1,
+          "middle": 0.6160668524252125
+        },
+        "true": {
+          "wildcard-face": 0.05179235911171936,
+          "honor": 0.5159686536089917,
+          "terminal": 1,
+          "middle": 0.6340735348618258
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08790344040089905,
+          "honor": 0.43254827809761304,
+          "terminal": 1,
+          "middle": 0.5889516463436765
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.014623977239671833,
+          "honor": 0.6149241857894163,
+          "terminal": 1,
+          "middle": 0.6812653006813268
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.050529663286386126,
+          "honor": 0.5596029619756182,
+          "terminal": 1,
+          "middle": 0.7010907129790243
+        },
+        "false": {
+          "wildcard-face": 0.015964096676480865,
+          "honor": 0.5252119025183303,
+          "terminal": 1,
+          "middle": 0.6842444621954534
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.017538849028134955,
+          "honor": 0.4439786974518478,
+          "terminal": 1,
+          "middle": 0.7253358553355549
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.013068336439359594,
+          "honor": 0.6219210153225725,
+          "terminal": 1,
+          "middle": 0.6370285916548539
+        },
+        "true": {
+          "wildcard-face": 0.09378515894971386,
+          "honor": 0.6325514068811156,
+          "terminal": 1,
+          "middle": 0.7364793189803924
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.1271911423997852,
+          "honor": 0.5126108063398643,
+          "terminal": 1,
+          "middle": 0.6108963331498196
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05626634747384658,
+          "honor": 0.7971766171352239,
+          "terminal": 1,
+          "middle": 0.9064523564083242
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04121926558845741,
+          "honor": 0.5068122376499495,
+          "terminal": 1,
+          "middle": 0.6787605055559337
+        },
+        "false": {
+          "wildcard-face": 0.009803511316502606,
+          "honor": 0.5199389618864599,
+          "terminal": 1,
+          "middle": 0.6988779713916473
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.018574962218900988,
+          "honor": 0.5248307682528093,
+          "terminal": 1,
+          "middle": 0.7738263204499505
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00048328697633139044,
+          "honor": 0.5209708214179584,
+          "terminal": 1,
+          "middle": 0.6387852878011048
+        },
+        "true": {
+          "wildcard-face": 0.06580011883804933,
+          "honor": 0.45901112356534596,
+          "terminal": 1,
+          "middle": 0.6208168357675254
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07593415700257694,
+          "honor": 0.42865596516838234,
+          "terminal": 1,
+          "middle": 0.6461489770378226
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05937665915049911,
+          "honor": 0.488750778156402,
+          "terminal": 1,
+          "middle": 0.5874094160672266
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.045228503082722374,
+          "honor": 0.685771807064713,
+          "terminal": 1,
+          "middle": 0.7657410269858678
+        },
+        "false": {
+          "wildcard-face": 0.011975662960760957,
+          "honor": 0.7281180929175136,
+          "terminal": 1,
+          "middle": 0.7413398344551391
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.018132747494173,
+          "honor": 0.6421631219730061,
+          "terminal": 1,
+          "middle": 0.7411828775105658
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004705486865976566,
+          "honor": 0.8119665322716824,
+          "terminal": 1,
+          "middle": 0.7402791857229576
+        },
+        "true": {
+          "wildcard-face": 0.07829105882241037,
+          "honor": 0.5799964119352912,
+          "terminal": 1,
+          "middle": 0.8164167350828485
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07881022996273541,
+          "honor": 0.4901481275598701,
+          "terminal": 1,
+          "middle": 0.7060235681372994
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.08093776229204479,
+          "honor": 0.6776214247231358,
+          "terminal": 1,
+          "middle": 0.941800108428767
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04773638194911473,
+          "honor": 0.538236341337487,
+          "terminal": 1,
+          "middle": 0.7040728888291677
+        },
+        "false": {
+          "wildcard-face": 0.011640059755475315,
+          "honor": 0.5594748926267055,
+          "terminal": 1,
+          "middle": 0.7417404064351493
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.017871715772443075,
+          "honor": 0.4835655827789228,
+          "terminal": 1,
+          "middle": 0.7713717360996
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004505210279392161,
+          "honor": 0.646543669028155,
+          "terminal": 1,
+          "middle": 0.7305384712583328
+        },
+        "true": {
+          "wildcard-face": 0.07662035294823365,
+          "honor": 0.48434607345904834,
+          "terminal": 1,
+          "middle": 0.6248554777833687
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.10072803319550945,
+          "honor": 0.4364301865789085,
+          "terminal": 1,
+          "middle": 0.6427260129798841
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05817296402535699,
+          "honor": 0.5399148503399986,
+          "terminal": 1,
+          "middle": 0.5982991596371826
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03014592159383541,
+          "honor": 0.5470740148176306,
+          "terminal": 1,
+          "middle": 0.7222951577057288
+        },
+        "false": {
+          "wildcard-face": 0.0027714159834236135,
+          "honor": 0.5280852325116931,
+          "terminal": 1,
+          "middle": 0.6731622015381282
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.00017979637398675806,
+          "honor": 0.5288938576979193,
+          "terminal": 1,
+          "middle": 0.7614228585914068
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.003406108946966378,
+          "honor": 0.529436200982776,
+          "terminal": 1,
+          "middle": 0.6109452657306537
+        },
+        "true": {
+          "wildcard-face": 0.05410961480177451,
+          "honor": 0.5760520419342842,
+          "terminal": 1,
+          "middle": 0.8361806032747789
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08672811412252236,
+          "honor": 0.5136199287393584,
+          "terminal": 1,
+          "middle": 0.8691392780509332
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03136806542811618,
+          "honor": 0.6471543304295582,
+          "terminal": 1,
+          "middle": 0.848697380254713
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03753841311751204,
+          "honor": 0.5952495566226211,
+          "terminal": 1,
+          "middle": 0.7123174010878693
+        },
+        "false": {
+          "wildcard-face": 0.009878216126068842,
+          "honor": 0.657748169872978,
+          "terminal": 1,
+          "middle": 0.7026590889199185
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.014013723460739473,
+          "honor": 0.50267314103946,
+          "terminal": 1,
+          "middle": 0.6897884283773181
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0047532079432709585,
+          "honor": 0.8247075242239612,
+          "terminal": 1,
+          "middle": 0.7140233809317695
+        },
+        "true": {
+          "wildcard-face": 0.05467737447783022,
+          "honor": 0.4571058561893876,
+          "terminal": 1,
+          "middle": 0.7234499131775158
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05786378760082468,
+          "honor": 0.41086950532437433,
+          "terminal": 1,
+          "middle": 0.7044925684340142
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.054831074793210886,
+          "honor": 0.4927267519908183,
+          "terminal": 1,
+          "middle": 0.7326869605656808
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04774826329180328,
+          "honor": 0.5340205516870313,
+          "terminal": 1,
+          "middle": 0.7090387785526422
+        },
+        "false": {
+          "wildcard-face": 0.019668492651828493,
+          "honor": 0.4845983570010636,
+          "terminal": 1,
+          "middle": 0.6814225139711299
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.022258828002756983,
+          "honor": 0.4838716990256579,
+          "terminal": 1,
+          "middle": 0.8092407836444873
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.016707620589100268,
+          "honor": 0.4749272685104248,
+          "terminal": 1,
+          "middle": 0.5911125941929015
+        },
+        "true": {
+          "wildcard-face": 0.0853485348689312,
+          "honor": 0.6772103998575553,
+          "terminal": 1,
+          "middle": 0.7835900629976523
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.11651825764211084,
+          "honor": 0.5236671707829217,
+          "terminal": 1,
+          "middle": 0.6626836740537361
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.06035525714304084,
+          "honor": 0.8592488809985548,
+          "terminal": 1,
+          "middle": 0.9260619889980716
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.059384976557841,
+          "honor": 0.5714132758441096,
+          "terminal": 1,
+          "middle": 0.7716353215897572
+        },
+        "false": {
+          "wildcard-face": 0.012866685404282862,
+          "honor": 0.5538651818559651,
+          "terminal": 1,
+          "middle": 0.7207098663487345
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.019983490199669888,
+          "honor": 0.5318780801380961,
+          "terminal": 1,
+          "middle": 0.7586312077804157
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0047894829243581415,
+          "honor": 0.579816105596703,
+          "terminal": 1,
+          "middle": 0.6823604368967036
+        },
+        "true": {
+          "wildcard-face": 0.11534173287897767,
+          "honor": 0.5909738224573782,
+          "terminal": 1,
+          "middle": 0.8705527122185284
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.16357137096790825,
+          "honor": 0.5163734155124033,
+          "terminal": 1,
+          "middle": 0.8213503137935876
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0732613876135549,
+          "honor": 0.6937521569818308,
+          "terminal": 1,
+          "middle": 0.9277733983781842
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.048791426970588005,
+          "honor": 0.580082252773032,
+          "terminal": 1,
+          "middle": 0.7404123166191524
+        },
+        "false": {
+          "wildcard-face": 0.014168846143119947,
+          "honor": 0.5795846311723155,
+          "terminal": 1,
+          "middle": 0.741241908251822
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.02538071131299897,
+          "honor": 0.4642518827308814,
+          "terminal": 1,
+          "middle": 0.7820070233008326
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004336878470276042,
+          "honor": 0.6715302888485926,
+          "terminal": 1,
+          "middle": 0.7117795563095074
+        },
+        "true": {
+          "wildcard-face": 0.08595343657986865,
+          "honor": 0.564209803276448,
+          "terminal": 1,
+          "middle": 0.7277209156196123
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07613655970601227,
+          "honor": 0.4690736675703972,
+          "terminal": 1,
+          "middle": 0.6396920875286036
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.09941887164467939,
+          "honor": 0.6523848903451736,
+          "terminal": 1,
+          "middle": 0.8044257560325553
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.036620609451900786,
+          "honor": 0.5453259772570935,
+          "terminal": 1,
+          "middle": 0.7090549008469628
+        },
+        "false": {
+          "wildcard-face": 0.009399100134414215,
+          "honor": 0.5887594725157002,
+          "terminal": 1,
+          "middle": 0.7669453588871992
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.011209894973123111,
+          "honor": 0.5522055190698137,
+          "terminal": 1,
+          "middle": 0.8972310253290722
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.007149366984212649,
+          "honor": 0.6218050787993329,
+          "terminal": 1,
+          "middle": 0.6798732711657252
+        },
+        "true": {
+          "wildcard-face": 0.050499280091738666,
+          "honor": 0.4427416347019016,
+          "terminal": 1,
+          "middle": 0.5814460732334708
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07596759607313941,
+          "honor": 0.39822902730168014,
+          "terminal": 1,
+          "middle": 0.5449570264989161
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03301426161421129,
+          "honor": 0.4807058842885108,
+          "terminal": 1,
+          "middle": 0.6018844040402679
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.045952667750031255,
+          "honor": 0.6265776834531283,
+          "terminal": 1,
+          "middle": 0.7297832131045753
+        },
+        "false": {
+          "wildcard-face": 0.023382139633035377,
+          "honor": 0.5848343580304233,
+          "terminal": 1,
+          "middle": 0.7042929979236997
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.028437891152158005,
+          "honor": 0.5814514626703414,
+          "terminal": 1,
+          "middle": 0.736364277640042
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.017953930935322698,
+          "honor": 0.5925486543827967,
+          "terminal": 1,
+          "middle": 0.6724262473464038
+        },
+        "true": {
+          "wildcard-face": 0.062342660333392766,
+          "honor": 0.7395782375481216,
+          "terminal": 1,
+          "middle": 0.8000768987760595
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08362234543676544,
+          "honor": 0.5962716873994169,
+          "terminal": 1,
+          "middle": 0.6534344059281884
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.043477043078789177,
+          "honor": 0.9112174836998777,
+          "terminal": 1,
+          "middle": 0.9739380555989336
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04745194013809298,
+          "honor": 0.5374089350023694,
+          "terminal": 1,
+          "middle": 0.6614356167619394
+        },
+        "false": {
+          "wildcard-face": 0.014652941159336423,
+          "honor": 0.5058222082124478,
+          "terminal": 1,
+          "middle": 0.6258463103136377
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.018722075252629474,
+          "honor": 0.5551949651853347,
+          "terminal": 1,
+          "middle": 0.6978623890107154
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010312294869969827,
+          "honor": 0.46759871901817524,
+          "terminal": 1,
+          "middle": 0.5676991714262105
+        },
+        "true": {
+          "wildcard-face": 0.09396530244642859,
+          "honor": 0.6102519503397973,
+          "terminal": 1,
+          "middle": 0.7529292924081671
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.11317066651327073,
+          "honor": 0.5446480284854385,
+          "terminal": 1,
+          "middle": 0.6224075079493138
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.07664767676136326,
+          "honor": 0.6968011242978212,
+          "terminal": 1,
+          "middle": 0.9196722292799192
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.043488682285953165,
+          "honor": 0.5893782358012326,
+          "terminal": 1,
+          "middle": 0.7852041739767167
+        },
+        "false": {
+          "wildcard-face": 0.010451997877801777,
+          "honor": 0.6020447578561068,
+          "terminal": 1,
+          "middle": 0.8089043066375352
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.012352306819363076,
+          "honor": 0.44279038159917883,
+          "terminal": 1,
+          "middle": 0.759518565291935
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.005990943746961451,
+          "honor": 0.8297888614630113,
+          "terminal": 1,
+          "middle": 0.8720878174444513
+        },
+        "true": {
+          "wildcard-face": 0.06439285037428723,
+          "honor": 0.5522172366910402,
+          "terminal": 1,
+          "middle": 0.7332534939717196
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08959107496407451,
+          "honor": 0.4532321285612649,
+          "terminal": 1,
+          "middle": 0.6788578607677681
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.035047990404192195,
+          "honor": 0.6763947821406431,
+          "terminal": 1,
+          "middle": 0.7902109717548913
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03358538676152585,
+          "honor": 0.6168243826436975,
+          "terminal": 1,
+          "middle": 0.6762223116370557
+        },
+        "false": {
+          "wildcard-face": 0.007122061027316772,
+          "honor": 0.6556209031747332,
+          "terminal": 1,
+          "middle": 0.6669111512226238
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.0003463371358161053,
+          "honor": 0.6264207812742594,
+          "terminal": 1,
+          "middle": 0.6233562948730301
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.012993952748723855,
+          "honor": 0.6997155826490599,
+          "terminal": 1,
+          "middle": 0.7197907606314533
+        },
+        "true": {
+          "wildcard-face": 0.050314686417516935,
+          "honor": 0.5248054079499583,
+          "terminal": 1,
+          "middle": 0.6837613775604368
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05987987722382069,
+          "honor": 0.398898770061627,
+          "terminal": 1,
+          "middle": 0.5608611205343631
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04256278285446967,
+          "honor": 0.6495812304768582,
+          "terminal": 1,
+          "middle": 0.8145283677657732
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.0761363109017435,
+          "honor": 0.6401056380904838,
+          "terminal": 1,
+          "middle": 0.7458890546039824
+        },
+        "false": {
+          "wildcard-face": 0.014278627733694975,
+          "honor": 0.6358525156918263,
+          "terminal": 1,
+          "middle": 0.7009242725706227
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.023415453739337774,
+          "honor": 0.5214033497044521,
+          "terminal": 1,
+          "middle": 0.7088905153061944
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0008402521854990392,
+          "honor": 0.7596106591451025,
+          "terminal": 1,
+          "middle": 0.6896497575684426
+        },
+        "true": {
+          "wildcard-face": 0.17621307766116515,
+          "honor": 0.6356720997239788,
+          "terminal": 1,
+          "middle": 0.8459059428694814
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.20114039402276584,
+          "honor": 0.4907185380263276,
+          "terminal": 1,
+          "middle": 0.6499252395069781
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.10626767575559311,
+          "honor": 0.745395700032745,
+          "terminal": 0.8559517471161359,
+          "middle": 1
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03483667178692105,
+          "honor": 0.5312013257613979,
+          "terminal": 1,
+          "middle": 0.7793378565905106
+        },
+        "false": {
+          "wildcard-face": 0.011659943994920237,
+          "honor": 0.514379649730176,
+          "terminal": 1,
+          "middle": 0.7882459894883271
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.009807523006832155,
+          "honor": 0.5721112954035759,
+          "terminal": 1,
+          "middle": 0.8450362904904051
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.012305227732397053,
+          "honor": 0.4698354017811551,
+          "terminal": 1,
+          "middle": 0.7402467487904972
+        },
+        "true": {
+          "wildcard-face": 0.043285510173607905,
+          "honor": 0.5461720549610426,
+          "terminal": 1,
+          "middle": 0.7562562137067256
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05636740628839955,
+          "honor": 0.4122196652963985,
+          "terminal": 1,
+          "middle": 0.6784886604453335
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.029944966301468694,
+          "honor": 0.6885902129217091,
+          "terminal": 1,
+          "middle": 0.8316679053787773
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.045021144096839036,
+          "honor": 0.5382729916051988,
+          "terminal": 1,
+          "middle": 0.74717927666685
+        },
+        "false": {
+          "wildcard-face": 0.013836755081287611,
+          "honor": 0.5378962897849623,
+          "terminal": 1,
+          "middle": 0.737928385427669
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.016473116107273707,
+          "honor": 0.5288452488713407,
+          "terminal": 1,
+          "middle": 0.7434933937151028
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00950985261496941,
+          "honor": 0.5536797973600903,
+          "terminal": 1,
+          "middle": 0.7335147305401735
+        },
+        "true": {
+          "wildcard-face": 0.07492813799112719,
+          "honor": 0.5223276160625939,
+          "terminal": 1,
+          "middle": 0.759192135715228
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.09988307179921468,
+          "honor": 0.4679356630938276,
+          "terminal": 1,
+          "middle": 0.6709352158225476
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04698903013825591,
+          "honor": 0.5880704780295056,
+          "terminal": 1,
+          "middle": 0.8695380743086664
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04409056794503213,
+          "honor": 0.6003003470603536,
+          "terminal": 1,
+          "middle": 0.7709586353957746
+        },
+        "false": {
+          "wildcard-face": 0.008145216105442383,
+          "honor": 0.6227433815264536,
+          "terminal": 1,
+          "middle": 0.812185167840159
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.014885294095371128,
+          "honor": 0.534698728342674,
+          "terminal": 1,
+          "middle": 0.827675944568884
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00042962340696386405,
+          "honor": 0.726114051959128,
+          "terminal": 1,
+          "middle": 0.8054864642632603
+        },
+        "true": {
+          "wildcard-face": 0.07216631395604087,
+          "honor": 0.536728885829619,
+          "terminal": 1,
+          "middle": 0.6753800419539605
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.10298524115257397,
+          "honor": 0.4958514965243778,
+          "terminal": 1,
+          "middle": 0.6506003139199689
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05168815089260875,
+          "honor": 0.5795287000333909,
+          "terminal": 1,
+          "middle": 0.7071675393395592
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.038963381190489296,
+          "honor": 0.5702817277997754,
+          "terminal": 1,
+          "middle": 0.7913601191553852
+        },
+        "false": {
+          "wildcard-face": 0.011995962834666423,
+          "honor": 0.5716646906052333,
+          "terminal": 1,
+          "middle": 0.760498747917
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.00965925237524086,
+          "honor": 0.6463030920080456,
+          "terminal": 1,
+          "middle": 0.8199210492600215
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.012933714123774928,
+          "honor": 0.5024783037331889,
+          "terminal": 1,
+          "middle": 0.7016024342626039
+        },
+        "true": {
+          "wildcard-face": 0.05920281155206873,
+          "honor": 0.5537232977691305,
+          "terminal": 1,
+          "middle": 0.858856554234808
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08090183522419792,
+          "honor": 0.47140049925847716,
+          "terminal": 1,
+          "middle": 0.7489480369044075
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.028693644496505796,
+          "honor": 0.6603853753441353,
+          "terminal": 0.9643585634914539,
+          "middle": 1
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04399384836191476,
+          "honor": 0.5554028196852047,
+          "terminal": 1,
+          "middle": 0.6643670834795334
+        },
+        "false": {
+          "wildcard-face": 0.008814496728188213,
+          "honor": 0.5853497905839132,
+          "terminal": 1,
+          "middle": 0.6648747613204044
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.011138452851599508,
+          "honor": 0.462250041926976,
+          "terminal": 1,
+          "middle": 0.6618061512824113
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00449999170296683,
+          "honor": 0.7365684729428125,
+          "terminal": 1,
+          "middle": 0.6677005114710013
+        },
+        "true": {
+          "wildcard-face": 0.082799354025297,
+          "honor": 0.47711092045332193,
+          "terminal": 1,
+          "middle": 0.6508020125862621
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.11717231452480245,
+          "honor": 0.43838585447561784,
+          "terminal": 1,
+          "middle": 0.559803453749306
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04666731703373462,
+          "honor": 0.5129678988485682,
+          "terminal": 1,
+          "middle": 0.7487448687147054
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.05127102416416272,
+          "honor": 0.5564948379748449,
+          "terminal": 1,
+          "middle": 0.8164799640231314
+        },
+        "false": {
+          "wildcard-face": 0.010490806948506471,
+          "honor": 0.5330161551673874,
+          "terminal": 1,
+          "middle": 0.7892259722212567
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.010203795743483124,
+          "honor": 0.5891286695199236,
+          "terminal": 1,
+          "middle": 0.8577326320888556
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.008846967485672413,
+          "honor": 0.4819754973958699,
+          "terminal": 1,
+          "middle": 0.7187806862742424
+        },
+        "true": {
+          "wildcard-face": 0.09250759111670252,
+          "honor": 0.5845184069148588,
+          "terminal": 1,
+          "middle": 0.8614135619895675
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.16639447778283087,
+          "honor": 0.6176164281049084,
+          "terminal": 1,
+          "middle": 0.8525034102724518
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.024874973038345887,
+          "honor": 0.5635928259569349,
+          "terminal": 1,
+          "middle": 0.8609258497435172
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.035029385118556876,
+          "honor": 0.667306390129544,
+          "terminal": 1,
+          "middle": 0.7299669541526416
+        },
+        "false": {
+          "wildcard-face": 0.007245276431731489,
+          "honor": 0.6497644959040103,
+          "terminal": 1,
+          "middle": 0.6944255644812993
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.004463041406299908,
+          "honor": 0.6231798011449005,
+          "terminal": 1,
+          "middle": 0.7113644414058498
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.008994553825468278,
+          "honor": 0.6908514042252223,
+          "terminal": 1,
+          "middle": 0.6837210708947042
+        },
+        "true": {
+          "wildcard-face": 0.05582842633098402,
+          "honor": 0.6966288687876828,
+          "terminal": 1,
+          "middle": 0.8024446645287002
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.052899233267265686,
+          "honor": 0.6331218259872758,
+          "terminal": 1,
+          "middle": 0.6825013609121875
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.06275151172027195,
+          "honor": 0.7807535384820605,
+          "terminal": 1,
+          "middle": 0.9477372819564832
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.037254012999022076,
+          "honor": 0.5735067900586633,
+          "terminal": 1,
+          "middle": 0.6915101963010797
+        },
+        "false": {
+          "wildcard-face": 0.007084120668750566,
+          "honor": 0.5717828763435416,
+          "terminal": 1,
+          "middle": 0.6514093282112532
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.008017002025556517,
+          "honor": 0.48727070037984255,
+          "terminal": 1,
+          "middle": 0.6186631549741299
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0047097369209959305,
+          "honor": 0.6834760681772676,
+          "terminal": 1,
+          "middle": 0.6948849274896622
+        },
+        "true": {
+          "wildcard-face": 0.07268059603099805,
+          "honor": 0.5582430448722098,
+          "terminal": 1,
+          "middle": 0.7976432107818093
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05942242606711212,
+          "honor": 0.6170655280292824,
+          "terminal": 1,
+          "middle": 0.7224861172220141
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.09359725980855227,
+          "honor": 0.512216179576202,
+          "terminal": 1,
+          "middle": 0.8957936740675376
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03156800255286339,
+          "honor": 0.43174930461444794,
+          "terminal": 1,
+          "middle": 0.5669691187001333
+        },
+        "false": {
+          "wildcard-face": 0.007612177611497061,
+          "honor": 0.40603214213493344,
+          "terminal": 1,
+          "middle": 0.5295285581392437
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.007986192726195506,
+          "honor": 0.44659094945148897,
+          "terminal": 1,
+          "middle": 0.5819228880028768
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.006201022937961718,
+          "honor": 0.36941181289515723,
+          "terminal": 1,
+          "middle": 0.47801524235769105
+        },
+        "true": {
+          "wildcard-face": 0.05159696579728457,
+          "honor": 0.4775169228708153,
+          "terminal": 1,
+          "middle": 0.6458830464042061
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07326642233120735,
+          "honor": 0.34295338766095435,
+          "terminal": 1,
+          "middle": 0.5100790554181617
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0274383957415177,
+          "honor": 0.647348203465491,
+          "terminal": 1,
+          "middle": 0.817575837885521
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04091780027302618,
+          "honor": 0.5372200796303238,
+          "terminal": 1,
+          "middle": 0.7227846945894207
+        },
+        "false": {
+          "wildcard-face": 0.015679695726719414,
+          "honor": 0.49819971915644756,
+          "terminal": 1,
+          "middle": 0.7146484327868058
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.020230734973510172,
+          "honor": 0.5309223409257121,
+          "terminal": 1,
+          "middle": 0.802454205505928
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.011238921107382699,
+          "honor": 0.4700848381822846,
+          "terminal": 1,
+          "middle": 0.642003622425978
+        },
+        "true": {
+          "wildcard-face": 0.056158494193962606,
+          "honor": 0.6011922844781036,
+          "terminal": 1,
+          "middle": 0.7312480138784554
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08527961046666936,
+          "honor": 0.5338611064432102,
+          "terminal": 1,
+          "middle": 0.6784148599340462
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03169543605501196,
+          "honor": 0.6783928215227129,
+          "terminal": 1,
+          "middle": 0.7799039401054649
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.032293296501979096,
+          "honor": 0.581853839857183,
+          "terminal": 1,
+          "middle": 0.7026742782466531
+        },
+        "false": {
+          "wildcard-face": 0.0028920442346536614,
+          "honor": 0.6170753132200413,
+          "terminal": 1,
+          "middle": 0.6926325463170152
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.0040833029969138505,
+          "honor": 0.5493452760664946,
+          "terminal": 1,
+          "middle": 0.7087630567041315
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00015613817773510398,
+          "honor": 0.7156280043819718,
+          "terminal": 1,
+          "middle": 0.6865095790420197
+        },
+        "true": {
+          "wildcard-face": 0.06558456349585728,
+          "honor": 0.46589454880015,
+          "terminal": 1,
+          "middle": 0.7183233631397277
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08150224202361048,
+          "honor": 0.39233841121423907,
+          "terminal": 1,
+          "middle": 0.6185197282534004
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.05354466801973787,
+          "honor": 0.5359798492493305,
+          "terminal": 1,
+          "middle": 0.8373217917572506
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.02643747214534015,
+          "honor": 0.482875996206625,
+          "terminal": 1,
+          "middle": 0.5879075865300883
+        },
+        "false": {
+          "wildcard-face": 0.0075748955162499585,
+          "honor": 0.48648688790752465,
+          "terminal": 1,
+          "middle": 0.5969652218603178
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.008176788001347263,
+          "honor": 0.4888241900721322,
+          "terminal": 1,
+          "middle": 0.6594705570235512
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00646311986393512,
+          "honor": 0.4927987743700488,
+          "terminal": 1,
+          "middle": 0.5462527701001793
+        },
+        "true": {
+          "wildcard-face": 0.03408637646243294,
+          "honor": 0.4612736641729654,
+          "terminal": 1,
+          "middle": 0.5582676812246835
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.03425897191696064,
+          "honor": 0.3773239812883349,
+          "terminal": 1,
+          "middle": 0.5059058669081883
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.036515279327168054,
+          "honor": 0.5562096627527833,
+          "terminal": 1,
+          "middle": 0.6129186211236216
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.031582827519073944,
+          "honor": 0.5152547006359288,
+          "terminal": 1,
+          "middle": 0.7336831893591605
+        },
+        "false": {
+          "wildcard-face": 0.013366284129273612,
+          "honor": 0.4828692785837302,
+          "terminal": 1,
+          "middle": 0.7303541272680389
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.029285732293855893,
+          "honor": 0.5298163972455587,
+          "terminal": 1,
+          "middle": 0.8295705745658706
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.0006211608980593483,
+          "honor": 0.44823120568193114,
+          "terminal": 1,
+          "middle": 0.6492002122901345
+        },
+        "true": {
+          "wildcard-face": 0.034333766927978925,
+          "honor": 0.5757396478888746,
+          "terminal": 1,
+          "middle": 0.7315047309556013
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.039987055084201584,
+          "honor": 0.5068730493891321,
+          "terminal": 1,
+          "middle": 0.6917758766373975
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03186527188005121,
+          "honor": 0.649269052898699,
+          "terminal": 1,
+          "middle": 0.7758363112141032
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04149852378398639,
+          "honor": 0.6476904053598161,
+          "terminal": 1,
+          "middle": 0.7336226323539891
+        },
+        "false": {
+          "wildcard-face": 0.008699992368766153,
+          "honor": 0.7247735564370218,
+          "terminal": 1,
+          "middle": 0.7797097788831575
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.010081188232857164,
+          "honor": 0.6335481755787301,
+          "terminal": 1,
+          "middle": 0.8159266109596343
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.005591325552742584,
+          "honor": 0.8371467258080854,
+          "terminal": 1,
+          "middle": 0.7578511232808303
+        },
+        "true": {
+          "wildcard-face": 0.059362712963020495,
+          "honor": 0.4721852414538339,
+          "terminal": 1,
+          "middle": 0.617205712388031
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.05459434143902675,
+          "honor": 0.41623661079131635,
+          "terminal": 1,
+          "middle": 0.615208652905622
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0678474075837931,
+          "honor": 0.5084357858552531,
+          "terminal": 1,
+          "middle": 0.6120092982203534
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.041938423182324415,
+          "honor": 0.5127054902340824,
+          "terminal": 1,
+          "middle": 0.6605867229296318
+        },
+        "false": {
+          "wildcard-face": 0.005462662157708334,
+          "honor": 0.5101564153026672,
+          "terminal": 1,
+          "middle": 0.6636588494260416
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.004780019900889039,
+          "honor": 0.461193314789365,
+          "terminal": 1,
+          "middle": 0.74047682510165
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004181169574529862,
+          "honor": 0.5663427714087633,
+          "terminal": 1,
+          "middle": 0.5938551706328423
+        },
+        "true": {
+          "wildcard-face": 0.07678783718528572,
+          "honor": 0.49857572750169443,
+          "terminal": 1,
+          "middle": 0.6398457345736565
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0862050268386923,
+          "honor": 0.4680793332869793,
+          "terminal": 1,
+          "middle": 0.5392797800470935
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.07150025774873885,
+          "honor": 0.5295764151659041,
+          "terminal": 1,
+          "middle": 0.7674378615148024
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03105351283649751,
+          "honor": 0.5204118126147975,
+          "terminal": 1,
+          "middle": 0.712362191911031
+        },
+        "false": {
+          "wildcard-face": 0.0027637540044021126,
+          "honor": 0.4938727764052141,
+          "terminal": 1,
+          "middle": 0.6382128609031161
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.004515139167823632,
+          "honor": 0.4985321761308632,
+          "terminal": 1,
+          "middle": 0.6409686662831172
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00014166449030994385,
+          "honor": 0.49110369029705253,
+          "terminal": 1,
+          "middle": 0.6306531245305524
+        },
+        "true": {
+          "wildcard-face": 0.05861217002182249,
+          "honor": 0.5692842780975845,
+          "terminal": 1,
+          "middle": 0.8878138052604643
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08155366172135418,
+          "honor": 0.44359998964969305,
+          "terminal": 1,
+          "middle": 0.7600830000918323
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.033054376631209165,
+          "honor": 0.6947326827078685,
+          "terminal": 0.945207278221639,
+          "middle": 1
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.044863425479908604,
+          "honor": 0.5131195438800461,
+          "terminal": 1,
+          "middle": 0.66017899376686
+        },
+        "false": {
+          "wildcard-face": 0.014867600234342039,
+          "honor": 0.5268108110104659,
+          "terminal": 1,
+          "middle": 0.692527197361089
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.018432647249453815,
+          "honor": 0.47001548182713776,
+          "terminal": 1,
+          "middle": 0.7402277246120288
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.010991354451976439,
+          "honor": 0.5732041355886068,
+          "terminal": 1,
+          "middle": 0.6626853618649781
+        },
+        "true": {
+          "wildcard-face": 0.07770315651713242,
+          "honor": 0.4528492941081368,
+          "terminal": 1,
+          "middle": 0.5555773742205721
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07634792689732649,
+          "honor": 0.35479256961611705,
+          "terminal": 1,
+          "middle": 0.5635218168912628
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.08664804890957103,
+          "honor": 0.5345046529187906,
+          "terminal": 1,
+          "middle": 0.5423334121415943
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03516792726338218,
+          "honor": 0.4779737292200863,
+          "terminal": 1,
+          "middle": 0.642267611202789
+        },
+        "false": {
+          "wildcard-face": 0.017242010020282254,
+          "honor": 0.4620336883291213,
+          "terminal": 1,
+          "middle": 0.6224597248842743
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.009742212803182741,
+          "honor": 0.4854362469305893,
+          "terminal": 1,
+          "middle": 0.675895516442324
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.02251781181953164,
+          "honor": 0.4416356898747989,
+          "terminal": 1,
+          "middle": 0.5741249658562718
+        },
+        "true": {
+          "wildcard-face": 0.039716960461896524,
+          "honor": 0.4978070842071657,
+          "terminal": 1,
+          "middle": 0.6818912924869982
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.058510565707204434,
+          "honor": 0.4537385911096024,
+          "terminal": 1,
+          "middle": 0.6094195450613663
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.02417255367081995,
+          "honor": 0.5472567205859226,
+          "terminal": 1,
+          "middle": 0.7454700577226894
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.030842959463479452,
+          "honor": 0.5801323963738976,
+          "terminal": 1,
+          "middle": 0.6799523789197843
+        },
+        "false": {
+          "wildcard-face": 0.010337030085911034,
+          "honor": 0.617007518835264,
+          "terminal": 1,
+          "middle": 0.7302846906878964
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.01479809778004513,
+          "honor": 0.5447401834288139,
+          "terminal": 1,
+          "middle": 0.8569697847647016
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.007435046210629911,
+          "honor": 0.6752129363245164,
+          "terminal": 1,
+          "middle": 0.6764051493576027
+        },
+        "true": {
+          "wildcard-face": 0.03212695513504583,
+          "honor": 0.48555548518052105,
+          "terminal": 1,
+          "middle": 0.5625738911427292
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.015596691443816126,
+          "honor": 0.43920233039314915,
+          "terminal": 1,
+          "middle": 0.5776271500397622
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0434456411307919,
+          "honor": 0.5188394947798376,
+          "terminal": 1,
+          "middle": 0.5442987270310999
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04477077367589444,
+          "honor": 0.5387684107792856,
+          "terminal": 1,
+          "middle": 0.7170797500995101
+        },
+        "false": {
+          "wildcard-face": 0.011288236059226915,
+          "honor": 0.5268703875797943,
+          "terminal": 1,
+          "middle": 0.6892819761591001
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.009483283888773725,
+          "honor": 0.536613905600253,
+          "terminal": 1,
+          "middle": 0.7281994455259019
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.011409867120486602,
+          "honor": 0.5194375961470937,
+          "terminal": 1,
+          "middle": 0.6514861556140359
+        },
+        "true": {
+          "wildcard-face": 0.08637160317410632,
+          "honor": 0.5539450282824872,
+          "terminal": 1,
+          "middle": 0.781972945380515
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.09793971139663774,
+          "honor": 0.4699147448837049,
+          "terminal": 1,
+          "middle": 0.6937380140748439
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.07515441563065015,
+          "honor": 0.6651618873146837,
+          "terminal": 1,
+          "middle": 0.9006335386569405
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04552376648900227,
+          "honor": 0.4587321986209847,
+          "terminal": 1,
+          "middle": 0.6897455152942171
+        },
+        "false": {
+          "wildcard-face": 0.020887635170359565,
+          "honor": 0.46451175480503165,
+          "terminal": 1,
+          "middle": 0.6877741246687552
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.015765804551533882,
+          "honor": 0.5071146399276006,
+          "terminal": 1,
+          "middle": 0.7715471660818946
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.023223255993503514,
+          "honor": 0.43376714620208634,
+          "terminal": 1,
+          "middle": 0.6230868258343338
+        },
+        "true": {
+          "wildcard-face": 0.06205563447333012,
+          "honor": 0.42779958853709665,
+          "terminal": 1,
+          "middle": 0.6829595193167799
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.08210224556623708,
+          "honor": 0.3634633107672068,
+          "terminal": 1,
+          "middle": 0.5946776097266213
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04600451451208127,
+          "honor": 0.49074273817858255,
+          "terminal": 1,
+          "middle": 0.7673036019403409
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03530288937389482,
+          "honor": 0.5975763336461702,
+          "terminal": 1,
+          "middle": 0.7041839617665423
+        },
+        "false": {
+          "wildcard-face": 0.00844378298811067,
+          "honor": 0.6084750977500888,
+          "terminal": 1,
+          "middle": 0.7199617758877996
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.009590302253424743,
+          "honor": 0.5492426167569978,
+          "terminal": 1,
+          "middle": 0.7898370480367807
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.006711333763658901,
+          "honor": 0.6596577057270273,
+          "terminal": 1,
+          "middle": 0.6705347875584882
+        },
+        "true": {
+          "wildcard-face": 0.05277450066441478,
+          "honor": 0.5646088693896548,
+          "terminal": 1,
+          "middle": 0.6650463829171034
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.07011128391123199,
+          "honor": 0.4893920305241758,
+          "terminal": 1,
+          "middle": 0.6591074353577779
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.041691429626152555,
+          "honor": 0.6384287989145967,
+          "terminal": 1,
+          "middle": 0.6687680593092981
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.0375514383882224,
+          "honor": 0.5005407568921549,
+          "terminal": 1,
+          "middle": 0.6718392059454288
+        },
+        "false": {
+          "wildcard-face": 0.012671784634123537,
+          "honor": 0.47426615372409375,
+          "terminal": 1,
+          "middle": 0.6619021715922492
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.017269746800121645,
+          "honor": 0.4165371981807115,
+          "terminal": 1,
+          "middle": 0.6782407663700237
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.007786071615052857,
+          "honor": 0.5319342729228769,
+          "terminal": 1,
+          "middle": 0.6480248784564725
+        },
+        "true": {
+          "wildcard-face": 0.05971553663280588,
+          "honor": 0.5455043047593301,
+          "terminal": 1,
+          "middle": 0.6819367126292722
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.11029555549758534,
+          "honor": 0.5980989077583698,
+          "terminal": 1,
+          "middle": 0.7173537594417139
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03306406607919291,
+          "honor": 0.5245941811582326,
+          "terminal": 1,
+          "middle": 0.6585655564028857
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03491222675995376,
+          "honor": 0.5142574659447654,
+          "terminal": 1,
+          "middle": 0.6644174636977463
+        },
+        "false": {
+          "wildcard-face": 0.004780564917882514,
+          "honor": 0.5054579902585279,
+          "terminal": 1,
+          "middle": 0.6627402340924171
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.0003210289713237828,
+          "honor": 0.43603758151104777,
+          "terminal": 1,
+          "middle": 0.7097839642648597
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.006483390209699639,
+          "honor": 0.5589597217466422,
+          "terminal": 1,
+          "middle": 0.6349538501016131
+        },
+        "true": {
+          "wildcard-face": 0.05953091654731443,
+          "honor": 0.5157207404184854,
+          "terminal": 1,
+          "middle": 0.6559628334545625
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0806072490456877,
+          "honor": 0.4451027551337269,
+          "terminal": 1,
+          "middle": 0.610933024349435
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.051228642855220705,
+          "honor": 0.5769909728001709,
+          "terminal": 1,
+          "middle": 0.7009906053615585
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.04638167516959208,
+          "honor": 0.4768594729304513,
+          "terminal": 1,
+          "middle": 0.7000710701954165
+        },
+        "false": {
+          "wildcard-face": 0.021025739530284034,
+          "honor": 0.45627287769925173,
+          "terminal": 1,
+          "middle": 0.6811872267342894
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.03110159876260398,
+          "honor": 0.45730421235419066,
+          "terminal": 1,
+          "middle": 0.7212392678413072
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.011717613893198588,
+          "honor": 0.45707238343386913,
+          "terminal": 1,
+          "middle": 0.6502347459514861
+        },
+        "true": {
+          "wildcard-face": 0.0693096089572147,
+          "honor": 0.5092499816560632,
+          "terminal": 1,
+          "middle": 0.7376235399930747
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.09711051210072787,
+          "honor": 0.4051885991412066,
+          "terminal": 1,
+          "middle": 0.6513011768173181
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.04354153313483979,
+          "honor": 0.6241048439045421,
+          "terminal": 1,
+          "middle": 0.829774552449751
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.037967692880736946,
+          "honor": 0.5662773973134541,
+          "terminal": 1,
+          "middle": 0.7226201139728219
+        },
+        "false": {
+          "wildcard-face": 0.013205312149186806,
+          "honor": 0.5728568970346537,
+          "terminal": 1,
+          "middle": 0.7124486714409779
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.021666698095017006,
+          "honor": 0.5502340266846268,
+          "terminal": 1,
+          "middle": 0.7356872641897729
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.004590974198803825,
+          "honor": 0.6051348296199501,
+          "terminal": 1,
+          "middle": 0.6883125873748679
+        },
+        "true": {
+          "wildcard-face": 0.05458268667629817,
+          "honor": 0.5381098833119565,
+          "terminal": 1,
+          "middle": 0.7352567709202816
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.0822895119243963,
+          "honor": 0.4945377599588355,
+          "terminal": 1,
+          "middle": 0.6373362714652123
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.03026670042780603,
+          "honor": 0.5998580629304441,
+          "terminal": 1,
+          "middle": 0.8771573851890374
+        }
+      }
+    },
+    {
+      "version": 1,
+      "weights": {
+        "global": {
+          "wildcard-face": 0.03077127404404009,
+          "honor": 0.6018937146512532,
+          "terminal": 1,
+          "middle": 0.7398906708332178
+        },
+        "false": {
+          "wildcard-face": 0.005508852423289519,
+          "honor": 0.6650594563239335,
+          "terminal": 1,
+          "middle": 0.8019652987745667
+        },
+        "false/low-1-40": {
+          "wildcard-face": 0.005697233707306697,
+          "honor": 0.6399199808979588,
+          "terminal": 1,
+          "middle": 0.8424563870267308
+        },
+        "false/mid-40-160": {
+          "wildcard-face": 0.00421300856381255,
+          "honor": 0.6918632150951758,
+          "terminal": 1,
+          "middle": 0.7746849641558898
+        },
+        "true": {
+          "wildcard-face": 0.03913745427678375,
+          "honor": 0.4751226894558707,
+          "terminal": 1,
+          "middle": 0.6170128921351679
+        },
+        "true/low-1-40": {
+          "wildcard-face": 0.03379361447975669,
+          "honor": 0.46231533499953886,
+          "terminal": 1,
+          "middle": 0.5923229414492598
+        },
+        "true/mid-40-160": {
+          "wildcard-face": 0.0450235069686305,
+          "honor": 0.4781683149591578,
+          "terminal": 1,
+          "middle": 0.6292790703110546
+        }
+      }
+    }
+  ]
+}
