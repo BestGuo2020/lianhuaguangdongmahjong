@@ -49,7 +49,8 @@ import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 import { createBloodFlowRecordState, recordBloodFlowSettle, recordBloodFlowView, type BloodFlowRecordContext } from '../../../replay/bloodFlowRecorder'
 import type { ReplayRecorderHooks } from '../../../replay/types'
 import {
-  choiceTookEffect, decisionStateOf, legalActionId, seatLegalActions, windowKindOf,
+  choiceTookEffect, decisionStateOf, legalActionId, seatLegalActions, settlementsFromView, windowKindOf,
+  type BloodFlowLedgerViewLike,
   type BloodFlowViewLike,
 } from '../../../replay/analysis/bloodFlowAdapter'
 import type { AnalysisRecorder } from '../../../replay/analysis/recorder'
@@ -364,6 +365,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (next.replay) recordReplaySpectator(next.replay)
       if (next.public.roundResult) recordReplaySettle(next)
     }
+    // 分析记录（§5）：权威账本的新结算也在这里入账 —— 与录制共用同一汇聚点，绕过 request 的路径同样覆盖。
+    if (options.analysis) {
+      for (const settlement of settlementsFromView(next as unknown as BloodFlowLedgerViewLike, state.round.value, analysisSettlementsSeen)) {
+        options.analysis.settlement(settlement)
+      }
+    }
     // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（淡出→换曲→淡入在音频层）。
     winMusic.update(winMusicState)
     // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
@@ -614,6 +621,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     if (options.externalAuthority) options.externalAuthority.send(command)
     else void request({ kind: 'command', command })
   }
+  /** 分析记录：已入账的结算（胡牌批次/杠）id，视角是累计的，同一结算只记一次引用（§5）。 */
+  const analysisSettlementsSeen = new Set<string>()
   /**
    * 人类提交后的执行回执：窗口推进时才判定（§3.4、§10.2）。
    * 只有该座位出现可见变化才算 executed，否则记 state-changed —— 不能因为"请求发出去了"就算执行成功。

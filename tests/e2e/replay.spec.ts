@@ -114,6 +114,16 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect(['pending', 'executed', 'overridden', 'window-expired', 'state-changed', 'rejected-illegal', 'cancelled'])
       .toContain((last.execution as { status: string }).status)
     expect(last.timing).toBeTruthy()
+
+    // 计分流水（§5）：引用权威账本，每次胡牌批次/杠一条；赢家与付款座位可从 deltas 推出，分数守恒
+    const settlements = probe.parts.filter(part => part.tag === 'settlement').map(part => part.value)
+    expect(settlements.length, '血流一场必然有结算').toBeGreaterThan(0)
+    const firstSettlement = settlements[0]
+    expect(firstSettlement.batchId).toBeTruthy()
+    expect(firstSettlement.kind).toBeTruthy()
+    expect((firstSettlement.deltas as number[]).length).toBe(4)
+    expect((firstSettlement.scoresAfter as number[]).length).toBe(4)
+    expect((firstSettlement.deltas as number[]).reduce((sum, delta) => sum + delta, 0)).toBe(0)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
