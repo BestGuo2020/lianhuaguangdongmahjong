@@ -360,6 +360,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     roundIndex: number; wall: TileType[]; dealer: number
     flipTile: TileType | null; flipStack: number | null
   } | null = null
+  /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
+  const analysisRoundCommands: Array<{ seat: number; kind: string; at: number }> = []
   function apply(next: BloodFlowWorkerView) {
     const previous = view.value
     view.value = next
@@ -380,7 +382,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           dealer: analysisRoundOpening.dealer,
           ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
           flipStack: analysisRoundOpening.flipStack,
+          // 完整权威命令序列（含过牌）+ 执行顺序：只有牌墙与展示步骤不足以精确复现（§6）。
+          commands: analysisRoundCommands.map((entry) => ({ ...entry })),
         })
+        analysisRoundCommands.length = 0
         analysisRoundOpening = null
       }
     }
@@ -596,6 +601,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const next = await active.request<BloodFlowWorkerView>(action ? { kind: 'command', command: {
         authorityEpoch: own.authorityEpoch, roundId: own.roundId, windowId, stateVersion: own.window.version, seat, action,
       }, replay: Boolean(options.recorder) } : { kind: 'bot', seat, windowId, replay: Boolean(options.recorder) })
+      // 分析记录（§6）：机器人/模型座位的命令同样入序列（否则只有牌墙、无法精确复现）。
+      if (options.analysis && action) analysisRoundCommands.push({ seat, kind: action.kind, at: Date.now() })
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
       // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。
       if (action) {
@@ -638,6 +645,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
+    // 分析记录（§6）：人类命令入序列（含过牌），供赛后精确复现。
+    if (options.analysis) analysisRoundCommands.push({ seat: current.seat, kind: action.kind, at: Date.now() })
     if (options.externalAuthority) options.externalAuthority.send(command)
     else void request({ kind: 'command', command })
   }

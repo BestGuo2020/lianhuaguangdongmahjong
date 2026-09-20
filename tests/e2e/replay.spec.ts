@@ -124,6 +124,19 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
     expect((firstSettlement.deltas as number[]).length).toBe(4)
     expect((firstSettlement.scoresAfter as number[]).length).toBe(4)
     expect((firstSettlement.deltas as number[]).reduce((sum, delta) => sum + delta, 0)).toBe(0)
+
+    // 赛后复现数据（§6）：每局一条，含完整初始牌墙与权威命令序列（含过牌）
+    const reproductions = probe.parts.filter(part => part.tag === 'reproduction').map(part => part.value)
+    expect(reproductions.length, '每局应有一条复现数据').toBeGreaterThan(0)
+    const reproduction = reproductions[0]
+    expect(reproduction.available).toBe(true)
+    const wall = reproduction.initialWall as string[]
+    expect(wall.length).toBeGreaterThanOrEqual(130)
+    expect(wall.length).toBeLessThanOrEqual(136)
+    expect(typeof reproduction.dealer).toBe('number')
+    const commands = reproduction.commands as Array<{ seat: number; kind: string }>
+    expect(commands.length, '应有权威命令序列').toBeGreaterThan(0)
+    expect(commands.every(entry => typeof entry.seat === 'number' && typeof entry.kind === 'string')).toBe(true)
   }
 
   const byRuleset = (id: string) => fixture.matches.find((match) => match.rulesetId === id)!
