@@ -32,6 +32,11 @@ export interface ReplayMatchMeta {
   humanSeat: number
   /** local（默认）= 单机对局；remote = 联机对局的房主侧牌谱。 */
   gameMode?: 'local' | 'remote'
+  /**
+   * 本场是否开着分析录制（§9.2、§10.7）：列表据此区分「分析：未开启」（当时就没开）
+   * 与「分析：缺少决策分析记录」（旧录像或记录已丢失）。旧记录没有这个字段 ⇒ undefined。
+   */
+  analysisRecorded?: boolean
 }
 
 export interface ReplaySink {
@@ -196,6 +201,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       status: 'aborted',
       roundCount: 0,
       summary: '',
+      // 记下"这场当时是否开着分析录制"：列表要能区分「未开启」与「缺少决策分析记录」（§10.7）
+      ...(meta.analysisRecorded === undefined ? {} : { analysisRecorded: meta.analysisRecorded }),
     }
     reservedMatchId = null
   }
