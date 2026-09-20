@@ -129,6 +129,7 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   // 窗口轨迹对照：重放实际见过的窗口集合 vs 已消费记录里涉及的窗口集合
   const seenWindows = new Set<string>()
   const windowTrace: string[] = []
+  const pairedTrace: string[] = []
   const recordedWindowsUpTo = (upTo: number) => new Set(
     commands.slice(0, upTo).map(entry => entry.windowId).filter((id): id is string => Boolean(id)),
   )
@@ -195,10 +196,16 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
         : ' 当前没有窗口（可能处在转场中）'
       return {
         ok: false, submitted: cursor, recorded, finalScores: scoresNow(), expectedScores: expected, scoresMatch: null,
-        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；重放开头轨迹=[${windowTrace.slice(0, 40).join(' ')}]；记录开头=[${commands.slice(0, 40).map(entry => `${entry.seat}:${entry.kind}${entry.resolution ? `(${entry.resolution})` : ''}`).join(' ')}]）`,
+        reason: `第 ${cursor + 1} 条命令与当时的合法动作对不上（seat=${command.seat} kind=${command.kind}${command.tile ? ` tile=${command.tile}` : ''}${command.handIndex !== undefined ? ` index=${command.handIndex}` : ''}${command.windowId ? ` windowId=${command.windowId}` : ''}；当时的合法动作：${offered}；${context}；窗口轨迹：重放见过 ${seenWindows.size} 个窗口 / 已消费记录涉及 ${recordedWindowsUpTo(cursor + 1).size} 个窗口；配对轨迹=[${pairedTrace.slice(-30).join(' ')}]）`,
       }
     }
     engine.submit(engine.command(seat, action))
+    // 配对轨迹：记录条目 → 应用时重放所处的窗口（kind + 有合法动作的座位）。人眼对齐两侧轨迹太慢，
+    // 这里直接成对记录，失败时输出开头若干对，第一条对不上的地方就是偏移起点。
+    if (pairedTrace.length < 60) {
+      const current = engine.window
+      pairedTrace.push(`${command.seat}:${command.kind}→${current ? `${(current as { kind?: string }).kind ?? '?'}[${SEATS.filter(s => current.options[s].length > 0).join('')}]` : 'none'}`)
+    }
     cursor += 1
     // 把可能的窗口过期交给引擎，避免在同一个窗口上死等
     const windowId = view.window?.id ?? engine.window?.id
