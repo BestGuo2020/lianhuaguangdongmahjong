@@ -91,6 +91,11 @@ async function gunzipBytes(bytes: Uint8Array, limitBytes: number): Promise<Uint8
   }
 }
 
+/** 配置指纹：同一份配置恒等，内容变化即变化（用于 §3.1 的 rules/ai 指纹）。 */
+export function fingerprintOf(value: unknown): string {
+  return fnv1a(new TextEncoder().encode(JSON.stringify(value ?? null)))
+}
+
 export interface AnalysisBlockWriter {
   /** 追加一条记录；达到目标后 shouldFlush() 为真，由调用方在合适时机刷盘。 */
   push(part: AnalysisBlockPart): void
