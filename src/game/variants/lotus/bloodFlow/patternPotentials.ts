@@ -507,6 +507,8 @@ export function estimateWinIncome(
 // ── 连锁期望与听口缓存 ──
 
 const waitingCache = new Map<string, TileType[]>()
+/** Offline cold-cache benchmark only. */
+export function clearWaitingCacheForDiagnostics() { waitingCache.clear() }
 
 export function waitingTilesCached(hand: readonly TileType[], exposedMelds: number, jokers: readonly TileType[]): TileType[] {
   const key = `${exposedMelds}|${[...jokers].sort().join(',')}|${[...hand].sort().join(',')}`

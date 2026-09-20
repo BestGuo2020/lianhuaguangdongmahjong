@@ -1,0 +1,1827 @@
+{
+  "groups": [
+    {
+      "key": "threshold/1",
+      "delta": {
+        "clusters": 8,
+        "matches": 32,
+        "mean": -4.0625,
+        "ci95": [
+          -44.375,
+          37.1875
+        ]
+      },
+      "firstPlace": {
+        "clusters": 8,
+        "matches": 32,
+        "mean": 0,
+        "ci95": [
+          0,
+          0
+        ]
+      },
+      "changed": 4,
+      "profiles": [
+        {
+          "panel": "mixed",
+          "delta": {
+            "clusters": 4,
+            "matches": 16,
+            "mean": -44.375,
+            "ci95": [
+              -88.75,
+              0
+            ]
+          }
+        },
+        {
+          "panel": "defensive",
+          "delta": {
+            "clusters": 4,
+            "matches": 16,
+            "mean": 36.25,
+            "ci95": [
+              0,
+              84.375
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "threshold/1.5",
+      "delta": {
+        "clusters": 8,
+        "matches": 32,
+        "mean": 11.5625,
+        "ci95": [
+          -2.1875,
+          27.1875
+        ]
+      },
+      "firstPlace": {
+        "clusters": 8,
+        "matches": 32,
+        "mean": 0,
+        "ci95": [
+          0,
+          0
+        ]
+      },
+      "changed": 4,
+      "profiles": [
+        {
+          "panel": "mixed",
+          "delta": {
+            "clusters": 4,
+            "matches": 16,
+            "mean": 15,
+            "ci95": [
+              0,
+              30
+            ]
+          }
+        },
+        {
+          "panel": "defensive",
+          "delta": {
+            "clusters": 4,
+            "matches": 16,
+            "mean": 8.125,
+            "ci95": [
+              -13.125,
+              37.5
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "trainingSelectionRule": "Highest paired mean; ties prefer 1.2. Selection only applies when these tags are the training batches.",
+  "selected": 1.5,
+  "runs": [
+    {
+      "tag": "threshold-mixed-1-271001",
+      "metadata": {
+        "ratio": 1,
+        "from": 271001,
+        "seeds": 4,
+        "panel": "mixed",
+        "mode": "threshold",
+        "candidateConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "controlConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.2,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "sourceFingerprint": "c8f33fe2bd558565d22ad5716988f0df97dfe9ca4d2dddb719b8d28f649b4b39"
+      },
+      "delta": {
+        "clusters": 4,
+        "observations": 16,
+        "mean": -44.375,
+        "ci95": [
+          -88.75,
+          0
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "rows": [
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -270,
+          "currentNet": -270,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 456
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -1670,
+          "currentNet": -1670,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 532
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 3110,
+          "currentNet": 3110,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 444
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 2950,
+          "currentNet": 2950,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 443
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -150,
+          "currentNet": -150,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 449
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 2950,
+          "currentNet": 2950,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 485
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -420,
+          "currentNet": -420,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 470
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 135,
+          "currentNet": -285,
+          "delta": -420,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": true,
+          "changes": [
+            {
+              "round": 1,
+              "wall": 27,
+              "from": {
+                "kind": "win"
+              },
+              "to": {
+                "kind": "discard",
+                "index": 6
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 709
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 8750,
+          "currentNet": 8460,
+          "delta": -290,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": true,
+          "changes": [
+            {
+              "round": 1,
+              "wall": 14,
+              "from": {
+                "kind": "win"
+              },
+              "to": {
+                "kind": "discard",
+                "index": 9
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 707
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 6630,
+          "currentNet": 6630,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 466
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -5520,
+          "currentNet": -5520,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 467
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3920,
+          "currentNet": -3920,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 495
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -1200,
+          "currentNet": -1200,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 477
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 15550,
+          "currentNet": 15550,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 548
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -765,
+          "currentNet": -765,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 446
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -1875,
+          "currentNet": -1875,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 441
+        }
+      ],
+      "seconds": 281.164
+    },
+    {
+      "tag": "threshold-mixed-1.5-271001",
+      "metadata": {
+        "ratio": 1.5,
+        "from": 271001,
+        "seeds": 4,
+        "panel": "mixed",
+        "mode": "threshold",
+        "candidateConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.5,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "controlConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.2,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "sourceFingerprint": "c8f33fe2bd558565d22ad5716988f0df97dfe9ca4d2dddb719b8d28f649b4b39"
+      },
+      "delta": {
+        "clusters": 4,
+        "observations": 16,
+        "mean": 15,
+        "ci95": [
+          0,
+          30
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "rows": [
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -270,
+          "currentNet": -270,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 456
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -1670,
+          "currentNet": -1670,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 532
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 3110,
+          "currentNet": 3110,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 444
+        },
+        {
+          "panel": "mixed",
+          "seed": 271001,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 2950,
+          "currentNet": 2950,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 443
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -150,
+          "currentNet": -60,
+          "delta": 90,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": true,
+          "changes": [
+            {
+              "round": 2,
+              "wall": 7,
+              "from": {
+                "kind": "discard",
+                "index": 9
+              },
+              "to": {
+                "kind": "win"
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 585
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 2950,
+          "currentNet": 2950,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 485
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -420,
+          "currentNet": -420,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 470
+        },
+        {
+          "panel": "mixed",
+          "seed": 271002,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 135,
+          "currentNet": 135,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 436
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 8750,
+          "currentNet": 8750,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 443
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 6630,
+          "currentNet": 6630,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 466
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -5520,
+          "currentNet": -5520,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 467
+        },
+        {
+          "panel": "mixed",
+          "seed": 271003,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3920,
+          "currentNet": -3920,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 495
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -1200,
+          "currentNet": -1050,
+          "delta": 150,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": true,
+          "changes": [
+            {
+              "round": 2,
+              "wall": 8,
+              "from": {
+                "kind": "discard",
+                "index": 4
+              },
+              "to": {
+                "kind": "win"
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 605
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 15550,
+          "currentNet": 15550,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 548
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": -765,
+          "currentNet": -765,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 446
+        },
+        {
+          "panel": "mixed",
+          "seed": 271004,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -1875,
+          "currentNet": -1875,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 441
+        }
+      ],
+      "seconds": 281.608
+    },
+    {
+      "tag": "threshold-defensive-1-271101",
+      "metadata": {
+        "ratio": 1,
+        "from": 271101,
+        "seeds": 4,
+        "panel": "defensive",
+        "mode": "threshold",
+        "candidateConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "controlConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.2,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "sourceFingerprint": "c8f33fe2bd558565d22ad5716988f0df97dfe9ca4d2dddb719b8d28f649b4b39"
+      },
+      "delta": {
+        "clusters": 4,
+        "observations": 16,
+        "mean": 36.25,
+        "ci95": [
+          0,
+          84.375
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "rows": [
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -2955,
+          "currentNet": -2955,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 501
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -80,
+          "currentNet": -80,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 485
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 4220,
+          "currentNet": 4220,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 482
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 2890,
+          "currentNet": 2890,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 506
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 2100,
+          "currentNet": 2100,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 476
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -4320,
+          "currentNet": -4320,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 472
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 2740,
+          "currentNet": 2740,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 438
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3150,
+          "currentNet": -3150,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 487
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -600,
+          "currentNet": -600,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 458
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 1345,
+          "currentNet": 1345,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 460
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 480,
+          "currentNet": 480,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 488
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -1845,
+          "currentNet": -1395,
+          "delta": 450,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": true,
+          "changes": [
+            {
+              "round": 2,
+              "wall": 4,
+              "from": {
+                "kind": "win"
+              },
+              "to": {
+                "kind": "discard",
+                "index": 10
+              }
+            },
+            {
+              "round": 3,
+              "wall": 38,
+              "from": {
+                "kind": "win"
+              },
+              "to": {
+                "kind": "discard",
+                "index": 2
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 586
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 1145,
+          "currentNet": 1275,
+          "delta": 130,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": true,
+          "changes": [
+            {
+              "round": 1,
+              "wall": 4,
+              "from": {
+                "kind": "win"
+              },
+              "to": {
+                "kind": "discard",
+                "index": 7
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 784
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 4570,
+          "currentNet": 4570,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 494
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 4675,
+          "currentNet": 4675,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 522
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3115,
+          "currentNet": -3115,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 489
+        }
+      ],
+      "seconds": 230.442
+    },
+    {
+      "tag": "threshold-defensive-1.5-271101",
+      "metadata": {
+        "ratio": 1.5,
+        "from": 271101,
+        "seeds": 4,
+        "panel": "defensive",
+        "mode": "threshold",
+        "candidateConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.5,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "controlConfig": {
+          "strategy": "ev",
+          "minimumFirstPayment": 0,
+          "selfDrawWeight": 6,
+          "firstWinFloorEarly": 40,
+          "firstWinFloorMid": 20,
+          "firstWinFloorLate": 10,
+          "lateGameWallCount": 15,
+          "earlyGameWallCount": 40,
+          "potentialFloor": 2,
+          "reformGainRatio": 1.2,
+          "chainHorizon": 8,
+          "chainForecast": "source-v2",
+          "safetyCostNone": 0.25,
+          "safetyCostOne": 0.1,
+          "safetyCostSafe": 0,
+          "opponentPatternRisk": "tier",
+          "riskFactorTier1": 4,
+          "riskFactorTier2": 16,
+          "riskFactorTier3": 32,
+          "riskOffSuitFactor": 0.5,
+          "defense": {
+            "foldThreatTier": 3,
+            "ceilingProgress": 0.35,
+            "ceilingWeightFloor": 4,
+            "mode": "hard",
+            "foldDiscardTolerance": 0
+          },
+          "bigHandRoute": {
+            "mode": "bot",
+            "enabled": [
+              "thirteenOrphans",
+              "nineGates",
+              "pureSuit",
+              "mixedSuit",
+              "allTriplets"
+            ],
+            "minOrphanKinds": 12,
+            "minSuitRanks": 9,
+            "minSuitTiles": 12,
+            "pureSuitMinTiles": 10,
+            "pureSuitMaxForeign": 2,
+            "mixedSuitMinTiles": 10,
+            "mixedSuitMaxForeign": 1,
+            "allTripletsMinUnits": 4,
+            "declineWinRatio": 2,
+            "minWallForCommit": 20,
+            "minDeficitForCommit": 300,
+            "minWallForCommitWithJokers": 15,
+            "jokerReliefCount": 2
+          },
+          "routeOpportunityGuard": true,
+          "claimMeldProjection": true,
+          "claimReadyNetGuard": true,
+          "llmEvFeatures": true,
+          "kongValue": {
+            "mode": "ev",
+            "bonusWeight": 1,
+            "robRisk": 60,
+            "shantenStepLoss": 10,
+            "concealedHandFallback": 0.5
+          },
+          "sevenPairsModel": "ev",
+          "opportunityCalibration": {
+            "drawScale": 0.9975786924939467,
+            "discardScale": 0.8990627253064167,
+            "selfYield": 0.8478712071537614,
+            "ronYield": 0.9877357078236184
+          }
+        },
+        "sourceFingerprint": "c8f33fe2bd558565d22ad5716988f0df97dfe9ca4d2dddb719b8d28f649b4b39"
+      },
+      "delta": {
+        "clusters": 4,
+        "observations": 16,
+        "mean": 8.125,
+        "ci95": [
+          -13.125,
+          37.5
+        ],
+        "method": "seed-cluster percentile bootstrap; equal weight per source seed"
+      },
+      "rows": [
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -2955,
+          "currentNet": -3025,
+          "delta": -70,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": true,
+          "changes": [
+            {
+              "round": 3,
+              "wall": 12,
+              "from": {
+                "kind": "discard",
+                "index": 11
+              },
+              "to": {
+                "kind": "win"
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 526
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -80,
+          "currentNet": -80,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 485
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 4220,
+          "currentNet": 4220,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 482
+        },
+        {
+          "panel": "defensive",
+          "seed": 271101,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": 2890,
+          "currentNet": 2890,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 506
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 2100,
+          "currentNet": 2100,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 476
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": -4320,
+          "currentNet": -4320,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 472
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 2740,
+          "currentNet": 2740,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 438
+        },
+        {
+          "panel": "defensive",
+          "seed": 271102,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3150,
+          "currentNet": -2950,
+          "delta": 200,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": true,
+          "changes": [
+            {
+              "round": 0,
+              "wall": 48,
+              "from": {
+                "kind": "discard",
+                "index": 2
+              },
+              "to": {
+                "kind": "win"
+              }
+            }
+          ],
+          "calibration": [],
+          "actualCommands": 928
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": -600,
+          "currentNet": -600,
+          "delta": 0,
+          "controlRank": 3,
+          "currentRank": 3,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 458
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 1345,
+          "currentNet": 1345,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 460
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 480,
+          "currentNet": 480,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 488
+        },
+        {
+          "panel": "defensive",
+          "seed": 271103,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -1845,
+          "currentNet": -1845,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 466
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 0,
+          "rounds": 4,
+          "controlNet": 1145,
+          "currentNet": 1145,
+          "delta": 0,
+          "controlRank": 2,
+          "currentRank": 2,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 506
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 1,
+          "rounds": 4,
+          "controlNet": 4570,
+          "currentNet": 4570,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 494
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 2,
+          "rounds": 4,
+          "controlNet": 4675,
+          "currentNet": 4675,
+          "delta": 0,
+          "controlRank": 1,
+          "currentRank": 1,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 522
+        },
+        {
+          "panel": "defensive",
+          "seed": 271104,
+          "focal": 3,
+          "rounds": 4,
+          "controlNet": -3115,
+          "currentNet": -3115,
+          "delta": 0,
+          "controlRank": 4,
+          "currentRank": 4,
+          "changed": false,
+          "changes": [],
+          "calibration": [],
+          "actualCommands": 489
+        }
+      ],
+      "seconds": 230.583
+    }
+  ]
+}

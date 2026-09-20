@@ -1,0 +1,84 @@
+[
+  {
+    "caseId": "public-01689b18987c2cfd",
+    "referenceMs": 1570.0537,
+    "optimizedMs": 941.1450999999997,
+    "reference": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 66,
+      "value": 1793.2075471698104,
+      "winEv": 1913.207547169812
+    },
+    "optimized": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 66,
+      "value": 1793.2075471698104,
+      "winEv": 1913.207547169812
+    }
+  },
+  {
+    "caseId": "public-b76602f2e29d9c92",
+    "referenceMs": 4228.6831,
+    "optimizedMs": 2615.5608999999995,
+    "reference": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 51,
+      "value": 830.5469845722299,
+      "winEv": 928.3870967741935
+    },
+    "optimized": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 51,
+      "value": 830.5469845722299,
+      "winEv": 928.3870967741935
+    }
+  },
+  {
+    "caseId": "public-e17f50bdccbd5afe",
+    "referenceMs": 3731.7186,
+    "optimizedMs": 2717.3184999999994,
+    "reference": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 48,
+      "value": 487.96806966618294,
+      "winEv": 987.1698113207544
+    },
+    "optimized": {
+      "action": {
+        "kind": "win"
+      },
+      "nodes": 48,
+      "value": 487.96806966618294,
+      "winEv": 987.1698113207544
+    }
+  },
+  {
+    "caseId": "public-64a6c6a98f52f2e0",
+    "referenceMs": 584.515800000001,
+    "optimizedMs": 606.8214999999982,
+    "reference": {
+      "action": {
+        "kind": "discard",
+        "index": 4
+      },
+      "nodes": 0
+    },
+    "optimized": {
+      "action": {
+        "kind": "discard",
+        "index": 4
+      },
+      "nodes": 0
+    }
+  }
+]
