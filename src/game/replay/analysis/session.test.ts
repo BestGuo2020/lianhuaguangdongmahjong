@@ -28,6 +28,42 @@ const config = {
 }
 
 describe('分析录制会话', () => {
+  // §9.2：开关是**活值**（UI 上的复选框随时可切），作用点是下一场 start()，不需要刷新页面。
+  it('开关可以随时切换：关着时不建录制器，打开后下一场开始录，且代理恒存在', async () => {
+    let on = false
+    const storage = createAnalysisMemoryStorage()
+    const session = createAnalysisSession({
+      enabled: () => on, storage, now: () => 1_700_000_000_000, monotonic: () => 1_000,
+      createId: (() => { let n = 0; return () => `match-${++n}` })(),
+    })
+    // 代理恒存在（调用方不需要判空），但"在录"为假时不建场、不写任何东西
+    expect(session.port, '代理必须存在，开关才有意义').toBeTruthy()
+    expect(session.enabled()).toBe(false)
+    expect(session.port.enabled, '开关关闭时不应处于"在录"状态').toBe(false)
+    expect(session.start({ ...config, seatControl: [...config.seatControl] })).toBe('')
+    expect(session.active()).toBe(false)
+    session.port.reproduction({ roundIndex: 1, available: true })
+    expect((await storage.read('match-1')).parts).toEqual([])
+
+    // 打开开关：下一场立刻开始录（同一个代理、同一个会话对象）
+    on = true
+    expect(session.enabled()).toBe(true)
+    const matchId = session.start({ ...config, seatControl: [...config.seatControl] })
+    expect(matchId).toBe('match-1')
+    expect(session.active()).toBe(true)
+    expect(session.port.enabled, '已开录后代理报告"在录"').toBe(true)
+    session.port.reproduction({ roundIndex: 1, available: true })
+    await session.finish()
+    const read = await storage.read(matchId)
+    expect(read.parts.some(part => part.tag === 'reproduction'), '打开后这一场要真的记下来').toBe(true)
+
+    // 关闭开关：下一场不再开始（这一场已经收尾）
+    on = false
+    expect(session.port.enabled, '关闭后不再处于"在录"状态（调用方据此停发私有数据）').toBe(false)
+    expect(session.start({ ...config, seatControl: [...config.seatControl] })).toBe('')
+    expect(session.active()).toBe(false)
+  })
+
   // 回归：引擎侧"中途退出"走的是 `port.finish()`。此前它只结束录制器、不清会话 target，
   // 于是 `session.active()` 一直是真 —— App 的守卫会跳过下一场的 start()，新对局的记录挂到上一场名下。
   it('代理 finish() 结束整场：会话不再是 active，下一场换新 matchId', async () => {
@@ -117,11 +153,16 @@ describe('分析录制会话', () => {
     expect(usage.matches).toBe(1)
   })
 
-  it('分析关闭时：代理为 null，开一场也不产生任何写入（§9.2、§10.7）', async () => {
+  it('分析关闭时：不产生任何写入；代理仍在但报告"没在录"（§9.2、§10.7）', async () => {
     const storage = createAnalysisMemoryStorage()
     const session = createAnalysisSession({ enabled: false, storage })
-    expect(session.port).toBeNull()
+    // 代理恒存在（开关是活值），"是否在录"看 port.enabled —— 调用方据此停发私有数据
+    expect(session.enabled()).toBe(false)
+    expect(session.port.enabled).toBe(false)
+    expect(session.active()).toBe(false)
     expect(session.start({ ...config, seatControl: [...config.seatControl] })).toBe('')
+    session.port.reproduction({ roundIndex: 1, available: true })
+    session.port.noteGap({ scope: 'match', reason: 'should-be-ignored' })
     const finished = await session.finish()
     expect(finished).toMatchObject({ status: 'disabled', bytes: 0 })
     expect(await storage.usage()).toEqual({ bytes: 0, matches: 0 })

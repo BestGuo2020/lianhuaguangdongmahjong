@@ -450,6 +450,18 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await keepSelect.selectOption('50')
   await expect(keepSelect).toHaveValue('50')
 
+  // ── 2c-2. AI 分析记录开关（§9.2）：界面上真的有入口，且落盘 + 只改录制、不改对局 ──
+  const analysisSwitch = page.getByTestId('replay-analysis-enabled')
+  await expect(analysisSwitch, '分析开关应在列表控制条里可见').toBeVisible()
+  await expect(analysisSwitch, 'dev 默认开启').toBeChecked()
+  await analysisSwitch.uncheck()
+  await expect(page.getByTestId('replay-hint')).toContainText('已关闭 AI 分析记录')
+  expect(await page.evaluate(() => localStorage.getItem('lgm_analysis_enabled')), '关掉要落盘').toBe('0')
+  await analysisSwitch.check()
+  await expect(page.getByTestId('replay-hint')).toContainText('已开启 AI 分析记录')
+  expect(await page.evaluate(() => localStorage.getItem('lgm_analysis_enabled')), '打开要落盘').toBe('1')
+  await expect(analysisSwitch).toBeChecked()
+
   // ── 2d. 独立分析区（§9.2、§10.7）：行内状态 / 自包含分析包 / 只删分析保留牌谱 ──
   const bloodRow = rowOf('莲花麻将·血流')
   await expect(bloodRow.getByTestId('replay-analysis-status')).toHaveText('分析：完整')
