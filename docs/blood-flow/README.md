@@ -19,6 +19,7 @@
 | [演出与结算细则](design/presentation.md) | E10～E16 的详细要求和通过条件；不重复维护阶段进度 |
 | [通用能力与交互检查](design/common-behavior-audit.md) | 公共能力/override 边界、渐进抽取顺序；后半保留历史定位，当前进度只见任务表 |
 | [AI 复用职责](design/ai-reuse.md) | 原 AI 策略核心、血流动作适配、权威引擎各自负责什么 |
+| [血流·换三张契约](design/blood-flow-swap3.md) | 新玩法 `lotus-blood-flow-swap3` 的规则契约与实现设计；**契约已定稿、尚未实现**，不改现行 `lotus-blood-flow-v1` |
 | [参考视频分析](references/impact-video.md) | 主参考 `843049425-1-208.mp4`：自摸、放枪、多响、盖楼与局末；上一段保留为字效补充 |
 
 ## 历史资料
