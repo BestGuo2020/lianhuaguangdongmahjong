@@ -444,13 +444,20 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
   /**
    * 客机：某局结算了 → 开始等权威端那份数据。
-   * - 房主**没有**下发分析场次 id（房主未开分析记录）：当场如实记"未提供"，不必空等；
-   * - 有 id：等中继把数据送到，超过时限由 450ms 定时器兜底记"未收到"。
+   *
+   * `serving` 是房主随帧下发的**房间级**说明（`analysisReproduction`）：
+   * - `false`：房主明确说了本场不记录、不提供赛后数据 ⇒ **当场**如实记「房主未开启」，不空等；
+   * - `true`：等中继把数据送到，超过时限由 450ms 定时器兜底记「未收到」；
+   * - `undefined`：老版本没这个字段（未知）⇒ 按等待处理。
    */
-  function awaitRoundReproduction(round: number): void {
+  function awaitRoundReproduction(round: number, serving?: boolean): void {
     if (!options.analysis || !analysisRecording() || reproductionDecided.has(round)) return
+    if (serving === false) {
+      markReproductionUnavailable(round, '联机房主未开启 AI 分析记录，本场没有赛后复现数据')
+      return
+    }
     if (!analysisMatchId) {
-      markReproductionUnavailable(round, '联机房主未开启分析记录，本局没有赛后复现数据')
+      markReproductionUnavailable(round, '联机房主未开启 AI 分析记录，本局没有赛后复现数据')
       return
     }
     if (!reproductionAwaited.has(round)) reproductionAwaited.set(round, Date.now())
@@ -667,12 +674,12 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       const announcedAnalysis = (message as { analysisMatchId?: string }).analysisMatchId
       if (announcedAnalysis && announcedAnalysis !== analysisMatchId) announceAnalysisMatch(announcedAnalysis)
       // §6：这一局结算了 →
-      // - 客机：开始等权威端那份赛后复现数据（房主没开分析就当场如实记"未提供"）；
+      // - 客机：开始等权威端那份赛后复现数据（房主在帧里明确说了不提供，就当场如实记"房主未开启"）；
       // - 房主：记下"本机还欠这一局一份复现数据"（产出由 onRoundSettled 触发，可能晚于结算帧，
       //   场末收尾要等它结清，否则最后一局会被会话结束吞掉）。
       if (message.view.public.roundResult) {
         if (authority) expectHostReproduction(message.round)
-        else awaitRoundReproduction(message.round)
+        else awaitRoundReproduction(message.round, (message as { analysisReproduction?: boolean }).analysisReproduction)
       }
       if (!current.view) return
       if(authority)for(const line of decisions.observe(current.view)){
@@ -783,6 +790,9 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         // **与本机是否开分析无关**：这把钥匙就是展示回放的场次 id，房主没开分析时客机仍然需要它
         // （否则客机那份分析数据会被"按展示回放清单回收"删掉）；只是那种情况下客机拿不到复现数据。
         analysisMatchId: () => analysisMatchId || null,
+        // §6 房间级语义：本场是否由权威端记录并提供赛后复现数据（= 房主的分析开关）。
+        // 客机据此当场知道"这一场有没有赛后数据"，不必空等超时；房主关着就明确发 false。
+        analysisServing: () => analysisRecording(),
         // 停滞取证：仅 ?bfdiag=1 时把 tick 的关键分支打到控制台（验收取证会收集这些行）。
         trace: BF_DIAG ? (message: string) => console.warn(`[bf-diag] 权威 tick：${message}`) : undefined,
         // 局末两件事：当局感言（reactions）与 §6 赛后私有复现数据的产出与下发。

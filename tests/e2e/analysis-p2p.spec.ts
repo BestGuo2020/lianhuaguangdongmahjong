@@ -455,7 +455,9 @@ test('联机分析记录：房主未开分析时，客机如实标记复现数�
     expect(record.available, `第 ${record.roundIndex} 局应如实标成不可用`).toBe(false)
     expect(record.wallLength, '不可用时不得带牌墙').toBe(0)
     expect(record.commands, '不可用时不得带命令序列').toBe(0)
-    expect(String(record.unavailableReason), '必须写明原因').toMatch(/未在时限内收到|场末仍未收到|未提供|未开启/)
+    // 措辞必须是「房主未开启」这一种：房主随帧明确下发了 analysisReproduction=false，客机**当场**据此记录；
+    // 若走了超时兜底（20s 扫描），文案会是"未在时限内收到"，这条断言就会失败。
+    expect(String(record.unavailableReason), `第 ${record.roundIndex} 局必须写明是房主未开启`).toMatch(/房主未开启/)
   }
   expect(guest.gaps.filter(gap => gap.scope === 'reproduction').length, '每个缺数据的局都要留痕').toBe(4)
 })
