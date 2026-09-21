@@ -284,9 +284,10 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
 
    **app-path 用例（约定 §9 于 2026-09-21 追加的必做项）已经在 `analysis-lotus-legacy.spec.ts` 里。
    协调者已经把上面那三行落进 `App.vue` 了（`lotusLegacyAnalysisSink` + `analysis.port` + `analysisSink`），
-   所以它现在是**真的在验端口传递**：2026-09-22 实测整场打完 → 15 分块、
-   `{"config":1,"decisionState":257,"decision":514,"responderCheckpoint":58,"settlement":5,"reproduction":5}`
-   （**P1 的复现数据在真实 App 路径上也逐局落库了**：5 局 5 条），3.0 分钟通过。**
+   所以它现在是**真的在验端口传递**：2026-09-22 实测整场打完 → 13 分块、
+   `{"config":1,"decisionState":229,"decision":458,"responderCheckpoint":45,"settlement":5,"reproduction":5}`
+   （**P1 的复现数据在真实 App 路径上也逐局落库了**：5 局 5 条），2.7 分钟通过。
+   （条数每次略有浮动 —— 这条用例走真实 App、牌墙是随机的：另一次单独跑到 15 分块 / `decisionState` 257。）**
 
    > 另一个坑（2026-09-22 实测修正）：这条用例的"节奏压缩"原先把所有定时器压到 **≤10ms**，
    > 而 `tileAssets.ts` 给每个牌面 `fetch` 挂的是 `window.setTimeout(..., FETCH_TIMEOUT_MS)`
@@ -426,7 +427,7 @@ P1 新增两个文件：
 | 分析关掉后零写入 | 0 块、0 场次、0 记录，`reproductionParts=0` |
 | 硬护栏（开/关同一副牌） | 分数 `-1200,-600,7500,2300` 两次相同；动作数相同；`rngDraws` 1552 = 1552 |
 | LLM 座位接缝 | 尝试 54 条、模板 1 条 |
-| app-path（真实 App） | 13 分块、`{"config":1,"decisionState":229,"decision":458,"responderCheckpoint":45,"settlement":5,"reproduction":5}` —— **真实 App 路径也逐局落了复现数据** |
+| app-path（真实 App） | 13 分块、`{"config":1,"decisionState":229,"decision":458,"responderCheckpoint":45,"settlement":5,"reproduction":5}` —— **真实 App 路径也逐局落了复现数据**（条数每次浮动：这条用例走真实 App、牌墙随机） |
 
 `?replay=0` 可跳过逐局重跑（与复现无关的用例不必付这份时间）；`?analysis=0` 时一次都不跑（零成本）。
 
@@ -443,4 +444,7 @@ P1 新增两个文件：
 4. **没有把重跑接进界面**：校验器目前只能在夹具/测试里调用（`replayLotusLegacyRound` 是纯函数入口）。
    界面上的"赛后复现"按钮属于后续工作。
 5. **vibehub 的 `lotusGame.ts` 仍需手动镜像**（本节的快照/命令日志/落库都在那个文件里）——
-   见「未做的部分」第 5 条，本轮已按那套流程镜像。
+   见「未做的部分」第 5 条。本轮已按那套流程镜像：master `c6a1114` → `sync:vibehub`（`5137093`，
+   keep 文件被还原成 vibehub 版）→ 手动移植（3-way 基线 = 改动前的 master 版本）→ vibehub 门控
+   （`vue-tsc --noEmit` 通过 + `vitest run src` = **2076 passed / 2 skipped**，含 `replayLotusRound.test.ts`）
+   → vibehub 提交 `25a6a72`。
