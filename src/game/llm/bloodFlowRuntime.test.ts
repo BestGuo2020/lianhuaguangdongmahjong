@@ -49,8 +49,35 @@ describe('E08 decision and reaction isolation', () => {
     expect(sent[0].messages.user).not.toContain('test-private-key')
     expect(service.stats.messages).toBe(0)
   })
-  it('does not request a model for locked or forced actions', async () => {
-    const request = vi.fn()
+  // §4 的"请求内容引用"：模板按版本去重存一次，决策只存**真正发出去的变量**。
+  // 这条护栏的重点是"逐字一致"：记录的变量必须就是 messages.user 里那一份（否则离线重建看到的不是模型当时看到的）。
+  it('records the prompt template once and the variables verbatim', async () => {
+    const templates: Array<{ id: string; content: unknown }> = []
+    const started: Array<Record<string, unknown>> = []
+    const request = vi.fn(async () => ({ choice: 'A1', message: '' }))
+    const service = createBloodFlowDecisions({
+      provider: () => provider, request, waits: async () => [],
+      analysis: {
+        promptTemplate: (input: { id: string; content: unknown }) => { templates.push(input) },
+        attemptStarted: (input: Record<string, unknown>) => { started.push(input); return 'attempt-1' },
+        attemptFinished: () => {},
+        candidates: () => {},
+        source: () => {},
+      } as never,
+    })
+    await service.decide(view(), () => true)
+
+    expect(templates, '模板登记一次').toHaveLength(1)
+    expect(templates[0].id).toContain('bloodFlow-decision/v1')
+    const sent = request.mock.calls[0] as any
+    expect(started[0].promptTemplateId).toBe(templates[0].id)
+    expect(started[0].promptVariables, '记录的变量必须与发给模型的一致').toEqual(JSON.parse(sent[0].messages.user))
+    // §4：禁止保存 API Key／凭据
+    expect(JSON.stringify(started[0].promptVariables)).not.toContain(provider.apiKey)
+    expect(JSON.stringify(templates[0].content)).not.toContain(provider.apiKey)
+  })
+
+  it('does not request a model for locked or forced actions', async () => {    const request = vi.fn()
     const service = createBloodFlowDecisions({ provider: () => provider, request })
     const input = view()
     input.public = { ...input.public, seats: [{ ...input.public.seats[0], locked: true }, ...input.public.seats.slice(1)] as any }

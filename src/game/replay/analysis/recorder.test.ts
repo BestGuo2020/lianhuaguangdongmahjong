@@ -42,6 +42,35 @@ function legalActions() {
 }
 
 describe('分析录制核心（P0）', () => {
+  // §4：提示词模板按版本去重存一次，决策侧只保存实际变量输入（不重复存模板全文）
+  it('提示词模板按 id 去重：同一模板只落一条，不同版本各落一条', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+    recorder.promptTemplate({ id: 'bloodFlow-decision/v1/稳健/plain', content: '系统提示正文' })
+    recorder.promptTemplate({ id: 'bloodFlow-decision/v1/稳健/plain', content: '系统提示正文' })
+    recorder.promptTemplate({ id: 'bloodFlow-decision/v1/激进/plain', content: '另一份系统提示' })
+
+    // 决策只引用模板 id + 变量，不重复模板正文
+    recorder.windowOpened({
+      windowId: 'w1', seat: 1, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'e1', stateVersion: 1,
+      state: { id: 's1', legalActions: [] },
+    })
+    const attemptId = recorder.attemptStarted({
+      decisionWindowId: 'w1', seat: 1, requestId: 'req-1', attempt: 1, provider: 'p', requestModel: 'm', sampling: {},
+      promptTemplateId: 'bloodFlow-decision/v1/稳健/plain', promptVariables: { seat: 1, hand: ['m5'] },
+    })
+    recorder.attemptFinished(attemptId, { outcome: 'success' })
+    await recorder.finish()
+
+    const templates = await readParts(storage, 'promptTemplate') as Array<{ id: string; content: string }>
+    expect(templates.map(template => template.id)).toEqual(['bloodFlow-decision/v1/稳健/plain', 'bloodFlow-decision/v1/激进/plain'])
+    expect(templates[0].content).toBe('系统提示正文')
+    const attempts = await readParts(storage, 'llm') as AnalysisLlmAttempt[]
+    expect(attempts[0].promptTemplateId).toBe('bloodFlow-decision/v1/稳健/plain')
+    expect(attempts[0].promptVariables).toEqual({ seat: 1, hand: ['m5'] })
+    expect(JSON.stringify(attempts[0])).not.toContain('系统提示正文')
+  })
+
   it('全链路：配置 → 窗口 → 合法/候选/推荐 → 选择 → 回执，都能读回并互相关联', async () => {
     const { recorder, storage, clock } = setup()
     const configId = recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })

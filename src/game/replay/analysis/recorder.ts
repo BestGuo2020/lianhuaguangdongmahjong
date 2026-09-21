@@ -121,6 +121,11 @@ export interface AnalysisRecorder {
   beginMatch(input: AnalysisMatchInput): string
   windowOpened(input: AnalysisWindowInput): void
   candidates(input: AnalysisCandidatesInput): void
+  /**
+   * 提示词模板：**按版本去重存一次**（§4）。决策只保存实际变量输入，
+   * 不重复存模板全文；同一 id 再登记一次是空操作。
+   */
+  promptTemplate(input: { id: string; content: unknown }): void
   chosen(input: AnalysisChoiceInput): void
   /** 运行时确定的来源（本地 AI／模型／回退）：chosen() 不得用 'unknown' 覆盖它（§3.4）。 */
   source(input: { windowId: string; seat: number; source: AnalysisChoiceSource }): void
@@ -171,6 +176,8 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
   let pending: AnalysisBlockPart[] = []
   let pendingBytes = 0
   const stateIds = new Set<string>()
+  /** 已落库的提示词模板 id（§4：模板按版本去重存一次，不重复存全文）。 */
+  const templateIds = new Set<string>()
   /** 运行时（决策运行时）确定的来源：优先级高于调用方在 chosen() 里报的 'unknown'。 */
   const runtimeSources = new Map<string, AnalysisChoiceSource>()
   const decisions = new Map<string, AnalysisDecision>()
@@ -341,6 +348,17 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
           gaps.push({ scope: 'responder-checkpoint', from: input.roundIndex, reason: '响应窗口缺少该座位手牌（视角不含别家手牌）' })
         }
       }
+    },
+
+    /**
+     * 提示词模板去重（§4）：同一 id 只落一条，决策侧只保存 `promptTemplateId` + 实际变量输入。
+     * 用集合记住已落库的 id；不因为"模型换了风格"重复存同一份模板。
+     */
+    promptTemplate(input) {
+      if (!enabled || paused) return
+      if (!input.id || templateIds.has(input.id)) return
+      templateIds.add(input.id)
+      push('promptTemplate', { id: input.id, content: structuredClone(input.content) })
     },
 
     candidates(input) {

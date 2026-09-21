@@ -37,6 +37,8 @@ export interface BloodFlowDecisionSink {
     /** 真正发给这次请求的推荐（对应 request.engineSuggestion）。 */
     recommended?: { candidateId: string; note?: string }
   }): void
+  /** 提示词模板：按版本去重存一次（§4）；决策只保存实际变量输入。 */
+  promptTemplate(input: { id: string; content: unknown }): void
   /** 一次实际请求的开始；返回 attemptId（供结束时报回执）。 */
   attemptStarted(input: {
     windowId: string
@@ -82,6 +84,8 @@ export interface DecisionAnalysisRecorder {
   }): void
   /** 运行时确定的来源；之后的 chosen() 不得用 'unknown' 覆盖它（§3.4）。 */
   source(input: { windowId: string; seat: number; source: 'local-strategy' | 'model' | 'model-fallback' }): void
+  /** 提示词模板：按版本去重存一次（§4）。 */
+  promptTemplate(input: { id: string; content: unknown }): void
 }
 
 export interface DecisionSinkOptions {
@@ -165,6 +169,11 @@ export function createBloodFlowDecisionSink(options: DecisionSinkOptions): Blood
           options.onError?.(`有 ${unmapped} 个候选无法对应到合法动作（未记录其合法 ID）`)
         }
       }, 'candidates')
+    },
+
+    promptTemplate(input) {
+      if (!enabled) return
+      safe(() => { options.recorder.promptTemplate(input) }, 'promptTemplate')
     },
 
     attemptStarted(input) {
