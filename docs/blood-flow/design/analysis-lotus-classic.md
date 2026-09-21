@@ -112,7 +112,22 @@ dev server 复用 `npx vite --port 4174 --force`，e2e 用 `E2E_PORT=4174 E2E_RE
 | 单测 | `npx vitest run src` | 187 passed \| 1 skipped，**1891 tests passed** |
 | 适配层 | `npx vitest run src/game/replay/analysis/lotusClassicAdapter.test.ts` | 20 passed |
 | 接线 | `npx vitest run src/game/core/local/useGame.analysis.test.ts` | 4 passed |
-| 端到端 | `npx playwright test tests/e2e/analysis-lotus-classic.spec.ts --workers=1` | 1 passed（13.1s） |
+| 端到端 | `npx playwright test tests/e2e/analysis-lotus-classic.spec.ts --workers=1` | 3 passed（6.7 分钟） |
+| ↳ 引擎级探针 | 同上第 1 条 | 12.5s |
+| ↳ **app-path 正向**（§9 追加的必做项） | 同上第 2 条 | 2.5 分钟 |
+| ↳ app-path 负向 | 同上第 3 条 | 3.9 分钟 |
+
+app-path 实测（真实 App + 真实大厅流程，锁住协调者补的 `analysis: analysis.port` 那一行）：
+
+| | 观察 |
+|---|---|
+| 正向 | 第 1 局结算前后、147s / 978 次点击时由**自动刷盘**落库：blocks=6、parts=363、`rulesetId=lotus-classic`、status=`complete`、`{config:1, decisionState:117, decision:232, responderCheckpoint:10, settlement:3}` |
+| 负向（`lgm_analysis_enabled=0`） | 推进 3 局 / 1476 次点击 / 216s：blocks=0、parts=0、matchId=null |
+| 结论 | 那一行"既接上了、又听开关"两头都锁住 |
+
+> 两条 app-path 用例慢（合计约 6.4 分钟），原因是**记录是缓冲写**：必须真的推进到落库点
+> （自动刷盘约在 147s / 第 1~2 局前后，或整场结束）。要放进每次提交的套件还是按慢用例另跑，
+> 由协调者定；`ROUNDS_TO_FLUSH` 是实测值，牌墙变快时需要往上调。
 
 e2e 探针实测数字（东风场，固定随机序列，同一场跑两遍）：
 
@@ -162,10 +177,12 @@ e2e 探针实测数字（东风场，固定随机序列，同一场跑两遍）�
    - B（`lotus-legacy`）是**同一个坑**而不是例外：`src/game/variants/lotus/lotusGame.ts` 同样在
      `$vibehubKeep` 第 100 行，两边差异 101 行。建议协调者**一次把两份镜像都做掉再 sync**
      —— 约定 §1／§6 的表里把 `lotusGame.ts` 写成"共享文件、不需要镜像"，那是错的（B 实测更正）。
-5. **e2e 不经由 App.vue**：App 那一行端口传递在冻结清单里，所以探针直接对 `useGame` 传入
-   会话代理（与 App 同一条路径、同一个 storage、同一把 matchId 钥匙），"列表行文案"用真实的
-   `analysisAreaLabel` 在数据层判定。等公共改动落地后，可以照 `analysis-human.spec.ts` 补一条
-   走真实 UI 的用例（点开大厅 → 打一场 → 在回放列表里看到那一行）。
+5. **e2e 的两条路径**（2026-09-21 更新）：`analysis-lotus-classic.spec.ts` 现在同时有
+   **引擎级探针**（fixture 直接给 `useGame` 注入会话代理，快、能断言导出包与硬护栏）与
+   **app-path**（真实 App + 真实大厅流程，锁住 App.vue 里那一行端口传递，慢）。
+   唯一还没走 UI 的断言是**回放列表行文案**「分析：完整」—— 它在数据层用真实的
+   `analysisAreaLabel` 判定；等 App.vue 的公共改动落地后，可以照 `analysis-human.spec.ts`
+   再补一条"在大厅打开对局回放列表、看到那一行"的用例（成本不高，但与本轮 DoD 无关）。
 
 ## 6. 维护提示
 
