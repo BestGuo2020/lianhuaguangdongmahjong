@@ -155,6 +155,10 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
   `lgm_analysis_enabled`（**不要**"设完再 reload"：那会把已登录页面打到另一个视图，后面找不到「创建房间」）。
 - 环境偶发：大模型场首跑时 `assets/MahjongTable3D-*.js` 动态导入失败（同一时段 `audio/bg.ogg` 也 520），
   立刻复测同一 URL 是 200 ⇒ 平台 CDN 抖动，重跑通过；另一次 `update` 触发部署返回 HTTP 524，原样重试成功。
+- **重跑（房间级开关语义上线后）**：两条用例在新构建上各再跑一遍并通过 —— 普通机器人场 `773S68`
+  （5.2 分钟）、大模型机器人场 `XETQK8`（8.0 分钟）；两场都是两端 4/4 局复现记录、命令数两端逐字相同、
+  复现缺口 0，证据带回本地用真校验器复核通过（`analysis-bf-plain-ai-mub11amo.json`、
+  `analysis-bf-llm-ai-mub1bnz5.json`）。
 
 ### 6.1 平台域名变更导致 TTS 断链（2026-09-14 修复）
 
