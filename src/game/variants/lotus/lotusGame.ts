@@ -274,6 +274,18 @@ export function useLotusGame({
   }
 
   /**
+   * 把**所有**还挂着的回执一次结掉。
+   *
+   * 在"下一个窗口开启时"调用（而不是等同一个座位的下一个窗口）：编排层是**串行**的 ——
+   * 它 `await` 完一个座位的控制器、把动作应用掉，才会去问下一个座位。所以任何一个新窗口
+   * 开启时，此前所有窗口的动作都已经落定，此刻的可见变化是最贴近"这一手"的读数；
+   * 等同一个座位的下一个窗口会跨越好几手，把别人的动作也算进来（误判成 executed）。
+   */
+  function settleOpenReceipts(detail: string) {
+    for (const seat of [...analysisOpenWindow.keys()]) settleAnalysisReceipt(seat, detail)
+  }
+
+  /**
    * 记一个决策窗口：开窗（含前态与合法动作）→ 等控制器作出选择 → 记选择与来源。
    * 来源按**控制器类型**如实标注：人类 = `human`，本地启发式 AI = `rule-auto`，
    * 其余（LLM 控制器）= `unknown` —— 本阶段没接模型钩子，不猜它到底是模型还是回退（§3.4、§9）。
@@ -291,8 +303,8 @@ export function useLotusGame({
     const recorder = analysis
     const view = recorder
       ? safely('window-open', () => {
-        // 上一个窗口还没收到回执就开了新窗口：它已经被应用或已被更高优先级压过，先结算回执。
-        settleAnalysisReceipt(seat, 'window-advanced')
+        // 开新窗口 ⇒ 此前所有窗口的动作都已应用，先把它们的回执结掉。
+        settleOpenReceipts('window-advanced')
         const roundId = roundIdOf(analysisRoundSequence)
         const windowId = windowIdOf(roundId, analysisWindowCounter + 1)
         const kind = windowKindOfMethod(method)
@@ -634,8 +646,8 @@ export function useLotusGame({
   function recordAnalysisSettlement() {
     if (!analysis) return
     const roundIndex = analysisRoundSequence
-    // 还挂着 pending 的窗口一律先结算回执：局都结束了，它们不会再有"下一个窗口"来收尾（§10.2）。
-    for (const seat of [...analysisOpenWindow.keys()]) settleAnalysisReceipt(seat, 'round-end')
+    // 局都结束了，还挂着的回执不会再有"下一个窗口"来收尾，必须在这里结掉（§10.2）。
+    settleOpenReceipts('round-end')
     const roundId = roundIdOf(roundIndex)
     safely('settlement', () => {
       const records = settlementsFromRound({
