@@ -16,6 +16,7 @@ interface CandidateCall {
 function fakeRecorder() {
   const calls = {
     candidates: [] as CandidateCall[],
+    templates: [] as Array<{ id: string; content: unknown }>,
     started: [] as Array<{ decisionWindowId: string; seat: number; requestId: string; attempt: number; provider: string; requestModel: string }>,
     finished: [] as Array<{ attemptId: string; outcome: AnalysisLlmOutcome }>,
     sources: [] as Array<{ windowId: string; seat: number; source: string }>,
@@ -23,6 +24,7 @@ function fakeRecorder() {
   let serial = 0
   const recorder: DecisionAnalysisRecorder = {
     candidates: (input) => { calls.candidates.push(input) },
+    promptTemplate: (input) => { calls.templates.push({ id: input.id, content: input.content }) },
     attemptStarted: (input) => { calls.started.push(input); return `attempt-${++serial}` },
     attemptFinished: (attemptId, input) => { calls.finished.push({ attemptId, outcome: input.outcome }) },
     source: (input) => { calls.sources.push(input) },
@@ -112,14 +114,23 @@ describe('决策接缝', () => {
     const errors: string[] = []
     const exploding: DecisionAnalysisRecorder = {
       candidates: () => { throw new Error('storage exploded') },
+      promptTemplate: () => { throw new Error('storage exploded') },
       attemptStarted: () => { throw new Error('storage exploded') },
       attemptFinished: () => { throw new Error('storage exploded') },
       source: () => { throw new Error('storage exploded') },
     }
     const sink = createBloodFlowDecisionSink({ recorder: exploding, onError: (detail) => errors.push(detail) })
     expect(() => sink.candidates({ windowId: 'w1', seat: 0, legalActions: legal, candidates: [] })).not.toThrow()
+    expect(() => sink.promptTemplate({ id: 'tpl', content: 'system' })).not.toThrow()
     expect(sink.attemptStarted({ windowId: 'w1', seat: 0, requestId: 'r', attempt: 1, provider: 'p', requestModel: 'm', sampling: {} })).toBe('')
     expect(() => sink.source({ windowId: 'w1', seat: 0, source: 'model' })).not.toThrow()
+  })
+
+  it('提示词模板经接缝登记（§4：模板去重存一次，决策只存变量）', () => {
+    const { recorder, calls } = fakeRecorder()
+    const sink = createBloodFlowDecisionSink({ recorder })
+    sink.promptTemplate({ id: 'bloodFlow-decision/v1/稳健/plain', content: '系统提示正文' })
+    expect(calls.templates).toEqual([{ id: 'bloodFlow-decision/v1/稳健/plain', content: '系统提示正文' }])
   })
 
   it('被收窄的动作清单（§3.3）能直接喂进接缝并被记录', () => {

@@ -73,6 +73,7 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
     beginMatch: (input) => target?.beginMatch(input) ?? '',
     windowOpened: (input) => target?.windowOpened(input),
     candidates: (input) => target?.candidates(input),
+    promptTemplate: (input) => target?.promptTemplate(input),
     chosen: (input) => target?.chosen(input),
     source: (input) => target?.source(input),
     receipt: (input) => target?.receipt(input),
