@@ -74,6 +74,14 @@ export interface LotusReplayResult {
     /** 重跑开出、记录里没有对应条目的窗口数。 */
     extraWindows: number
     /**
+     * 记录里**不是命令口径**的条目数（`expire` 靠超时推进 / `auto` 自动推进）。
+     *
+     * 这两个口径是**血流权威端**的概念（`expireEntry`、`useBloodFlowGame` 的 `resolution:'auto'`）；
+     * 翻精癞子没有靠超时推进的窗口，因此本校验器**不重放**它们，但**也绝不静默丢掉** ——
+     * 计入这里并在有任何一条时直接判不通过（"不许跳过命令"）。
+     */
+    nonCommandEntries: number
+    /**
      * 被**照原样重放**、但记录侧自己标了"当时不在合法动作里"的条目数
      * （P0 的 `chosenIndex = -1`：条目没有 `legalActionId`）。这类条目仍然逐条执行，
      * 只是不做"必须命中合法动作"的断言 —— 记录自己说了它当时就不合法。
@@ -124,9 +132,16 @@ export async function replayLotusLegacyRound(input: LotusReplayInput): Promise<L
   // ── 记录侧：按 windowId 编成"窗口编号 → 命令条目"（顺序判据；不依赖数组顺序）──
   const recordedByNo = new Map<number, AnalysisCommandEntry>()
   const notLegalAtRecordTime = new Set<number>()
+  const nonCommandResolutions = new Set<string>()
+  let nonCommandEntries = 0
   let withoutWindowId = 0
   for (const entry of input.commands) {
-    if ((entry.resolution ?? 'command') !== 'command') continue
+    if (entry.resolution !== undefined && entry.resolution !== 'command') {
+      // `expire`/`auto` 是血流权威端的推进口径，本玩法没有这类窗口 ⇒ 不重放、也不静默丢。
+      nonCommandEntries += 1
+      nonCommandResolutions.add(String(entry.resolution))
+      continue
+    }
     const no = windowNumberOf(entry.windowId)
     if (!Number.isFinite(no)) { withoutWindowId += 1; continue }
     recordedByNo.set(no, entry)
@@ -160,6 +175,7 @@ export async function replayLotusLegacyRound(input: LotusReplayInput): Promise<L
       withoutWindowId,
       unusedCommands: [...recordedByNo.keys()].filter((no) => !consumed.has(no)).length,
       extraWindows,
+      nonCommandEntries,
       commandsNotLegalAtRecordTime: notLegalAtRecordTime.size,
     }
   }
@@ -187,6 +203,12 @@ export async function replayLotusLegacyRound(input: LotusReplayInput): Promise<L
   const deficiencies = reproductionDeficiencies(reproduction)
   if (deficiencies.length) {
     return result(false, `复现数据不完整，缺少：${deficiencies.join('、')}`, [], null)
+  }
+  if (nonCommandEntries) {
+    // 口径不对 ⇒ 连跑都不跑，如实说清"这些条目是什么、为什么不能重放"。
+    // §4 的"被拒动作不出现"：这类条目一旦出现，说明记录不是本玩法的权威口径，绝不能靠过滤掉它来"跑绿"。
+    return result(false, `记录里有 ${nonCommandEntries} 条不是命令口径的条目（${[...nonCommandResolutions].join('、')}）：`
+      + `翻精癞子没有靠超时/自动推进的窗口，本校验器无法重放它们，也不静默跳过 —— 不宣称精确复现`, [], null)
   }
 
   // ── 观测桩：只为拿到"重跑自己的窗口与合法动作"（与 P0 记录同一套投影），不落任何记录 ──

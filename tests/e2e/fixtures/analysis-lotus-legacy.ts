@@ -121,6 +121,7 @@ interface ReproductionRun {
   commandsNotLegalAtRecordTime: number
   withoutWindowId: number
   unusedCommands: number
+  nonCommandEntries: number
   gaps: string[]
 }
 
@@ -472,7 +473,10 @@ void (async () => {
       for (const record of records) {
         const run = await replayLotusLegacyRound({
           reproduction: record,
-          commands: (record.commands ?? []).filter((entry) => (entry.resolution ?? 'command') === 'command'),
+          // **原样**把命令日志交出去（不在这里按 `resolution` 预过滤）：跳过哪些条目必须由校验器
+          // 自己计数并如实报出来（§4「被拒动作不出现」/「不许跳过命令」）——
+          // 上游过滤会让"记录里混进了 bloodFlow 口径的条目"这种事悄悄消失。
+          commands: record.commands ?? [],
           expectedScores: scoresByRound.get(record.roundIndex) ?? null,
           tick,
         })
@@ -486,6 +490,7 @@ void (async () => {
           commandsConsumed: run.metrics.commandsConsumed,
           commandsNotLegalAtRecordTime: run.metrics.commandsNotLegalAtRecordTime,
           withoutWindowId: run.metrics.withoutWindowId, unusedCommands: run.metrics.unusedCommands,
+          nonCommandEntries: run.metrics.nonCommandEntries,
           gaps: run.gaps,
         })
       }

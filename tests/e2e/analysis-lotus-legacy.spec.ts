@@ -82,6 +82,7 @@ interface ProbeStatus {
     commandsNotLegalAtRecordTime: number
     withoutWindowId: number
     unusedCommands: number
+    nonCommandEntries: number
     gaps: string[]
   }>
   postDealTamper: { ok: boolean; reason: string | null; windowsOpened: number; commandsConsumed: number } | null
@@ -212,6 +213,11 @@ test('P1 赛后复现：从落库读回的复现数据逐局重跑 ⇒ 到达同
     expect(run.commandsRecorded, `${where}命令日志不能是空的（空的"全对上"是空转）`).toBeGreaterThan(0)
     expect(run.commandsConsumed, `${where}记录里的命令必须全部被消费（不许跳过）`).toBe(run.commandsRecorded)
     expect(run.unusedCommands, `${where}不许有没被消费的命令（重跑提前终局）`).toBe(0)
+    // §4「被拒动作不出现」，两个可观测形式都要立住：
+    // ① 日志里没有"不是命令口径"的条目（expire/auto 是血流权威端的概念，掺进来必须如实报错而不是过滤掉）；
+    // ② 每条命令在记录时都确实落在当时的合法动作里（P0 的 chosenIndex ≥ 0 ⇒ 带 legalActionId）。
+    expect(run.nonCommandEntries, `${where}命令日志里不该有非命令口径的条目`).toBe(0)
+    expect(run.commandsNotLegalAtRecordTime, `${where}每条命令在记录时都必须是合法动作（不许把被拒动作记进来）`).toBe(0)
     expect(run.kindMismatches, `${where}窗口类型必须逐窗口对上`).toBe(0)
     expect(run.gaps, `${where}重跑期间不得留缝：${run.gaps.join(' | ')}`).toEqual([])
   }

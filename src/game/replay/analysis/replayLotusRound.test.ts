@@ -101,7 +101,8 @@ async function playOneRound(seed: number) {
 
 const replay = (reproduction: AnalysisReproduction, expectedScores: number[] | null) => replayLotusLegacyRound({
   reproduction,
-  commands: (reproduction.commands ?? []).filter((entry) => (entry.resolution ?? 'command') === 'command'),
+  // 原样交出命令日志（不预过滤 `resolution`）：跳过哪些条目必须由校验器自己计数并报出来。
+  commands: reproduction.commands ?? [],
   expectedScores,
   tick,
   // 假时钟下 `Date.now()` 跟着跳：上限放大（真实浏览器里 120s 绰绰有余）。
@@ -138,6 +139,9 @@ describe('翻精癞子 P1：重跑一局（§2.2、§2.3、§3.3）', () => {
     expect(run.metrics.extraWindows).toBe(0)
     expect(run.metrics.withoutWindowId).toBe(0)
     expect(run.kindMismatches, '窗口类型/座位必须逐窗口对上').toBe(0)
+    // §4「被拒动作不出现」：日志里没有非命令口径的条目，且每条命令在记录时都落在当时的合法动作里
+    expect(run.metrics.nonCommandEntries, '不该有 expire/auto 这类非命令口径的条目').toBe(0)
+    expect(run.metrics.commandsNotLegalAtRecordTime, '不该把当时不合法的动作记进来').toBe(0)
     expect(run.metrics.windowsOpened, '重跑开出的窗口数应当与命令条数一致').toBe(run.metrics.commandsRecorded)
     expect(run.gaps, '重跑期间不该留缝').toEqual([])
   }, 120_000)
@@ -178,6 +182,26 @@ describe('翻精癞子 P1：重跑一局（§2.2、§2.3、§3.3）', () => {
     const run = await replay(played.record, null)
     expect(run.ok).toBe(false)
     expect(run.reason, '没有结束分数就要说清"无从比对"').toContain('结束状态')
+  }, 120_000)
+
+  it('命令日志里混进非命令口径的条目（expire/auto）⇒ 如实报错，不静默过滤、也不开跑', async () => {
+    stubWindow()
+    const played = await playOneRound(20_260_921)
+    const withExpire: AnalysisReproduction = {
+      ...played.record,
+      // `expire`/`auto` 是血流权威端的推进口径（`expireEntry`、`resolution:'auto'`）：
+      // 翻精癞子没有靠超时推进的窗口，掺进来必须被指出来，而不是过滤掉之后"跑绿"。
+      commands: [
+        ...(played.record.commands ?? []),
+        { seat: -1, kind: 'expire', at: 1, resolution: 'expire' as const, windowId: 'round-1/window/99' },
+      ],
+    }
+    const run = await replay(withExpire, played.endScores)
+    expect(run.ok, '记录口径不对就不能声称复现成功').toBe(false)
+    expect(run.reason, '必须点明是哪一类条目').toContain('expire')
+    expect(run.reason, '必须说清为什么不能重放').toContain('无法重放')
+    expect(run.metrics.nonCommandEntries, '跳过了多少条要计数').toBe(1)
+    expect(run.metrics.commandsConsumed, '一条都不该喂').toBe(0)
   }, 120_000)
 
   it('血流口径的记录不硬套：如实报"不适用"', async () => {
