@@ -8,10 +8,11 @@ import {
   matchSubtitle,
   meldLabel,
   rankTone,
+  replayVersionNotice,
   roundLabelFor,
   stepSummary,
 } from './format'
-import type { ReplayStep } from './types'
+import { REPLAY_SCHEMA_VERSION, type ReplayStep } from './types'
 
 const NOON = new Date(2026, 8, 14, 12, 0, 0).getTime()
 
@@ -65,6 +66,18 @@ describe('回放列表文案', () => {
       .toBe('4局 · 2位 · +13200分')
     expect(matchSubtitle({ roundCount: 2, myRank: undefined, myScore: -300, status: 'aborted' }))
       .toBe('2局 · 未完成')
+  })
+
+  // §9.5：旧记录不清空、照常观看；但"更新版本写下、本程序不认识"的记录要明确说出来，
+  // 不能静默按旧规则渲染（字段整体缺失时看起来会像"这场没打完"）。
+  it('牌谱版本提示：只对高于当前版本的记录给出，旧格式不提示', () => {
+    expect(replayVersionNotice({ schemaVersion: REPLAY_SCHEMA_VERSION })).toBeNull()
+    expect(replayVersionNotice({ schemaVersion: REPLAY_SCHEMA_VERSION - 1 })).toBeNull()
+    expect(replayVersionNotice({ schemaVersion: undefined as unknown as number })).toBeNull()
+    const notice = replayVersionNotice({ schemaVersion: REPLAY_SCHEMA_VERSION + 2 })
+    expect(notice).toContain(`v${REPLAY_SCHEMA_VERSION + 2}`)
+    expect(notice).toContain(`v${REPLAY_SCHEMA_VERSION}`)
+    expect(notice).toContain('可能显示不完整')
   })
 })
 

@@ -54,6 +54,17 @@ let camera
 let resizeObserver
 let animationFrame
 let destroyed = false
+/**
+ * 还没结束的 compileAsync（着色器编译）。
+ *
+ * 卸载时必须等它结束再 dispose：three 的 `compileAsync` 用 `setTimeout` 轮询
+ * `checkMaterialsReady()`，而 `renderer.dispose()` 会清空内部 properties ⇒ 轮询里
+ * `materialProperties.currentProgram` 变成 undefined，`program.isReady()` 直接抛
+ * `Cannot read properties of undefined (reading 'isReady')`。这个异常发生在 setTimeout 回调里，
+ * 既不会让 compileAsync 的 promise 变成 reject，也catch 不到，只能保证"编译期间不 dispose"。
+ * 实测：快速进出回放视图（编译还没完成就返回大厅）时必现。
+ */
+let compilingShaders: Promise<unknown> | null = null
 let lastPileAnchors = ''
 let dynamicGroups = []
 let winEffectPresenter: ReturnType<typeof createWinEffectPresenter> | null = null
@@ -569,7 +580,14 @@ onMounted(async () => {
   )
 
   // compileAsync 等待着色器真正可用；随后提交首帧并跨过两个浏览器合成帧。
-  await renderer.compileAsync(scene, camera)
+  if (destroyed) return
+  // 记下这个 promise：卸载时要等它结束再 dispose（见 compilingShaders 的说明）。
+  compilingShaders = renderer.compileAsync(scene, camera)
+  try {
+    await compilingShaders
+  } finally {
+    compilingShaders = null
+  }
   if (destroyed) return
   renderer.render(scene, camera)
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -658,14 +676,29 @@ onBeforeUnmount(() => {
   perfHud?.destroy()
   perfHud = null
   resizeObserver?.disconnect()
-  bloodFlowWinEffects?.dispose()
-  if (scene) clearDynamicScene()
-  staticResources.forEach((resource) => resource.dispose?.())
-  renderer?.dispose()
+  // 先把引用摘掉：render() 与 resize() 都以 `!renderer` 作为"已卸载"的判据。
+  const target = renderer
+  renderer = null
   if (tableDebugWindow.__tableRenderedFrames === renderedFramesProbe) delete tableDebugWindow.__tableRenderedFrames
   if (tableDebugWindow.__tableDrawCalls === drawCallsProbe) delete tableDebugWindow.__tableDrawCalls
   outlineEffect = null
-  renderer = null
+  /**
+   * 释放场景与渲染器。
+   * 着色器还在编译（`compileAsync` 未结束）时**必须推迟**：它内部用 setTimeout 轮询
+   * `checkMaterialsReady()`，读的是渲染器的 properties 表；先 dispose 材质/渲染器会让
+   * `materialProperties.currentProgram` 变成 undefined，`program.isReady()` 抛未捕获异常
+   * （实测：快速进出回放视图必现）。等不到就只丢引用，交给 GC 回收上下文 ——
+   * 宁可少释放一次，也不要抛异常打断整页。
+   */
+  const teardown = () => {
+    bloodFlowWinEffects?.dispose()
+    if (scene) clearDynamicScene()
+    staticResources.forEach((resource) => resource.dispose?.())
+    target?.dispose()
+  }
+  const pending: Promise<unknown> | null = compilingShaders
+  if (pending) void pending.then(teardown, teardown)
+  else teardown()
 })
 </script>
 

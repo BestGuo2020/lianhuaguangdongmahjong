@@ -210,4 +210,19 @@ describe('赛后复现校验（§10.6）', () => {
     expect(result.ok).toBe(true)
     expect(result.kindMismatches, '同编号窗口的 kind 应两侧一致').toBe(0)
   })
+
+  // 回归：记录里若混进"权威拒绝过的命令"，重放绝不能执行它 —— 执行了就是一条权威从未做过的动作
+  // （静默分叉，比报错更难查）。录制侧已经不写这种条目，这里再挡一道。
+  it('标了 accepted=false 的条目不得被消费（权威从未执行它）', () => {
+    const { record, commands, scores } = playAndRecord()
+    // 在真命令旁边插一条"权威拒绝过"的条目（例如重复提交被拒）：它必须被丢弃、且不影响这一局
+    const rejected = { seat: commands[3].seat, kind: 'discard', handIndex: 0, windowId: commands[3].windowId, accepted: false }
+    const withRejected = [...commands.slice(0, 3), rejected, ...commands.slice(3)]
+    const result = replayReproduction({ reproduction: record, commands: withRejected, expectedScores: scores })
+    expect(result.metrics.rejectedCommands).toBe(1)
+    expect(result.reason, '跳过被拒条目后剩下的仍是同一局，应当能复现').toBeNull()
+    expect(result.ok).toBe(true)
+    expect(result.scoresMatch).toBe(true)
+    expect(result.submitted, '被拒条目不计入已消费条数').toBe(result.recorded)
+  })
 })

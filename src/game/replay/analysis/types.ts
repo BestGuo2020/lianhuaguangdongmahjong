@@ -270,7 +270,11 @@ export interface AnalysisSettlement {
 export interface AnalysisReproduction {
   roundIndex: number
   available: boolean
-  /** 优先保存完整初始物理牌墙，而不是只存随机种子（算法变化会让同种子产生不同牌局）。 */
+  /**
+   * 完整初始物理牌墙（发牌后剩余），**记牌码**（`m1`/`south`）。
+   * 优先保存牌墙而不是只存随机种子（算法变化会让同种子产生不同牌局，§6）。
+   * 读取侧 `tileFromName` 两种写法都认：2026-09-21 之前写下的记录是中文显示名，照样能读。
+   */
   initialWall?: string[]
   /**
    * 四家初始手牌与庄家第 14 张的下标。

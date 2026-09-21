@@ -2,6 +2,7 @@
 import type { MatchType, TileType } from '../core/contracts/types'
 import { tileName } from '../core/rules/tiles'
 import type { ReplayMatch, ReplayMeldKind, ReplayStep } from './types'
+import { REPLAY_SCHEMA_VERSION } from './types'
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -105,4 +106,19 @@ export function matchSubtitle(match: Pick<ReplayMatch, 'roundCount' | 'myRank' |
 /** 对局来源：单机 / 联机（联机牌谱由房主生成后下发，四家均为明牌）。 */
 export function gameModeLabel(match: Pick<ReplayMatch, 'gameMode'>): string {
   return match.gameMode === 'remote' ? '联机' : '单机'
+}
+
+/**
+ * 牌谱格式版本提示（§9.5）：本地库里的记录不因为版本被清空（旧记录照常观看），
+ * 但"由更新版本写下、本程序不认识"的记录要**说出来** —— 静默按旧规则渲染才是真正的坑
+ * （字段可能整体缺失，看起来像"这场没打完"）。
+ * 返回 null 表示版本与当前一致或更旧（旧格式本来就兼容可读）。
+ */
+export function replayVersionNotice(
+  match: Pick<ReplayMatch, 'schemaVersion'>,
+  current = REPLAY_SCHEMA_VERSION,
+): string | null {
+  const version = match.schemaVersion
+  if (typeof version !== 'number' || !Number.isFinite(version) || version <= current) return null
+  return `牌谱版本 v${version} 高于本程序（v${current}），可能显示不完整`
 }

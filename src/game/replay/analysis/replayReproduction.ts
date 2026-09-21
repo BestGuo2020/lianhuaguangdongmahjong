@@ -36,6 +36,11 @@ export interface ReproductionCommand {
   windowKind?: string
   /** `expire` 条目专用：当时的等待座位。 */
   waitingSeats?: number[]
+  /**
+   * 权威是否接受了这条提交（§3.4）。`false` 表示权威从未执行它 —— 例如窗口已关闭或该座位已决定。
+   * 录制侧本就不该写这种条目；这里再挡一道，避免"重放执行一条不存在的动作"这种静默分叉。
+   */
+  accepted?: boolean
 }
 
 export interface ReplayVerification {
@@ -65,6 +70,8 @@ export interface ReplayVerification {
     expireSkippedByFilter: number
     /** 缺 windowId 的命令条目数（排序会把它甩到序列末尾，属于记录缺陷）。 */
     withoutWindowId: number
+    /** 记录里被权威拒绝过的命令条目数（本不该出现；出现则跳过不执行，§3.4）。 */
+    rejectedCommands: number
   }
 }
 
@@ -135,7 +142,10 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
   // 关键：**按窗口编号稳定排序后再消费**。记录是异步压入的（机器人动作要等权威回传），
   // 因此条目顺序与引擎的窗口顺序并不一致（实测：窗口 77 的座位 1 弃牌被排在座位 0 的后续动作之后）。
   // 同窗口内保持原有相对顺序（稳定排序），编号缺失的排在最后。
+  // 另：记录里标了 `accepted === false` 的条目（权威拒绝过）直接不消费 —— 权威从未执行它（§3.4）。
+  const rejectedCommands = input.commands.filter(entry => entry.accepted === false).length
   const commands = input.commands
+    .filter(entry => entry.accepted !== false)
     .filter(entry => entry.resolution !== 'expire' || !entry.windowId || !windowsWithCommand.has(entry.windowId))
     .map((entry, index) => ({ entry, index, no: entry.windowId ? Number(entry.windowId.split('/').pop()) : Number.NaN }))
     .sort((a, b) => {
@@ -146,7 +156,10 @@ export function replayReproduction(input: ReplayReproductionInput): ReplayVerifi
     .map(item => item.entry)
   const recorded = commands.length
   /** expire 判定计数：应用 / 因编号不符丢弃 / 因同窗口有命令被前置过滤丢弃（返回给调用方做观测）。 */
-  const metrics = { expireApplied: 0, expireSkippedByNumber: 0, expireSkippedByFilter: input.commands.length - commands.length, withoutWindowId: 0 }
+  const metrics = {
+    expireApplied: 0, expireSkippedByNumber: 0, withoutWindowId: 0, rejectedCommands,
+    expireSkippedByFilter: input.commands.length - commands.length - rejectedCommands,
+  }
   /** 已经推进过的窗口编号：同一窗口常有多条 expire（主线程按计时器各压一条），只允许推进一次。 */
   let lastExpiredNo = Number.NaN
   /**

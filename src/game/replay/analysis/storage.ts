@@ -25,6 +25,9 @@ import {
   type AnalysisStoredConfig,
   type AnalysisStoreDriver,
 } from './idb'
+import { createStorageCapability, type StorageCapability } from './capability'
+import { reassembleFragments, splitOversizedPart } from './fragments'
+import { createBudgetLease, type BudgetLease } from './leases'
 
 /** 默认字节预算：可配置软上限候选，正式默认值待设备实测确定（§9.4）。 */
 export const ANALYSIS_DEFAULT_BUDGET_BYTES = 200 * 1024 * 1024
@@ -37,6 +40,12 @@ export interface AnalysisStorageOptions {
   rawBudgetBytes?: number
   now?: () => number
   onError?: (detail: string) => void
+  /** 注入 `navigator.storage`（单测用；默认取全局，缺失即视为不支持）。 */
+  storageManager?: Parameters<typeof createStorageCapability>[0]['storage']
+  /** 注入跨标签页预算预留（单测用；默认走 localStorage，两页共享同一份）。 */
+  lease?: BudgetLease
+  /** 关掉"创建时读一次 estimate()"（单测里避免多余的异步调用）。 */
+  probeEstimateOnCreate?: boolean
 }
 
 /** 写入失败原因。 */
@@ -83,6 +92,11 @@ export interface AnalysisStorage {
   budget(): number
   /** 记录缺失范围与原因（容量／队列／写入失败都必须留痕，§9.5）。 */
   noteGap(matchId: string, gap: AnalysisGapRecord): Promise<void>
+  /**
+   * 浏览器存储能力（§9.4、§10.11）：持久化状态与同源容量估算。
+   * 首次启用录制时申请一次持久化；压力高时**只下调**字节预算，不按估算覆盖逐块账本。
+   */
+  capability(): StorageCapability
   close(): void
 }
 
@@ -107,6 +121,22 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
   let broken = false
   /** 因预算/raw 限制或写入失败而暂停的场次；同时记住**最初**的原因（诊断必需）。 */
   const paused = new Map<string, string>()
+  /**
+   * 浏览器存储能力（§9.4）：压力高时把字节预算**下调**到剩余空间内（留临时写入余量）。
+   * 只下调不上调：estimate() 是同源估算，不能拿来扩大本应用的逐块账本。
+   */
+  const capability = createStorageCapability({
+    ...(options.storageManager !== undefined ? { storage: options.storageManager } : {}),
+    onBudgetPressure: ({ suggestedBytes }) => { maxBytes = Math.min(maxBytes, Math.max(1024 * 1024, suggestedBytes)) },
+  })
+  /**
+   * 跨标签页预算预留（§9.4）：同源多页共享同一份预算，**不能只靠各页自己的计数**。
+   * 预留只覆盖在途写入；别的页拿着过期预留说明它已经走了，会在读取时被回收。
+   */
+  const lease: BudgetLease = options.lease ?? createBudgetLease()
+  // §9.4「启动、批量导入／清理后及有节制的定期检查调用 estimate()」：启动这一次在这里做
+  // （每次加载只问一次，不跟着写入频率走；失败只记快照，不打断任何流程）。
+  if (options.probeEstimateOnCreate !== false) void capability.refreshEstimate()
 
   function pause(matchId: string, detail: string) {
     if (!paused.has(matchId)) paused.set(matchId, detail)
@@ -190,11 +220,26 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
       if (pausedDetail) return { ok: false, reason: 'paused', storedBytes: 0, blocks: 0, paused: true, detail: pausedDetail }
 
       let meta = await readMeta(matchId) ?? emptyMeta(matchId, info.rulesetId, now())
+      // 墓碑（已删除）遇到新写入必须**复活**：否则写进去的记录永远显示「已删除」，
+      // 而 `noteGap` 也会继续把状态压回 deleted（§9.2 的四态就再也回不去）。
+      // 计数器归零是必须的：墓碑对应的块早已被 deleteMatchData 清空。
+      // `configIds` 保留刚读取到的那份 —— 调用方（如导入）通常在本函数之前已登记了配置引用。
+      if (meta.status === 'deleted') {
+        meta = { ...meta, status: 'complete' as AnalysisCompleteness, parts: 0, storedBytes: 0, blockCount: 0, gaps: [] }
+        await putMeta(meta)
+      }
       const writer = createAnalysisBlockWriter()
       let storedBytes = 0
       let blocks = 0
+      // 写入期间保持心跳：否则别的标签页会以为这页已经走了，回收我们**在途**的预留（§9.4）
+      lease.startHeartbeat()
+      try {
 
-      for (const part of parts) {
+      // 片段化（§9.3）：单条超大记录（例如模型返回的超长回答）先切成有界片段，
+      // 否则"按字节分批"会退化成一个巨块，队列峰值与解压开销都不可控。原文逐字保留，读取侧重组。
+      const expanded: AnalysisBlockPart[] = []
+      for (const part of parts) expanded.push(...splitOversizedPart(part))
+      for (const part of expanded) {
         writer.push(part)
         // 按目标字节分批：达到目标就刷一块（压缩在写事务之前完成，见 codec）
         if (!writer.shouldFlush()) continue
@@ -215,6 +260,10 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
       }
       await putMeta(updated)
       return { ok: true, reason: null, storedBytes, blocks, paused: false }
+      } finally {
+        lease.release()
+        lease.stopHeartbeat()
+      }
 
       /**
        * 刷一块：先做预算与 raw 判定，再不可变追加；任一步失败即留痕并暂停该场。
@@ -247,20 +296,23 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
             { scope: 'analysis', reason: 'raw-block-over-budget' },
           )
         }
-        // 字节预算：先按 §9.4 顺序淘汰其它分析区，再决定是否暂停本场
+        // 字节预算：先按 §9.4 顺序淘汰其它分析区，再决定是否暂停本场。
+        // **别的标签页在途的预留要算进来**（§9.4：跨实例协调，不能只看自己这一页的计数）。
         const used = await totalBytes()
-        if (used + block.storedBytes > maxBytes) {
-          await evictToBudget({ protect: [matchId] })
+        const inFlight = lease.othersReserved()
+        if (used + inFlight + block.storedBytes > maxBytes) {
+          await evictToBudget({ protect: [matchId], budgetBytes: Math.max(0, maxBytes - inFlight) })
           const after = await totalBytes()
-          if (after + block.storedBytes > maxBytes) {
+          if (after + lease.othersReserved() + block.storedBytes > maxBytes) {
             // 记下当时的数字：只报"预算不足"没法判断是账本异常还是真的满了
             return await pauseWith(
-              `budget-exceeded(used=${after},budget=${maxBytes},block=${block.storedBytes})`,
+              `budget-exceeded(used=${after},inflight=${lease.othersReserved()},budget=${maxBytes},block=${block.storedBytes})`,
               { scope: 'analysis', reason: 'budget-exceeded' },
             )
           }
         }
-
+        // 写入前取一份在途预留（别的页据此让路），写完立刻释放：预留只覆盖在途字节
+        lease.reserve(block.storedBytes)
         const appended = await guard('追加分析块', (d) => d.putBlock({
           id: `${matchId}#${block.sequence}`,
           matchId,
@@ -272,6 +324,7 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
           parts: block.parts,
           payload: block.payload,
         }), false)
+        lease.release()
         if (!appended) {
           // 驱动失败（已停用）或序号已被占用：都算这一块没落成功，留痕并暂停本场（§9.5）。
           // 这两种情况必须分开报：序号冲突通常意味着元数据没写进去（序号没前进），而不是空间问题。
@@ -318,8 +371,13 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
         if (decoded.error || !decoded.parts) return { parts, meta, complete: false, reason: decoded.error ?? 'parse-failed' }
         parts.push(...decoded.parts)
       }
-      const complete = meta.status === 'complete' && metas.length === meta.blockCount
-      return { parts, meta, complete, ...(complete ? {} : { reason: 'incomplete' }) }
+      // 片段重组（§9.3）：缺片 / 坏片必须如实把这一场标成不完整，不能给半份数据
+      const rebuilt = reassembleFragments(parts)
+      const complete = meta.status === 'complete' && metas.length === meta.blockCount && !rebuilt.incomplete.length
+      return {
+        parts: rebuilt.parts, meta, complete,
+        ...(complete ? {} : { reason: rebuilt.incomplete.length ? 'fragment-incomplete' : 'incomplete' }),
+      }
     },
 
     async status(matchId) {
@@ -376,6 +434,8 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
       paused.delete(matchId)
       // 留墓碑：列表要能显示「已删除」，且不再计入字节账本（§9.2）
       await putMeta({ ...meta, status: 'deleted', parts: 0, storedBytes: 0, blockCount: 0, nextSequence: 1, gaps: [], configIds: [], updatedAt: now() })
+      // 清理后按 §9.4 复检一次同源容量（有节制的检查，不是每次写入都问）
+      void capability.refreshEstimate()
     },
 
     async reconcileLifecycle(existingMatchIds) {
@@ -419,7 +479,12 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
       })
     },
 
+    capability() { return capability },
+
     close() {
+      // 关闭这一页时主动释放预留，别的标签页不必等 ttl 才回收（§9.4）
+      lease.release()
+      lease.stopHeartbeat()
       try { driver?.close() } catch { /* 关闭失败无需上报 */ }
       driver = null
     },
