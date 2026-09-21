@@ -119,6 +119,23 @@ roundId   = `round-${S}`                  S = 本局在整场里的序号（1 �
 > sink 要**反着对**：由包装层维护"该座位当前打开的窗口"，钩子触发时按 `seat` 找到在飞的那个窗口，
 > 再把 `attemptStarted({ decisionWindowId })` 指过去 —— 不去匹配钩子里的 `requestId`。
 
+**而且这个缺口是自洽的（读 `LotusLlmController` 核实过，`src/game/llm/llmController.ts`）**：
+LLM 控制器里**恰好只有那三个能拿到 requestId 的窗口**真的会发请求 ——
+
+| 窗口 | LLM 控制器 | 会不会有 attempt |
+|---|---|---|
+| `requestTurn`(347) | 先短路"必成杠上开花"的暗杠/风杠与已成胡的手牌（348–362），其余走 `decideCanonical`(363) | 有时有 |
+| `requestClaim`(394) | 无选项直接 `pass`(395)、必成杠上开花直接 `gang`(396–399)，其余走 `decideCanonical`(400) | 有时有 |
+| `requestChi`(420) | 走 `decideCanonical`(422) | 有时有 |
+| `requestDiscardHu`(380) | **全是确定性短路**（385–391），从不进 `decideCanonical` | **永不** |
+| `requestRobKong`(441) | `lotusDecideRobKong` 确定性裁决 | **永不** |
+
+也就是说：**拿不到 requestId 的那两个窗口，正好就是永远不会有 attempt 的两个窗口** ——
+不需要为它们做任何特例，按 `seat` 找在飞窗口这一套就够了。
+推论（写给下一轮做 sink 的人）：**`llm` 记录会是 LLM 座位决策的严格子集**，
+不要断言"每个 LLM 座位的决策都有一条 llm 记录"；反过来，`candidates`/`recommended` 也只有
+真的走了模型的那些窗口才有。
+
 ## 7. 执行回执与结算折算（§3.4、§5）
 
 **执行回执**：翻精癞子是 Vue 状态机、没有权威回执，所以只看**该座位自己的可见变化**
