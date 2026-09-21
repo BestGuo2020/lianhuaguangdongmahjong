@@ -1,6 +1,6 @@
 # 执行方案：翻精癞子 P1「赛后复现」（§6、§10.6 口径）
 
-> 状态：**待执行**（2026-09-21 由协调者编写；本轮只出方案 + 建分支，不动实现）。
+> 状态：**待执行**（2026-09-21 编写；**单人单会话执行**，直接在主工作区的 master 上做，见 §5）。
 > 前置阅读：`analysis-recording-other-variants-plan.md`（总方案）、
 > `analysis-two-variants-work-agreement.md`（协作与冻结清单，**必须遵守**）、
 > `analysis-lotus-legacy.md`（B 写的 P0 玩法文档：字段口径、窗口 ID、未做的部分）。
@@ -61,7 +61,8 @@ postDealHands?: string[][]
 variant?: string
 ```
 
-⚠️ 这是**冻结文件**（约定 §3）⇒ 要么由协调者走"公共改动"提交，要么在方案里先跟协调者确认后再改。
+⚠️ 单人执行时**直接改**即可（"冻结清单/协调者"是并行协作时的角色约定，现在不适用，见 §5）。
+向后兼容是硬要求：旧记录没有这些字段，读取侧不能因此报错。
 
 ### 3.2 快照在哪一刻取（这一条最容易取错）
 
@@ -121,24 +122,34 @@ P1 只增加记录与新 API，**不得改变对局行为**：现有硬护栏用
 
 - [ ] 导出包里 `reproductionCapable` 按记录内容判定：有完整复现数据 ⇒ true，缺 ⇒ false 并给出缺什么。
 
-## 5. 协作与流程（沿用既有约定，别另起一套）
+## 5. 执行方式（单人单会话，2026-09-21 修正）
 
-- 分支 `feat/repro-lotus-legacy`，工作树 `work/repro-legacy`，dev server **端口 4178**
-  （A=4174、B=4176、协调者 master=4175、vibehub=4177 —— 起服务后先自查端口归属，见约定 §8）；
-- **冻结清单**照旧（约定 §3）：`src/App.vue`、`src/game/llm/*`、
-  `analysis/{session,storage,recorder,status,types,codec,export,import}.ts`；
-  本方案需要动 `types.ts`（§3.1）与 `export.ts`（能力判定）⇒ **先请协调者提"公共改动"提交**；
-- `src/game/variants/lotus/lotusGame.ts` 与 `src/game/core/local/useGame.ts` 都是 **vibehub keep 文件**：
-  本分支改 `lotusGame.ts` ⇒ 协调者合并后要再做一次 vibehub 镜像（手法见约定 §6.1：三方合并 + 行尾陷阱）；
-- 做完向协调者交接：**分支名 + 期望合并的 sha + 门控结果（在哪棵树跑的、跑了什么、观察到什么数字）**；
-- 开工第一步 `git merge master`（拿最新约定与公共改动）。
+**这个任务由一个人在一个对话里做到底，不需要分支、工作树，也不需要"协调者"。**
+（"协调者 / 冻结清单 / 分支所有权"那套是先前 A、B 两个玩法**并行**时为了避免撞车定的角色分工；
+现在没有并行方，那些约束不适用，别去等一个不存在的协调者。）
+
+单人流程：
+
+1. **直接在 master 上做**（主工作区 `D:\vueprojects\lianhua_guangma`）——`analysis/types.ts`、
+   `analysis/export.ts`、`lotusGame.ts` 想改就改，不需要"先报公共改动"那一步；
+2. dev server 端口用 **4178**（4174/4176 是别人的旧会话，4175/4177 是我用过的；
+   起服务后先 `Get-NetTCPConnection -LocalPort 4178` 或 `GET /src/App.vue` 确认端口是自己的 —— 我为此踩过一次假失败）；
+3. 每个阶段：`pnpm typecheck` + `pnpm test`（vitest）→ 相关 e2e → 提交；
+4. **提交到 master 之后必须 `pnpm sync:vibehub`**（仓库规矩，脚本要求 master 工作区干净）；
+5. **`src/game/variants/lotus/lotusGame.ts` 是 vibehub 的 keep 文件，同步不会带过去** ⇒
+   改完要手动镜像到 vibehub（手法：先 sync 再镜像；三方合并的 `base` 取"改动前的 master 版本"；
+   统一行尾 —— vibehub 工作区是 CRLF、`git show` 是 LF，不统一会把每一行都判成冲突；
+   镜像后 `git diff --stat` 应只有本次改动量，`pnpm typecheck` + `pnpm test` 过关后单独提交）。
+   `App.vue` / `useGame.ts` 同样是 keep 文件，但本任务大概率不碰它们。
+6. 收尾：在 `docs/blood-flow/design/analysis-lotus-legacy.md` 补 P1 一节（字段口径、校验器判据、未做的部分），
+   并在最终报告里写清"跑了什么、在哪棵树上、观察到什么数字"。
 
 ## 6. 建议的执行顺序（最小可验证切片）
 
 1. 快照（`beginTurn` 处取 + 写进记录）+ 单测（字段口径）——**先只做这一半**，跑一次 e2e 确认记录里有 `ringWall/dice`；
 2. 动作日志（复用现有汇聚点）+ 单测（形状与顺序）；
 3. 校验器（浏览器夹具）+ e2e「整局重跑到同一结束状态」；
-4. 公共改动（`types.ts`/`export.ts` 的能力判定）与协调者对接；
+4. 导出能力判定（`export.ts` 的 `reproductionCapable` 按记录内容算）；
 5. 文档（在 `analysis-lotus-legacy.md` 里补 P1 一节）+ 交接。
 
 ## 7. 明确不做
