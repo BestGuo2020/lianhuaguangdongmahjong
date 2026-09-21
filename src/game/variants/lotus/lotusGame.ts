@@ -4,7 +4,7 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import type { TableActionEvent, TileType } from '../../core/contracts/types'
 import { defineGamePort, type GameStartOptions } from '../../core/contracts/gamePort'
 import type { AnalysisRecorder } from '../../replay/analysis/recorder'
-import type { LotusActionLike, LotusDecisionMethod, LotusLegacyDecisionSink, LotusSeatObservable, LotusWindowDescriptor } from '../../replay/analysis/lotusLegacyAdapter'
+import type { LotusActionLike, LotusDecisionMethod, LotusLegacyDecisionSink, LotusSeatObservable, LotusSeatView, LotusWindowDescriptor } from '../../replay/analysis/lotusLegacyAdapter'
 import {
   choiceTookEffect,
   chosenIndex,
@@ -21,6 +21,8 @@ import {
   windowKindOfMethod,
 } from '../../replay/analysis/lotusLegacyAdapter'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
+import type { AnalysisCommandEntry } from '../../replay/analysis/commandEntry'
+import { buildLotusReproduction, lotusCommandEntry } from '../../replay/analysis/lotusReproduction'
 import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
 import { createMatchLifecycle } from '../../shared/runtime/matchLifecycle'
 import { createTimerScheduler } from '../../shared/runtime/timerScheduler'
@@ -246,6 +248,41 @@ export function useLotusGame({
   }>()
   /** 本局开局分数（结算折算的基准，§5）；在开局阶段捕获，与传给引擎的开局读数同一时刻。 */
   let analysisOpeningScores: number[] = []
+  // ── P1 §6：本局的**复现数据**（重跑起点 + 权威动作日志） ──────────────
+  //
+  // 与 P0 的"决策记录"共用同一批汇聚点，但两件事不同：P0 记的是"**当时决策是什么**"，
+  // P1 记的是"**能不能把这一局重跑出来**" —— 后者需要三样东西：确定性起点（环状牌墙 + 两颗骰子
+  // + 庄家）、当局开局分（否则结束分数无从比对）、以及**权威真正执行过的动作序列**。
+  /**
+   * 本局的**重跑起点参数**（环状牌墙 136 + 两颗骰子 + 庄家），由开局时间线的 `onRoundPrepared`
+   * 在"骰子与牌墙都定下来"时交出。**必须在那一刻拿**：此后牌墙会被移出翻精墩、按开牌断点重排、
+   * 发出去，局末读 `state.wall` 拿到的是终局牌墙（血流在同一个地方踩过坑）。
+   */
+  let analysisRoundRing: {
+    ringWall: TileType[]
+    firstDice: [number, number]
+    secondDice: [number, number]
+    dealer: number
+  } | null = null
+  /**
+   * 本局**发牌完成、进入第一手决策之前**那一拍的读数（`beginTurn` 回调时刻）：开局分、四家手牌、
+   * 翻精结果。手牌/分数是**交叉校验**与计分基准，不是重跑输入（重跑由牌墙+骰子重新发牌）。
+   */
+  let analysisRoundOpening: {
+    roundIndex: number
+    openingScores: number[]
+    postDealHands: string[][]
+    flipTile: TileType | null
+    jokers: string[]
+    flipSeat: number | null
+    flipStack: number | null
+    wallBreakIndex: number
+  } | null = null
+  /**
+   * 本局的权威动作序列：与 P0 的 `chosen` **同源、同顺序**（在同一个汇聚点各落一份）。
+   * 顺序判据是 `windowId`（末段自增编号），不是数组下标 —— 异步回传会让数组顺序 ≠ 执行顺序。
+   */
+  const analysisRoundCommands: AnalysisCommandEntry[] = []
   /** 已经折算过结算的那一份 `state.result`（同一局不得重复记：对象身份即"这一次结算"）。 */
   let analysisSettledResult: unknown = null
   /** 已包过观测的控制器实例：重复安装不得把包装再包一层。 */
@@ -373,8 +410,27 @@ export function useLotusGame({
         })
         analysisOpenWindow.set(seat, { windowId: view.windowId, seat, before, action: picked })
       })
+      // P1 §6：在**同一个汇聚点**再落一条可重跑的命令（形状 = `AnalysisCommandEntry`）。
+      // 单独一个 `safely`：上面那条决策记录失败不该连带丢掉可重跑的动作序列（§9.5 独立失败域）。
+      // 条目带 `legalActionId` 当且仅当该动作确实落在本窗口的合法动作里（P0 的 chosenIndex ≥ 0）——
+      // 校验器据此区分"记录侧自己标了当时不合法"与"重跑侧状态分叉了"。
+      safely('command', () => {
+        const index = pickedActionIndex(view, action)
+        analysisRoundCommands.push(lotusCommandEntry(seat, action, {
+          at: Date.now(),
+          windowId: view.windowId,
+          windowKind: view.kind,
+          ...(index >= 0 ? { legalActionId: legalActionId(view.windowId, index) } : {}),
+        }))
+      })
     }
     return action
+  }
+
+  /** 该动作在**本窗口**合法动作里的下标（与决策记录的 `chosenIndex` 同一条判据）。 */
+  function pickedActionIndex(view: LotusSeatView, action: unknown): number {
+    const picked = toLotusActionLike(action)
+    return picked ? chosenIndex(view, picked) : -1
   }
 
   /** 把一个控制器包装成观测版；除记录外行为完全一致（含 reset/onDiscarded 转发）。 */
@@ -471,6 +527,10 @@ export function useLotusGame({
   }
 
   function beginTurn(playerIndex: number, options: { skipDraw?: boolean; fromTail?: boolean } = {}) {
+    // P1 §6：每局的**第一个回合**（庄家起手）就是"发牌完成、还没进入第一手决策"那一刻 ——
+    // 复现快照在这里取（每局只取一次）。局末再读 `state.players` 拿到的是**终局**手牌与分数，
+    // 拿它当"起始状态"就是血流踩过的那个坑。
+    captureAnalysisOpening()
     return turnOrchestrator.beginTurn(playerIndex, options)
   }
 
@@ -560,6 +620,15 @@ export function useLotusGame({
     endGame,
     playerSeeds: aiPlayerSeeds,
     humanPlayerSeed,
+    // P1 §6：重跑参数（环状牌墙 + 两颗骰子 + 庄家）在"发牌之前、骰子已定"那一刻交出。
+    onRoundPrepared: (info) => safely('opening-parameters', () => {
+      analysisRoundRing = {
+        ringWall: [...info.ringWall],
+        firstDice: [...info.firstDice] as [number, number],
+        secondDice: [...info.secondDice] as [number, number],
+        dealer: info.dealer,
+      }
+    }),
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (
@@ -573,6 +642,10 @@ export function useLotusGame({
     if (mode) {
       analysisRoundSequence = 0
       analysisSettledResult = null
+      // 新的一场：上一场残留的复现快照/命令日志一律作废（上半场已随局末落库）。
+      analysisRoundRing = null
+      analysisRoundOpening = null
+      analysisRoundCommands.length = 0
     }
     // 转交开局参数（固定牌墙/骰子）。此前第二个参数被丢掉 ⇒ 只有本引擎做不到"同一副牌重跑两次"，
     // 而"记录开/关两种设置下结束分数与动作数完全一致"这条硬护栏正需要它（§9）。
@@ -679,6 +752,64 @@ export function useLotusGame({
     }, { flush: 'sync' })
   }
 
+  /**
+   * P1 §6：`beginTurn` 那一刻的复现快照（每局一次）。
+   *
+   * 取的是"**发牌完成、还没到第一手决策**"的读数：四家手牌（交叉校验用）、当局开局分
+   * （结束分数的比对基准）、翻精结果（交叉校验用）。重跑**输入**（环状牌墙/骰子/庄家）
+   * 另由 `onRoundPrepared` 交出 —— 它们在发牌前就定型了，且牌墙发完就没了。
+   */
+  function captureAnalysisOpening() {
+    if (!analysis || analysisRoundOpening) return
+    safely('opening-snapshot', () => {
+      analysisRoundOpening = {
+        roundIndex: analysisRoundSequence,
+        openingScores: state.players.map((player) => player.score),
+        postDealHands: state.players.map((player) => [...player.hand]),
+        flipTile: state.flipTile.value,
+        jokers: [...state.jokerTiles.value],
+        flipSeat: state.flipSeat.value,
+        flipStack: state.flipStack.value,
+        wallBreakIndex: state.wallBreakIndex.value,
+      }
+    })
+  }
+
+  /**
+   * P1 §6：局末把这一局的**复现数据**落库，然后作废本局的快照与命令日志。
+   *
+   * 快照缺失时（例如庄家天胡：开局时间线直接结算，根本没走到 `beginTurn`）**不写**这一局，
+   * 只如实留痕 —— 拿局末状态凑一个"起始状态"出来是另一种谎（§9.5）。
+   */
+  function recordAnalysisReproduction() {
+    if (!analysis) return
+    const ring = analysisRoundRing
+    const opening = analysisRoundOpening
+    if (!ring || !opening) {
+      safely('reproduction-gap', () => analysis?.noteGap({
+        scope: 'reproduction',
+        reason: ring ? 'round-without-opening-snapshot' : 'round-without-opening-parameters',
+      }))
+    } else {
+      safely('reproduction', () => analysis?.reproduction(buildLotusReproduction({
+        roundIndex: opening.roundIndex,
+        ringWall: ring.ringWall,
+        dice: { first: ring.firstDice, second: ring.secondDice },
+        dealer: ring.dealer,
+        openingScores: opening.openingScores,
+        postDealHands: opening.postDealHands,
+        flipTile: opening.flipTile,
+        jokers: opening.jokers,
+        flipSeat: opening.flipSeat,
+        flipStack: opening.flipStack,
+        wallBreakIndex: opening.wallBreakIndex,
+        commands: analysisRoundCommands,
+      })))
+    }
+    analysisRoundOpening = null
+    analysisRoundCommands.length = 0
+  }
+
   /** 局末结算折算（§5）：每局一条，`deltas = 局末分 − 开局分`（四家之和恒等于牌流的守恒量）。 */
   function recordAnalysisSettlement() {
     if (!analysis) return
@@ -711,12 +842,19 @@ export function useLotusGame({
     // 上一局若在窗口中途被中断，接缝里可能还留着"在飞"的窗口：换局时一律清掉，
     // 免得新一局的模型请求被关联到上一局的窗口号上。
     for (let seat = 0; seat < controllers.length; seat += 1) analysisSink?.windowClosed(seat)
+    // P1 §6：新的一局 ⇒ 上一局的复现快照与命令日志作废（它们已在上一局局末落库）。
+    // 注意**不能**在这里清 `analysisRoundRing`：重跑参数在 `onRoundPrepared` 里、本拍之前就交出来了。
+    analysisRoundOpening = null
+    analysisRoundCommands.length = 0
   }, { flush: 'sync' })
   watch(state.result, (result) => {
     // 用对象身份去重：同一局的结算对象只会被折算一次；换局/换场都是新对象。
     if (!result || result === analysisSettledResult) return
     analysisSettledResult = result
     recordAnalysisSettlement()
+    // P1 §6：复现数据也在这里落库（此刻分数已算完 —— 见 `settlementTimeline` 里
+    // `finalizeWin` → `state.result` 的先后顺序）。
+    recordAnalysisReproduction()
   }, { flush: 'sync' })
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
