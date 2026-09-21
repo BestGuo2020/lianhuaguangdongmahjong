@@ -208,8 +208,31 @@ E2E_PORT=4176 E2E_SKIP_WEBSERVER=1 npx playwright test tests/e2e/analysis-lotus-
    记录链路完全同源；差的只有"大厅列表行内状态"那一层 UI —— 用例断言的是它读的那个**落库状态**
    （`matches.status === 'complete'`）。App.vue 接上后，可以在 `replay.spec.ts` 里按血流的写法
    补一条 `replay-analysis-status` 显示「分析：完整」的行内断言。
-5. **vibehub 镜像**：`lotusGame.ts` 是**共享文件**（约定 §6 表里已注明"不需要镜像"），
-   因此本分支的改动随 `pnpm sync:vibehub` 自动过去，不需要手动镜像。
+5. **vibehub 镜像：约定写错了，`lotusGame.ts` 需要手动镜像（实测更正）**。
+   约定 §1 与 §6 表里都把 `src/game/variants/lotus/lotusGame.ts` 标成"共享文件、不需要镜像"，
+   但同步脚本 `scripts/sync-master-to-vibehub.ps1` 的 **`$vibehubKeep` 清单第 100 行就把
+   `lotusGame.ts` 列在里面**（该清单是"永远保留 vibehub 自己的版本"，脚本合并后用
+   `git checkout $keepBase -- $vibehubKeep` 强制还原）。并且两边的这一份**差别很大**：
+   `git diff --stat vibehub bfe2708 -- src/game/variants/lotus/lotusGame.ts` = 37 insertions /
+   64 deletions（增减散布在 import、`UseLotusGameOptions`、函数体的二十多处 hunk 上），
+   所以它不是"几乎一样、抄一下就行"，而是一次真正的移植。
+
+   因此本分支对 vibehub 的影响与 A 的 `useGame.ts` **完全同类**，需要注意两点：
+   1. 本节在 `lotusGame.ts` 里的记录接线（`analysis` 选项、控制器包装、结算/回执）**不会**自动
+      同步到 vibehub，要**手动镜像**到 vibehub 的那一份；
+   2. `tests/e2e/fixtures/analysis-lotus-legacy.{html,ts}` 与 `tests/e2e/analysis-lotus-legacy.spec.ts`
+      是**新文件、不在 `$vibehubKeep` 也不在 `$masterOnly` 里 ⇒ 会被同步过去**，而它们依赖
+      `useLotusGame` 的 `analysis` 选项。于是**只 sync 不镜像 ⇒ vibehub 的 `pnpm typecheck` 直接挂**
+      （`analysis` 不在 `UseLotusGameOptions` 里）。
+   顺序上「先镜像再 sync」不会出问题；先 sync 再镜像会让 vibehub 的中间态挂一会儿。
+
+   两条解法（选一条，由协调者定）：
+   ① 镜像时把 vibehub 那份 `lotusGame.ts` 的记录接线一起写上（推荐 —— 镜像本来就要做，写全了
+      功能也在）；② 把这两个 e2e 文件加进 `$masterOnly`（它们只测本机分析链路，vibehub 不需要）
+      或加进 `$vibehubKeep`。**无论哪条，`lotusGame.ts` 本身都必须镜像。**
+
+   > 约定 §1／§6 是冻结清单里的文件，只能由协调者走「公共改动」更正；
+   > 本节只记录实测事实，不改约定。
 
 ## 11. 与 A（莲花广麻）的对齐
 
