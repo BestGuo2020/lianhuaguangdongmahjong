@@ -169,14 +169,20 @@ const llmStats = computed<LlmControllerStats>(() => ({
 // ── 对局回放（只存本机 IndexedDB，不上服务器）──
 // 录制器在三个单机引擎之间共享：同一时刻只有所选玩法的引擎在跑，局序不会交错。
 // ── AI 分析记录（方案 docs/blood-flow/design/replay-ai-analysis-recording.md）──
-// 独立分析区（自己的数据库与失败域，§9.2/§9.5）；默认关闭，dev 打开以便本地验证。
+// 独立分析区（自己的数据库与失败域，§9.2/§9.5）；**默认关闭**，玩家在「对局回放」里用开关打开。
 // 开关只影响分析录制，不改变任何策略动作或对局结果（§10.1、§10.7）。
 const analysisStorage = createAnalysisStorage()
 const analysisEnabled = ref(import.meta.env.DEV
   ? localStorage.getItem('lgm_analysis_enabled') !== '0'
   : localStorage.getItem('lgm_analysis_enabled') === '1')
+/** 开关落盘：持久化失败（隐私模式）也只在本次会话生效，不影响任何对局行为。 */
+function setAnalysisEnabled(next: boolean) {
+  analysisEnabled.value = next
+  try { localStorage.setItem('lgm_analysis_enabled', next ? '1' : '0') } catch { /* 隐私模式：本次会话内生效 */ }
+}
 const analysis = createAnalysisSession({
-  enabled: analysisEnabled.value,
+  // 传取值函数：开关随时可切，**下一场生效**（不需要刷新页面）
+  enabled: () => analysisEnabled.value,
   storage: analysisStorage,
   onError: (detail) => console.warn('[analysis]', detail),
 })
@@ -705,6 +711,9 @@ const themeLockReason = computed(() => (
           v-model:open="replayOpen"
           :storage="replay.storage"
           :available="replay.available.value"
+          :analysis="analysisStorage"
+          :analysis-enabled="analysisEnabled"
+          @update:analysis-enabled="setAnalysisEnabled"
           @view="openReplay"
         />
         <DisclaimerDialog

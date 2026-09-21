@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 // §6 联机（P2P）分析记录：房主在**局后**产出赛后私有复现数据 → 经中继下发 → 两端各自落进分析区，
@@ -363,6 +364,78 @@ test('联机分析记录：房主局后下发复现数据，两端都能重跑�
   }
 })
 
+// 「线上取证本地复核」：线上跑的是**生产构建**，页面里没有校验器；因此线上用例只负责把两端分析区里
+// 本场的复现记录原样取回来（`tmp/bf-online-evidence/analysis-*.json`），真正的 §10.6 复现在这里做：
+// 读那份证据 → 用**真校验器**在本页面复现每一局 → 与线上结算名次核对最后一局。
+// 没有线上证据时整条用例跳过（不污染日常回归）。
+test('线上证据复核：生产环境落下的复现数据能重跑到同一结束状态（§10.6）', async ({ page }) => {
+  const dir = `${fileURLToPath(new URL('../..', import.meta.url))}/tmp/bf-online-evidence`
+  const files = await readdir(dir).catch(() => [] as string[])
+  const candidates = files.filter(name => /^analysis-.*\.json$/.test(name))
+  if (!candidates.length) {
+    test.skip(true, '还没有线上分析取证（先跑 pnpm test:e2e -- online-two-accounts 的血流用例）')
+    return
+  }
+  const newest = candidates
+    .map(name => ({ name, at: statSync(`${dir}/${name}`).mtimeMs }))
+    .sort((a, b) => b.at - a.at)[0]!
+  const evidence = JSON.parse(await readFile(`${dir}/${newest.name}`, 'utf8')) as {
+    label: string
+    standings: Array<{ seat: number; name: string; amount: number }>
+    host: { matchId: string | null; records: any[]; gaps: any[] }
+    client: { matchId: string | null; records: any[]; gaps: any[] }
+  }
+  console.log(`[analysis-p2p] 复核线上证据 ${newest.name}（${evidence.label}）`)
+  await page.goto('/')
+  // 最终名次的数字是否是"绝对分数"：四人各 2000 起，绝对分之和应为 8000（是变化量则为 0）
+  const standingsScores = evidence.standings
+    .slice().sort((a, b) => a.seat - b.seat).map(row => row.amount)
+  const absolute = standingsScores.length === 4 && standingsScores.reduce((sum, n) => sum + n, 0) === 8000
+
+  const verified = await page.evaluate(async (input: { sides: any[]; lastScores: number[] | null }) => {
+    const { replayReproduction } = await import('/src/game/replay/analysis/replayReproduction.ts')
+    return input.sides.map((side: any) => {
+      const records = [...side.records].sort((a: any, b: any) => a.roundIndex - b.roundIndex)
+      const verify = records.map((record: any, index: number) => {
+        // 期望分数：最后一局用线上最终名次；其余用"下一局的开局分数"做跨局自洽核对
+        const expected = index === records.length - 1 && input.lastScores ? input.lastScores : null
+        const result = replayReproduction({ reproduction: record, commands: record.commands ?? [], expectedScores: expected })
+        const next = records[index + 1]
+        return {
+          roundIndex: record.roundIndex, ok: result.ok, reason: result.reason, scoresMatch: result.scoresMatch,
+          kindMismatches: result.kindMismatches, submitted: result.submitted, recorded: result.recorded,
+          finalScores: result.finalScores, expectedScores: expected,
+          nextOpeningScores: next ? next.openingScores : null,
+        }
+      })
+      return { seat: side.seat, matchId: side.matchId, records: records.length, verify }
+    })
+  }, {
+    sides: [
+      { seat: 0, ...evidence.host, records: evidence.host.records },
+      { seat: 1, ...evidence.client, records: evidence.client.records },
+    ],
+    lastScores: absolute ? standingsScores : null,
+  })
+
+  for (const side of verified) {
+    const who = side.seat === 0 ? '房主' : '客机'
+    expect(side.records, `${who}线上分析区应有 ≥4 局复现记录`).toBeGreaterThanOrEqual(4)
+    for (const item of side.verify) {
+      expect(item.reason, `${who}第 ${item.roundIndex} 局：${item.reason}`).toBeNull()
+      expect(item.ok, `${who}第 ${item.roundIndex} 局应复现成功`).toBe(true)
+      expect(item.kindMismatches, `${who}第 ${item.roundIndex} 局窗口类型不应错位`).toBe(0)
+      expect(item.submitted).toBe(item.recorded)
+      if (item.expectedScores) expect(item.scoresMatch, `${who}第 ${item.roundIndex} 局结束分数应与线上名次一致`).toBe(true)
+      // 跨局自洽：这一局重跑出来的结束分数 == 下一局记录里的开局分数
+      if (item.nextOpeningScores) expect(item.finalScores, `${who}第 ${item.roundIndex} 局重跑结果应等于下一局开局分数`).toEqual(item.nextOpeningScores)
+    }
+  }
+  for (const side of [evidence.host, evidence.client]) {
+    expect(side.gaps.filter((gap: any) => gap.scope === 'reproduction'), '线上证据里不该有复现数据缺口').toEqual([])
+  }
+  if (!absolute) console.log('[analysis-p2p] 线上名次数字不是绝对分数，最后一局只做链式核对（已如实跳过口径比对）')
+})
 // §6 的另一半：房主**没**开分析记录时，客机拿不到赛后私有数据 —— 必须如实记"未提供/未收到"，
 // 而不是留一片空白，更不能拿本机视角猜一份（客机本就没有牌墙与对手暗手）。
 test('联机分析记录：房主未开分析时，客机如实标记复现数据不可用（§6 的降级口径）', async ({ page }) => {

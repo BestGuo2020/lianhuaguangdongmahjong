@@ -3031,6 +3031,112 @@ async function expectOnlineReplayPaipu(options: {
 }
 
 
+/**
+ * 线上构建里分析记录默认**关闭**。验收要看这条通路，所以在**任何页面脚本跑起来之前**
+ * 用 init script 把开关打开（不刷新、不动进入大厅的既有流程 —— 早先"设完再 reload"的做法
+ * 会把已登录页面打到另一个视图，导致后面的「创建房间」找不到）。
+ */
+async function enableAnalysisRecording(contexts: BrowserContext[]) {
+  for (const context of contexts) {
+    await context.addInitScript(() => {
+      try { localStorage.setItem('lgm_analysis_enabled', '1') } catch { /* 隐私模式：忽略 */ }
+    })
+  }
+}
+
+/** 读取页面本机**分析区**（独立数据库 `lianhua-guangma-analysis`）里最新一场血流对局的复现记录。 */
+async function readLocalAnalysisReproduction(page: Page) {
+  return await page.evaluate(async () => {
+    const open = () => new Promise<IDBDatabase | null>((resolve) => {
+      let request: IDBOpenDBRequest
+      try { request = indexedDB.open('lianhua-guangma-analysis') } catch { resolve(null); return }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(null)
+      request.onblocked = () => resolve(null)
+    })
+    const getAll = (db: IDBDatabase, store: string) => new Promise<any[]>((resolve) => {
+      try {
+        const request = db.transaction(store, 'readonly').objectStore(store).getAll()
+        request.onsuccess = () => resolve((request.result ?? []) as any[])
+        request.onerror = () => resolve([])
+      } catch { resolve([]) }
+    })
+    const db = await open()
+    if (!db) return { matchId: null as string | null, status: null as string | null, parts: 0, records: [] as any[], gaps: [] as any[] }
+    const matches = await getAll(db, 'matches')
+    const blocks = await getAll(db, 'blocks')
+    const blood = matches
+      .filter((match: any) => match?.rulesetId === 'lotus-blood-flow')
+      .sort((a: any, b: any) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))[0]
+    if (!blood) return { matchId: null as string | null, status: null as string | null, parts: 0, records: [] as any[], gaps: [] as any[] }
+    const parts: Array<{ tag: string; value: any }> = []
+    const ordered = blocks.filter((block: any) => block?.matchId === blood.matchId)
+      .sort((a: any, b: any) => a.sequence - b.sequence)
+    for (const record of ordered) {
+      try {
+        const payload: Uint8Array = record.payload instanceof Uint8Array ? record.payload : new Uint8Array(record.payload)
+        const text = record.codec === 'gzip'
+          ? await new Response(new Blob([payload]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+          : new TextDecoder().decode(payload)
+        const parsed = JSON.parse(text)
+        if (Array.isArray(parsed)) parts.push(...parsed)
+      } catch { /* 坏块跳过：这里只做取证，判定由本地复核用例给出 */ }
+    }
+    return {
+      matchId: blood.matchId as string,
+      status: (blood.status ?? null) as string | null,
+      parts: parts.length,
+      records: parts.filter((part) => part.tag === 'reproduction').map((part) => part.value),
+      gaps: parts.filter((part) => part.tag === 'gaps').map((part) => part.value),
+    }
+  })
+}
+
+/**
+ * §6 联机分析记录的**线上取证**：把两端分析区里本场的复现记录原样读到证据文件，并做"落库形状"断言。
+ *
+ * 为什么不在用例里直接复现：线上跑的是生产构建，页面里没有校验器（`replayReproduction`）。
+ * 真正的 §10.6 复现由本地 `tests/e2e/analysis-p2p.spec.ts` 的「线上证据复核」用例完成
+ * （读这一份证据 + 真校验器 + 结算名次）。
+ */
+async function collectOnlineAnalysisEvidence(options: {
+  pages: Page[]
+  testInfo: TestInfo
+  label: string
+  wantAnalysis: boolean
+  standings: Array<{ seat: number; name: string; amount: number }>
+}) {
+  const { pages, testInfo, label, wantAnalysis, standings } = options
+  if (!wantAnalysis) return
+  let sides = await Promise.all(pages.map((page) => readLocalAnalysisReproduction(page)))
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (sides.every((side) => side.records.length >= 4)) break
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    sides = await Promise.all(pages.map((page) => readLocalAnalysisReproduction(page)))
+  }
+  const evidence = { label, capturedAt: new Date().toISOString(), standings, host: sides[0], client: sides[1] }
+  mkdirSync('tmp/bf-online-evidence', { recursive: true })
+  const file = `tmp/bf-online-evidence/analysis-${label}-${Date.now().toString(36)}.json`
+  writeFileSync(file, JSON.stringify(evidence, null, 2), 'utf8')
+  await testInfo.attach(`${label}-analysis`, { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' })
+
+  for (const [index, side] of sides.entries()) {
+    const who = index === 0 ? '房主' : '客机'
+    expect(side.matchId, `${who}本机应有本场分析区`).toBeTruthy()
+    expect(side.records.length, `${who}应有 ≥4 局复现记录（实际 ${side.records.length}）`).toBeGreaterThanOrEqual(4)
+    for (const record of side.records) {
+      expect(record.available, `${who}第 ${record.roundIndex} 局复现数据应可用`).toBe(true)
+      expect(record.origin, `${who}第 ${record.roundIndex} 局的来源应是权威端`).toBe('authority')
+      expect((record.initialWall ?? []).length, `${who}第 ${record.roundIndex} 局应带 81 张初始牌墙`).toBe(81)
+      expect((record.commands ?? []).length, `${who}第 ${record.roundIndex} 局应带完整命令序列`).toBeGreaterThan(10)
+      expect((record.openingScores ?? []).length, `${who}第 ${record.roundIndex} 局应带当局开局分数`).toBe(4)
+    }
+    expect(side.gaps.filter((gap: any) => gap.scope === 'reproduction'), `${who}不该有复现数据缺口`).toEqual([])
+  }
+  console.log(`[BF-ONLINE] ${label} 联机分析记录：房主 ${sides[0].records.length} 局 / `
+    + `客机 ${sides[1].records.length} 局（均为权威端下发）；证据 ${file}`)
+}
+
 async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo; label: string }) {
   const { llm, testInfo, label } = options
   const pair = await launchAccountBrowserPair()
@@ -3041,10 +3147,14 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
   const consoleKinds: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
   const consoleRepeats: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
   const roundScores: Array<{ round: string; seats: Array<{ name: string; amount: number }> }> = []
+  /** §6 联机分析记录验收：默认开（线上构建里需要显式打开本机开关，见 enableAnalysisRecording）。 */
+  const wantAnalysis = process.env.ONLINE_ANALYSIS !== '0'
   let roomCode = ''
   try {
     // 大模型座位 Key 只写作品托管域（vibeapps），不能扩散到 OAuth 主站。
     if (llm) await installHostLlmConfig(pair.contexts[0], ONLINE.deepseekApiKey)
+    // 分析记录在线上默认关闭：先挂 init script，让登录后的每个页面都带着开关（不刷新）
+    if (wantAnalysis) await enableAnalysisRecording(pair.contexts)
     const host = await authenticateAccount(pair, 0, ONLINE.accounts[0])
     const client = await authenticateAccount(pair, 1, ONLINE.accounts[1])
     pages.push(host, client)
@@ -3256,6 +3366,8 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     // （结算帧四家手牌都非空），而不是只有自己的牌或干脆没有记录。
     // 联机牌谱（全知）：房主录制 → 广播 → 两名玩家各自本地都存下同一份全知牌谱
     await expectOnlineReplayPaipu({ pages, testInfo, label, rulesetPattern: /血流/ })
+    // §6：联机分析记录（房主局后产出复现数据 → 中继下发 → 两端各自落库）
+    await collectOnlineAnalysisEvidence({ pages, testInfo, label, wantAnalysis, standings: standings[0]! })
     console.log(`[BF-ONLINE] ${label} 完整东风场通过：`
       + `${standings[0].map((row) => `${row.name} ${row.amount}`).join(' / ')}；房间 ${roomCode}`)
   } finally {

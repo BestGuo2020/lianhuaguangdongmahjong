@@ -121,6 +121,14 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     const preset = settings.presets.find(p => p.id === selected.presetId)
     return preset?.apiKey.trim() ? { ...preset, style: selected.style } : null
   }
+  /**
+   * 本机**这一场是否真的在录**（§9.2/§10.7）。
+   *
+   * 代理（`analysis.port`）现在是恒存在的稳定对象（UI 上有开关，随时可切），因此所有
+   * "要不要产出/下发私有复现数据"的判断都必须看 `enabled`（开关打开且已 start），
+   * 而不是"代理是否存在" —— 否则房主关掉分析后仍会把牌墙与暗手发给房间里所有人。
+   */
+  const analysisRecording = () => options.analysis?.enabled === true
   const decisions = createBloodFlowDecisions({ provider,theme:()=>options.getThemeName?.()??'jade',
     // §3/§4 分析记录接缝：AI/LLM 座位的候选、推荐、请求生命周期与来源接进录制器。
     // 联机时这些座位由**房主**决定（权威的 decide 钩子），因此录制也只能在房主侧发生；
@@ -136,7 +144,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    */
   async function decideSeat(view: BloodFlowSeatView, isCurrent: () => boolean) {
     const recorder = options.analysis
-    if (!recorder) return decisions.decide(view, isCurrent)
+    if (!recorder || !analysisRecording()) return decisions.decide(view, isCurrent)
     const window = view.window
     const seat = view.seat
     const actions = window ? seatLegalActions(view, seat) : []
@@ -360,8 +368,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    */
   async function publishRoundReproduction(round: number): Promise<void> {
     const active = authority, recorder = options.analysis
-    if (!active || !recorder || !analysisMatchId) {
-      traceAnalysis(`房主跳过第 ${round} 局：${!active ? '无权威' : !recorder ? '本机未开分析' : '无场次 id'}`)
+    if (!active || !recorder || !analysisRecording() || !analysisMatchId) {
+      traceAnalysis(`房主跳过第 ${round} 局：${!active ? '无权威' : !analysisRecording() ? '本机未开分析' : '无场次 id'}`)
       hostReproductionPending.delete(round)
       return
     }
@@ -389,7 +397,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
   /** 房主：看到某局结算帧 → 记下"本机还欠这一局一份复现数据"（场末收尾据此等待）。 */
   function expectHostReproduction(round: number): void {
-    if (!options.analysis || !analysisMatchId || !authority) return
+    if (!analysisRecording() || !analysisMatchId || !authority) return
     if (reproductionInFlight.has(round) || hostReproductionPending.has(round)) return
     hostReproductionPending.add(round)
   }
@@ -400,7 +408,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    */
   function acceptAnalysisPayload(detail: { matchId: string; roundIndex: number | null; payload: unknown }): void {
     const recorder = options.analysis
-    if (!recorder) return
+    if (!recorder || !analysisRecording()) return
     if (!analysisMatchId || detail.matchId !== analysisMatchId) return
     const decoded = decodeReproductionPayload(detail.payload)
     const round = decoded.payload?.roundIndex ?? detail.roundIndex
@@ -426,11 +434,12 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
   /** 如实记一条"这一局拿不到复现数据"（§6：明确标记，不猜测补齐）。 */
   function markReproductionUnavailable(round: number, reason: string): void {
-    if (!options.analysis || reproductionDecided.has(round)) return
+    const recorder = options.analysis
+    if (!recorder || !analysisRecording() || reproductionDecided.has(round)) return
     reproductionDecided.add(round)
     reproductionAwaited.delete(round)
-    options.analysis.noteGap({ scope: 'reproduction', from: round, reason })
-    options.analysis.reproduction(unavailableReproduction(round, reason))
+    recorder.noteGap({ scope: 'reproduction', from: round, reason })
+    recorder.reproduction(unavailableReproduction(round, reason))
   }
 
   /**
@@ -439,7 +448,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    * - 有 id：等中继把数据送到，超过时限由 450ms 定时器兜底记"未收到"。
    */
   function awaitRoundReproduction(round: number): void {
-    if (!options.analysis || reproductionDecided.has(round)) return
+    if (!options.analysis || !analysisRecording() || reproductionDecided.has(round)) return
     if (!analysisMatchId) {
       markReproductionUnavailable(round, '联机房主未开启分析记录，本局没有赛后复现数据')
       return
@@ -760,13 +769,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       // 只要回放录制器在就下发：房主没开分析时客机仍需要这把钥匙来挂自己的分析记录，
       // 只是那时客机拿不到赛后复现数据 —— 它会如实记成"未提供"。
       if (replayRecorder) announceAnalysisMatch(replayRecorder.ensureMatchId())
-      else if (options.analysis) announceAnalysisMatch(crypto.randomUUID())
+      else announceAnalysisMatch(crypto.randomUUID())
       const bindings = new Map([...(initialBindings ?? verified())].map(([peer, s]) => [peer, s as Seat]))
       bindings.set(active.peerId, 0)
       authority = new BloodFlowAuthority({ roomId: active.roomId, authorityEpoch: epoch, hostPeer: active.peerId,
         mode: options.getMode(), seatByPeer: bindings,
         // §6：分析开启时让引擎记录权威命令序列（局后才能产出复现数据）；关闭时零成本。
-        backend: createWorkerAuthorityBackend({ recordCommands: Boolean(options.analysis) }),
+        backend: createWorkerAuthorityBackend({ recordCommands: analysisRecording() }),
         decide: (view, current) => decideSeat(view, current), cancelDecisions: decisions.cancel,
         // §3.4：把权威的处置结果接进分析记录（AI/LLM 座位的执行回执）
         onCommand: (command, outcome) => applyReceipt(command, outcome),
