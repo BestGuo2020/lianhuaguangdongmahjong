@@ -271,6 +271,11 @@ export interface AnalysisReproduction {
   roundIndex: number
   available: boolean
   /**
+   * 数据来源：`local`（默认）＝本机权威引擎（单机），`authority`＝联机权威端在**局后**下发的赛后私有数据
+   * （§6）。赛后读记录的人必须能分清这两种来源：联机时数据并非本机产生，缺失也只能由权威端解释。
+   */
+  origin?: 'local' | 'authority'
+  /**
    * 完整初始物理牌墙（发牌后剩余），**记牌码**（`m1`/`south`）。
    * 优先保存牌墙而不是只存随机种子（算法变化会让同种子产生不同牌局，§6）。
    * 读取侧 `tileFromName` 两种写法都认：2026-09-21 之前写下的记录是中文显示名，照样能读。

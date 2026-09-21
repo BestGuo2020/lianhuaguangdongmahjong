@@ -14,7 +14,7 @@ export const REPLAY_SLICE_CHARS = 2_400
 /** 发送方补发上限（超过就放弃该局，不无限重试）。 */
 export const REPLAY_MAX_RETRIES = 3
 
-export type ReplayPayloadKind = 'round' | 'match'
+export type ReplayPayloadKind = 'round' | 'match' | 'analysis'
 export type ReplayPayloadCodec = 'gzip' | 'raw'
 
 /** 清单：先广播这个小包，收方据此知道要收多少片、校验什么。 */
@@ -122,7 +122,7 @@ export async function encodeReplayPayload(
   payloadKind: ReplayPayloadKind,
   value: unknown,
   identity: { id: string; matchId: string; roundIndex?: number },
-  options: { sliceChars?: number } = {},
+  options: { sliceChars?: number; schemaVersion?: number } = {},
 ): Promise<EncodedReplayPayload> {
   const raw = encodeText(JSON.stringify(value))
   const compressed = await gzip(raw)
@@ -140,7 +140,8 @@ export async function encodeReplayPayload(
       sha: await digest(body),
       total: Math.max(1, Math.ceil(base64.length / sliceChars)),
       sliceChars,
-      schemaVersion: REPLAY_SCHEMA_VERSION,
+      // 载荷格式版本由调用方给出：分析复现数据与展示牌谱的版本线各自独立（§6、§9.3）
+      schemaVersion: options.schemaVersion ?? REPLAY_SCHEMA_VERSION,
     },
     base64,
   }

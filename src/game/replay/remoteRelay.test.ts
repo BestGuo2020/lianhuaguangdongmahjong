@@ -5,9 +5,11 @@ import {
   REPLAY_REQUEST_KIND,
   REPLAY_SLICE_KIND,
   adaptReplayToSeat,
+  analysisManifestId,
   createRemoteReplayHost,
   createRemoteReplayPeer,
 } from './remoteRelay'
+import { encodeReplayPayload, sliceForManifest } from './transfer'
 import type { ReplayMatch, ReplayRound, ReplayStep } from './types'
 
 // 联机牌谱中继：房主广播 → 客机收片校验落库；这里用"丢包开关"把两端在进程内跑通，
@@ -107,6 +109,7 @@ function createRelayHarness(options: { drop?: (message: Record<string, unknown>,
   const peerMatch = new Map<string, ReplayMatch>()
   const rejected: string[] = []
   const gaveUp: string[] = []
+  const analysis: Array<{ matchId: string; roundIndex: number | null; payload: unknown }> = []
   let dropped = 0
   let sent = 0
 
@@ -146,6 +149,8 @@ function createRelayHarness(options: { drop?: (message: Record<string, unknown>,
     getMySeat: () => 2,
     later: (callback) => { timers.push(callback) },
     onRejected: (detail) => rejected.push(detail),
+    // §6 分析复现数据：不进回放库，直接交给宿主（这里只登记，校验由 analysis 侧负责）
+    onAnalysisPayload: (detail) => analysis.push(detail),
   })
 
   /** 把队列跑空，并驱动一次客机的定时回执（有界，避免死循环）。 */
@@ -164,7 +169,7 @@ function createRelayHarness(options: { drop?: (message: Record<string, unknown>,
   }
 
   return {
-    host, peer, pump, messages, timers, hostRounds, hostMatch, peerRounds, peerMatch, rejected, gaveUp,
+    host, peer, pump, messages, timers, hostRounds, hostMatch, peerRounds, peerMatch, rejected, gaveUp, analysis,
     get dropped() { return dropped },
     get sent() { return sent },
   }
@@ -298,6 +303,94 @@ describe('联机牌谱中继：房主广播 → 客机落库', () => {
     harness.host.prune(Date.now() + 200_000)
     expect(harness.host.pending()).toBe(0)
     expect(harness.gaveUp.join(' | ')).toContain('长时间没有收到回执')
+  })
+})
+
+describe('§6 分析复现数据走同一套中继（清单 + 分片 + 回执）', () => {
+  /** 一局的复现载荷：这里给一份体积可观的数据，确保走的是"多片 + 丢片可补"的真实路径。 */
+  function payload(roundIndex = 1) {
+    return {
+      formatVersion: 1,
+      matchId: 'remote-match',
+      roundIndex,
+      authorityEpoch: 'epoch',
+      roundId: `epoch/round/${roundIndex}`,
+      dealer: 0,
+      initialWall: Array.from({ length: 81 }, (_, index) => `m${(index % 9) + 1}`),
+      initialHands: [[], [], [], []].map((_, seat) => Array.from({ length: 13 }, (_, index) => `s${((index + seat) % 9) + 1}`)),
+      dealerDrawnIndex: 13,
+      flipTiles: ['east', 'south'],
+      jokers: ['east'],
+      flipSeat: 0,
+      wallBreakIndex: 14,
+      flipStack: 7,
+      openingScores: [2000, 2000, 2000, 2000],
+      commands: Array.from({ length: 40 }, (_, index) => ({
+        seat: index % 4, kind: 'discard', at: index, windowId: `epoch/round/${roundIndex}/window/${index + 1}`,
+        windowKind: 'turn', tile: `p${(index % 9) + 1}`, handIndex: index % 13,
+      })),
+    }
+  }
+
+  it('无丢包：客机收全后交给宿主，且**不进回放库**（分析数据与展示牌谱分流）', async () => {
+    const harness = createRelayHarness()
+    await harness.host.broadcastAnalysis('remote-match', 1, payload(1), 1)
+    await harness.pump()
+
+    expect(harness.analysis).toHaveLength(1)
+    expect(harness.analysis[0]!.matchId).toBe('remote-match')
+    expect(harness.analysis[0]!.roundIndex).toBe(1)
+    expect((harness.analysis[0]!.payload as { commands: unknown[] }).commands).toHaveLength(40)
+    // 回放库必须干净：分析载荷不能污染展示牌谱
+    expect(harness.peerRounds.get('remote-match')).toBeUndefined()
+    expect(harness.peerMatch.get('remote-match')).toBeUndefined()
+    expect(harness.host.pending()).toBe(0)
+  })
+
+  it('丢一片：客机回执只报缺失片，补发后照样收全（且只回调一次）', async () => {
+    let droppedOnce = false
+    const harness = createRelayHarness({
+      drop: (message, index) => {
+        if (droppedOnce || message.kind !== REPLAY_SLICE_KIND) return false
+        if ((message.slice as { index: number }).index !== 1) return false
+        droppedOnce = true
+        return index > 0
+      },
+    })
+    await harness.host.broadcastAnalysis('remote-match', 1, payload(1), 1)
+    await harness.pump()
+
+    expect(harness.dropped).toBe(1)
+    expect(harness.analysis).toHaveLength(1)
+    expect(harness.rejected).toEqual([])
+    expect(harness.gaveUp).toEqual([])
+  })
+
+  it('没接分析回调（本机没开分析）也要回执收全，免得房主一直补发', async () => {
+    // 客机侧未注册 onAnalysisPayload：收全后仍必须回执（空缺失列表），否则房主会一直等回执重发
+    const encoded = await encodeReplayPayload('analysis', payload(3), {
+      id: analysisManifestId('remote-match', 3), matchId: 'remote-match', roundIndex: 3,
+    }, { schemaVersion: 1 })
+    const sent: Array<Record<string, unknown>> = []
+    const timers: Array<() => void> = []
+    const bare = createRemoteReplayPeer({
+      send: (message) => { sent.push(message as Record<string, unknown>) },
+      saveRound: () => {}, saveMatch: () => {},
+      loadRounds: async () => [], loadMatch: async () => null,
+      getMySeat: () => 1,
+      // 生产里由定时器 tick 驱动回执：这里先攒着，等分片到齐后再驱动一次
+      later: (callback) => { timers.push(callback) },
+    })
+    await bare.handle({ kind: REPLAY_MANIFEST_KIND, manifest: encoded.manifest })
+    for (const slice of sliceForManifest(encoded.manifest, encoded.base64)) {
+      await bare.handle({ kind: REPLAY_SLICE_KIND, slice })
+    }
+    for (const callback of timers.splice(0)) callback()
+    const acks = sent.filter(message => message.kind === REPLAY_ACK_KIND) as Array<{ ack: { id: string; missing: number[] } }>
+    expect(acks.at(-1)?.ack.id).toBe(analysisManifestId('remote-match', 3))
+    expect(acks.at(-1)?.ack.missing).toEqual([])
+    // 没有回调时也绝不能把分析载荷写进回放库
+    expect(sent.some(message => message.kind === REPLAY_MANIFEST_KIND)).toBe(false)
   })
 })
 
