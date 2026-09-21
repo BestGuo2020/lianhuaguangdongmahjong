@@ -1,15 +1,20 @@
 import { expect, test } from '@playwright/test'
 
-// 「莲花麻将·翻精癞子」分析记录的端到端（约定 §9 的 P0）：
-// ① 真实引擎 + 真实分析区跑完一场 ⇒ 从 IndexedDB 读回，断言记录形状（config/decisionState/decision/settlement）、
+// 「莲花麻将·翻精癞子」分析记录的端到端（约定 §9 的 P0 + P1）：
+// ① 真实引擎 + 真实分析区跑完一场 ⇒ 从 IndexedDB 读回，断言记录形状（config/decisionState/decision/settlement/reproduction）、
 //    前态与决策一一对应、窗口 ID 唯一、结算四家变化之和为 0、行内状态「分析：完整」（读的是同一份落库状态）；
-// ② 导出包自包含（记录 + 被引用配置 + 展示回放）；
-// ③ 开关关掉后**零写入**；
-// ④ 硬护栏：同一副牌（固定牌墙 + 固定随机流）在"分析开/关"两种设置下，结束分数与动作数完全一致。
+// ② 导出包自包含（记录 + 被引用配置 + 展示回放），且**按记录内容**如实声称"可精确复现"（P1 §2.4）；
+// ③ 开关关掉后**零写入**（含复现数据）；
+// ④ 硬护栏：同一副牌（固定牌墙 + 固定随机流）在"分析开/关"两种设置下，结束分数与动作数完全一致；
+// ⑤ P1：把落库读回的复现数据逐局重跑 ⇒ 到达同一结束状态（含发牌后手牌交叉校验），
+//    以及"把记录改一张 ⇒ 报不一致并停下"的负向对照。
 //
 // 为什么走夹具而不是真实 App：`src/App.vue` 在协调者的冻结清单里（约定 §3），给 `useLotusGame` 传
 // `analysis: analysis.port` 的那一行由协调者走「公共改动」提交。夹具按与 App 同一套接线直接挂载引擎，
 // 记录链路完全同源；差的只是"大厅列表行内状态"那一层 UI —— 用例里断言的是它读的那个落库状态。
+//
+// 查询参数：`?analysis=0|1`（开关记录）、`?seed=N`（固定牌墙与随机流）、`?llm=1`（接通 LLM 座位的接缝）、
+// `?replay=0`（跳过 P1 的逐局重跑 —— 与复现无关的用例不必付这份时间）。
 test.setTimeout(300_000)
 
 const FIXTURE = '/tests/e2e/fixtures/analysis-lotus-legacy.html'
@@ -57,6 +62,29 @@ interface ProbeStatus {
   sentUserSample: string | null
   decisionSources: string[]
   attemptDecisionsWithoutModelSource: number
+  // ── P1（赛后复现）──
+  reproductionParts: number
+  reproductionRounds: Array<{
+    roundIndex: number
+    ok: boolean
+    reason: string | null
+    scoresMatch: boolean | null
+    expectedScores: number[] | null
+    finalScores: number[]
+    kindMismatches: number
+    postDealChecked: boolean
+    postDealOk: boolean
+    openingChecked: boolean
+    openingOk: boolean
+    windowsOpened: number
+    commandsRecorded: number
+    commandsConsumed: number
+    commandsNotLegalAtRecordTime: number
+    withoutWindowId: number
+    unusedCommands: number
+    gaps: string[]
+  }>
+  postDealTamper: { ok: boolean; reason: string | null; windowsOpened: number; commandsConsumed: number } | null
 }
 
 async function runProbe(page: import('@playwright/test').Page, query: string): Promise<ProbeStatus> {
@@ -78,7 +106,7 @@ test.describe.configure({ mode: 'serial' })
 test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口 ID、结算守恒、导出包自包含', async ({ page }) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  const probe = await runProbe(page, `?analysis=1&seed=${SEED}`)
+  const probe = await runProbe(page, `?analysis=1&seed=${SEED}&replay=0`)
 
   expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
   expect(probe.storageAvailable, '分析区应当可用（否则下面的断言没有证据力）').toBe(true)
@@ -101,6 +129,8 @@ test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口
   expect(probe.partsByTag.decisionState, '决策前态必须落库').toBeGreaterThan(0)
   expect(probe.partsByTag.decision, '决策必须落库').toBeGreaterThan(0)
   expect(probe.partsByTag.settlement, '结算必须落库').toBeGreaterThan(0)
+  // P1（§2.1）：复现数据也必须落库，且**每一局一条**（打了 N 局就有 N 条可重跑的起点）
+  expect(probe.partsByTag.reproduction, '每一局都要落一条复现数据').toBe(probe.roundsPlayed)
   expect(probe.partsByTag.llm ?? 0, '本阶段 LLM 座位未接钩子 ⇒ 不应有 llm 记录').toBe(0)
 
   // ── ③ 人类 + 本地 AI 座位的来源如实标注（§3.4）：LLM 未接线 ⇒ 只能是这两种 ──
@@ -136,15 +166,71 @@ test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口
   expect(manifest!.configReferencesClosed, '引用要闭合：不能只有 id 没有正文').toBe(true)
   expect(manifest!.includesReplay, '公开字段的唯一来源是展示回放，必须随包带走').toBe(true)
   expect(manifest!.replayRounds, '展示回放应当带上这一场打过的每一局').toBe(probe.roundsPlayed)
-  // P0 不含赛后复现（§6，P1）：如实标成"不能精确复现"，并把原因写在 missing 里 —— 不得谎称可复现
-  expect(probe.reproductionCapable, 'P0 没有复现数据 ⇒ 不得声称可精确复现').toBe(false)
-  expect(manifest!.missing.some((entry) => entry.includes('复现数据')), '缺少复现数据的原因必须如实标注').toBe(true)
+  // P1 之后这一场带着**内容完整**的复现数据 ⇒ 导出包必须如实声称"可以精确复现"（§2.4）。
+  // 判据不再是"有没有 reproduction 记录"，而是逐局看字段齐不齐（`reproductionCapability.ts`）。
+  expect(probe.reproductionCapable, 'P1 起复现数据字段齐全 ⇒ 应当声称可精确复现').toBe(true)
+  expect(manifest!.missing, '可精确复现时不该再有任何缺失项').toEqual([])
+})
+
+test('P1 赛后复现：从落库读回的复现数据逐局重跑 ⇒ 到达同一结束状态（§2、§4 的 DoD）', async ({ page }) => {
+  // 这条是 P1 的核心验收点：**不是**读字段对不对，而是拿记录里的"环状牌墙 + 两颗骰子 + 庄家 + 当局开局分
+  // + 权威动作序列"重新跑一局，看能不能到达同一个结束状态（§2.3：不许拿"跑通"当"复现"）。
+  //
+  // 为什么必须在浏览器里跑：校验器要起真实 `useLotusGame`（Vue 响应式 + 定时器链），
+  // vitest 环境里没有这套 DOM/定时器组合（§3.5）。
+  test.setTimeout(900_000)
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  const probe = await runProbe(page, `?analysis=1&seed=${SEED}`)
+
+  expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
+  expect(probe.roundsPlayed, '应当打完东风场').toBeGreaterThanOrEqual(4)
+  console.log(`[analysis-lotus-legacy] P1 重跑：复现数据 ${probe.reproductionParts} 条；`
+    + `逐局 ${probe.reproductionRounds.map((run) => `#${run.roundIndex} ok=${run.ok} 命令 ${run.commandsConsumed}/${run.commandsRecorded}`
+      + ` 窗口 ${run.windowsOpened} 分数 ${run.finalScores.join('/')}`).join(' | ')}；`
+    + `篡改对照 ok=${probe.postDealTamper?.ok} 命令 ${probe.postDealTamper?.commandsConsumed}`)
+
+  // 复现数据逐局落库（跳过的局会在 `partsByTag.reproduction` 上少一条，前面那条用例已经卡住了这一点）
+  expect(probe.reproductionParts, '每一局都要有复现数据').toBe(probe.roundsPlayed)
+  expect(probe.reproductionRounds, '每一局都要真的重跑一次').toHaveLength(probe.reproductionParts)
+
+  for (const run of probe.reproductionRounds) {
+    const where = `第 ${run.roundIndex} 局`
+    expect(run.ok, `${where}重跑未到达同一结束状态：${run.reason ?? '（没有给出原因，这本身就是缺陷）'}`).toBe(true)
+    // ① 发牌后的手牌必须**交叉校验过**并且一致（§3.3）：这一步不一致就说明"发牌算法变了或记录与引擎不一致"
+    expect(run.postDealChecked, `${where}必须做发牌后手牌的交叉校验（没做就等于没验证）`).toBe(true)
+    expect(run.postDealOk, `${where}发牌后的手牌必须与记录一致`).toBe(true)
+    // ② 翻精/精牌/开牌断点由牌墙+骰子推出，重跑推出来的必须与记录一致
+    expect(run.openingChecked, `${where}必须校验翻精与开牌断点`).toBe(true)
+    expect(run.openingOk, `${where}翻精/精牌/开牌断点必须与记录一致`).toBe(true)
+    // ③ 结束分数与记录侧的结算完全一致（"同一结束状态"的机器判据）
+    expect(run.expectedScores, `${where}必须有可比的结束分数`).not.toBeNull()
+    expect(run.scoresMatch, `${where}结束分数必须与记录一致`).toBe(true)
+    expect(run.finalScores, `${where}结束分数`).toEqual(run.expectedScores)
+    // ④ 命令日志必须**逐条被消费**：漏跑一条、多跑一条、顺序错了都会在这里露出来（§2.2、§4）
+    expect(run.withoutWindowId, `${where}每条命令都要带 windowId（顺序判据）`).toBe(0)
+    expect(run.commandsRecorded, `${where}命令日志不能是空的（空的"全对上"是空转）`).toBeGreaterThan(0)
+    expect(run.commandsConsumed, `${where}记录里的命令必须全部被消费（不许跳过）`).toBe(run.commandsRecorded)
+    expect(run.unusedCommands, `${where}不许有没被消费的命令（重跑提前终局）`).toBe(0)
+    expect(run.kindMismatches, `${where}窗口类型必须逐窗口对上`).toBe(0)
+    expect(run.gaps, `${where}重跑期间不得留缝：${run.gaps.join(' | ')}`).toEqual([])
+  }
+  // 一局至少一手牌，所以整场命令数必然多于局数 —— 顺带证明记的不是"每局一条"那种空壳
+  expect(probe.reproductionRounds.reduce((total, run) => total + run.commandsRecorded, 0))
+    .toBeGreaterThan(probe.roundsPlayed)
+
+  // ── 负向对照（§3.3、§4）：把记录改一张 ⇒ 必须报"发牌算法变了或记录与引擎不一致"并**停下来** ──
+  const tamper = probe.postDealTamper
+  expect(tamper, '夹具应当做"改了记录"的负向对照').not.toBeNull()
+  expect(tamper!.ok, '记录被动过就不能再声称复现成功').toBe(false)
+  expect(tamper!.reason, '失败原因必须点明是发牌/记录与引擎不一致').toContain('发牌算法变了或记录与引擎不一致')
+  expect(tamper!.commandsConsumed, '发现不一致之后不许再喂任何命令（更不许跳过它把这一局跑完）').toBe(0)
 })
 
 test('翻精癞子：分析开关关掉后零写入', async ({ page }) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  const probe = await runProbe(page, `?analysis=0&seed=${SEED}`)
+  const probe = await runProbe(page, `?analysis=0&seed=${SEED}&replay=0`)
 
   expect(pageErrors).toEqual([])
   expect(probe.analysisEnabled).toBe(false)
@@ -154,14 +240,16 @@ test('翻精癞子：分析开关关掉后零写入', async ({ page }) => {
   expect(probe.storageBlocks, '关掉分析后不得有任何分析块').toBe(0)
   expect(probe.storageMatches, '关掉分析后不得有场次元数据').toBe(0)
   expect(Object.keys(probe.partsByTag), '关掉分析后不得有任何记录').toEqual([])
+  // P1：复现数据也必须在关掉时为零 —— 它同样是"旁路记录"，不许在关掉时还去抓牌墙/命令（§10.7）
+  expect(probe.reproductionParts, '关掉分析后不得有复现数据').toBe(0)
   expect(probe.matchId, '关掉分析时不开场次').toBe('')
 })
 
 test('硬护栏：同一副牌在分析开/关两种设置下，结束分数与动作数完全一致', async ({ page }) => {
   // 同一个浏览器上下文里跑两次：第一次关分析（干净的分析区），第二次开分析（写进同一个库）。
   // 两次都固定牌墙与随机流，所以"对局侧的量"必须逐位相等 —— 记录层只许旁路观测（§10.1、§9 硬护栏）。
-  const off = await runProbe(page, `?analysis=0&seed=${SEED}`)
-  const on = await runProbe(page, `?analysis=1&seed=${SEED}`)
+  const off = await runProbe(page, `?analysis=0&seed=${SEED}&replay=0`)
+  const on = await runProbe(page, `?analysis=1&seed=${SEED}&replay=0`)
 
   console.log(`[analysis-lotus-legacy] 开/关对比：分数 off=${off.finalScores} on=${on.finalScores}；`
     + `动作 off=${JSON.stringify(off.gameEvents)} on=${JSON.stringify(on.gameEvents)}；`
@@ -186,7 +274,7 @@ test('LLM 座位：真实 LLM 控制器走接缝 ⇒ llm 记录、模板去重�
   // 抓不到这里的顺序错、座位错或窗口早关。
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  const probe = await runProbe(page, `?analysis=1&llm=1&seed=${SEED}`)
+  const probe = await runProbe(page, `?analysis=1&llm=1&seed=${SEED}&replay=0`)
 
   expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
   expect(probe.storageAvailable).toBe(true)
@@ -223,13 +311,20 @@ test('app-path：走真实 App 打完一场东风场，从分析库读回翻精�
   test.setTimeout(660_000)
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  // 节奏压缩：把页面里所有定时器压到 ≤10ms。整场东风场在真实节奏下要 **7 分钟**（实测），
+  // 节奏压缩：把页面里所有定时器压到 ≤250ms。整场东风场在真实节奏下要 **7 分钟**（实测），
   // 而这条用例要锁的是"App 的端口传递那一行有没有生效"，不是真实配速 —— 压缩后同样走
   // 真实 App、真实引擎、真实 UI 交互（点内层牌元素、点「继续」），只是不等演出。
+  //
+  // **下限不能压到 10ms**（2026-09-22 实测修正，这条用例此前在本机一直红）：
+  // 牌桌初始化要预加载 34 张牌面，`tileAssets.ts` 用 `window.setTimeout(..., FETCH_TIMEOUT_MS)`
+  // 给每个 `fetch` 挂了一个 **12 秒**的中止定时器；压到 10ms 就等于"10ms 内没回就中止"，
+  // 于是 34 个请求全被 abort（`net::ERR_ABORTED`）→「牌面资源加载失败」→ 牌桌报
+  // 「牌桌资源加载失败」→ `.flip-indicator` 永远不出现。实测：下限 10ms 必红，50/250/1000ms 都绿。
+  // 这不是"对局慢"（真实定时器是秒级，250ms 仍是十几倍压缩），而是把**网络超时**一起压缩了。
   await page.addInitScript(() => {
     const realSetTimeout = window.setTimeout.bind(window)
     window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => (
-      realSetTimeout(handler as never, Math.min(Number(timeout) || 0, 10), ...args)
+      realSetTimeout(handler as never, Math.min(Number(timeout) || 0, 250), ...args)
     )) as typeof window.setTimeout
   })
 

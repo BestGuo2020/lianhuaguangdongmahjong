@@ -12,7 +12,8 @@
 import type { ReplayMatch, ReplayRound } from '../types'
 import { REPLAY_SCHEMA_VERSION } from '../types'
 import { downloadJsonFile } from '../export'
-import { ANALYSIS_FORMAT_VERSION, type AnalysisAreaStatus, type AnalysisCompleteness } from './types'
+import { ANALYSIS_FORMAT_VERSION, type AnalysisAreaStatus, type AnalysisCompleteness, type AnalysisReproduction } from './types'
+import { reproductionDeficiencies } from './reproductionCapability'
 import type { AnalysisBlockPart } from './codec'
 
 export interface AnalysisExportCounts { [tag: string]: number }
@@ -27,8 +28,12 @@ export interface AnalysisExportPayload {
   /** 缺了哪一段、为什么（§9.5）；空数组表示没有已知缺失。 */
   gaps: Array<{ scope: string; from?: number; to?: number; reason: string }>
   /**
-   * 能不能用这份包做 §10.6 的精确复现：只有"完整 + 有复现数据"才为 true。
-   * 不完整时明确为 false，避免"导出成功"被读成"可以精确复现"。
+   * 能不能用这份包做 §10.6 的精确复现：**按记录内容逐局判定**，不是"有 reproduction 记录就算齐"。
+   *
+   * P0 阶段这里是一刀切的 false（那时确实一条复现数据都没有）；做完 P1 之后必须改成看内容：
+   * 有的局带了完整复现数据、有的局没带（例如那一局没进入第一手决策），读方需要知道**缺了哪一项**。
+   * 判据（字段清单、玩法口径差异）在 `reproductionCapability.ts`，两个玩法共用一份，避免
+   * "导出说可复现、校验器说缺字段"这种自相矛盾。
    */
   reproductionCapable: boolean
   /** 引用闭合清单：带走了什么、还差什么。 */
@@ -97,6 +102,18 @@ export function buildAnalysisExport(input: BuildAnalysisExportInput): AnalysisEx
   for (const id of wantedConfigs) if (!providedConfigs.has(id)) missing.push(`配置 ${id}`)
   if (!records.length) missing.push('分析记录（这场未开启分析录制或已删除）')
   if (complete && !hasReproduction) missing.push('复现数据（reproduction）')
+  // 按内容判：有复现记录但缺字段的，逐局列出**缺了什么**（"缺字段"与"根本没记"是两件事）。
+  const reproductionIssues = records
+    .filter((part) => part.tag === 'reproduction')
+    .map((part) => ({ record: part.value as AnalysisReproduction | null }))
+    .map(({ record }) => {
+      const gaps = reproductionDeficiencies(record)
+      if (!gaps.length) return null
+      const round = typeof record?.roundIndex === 'number' ? `第 ${record.roundIndex} 局` : '局号未知的复现数据'
+      return `${round}缺少 ${gaps.join('、')}`
+    })
+    .filter((issue): issue is string => Boolean(issue))
+  for (const issue of reproductionIssues) missing.push(`复现数据不完整（${issue}）`)
   const configReferencesClosed = wantedConfigs.every(id => providedConfigs.has(id))
   return {
     schemaVersion: ANALYSIS_FORMAT_VERSION,
@@ -105,7 +122,7 @@ export function buildAnalysisExport(input: BuildAnalysisExportInput): AnalysisEx
     status: input.status,
     completeness: input.status === 'deleted' ? 'missing' : complete ? 'complete' : records.length ? 'partial' : 'missing',
     gaps: [...(input.gaps ?? [])],
-    reproductionCapable: complete && hasReproduction && configReferencesClosed,
+    reproductionCapable: complete && hasReproduction && !reproductionIssues.length && configReferencesClosed,
     manifest: {
       records: counts,
       recordsTotal: records.length,
