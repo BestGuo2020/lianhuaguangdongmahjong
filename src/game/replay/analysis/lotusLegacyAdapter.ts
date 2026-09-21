@@ -503,7 +503,12 @@ export function usageOf(usage: unknown): Record<string, number> | null {
 }
 
 export interface LotusLegacyDecisionSinkOptions {
-  recorder: AnalysisRecorder
+  /**
+   * 录制器（分析会话的稳定代理）。
+   * **可以传 getter**：App 里 LLM 控制器（`createLotusLlmControllers`）比分析会话**先**创建，
+   * 而接缝的 hooks 又必须在构造控制器时给出去 —— 传 getter 就不必为了接缝去调 App 的初始化顺序。
+   */
+  recorder: AnalysisRecorder | (() => AnalysisRecorder | null | undefined)
   onError?(detail: string): void
 }
 
@@ -533,7 +538,10 @@ export interface LotusLegacyDecisionSink {
  * 于是所有权对调：接缝独立存在，引擎通过 `windowOpened`/`windowClosed` 告诉它"现在在飞的是哪个窗口"。
  */
 export function createLotusLegacyDecisionSink(options: LotusLegacyDecisionSinkOptions): LotusLegacyDecisionSink {
-  const { recorder } = options
+  /** 每次用到时再取（见 `recorder` 的说明）：没有会话时直接不记，也没什么可留痕的。 */
+  const recorderOf = (): AnalysisRecorder | null => (
+    typeof options.recorder === 'function' ? options.recorder() ?? null : options.recorder
+  )
   /** 引擎侧 `requestId` → 这次尝试（钩子的开始/结束只靠它关联）。 */
   const attempts = new Map<string, { attemptId: string; windowId: string; seat: number }>()
   /** 该座位当前在飞的窗口（钩子按 seat 查它）。 */
@@ -566,6 +574,8 @@ export function createLotusLegacyDecisionSink(options: LotusLegacyDecisionSinkOp
     hooks: {
       onDecisionRequest(input) {
         safe(() => {
+          const recorder = recorderOf()
+          if (!recorder) return
           const window = inFlight.get(input.seat)
           if (!window) {
             // 找不到在飞的窗口就不写：宁可留痕，也不落一条没有归属（关联不上决策）的尝试
@@ -616,6 +626,8 @@ export function createLotusLegacyDecisionSink(options: LotusLegacyDecisionSinkOp
         if (!tracked) return
         attempts.delete(input.requestId)
         safe(() => {
+          const recorder = recorderOf()
+          if (!recorder) return
           const usage = usageOf(input.usage)
           const fallback = input.fallback ? { reason: input.fallback.reason, strategy: 'lotus-local-ai' } : null
           recorder.attemptFinished(tracked.attemptId, {

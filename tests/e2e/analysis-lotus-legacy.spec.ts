@@ -209,3 +209,114 @@ test('LLM 座位：真实 LLM 控制器走接缝 ⇒ llm 记录、模板去重�
   expect(probe.attemptUserSample, '落库尝试里应当有 user 变量').toBeTruthy()
   expect(probe.attemptUserSample).toBe(probe.sentUserSample)
 })
+
+test('app-path：走真实 App 打完一场东风场，从分析库读回翻精癞子的记录', async ({ page }) => {
+  // 约定 §9 的必做项（2026-09-21 追加）：这条锁的是**协调者在 `App.vue` 里补的端口传递那一行**
+  // （`useLotusGame({ analysis: analysis.port })`）—— 引擎级夹具用例注入的是自己的 recorder，
+  // 证明不了那一行。
+  //
+  // 三个坑（约定 §9.1）都按这里的做法绕开了：
+  // ① 缓冲写 ⇒ 必须走到 flush 点。单机没有「返回大厅」可点（它只在结算的**最终排名**里），
+  //    所以这里**把整场打完** —— 整场结束时 App 的 `matchFinished` 会调 `analysis.finish()` 刷盘。
+  // ② 托管按钮单机没有 ⇒ 不用它。
+  // ③ 手牌是 pointer 手势 ⇒ 点内层 `.mahjong-tile`（不是外层 `.hand-tile-slot`）。
+  test.setTimeout(660_000)
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  // 节奏压缩：把页面里所有定时器压到 ≤10ms。整场东风场在真实节奏下要 **7 分钟**（实测），
+  // 而这条用例要锁的是"App 的端口传递那一行有没有生效"，不是真实配速 —— 压缩后同样走
+  // 真实 App、真实引擎、真实 UI 交互（点内层牌元素、点「继续」），只是不等演出。
+  await page.addInitScript(() => {
+    const realSetTimeout = window.setTimeout.bind(window)
+    window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => (
+      realSetTimeout(handler as never, Math.min(Number(timeout) || 0, 10), ...args)
+    )) as typeof window.setTimeout
+  })
+
+  await page.goto('/')
+  await page.locator('.game-settings button', { hasText: '玩法' }).click()
+  await page.getByRole('button', { name: /莲花麻将 翻精/ }).click()
+  await page.getByRole('button', { name: '确定' }).click()
+  await page.getByRole('button', { name: /开始东风场/ }).click()
+  await expect(page.locator('.flip-indicator')).toBeVisible({ timeout: 30_000 })
+  await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(4)
+
+  const finalButton = page.getByRole('button', { name: '返回大厅' })
+  const continueButton = page.getByRole('button', { name: /^继续/ })
+  const enabledTiles = page.locator('.hand-tile-slot .mahjong-tile:not(.disabled)')
+  const passButton = page.locator('.action-bar').getByRole('button', { name: '过', exact: true })
+  let advanced = 0
+  const until = Date.now() + 540_000
+  while (Date.now() < until) {
+    if (await finalButton.count() && await finalButton.isVisible().catch(() => false)) break
+    if (await continueButton.count() && await continueButton.isVisible().catch(() => false)) {
+      await continueButton.click({ timeout: 5_000 }).catch(() => {})
+      advanced += 1
+      await page.waitForTimeout(400)
+      continue
+    }
+    if (await passButton.count() && await passButton.isVisible().catch(() => false)) {
+      await passButton.click({ timeout: 3_000 }).catch(() => {})
+    } else if (await enabledTiles.count()) {
+      await enabledTiles.last().click({ timeout: 5_000 }).catch(() => {})
+    }
+    await page.waitForTimeout(120)
+  }
+  expect(await finalButton.isVisible().catch(() => false), `整场应当打完（推进了 ${advanced} 局）`).toBe(true)
+
+  // 从分析库读回：整场结束时 App 已调 analysis.finish()，但落库是异步的 ⇒ 轮询（约定 §9.1 坑 1）。
+  // **必须解码后按 tag 计数**：只数分块/记录条数是假阳性 —— 没有端口那一行时，
+  // App 的 `analysis.start()` 仍会写下**配置**那一条（公共地基的能力表让 `lotus-legacy` 开局），
+  // 于是"有分块、rulesetId 也对"全都成立，但一条决策都没有（正是「未记录到任何数据」那状态）。
+  const readBack = async () => page.evaluate(async () => {
+    const empty = { blocks: 0, partsByTag: {} as Record<string, number>, rulesetIds: [] as string[] }
+    const exists = (await indexedDB.databases?.())?.some((entry) => entry.name === 'lianhua-guangma-analysis')
+    if (!exists) return empty
+    const db = await new Promise<IDBDatabase | null>((resolve) => {
+      const request = indexedDB.open('lianhua-guangma-analysis')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(null)
+    })
+    if (!db) return empty
+    const readAll = <T,>(store: string) => new Promise<T[]>((resolve) => {
+      if (!db.objectStoreNames.contains(store)) return resolve([])
+      const tx = db.transaction(store, 'readonly')
+      const request = tx.objectStore(store).getAll()
+      request.onsuccess = () => resolve(request.result as T[])
+      request.onerror = () => resolve([])
+    })
+    const blocks = await readAll<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; checksum: string; parts: number; payload: Uint8Array }>('blocks')
+    const matches = await readAll<{ rulesetId?: string }>('matches')
+    db.close()
+    const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
+    const partsByTag: Record<string, number> = {}
+    for (const block of blocks.slice().sort((a, b) => Number(a.sequence) - Number(b.sequence))) {
+      const decoded = await decodeAnalysisBlock({
+        sequence: Number(block.sequence), codec: block.codec as 'gzip' | 'raw', rawBytes: Number(block.rawBytes),
+        storedBytes: Number(block.storedBytes), checksum: String(block.checksum), parts: Number(block.parts),
+        payload: new Uint8Array(block.payload),
+      })
+      for (const part of decoded.parts ?? []) partsByTag[part.tag] = (partsByTag[part.tag] ?? 0) + 1
+    }
+    return { blocks: blocks.length, partsByTag, rulesetIds: matches.map((entry) => String(entry.rulesetId ?? '')) }
+  })
+  await expect.poll(async () => (await readBack()).partsByTag.decision ?? 0, {
+    timeout: 90_000,
+    intervals: [500],
+    message: '分析区里始终没有决策记录 —— 若 `App.vue` 还没给 `useLotusGame` 传 `analysis: analysis.port`，'
+      + '这条用例必然失败（协调者的待办，见 docs/blood-flow/design/analysis-lotus-legacy.md §10 第 4 条）：'
+      + '没有那一行时只有"配置"那一条记录，正是「未记录到任何数据」的状态',
+  }).toBeGreaterThan(0)
+
+  const read = await readBack()
+  console.log(`[analysis-lotus-legacy] app-path：推进 ${advanced} 局；分块 ${read.blocks}、`
+    + `记录 ${JSON.stringify(read.partsByTag)}、rulesetId ${JSON.stringify(read.rulesetIds)}`)
+  // 真正锁住"端口那一行生效"的判据：有决策与前态（配置那一条不算）
+  expect(read.partsByTag.decision ?? 0, '真实 App 路径必须真的写下决策（根因同上：App.vue 的端口那一行）')
+    .toBeGreaterThan(0)
+  expect(read.partsByTag.decisionState ?? 0, '真实 App 路径必须真的写下决策前态').toBeGreaterThan(0)
+  expect(read.partsByTag.settlement ?? 0, '真实 App 路径必须真的写下结算').toBeGreaterThan(0)
+  expect(read.rulesetIds, '场次的玩法 id 必须是 lotus-legacy').toContain('lotus-legacy')
+  expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
+})

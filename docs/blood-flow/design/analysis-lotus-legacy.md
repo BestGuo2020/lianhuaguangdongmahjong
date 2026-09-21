@@ -223,7 +223,7 @@ pnpm test                          # 188 passed | 1 skipped（189 文件）；19
 npx vitest run src/game/replay/analysis/lotusLegacyAdapter.test.ts
                                    # 32 passed（投影/结算 22 + LLM 接缝 10）
 E2E_PORT=4176 E2E_SKIP_WEBSERVER=1 npx playwright test tests/e2e/analysis-lotus-legacy.spec.ts --workers=1
-                                   # 4 passed（37.3s），dev server 用 npx vite --port 4176 --force
+                                   # 夹具 4 条 4 passed（37.3s）；app-path 1 条**当前为红**，见 §10 第 4 条
 npx playwright test tests/e2e/lotus-legacy.smoke.spec.ts   # 1 passed（改过 lotusGame 的回归）
 ```
 
@@ -277,7 +277,17 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
    （会话 + 稳定代理 + 展示回放共用场次 id + 接缝）直接挂载真实 `useLotusGame`，
    记录链路完全同源（含 `?llm=1` 那条真实 LLM 控制器用例）；差的只有"大厅列表行内状态"那一层 UI ——
    用例断言的是它读的那个**落库状态**（`matches.status === 'complete'`）。
-   App.vue 接上后，可以在 `replay.spec.ts` 里按血流的写法补一条 `replay-status` 显示「分析：完整」的行内断言。
+
+   **app-path 用例（约定 §9 于 2026-09-21 追加的必做项）已经在 `analysis-lotus-legacy.spec.ts` 里，
+   但在上面那三行落地之前它是红的 —— 这是有意的**：它锁的就是那一行，失败信息直接点明根因与待办。
+   已用**临时补丁**（改 App.vue，不进任何提交）验证过：加上端口那一行后它 23.5s 通过
+   （推进 5 局、8 分块、`rulesetId` 为 `lotus-legacy`，决策/前态/结算都有记录）。
+   顺序：协调者合并本分支 → 补那三行 → 该用例转绿。
+
+   > 一个**假阳性陷阱**（这条用例第一版就踩了）：只断言"有分块 / `rulesetId` 对"是**不够**的 ——
+   > 没有端口那一行时，App 的 `analysis.start()` 仍会写下**配置**那一条（公共地基的能力表让
+   > `lotus-legacy` 开局），于是上述断言全部成立，但一条决策都没有（正是「未记录到任何数据」的状态）。
+   > 判据必须落在**决策/前态/结算**这些 tag 的计数上。
 5. **vibehub 镜像：约定写错了，`lotusGame.ts` 需要手动镜像（实测更正）**。
    约定 §1 与 §6 表里都把 `src/game/variants/lotus/lotusGame.ts` 标成"共享文件、不需要镜像"，
    但同步脚本 `scripts/sync-master-to-vibehub.ps1` 的 **`$vibehubKeep` 清单第 100 行就把
