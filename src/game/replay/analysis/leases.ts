@@ -35,15 +35,25 @@ export interface BudgetLease {
   reserve(bytes: number): void
   /** 释放本实例的预留（写入结束、失败、暂停或关闭时都要调用）。 */
   release(): void
+  /**
+   * 淘汰令牌：同一时刻只允许一个实例做淘汰（§9.4「清理应跨实例协调」）。
+   * 拿不到就说明别的标签页正在淘汰 —— 调用方应让路（稍后重查账本），而不是各删各的。
+   */
+  tryAcquireEviction(): boolean
+  releaseEviction(): void
   /** 录制期间保活：定时刷新自己的时间戳，让别的标签页知道这页还活着。 */
   startHeartbeat(): void
   stopHeartbeat(): void
-  snapshot(): { instanceId: string; self: number; others: number; liveInstances: string[] }
+  snapshot(): { instanceId: string; self: number; others: number; liveInstances: string[]; evictor: string | null }
 }
 
 const LEASE_KEY = 'lgm_analysis_budget_leases'
+/** 淘汰令牌在共享状态里的保留键（不是实例 id，故不会被当成"别的标签页在途预留"）。 */
+const EVICTOR_KEY = '__evictor'
+/** 令牌记录用的哨兵字节值（与真实预留区分，便于识别）。 */
+const EVICTION_TOKEN = -1
 
-interface LeaseRecord { bytes: number; at: number }
+interface LeaseRecord { bytes: number; at: number; /** 淘汰令牌专用：持有者实例 id。 */ holder?: string }
 
 function defaultLoad(): string | null {
   try {
@@ -79,18 +89,23 @@ export function createBudgetLease(options: BudgetLeaseOptions = {}): BudgetLease
 
   /** 读全部预留并**顺手回收过期项**（关闭的那一页留下的预留就在这一步被释放）。 */
   function read(): Record<string, LeaseRecord> {
-    let parsed: Record<string, LeaseRecord> = {}
+        const parsed: Record<string, LeaseRecord> = {}
     try {
       const raw = load()
       if (raw) {
         const value = JSON.parse(raw) as Record<string, LeaseRecord>
         for (const [id, record] of Object.entries(value)) {
           if (!record || typeof record.bytes !== 'number' || typeof record.at !== 'number') continue
-          parsed[id] = { bytes: Math.max(0, record.bytes), at: record.at }
+          // 淘汰令牌可能是负数（哨兵），预留字节一律非负；持有者字段要保留，否则无法判断"谁在淘汰"
+          parsed[id] = {
+            bytes: id === EVICTOR_KEY ? record.bytes : Math.max(0, record.bytes),
+            at: record.at,
+            ...(typeof record.holder === 'string' ? { holder: record.holder } : {}),
+          }
         }
       }
     } catch {
-      parsed = {}
+      /* 坏数据按"没有预留"处理；淘汰令牌也一样，不至于永久卡住 */
     }
     const at = now()
     const live: Record<string, LeaseRecord> = {}
@@ -111,14 +126,15 @@ export function createBudgetLease(options: BudgetLeaseOptions = {}): BudgetLease
     }
   }
 
-  function snapshot(): { instanceId: string; self: number; others: number; liveInstances: string[] } {
+function snapshot(): { instanceId: string; self: number; others: number; liveInstances: string[]; evictor: string | null } {
     const records = read()
-    const others = Object.entries(records).filter(([id]) => id !== instanceId)
+    const others = Object.entries(records).filter(([id]) => id !== instanceId && id !== EVICTOR_KEY)
     return {
       instanceId,
       self: records[instanceId]?.bytes ?? 0,
       others: others.reduce((total, [, record]) => total + record.bytes, 0),
       liveInstances: others.map(([id]) => id),
+      evictor: records[EVICTOR_KEY]?.holder ?? null,
     }
   }
 
@@ -135,6 +151,26 @@ export function createBudgetLease(options: BudgetLeaseOptions = {}): BudgetLease
       const records = read()
       if (records[instanceId]) {
         delete records[instanceId]
+        write(records)
+      }
+    },
+    /**
+     * 淘汰令牌：用同一个共享状态里的保留键（`__evictor`）表示"谁在淘汰"，
+     * 时间戳沿用同一套 ttl —— 那一页崩了/被关了，令牌也会自己过期，不会永久卡住别的页。
+     */
+    tryAcquireEviction() {
+      const records = read()
+      const token = records[EVICTOR_KEY]
+      // 别人正持有（且没过期：过期项在上面的 read() 里已经被回收）⇒ 让路
+      if (token && token.holder && token.holder !== instanceId) return false
+      records[EVICTOR_KEY] = { bytes: EVICTION_TOKEN, at: now(), holder: instanceId }
+      write(records)
+      return true
+    },
+    releaseEviction() {
+      const records = read()
+      if (records[EVICTOR_KEY]?.holder === instanceId) {
+        delete records[EVICTOR_KEY]
         write(records)
       }
     },
@@ -163,8 +199,10 @@ export function createNoopBudgetLease(): BudgetLease {
     othersReserved: () => 0,
     reserve: () => {},
     release: () => {},
+    tryAcquireEviction: () => true,
+    releaseEviction: () => {},
     startHeartbeat: () => {},
     stopHeartbeat: () => {},
-    snapshot: () => ({ instanceId: 'single', self: 0, others: 0, liveInstances: [] }),
+    snapshot: () => ({ instanceId: 'single', self: 0, others: 0, liveInstances: [], evictor: null }),
   }
 }

@@ -115,6 +115,42 @@ describe('跨标签页预算预留（§9.4）', () => {
     const none = createNoopBudgetLease()
     none.reserve(1_000)
     expect(none.othersReserved()).toBe(0)
-    expect(none.snapshot()).toEqual({ instanceId: 'single', self: 0, others: 0, liveInstances: [] })
+    expect(none.tryAcquireEviction(), '单实例下淘汰令牌总是可用').toBe(true)
+    expect(none.snapshot()).toEqual({ instanceId: 'single', self: 0, others: 0, liveInstances: [], evictor: null })
+  })
+
+  // §9.4「清理应跨实例协调」：淘汰令牌同一时刻只属于一个实例；那一页走了/崩了会自己过期
+  it('淘汰令牌：同一时刻只有一个实例能拿到，释放后另一个实例可拿', () => {
+    const store = sharedStore()
+    const clock = { at: 1_000 }
+    const a = leaseOn(store, 'tab-a', () => clock.at)
+    const b = leaseOn(store, 'tab-b', () => clock.at)
+    expect(a.tryAcquireEviction()).toBe(true)
+    expect(b.tryAcquireEviction(), '别人正在淘汰时不得同时动手').toBe(false)
+    expect(a.snapshot().evictor, '令牌要能看出是谁在持有').toBe('tab-a')
+    a.releaseEviction()
+    expect(b.tryAcquireEviction()).toBe(true)
+    b.releaseEviction()
+    expect(b.snapshot().evictor).toBeNull()
+  })
+
+  it('淘汰令牌会过期：持有者不再心跳（那一页崩了）后另一个实例能接手', () => {
+    const store = sharedStore()
+    const clock = { at: 1_000 }
+    const crashed = leaseOn(store, 'tab-crashed', () => clock.at, 10_000)
+    const alive = leaseOn(store, 'tab-alive', () => clock.at, 10_000)
+    expect(crashed.tryAcquireEviction()).toBe(true)
+    expect(alive.tryAcquireEviction()).toBe(false)
+    clock.at += 11_000
+    expect(alive.tryAcquireEviction(), '过期的令牌必须能被接手，否则清理会永久卡住').toBe(true)
+  })
+
+  it('淘汰令牌不被当成"别的标签页在途预留"', () => {
+    const store = sharedStore()
+    const a = leaseOn(store, 'tab-a', () => 1_000)
+    const b = leaseOn(store, 'tab-b', () => 1_000)
+    a.tryAcquireEviction()
+    expect(b.othersReserved(), '令牌不是字节预留').toBe(0)
+    expect(b.snapshot().liveInstances).toEqual([])
   })
 })
