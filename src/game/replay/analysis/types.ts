@@ -181,6 +181,8 @@ export interface AnalysisDecision {
   /** 实际选择与来源、执行回执（§3.4）。 */
   choice: AnalysisMaybe<{ legalActionId: string; action: AnalysisLegalAction }>
   source: AnalysisChoiceSource
+  /** No request is fabricated for terminal choices or a suspended connection. */
+  sourceReason?: string
   execution: {
     commandId?: string
     status: AnalysisExecutionStatus

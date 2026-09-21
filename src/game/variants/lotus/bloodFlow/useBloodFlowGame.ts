@@ -141,6 +141,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const thinkingIds = new Map<string,number>()
   const thinkingSequences = new Map<number,number>()
   const decisions = createBloodFlowDecisions({theme:()=>options.getThemeName?.()??'jade',
+    onQuotaPaused: () => transient.announce('模型额度耗尽，暂由本地 AI 接管；可在大模型设置重新连接', 'gold'),
     // AI 分析记录接缝（可选）：把候选/推荐/请求生命周期/来源接进录制器；不传时零成本。
     analysis: options.analysis ? createBloodFlowDecisionSink({ recorder: options.analysis }) : null,
     // LLM 座位启用"真·大牌路线"（候选层收窄）；普通 AI 座位不走这条路径，行为不变。

@@ -41,6 +41,25 @@ function legalActions() {
   ]
 }
 
+it('keeps terminal, first quota fallback and suspended local provenance in exported decisions', async () => {
+  const { recorder, storage } = setup()
+  recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+  const reasons = ['terminal-self-draw', 'quota-exhausted', 'quota-paused']
+  for (const [i, reason] of reasons.entries()) {
+    const windowId = `source-${i}`
+    recorder.windowOpened({ windowId, seat: 1, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'test', stateVersion: i,
+      state: { id: windowId, legalActions: legalActions() } })
+    recorder.candidates({windowId,seat:1,legalActions:legalActions(),candidates:[]})
+    recorder.source({windowId,seat:1,source:i===1?'model-fallback':'local-strategy',reason})
+    recorder.chosen({windowId,seat:1,source:'unknown',legalActionId:'win-1'})
+  }
+  await recorder.finish()
+  const records = await readParts(storage!, 'decision') as AnalysisDecision[]
+  expect(records.map(d => d.sourceReason)).toEqual(reasons)
+  expect(records.map(d => d.source)).toEqual(['local-strategy','model-fallback','local-strategy'])
+  expect(await readParts(storage!, 'llm')).toHaveLength(0)
+})
+
 describe('分析录制核心（P0）', () => {
   // §4：提示词模板按版本去重存一次，决策侧只保存实际变量输入（不重复存模板全文）
   it('提示词模板按 id 去重：同一模板只落一条，不同版本各落一条', async () => {

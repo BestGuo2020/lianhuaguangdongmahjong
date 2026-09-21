@@ -6,6 +6,7 @@ import {
 } from '../../game/llm/config'
 import { defaultNicknameFor } from '../../game/llm/persona'
 import { testLlmConnection } from '../../game/llm/client'
+import { quotaStatus } from '../../game/llm/providerAvailability'
 import { inferProviderDialect, resolveReasoningPolicy } from '../../game/llm/reasoningPolicy'
 import type { LlmControllerStats } from '../../game/llm/llmController'
 import { LOCAL_LLM_SEAT_OPTIONS } from './seatAssignment'
@@ -35,6 +36,8 @@ const transferStatus = ref<{ ok: boolean; message: string } | null>(null)
 const MAX_IMPORT_BYTES = 1024 * 1024
 
 const selected = computed(() => settings.value.presets.find((preset) => preset.id === selectedId.value) ?? null)
+const selectedQuotaStatus = computed(() => selected.value ? quotaStatus(selected.value) : 'available')
+const pausedPresets = computed(() => settings.value.presets.filter(p => quotaStatus(p) !== 'available'))
 const selectedReasoningPolicy = computed(() => selected.value ? resolveReasoningPolicy(selected.value) : null)
 const selectedUsesDivergentGlmRelay = computed(() => {
   const preset = selected.value
@@ -328,7 +331,7 @@ function presetName(id: string | null): string {
       <div class="llm-actions">
         <button data-testid="llm-save" data-action-role="primary" @click="save">保存</button>
         <button data-testid="llm-test" data-action-role="secondary" :disabled="!selected || testing" @click="testConnection">
-          {{ testing ? '测试中…' : '测试连接' }}
+          {{ testing ? '测试中…' : selectedQuotaStatus !== 'available' ? '重新连接' : '测试连接' }}
         </button>
         <button data-testid="llm-clear-key" data-action-role="danger" :disabled="!selected" @click="clearKey">清除当前 Key</button>
         <button data-testid="llm-export-json" data-action-role="light" :disabled="settings.presets.length === 0" @click="exportSettingsJson">导出 JSON</button>
@@ -338,7 +341,10 @@ function presetName(id: string | null): string {
           data-testid="llm-import-file" @change="importSettingsJson"
         >
       </div>
-      <p class="llm-transfer-hint">导出文件不包含 API Key；导入后需检查并点击保存。</p>
+        <p class="llm-transfer-hint">导出文件不包含 API Key；导入后需检查并点击保存。</p>
+        <p v-for="preset in pausedPresets" :key="preset.id" class="llm-status err" role="status">
+          {{ preset.name }}：{{ quotaStatus(preset) === 'probing' ? '正在重新连接' : '额度耗尽，已暂停请求' }}，暂由本地 AI 接管。补充额度后选择此配置并点击“重新连接”。
+        </p>
       <p v-if="savedMark" class="llm-status ok">已保存（开局时生效）</p>
       <p v-if="testResult" class="llm-status" :class="testResult.ok ? 'ok' : 'err'">{{ testResult.message }}</p>
       <p v-if="transferStatus" class="llm-status" :class="transferStatus.ok ? 'ok' : 'err'">{{ transferStatus.message }}</p>

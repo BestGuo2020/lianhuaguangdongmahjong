@@ -128,7 +128,7 @@ export interface AnalysisRecorder {
   promptTemplate(input: { id: string; content: unknown }): void
   chosen(input: AnalysisChoiceInput): void
   /** 运行时确定的来源（本地 AI／模型／回退）：chosen() 不得用 'unknown' 覆盖它（§3.4）。 */
-  source(input: { windowId: string; seat: number; source: AnalysisChoiceSource }): void
+  source(input: { windowId: string; seat: number; source: AnalysisChoiceSource; reason?: string }): void
   receipt(input: AnalysisReceiptInput): void
   attemptStarted(input: AnalysisAttemptStartInput): string
   attemptFinished(attemptId: string, input: AnalysisAttemptFinishInput): void
@@ -380,7 +380,7 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
     source(input) {
       runtimeSources.set(key(input.windowId, input.seat), input.source)
       const decision = decisions.get(key(input.windowId, input.seat))
-      if (decision) decision.source = input.source
+      if (decision) { decision.source = input.source; decision.sourceReason = input.reason }
     },
 
     chosen(input) {
