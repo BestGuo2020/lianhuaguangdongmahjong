@@ -142,7 +142,27 @@ export interface LlmControllerHooks {
   再在 master 提「公共改动」抽取——不要在地基里预造抽象。
 - 一方卡住（例如 LLM 钩子实现不顺）：另一方**不受阻**，P0 的第一半（人类 + 本地 AI 座位）本来就不依赖钩子。
 
-## 11. 两条会话的开场提示（直接粘贴）
+## 11. 协调者与交接（2026-09-21 起）
+
+**协调者 = 主工作区（`D:\vueprojects\lianhua_guangma`，检出 master）里的那个会话**。它负责：
+
+1. 把 A/B 完成的分支合并进 master（`--no-ff`）并跑门控（typecheck + 全量测试）；
+2. 每次合并后 `pnpm sync:vibehub`，核对共享文件一致、keep 文件没被覆盖；
+3. 需要"公共改动"时在 master 上单独提交（冻结清单里的文件只能这样改）；
+4. 处理两条分支之间的冲突与顺序（先合谁、B 何时 merge master）；
+5. 需要镜像 vibehub 的改动（§6）由它落实。
+
+**A/B 的交接方式**：分支做到 DoD 后，向协调者报告三件事——
+「分支名 + 期望合并的提交 sha + 门控结果（在哪棵树跑的、数字）」；协调者合并后再通知另一边 `git merge master`。
+**不要**自己往 master 上推、也不要动别的工作树。
+
+**工作树里的注意事项**：
+
+- `node_modules` 是指向主工作区的 **junction**：**不要在工作树里跑 `pnpm install`**（会写穿到主工作区的依赖）；真要隔离就先把 junction 删掉再装。
+- 各自的 dev server 端口见 §8；`E2E_SKIP_WEBSERVER=1` 复用它，别让 Playwright 自己再起一个。
+- 开工第一步先 `git merge master`，把最新的约定与公共改动拿进来。
+
+## 12. 两条会话的开场提示（直接粘贴）
 
 **A（莲花广麻）**：
 
@@ -150,10 +170,11 @@ export interface LlmControllerHooks {
 > 先读：`docs/blood-flow/design/analysis-recording-other-variants-plan.md` 与
 > `docs/blood-flow/design/analysis-two-variants-work-agreement.md`（你是 A）。
 > 工作树 `work/analysis-classic`，分支 `feat/analysis-lotus-classic`（已从 master 的公共地基切出）。
-> 只许改 §1 里属于 A 的路径。`LlmControllerHooks` 的两个可选钩子由你实现（§5），做完**尽早合并到 master**
+> 开工先 `git merge master` 拿最新约定与公共改动（本文件 §11 是协调者与交接规则）。
+> 只许改 §1 里属于 A 的路径。`LlmControllerHooks` 的两个可选钩子由你实现（§5），做完**尽早报告协调者合并到 master**
 > 再继续，因为 B 在等它。参考实现：`src/game/replay/analysis/bloodFlowAdapter.ts` 与
 > `src/game/variants/lotus/bloodFlow/useBloodFlowGame.ts` 的记录调用点。DoD 见约定 §9。
-> 注意 `useGame.ts` 是 vibehub keep 文件：改动要镜像（§6）。
+> 注意 `useGame.ts` 是 vibehub keep 文件：改动要镜像（§6）；**不要在工作树里 `pnpm install`**（node_modules 是 junction）。
 
 **B（莲花麻将·翻精癞子）**：
 
@@ -161,6 +182,8 @@ export interface LlmControllerHooks {
 > 先读：`docs/blood-flow/design/analysis-recording-other-variants-plan.md` 与
 > `docs/blood-flow/design/analysis-two-variants-work-agreement.md`（你是 B）。
 > 工作树 `work/analysis-legacy`，分支 `feat/analysis-lotus-legacy`（已从 master 的公共地基切出）。
+> 开工先 `git merge master` 拿最新约定与公共改动（本文件 §11 是协调者与交接规则）。
 > 只许改 §1 里属于 B 的路径。**不要**动 `src/game/llm/*`（A 正在实现钩子）：先做人类座位 + 本地 AI 座位的
 > 完整闭环（记录形状、遮蔽、窗口 ID、结算折算、e2e），LLM 座位先记 `source: 'unknown'`；
 > 等 master 上出现 A 的钩子提交后 `git merge master` 再接钩子。参考实现同上。DoD 见约定 §9。
+> **不要在工作树里 `pnpm install`**（node_modules 是 junction）。
