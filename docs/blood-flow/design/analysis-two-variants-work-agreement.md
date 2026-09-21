@@ -148,9 +148,16 @@ export interface LlmControllerHooks {
 
 ## 8. 资源约定
 
-- dev server 端口各占一个：**A = 4174，B = 4176**，都加 `--force`（两个工作树共享 `node_modules/.vite` 依赖缓存）。
+- dev server 端口**固定**（谁都不许抢）：**A = 4174、B = 4176、协调者 master = 4175、协调者 vibehub = 4177**；
+  都加 `--force`（多个工作树共享 `node_modules/.vite` 依赖缓存）。
+- **起服务前先确认端口是不是自己的**（2026-09-21 踩过）：`pnpm dev --port 4176` 若端口已被 B 占用，
+  它会另找端口或直接失败，而你的 e2e 仍然打到**别人的工作树**上 —— 表现为"我明明改了却没生效"。
+  自查两招：`Get-NetTCPConnection -LocalPort <port>` 看进程命令行里的工作树路径；
+  或 `GET http://127.0.0.1:<port>/src/App.vue` 里 grep 自己刚加的标识。
 - 重活错峰：不要同时跑 `pnpm test` 全量 / Playwright（各自还会起 Chromium），错开 2–3 分钟。
 - e2e 证据写各自的 `tmp/`（不 junction），文件名带玩法前缀，互不覆盖。
+- 冷启动的 dev server（`--force` 首次打包）会让重型 fixture 用例假超时（实测：探针 240s 超时，
+  热起来后 33.7s 通过）⇒ 跑 spec 前先访问一次页面把服务焐热。
 
 ## 9. 完成定义（DoD，两条分支同一套）
 
@@ -256,3 +263,29 @@ export interface LlmControllerHooks {
 > 完整闭环（记录形状、遮蔽、窗口 ID、结算折算、e2e），LLM 座位先记 `source: 'unknown'`；
 > 等 master 上出现 A 的钩子提交后 `git merge master` 再接钩子。参考实现同上。DoD 见约定 §9。
 > **不要在工作树里 `pnpm install`**（node_modules 是 junction）。
+
+## 13. 结果（两个玩法 P0 均已落地并验收，2026-09-21）
+
+| 项 | A（莲花广麻） | B（翻精癞子） |
+|---|---|---|
+| 合并到 master | 钩子 `2f85417`（公共改动）、分支 `968026b`、app-path `b9f78df` | 分支 `5709c3a`（含 LLM 接缝 + app-path） |
+| 协调者补的公共改动 | `1b15091`（`App.vue` 给 `localGame` 传端口） | `50d66a5`（`App.vue` 接缝 + **两处**控制器构造带钩子 + `analysis`/`analysisSink` 成对传参） |
+| vibehub 镜像 | `42a7fcb`（`useGame.ts` + `App.vue`） | `ce044b4`（`lotusGame.ts` + `App.vue`） |
+| e2e | 3 条（引擎级 + app-path 正向默认跑 / 负向 `E2E_SLOW=1`） | 5 条（引擎级 3 + LLM 接缝「变量逐字相等」 + app-path） |
+| 门控 | master 全量 1923 项通过；typecheck 通过 | vibehub 全量 2044 项通过；typecheck 通过 |
+| app-path 实测 | 推进 1~5 局自动刷盘，`decisionState/decision/settlement` 均有记录 | 推进 5~6 局，`decisionState 267 / decision 534 / settlement 6` |
+
+**B 在实现里抓到两个真 bug（单测没抓到，e2e 抓到）**：
+
+1. **吃的组合不在 `candidate.action` 上**：钩子拿到的 `candidates[].action` 是引擎侧原始动作，吃只有
+   `{kind:'chi', optionIndex}`，组合在并行的 `legalActions[]` 上（按 id 对应）⇒ 只看前者会**静默丢掉每一个吃候选**。
+2. **仓库有两套中文牌名**：`core/rules/tiles` 是中文数字（六筒），`llm/schema` 是阿拉伯数字（6筒），
+   而 `llmController` 用的是后者 ⇒ 两边都「是显示名」却永远对不上。
+   修法：匹配键一律经 `canonicalTileKey` 折回牌码。
+
+**已知未做/待办**：
+
+- P1（§6 赛后复现）两玩法都没做 —— 导出包如实标 `reproductionCapable: false`，没有假装能复现。
+- B 的 app-path 用例在批跑时出现过一次 `.flip-indicator` 30 秒等待超时（同条件单跑与复跑都通过，
+  属冷启动/负载 flake）；建议把那一处等待放宽或改成轮询。
+- 两个玩法的 LLM `sampling` 记 `{}`（钩子不暴露 temperature，**不编造**）。
