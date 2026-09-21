@@ -248,6 +248,9 @@ const localGame = useGame({
   getThemeName: () => tableThemeName.value,
   animeFixedTts: localAnimeFixedTts,
   recorder: replay.hooks,
+  // AI 分析记录（§9.2）：本地玩法共用同一个稳定代理；未接线的玩法只是不写记录。
+  // 这一行由协调者补（App.vue 是冻结文件，单写者；见 docs/blood-flow/design/analysis-two-variants-work-agreement.md §3.1）。
+  analysis: analysis.port,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
