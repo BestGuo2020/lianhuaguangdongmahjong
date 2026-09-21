@@ -194,6 +194,7 @@ export function useGame({
   const analysisPending = new Map<number, {
     windowId: string
     seat: number
+    kind: LotusClassicWindowKind
     action: LotusClassicActionLike
     before: LotusClassicViewLike
   }>()
@@ -344,6 +345,11 @@ export function useGame({
     try {
       analysisWindowSeq += 1
       const actions = analysisLegalActions(kind, ctx)
+      // 该座位上一次的选择若始终没被观察到（引擎拒了、或收尾把延迟检查清掉了），
+      // 条目留在表里会让**下一个窗口**的观察错记到旧窗口上 ⇒ 开新窗口时先丢掉它。
+      // 丢掉 = 那条决策保持 pending（"已提交但未观察到回执"），这是诚实的默认值；
+      // 错记成 state-changed 才是说谎。
+      analysisPending.delete(seat)
       const windowId = decisionWindowId(String(analysisRoundIndex), analysisWindowSeq)
       // 本局开局分：在**本局第一个决策窗口**取基线并置位就绪（开局阶段刚建好玩家时分数还没落定，
       // 那时取会把 0 当成开局分；而本局第一次真的分数变化必然晚于第一个窗口）。
@@ -377,7 +383,7 @@ export function useGame({
             at: monotonicNow(),
           })
           if (!action) return
-          analysisPending.set(seat, { windowId, seat, action, before: view })
+          analysisPending.set(seat, { windowId, seat, kind, action, before: view })
           // 过牌不会有任何"上桌"事件，但它确实生效（本座位状态不变）。
           // 让出一个宏任务再按状态比对判定，用的是适配层同一套 choiceTookEffect（§3.2）。
           if (action.kind === 'pass') {
@@ -399,7 +405,7 @@ export function useGame({
     const pending = analysisPending.get(seat)
     if (!pending || !analysis) return
     try {
-      const after = analysisView(seat, pending.windowId, 'turn', [])
+      const after = analysisView(seat, pending.windowId, pending.kind, [])
       const executed = observed
         ? analysisSameAction(pending.action, observed)
         : choiceTookEffect(pending.before, after, seat, pending.action)

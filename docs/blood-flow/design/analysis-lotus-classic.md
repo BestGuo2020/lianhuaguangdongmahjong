@@ -148,8 +148,20 @@ e2e 探针实测数字（东风场，固定随机序列，同一场跑两遍）�
    - `analysisSnapshotFor` 补广麻的 `rules` / `aiConfig` 口径：现在是 `{ id: 'lotus-classic' }`
      占位（只记标识）。P0 的记录本身不依赖它，但它决定"这一手是在什么规则/AI 配置下决定的"
      能不能被回答，建议与 B 的 `lotus-legacy` 口径一起放进同一次公共改动。
-4. **`useGame.ts` 是 vibehub keep 文件**：上述改动需要手动镜像到 vibehub 的同一份文件
-   （约定 §6）—— 由协调者在合并后落实。
+4. **vibehub 镜像：这是一处会让 vibehub 直接挂掉的坑，别只当成"顺手抄一份"**
+   - `src/game/core/local/useGame.ts` 在 `scripts/sync-master-to-vibehub.ps1` 的
+     `$vibehubKeep` 里（第 72 行），语义是"永远保留 vibehub 自己的版本"（脚本合并后
+     `git checkout $keepBase -- $vibehubKeep` 强制还原）。实测两边的这份文件差的不是一两行：
+     `git diff --stat vibehub bfe2708 -- src/game/core/local/useGame.ts` = 91 行改动。
+     所以本文 §2 的 `useGame.ts` 改动**不会自动过去**，必须手动镜像（约定 §6 / §11）。
+   - **连带**：我新增的 `src/game/core/local/useGame.analysis.test.ts`、`tests/e2e/fixtures/analysis-lotus-classic.{html,ts}`、
+     `tests/e2e/analysis-lotus-classic.spec.ts` **既不在 `$vibehubKeep` 也不在 `$masterOnly`**
+     ⇒ 会被同步到 vibehub；它们都依赖 `useGame` 的 `analysis` 选项。
+     **只 sync 不镜像 = vibehub 的 `pnpm typecheck` 直接报"analysis 不存在"**。
+     正确顺序：**先镜像 useGame.ts，再 `pnpm sync:vibehub`**（或用 `$vibehubKeep` 把新测试也留下）。
+   - B（`lotus-legacy`）是**同一个坑**而不是例外：`src/game/variants/lotus/lotusGame.ts` 同样在
+     `$vibehubKeep` 第 100 行，两边差异 101 行。建议协调者**一次把两份镜像都做掉再 sync**
+     —— 约定 §1／§6 的表里把 `lotusGame.ts` 写成"共享文件、不需要镜像"，那是错的（B 实测更正）。
 5. **e2e 不经由 App.vue**：App 那一行端口传递在冻结清单里，所以探针直接对 `useGame` 传入
    会话代理（与 App 同一条路径、同一个 storage、同一把 matchId 钥匙），"列表行文案"用真实的
    `analysisAreaLabel` 在数据层判定。等公共改动落地后，可以照 `analysis-human.spec.ts` 补一条
