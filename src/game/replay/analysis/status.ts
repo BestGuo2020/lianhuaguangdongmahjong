@@ -13,18 +13,21 @@ export interface AnalysisStatusSubject {
 
 /**
  * 行内状态文案：
- * - `complete` / `partial` / `deleted` / `missing` 直接对应落库状态；
- * - 没有该场的分析元数据时（`disabled`）再分两种：
- *   本场当时就没开录制 ⇒「未开启」；本场开着录制或不知道（旧录像）⇒「缺少决策分析记录」。
+ * - `complete` / `partial` / `deleted` 直接对应落库状态；
+ * - `missing` / `disabled`（库里没有这一场的记录）再分三种：
+ *   本场当时就没开录制 ⇒「未开启」；**开着录制但一条记录都没写** ⇒「未记录到任何数据」
+ *   （例如该玩法还没接分析记录 —— 这句必须是"没录到"，不能写成"缺少/丢失"）；其余（旧录像）⇒「缺少决策分析记录」。
  */
 export function analysisAreaLabel(subject: AnalysisStatusSubject, status: AnalysisAreaStatus | undefined): string {
   if (!status) return '分析：不可用'      // 分析区整体不可用（无 IndexedDB／驱动因失败停用）
   if (status === 'complete') return '分析：完整'
   if (status === 'partial') return '分析：部分缺失'
   if (status === 'deleted') return '分析：已删除'
-  if (status === 'missing') return '分析：缺少决策分析记录'
-  // status === 'disabled'：分析区里没有这一场
-  return subject.analysisRecorded === false ? '分析：未开启' : '分析：缺少决策分析记录'
+  if (subject.analysisRecorded === false) return '分析：未开启'
+  // 开着录制却拿不到这一场的数据：只可能是"这一场什么都没写进去"（玩法未接线、或全程没有决策窗口），
+  // 不能写成"缺少决策分析记录" —— 那是"曾经有、现在丢了"的意思（§10.7 的两态区分）。
+  if (subject.analysisRecorded === true) return '分析：未记录到任何数据'
+  return '分析：缺少决策分析记录'
 }
 
 /** 有分析记录可读（可导出、可删除）。 */

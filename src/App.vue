@@ -561,18 +561,35 @@ watch(matchFinished, (finished) => {
     await reconcileAnalysisWithReplay(analysisStorage, (await replay.storage.list()).map((match) => match.id))
   })
 })
-// 分析录制开局：本地血流对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
-watch(() => (gameMode.value === 'local' && selectedRule.value === 'lotus-blood-flow' ? phase.value : null), (value) => {
+// 分析录制开局：本地对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
+// **哪些玩法接分析记录**集中在这张表里（两个新玩法的分支都不需要再改这段）：
+// 表里有、但引擎还没接线的玩法，这一场只会写下配置、没有决策记录 —— 列表会如实显示
+// 「分析：未记录到任何数据」（见 status.ts），不会谎称"数据丢了"。
+const ANALYSIS_CAPABLE_RULESETS: readonly RuleVariant[] = ['lotus-blood-flow', 'lotus-classic', 'lotus-legacy']
+/**
+ * 某一玩法的分析快照口径（§3.1）。
+ * 血流记完整规则与 AI 配置；还没接线的玩法**只记标识**，绝不冒充血流的配置
+ * （两个玩法接线时各自补自己的 `rules` / `aiConfig`，见 docs/blood-flow/design/analysis-two-variants-work-agreement.md）。
+ */
+function analysisSnapshotFor(ruleset: RuleVariant) {
+  if (ruleset === 'lotus-blood-flow') {
+    return { rules: BLOOD_FLOW_CONFIG as unknown, rulesVersion: BLOOD_FLOW_CONFIG.version,
+      aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI } as unknown }
+  }
+  return { rules: { id: ruleset } as unknown, rulesVersion: ruleset, aiConfig: null }
+}
+watch(() => (gameMode.value === 'local' && ANALYSIS_CAPABLE_RULESETS.includes(selectedRule.value) ? phase.value : null), (value) => {
   if (value !== 'opening' || analysis.active()) return
+  const snapshot = analysisSnapshotFor(selectedRule.value)
   analysis.start({
     // 与展示回放**共用同一个场次 id**（§9.2）：否则分析数据在"按展示回放清单回收"时会被当成
     // 悬空数据整场删掉，列表也无从显示这场是「完整」还是「已删除」。
     matchId: replay.ensureMatchId(),
-    rulesetId: 'lotus-blood-flow',
-    rules: BLOOD_FLOW_CONFIG,
-    rulesVersion: BLOOD_FLOW_CONFIG.version,
+    rulesetId: selectedRule.value,
+    rules: snapshot.rules,
+    rulesVersion: snapshot.rulesVersion,
     // 本地 AI 与 LLM 两套配置都记下来：分析时要能分辨某一手是谁在什么配置下决定的（§3.1）。
-    aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI },
+    aiConfig: snapshot.aiConfig,
     aiStrategy: 'source-v2',
     // 本地单机的本家固定是 0 号座（与展示回放的 humanSeat 口径一致）。
     seatControl: players.value.map((player, seat): AnalysisSeatControl => (
