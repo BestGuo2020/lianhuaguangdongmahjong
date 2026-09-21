@@ -436,19 +436,31 @@ async function openReplay(matchId: string) {
   replayView.value = { match, rounds }
 }
 // 回放落库时机：场末按引擎最终 standings 记录名次；中途回大厅按已打完的局收尾（标「未完成」）。
-// 分析录制开局：本地血流对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
+// 分析录制开局：本地对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
 // 联机血流对局由房间在拿到场次 id 时调 `startOnlineAnalysis`（见上）。
-watch(() => (gameMode.value === 'local' && selectedRule.value === 'lotus-blood-flow' ? phase.value : null), (value) => {
+// **哪些玩法接分析记录**集中在这张表里（master 的公共地基同步口径；App.vue 是 keep 文件，故需手动镜像）：
+// 表里有、但引擎还没接线的玩法，这一场只写配置 —— 列表会如实显示「分析：未记录到任何数据」。
+const ANALYSIS_CAPABLE_RULESETS: readonly RuleVariant[] = ['lotus-blood-flow', 'lotus-classic', 'lotus-legacy']
+/** 某一玩法的分析快照口径（§3.1）：未接线的玩法只记标识，绝不冒充血流的规则/AI 配置。 */
+function analysisSnapshotFor(ruleset: RuleVariant) {
+  if (ruleset === 'lotus-blood-flow') {
+    return { rules: BLOOD_FLOW_CONFIG as unknown, rulesVersion: BLOOD_FLOW_CONFIG.version,
+      aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI } as unknown }
+  }
+  return { rules: { id: ruleset } as unknown, rulesVersion: ruleset, aiConfig: null }
+}
+watch(() => (gameMode.value === 'local' && ANALYSIS_CAPABLE_RULESETS.includes(selectedRule.value) ? phase.value : null), (value) => {
   if (value !== 'opening' || analysis.active()) return
+  const snapshot = analysisSnapshotFor(selectedRule.value)
   analysis.start({
     // 与展示回放**共用同一个场次 id**（§9.2）：否则分析数据在"按展示回放清单回收"时会被当成
     // 悬空数据整场删掉，列表也无从显示这场是「完整」还是「已删除」。
     matchId: replay.ensureMatchId(),
-    rulesetId: 'lotus-blood-flow',
-    rules: BLOOD_FLOW_CONFIG,
-    rulesVersion: BLOOD_FLOW_CONFIG.version,
+    rulesetId: selectedRule.value,
+    rules: snapshot.rules,
+    rulesVersion: snapshot.rulesVersion,
     // 本地 AI 与 LLM 两套配置都记下来：分析时要能分辨某一手是谁在什么配置下决定的（§3.1）。
-    aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI },
+    aiConfig: snapshot.aiConfig,
     aiStrategy: 'source-v2',
     // 本地单机的本家固定是 0 号座（与展示回放的 humanSeat 口径一致）。
     seatControl: players.value.map((player, seat): AnalysisSeatControl => (
