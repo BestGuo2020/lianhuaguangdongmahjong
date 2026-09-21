@@ -21,6 +21,13 @@ export function firstWinFloor(wallCount: number, config: BloodFlowAiConfig) {
 
 export type EvFloorStage = 'early' | 'mid' | 'late'
 
+/** 最后一张自摸：胡后即结算，改张不再有未来收入；不包含末张弃牌的竞争窗口。 */
+export function isFinalSelfDrawWin(view: BloodFlowSeatView): boolean {
+  return view.wallCount <= 0 && view.window?.kind === 'turn'
+    && view.window.source.kind === 'draw' && view.window.source.seat === view.seat
+    && view.ownActions.some(action => action.kind === 'win')
+}
+
 export interface ReformCandidateInfo {
   index: number
   tile: TileType
@@ -67,7 +74,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const wallCount = view.wallCount
   const sourceSeat = view.window?.source.seat ?? view.seat
   const drawOffset = ((view.seat - sourceSeat + 4) % 4) || 4
-  const chain = (tiles: readonly TileType[], offset = drawOffset) => config.chainForecast === 'source-v2' && config.opportunityCalibration
+  const chain = (tiles: readonly TileType[], offset = drawOffset) => wallCount <= 0 ? 0 : config.chainForecast === 'source-v2' && config.opportunityCalibration
     ? config.conditionalRon
       ? forecastConditionalIncome(tiles,melds,jokers,visible,wallCount,config.chainHorizon,offset,config.opportunityCalibration,
         view.seat,view.public.seats.map(s=>s.locked),config.conditionalRon)
@@ -92,7 +99,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const potentialTotal = patternPotentialTotal(lockedHand, melds, jokers, config.sevenPairsModel)
   const topDirections = [...patternPotentials(lockedHand, melds, jokers, config.sevenPairsModel)]
     .sort((a, b) => b.score - a.score).slice(0, 3)
-  const developEv = patternPotentialEv(lockedHand, melds, jokers, wallCount, config.sevenPairsModel, config)
+  const developEv = wallCount <= 0 ? 0 : patternPotentialEv(lockedHand, melds, jokers, wallCount, config.sevenPairsModel, config)
 
   const reformCandidates: ReformCandidateInfo[] = []
   if (!locked && window?.kind === 'turn' && window.source.kind === 'draw' && drawnIndex >= 0 && winOffered) {

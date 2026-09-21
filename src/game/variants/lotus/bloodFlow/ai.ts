@@ -9,7 +9,7 @@ import { BLOOD_FLOW_ACTION_PRIORITY, BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG, BLOOD_FLO
 import { kongCandidateValue, type KongValueKind } from './kongValue'
 import { narrowActionsToRoute } from './bigHandRoute'
 import { patternPotentialEv, patternPotentials, waitingTilesCached } from './patternPotentials'
-import { bloodFlowEvContext } from './evContext'
+import { bloodFlowEvContext, isFinalSelfDrawWin } from './evContext'
 import { opponentPatternExposure, opponentRiskProfiles, type OpponentRiskProfile } from '../../../shared/ai/opponentPatternRisk'
 import { decideDefensePolicy, ownHandFacts, type DefensePolicyConfig } from './defensePolicy'
 import { evaluateHandProgress } from '../../../shared/ai/handProgress'
@@ -296,6 +296,7 @@ interface EvExtras {
 function narrowRoutesForBot(
   view: BloodFlowSeatView, actions: readonly BloodFlowAction[], config: BloodFlowAiConfig,
 ) {
+  if (isFinalSelfDrawWin(view)) return { actions, collapsed: false, route: null }
   if (config.bigHandRoute.mode !== 'bot' && config.bigHandRoute.mode !== 'all') {
     return { actions, collapsed: false, route: null }
   }
@@ -388,6 +389,7 @@ export function decideBloodFlowActionEv(view: BloodFlowSeatView, config: BloodFl
   }
 
   if (win) {
+    if (isFinalSelfDrawWin(view)) return win
     const ev = bloodFlowEvContext(view, config)
     // 自摸窗口：改张优先于门槛，再决定胡或继续发育。
     if (view.window?.kind === 'turn' && view.window.source.kind === 'draw' && player.drawnTileIndex >= 0) {
