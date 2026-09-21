@@ -209,6 +209,8 @@ const localGame = useGame({
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: localAnimeFixedTts,
   recorder: replay.hooks,
+  // AI 分析记录（§9.2）：镜像 master 的公共改动（App.vue 是 keep 文件，见约定 §3.1/§6）
+  analysis: analysis.port,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
