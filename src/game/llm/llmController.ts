@@ -79,9 +79,16 @@ export interface LlmDecisionRequestHookInput {
   /** 本次请求的引擎侧标识（经典本地引擎为 `${kind}-${seat}-${序号}`，见 core/controllers/llmContext.ts）。 */
   requestId: string
   /**
-   * 该请求所属的决策窗口。经典本地引擎没有独立的权威窗口号，因此这里就是引擎侧请求标识
-   * （请求内容里逐字带来的 `requestId`，事后可由同一份对局状态复算）；分析侧用它把
-   * attempt 关联到自己记录的窗口，不要在两侧各推一套编号。
+   * 本次请求所属的**引擎侧**窗口标识：就是请求内容里逐字带来的 `requestId`
+   * （经典本地引擎为 `${kind}-${seat}-${请求序号}`，见 core/controllers/llmContext.ts）。
+   *
+   * ⚠️ 它**不是**分析侧的窗口号。分析侧各玩法自己计数（血流 `${roundId}/window/${version}`、
+   * 广麻与翻精癞子 `${roundId}/window/${N}`），两套编号不要混用。接 sink 的推荐做法：
+   * 由包在控制器外面的那一层记录"该座位当前打开的窗口"，钩子触发时用 `seat` 找到在飞的那个窗口，
+   * 再把 `attemptStarted({ decisionWindowId })` 指过去（这样也不依赖本字段的稳定性）。
+   *
+   * 这个号并非每个窗口都能拿到：抢杠/胡这类由引擎短路、根本不发请求的窗口不会触发钩子；
+   * 翻精癞子的胡窗口上下文也不带 `llm.meta()`。真拿不到时这里是空串，不要当窗口号用。
    */
   windowId: string
   /**
