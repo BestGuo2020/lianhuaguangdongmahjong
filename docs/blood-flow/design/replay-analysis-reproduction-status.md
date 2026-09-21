@@ -16,7 +16,7 @@
 | 记录内容（单场东风场） | `config` 1、`decisionState` ~500~560、`decision` ~620~740、`responderCheckpoint` ~145~210、`settlement` ~140~200、`reproduction` 4 |
 | 容量基线（实测） | 单场 ≈ **78~90KB**（21~26 个 gzip 块）⇒ 50 场约 **4MB**，远低于 §9.4 的 200MB 预算 |
 | 复现数据完整性 | 牌墙（发牌后剩余 81 张）、四家初始手牌、庄家第 14 张下标、两个翻精、精牌、`flipStack/flipSeat/wallBreakIndex`、**当局开局分数**、带载荷命令（`tile/tiles/handIndex/from/meldIndex` + `windowId` + `windowKind`） |
-| **§10.6 复现** | e2e：`replayOk` 四局全 true、`replayProgress` 逐局满额（如 139/139、153/153、106/106、108/108）、`kindMismatches` 全 0、`scoresMatch` 全 true、`replayReasons` 全 null |
+| **§10.6 复现** | e2e：`replayOk` 四局全 true、`replayProgress` 逐局满额（如 139/139、153/153、106/106、108/108）、`kindMismatches` 全 0、`scoresMatch` 全 true、`replayReasons` 全 null；**人类座位**另有慢用例实测 `154/154 + scoresMatch true`（`E2E_SLOW=1`） |
 | 记录只保留权威动作 | 命令：只有 `commandAccepted !== false` 才入列；`expire`：只有 `expireAdvanced` 才入列 ⇒ 复现记录从每局 ~530 条降到 ~110~150 条，expire 噪声归零（§3.4、§6） |
 | §9.2 分析区生命周期 | 分析区与展示回放共用场次 id；列表显示四态（未开启／完整／部分缺失／已删除）；只删分析保留牌谱；删场次/清空全部时同步回收分析区；写入遇到墓碑会复活 |
 | 中途退出的记录处理 | 未打完整场就返回大厅：已录数据**刷进分析区**并标 `partial` + gap `match-aborted`（不静默丢），同时结束本场会话 —— 否则下一场会被 App 的 `active()` 守卫跳过、记录挂到上一场名下（见 §2.6）。e2e `analysis-abort.spec.ts` 覆盖（3 秒） |
@@ -177,9 +177,10 @@ e2e `analysis-abort.spec.ts`（真实引擎：打 12 个窗口 → 返回大厅 
 1. **P2P 联机路径的分析记录**：需要权威端参与（同 worker 回传那套）。§6 明确"联机场景不能为了分析
    向普通客户端提前泄露牌墙或对手暗手，只能由有权限的权威端在局后提供" —— 因此要在权威端（房主/服务端）
    侧录制并回传。触及联机层时按 AGENTS.md 走**线上验收**（本地 mock 覆盖不了真实 P2P 行为）。
-2. **人类对局的整局复现未纳入常规 e2e**：常规 e2e 用 autoplay 对局覆盖 §10.6（fixture + 探针），
-   人类座位只覆盖到"命令入列正确 + 记录与权威不一致时明确报错"（`analysis-human.spec.ts`）。
-   不改造牌墙打完整局约 4 分钟/局，因此整局复现留给人工验收或按需专项跑。
+2. **人类对局的整局复现已实测通过，但默认跳过**：`analysis-human-round.spec.ts`（不改造牌墙、
+   老老实实打完东1局）实测 154 条命令 / 27 条人类命令 / 100 条 human 决策、`progress 154/154`、
+   `kindMismatches 0`、`scoresMatch true`；单次约 12 分钟，因此需要 `E2E_SLOW=1` 才运行，
+   日常回归用 `analysis-human.spec.ts`（记录形状 + 不一致必报错，1 分钟）。
 3. **响应窗口检查点仍可能为空**（看不到手牌时如实降级 `partial`），§9.3 已按需实现。
 4. **跨标签页的"淘汰"仍不是分布式锁**（§9.4）：在途预留已经让两页互相让路（见 §1 的跨标签页一行），
    但"谁淘汰哪些场次"没有跨页 leader，两页可能同时决定淘汰同一场（幂等，不会出错）或同时判断
