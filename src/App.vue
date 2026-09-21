@@ -23,7 +23,6 @@ import type { GamePort } from './game/core/contracts/gamePort'
 import { useRemoteGame } from './game/online/useRemoteGame'
 import type { StoredSession } from './game/online/session/remoteSessionStore'
 import { getRoom, type LlmSeatRequest, type ServerLlmStyle } from './game/online/api/roomApi'
-import type { RoomMatchInfo, RoomSyncSnapshot } from './game/online/session/roomSyncState'
 import { createRemoteLobbyController } from './game/online/orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './game/online/session/useDisclaimerGate'
 import { useWakuDemoAuth } from './game/online/session/useWakuDemoAuth'
@@ -359,7 +358,6 @@ const debugPreviewDraw = () => {
 // 血流联机房间走自己的会话：以下代理在联机槽切换时读取/写入对应模块的真实 ref。
 const proxyRef = <T,>(name: 'sessionStatus' | 'sessionError' | 'roomId' | 'mySeat' | 'nickname'
   | 'playerId' | 'isCreator' | 'roomSeats' | 'reservedSeats' | 'roomTimeLimit' | 'roomStatus'
-  | 'roomSync' | 'roomMatch' | 'myMatchId'
   | 'storedSession'
   | 'llmEnabled' | 'effectiveLlmEnabled' | 'llmAvailable' | 'autoPlay'
   | 'roomTableThemeName') => computed<T>({
@@ -379,12 +377,6 @@ const reservedSeats = proxyRef<Array<LlmSeatRequest>>('reservedSeats')
 const roomTimeLimit = proxyRef<number>('roomTimeLimit')
 /** 服务端房间状态：blood flow 暂离时房间面板据此显示「本场进行中 · 回到牌桌」。 */
 const roomStatus = proxyRef<'lobby' | 'playing' | 'finished' | 'error' | 'closed' | string>('roomStatus')
-/** 房间信息同步健康态：轮询连续失败 / 登录过期可见化；面板据此四态渲染。 */
-const roomSync = proxyRef<RoomSyncSnapshot>('roomSync')
-/** REST 下发的场次身份（matchId 会被下一场覆盖，仅作参考）。 */
-const roomMatch = proxyRef<RoomMatchInfo>('roomMatch')
-/** WS rejoin_ok 锚定的「我参与的那场」。 */
-const myMatchId = proxyRef<string | null>('myMatchId')
 const storedSession = proxyRef<StoredSession | null>('storedSession')
 const llmEnabled = proxyRef<boolean>('llmEnabled')
 const effectiveLlmEnabled = proxyRef<boolean>('effectiveLlmEnabled')
@@ -426,11 +418,7 @@ const remoteActions = {
   leaveMatch: () => activeRemote.value.remoteActions.leaveMatch(),
   resumeSession: () => activeRemote.value.remoteActions.resumeSession(),
   updateCharacter: (characterId: string) => activeRemote.value.remoteActions.updateCharacter(characterId),
-  // 未同步后面板的「重试」：立刻再拉一次房间真值（1.5s 轮询仍在跑，成功即自愈）。
-  refreshRoom: () => activeRemote.value.remoteActions.refreshRoom(),
 }
-
-function refreshRoomSync() { void remoteActions.refreshRoom() }
 
 // 房主改主题 → 全房间同步；非房主只读（本地 tableThemeName 随房间主题）。
 watch(roomTableThemeName, (theme) => {
@@ -479,22 +467,10 @@ watch(gameMode, (mode) => {
 })
 
 // 联机接口返回 401 AUTH_REQUIRED 时提示重新登录（不跳转、不弹窗）。
-// 提示节流与「重探登录态」间隔同值：401 通常来自 1.5s 一次的房间轮询。
-const AUTH_REPROBE_INTERVAL_MS = 5000
-let lastAuthReprobeAt = 0
-
 function handleAuthRequired() {
-  // 不再用 `!wakuAuth.authenticated.value` 做守卫：客户端那份 authenticated 是
-  // 会话过期前的旧值（true），守卫在真正需要它的场景下恒假——事故中 401 已被派发
-  // 了 9 分钟，界面既不提示也不重探。
-  wakuAuth.error.value = '登录已过期，请重新登录 WakuDemo 账号'
-  // 节流地重探登录态：refresh() 会把 authenticated 落到真实值 ⇒ 大厅账号卡片
-  // 立刻出现「登录」入口，玩家点它即整页跳转重新登录；回来后 localStorage 会话
-  // 仍在，大厅出现「继续对局」，一键恢复原座位。
-  const now = Date.now()
-  if (now - lastAuthReprobeAt < AUTH_REPROBE_INTERVAL_MS) return
-  lastAuthReprobeAt = now
-  void wakuAuth.refresh()
+  if (!wakuAuth.authenticated.value) {
+    wakuAuth.error.value = '登录已过期，请重新登录 WakuDemo 账号'
+  }
 }
 onMounted(() => window.addEventListener('wakudemo-auth-required', handleAuthRequired))
 onBeforeUnmount(() => window.removeEventListener('wakudemo-auth-required', handleAuthRequired))
@@ -800,9 +776,6 @@ function changeTableTheme(theme: TableThemeName) {
         :session-error="sessionError"
         :room-time-limit="roomTimeLimit"
         :room-status="roomStatus"
-        :room-sync="roomSync"
-        :room-match="roomMatch"
-        :my-match-id="myMatchId"
         :room-seats="roomSeats"
         :reserved-seats="reservedSeats"
         :llm-enabled="llmEnabled"
@@ -832,7 +805,6 @@ function changeTableTheme(theme: TableThemeName) {
         @leave-room="leaveRoom"
         @close-room="closeRoom"
         @leave-match="leaveMatchFromPanel"
-        @retry-sync="refreshRoomSync"
         @open-stats="statsOpen = true"
         @open-replay="replayOpen = true"
         @open-rules="rulesOpen = true"
