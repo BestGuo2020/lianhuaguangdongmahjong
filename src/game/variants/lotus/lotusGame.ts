@@ -4,6 +4,22 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import type { TableActionEvent, TileType } from '../../core/contracts/types'
 import { defineGamePort } from '../../core/contracts/gamePort'
 import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
+import type { AnalysisRecorder } from '../../replay/analysis/recorder'
+import type { LotusActionLike, LotusDecisionMethod, LotusSeatObservable, LotusWindowDescriptor } from '../../replay/analysis/lotusLegacyAdapter'
+import {
+  choiceTookEffect,
+  chosenIndex,
+  decisionStateOf,
+  decisionWindowOf,
+  legalActionId,
+  lotusSeatView,
+  observableOf,
+  roundIdOf,
+  settlementsFromRound,
+  toLotusActionLike,
+  windowIdOf,
+  windowKindOfMethod,
+} from '../../replay/analysis/lotusLegacyAdapter'
 import { createLocalCountdownController } from '../../core/local/localCountdownController'
 import { createLocalTransientEventPresenter } from '../../core/local/localTransientEventPresenter'
 import { createMatchLifecycle } from '../../shared/runtime/matchLifecycle'
@@ -53,6 +69,12 @@ interface UseLotusGameOptions {
   ruleset?: RuleSet
   /** 对局回放录制钩子（可选；不传时零行为变化）。 */
   recorder?: ReplayRecorderHooks
+  /**
+   * AI 分析记录（可选；约定见 docs/blood-flow/design/analysis-two-variants-work-agreement.md）。
+   * 拿到的是一个**稳定代理**：换场只换内部录制器，关闭时所有写入空转（§9.2）。
+   * 不传时零成本、零行为变化 —— 记录层只旁路观测，不参与决策（§10.1）。
+   */
+  analysis?: AnalysisRecorder | null
 }
 
 export function useLotusGame({
@@ -67,6 +89,7 @@ export function useLotusGame({
   countdownEnabled = true,
   ruleset = LOTUS_RULESET,
   recorder,
+  analysis,
 }: UseLotusGameOptions = {}) {
   const state = createLotusGameState()
   const selectors = createLotusSelectors(state, ruleset)
@@ -165,10 +188,191 @@ export function useLotusGame({
     },
   }
   const humanController = new LotusHumanController(humanBridge)
-  const controllers: LotusController[] = suppliedControllers ?? [
+  // 复制一份：分析录制会把控制器换成观测包装，绝不能写穿调用方传进来的数组。
+  const controllers: LotusController[] = suppliedControllers ? [...suppliedControllers] : [
     humanController,
     ...(aiControllers && aiControllers.length ? aiControllers : [new LotusAiController(), new LotusAiController(), new LotusAiController()]),
   ]
+
+  // ── AI 分析记录（§3.2／§3.3／§3.4） ────────────────────────────────
+  //
+  // 翻精癞子没有权威窗口对象：决策窗口由**编排层调用控制器**产生。因此记录点就包在控制器外面 ——
+  // 编排层的五个询问入口（回合／胡／碰杠／吃／抢杠）正好就是全部决策窗口，一处都不用漏，也不必
+  // 去改编排层。包装是纯观测：候选、来源、回执都只读，不参与决策、不改对局行为（§10.1）。
+  //
+  // 窗口 ID 用**本局内的决策计数**（§3.1：可离线复算，不用时间戳/帧号）。计数器只在真的记下
+  // 一个窗口时自增，因此编号是连续的、能在记录侧复算出来。
+  let analysisWindowCounter = 0
+  /**
+   * 本局在整场里的序号（1 起），每局开局加一 —— **不能用 `state.round`**：连庄时它不变、只加
+   * `honba`，两局会共用同一个 roundId，窗口 ID 跟着重复，录制器按 `windowId#seat` 建决策对象
+   * 就会把第二局的决策写进第一局那条记录里。展示回放用的是同一套口径（"已打局数 + 1"），
+   * 两边对齐后 §9.3 的"按 roundIndex 配对"才对得上。
+   */
+  let analysisRoundSequence = 0
+  /** 已开窗但还没收到执行回执的窗口（下一个窗口开启时结算，§3.4）。 */
+  const analysisOpenWindow = new Map<number, {
+    windowId: string
+    seat: number
+    before: LotusSeatObservable
+    action: LotusActionLike | null
+  }>()
+  /** 本局开局分数（结算折算的基准，§5）；在开局阶段捕获，与传给引擎的开局读数同一时刻。 */
+  let analysisOpeningScores: number[] = []
+  /** 已经折算过结算的那一份 `state.result`（同一局不得重复记：对象身份即"这一次结算"）。 */
+  let analysisSettledResult: unknown = null
+  /** 已包过观测的控制器实例：重复安装不得把包装再包一层。 */
+  const analysisWrapped = new WeakSet<LotusController>()
+
+  /** 牌桌快照：投影的输入（别家手牌在 `lotusSeatView` 里被遮蔽）。 */
+  const analysisTableSnapshot = () => ({
+    players: state.players.map((player) => ({
+      hand: player.hand,
+      melds: player.melds,
+      discards: player.discards,
+      drawnTileIndex: player.drawnTileIndex,
+      score: player.score,
+    })),
+    jokers: state.jokerTiles.value,
+    wildcardTiles: state.wildcardTiles.value,
+  })
+
+  /**
+   * 记录代码的**唯一**执行口：任何记录侧异常都只吞掉并留痕。
+   * §10.2／§9.5：分析落库失败最多让这一场不完整，绝不能把异常抛回对局路径。
+   */
+  function safely<T>(what: string, run: () => T): T | null {
+    try {
+      return run()
+    } catch (error) {
+      try {
+        analysis?.noteGap({
+          scope: 'recorder',
+          reason: `${what}-failed: ${error instanceof Error ? error.message : String(error)}`,
+        })
+      } catch { /* 留痕自身失败也要吞掉（§9.5 独立失败域） */ }
+      return null
+    }
+  }
+
+  /** 结算某个已开窗的执行回执：只认该座位自己的可见变化（§3.4、§10.2）。 */
+  function settleAnalysisReceipt(seat: number, detail: string) {
+    const open = analysisOpenWindow.get(seat)
+    if (!open) return
+    analysisOpenWindow.delete(seat)
+    const action = open.action
+    if (!action) return
+    safely('receipt', () => {
+      const after = observableOf(analysisTableSnapshot(), seat)
+      analysis?.receipt({
+        windowId: open.windowId,
+        seat,
+        status: choiceTookEffect(open.before, after, action) ? 'executed' : 'state-changed',
+        detail,
+      })
+    })
+  }
+
+  /**
+   * 记一个决策窗口：开窗（含前态与合法动作）→ 等控制器作出选择 → 记选择与来源。
+   * 来源按**控制器类型**如实标注：人类 = `human`，本地启发式 AI = `rule-auto`，
+   * 其余（LLM 控制器）= `unknown` —— 本阶段没接模型钩子，不猜它到底是模型还是回退（§3.4、§9）。
+   *
+   * 注意这个函数**恒为 async 且恒 await 一次**（无论记不记录）：记录开/关两条路径的
+   * 微任务时序因此完全一样，"记录不得影响对局"这条硬护栏就不会被"少一个 tick"的差异污染。
+   */
+  async function recordAnalysisWindow<T>(
+    seat: number,
+    method: LotusDecisionMethod,
+    raw: LotusController,
+    run: () => Promise<T>,
+    window: { tile?: TileType; from?: number; skipDraw?: boolean; kongBloom?: boolean } = {},
+  ): Promise<T> {
+    const recorder = analysis
+    const view = recorder
+      ? safely('window-open', () => {
+        // 上一个窗口还没收到回执就开了新窗口：它已经被应用或已被更高优先级压过，先结算回执。
+        settleAnalysisReceipt(seat, 'window-advanced')
+        const roundId = roundIdOf(analysisRoundSequence)
+        const windowId = windowIdOf(roundId, analysisWindowCounter + 1)
+        const kind = windowKindOfMethod(method)
+        const descriptor: LotusWindowDescriptor = {
+          windowId, roundId, kind, seat,
+          ...(window.tile !== undefined ? { tile: window.tile } : {}),
+          ...(window.from !== undefined ? { from: window.from } : {}),
+          ...(window.skipDraw !== undefined ? { skipDraw: window.skipDraw } : {}),
+          ...(window.kongBloom !== undefined ? { kongBloom: window.kongBloom } : {}),
+        }
+        const seatView = lotusSeatView(analysisTableSnapshot(), descriptor, ruleset)
+        // 该座位此刻没有可选动作 ⇒ 不是决策窗口，照常放行、不占编号。
+        if (!decisionWindowOf(seatView)) return null
+        recorder.windowOpened({
+          windowId, seat, windowKind: kind,
+          roundIndex: analysisRoundSequence,
+          authorityEpoch: 'local',
+          stateVersion: analysisWindowCounter + 1,
+          state: decisionStateOf(seatView),
+        })
+        analysisWindowCounter += 1
+        return seatView
+      })
+      : null
+    const before = view ? observableOf(analysisTableSnapshot(), seat) : null
+    const action = await run()
+    if (recorder && view && before) {
+      safely('chosen', () => {
+        const picked = toLotusActionLike(action)
+        const index = chosenIndex(view, picked)
+        recorder.chosen({
+          windowId: view.windowId, seat,
+          source: raw instanceof LotusHumanController ? 'human' : raw instanceof LotusAiController ? 'rule-auto' : 'unknown',
+          legalActionId: index >= 0 ? legalActionId(view.windowId, index) : null,
+        })
+        analysisOpenWindow.set(seat, { windowId: view.windowId, seat, before, action: picked })
+      })
+    }
+    return action
+  }
+
+  /** 把一个控制器包装成观测版；除记录外行为完全一致（含 reset/onDiscarded 转发）。 */
+  function wrapAnalysisController(controller: LotusController, seat: number): LotusController {
+    if (analysisWrapped.has(controller)) return controller
+    const wrapped: LotusController = {
+      requestTurn: (ctx) => recordAnalysisWindow(seat, 'requestTurn', controller, () => controller.requestTurn(ctx), {
+        skipDraw: ctx.skipDraw, kongBloom: ctx.kongBloom,
+      }),
+      requestDiscardHu: (ctx) => recordAnalysisWindow(seat, 'requestDiscardHu', controller, () => controller.requestDiscardHu(ctx), {
+        tile: ctx.tile, from: ctx.from,
+      }),
+      requestClaim: (ctx) => recordAnalysisWindow(seat, 'requestClaim', controller, () => controller.requestClaim(ctx), {
+        tile: ctx.tile, from: ctx.from,
+      }),
+      requestChi: (ctx) => recordAnalysisWindow(seat, 'requestChi', controller, () => controller.requestChi(ctx), {
+        tile: ctx.tile, from: ctx.from,
+      }),
+      requestRobKong: (ctx) => recordAnalysisWindow(seat, 'requestRobKong', controller, () => controller.requestRobKong(ctx), {
+        tile: ctx.tile, from: ctx.from,
+      }),
+      onDiscarded: () => controller.onDiscarded?.(),
+      reset: () => controller.reset?.(),
+    }
+    analysisWrapped.add(controller)
+    analysisWrapped.add(wrapped)
+    return wrapped
+  }
+
+  /**
+   * 就地安装观测包装。必须在编排器/动作控制器创建**之前**跑：它们按引用捕获这个数组。
+   * `replaceAiControllers` 之后要再跑一次（设置页换 AI 会换掉座位 1-3 的实例）。
+   */
+  function installAnalysisWrappers() {
+    if (!analysis) return
+    for (let seat = 0; seat < controllers.length; seat += 1) {
+      const controller = controllers[seat]
+      if (controller) controllers[seat] = wrapAnalysisController(controller, seat)
+    }
+  }
+  installAnalysisWrappers()
 
   // 设置页只在大厅开放；保存后替换内部数组，使下一次开局读取新的 AI 控制器。
   // 调用方不能直接替换 aiControllers 参数，因为下游编排器持有的是这个数组的引用。
@@ -177,6 +381,8 @@ export function useLotusGame({
       ? nextControllers
       : [new LotusAiController(), new LotusAiController(), new LotusAiController()]
     controllers.splice(1, Math.max(0, controllers.length - 1), ...replacement)
+    // 新实例还没被观测包装过：不重装的话这一局之后座位 1-3 就不再产生决策记录。
+    installAnalysisWrappers()
   }
 
   const timer = createTimerScheduler({
@@ -310,10 +516,22 @@ export function useLotusGame({
     humanPlayerSeed,
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
-  const startGame = (mode?: Parameters<typeof openingTimeline.start>[0]) => {
+  const startGame = (
+    mode?: Parameters<typeof openingTimeline.start>[0],
+    startOptions?: Parameters<typeof openingTimeline.start>[1],
+  ) => {
     animeFixedTts?.reset()
     followDealer.reset()
-    return openingTimeline.start(mode)
+    // 传了 mode 就是**新的一场**（nextRound 走的是不带 mode 的那条路）：本局序号与结算去重都要
+    // 从头开始，否则第二场的 roundId 会接着上一场继续涨、与展示回放的"已打局数"对不上。
+    if (mode) {
+      analysisRoundSequence = 0
+      analysisSettledResult = null
+    }
+    // 转交开局参数（固定牌墙/骰子）。此前第二个参数被丢掉 ⇒ 只有本引擎做不到"同一副牌重跑两次"，
+    // 而"记录开/关两种设置下结束分数与动作数完全一致"这条硬护栏正需要它（§9）。
+    // 现有调用方都只传一个参数，因此行为不变。
+    return openingTimeline.start(mode, startOptions)
   }
 
   const tableContext = {
@@ -375,6 +593,21 @@ export function useLotusGame({
   })
 
   const matchLifecycle = createMatchLifecycle({ state, clearTimers: clearPresentation, startGame })
+  /**
+   * 中途退出（整场没打完）：把已经录到的分析数据刷进分析区并如实标成不完整（§9.5：不许静默丢），
+   * 同时结束本场会话 —— 否则会话一直是 active，App 的 `analysis.active()` 守卫会跳过下一场
+   * 的 `start()`，新对局的记录会挂到上一场的 matchId 上（错场归属，实测隐患）。
+   * 正常打完时 `matchFinished` 已为真：那条路径上 App 已经 finish 过一次，这里不再重复留痕。
+   */
+  const returnToLobby = () => {
+    if (analysis && !state.matchFinished.value) {
+      safely('abort', () => {
+        analysis.noteGap({ scope: 'match', reason: 'match-aborted' })
+        void analysis.finish().catch(() => {})
+      })
+    }
+    matchLifecycle.returnToLobby()
+  }
   const capabilities = computed(() => ({
     chi: { choose: playerActions.userChi },
     windKong: { available: selectors.userHasWindKong.value, execute: playerActions.userWindKong },
@@ -396,6 +629,43 @@ export function useLotusGame({
       if (result) recorder.roundEnd(result, replayFrame())
     }, { flush: 'sync' })
   }
+
+  /** 局末结算折算（§5）：每局一条，`deltas = 局末分 − 开局分`（四家之和恒等于牌流的守恒量）。 */
+  function recordAnalysisSettlement() {
+    if (!analysis) return
+    const roundIndex = analysisRoundSequence
+    // 还挂着 pending 的窗口一律先结算回执：局都结束了，它们不会再有"下一个窗口"来收尾（§10.2）。
+    for (const seat of [...analysisOpenWindow.keys()]) settleAnalysisReceipt(seat, 'round-end')
+    const roundId = roundIdOf(roundIndex)
+    safely('settlement', () => {
+      const records = settlementsFromRound({
+        roundIndex,
+        roundId,
+        openingScores: analysisOpeningScores,
+        endingScores: state.players.map((player) => player.score),
+        result: state.result.value,
+      })
+      for (const record of records) analysis.settlement(record)
+    })
+  }
+
+  // 分析记录的两个局边界，都用 sync 刷新 —— 必须与"局边界"同一拍发生：
+  // 开局分数若晚一拍取，第 2 局以后就会取到上一局结算后的值（§5 的 openingScores 正为此必须记）。
+  watch(state.phase, (phase) => {
+    if (phase !== 'opening') return
+    // 连庄也算新的一局（"已打局数 + 1"），所以序号在这里加一，与展示回放同一套口径。
+    analysisRoundSequence += 1
+    analysisOpeningScores = state.players.map((player) => player.score)
+    // 窗口 ID 的计数器是"本局内第 N 次进入决策"（§3.1），所以每局从 1 重新开始。
+    analysisWindowCounter = 0
+    analysisOpenWindow.clear()
+  }, { flush: 'sync' })
+  watch(state.result, (result) => {
+    // 用对象身份去重：同一局的结算对象只会被折算一次；换局/换场都是新对象。
+    if (!result || result === analysisSettledResult) return
+    analysisSettledResult = result
+    recordAnalysisSettlement()
+  }, { flush: 'sync' })
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
   if (getCurrentInstance()) onBeforeUnmount(clearPresentation)
@@ -449,6 +719,8 @@ export function useLotusGame({
     startGame,
     ...playerActions,
     ...matchLifecycle,
+    // 覆盖 matchLifecycle 的原版：退出大厅时先给分析记录收尾（见上面的 returnToLobby）。
+    returnToLobby,
     tileName,
     humanController,
     replaceAiControllers,
