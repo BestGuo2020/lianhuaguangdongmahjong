@@ -120,9 +120,24 @@ export interface LlmControllerHooks {
 |---|---|---|
 | `src/App.vue` | 公共地基（能力表已是共享？**不是**：App.vue 是 keep 文件 ⇒ 地基里的能力表也要镜像一次） | 地基提交后必须同步镜像，否则 vibehub 站点按老条件只开血流场次 |
 | `src/game/core/local/useGame.ts` | A（莲花广麻） | 选项 + 记录调用点两边各写一份 |
-| `src/game/variants/lotus/lotusGame.ts` | B | **共享文件**，不需要镜像 |
+| `src/game/variants/lotus/lotusGame.ts` | B（翻精癞子） | **也是 keep 文件**（脚本 `$vibehubKeep` 里就有它 —— 2026-09-21 由 B 核实并纠正，我原先写成"共享文件"是错的）：B 的改动同样要手动镜像 |
 
 联机侧（vibehub）改动是**串行**的：vibehub 工作区一次只能检出一条分支 ⇒ 约定「谁先合并到 master 谁先做镜像」。
+
+### 6.1 镜像 keep 文件的正确姿势（2026-09-21 实战）
+
+1. **顺序**：先 `pnpm sync:vibehub`（把 master 的共享文件带过来、keep 文件原样保留），**再**做镜像并提交 ——
+   反过来的话，下一次同步会把镜像覆盖掉。
+2. **手法：三方合并**，不要手工重放几百行：
+   - `base` = 合并前的 master 版本（`git show <A 合并前的 sha>:<路径>`）
+   - `ours` = vibehub 当前文件
+   - `theirs` = 合并后的 master 版本
+   - `git merge-file -p ours base theirs > merged`，检查无 `<<<<<<<` 后写回。
+3. **行尾陷阱**：vibehub 工作区是 **CRLF**，而 `git show` 输出是 **LF** ⇒ 不先统一行尾，
+   `git merge-file` 会把**每一行**都判成冲突（实测得到 1258 行冲突块）。先把 `ours` 转成 LF 再合并，
+   写回时再转回 CRLF。
+4. **验收**：`git diff --stat` 应显示"master 侧那点改动量"（例如 `+365/-3`），**不是**整文件重写；
+   然后 `pnpm typecheck` + `pnpm test`（vibehub 全量）。
 
 ## 7. 合并与同步协议
 
