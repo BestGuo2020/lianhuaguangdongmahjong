@@ -186,6 +186,27 @@ describe('分析区存储', () => {
     expect(read.parts, '不得返回半份数据').toEqual([])
   })
 
+  // §9.4「清理应跨实例协调」：另一页正在淘汰时，本页不做淘汰（让调用方按预算不足如实降级），
+  // 而不是两页同时删、把彼此的账本与配置引用搞乱。
+  it('跨标签页淘汰协调：令牌被别的页持有时本页不淘汰，释放后又能淘汰', async () => {
+    const { b, leaseFor } = twoTabs(10_000_000)
+    await b.write('older', { rulesetId: 'lotus-blood-flow' }, parts(30))
+    const before = (await b.read('older')).meta?.blockCount ?? 0
+    expect(before).toBeGreaterThan(0)
+
+    const other = leaseFor('tab-a')
+    expect(other.tryAcquireEviction()).toBe(true)
+    const skipped = await b.evictToBudget({ budgetBytes: 0 })
+    expect(skipped.removed, '令牌在别人手里时不淘汰').toEqual([])
+    expect(skipped.freedBytes).toBe(0)
+    expect(await b.status('older'), '另一页的数据没被本页删掉').toBe('complete')
+
+    other.releaseEviction()
+    const evicted = await b.evictToBudget({ budgetBytes: 0 })
+    expect(evicted.removed, '令牌回到自己手里后可以淘汰').toEqual(['older'])
+    expect(await b.status('older')).toBe('disabled')
+  })
+
   it('压缩不可用且超出 raw 预算：不落库、暂停该场并留下缺失原因', async () => {    withoutCompression()
     const storage = makeStorage({ rawBudgetBytes: 10 })
     const result = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(10))

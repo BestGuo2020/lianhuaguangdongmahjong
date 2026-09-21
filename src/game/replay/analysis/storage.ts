@@ -183,29 +183,45 @@ export function createAnalysisStorage(options: AnalysisStorageOptions = {}): Ana
     }, 0)
   }
 
-  /** 按 §9.4 顺序淘汰：分析区优先、按最近查看时间、受保护场次不动。 */
+  /**
+   * 按 §9.4 顺序淘汰：分析区优先、按最近查看时间、受保护场次不动。
+   *
+   * 跨标签页协调（§9.4「清理应跨实例协调」）：同一时刻只让一个实例做淘汰 —— 拿到令牌才动手，
+   * 拿不到就等一下再试（淘汰很快）；仍然拿不到就**跳过**这一次，让调用方按"预算不足"如实降级，
+   * 而不是两页各删各的、把彼此的账本和引用计数搞乱。令牌沿用同一套 ttl，那一页崩了会自己过期。
+   */
   async function evictToBudget(options2: { budgetBytes?: number; protect?: string[] } = {}) {
-    const budget = Math.max(0, options2.budgetBytes ?? maxBytes)
-    const protect = new Set(options2.protect ?? [])
-    let used = await totalBytes()
-    if (used <= budget) return { removed: [] as string[], freedBytes: 0 }
-    const metas: AnalysisMatchMeta[] = await guard('列出分析元数据', (d) => d.listMatchMetas(), [])
-    // §9.4 顺序：分析区优先、按最近查看／分析使用时间淘汰、不动受保护与正在写入的场次
-    const candidates = metas
-      .filter((meta) => meta.status !== 'deleted' && meta.storedBytes > 0 && !protect.has(meta.matchId))
-      .sort((a, b) => a.lastViewedAt - b.lastViewedAt || a.createdAt - b.createdAt)
-    const removed: string[] = []
-    let freedBytes = 0
-    for (const meta of candidates) {
-      if (used <= budget) break
-      await releaseConfigs(meta.matchId, meta.configIds)
-      await guard('淘汰分析数据', (d) => d.deleteMatchData(meta.matchId), undefined)
-      paused.delete(meta.matchId)
-      used -= meta.storedBytes
-      freedBytes += meta.storedBytes
-      removed.push(meta.matchId)
+    let acquired = lease.tryAcquireEviction()
+    for (let attempt = 0; !acquired && attempt < 5; attempt += 1) {
+      await new Promise<void>((resolve) => { setTimeout(() => resolve(), 20) })
+      acquired = lease.tryAcquireEviction()
     }
-    return { removed, freedBytes }
+    if (!acquired) return { removed: [] as string[], freedBytes: 0, skippedByOtherTab: true }
+    try {
+      const budget = Math.max(0, options2.budgetBytes ?? maxBytes)
+      const protect = new Set(options2.protect ?? [])
+      let used = await totalBytes()
+      if (used <= budget) return { removed: [] as string[], freedBytes: 0 }
+      const metas: AnalysisMatchMeta[] = await guard('列出分析元数据', (d) => d.listMatchMetas(), [])
+      // §9.4 顺序：分析区优先、按最近查看／分析使用时间淘汰、不动受保护与正在写入的场次
+      const candidates = metas
+        .filter((meta) => meta.status !== 'deleted' && meta.storedBytes > 0 && !protect.has(meta.matchId))
+        .sort((a, b) => a.lastViewedAt - b.lastViewedAt || a.createdAt - b.createdAt)
+      const removed: string[] = []
+      let freedBytes = 0
+      for (const meta of candidates) {
+        if (used <= budget) break
+        await releaseConfigs(meta.matchId, meta.configIds)
+        await guard('淘汰分析数据', (d) => d.deleteMatchData(meta.matchId), undefined)
+        paused.delete(meta.matchId)
+        used -= meta.storedBytes
+        freedBytes += meta.storedBytes
+        removed.push(meta.matchId)
+      }
+      return { removed, freedBytes }
+    } finally {
+      lease.releaseEviction()
+    }
   }
 
   return {
