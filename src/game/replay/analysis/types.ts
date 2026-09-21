@@ -284,6 +284,30 @@ export interface AnalysisReproduction {
    */
   initialWall?: string[]
   /**
+   * **环状牌墙（136 张，牌码）**：翻精癞子（`lotus-legacy`）的**重跑起点**。
+   *
+   * 与血流的 `initialWall` **不是一回事**：血流那是"发牌后剩余的物理牌墙"（约 81 张，且已按
+   * 开牌断点重排为摸牌顺序）；翻精癞子的引擎吃的开局参数是**未翻精、未发牌、未重排的环状牌墙**
+   * （`lotusOpening.start` 的 `startOptions.initialWall`）。翻精方位、精牌、开牌断点、发牌顺序
+   * 全部由"牌墙 + 庄家 + 两颗骰子"确定性地推出来（`resolveFlip` / `resolveOpeningStack` /
+   * `buildDrawOrderWall`）。两个口径混用会直接重跑出另一副牌，所以另立字段而不是复用。
+   */
+  ringWall?: string[]
+  /**
+   * **发牌后的四家手牌**：翻精癞子的**交叉校验**输入，不是重跑输入（重跑的手牌由
+   * `ringWall + dice + dealer` 重新发牌得到）。
+   *
+   * 为什么必须有：只证明"能跑完一局"是不够的 —— 如果发牌算法变了、或记录与引擎不同源，
+   * 重跑只是拿**另一副牌**跑了一遍，却会得出"复现成功/失败"的错误结论。校验器先比这一项，
+   * 不一致就报「发牌算法变了或记录与引擎不一致」并**停止**（§3.3）。
+   */
+  postDealHands?: string[][]
+  /**
+   * 这份复现数据属于哪个玩法（翻精癞子写 `lotus-legacy`；血流不写此字段）。
+   * 读取侧据此选校验器：两个玩法的重跑起点不同（环状牌墙 vs 发牌后牌墙），判据不能共用一套。
+   */
+  variant?: string
+  /**
    * 四家初始手牌与庄家第 14 张的下标。
    * **必须记**：引擎走 `opening.players[].hand` 建立手牌（`options.opening ?? this.deal()`），
    * 手牌并非由 `initialWall` 推出，只记牌墙无法重建开局（§6、§10.6）。
@@ -342,6 +366,15 @@ export interface AnalysisReproduction {
     /** 吃/杠等组合动作的牌集合：这类动作在引擎里不带单张 `tile`，只比 kind 会吃错组合。 */
     tiles?: string[]
     handIndex?: number
+    /**
+     * **碰后立刻弃出的手牌下标**（翻精癞子特有）。
+     *
+     * 编排层把"碰完弃哪张"折在碰动作里（`lotusTurnOrchestrator` 的 `case 'peng'`：带了
+     * `discardIndex` 就直接弃牌、**不另开决策窗口**），所以它既不是本窗口的动作标识
+     * （P0 的 `toLotusActionLike` 故意不取它），又是重跑**必须**的一项 —— 漏了它，重跑会以为
+     * 这次碰之后要重新摸牌，整局从此分叉、再也回不到同一个结束状态。
+     */
+    discardIndex?: number
     from?: number | null
     meldIndex?: number
   }>

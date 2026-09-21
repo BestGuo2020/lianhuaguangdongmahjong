@@ -22,6 +22,10 @@ import type { LlmProviderConfig } from '../../../src/game/llm/config'
 import { decodeAnalysisBlock, type AnalysisBlockPart } from '../../../src/game/replay/analysis/codec'
 import { buildAnalysisExport } from '../../../src/game/replay/analysis/export'
 import { createReplayRecorder } from '../../../src/game/replay/recorder'
+// P1（§6）：赛后复现的校验器。它是**浏览器侧**模块（内部起真实 `useLotusGame` 重跑一局），
+// 所以只能在夹具页面里调用 —— 这也正是它必须在夹具里跑、而不是在 vitest 里跑的原因（§3.5）。
+import { replayLotusLegacyRound } from '../../../src/game/replay/analysis/reproduceLotusLegacy'
+import type { AnalysisReproduction } from '../../../src/game/replay/analysis/types'
 import type { ReplayFrameSource, ReplayMatch, ReplayRecorderHooks, ReplayRound } from '../../../src/game/replay/types'
 import type { RoundResult } from '../../../src/game/core/contracts/gamePort'
 import type { AnalysisAreaStatus } from '../../../src/game/replay/analysis/types'
@@ -86,6 +90,38 @@ interface ProbeStatus {
   decisionSources: string[]
   /** 有 llm 尝试却**没有**标成模型来源的决策条数（应为 0：有请求就必须归因到模型侧）。 */
   attemptDecisionsWithoutModelSource: number
+  /** P1：落库的复现数据条数（关掉分析时必须为 0 ⇒ 零成本）。 */
+  reproductionParts: number
+  /** P1：逐局重跑的结论（§4「整局重跑到同一结束状态」的机器可判据）。 */
+  reproductionRounds: ReproductionRun[]
+  /**
+   * P1：把 `postDealHands` 改一张之后的重跑结论。
+   * 必须 `ok=false`、原因里带「发牌算法变了或记录与引擎不一致」，且 **一条命令都没消费**
+   * （`commandsConsumed=0`）—— 这证明校验器是"停下来"，而不是拿另一副牌把这一局跑完了。
+   */
+  postDealTamper: { ok: boolean; reason: string | null; windowsOpened: number; commandsConsumed: number } | null
+}
+
+/** 一局重跑的摘要（只留机器可判据与失败原因，不留整套状态）。 */
+interface ReproductionRun {
+  roundIndex: number
+  ok: boolean
+  reason: string | null
+  scoresMatch: boolean | null
+  expectedScores: number[] | null
+  finalScores: number[]
+  kindMismatches: number
+  postDealChecked: boolean
+  postDealOk: boolean
+  openingChecked: boolean
+  openingOk: boolean
+  windowsOpened: number
+  commandsRecorded: number
+  commandsConsumed: number
+  commandsNotLegalAtRecordTime: number
+  withoutWindowId: number
+  unusedCommands: number
+  gaps: string[]
 }
 
 const status: ProbeStatus = {
@@ -99,6 +135,7 @@ const status: ProbeStatus = {
   storageBlocks: 0, storageMatches: 0, storageAvailable: false, rngDraws: 0,
   llmParts: 0, promptTemplateParts: 0, attemptUserSample: null, sentUserSample: null, decisionSources: [],
   attemptDecisionsWithoutModelSource: 0,
+  reproductionParts: 0, reproductionRounds: [], postDealTamper: null,
 }
 ;(window as unknown as { __lotusLegacyProbe: ProbeStatus }).__lotusLegacyProbe = status
 
@@ -163,6 +200,8 @@ void (async () => {
   try {
     const params = new URLSearchParams(location.search)
     status.analysisEnabled = params.get('analysis') !== '0'
+    // P1：`?replay=0` 跳过逐局重跑（P0 的形状用例与开/关硬护栏不需要它，省一次全套重跑的时间）。
+    const replayEnabled = params.get('replay') !== '0'
     const seedParam = Number(params.get('seed'))
     const seed = Number.isFinite(seedParam) && seedParam > 0 ? seedParam : null
     status.seed = seed
@@ -410,6 +449,65 @@ void (async () => {
         missing: [...exported.manifest.missing],
       }
       status.reproductionCapable = exported.reproductionCapable
+    }
+
+    // ── P1（§6）：从分析区读回复现数据 → 在夹具里**逐局重跑**，看是否到达同一结束状态 ──
+    //
+    // 关键点：重跑用的是**落库读回**的那份记录（不是内存里的对象），因此它同时验证了
+    // 编码/解码/落库/读回这一整条链路没有把复现数据弄丢或改形。
+    if (status.analysisEnabled && replayEnabled) {
+      const reproductionParts = area.parts.filter((part) => part.tag === 'reproduction')
+      status.reproductionParts = reproductionParts.length
+      // 结束分数用**结算记录**里的 `scoresAfter`（每局一条）—— 那是"记录侧权威的结束状态"。
+      const scoresByRound = new Map<number, number[]>()
+      for (const part of area.parts.filter((entry) => entry.tag === 'settlement')) {
+        const record = part.value as { roundIndex?: number; scoresAfter?: number[] }
+        if (typeof record.roundIndex === 'number' && Array.isArray(record.scoresAfter)) {
+          scoresByRound.set(record.roundIndex, record.scoresAfter)
+        }
+      }
+      const records = reproductionParts
+        .map((part) => part.value as AnalysisReproduction)
+        .sort((a, b) => a.roundIndex - b.roundIndex)
+      for (const record of records) {
+        const run = await replayLotusLegacyRound({
+          reproduction: record,
+          commands: (record.commands ?? []).filter((entry) => (entry.resolution ?? 'command') === 'command'),
+          expectedScores: scoresByRound.get(record.roundIndex) ?? null,
+          tick,
+        })
+        status.reproductionRounds.push({
+          roundIndex: run.roundIndex, ok: run.ok, reason: run.reason,
+          scoresMatch: run.scoresMatch, expectedScores: run.expectedScores, finalScores: run.finalScores,
+          kindMismatches: run.kindMismatches,
+          postDealChecked: run.postDealCheck.checked, postDealOk: run.postDealCheck.ok,
+          openingChecked: run.openingCheck.checked, openingOk: run.openingCheck.ok,
+          windowsOpened: run.metrics.windowsOpened, commandsRecorded: run.metrics.commandsRecorded,
+          commandsConsumed: run.metrics.commandsConsumed,
+          commandsNotLegalAtRecordTime: run.metrics.commandsNotLegalAtRecordTime,
+          withoutWindowId: run.metrics.withoutWindowId, unusedCommands: run.metrics.unusedCommands,
+          gaps: run.gaps,
+        })
+      }
+      // 交叉校验的**负向**证据（§3.3）：把第 1 局的 postDealHands 动一张（把首张挪到末尾：
+      // **牌的多重集合没变、只有顺序变了**），校验器必须报"不一致"并且**一条命令都不喂**。
+      // 用"顺序变了"而不是"换一张牌"是刻意的：它同时证明这道闸不是按集合比的。
+      const first = records[0]
+      if (first?.postDealHands?.[0] && first.postDealHands[0].length > 1) {
+        const tampered: AnalysisReproduction = {
+          ...first,
+          postDealHands: first.postDealHands.map((hand, seat) => (
+            seat === 0 ? [...hand.slice(0, -1), hand[0]] : [...hand]
+          )),
+        }
+        const run = await replayLotusLegacyRound({
+          reproduction: tampered, commands: first.commands ?? [], expectedScores: null, tick,
+        })
+        status.postDealTamper = {
+          ok: run.ok, reason: run.reason,
+          windowsOpened: run.metrics.windowsOpened, commandsConsumed: run.metrics.commandsConsumed,
+        }
+      }
     }
 
     // ── LLM 接缝（`?llm=1`）：落库的尝试、模板去重，以及"落库的 user == 发给模型的 user" ──

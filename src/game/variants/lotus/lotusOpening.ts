@@ -34,6 +34,25 @@ interface LotusOpeningOptions {
   humanPlayerSeed?: PlayerSeed
   /** Continuous modes must offer the opening win through their own claim window. */
   automaticOpeningWin?: boolean
+  /**
+   * 分析记录（P1 §6）：**确定性重跑所需的开局参数**在这一刻就齐了（环状牌墙 + 两颗骰子 + 庄家），
+   * 交出去由引擎侧留作本局的复现起点。
+   *
+   * 为什么非要在这里交出**环状牌墙**：这一刻之后 `state.wall` 会被移出翻精墩、按开牌断点重排成
+   * 摸牌顺序、再发出去 —— 局末读 `state.wall` 拿到的是**终局牌墙**，不是复现起点。
+   * 只有"未翻精、未发牌、未重排"的环状牌墙 + 两颗骰子 + 庄家，才能让引擎重新推出翻精方位、
+   * 精牌、开牌断点与同一套发牌结果（`resolveFlip` / `resolveOpeningStack` / `buildDrawOrderWall`）。
+   */
+  onRoundPrepared?(info: LotusRoundOpeningInfo): void
+}
+
+/** 分析记录（P1 §6）：一局的确定性重跑参数（开局时间线在"骰子与牌墙都定下来"时交出）。 */
+export interface LotusRoundOpeningInfo {
+  /** 环状牌墙 136 张（**牌码**）。 */
+  ringWall: TileType[]
+  firstDice: [number, number]
+  secondDice: [number, number]
+  dealer: number
 }
 
 export function createLotusOpening(options: LotusOpeningOptions) {
@@ -56,6 +75,16 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     initialWall?: TileType[]
     openingDice?: [number, number]
     openingSecondDice?: [number, number]
+    /**
+     * 确定性子局重跑（分析区 P1 §6）：当局的庄家。
+     *
+     * 为什么必须能从外面指定：庄家决定**翻精方位**（`resolveFlip`）与**发牌起点**
+     * （`dealInitialHands`），还决定结算的庄闲关系。重跑第 2 局以后的记录时若沿用默认的 0，
+     * 翻精与手牌从一开始就是另一副牌 —— 正是"拿另一副牌跑了一遍却宣称复现"这类假结论的来源。
+     */
+    dealer?: number
+    /** 确定性子局重跑（分析区 P1 §6）：当局的开局分数（四家）。缺了它重跑只能从初始分起步。 */
+    scores?: readonly number[]
   } = {}) {
     options.clearTimers()
     if (mode && MATCH_HANDS[mode]) {
@@ -66,8 +95,18 @@ export function createLotusOpening(options: LotusOpeningOptions) {
       state.matchFinished.value = false
       state.players.splice(0, state.players.length)
     }
+    // 重跑参数必须在**掷骰之前**落到状态上：`state.dealer` 是翻精方位与发牌起点的输入。
+    if (typeof startOptions.dealer === 'number') state.dealer.value = startOptions.dealer
     const currentSequence = sequence
     resetPlayers()
+    // 开局分也要在发牌之前就位（`resetLocalPlayers` 只给一个缺省值，重跑要的是四家各自的开局分）。
+    if (startOptions.scores) {
+      const scores = startOptions.scores
+      state.players.forEach((player, seat) => {
+        const score = scores[seat]
+        if (typeof score === 'number') player.score = score
+      })
+    }
     // 先立起牌山（环序 136 张），掷骰前即可看到
     const ring = startOptions.initialWall
       ? [...startOptions.initialWall]
@@ -148,6 +187,15 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     const openingStack = resolveOpeningStack(flipStack, secondDice)
     state.wall.value = buildDrawOrderWall(ring, openingStack, flipStack)
     state.wallBreakIndex.value = wallBreakIndexForOpeningStack(openingStack, flipStack)
+
+    // 分析记录（P1 §6）：**重跑起点**在这里交出。此后 `state.wall` 会被发出去、`state.players`
+    // 会被发牌改写，局末再读它们拿到的是终局状态（不是复现起点）—— 血流在同一个地方踩过坑。
+    options.onRoundPrepared?.({
+      ringWall: [...ring],
+      firstDice: [...firstDice] as [number, number],
+      secondDice: [...secondDice] as [number, number],
+      dealer: state.dealer.value,
+    })
 
     state.openingStage.value = 'deal'
     const dealt = await dealInitialHands({

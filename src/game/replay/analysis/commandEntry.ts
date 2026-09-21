@@ -14,10 +14,14 @@ interface ActionPayload {
   kind?: unknown
   tile?: unknown
   index?: unknown
+  /** 与 `index` 同义（翻精癞子的动作对象用的是 `handIndex`）：两套写法都认，避免各自漂移。 */
+  handIndex?: unknown
   from?: unknown
   meldIndex?: unknown
   tiles?: unknown
   meld?: unknown
+  /** 碰后立刻弃牌的下标（翻精癞子特有，见 `AnalysisReproduction.commands` 里的说明）。 */
+  discardIndex?: unknown
 }
 
 export interface CommandEntryOptions {
@@ -44,7 +48,10 @@ export function commandEntryFromAction(seat: number, action: unknown, options: C
   // 吃/杠不带单张 tile，必须把组合记下来，否则复现时只能按 kind 取第一个候选（实测会吃错组合）
   const combination = Array.isArray(payload.tiles) ? payload.tiles : Array.isArray(payload.meld) ? payload.meld : null
   if (combination?.length) entry.tiles = combination.filter((tile): tile is string => typeof tile === 'string')
-  if (typeof payload.index === 'number') entry.handIndex = payload.index
+  // 手牌下标：血流/联机报文用 `index`，翻精癞子的动作对象用 `handIndex` —— 同一个语义，两种写法都认。
+  const handIndex = typeof payload.index === 'number' ? payload.index : payload.handIndex
+  if (typeof handIndex === 'number') entry.handIndex = handIndex
+  if (typeof payload.discardIndex === 'number') entry.discardIndex = payload.discardIndex
   if (typeof payload.from === 'number' || payload.from === null) entry.from = payload.from as number | null
   if (typeof payload.meldIndex === 'number') entry.meldIndex = payload.meldIndex
   return entry

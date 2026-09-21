@@ -1,14 +1,17 @@
-# 「莲花麻将·翻精癞子」AI 分析记录（P0：能归因，不含赛后复现）
+# 「莲花麻将·翻精癞子」AI 分析记录（P0 能归因 + P1 赛后复现）
 
-> 玩法 `lotus-legacy`；分支 `feat/analysis-lotus-legacy`；工作树 `work/analysis-legacy`。
-> 配套：方案 `analysis-recording-other-variants-plan.md`、分工约定 `analysis-two-variants-work-agreement.md`（本文作者是 **B**）。
-> 本轮范围是方案 §3 的 **P0**；§4 的赛后复现（P1）**没做**，见文末「未做的部分」。
+> 玩法 `lotus-legacy`；分支 `master`（原 `feat/analysis-lotus-legacy` 的成果已合入）。
+> 配套：方案 `analysis-recording-other-variants-plan.md`、分工约定 `analysis-two-variants-work-agreement.md`（本文作者是 **B**）、
+> P1 实施方案 `lotus-legacy-p1-reproduction-plan.md`。
+> §1–§11 是 **P0**（决策归因 + LLM 接缝）；§12 是 **P1**（赛后复现：开局快照 + 权威动作日志 + 浏览器内校验器）。
 
 ## 1. 一句话
 
 翻精癞子对局现在会把**决策前态 / 选择与来源 / 执行回执 / 模型请求 / 结算**写进与血流共用的那个本机分析区；
 LLM 座位接了约定 §5 的两个钩子（真发请求记 `model`、回退记 `model-fallback`）；
 记录层是纯旁路观测，同一副牌在"分析开/关"两种设置下结束分数与动作数**逐位相同**（§9 硬护栏）。
+P1 之后同样的记录点还额外落下**逐局的复现数据**（环状牌墙 + 两颗骰子 + 庄家 + 当局开局分 + 权威动作序列），
+使读方能拿记录**把整局重跑到同一结束状态**（§12）。
 
 ## 2. 接线方式：包在控制器外面，不动编排层
 
@@ -262,8 +265,9 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
 
 ## 10. 未做的部分（如实列出）
 
-1. **P1 赛后复现（§6）没做**：没有开局快照与权威命令日志，导出包会如实标
-   `reproductionCapable: false`、`manifest.missing` 里写明缺"复现数据（reproduction）"。**不谎称可复现。**
+1. ~~**P1 赛后复现（§6）没做**~~ —— **已做，见 §12**（2026-09-22）。当时的如实标注是
+   `reproductionCapable: false` + `manifest.missing` 写"复现数据（reproduction）"；现在改成
+   **按记录内容逐局判定**（字段齐 ⇒ true、缺字段 ⇒ false 并点名缺什么），见 §12.4。
 2. **LLM 座位已接 sink**（§6.1），但**采样/思考开关没记**：钩子不暴露 temperature 这类参数，
    所以 `AnalysisLlmAttempt.sampling` 只写 `{}`（留空，不编）。要补得先扩钩子。
 3. **逐笔杠分/跟庄流水没单列**：结算只到"每局一条 + 四家 delta"。牌桌的 `showScoreFlow` 能给出逐笔
@@ -278,11 +282,19 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
    记录链路完全同源（含 `?llm=1` 那条真实 LLM 控制器用例）；差的只有"大厅列表行内状态"那一层 UI ——
    用例断言的是它读的那个**落库状态**（`matches.status === 'complete'`）。
 
-   **app-path 用例（约定 §9 于 2026-09-21 追加的必做项）已经在 `analysis-lotus-legacy.spec.ts` 里，
-   但在上面那三行落地之前它是红的 —— 这是有意的**：它锁的就是那一行，失败信息直接点明根因与待办。
-   已用**临时补丁**（改 App.vue，不进任何提交）验证过：加上端口那一行后它 23.5s 通过
-   （推进 5 局、8 分块、`rulesetId` 为 `lotus-legacy`，决策/前态/结算都有记录）。
-   顺序：协调者合并本分支 → 补那三行 → 该用例转绿。
+   **app-path 用例（约定 §9 于 2026-09-21 追加的必做项）已经在 `analysis-lotus-legacy.spec.ts` 里。
+   协调者已经把上面那三行落进 `App.vue` 了（`lotusLegacyAnalysisSink` + `analysis.port` + `analysisSink`），
+   所以它现在是**真的在验端口传递**：2026-09-22 实测整场打完 → 15 分块、
+   `{"config":1,"decisionState":257,"decision":514,"responderCheckpoint":58,"settlement":5,"reproduction":5}`
+   （**P1 的复现数据在真实 App 路径上也逐局落库了**：5 局 5 条），3.0 分钟通过。**
+
+   > 另一个坑（2026-09-22 实测修正）：这条用例的"节奏压缩"原先把所有定时器压到 **≤10ms**，
+   > 而 `tileAssets.ts` 给每个牌面 `fetch` 挂的是 `window.setTimeout(..., FETCH_TIMEOUT_MS)`
+   > （**12 秒**）的中止定时器 —— 压到 10ms 就等于"10ms 内没回就中止"，于是 34 张牌面的请求
+   > 全被 abort（`net::ERR_ABORTED`）→ 牌桌报「牌桌资源加载失败」→ `.flip-indicator` 永远不出现。
+   > **这条红与本分支改动无关**：把本分支改过的两个引擎文件还原成 `HEAD` 版本后同样红，而故障路径
+   > （`tileAssets.ts` 的牌面预加载 → 牌桌挂载）发生在任何对局代码之前。证据：压缩下限取
+   > 50/250/1000ms 都绿、10ms 必红。已把下限改成 250ms（仍是十几倍压缩，只是不再把网络超时一起压）。
 
    > 一个**假阳性陷阱**（这条用例第一版就踩了）：只断言"有分块 / `rulesetId` 对"是**不够**的 ——
    > 没有端口那一行时，App 的 `analysis.start()` 仍会写下**配置**那一条（公共地基的能力表让
@@ -321,3 +333,114 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
   本适配层没有与 A 共用的代码。
 - 唯一的公共接缝是 `LlmControllerHooks`（A 实现）+ `src/App.vue` 的引擎端口传递（协调者），
   见 §6 与「未做的部分」第 4 条。
+
+## 12. P1 赛后复现（2026-09-22）
+
+方案：`lotus-legacy-p1-reproduction-plan.md`。目标一句话：**读方能拿记录把整局重跑到同一结束状态**
+（§2.3：不许拿"跑通"当"复现"）。与 P0 的关系：P0 记的是"**当时决策是什么**"，P1 记的是
+"**能不能把这一局重跑出来**" —— 共用同一批汇聚点（控制器外面那层包装），但落两份不同用途的数据。
+
+### 12.1 记录了什么、在哪一刻记（字段表）
+
+落在 `reproduction` 这一 tag 下，与血流**同一个记录类型** `AnalysisReproduction`，靠 `variant` 区分口径：
+
+| 字段 | 口径 | 取数时刻 | 为什么必须在这里取 |
+|---|---|---|---|
+| `ringWall` | 环状牌墙 136 张（**牌码**） | 开局时间线 `onRoundPrepared`（骰子已掷、**发牌之前**） | 此后牌墙会被移出翻精墩 → 按开牌断点重排 → 发出去。局末读 `state.wall` 拿到的是**终局牌墙**（血流在同一个地方踩过坑） |
+| `dice.first` / `dice.second` | 两对骰子（各两粒） | 同上 | 翻精方位与开牌断点都由它们推出，不能事后反推 |
+| `dealer` | 当局庄家 | 同上 | 决定翻精方位（`resolveFlip`）与发牌起点（`dealInitialHands`）。重跑第 2 局以后若沿用默认 0，翻精与手牌从一开始就是另一副牌 |
+| `openingScores` | 四家**当局开局分** | `beginTurn` 那一刻（见下） | 结束分数是复现的判据；`resetLocalPlayers` 只给缺省分，第 2 局以后必须注入当局开局分才对得上 |
+| `postDealHands` | 四家发牌后手牌 | 同上 | **交叉校验**（§12.3），不是重跑输入 |
+| `flipTile`/`jokers`/`flipSeat`/`flipStack`/`wallBreakIndex` | 翻精读数 | 同上 | 由牌墙+骰子推出的结果，重跑推出来的必须一致 |
+| `commands[]` | 权威动作序列（`AnalysisCommandEntry` 同形，含 `windowId`/`windowKind`/`legalActionId`） | 与 P0 的 `chosen` 同一处 | 见 §12.2 |
+
+"`beginTurn` 那一刻"= 每局的**第一个回合**（庄家起手）：这时发牌刚完成、还没进入第一手决策，
+`state.players[].hand` 与 `score` 正是**起始状态**。局末再读它们拿到的是终局 —— 拿终局当"起始状态"
+就是另一种谎（§9.5），所以快照每局只取一次、就取在这一拍。
+
+**故意不记的**：`honba`（连庄数）。翻了代码：翻精癞子的**计分**只用到 `dealer`（`applyWinScore`），
+`honba` 只进 `RoundResult` 的展示字段，不进分数；所以重跑不需要它，硬记一个用不上的字段只会误导读方。
+
+### 12.2 权威动作日志：同源、同顺序、顺序判据是 `windowId`
+
+- **同源**：就在 P0 记 `chosen` 的那一处（`recordAnalysisWindow` 里控制器返回之后）再落一条命令，
+  用同一个 `safely(...)` 分区隔离（决策记录失败不该连带丢掉可重跑的命令序列）。
+- **顺序判据 = `windowId` 末段的自增编号**（`round-N/window/M`），**不是数组下标**：窗口 ID 在开窗时就
+  定下来了，而回执/写库是异步的，数组顺序不等于执行顺序。
+- **载荷按引擎真实动作形状记**，一个都不许漏：
+  - 回合：`discard{handIndex}` / `added-kong{meldIndex}` / `concealed-kong{tile}` / `wind-kong` / `win`；
+  - 鸣牌：`pass` / `gang` / `peng` / `chi{tiles}`；抢杠是**裸字符串** `'win' | 'pass'`（`toLotusActionLike` 认它）。
+  - **`peng` 的 `discardIndex` 必须记**：编排层里"碰完顺手弃牌"（`offerNextClaim` 的 `discardIndex !== undefined`
+    分支）与"碰完另开一个弃牌窗口"（`offerHu` 那条路）是**两条不同的路**，漏了这个下标，重跑会以为还要再摸一张。
+- **被拒的动作不进日志**：条目只在控制器真的返回之后才落，拒绝/异常路径上什么也不写（§10.2）。
+
+### 12.3 校验器：在浏览器里跑（`reproduceLotusLegacy.ts`）
+
+`replayLotusLegacyRound({reproduction, commands, expectedScores, tick})` —— 起一个真实 `useLotusGame`，
+用记录里的牌墙/骰子/庄家/开局分重新发牌，再把记录里的命令**逐条喂回**四个座位的脚本化控制器：
+
+- **发牌后交叉校验（§3.3）**：重跑第一个窗口开窗时，把 `state.players[].hand` 与记录的 `postDealHands`
+  **逐家逐张按位置**比。不一致就报「**发牌算法变了或记录与引擎不一致**」并**立刻停**，
+  绝不用另一副牌把这一局跑完再宣布"复现失败"。（按位置比而不是按集合比，有单测专门锁这条：
+  把首张挪到末尾、牌还是那几张，也必须判不一致。）
+- **翻精读数交叉校验**：`flipTile`/`jokers`/`flipSeat`/`wallBreakIndex` 与记录比（记录里没带的项不猜、不比）。
+- **命令合法性**：带 `legalActionId` 的条目必须落在**重跑此刻**的合法动作里（与 P0 的 `chosenIndex` 同一条判据）；
+  唯一例外是**记录侧自己标了"当时就不合法"**的条目（P0 的 `chosenIndex = -1`、没有 `legalActionId`）：
+  它们**照原样重放**但不做命中断言 —— 照原样重放才是忠实的（同样的输入 → 引擎同样的兜底分支），
+  这类条目的条数如实暴露在 `metrics.commandsNotLegalAtRecordTime` 上。这是**如实**，不是放宽。
+- **不许跳过、不许凑**：`unusedCommands`（记录里有、重跑没走到）与 `extraWindows`（重跑开出、记录里没有）
+  都必须为 0；缺 `windowId`、窗口座位/类型对不上都直接判不通过；**缺 `openingScores` 时报"结束分数不可比对"**
+  并且根本不开始跑；缺"可比的结束分数"同样不宣称成功。
+- **观测桩不许抛**（实测踩到的坑，值得记住）：校验器挂的是**观测桩**（不落库）。引擎的
+  `safely('window-open')` 会把桩里的异常吞掉，但"窗口编号自增"那一步在它后面 —— 桩一抛，
+  编号就不再自增，重跑侧会开出两个都叫 `#1` 的窗口，后续全被误判成"窗口序列错位"。
+  本文件第一次跑（端口少了 `flipSeat`）就是这么红的：真正的错因藏在 `gaps` 里，报出来的却是座位错位。
+  桩现在自己 try/catch，并把"观测失败"变成一个停止原因。同时**给游戏端口补了 `flipSeat`**（它本来就该暴露）。
+
+### 12.4 导出包如实声称"可复现"
+
+`export.ts` 的 `reproductionCapable` 从 P0 的一刀切 `false` 改成**按记录内容逐局判定**
+（判据在 `reproductionCapability.ts`，与校验器共用一份字段清单，避免"导出说可复现、校验器说缺字段"）：
+完整 + 引用闭合 + ≥1 条复现数据 + **每条复现数据的字段都齐**。缺字段时逐局写进 `manifest.missing`
+（形如「复现数据不完整（第 3 局缺少 ringWall（环状牌墙 136 张，实为 0 张）、commands（权威动作日志））」），
+而不是笼统一句"缺复现数据"。
+
+### 12.5 验证（跑了什么、看到什么数字）
+
+**单测**（`vue-tsc --noEmit` + `vitest run src`）：全绿 **1955 passed / 2 skipped（193 个文件）**。
+P1 新增两个文件：
+
+- `lotusReproduction.test.ts`（15 条）：快照口径（136 张、每种 4 张、全是牌码）、四家开局分、
+  `postDealHands` 改一张 ⇒ 报不一致并点名"第 2 家第 2 张"、命令条目形状（含 `peng.discardIndex`、
+  抢杠裸字符串）、区分键、旧记录（血流口径）向后兼容。
+- `replayLotusRound.test.ts`（5 条）：**真跑一局再重跑**（假定时器，几秒）。本地这一条第一次跑就抓出了
+  上面那个"观测桩抛异常 ⇒ 窗口编号错乱"的坑，还有三条负向：篡改发牌、缺开局分、缺结束分数。
+
+**e2e**（`tests/e2e/analysis-lotus-legacy.spec.ts`，**6 条全绿，共 4.1 分钟**；dev server 在 4178）：
+
+| 用例 | 结果 |
+|---|---|
+| 记录形状/遮蔽/窗口 ID/结算守恒/导出包自包含 | 5 局；`{"config":1,"decisionState":202,"decision":404,"responderCheckpoint":42,"settlement":5,"reproduction":5}`；`reproductionCapable=true`、`missing=[]` |
+| **P1 逐局重跑** | 5 局全部 `ok=true`：命令**逐条**消费 37/37、47/47、62/62、34/34、22/22，窗口数=命令数，`unused=0`、`extra=0`、`kindMismatches=0`、`gaps=[]`；结束分数与记录**逐位相同**（如第 5 局 `-1200/-600/7500/2300`） |
+| 同上：篡改对照 | 改一张 ⇒ `ok=false`、原因含「发牌算法变了或记录与引擎不一致」、**`commandsConsumed=0`**（一条都没喂） |
+| 分析关掉后零写入 | 0 块、0 场次、0 记录，`reproductionParts=0` |
+| 硬护栏（开/关同一副牌） | 分数 `-1200,-600,7500,2300` 两次相同；动作数相同；`rngDraws` 1552 = 1552 |
+| LLM 座位接缝 | 尝试 54 条、模板 1 条 |
+| app-path（真实 App） | 13 分块、`{"config":1,"decisionState":229,"decision":458,"responderCheckpoint":45,"settlement":5,"reproduction":5}` —— **真实 App 路径也逐局落了复现数据** |
+
+`?replay=0` 可跳过逐局重跑（与复现无关的用例不必付这份时间）；`?analysis=0` 时一次都不跑（零成本）。
+
+### 12.6 明确没做 / 边界
+
+1. **天胡那一局没有复现数据**：庄家起手即胡时开局时间线直接结算、根本不进 `beginTurn`，所以取不到快照。
+   这种情况**不写**这一局、只如实留痕 `noteGap({scope:'reproduction', reason:'round-without-opening-snapshot'})` ——
+   拿局末状态凑一个"起始状态"就是另一种谎。（实测那 5 局都不是天胡，5 局 5 条；判据源是
+   `partsByTag.reproduction === roundsPlayed`，真遇到天胡会如实少一条并留下缝。）
+2. **重跑不比对逐手状态**：只比"发牌后手牌 + 翻精读数 + 窗口序列 + 命令合法性 + 结束分数"。
+   中间每一手的牌河/副露没有逐步比对（血流那边也没有）—— 逐步比对属于更细的 P2 级要求。
+3. **四个座位都脚本化 ⇒ 验证的不是"AI 决策复现"**：重跑时四家都由记录驱动，所以它证明的是
+   "**记录足够把这一局重放出来**"，不是"AI 在同样局面下会做同样选择"（后者要求模型侧确定性，本阶段没有）。
+4. **没有把重跑接进界面**：校验器目前只能在夹具/测试里调用（`replayLotusLegacyRound` 是纯函数入口）。
+   界面上的"赛后复现"按钮属于后续工作。
+5. **vibehub 的 `lotusGame.ts` 仍需手动镜像**（本节的快照/命令日志/落库都在那个文件里）——
+   见「未做的部分」第 5 条，本轮已按那套流程镜像。

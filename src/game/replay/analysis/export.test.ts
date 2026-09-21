@@ -21,11 +21,22 @@ const match: ReplayMatch = {
 const round = { roundIndex: 0, steps: [] } as unknown as ReplayRound
 
 const config = { id: 'config/m-1/1', formatVersion: ANALYSIS_FORMAT_VERSION, rulesVersion: 'v1' }
+/**
+ * 一条**内容完整**的血流口径复现数据（字段清单与 `openingFromReproduction` 对齐）。
+ * P1 之后 `reproductionCapable` 按记录内容判定，所以"有 reproduction 记录"本身不再够用 ——
+ * 这里的夹具必须真的带齐字段，否则测的就是"缺字段"那条分支。
+ */
+const reproduction = {
+  roundIndex: 1, available: true,
+  initialWall: ['m1'], initialHands: [[], [], [], []], dealer: 0, dealerDrawnIndex: 13,
+  flipTiles: ['m1', 'm2'], jokers: ['m1', 'm2'], flipStack: 0, flipSeat: 0, wallBreakIndex: 0,
+  openingScores: [2000, 2000, 2000, 2000], commands: [{ seat: 0, kind: 'discard', at: 0 }],
+}
 const parts: AnalysisBlockPart[] = [
   { tag: 'config', value: config },
   { tag: 'decisionState', value: { id: 'state/1' } },
   { tag: 'decision', value: { id: 'decision/1', configId: 'config/m-1/1' } },
-  { tag: 'reproduction', value: { roundIndex: 1, available: true } },
+  { tag: 'reproduction', value: reproduction },
 ]
 
 function build(overrides: Partial<Parameters<typeof buildAnalysisExport>[0]> = {}) {
@@ -72,6 +83,38 @@ describe('分析包导出（§9.2、§9.3、§9.5）', () => {
     expect(payload.completeness).toBe('complete')
     expect(payload.reproductionCapable).toBe(false)
     expect(payload.manifest.missing.join(' ')).toContain('复现数据')
+  })
+
+  // P1（§2.4）：`reproductionCapable` 必须按**记录内容**判定，而不是"有 reproduction 记录就算齐"。
+  // 两条分支都要有证据：字段齐 ⇒ true；缺字段 ⇒ false 且**点名缺什么、缺在第几局**。
+  it('复现能力按记录内容判定：翻精癞子字段齐 ⇒ true（环状牌墙口径）', () => {
+    const complete = {
+      roundIndex: 2, available: true, variant: 'lotus-legacy',
+      ringWall: Array.from({ length: 136 }, () => 'm1'),
+      dice: { first: [1, 2], second: [3, 4] },
+      dealer: 1, openingScores: [2000, 1900, 2100, 2000],
+      postDealHands: [[], [], [], []], jokers: ['m1', 'm2'], flipTile: 'm1', wallBreakIndex: 0,
+      commands: [{ seat: 1, kind: 'discard', at: 0, handIndex: 0, windowId: 'round-2/window/1' }],
+    }
+    const payload = build({ parts: [...parts.slice(0, 3), { tag: 'reproduction', value: complete }] })
+    expect(payload.reproductionCapable, '环状牌墙口径的字段齐了就该算可复现').toBe(true)
+    expect(payload.manifest.missing).toEqual([])
+  })
+
+  it('复现能力按记录内容判定：缺环状牌墙/骰子/命令 ⇒ false，并点名缺什么、第几局', () => {
+    const incomplete = {
+      roundIndex: 3, available: true, variant: 'lotus-legacy',
+      ringWall: [], dice: {}, dealer: 0, openingScores: [],
+      postDealHands: [], jokers: [], flipTile: null, commands: [],
+    }
+    const payload = build({ parts: [...parts.slice(0, 3), { tag: 'reproduction', value: incomplete }] })
+    expect(payload.completeness).toBe('complete')
+    expect(payload.reproductionCapable, '缺字段就不能声称可精确复现').toBe(false)
+    const missing = payload.manifest.missing.join(' ')
+    for (const field of ['ringWall', 'dice.first', 'dice.second', 'openingScores', 'commands', 'postDealHands']) {
+      expect(missing, `缺失清单必须点名 ${field}`).toContain(field)
+    }
+    expect(missing, '必须说明缺在第几局').toContain('第 3 局')
   })
 
   it('部分缺失：状态与缺失范围随包带走，读完知道哪一段不可信', () => {
