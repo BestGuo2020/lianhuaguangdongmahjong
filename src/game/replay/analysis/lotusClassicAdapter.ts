@@ -114,6 +114,26 @@ export function windowKindOf(kind: LotusClassicWindowKind): AnalysisWindowKind {
   return kind === 'turn' ? 'draw-turn' : kind === 'claim' ? 'claim' : 'rob-kong'
 }
 
+/**
+ * 反过来：引擎的窗口类型 → **记录口径**的窗口类型（`AnalysisWindowKind`）。
+ *
+ * 为什么需要这个方向：P1 的命令条目要与记录侧的窗口逐号对照（"第 N 个窗口是不是同一类窗口"），
+ * 而两侧的词汇表不同 —— 记录侧（`AnalysisDecision.windowKind`、观测桩收到的 `window.windowKind`）
+ * 用的是 `AnalysisWindowKind`（`draw-turn`/`claim`/`rob-kong`），引擎内部用的是
+ * `LotusClassicWindowKind`（`turn`/`claim`/`rob-kong`）。直接拿两套字面量比，**第 1 个窗口
+ * 就会报"类型对不上"**（实测：`记录 turn vs 重跑 draw-turn`）。
+ *
+ * 所以 `AnalysisCommandEntry.windowKind` 与决策记录**同一口径**写 `AnalysisWindowKind`
+ * （`useGame` 里落命令时用的就是本函数的返回值），校验器再把它折回引擎词汇表去比。
+ */
+export function recordedWindowKindOf(kind: AnalysisWindowKind): LotusClassicWindowKind {
+  if (kind === 'draw-turn') return 'turn'
+  // 除了摸牌回合，本玩法只有"响应弃牌"与"抢杠"两类；`AnalysisWindowKind` 的其余取值
+  // （血流的 `meld`/`win`…）在广麻的记录里不该出现，出现了就按响应窗口比 —— 但它会被
+  // 窗口对照判成"类型对不上"，不会静默放过。
+  return kind === 'rob-kong' ? 'rob-kong' : 'claim'
+}
+
 /** 决策前态 ID：同一 (窗口, 座位) 就是同一份前态（§9.3 禁止重复快照）。 */
 export function decisionStateId(view: LotusClassicViewLike, seat: number): string {
   return `${view.windowId}/${seat}`

@@ -11,7 +11,13 @@
 // 硬套一份清单必然把本来完整的记录判成缺失（缺的字段名甚至会张冠李戴）。
 import type { AnalysisReproduction } from './types'
 
-/** 这份复现数据是不是"环状牌墙"口径（翻精癞子）。 */
+/**
+ * 这份复现数据是不是"环状牌墙"口径（翻精癞子，或不写 `variant` 的老记录）。
+ *
+ * ⚠️ **不能**用它区分翻精癞子与广麻：两个玩法的重跑起点**同为环状牌墙 136 张**（差异清单 §2）。
+ * 它是给"没有 `variant` 字段的历史记录"用的兜底判据：新记录一律先看 `variant`
+ * （见 `reproductionDeficiencies` 的分派顺序）。
+ */
 export function isRingWallReproduction(record: AnalysisReproduction): boolean {
   return record.variant === 'lotus-legacy' || Array.isArray(record.ringWall)
 }
@@ -61,17 +67,47 @@ function lotusLegacyDeficiencies(record: AnalysisReproduction): string[] {
 }
 
 /**
+ * 广麻口径必需字段（`lotus-classic`）：
+ * - 重跑输入：`ringWall`(136) / `dice.first` / `dealer` / `openingScores`(四家) / `commands`；
+ * - 交叉校验输入：`postDealHands`(四家) / `wallBreakIndex`。
+ *
+ * 与翻精癞子那份清单的差别**只有一处，而且是玩法本身的差别**：广麻**没有翻精**
+ * （`localOpeningTimeline` 只掷一次骰、按庄家拆墙，没有 `resolveFlip` 那一套），
+ * 所以这里**不要求** `jokers` / `flipTile` / `dice.second` —— 拿翻精癞子的清单套过来，
+ * 会把每一局本来完整的广麻记录都判成"缺 3 项"。宁可如实少要几项，也不造假字段（差异清单 §3.2）。
+ *
+ * `postDealHands` 同样是必需：校验器拿它证明"重跑与记录是同一副牌、同一个发牌算法"，
+ * 缺了它就只能证明"能跑完"，不能证明跑的是同一局 —— 按 §9.5 的口径必须如实标成不可复现。
+ */
+function lotusClassicDeficiencies(record: AnalysisReproduction): string[] {
+  const missing: string[] = []
+  if (record.ringWall?.length !== 136) missing.push(`ringWall（环状牌墙 136 张，实为 ${record.ringWall?.length ?? 0} 张）`)
+  if (record.dice?.first?.length !== 2) missing.push('dice.first（开局掷骰两枚）')
+  if (typeof record.dealer !== 'number') missing.push('dealer（庄家）')
+  if (!record.openingScores || record.openingScores.length !== 4) missing.push('openingScores（当局开局分）')
+  if (!record.commands?.length) missing.push('commands（权威动作日志）')
+  if (!record.postDealHands || record.postDealHands.length !== 4) missing.push('postDealHands（发牌后的四家手牌，交叉校验用）')
+  if (typeof record.wallBreakIndex !== 'number') missing.push('wallBreakIndex（开牌断点，交叉校验用）')
+  return missing
+}
+
+/**
  * 这条复现数据**缺什么**（空数组 = 重跑所需的内容齐了）。
  *
  * 口径（与 `openingFromReproduction` 同一句原则）：**绝不用默认值顶替缺失字段**。
  * 缺就是缺，如实列出字段名；不要因为"缺一项也能跑起来"就放行 —— 那样跑出来的是另一个局面，
  * 读方却会以为复现成功。
+ *
+ * 判据按**玩法口径**分派，顺序不能反：`lotus-classic` 与 `lotus-legacy` **都有** `ringWall`
+ * （两个玩法的重跑起点同为环状牌墙），所以只看"有没有 ringWall"是分不开这两个玩法的 ——
+ * 先认 `variant` 字面量，再退回"环状牌墙/发牌后牌墙"这条老判据（旧记录不写 `variant`）。
  */
 export function reproductionDeficiencies(record: AnalysisReproduction | null | undefined): string[] {
   if (!record || typeof record !== 'object') return ['复现数据（记录为空）']
   if (record.available === false) {
     return [record.unavailableReason ? `复现数据不可用：${record.unavailableReason}` : '复现数据被标记为不可用']
   }
+  if (record.variant === 'lotus-classic') return lotusClassicDeficiencies(record)
   return isRingWallReproduction(record) ? lotusLegacyDeficiencies(record) : bloodFlowDeficiencies(record)
 }
 

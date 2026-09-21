@@ -1,9 +1,16 @@
 import { getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import { defineGamePort, type GameStartOptions } from '../contracts/gamePort'
 import type { EndGameOptions, TableActionEvent, TileType } from '../contracts/types'
+import { createWall, TILE_TYPES } from '../rules/tiles'
 import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
 import type { AnalysisChoiceSource, AnalysisExecutionStatus } from '../../replay/analysis/types'
+import type { AnalysisCommandEntry } from '../../replay/analysis/commandEntry'
 import type { AnalysisRecorder } from '../../replay/analysis/recorder'
+import {
+  buildLotusClassicReproduction,
+  lotusClassicCommandEntry,
+  ringWallDeficiencies,
+} from '../../replay/analysis/lotusClassicReproduction'
 import {
   choiceTookEffect,
   decisionStateOf,
@@ -200,36 +207,104 @@ export function useGame({
   }>()
   /** 上一次结算流水记到的分数（按绝对座位）：每次变化都从它算 delta。 */
   let analysisLastScores: number[] = state.players.map((player) => player.score)
-  /** 分数变化合并标志：一次结算连写四家分数，合并成一条流水。 */
+  /** 分数变化合并标志：一次结算连写四家分数，合并成一条局中流水。 */
   let analysisScorePending = false
-  /**
-   * 本局的开局分基线是否已就绪（在本局第一个决策窗口置位）。
-   * 开局建玩家本身就会写一次分数（空 → 起始分），那不是结算，绝不能记成一条流水。
-   */
-  let analysisBaselineReady = false
   /** 本局结束的类型（由 state.result 的同步 watch 写入，供流水标注 kind）。 */
   let analysisRoundEndKind: string | null = null
   let analysisSettlementSeq = 0
+  /**
+   * 本局的**开局分**（四家）：每次进入开局阶段时取，是结算折算与复现数据共用的基准。
+   *
+   * 为什么必须单独留一份、不能拿 `analysisLastScores` 顶：后者会被局中的每一次分数变化推进，
+   * 到局末它记的是"上一次变化之后"的分数，不是开局分。P1 的复现字段 `openingScores` 与
+   * 结算流水的 `deltas` 都要拿**开局分**当基准，否则第 2 局以后对不上（§6 的 openingScores 正为此存在）。
+   */
+  let analysisOpeningScores: number[] = state.players.map((player) => player.score)
+  /** 本局是否已经落过局末结算（同一次结束不得重复记：微任务里的分数冲刷会再触发一次）。 */
+  let analysisRoundSettled = false
+  /**
+   * 已经折算过结算的那一份 `state.result`（同一局不得重复记：对象身份即"这一次结算"）。
+   * 换局/换场都是新对象，所以不需要额外的清零动作。
+   */
+  let analysisSettledResult: unknown = null
+
+  // ── P1 §6：本局的**复现数据**（重跑起点 + 权威动作日志） ────────────────────────────
+  //
+  // 与 P0 的"决策记录"共用同一批汇聚点，但两件事不同：P0 记的是"**当时决策是什么**"，
+  // P1 记的是"**能不能把这一局重跑出来**"。后者需要三样东西：确定性起点（环状牌墙 136 张 +
+  // 开局骰子 + 庄家）、当局开局分（否则结束分数无从比对）、以及**权威真正执行过的动作序列**。
+  //
+  // 广麻**没有翻精** ⇒ 这一份里**没有** `flipTile`/`jokers`/`flipSeat`/`flipStack`
+  // 那一套（`localOpeningTimeline` 里连 `resolveFlip` 都没有）。不要为了与翻精癞子对齐而补空值：
+  // 读取侧要能如实看出"广麻本来就没有翻精"，而不是读到一组空值以为"翻精没翻出来"。
+  /**
+   * 本局的**重跑起点参数**（环状牌墙 136 + 开局骰子 + 庄家 + 牌山断点），由开局时间线的
+   * `onRoundPrepared` 在"骰子掷完、牌墙按庄家拆开、**还没发牌**"那一刻交出。
+   * 必须在那一刻拿：此后 `state.wall` 会被发完，局末读它拿到的是**终局牌墙**。
+   */
+  let analysisRoundRing: {
+    ringWall: string[]
+    firstDice: [number, number]
+    dealer: number
+    wallBreakIndex: number
+    openingScores: number[]
+  } | null = null
+  /**
+   * 本局**发牌完成、进入第一手决策之前**那一拍的读数（`beginTurn` 回调时刻）：四家手牌。
+   * 手牌是**交叉校验**输入（证明重跑与记录是同一副牌；广麻没有翻精，所以只有这一项要交叉校验）。
+   */
+  let analysisRoundOpening: {
+    roundIndex: number
+    postDealHands: string[][]
+  } | null = null
+  /**
+   * 本局的权威动作序列：与 P0 的 `chosen` **同源、同顺序**（在同一个汇聚点各落一份）。
+   * 顺序判据是 `windowId`（末段自增编号），不是数组下标 —— 异步回传会让数组顺序 ≠ 执行顺序。
+   */
+  const analysisRoundCommands: AnalysisCommandEntry[] = []
 
   /**
-   * 把"分数实际变了多少"折算成一条结算流水（§5）。
+   * 记录代码的**唯一**执行口：任何记录侧异常都只吞掉并留痕。
+   * §9.5：分析落库失败最多让这一场不完整，绝不能把异常抛回对局路径。
+   */
+  function safely<T>(what: string, run: () => T): T | null {
+    try {
+      return run()
+    } catch (error) {
+      try {
+        analysis?.noteGap({
+          scope: 'recorder',
+          reason: `${what}-failed: ${error instanceof Error ? error.message : String(error)}`,
+        })
+      } catch { /* 留痕自身失败也要吞掉（§9.5 独立失败域） */ }
+      return null
+    }
+  }
+
+  /**
+   * 把"分数实际变了多少"折算成一条**局中**流水（§5）。
+   *
+   * 与 `recordAnalysisSettlement`（局末那条）的分工：
+   * - 这里记**局中**的分数流动（跟庄、杠分这类还没结束时的变化），它撑起"流水首尾相接"这条
+   *   P0 判据（`useGame.analysis.test.ts` 断言相邻两条 `before` 与上一条 `scoresAfter` 一致）；
+   * - 局末由 `recordAnalysisSettlement` 记一条"开局分 → 局末分"，**并把 `analysisLastScores`
+   *   同步到局末分**，所以本函数在局末不会再记出一条重复流水（那个时刻 delta 恒为 0）。
+   *
    * 引擎不变量是四家变化之和为 0；这里若发现不为 0 也照实记录，不做修补 —— 读取侧要能看出来。
    */
   function analysisFlushScores(): void {
     analysisScorePending = false
     const after = state.players.map((player) => player.score)
-    const changed = after.some((score, seat) => score !== (analysisLastScores[seat] ?? 0))
-    if (!changed) return
-    // 基线没就绪（本局还没进入任何决策窗口）时不记流水：开局建玩家会写一次分数，
-    // 那是初始化不是结算；真的分数变化必然晚于本局第一个窗口。
-    if (!analysisBaselineReady) {
+    // 第一局开局之前**不记流水**：建玩家本身就会写一次分数（空 → 起始分），那是初始化不是结算。
+    // 真的分数变化必然晚于本局开局（`analysisRoundIndex` 在进入开局阶段那一拍才 +1）。
+    // 少了这道闸，那一次初始化会被记成一条 `deltas=[1000,1000,1000,1000]` 的"结算"（实测抓到过）。
+    if (analysisRoundIndex === 0) {
       analysisLastScores = after
       return
     }
+    if (!after.some((score, seat) => score !== (analysisLastScores[seat] ?? 0))) return
     const before = analysisLastScores
     analysisLastScores = after
-    const kind = analysisRoundEndKind ?? 'score-flow'
-    analysisRoundEndKind = null
     if (!analysis) return
     try {
       analysisSettlementSeq += 1
@@ -238,7 +313,8 @@ export function useGame({
         roundId: String(analysisRoundIndex),
         before,
         after,
-        kind,
+        // 局中的分数流动一律记 `score-flow`（跟庄/杠分），结算型 kind 留给局末那条。
+        kind: 'score-flow',
         sourceEventId: `score-${analysisRoundIndex}-${analysisSettlementSeq}`,
       }))
     } catch { /* 记录失败不影响对局 */ }
@@ -351,12 +427,6 @@ export function useGame({
       // 错记成 state-changed 才是说谎。
       analysisPending.delete(seat)
       const windowId = decisionWindowId(String(analysisRoundIndex), analysisWindowSeq)
-      // 本局开局分：在**本局第一个决策窗口**取基线并置位就绪（开局阶段刚建好玩家时分数还没落定，
-      // 那时取会把 0 当成开局分；而本局第一次真的分数变化必然晚于第一个窗口）。
-      if (analysisWindowSeq === 1) {
-        analysisLastScores = state.players.map((player) => player.score)
-        analysisBaselineReady = true
-      }
       const view = analysisView(seat, windowId, kind, actions)
       analysis.windowOpened({
         windowId,
@@ -382,6 +452,23 @@ export function useGame({
             source: analysisSourceOf(seat),
             at: monotonicNow(),
           })
+          // P1 §6：在**同一个汇聚点**再落一条可重跑的命令（形状 = `AnalysisCommandEntry`）。
+          // 单独一个 `try` 包住：上面那条决策记录失败不该连带丢掉可重跑的动作序列（§9.5 独立失败域）。
+          // 条目带 `legalActionId` 当且仅当该动作确实落在本窗口的合法动作里（与 P0 同一条判据）——
+          // 校验器据此区分"记录侧自己标了当时不合法"与"重跑侧状态分叉了"。
+          try {
+            if (action) {
+              analysisRoundCommands.push(lotusClassicCommandEntry(seat, action, {
+                at: Date.now(),
+                windowId,
+                // 与决策记录的 `windowKind` **同一口径**（`windowKindOf` 的产物，即
+                // `AnalysisWindowKind`）：两处若一套写 `turn`、一套写 `draw-turn`，
+                // P1 的校验器拿记录与重跑逐号对照时第 1 个窗口就会误报"类型对不上"（实测踩过）。
+                windowKind: windowKindOf(kind),
+                ...(index >= 0 ? { legalActionId: legalActionId(windowId, index) } : {}),
+              }))
+            }
+          } catch { /* 命令日志失败不影响对局，也不影响上面那条决策记录 */ }
           if (!action) return
           analysisPending.set(seat, { windowId, seat, kind, action, before: view })
           // 过牌不会有任何"上桌"事件，但它确实生效（本座位状态不变）。
@@ -514,6 +601,10 @@ export function useGame({
   }
 
   function beginTurn(playerIndex: number, options: { skipDraw?: boolean; fromTail?: boolean } = {}) {
+    // P1 §6：每局的**第一个回合**（庄家起手）就是"发牌完成、还没进入第一手决策"那一刻 ——
+    // 复现快照在这里取（每局只取一次）。局末再读 `state.players` 拿到的是**终局**手牌与分数，
+    // 拿它当"起始状态"就是血流踩过的那个坑。
+    captureAnalysisOpening()
     return turnOrchestrator.beginTurn(playerIndex, options)
   }
 
@@ -618,11 +709,43 @@ export function useGame({
     endGame,
     playerSeeds: aiPlayerSeeds,
     humanPlayerSeed,
+    // P1 §6：重跑参数（环状牌墙 + 开局骰子 + 庄家 + 牌山断点）在"发牌之前、骰子已定"那一刻交出。
+    // 广麻没有翻精 ⇒ 这里比翻精癞子少一整套参数（没有翻精墩/开牌断点重排）。
+    onRoundPrepared: (info) => safely('opening-parameters', () => {
+      // 牌墙口径自检：不是 136 张 / 不是每种 4 张就**留痕**，但**不拦**对局 ——
+      // 记录侧的问题只应该让这一场不完整，绝不能影响正在打的牌（§9.5）。
+      const problems = ringWallDeficiencies(info.ringWall, TILE_TYPES)
+      if (problems.length) {
+        analysis?.noteGap({ scope: 'reproduction', reason: `ring-wall-unexpected: ${problems.join('、')}` })
+      }
+      analysisRoundRing = {
+        ringWall: [...info.ringWall],
+        firstDice: [...info.openingDice] as [number, number],
+        dealer: info.dealer,
+        wallBreakIndex: info.wallBreakIndex,
+        // 当局开局分在**发牌之前**读到的这一份（时间线在拆墙那一刻交出）：重跑要靠它从同一分起步，
+        // 少了它第 2 局以后的结束分数永远对不上。
+        openingScores: [...info.openingScores],
+      }
+    }),
   })
   // 每局开局先复位跟庄窗口，再走开局时间线。
   const startGame = (mode?: Parameters<typeof openingTimeline.start>[0], options?: GameStartOptions) => {
     animeFixedTts?.reset()
     followDealer.reset()
+    // 传了 mode 就是**新的一场**（nextRound 走的是不带 mode 的那条路）：本局序号与结算去重都要
+    // 从头开始，否则第二场的 roundId 会接着上一场继续涨、与展示回放的"已打局数"对不上。
+    if (mode) {
+      analysisRoundIndex = 0
+      // 新的一场：上一场残留的复现快照/命令日志一律作废（上半场已随局末落库）。
+      analysisRoundRing = null
+      analysisRoundOpening = null
+      analysisRoundCommands.length = 0
+      analysisSettledResult = null
+    }
+    // 转交开局参数（固定牌墙/骰子）。此前第二个参数被丢掉 ⇒ 只有本引擎做不到"同一副牌重跑两次"，
+    // 而 §3.3 的交叉校验（拿记录里的牌墙+骰子重新发牌、比对 `postDealHands`）正需要它。
+    // 现有调用方都只传一个参数，因此行为不变。
     return openingTimeline.start(mode, options)
   }
 
@@ -702,23 +825,9 @@ export function useGame({
     }, { flush: 'sync' })
   }
 
-  // ── 分析记录：局书号、结算流水与中途退出 ──
+  // ── 分析记录：中途退出（局书号、结算流水与局边界的两个 watch 在下面） ──
   if (analysis) {
-    // 每局开局：局号 +1、窗口计数清零。窗口 ID 才能"本局内稳定、跨局不重复"（§3.1）。
-    watch(state.phase, (phase) => {
-      if (phase !== 'opening') return
-      analysisRoundIndex += 1
-      analysisWindowSeq = 0
-      analysisPending.clear()
-      analysisBaselineReady = false
-    }, { flush: 'sync' })
-
-    // 本局结束的类型（自摸/点杠/抢杠/荒庄）：与分数变化同一批同步写入，供下面的流水标注 kind。
-    watch(state.result, (result) => {
-      if (result) analysisRoundEndKind = roundKindOfResult(result)
-    }, { flush: 'sync' })
-
-    // 结算流水：经典玩法没有权威账本，按**分数实际变化**折算，每次变化一条（四家变化之和恒为 0）。
+    // 局中分数流动（跟庄/杠分）：经典玩法没有权威账本，按**分数实际变化**折算，每次变化一条。
     // 一次结算会连写四家分数，因此用微任务合并：不合并就会记出几条不守恒的半截流水。
     watch(() => state.players.map((player) => player.score), () => {
       if (analysisScorePending) return
@@ -737,6 +846,127 @@ export function useGame({
       } catch { /* 记录失败不影响对局 */ }
     }, { flush: 'sync' })
   }
+
+  /**
+   * 局末结算折算（§5）。
+   *
+   * 职责与 `analysisFlushScores` 分开：那个记**局中**的分数流动（跟庄/杠分），本函数**兜底**记
+   * "本局结束了，但整局分数一次都没变过"那种情况（典型是荒庄：`endDraw` 的罚符恰好四家相抵）。
+   * 为什么需要这条兜底：P1 要拿记录侧的结束状态去比重跑的结束分数，而**每条结算是按分数变化记的**——
+   * 一次变化都没有的局就一条记录都没有，那一局于是"无从比对"。让它空着等于把"没记"伪装成"缺数据"。
+   *
+   * 分工否则会重复记：若本局有过分数变化，`analysisFlushScores` 的末次读数就是局末分，
+   * 这里发现"没有任何变化"就什么也不写（同一次结束绝不落两条流水）。
+   * 时间上成立：引擎的分数写入（`finalizeWin` 与 `endDraw`）都发生在 `state.result` 落定**之前**
+   * （见 `settlementTimeline`），而分数 watch 推给 `analysisFlushScores` 的是一次**微任务**——
+   * 本函数在 `state.result` 的同步 watch 里跑，看到的是"局末分 vs 上一次读数"的原始差别。
+   */
+  function recordAnalysisSettlement() {
+    if (!analysis || analysisRoundSettled) return
+    analysisRoundSettled = true
+    // 局都结束了，还挂着的回执不会再有"下一个窗口"来收尾（§3.2 的 pending 语义）。
+    analysisPending.clear()
+    const endingScores = state.players.map((player) => player.score)
+    // 本局分数有过变化 ⇒ `analysisFlushScores` 已经记过（或马上会记）局末那一段，这里不再重复。
+    if (endingScores.some((score, seat) => score !== (analysisLastScores[seat] ?? 0))) return
+    if (analysisOpeningScores.length !== endingScores.length) return
+    analysisSettlementSeq += 1
+    try {
+      analysis.settlement(settlementsFromScoreChange({
+        roundIndex: analysisRoundIndex,
+        roundId: String(analysisRoundIndex),
+        before: [...analysisOpeningScores],
+        after: endingScores,
+        kind: analysisRoundEndKind ?? roundKindOfResult(state.result.value),
+        sourceEventId: `round-${analysisRoundIndex}`,
+      }))
+    } catch { /* 记录失败不影响对局 */ }
+    analysisRoundEndKind = null
+  }
+
+  /**
+   * P1 §6：`beginTurn` 那一刻的复现快照（每局一次）。
+   *
+   * 取的是"**发牌完成、还没到第一手决策**"的读数：四家手牌（交叉校验用）、当局开局分
+   * （结束分数的比对基准）。重跑**输入**（环状牌墙/骰子/庄家）另由开局时间线的
+   * `onRoundPrepared` 交出 —— 它们在发牌前就定型了，且牌墙发完就没了。
+   *
+   * 广麻**没有翻精** ⇒ 这里**没有** `flipTile`/`jokers`/`flipSeat`/`flipStack` 四项。
+   * 这不是漏取：`localOpeningTimeline` 里根本没有 `resolveFlip` 那套推算，补空值是编造。
+   */
+  function captureAnalysisOpening() {
+    if (!analysis || analysisRoundOpening) return
+    safely('opening-snapshot', () => {
+      analysisRoundOpening = {
+        roundIndex: analysisRoundIndex,
+        postDealHands: state.players.map((player) => [...player.hand]),
+      }
+    })
+  }
+
+  /**
+   * P1 §6：局末把这一局的**复现数据**落库，然后作废本局的快照与命令日志。
+   *
+   * 快照缺失时（例如开局四红直接结算：开局时间线直接 `endGame`，根本没走到 `beginTurn`）
+   * **不写**这一局，只如实留痕 —— 拿局末状态凑一个"起始状态"出来是另一种谎（§9.5）。
+   */
+  function recordAnalysisReproduction() {
+    if (!analysis) return
+    const ring = analysisRoundRing
+    const opening = analysisRoundOpening
+    if (!ring || !opening) {
+      safely('reproduction-gap', () => analysis?.noteGap({
+        scope: 'reproduction',
+        reason: ring ? 'round-without-opening-snapshot' : 'round-without-opening-parameters',
+      }))
+    } else {
+      safely('reproduction', () => analysis?.reproduction(buildLotusClassicReproduction({
+        roundIndex: opening.roundIndex,
+        ringWall: ring.ringWall,
+        // 广麻只掷一次骰 ⇒ 只有 `dice.first`，没有 `dice.second`（翻精癞子才有第二次掷骰）。
+        dice: { first: ring.firstDice },
+        dealer: ring.dealer,
+        openingScores: ring.openingScores,
+        postDealHands: opening.postDealHands,
+        wallBreakIndex: ring.wallBreakIndex,
+        commands: analysisRoundCommands,
+      })))
+    }
+    analysisRoundOpening = null
+    analysisRoundCommands.length = 0
+  }
+
+  // 分析记录的两个局边界，都用 sync 刷新 —— 必须与"局边界"同一拍发生：
+  // 开局分数若晚一拍取，第 2 局以后就会取到上一局结算后的值（§5 的 openingScores 正为此必须记）。
+  watch(state.phase, (phase) => {
+    if (phase !== 'opening') return
+    // 连庄也算新的一局（"已打局数 + 1"），所以序号在这里加一，与展示回放同一套口径。
+    analysisRoundIndex += 1
+    analysisOpeningScores = state.players.map((player) => player.score)
+    // 注意**不能**在这里把 `analysisLastScores` 重置成开局分：它是**跨局**首尾相接的读数
+    // （结算流水"相邻两条 before 与上一条 scoresAfter 一致"这条判据靠它），
+    // 重置会让局末那条兜底结算与上一条流水对不上。
+    analysisRoundSettled = false
+    analysisRoundEndKind = null
+    // 窗口 ID 的计数器是"本局内第 N 次进入决策"（§3.1），所以每局从 1 重新开始。
+    analysisWindowSeq = 0
+    analysisPending.clear()
+    // P1 §6：新的一局 ⇒ 上一局的复现快照与命令日志作废（它们已在上一局局末落库）。
+    // 注意**不能**在这里清 `analysisRoundRing`：重跑参数在 `onRoundPrepared` 里、本拍之前就交出来了。
+    analysisRoundOpening = null
+    analysisRoundCommands.length = 0
+  }, { flush: 'sync' })
+  watch(state.result, (result) => {
+    // 用对象身份去重：同一局的结算对象只会被折算一次；换局/换场都是新对象。
+    if (!result || result === analysisSettledResult) return
+    analysisSettledResult = result
+    // 本局结束的类型（自摸/点杠/抢杠/荒庄）：**先**写下，结算折算要用它当 `kind`。
+    analysisRoundEndKind = roundKindOfResult(result)
+    recordAnalysisSettlement()
+    // P1 §6：复现数据也在这里落库（此刻分数已算完 —— 见 `settlementTimeline` 里
+    // `finalizeWin`/`endDraw` 把分数写入放在 `state.result` 之前的顺序）。
+    recordAnalysisReproduction()
+  }, { flush: 'sync' })
 
   // 模拟测试里没有组件实例，直接注册会触发 Vue 警告；与 useRemoteGame.ts 同款守卫。
   if (getCurrentInstance()) onBeforeUnmount(clearPresentation)
@@ -779,7 +1009,11 @@ export function useGame({
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,
     userKongs: selectors.userKongs,
-    capabilities: ref({}),
+    capabilities: ref({
+      // P1 §6 的重跑校验器要读"由牌墙 + 骰子 + 庄家推出的开牌断点"（交叉校验用）。
+      // 广麻没有翻精：**只有这一项**，没有精牌/方位/墩位那一套。
+      openingWallBreakIndex: () => state.wallBreakIndex.value,
+    }),
     startGame,
     ...playerActions,
     ...matchLifecycle,
