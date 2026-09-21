@@ -1,15 +1,17 @@
 <script setup lang="ts">
 // 对局回放列表：一行 = 一整场（玩法 / 场次 / 对局日期 / 位次 / 主题），提供「查看 / 导出 / 删除」。
-// 底部提供保留策略（本机偏好）与全部清空。
+// 底部提供保留策略（本机偏好）、全部清空，以及**导入**入口（牌谱与分析包各一个，§10.7）。
 // AI 分析记录（方案 §9.2）：每行显示分析区状态（未开启／完整／部分缺失／已删除），
 // 并提供「导出分析包」与「只删分析、保留牌谱」两个独立入口 —— 两者互不影响。
 import { computed, ref, watch } from 'vue'
-import { formatMatchDate, formatRank, gameModeLabel, matchSubtitle } from '../../game/replay/format'
+import { formatMatchDate, formatRank, gameModeLabel, matchSubtitle, replayVersionNotice } from '../../game/replay/format'
 import { buildReplayExport, downloadReplayExport, replayExportFilename } from '../../game/replay/export'
+import { importReplayFile } from '../../game/replay/importReplay'
 import { REPLAY_KEEP_OPTIONS, readReplayKeepCount, saveReplayKeepCount } from '../../game/replay/preferences'
 import {
   analysisExportFilename, analysisFormatReadable, buildAnalysisExport, downloadAnalysisExport,
 } from '../../game/replay/analysis/export'
+import { importAnalysisFile } from '../../game/replay/analysis/import'
 import type { AnalysisStorage } from '../../game/replay/analysis/storage'
 import { analysisAreaLabel, analysisHasRecords } from '../../game/replay/analysis/status'
 import type { AnalysisAreaStatus } from '../../game/replay/analysis/types'
@@ -168,6 +170,61 @@ async function changeKeepCount(event: Event) {
   flashHint(`保留最近 ${next} 场`)
 }
 
+/** 读取用户选中的文件，并把 input 清空（否则再选同一个文件不会触发 change）。 */
+async function takeFile(event: Event): Promise<string | null> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  input.value = ''
+  if (!file) return null
+  try {
+    return await file.text()
+  } catch (error) {
+    flashHint(`读取文件失败：${String(error instanceof Error ? error.message : error)}`)
+    return null
+  }
+}
+
+/** 导入牌谱（§10.7）：解析失败或引用不闭合时如实报错，不落库半份。 */
+async function importReplayFromFile(event: Event) {
+  const text = await takeFile(event)
+  if (text === null) return
+  busy.value = true
+  try {
+    const outcome = await importReplayFile(props.storage, text)
+    await reload()
+    if (!outcome.ok) {
+      flashHint(`导入失败：${outcome.reason ?? '未知原因'}`)
+      return
+    }
+    // 导入的牌谱没有分析记录 ⇒ 列表会显示「缺少决策分析记录」，提示里也说清
+    const note = outcome.notes.length ? `（${outcome.notes.join('；')}）` : ''
+    flashHint(`已导入牌谱：${outcome.match?.rulesetName ?? ''} ${outcome.rounds.length} 局${note}；该场没有分析记录`)
+  } finally {
+    busy.value = false
+  }
+}
+
+/** 导入自包含分析包（§9.2）：包里带展示回放，本地没有该场时会一并补上。 */
+async function importAnalysisFromFile(event: Event) {
+  const storage = props.analysis
+  if (!storage) return
+  const text = await takeFile(event)
+  if (text === null) return
+  busy.value = true
+  try {
+    const outcome = await importAnalysisFile({ replay: props.storage, analysis: storage, text })
+    await reload()
+    if (!outcome.ok) {
+      flashHint(`导入失败：${outcome.reason ?? '未知原因'}`)
+      return
+    }
+    const note = outcome.notes.length ? `（${outcome.notes.join('；')}）` : ''
+    flashHint(`已导入分析包：${outcome.writtenRecords} 条记录${outcome.wroteReplay ? '，并补上该场牌谱' : ''}${note}`)
+  } finally {
+    busy.value = false
+  }
+}
+
 const themeLabel = (name: ReplayMatch['themeName']) => tableThemeIdentity(name).label
 const themeAccent = (name: ReplayMatch['themeName']) => themePresentationByName(name).palette.accent
 const hasMatches = computed(() => matches.value.length > 0)
@@ -183,6 +240,15 @@ function analysisLabel(match: ReplayMatch): string {
 function hasAnalysisRecords(match: ReplayMatch): boolean {
   return analysisHasRecords(analysisStatus.value[match.id])
 }
+
+/** 牌谱版本提示（§9.5）：由更新版本写下的记录要明确说出来，不静默按旧规则渲染。 */
+function versionNotice(match: ReplayMatch): string | null {
+  return replayVersionNotice(match)
+}
+
+/** 隐藏的文件输入：导入牌谱 / 导入分析包（§10.7）。 */
+const replayImportInput = ref<HTMLInputElement | null>(null)
+const analysisImportInput = ref<HTMLInputElement | null>(null)
 </script>
 
 <template>
@@ -217,6 +283,11 @@ function hasAnalysisRecords(match: ReplayMatch): boolean {
               <span class="replay-row-theme-name" :title="`对局使用主题：${themeLabel(match.themeName)}`">
                 主题 {{ themeLabel(match.themeName) }}
               </span>
+              <span
+                v-if="versionNotice(match)"
+                class="replay-row-version"
+                data-testid="replay-version-notice"
+              >{{ versionNotice(match) }}</span>
               <span
                 v-if="analysis"
                 class="replay-row-analysis"
@@ -259,8 +330,41 @@ function hasAnalysisRecords(match: ReplayMatch): boolean {
             </select>
           </label>
           <span class="replay-list-count">已存 {{ matches.length }} 场，超出自动删除最旧</span>
+          <button
+            type="button"
+            data-action-role="light"
+            data-testid="replay-import"
+            :disabled="busy || !available"
+            @click="replayImportInput?.click()"
+          >导入牌谱</button>
+          <button
+            v-if="analysis"
+            type="button"
+            data-action-role="light"
+            data-testid="replay-analysis-import"
+            :disabled="busy || !analysis.available()"
+            @click="analysisImportInput?.click()"
+          >导入分析</button>
           <span v-if="hint" class="replay-list-hint" role="status" data-testid="replay-hint">{{ hint }}</span>
         </div>
+        <!-- 视觉隐藏但保留在布局里：setInputFiles / 真实浏览器都能用 -->
+        <input
+          ref="replayImportInput"
+          class="replay-import-input"
+          type="file"
+          accept="application/json,.json"
+          data-testid="replay-import-input"
+          @change="importReplayFromFile"
+        />
+        <input
+          v-if="analysis"
+          ref="analysisImportInput"
+          class="replay-import-input"
+          type="file"
+          accept="application/json,.json"
+          data-testid="replay-analysis-import-input"
+          @change="importAnalysisFromFile"
+        />
 
         <div class="result-actions replay-list-actions">
           <button v-if="hasMatches" type="button" data-action-role="danger" :disabled="busy" @click="clearAll">清空全部</button>
@@ -305,6 +409,8 @@ function hasAnalysisRecords(match: ReplayMatch): boolean {
 .replay-row-meta { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .replay-row-date { color: var(--theme-text); font-size: 12px; }
 .replay-row-theme-name { overflow: hidden; color: var(--theme-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+/* 牌谱版本提示（§9.5）：更新版本写下的记录，明确提示而不是静默按旧规则渲染 */
+.replay-row-version { color: #e0a94a; font-size: 11px; }
 /* 分析区状态（§9.2）：用颜色区分四态，避免"未开启"与"缺失"看起来一样 */
 .replay-row-analysis { color: var(--theme-text-muted); font-size: 11px; }
 .replay-row-analysis[data-analysis-status="complete"] { color: var(--theme-accent); }
@@ -341,6 +447,21 @@ function hasAnalysisRecords(match: ReplayMatch): boolean {
   color: var(--theme-text, #f8f3df);
 }
 .replay-list-hint { color: var(--theme-accent); }
+/* 导入用的隐藏文件输入：不用 display:none —— 那样 .click() 与自动化都不可靠 */
+.replay-import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.replay-list-settings button {
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
 .replay-list-actions {
   /* 居中排列（与结算卡片一致）：贴到内容区左右边缘时，直角按钮会视觉上"戳出"卡片圆角边框。 */
   justify-content: center;

@@ -22,6 +22,15 @@ export default defineConfig({
   base: './',
   server: {
     port: 4173,
+    /**
+     * 开发服务器不该因为**编辑器/工具的原子写临时文件**而崩掉。
+     * 实测：Agent 的写入是"临时目录 + 改名"，Windows 上 chokidar 去 watch 那个临时文件会拿到
+     * EBUSY，而 Vite 对 watcher 的 error 事件是致命的 ⇒ 整个 dev server 退出，
+     * 正在跑的 e2e 随即 net::ERR_CONNECTION_REFUSED。这里把这类临时产物排除掉。
+     */
+    watch: {
+      ignored: ['**/*.tmpdir/**', '**/*.tmp', '**/.*.tmpdir/**'],
+    },
     proxy: {
       '/api': {
         target: apiTarget,

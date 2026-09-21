@@ -90,4 +90,30 @@ describe('复现数据还原成引擎开局', () => {
     expect(openingFromReproduction(record, { baseScores: [1, 2, 3, 4] }).opening!.players.map(player => player.score))
       .toEqual([1, 2, 3, 4])
   })
+
+  // 记录格式统一（2026-09-21）：新记录一律记牌码；**旧记录的中文显示名照样要能读**
+  // （§9.5 旧回放继续可看、§10.7 新格式导入导出不丢引用）。
+  it('两种牌名写法都能还原（新记录记牌码，旧记录记显示名）', () => {
+    const displayNames: AnalysisReproduction = {
+      ...fullRecord(),
+      initialWall: ['一万', '二万', '三筒', '东风', '白板'],
+      initialHands: [
+        ['一万', '二万', '三万', '四条', '南风', '红中', '发财', '白板', '九筒', '九条', '八万', '七筒', '六条', '五万'],
+        ['一万', '二万', '三万', '四条', '南风', '红中', '发财', '白板', '九筒', '九条', '八万', '七筒', '六条'],
+        ['一万', '二万', '三万', '四条', '南风', '红中', '发财', '白板', '九筒', '九条', '八万', '七筒', '六条'],
+        ['一万', '二万', '三万', '四条', '南风', '红中', '发财', '白板', '九筒', '九条', '八万', '七筒', '六条'],
+      ],
+      flipTiles: ['九筒', '白板'],
+      jokers: ['红中', '发财'],
+    }
+    const legacy = openingFromReproduction(displayNames)
+    expect(legacy.reason).toBeNull()
+    expect(legacy.opening!.wall).toEqual(['m1', 'm2', 'p3', 'east', 'white'])
+    expect(legacy.opening!.jokers).toEqual(['red', 'green'])
+    expect(legacy.opening!.players[0].hand[0]).toBe('m1')
+
+    // 两种写法混用也认（记录格式统一之前的过渡数据）
+    const mixed = openingFromReproduction({ ...fullRecord(), initialWall: ['m1', '二万', 'p3'] })
+    expect(mixed.opening!.wall).toEqual(['m1', 'm2', 'p3'])
+  })
 })

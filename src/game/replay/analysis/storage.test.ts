@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createAnalysisMemoryDriver, type AnalysisStoreDriver } from './idb'
 import { createAnalysisStorage, type AnalysisStorage } from './storage'
+import { createBudgetLease } from './leases'
 import type { AnalysisBlockPart } from './codec'
 
 // 分析区存储的验收点（方案 §9.2／§9.3／§9.4／§9.5）：
@@ -59,6 +60,28 @@ function makeStorage(options: Parameters<typeof createAnalysisStorage>[0] = {}):
   return createAnalysisStorage({ driver: createAnalysisMemoryDriver(), ...options })
 }
 
+/**
+ * 模拟两个标签页：共享同一个存储驱动（同源同一分区）与同一份 localStorage 替身。
+ * §9.4 明确要求"不能只测单页或两个独立浏览器"、"不能只靠内存锁或各页自己的计数"。
+ */
+function twoTabs(budgetBytes: number) {
+  const driver = createAnalysisMemoryDriver()
+  const store = { value: null as string | null }
+  const clock = { at: 1_000 }
+  const leaseFor = (id: string) => createBudgetLease({
+    load: () => store.value,
+    save: (value) => { store.value = value },
+    instanceId: id,
+    now: () => clock.at,
+    ttlMs: 30_000,
+    // 心跳用可控定时器：测试里不需要真的跑定时器
+    setTimer: () => 'timer',
+    clearTimer: () => {},
+  })
+  const tab = (id: string) => createAnalysisStorage({ driver, maxBytes: budgetBytes, lease: leaseFor(id) })
+  return { a: tab('tab-a'), b: tab('tab-b'), leaseFor, clock }
+}
+
 describe('分析区存储', () => {
   it('追加后可按序读回，账本记录条数与落库字节', async () => {
     const storage = makeStorage()
@@ -100,8 +123,70 @@ describe('分析区存储', () => {
     expect(after.parts).toHaveLength(1)
   })
 
-  it('压缩不可用且超出 raw 预算：不落库、暂停该场并留下缺失原因', async () => {
-    withoutCompression()
+  // §9.4 的跨标签页要求：两页共享同一份字节预算，在途预留要互相看得见；
+  // 一页关掉（不再心跳）后留下的预留必须能被回收，否则另一页会永远少一块可用空间。
+  // §9.4：启动时读一次 estimate()（每次加载只问一次，不跟着写入频率走）
+  it('创建存储时读一次浏览器容量估算，且读数只用于下调预算', async () => {
+    let calls = 0
+    const storage = createAnalysisStorage({
+      driver: createAnalysisMemoryDriver(),
+      maxBytes: 100 * 1024 * 1024,
+      storageManager: { estimate: async () => { calls += 1; return { usage: 95 * 1024 * 1024, quota: 100 * 1024 * 1024 } } },
+    })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(calls, '启动时读一次').toBe(1)
+    expect(storage.budget(), '压力高时下调预算').toBeLessThan(100 * 1024 * 1024)
+    expect(storage.budget()).toBeGreaterThan(0)
+  })
+
+  it('跨标签页预算：一页在途预留让另一页让路；关闭一页后遗留预留被回收', async () => {    const { b, leaseFor, clock } = twoTabs(1_000)
+    // 模拟"标签页 A 正在写一大块"：它的在途预留必须被 B 看见
+    const other = leaseFor('tab-a')
+    other.reserve(900)
+    const blocked = await b.write('m-b', { rulesetId: 'lotus-blood-flow' }, parts(20))
+    // B 自己的账本是空的，但 A 占着 900/1000 ⇒ 本块放不下：暂停并留痕（detail 里带上在途数字）
+    expect(blocked).toMatchObject({ ok: false, reason: 'paused' })
+    expect(blocked.detail).toContain('inflight=900')
+
+    // A 关掉且不再心跳：超过 ttl 后它的预留被回收，B 立刻写得进去（清空后另开一场）
+    clock.at += 31_000
+    const allowed = await b.write('m-b2', { rulesetId: 'lotus-blood-flow' }, parts(20))
+    expect(allowed.ok, '回收遗留预留后应能写入').toBe(true)
+  })
+
+  // §9.3：单条超大记录（模型超长回答）要走片段化 —— 分块保持有界，读回来原文逐字一致
+  it('超大单条记录：分块保持有界，读回后原文逐字一致（§9.3）', async () => {
+    const storage = makeStorage()
+    const answer = '字'.repeat(80_000)
+    const result = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, [
+      { tag: 'config', value: { id: 'config/m1/1' } },
+      { tag: 'llmAttempt', value: { id: 'attempt/1', answer } },
+    ])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // 单块原始字节不应等于"整条记录塞进一块"（目标 48KiB ⇒ 必然多块）
+    expect(result.blocks).toBeGreaterThan(1)
+    const metas = await storage.read('m1')
+    expect(metas.complete).toBe(true)
+    expect(metas.parts.map(part => part.tag)).toEqual(['config', 'llmAttempt'])
+    expect((metas.parts[1].value as { answer: string }).answer).toBe(answer)
+    expect((metas.parts[1].value as { answer: string }).answer.length).toBe(80_000)
+  })
+
+  // §9.3：片段缺片时读取侧必须把这一场标成不完整，而不是给半份回答
+  it('片段缺片：读取侧标为不完整（fragment-incomplete），不返回半份数据', async () => {
+    const storage = makeStorage()
+    // 直接写入"只有第 0 片、却声明共 9 片"的片段（模拟落库中断后的库内容）
+    await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, [
+      { tag: 'fragment', value: { id: 'g1', index: 0, total: 9, tag: 'llmAttempt', text: '{"answer":"半份' } },
+    ])
+    const read = await storage.read('m1')
+    expect(read.complete, '缺片的场次不能算完整').toBe(false)
+    expect(read.reason).toBe('fragment-incomplete')
+    expect(read.parts, '不得返回半份数据').toEqual([])
+  })
+
+  it('压缩不可用且超出 raw 预算：不落库、暂停该场并留下缺失原因', async () => {    withoutCompression()
     const storage = makeStorage({ rawBudgetBytes: 10 })
     const result = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(10))
     // 失败原因统一为 'paused'，而 detail 写明**最初**是哪一步暂停的（否则线上只能看到笼统的 budget）
@@ -171,6 +256,33 @@ describe('分析区存储', () => {
     // 字节账本不再计入已删除场
     const write = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(2))
     expect(write.ok).toBe(true)
+  })
+
+  // 回归：写入遇到墓碑时必须复活，否则导入/重新录制回去的记录永远显示「已删除」，
+  // 且 noteGap 会继续把状态压回 deleted —— 四态就再也回不去。
+  it('已删除的场次再写入 ⇒ 状态复活为完整，配置引用不漏（§9.2、§9.4）', async () => {
+    const storage = makeStorage()
+    await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(5))
+    await storage.removeAnalysis('m1')
+    expect(await storage.status('m1')).toBe('deleted')
+
+    // 导入流程的真实顺序：先登记配置引用，再写回记录
+    await storage.retainConfig('m1', { id: 'cfg-imported', value: { rulesVersion: 'v1' } })
+    const write = await storage.write('m1', { rulesetId: 'lotus-blood-flow' }, parts(4))
+    expect(write.ok).toBe(true)
+    expect(await storage.status('m1'), '写入后不应继续是「已删除」').toBe('complete')
+    const read = await storage.read('m1')
+    expect(read.parts.length).toBeGreaterThan(0)
+    expect(await storage.readConfigs('m1')).toEqual([{ rulesVersion: 'v1' }])
+
+    // 复活后不完整仍按 partial 记录
+    await storage.noteGap('m1', { scope: 'import', reason: 'package-marked-partial' })
+    expect(await storage.status('m1')).toBe('partial')
+
+    // 再删除：新登记的配置引用要被释放（否则引用计数泄漏）
+    await storage.removeAnalysis('m1')
+    expect(await storage.status('m1')).toBe('deleted')
+    expect(await storage.readConfigs('m1')).toEqual([])
   })
 
   it('配置引用计数：两场共享同一版本配置，删一场不影响另一场，零引用才回收', async () => {

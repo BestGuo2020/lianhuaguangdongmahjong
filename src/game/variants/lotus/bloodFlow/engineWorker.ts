@@ -32,15 +32,35 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     let result: unknown
     /** 权威机器人实际提交的动作：随回复回传，供分析记录落成真命令（§6/§10.6）。 */
     let botAction: unknown = null
-    if (data.kind === 'command') engine.submit(data.command)
+    /**
+     * 这次提交权威**是否接受**（§3.4：请求发出 ≠ 动作执行）。
+     * 只有 `{kind:'command'|'bot'}` 才有值；分析录制据此决定要不要记进"权威命令序列" ——
+     * 记下被拒的命令会让重放执行一条权威从未执行的动作（静默分叉，比报错更难查）。
+     */
+    let commandAccepted: boolean | null = null
+    /**
+     * `{kind:'expire'}` 是否**真的推进了窗口**。窗口还没到截止时间、或已被别的动作解决时，
+     * `engine.expire` 是无操作；把无操作的 expire 记成"靠超时推进"，重放就会替引擎多做一次决定。
+     */
+    let expireAdvanced: boolean | null = null
+    if (data.kind === 'command') commandAccepted = engine.submit(data.command)
     if (data.kind === 'bot' && engine.window?.id === data.windowId) {
       const view = bloodFlowSeatView(engine, data.seat)
       const action = BLOOD_FLOW_AI.strategy === 'legacy'
         ? decideBloodFlowAction(view, BLOOD_FLOW_AI.minimumFirstPayment)
         : decideBloodFlowActionEv(view, BLOOD_FLOW_AI)
-      if (action) { botAction = action; engine.submit(engine.command(data.seat, action)) }
+      if (action) {
+        botAction = action
+        commandAccepted = engine.submit(engine.command(data.seat, action))
+      } else commandAccepted = false
     }
-    if (data.kind === 'expire') engine.expire(Date.now(), data.windowId)
+    if (data.kind === 'expire') {
+      const beforeWindow = engine.window?.id ?? null
+      const beforeVersion = engine.version
+      engine.expire(Date.now(), data.windowId)
+      // 推进的判据用引擎自己的版本号/窗口 id：expire 会要么解决当前窗口、要么什么都不做。
+      expireAdvanced = engine.version !== beforeVersion || (engine.window?.id ?? null) !== beforeWindow
+    }
     if (data.kind === 'advance') engine.advance(data.transitionId)
     if (data.kind === 'pause') engine.pause()
     if (data.kind === 'resume') engine.resume()
@@ -60,7 +80,12 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
       const base = data.replay
         ? { ...view, replay: bloodFlowSeatView(engine, 0, { revealAll: true, includeDiscards: true }) }
         : view
-      result = botAction ? { ...base, botAction } : base
+      result = {
+        ...base,
+        ...(botAction ? { botAction } : {}),
+        ...(commandAccepted === null ? {} : { commandAccepted }),
+        ...(expireAdvanced === null ? {} : { expireAdvanced }),
+      }
     }
     self.postMessage({ id: data.id, result })
   } catch (error) {

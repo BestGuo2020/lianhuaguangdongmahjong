@@ -27,7 +27,11 @@ interface FixtureMatch {
 
 test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌 / 单步 / 切局 / 视角 / 主题）', async ({ page }) => {
   const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('pageerror', (error) => {
+    // 诊断用：把栈打出来（three.js 的 program.isReady 这类 teardown 竞态只有栈能定位）
+    console.log(`[pageerror] ${error.message}\n${error.stack ?? ''}`)
+    errors.push(error.message)
+  })
   await mkdir(OUT, { recursive: true })
 
   // ── 1. 真实引擎跑完三种玩法并入本地库 ──
@@ -492,6 +496,140 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(bloodRow.getByTestId('replay-analysis-remove')).toBeDisabled()
   // 牌谱本身仍在（行还在、导出牌谱仍可用）
   await expect(bloodRow.getByTestId('replay-export')).toBeEnabled()
+
+  // ── 2e. 导入往返（§9.5、§10.7）：自包含分析包能把删掉的分析区完整变回来 ──
+  await page.setInputFiles('[data-testid="replay-analysis-import-input"]', analysisPath!)
+  await expect(page.getByTestId('replay-hint')).toContainText('已导入分析包')
+  await expect(bloodRow.getByTestId('replay-analysis-status')).toHaveText('分析：完整')
+  // 「自包含」不能只是文件里有字段：导入回来的记录必须真的能重跑到同一结束状态（§10.6）
+  const importedReplays = await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('lianhua-guangma-analysis')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const blocks = await new Promise<Array<{ sequence: number; codec: string; rawBytes: number; storedBytes: number; parts: number; checksum: string; payload: Uint8Array }>>((resolve, reject) => {
+      const tx = db.transaction('blocks', 'readonly')
+      const request = tx.objectStore('blocks').getAll()
+      request.onsuccess = () => resolve(request.result as never)
+      request.onerror = () => reject(request.error)
+    })
+    db.close()
+    const { decodeAnalysisBlock } = await import('/src/game/replay/analysis/codec.ts')
+    const { replayReproduction } = await import('/src/game/replay/analysis/replayReproduction.ts')
+    const gathered: Array<{ tag: string; value: Record<string, unknown> }> = []
+    for (const block of blocks.sort((a, b) => a.sequence - b.sequence)) {
+      const decoded = await decodeAnalysisBlock({
+        sequence: block.sequence, codec: block.codec as 'gzip' | 'raw', rawBytes: block.rawBytes,
+        storedBytes: block.storedBytes, checksum: block.checksum, parts: block.parts, payload: new Uint8Array(block.payload),
+      })
+      if (decoded.parts) gathered.push(...(decoded.parts as never))
+    }
+    const reproductions = gathered.filter(part => part.tag === 'reproduction').map(part => part.value) as Array<{ commands?: unknown[] }>
+    return reproductions.map(record => {
+      const result = replayReproduction({ reproduction: record as never, commands: (record.commands ?? []) as never })
+      return { ok: result.ok, progress: `${result.submitted}/${result.recorded}`, kindMismatches: result.kindMismatches, reason: result.reason }
+    })
+  })
+  console.log(`[analysis] 导入后复现：${importedReplays.map(entry => `${entry.progress}${entry.ok ? ' ok' : ''}`).join('  ')}`)
+  expect(importedReplays.length, '导入后应有全部四局的复现数据').toBe(4)
+  for (const entry of importedReplays) {
+    expect(entry.reason, '导入回来的记录必须能复现（自包含不是"有字段"就够）').toBeNull()
+    expect(entry.ok, `导入后复现应成功：${entry.progress}`).toBe(true)
+    expect(entry.kindMismatches).toBe(0)
+  }
+
+  // 牌谱往返：删除该场 → 用 2b 导出的文件导入回来（引用闭合，局数与事件流都在）
+  page.once('dialog', (dialog) => void dialog.accept())
+  await rowOf('莲花广麻').getByRole('button', { name: '删除' }).click()
+  await expect(rows).toHaveCount(2)
+  await expect(page.locator('.replay-list-count')).toContainText('已存 2 场')
+  await page.setInputFiles('[data-testid="replay-import-input"]', downloadPath!)
+  await expect(page.getByTestId('replay-hint')).toContainText('已导入牌谱')
+  await expect(rows).toHaveCount(3)
+  await expect(page.locator('.replay-list-count')).toContainText('已存 3 场')
+  const importedRow = rowOf('莲花广麻')
+  await expect(importedRow).toContainText(/\d+局 · [1-4]位/)
+  // 这份牌谱自己记着"录制时分析没开"（analysisRecorded=false 随文件一起往返）⇒ 显示「未开启」；
+  // 只有"没有该字段的旧录像"才该显示「缺少决策分析记录」（下面用去掉字段的副本验证）。
+  await expect(importedRow.getByTestId('replay-analysis-status')).toHaveText('分析：未开启')
+  // 再导一次同一文件：拒绝覆盖（不静默改用户的库）
+  await page.setInputFiles('[data-testid="replay-import-input"]', downloadPath!)
+  await expect(page.getByTestId('replay-hint')).toContainText('已存在同一场次')
+
+  // 旧格式（没有 schemaVersion、没有 analysisRecorded）⇒ 可导入、观看，并标记「缺少决策分析记录」（§10.7）
+  const legacyPayload = JSON.parse(await readFile(downloadPath!, 'utf8')) as {
+    match: { id: string; analysisRecorded?: boolean }
+    rounds: Array<{ id: string; matchId: string }>
+    schemaVersion?: number
+  }
+  legacyPayload.match.id = 'legacy-import-e2e'
+  delete legacyPayload.match.analysisRecorded
+  delete legacyPayload.schemaVersion
+  for (const round of legacyPayload.rounds) { round.matchId = 'legacy-import-e2e'; round.id = `legacy-import-e2e:${round.id}` }
+  const legacyFile = `${fileURLToPath(new URL('../..', import.meta.url))}/tmp/replay-legacy-import.json`
+  await writeFile(legacyFile, JSON.stringify(legacyPayload, null, 2))
+  await page.setInputFiles('[data-testid="replay-import-input"]', legacyFile)
+  await expect(page.getByTestId('replay-hint')).toContainText('旧格式牌谱')
+  await expect(rows).toHaveCount(4)
+  const legacyRow = rowOf('莲花广麻').nth(0)
+  expect(await page.locator('.replay-row').filter({ hasText: '缺少决策分析记录' }).count(),
+    '旧录像（无 analysisRecorded 字段）应标「缺少决策分析记录」').toBe(1)
+  // 该行也能打开观看（旧格式照样能看牌谱）
+  await legacyRow.getByRole('button', { name: '查看' }).click()
+  await expect(page.getByTestId('replay-viewer')).toBeVisible()
+  await expect(page.locator('canvas.mahjong-scene')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.replay-log-list button').first()).toBeVisible()
+  await page.getByRole('button', { name: '← 返回大厅' }).click()
+  await expect(page.locator('.replay-log-list button')).toHaveCount(0)
+  // 清掉这份临时导入，保持后续用例的列表状态干净
+  if (await page.getByTestId('replay-list').count() === 0) await page.getByTestId('open-replay').click()
+  page.once('dialog', (dialog) => void dialog.accept())
+  await rowOf('莲花广麻').first().getByRole('button', { name: '删除' }).click()
+  await expect(rows).toHaveCount(3)
+
+  // ── 2f. 版本高于本程序的牌谱：照常列出但明确提示（§9.5：不清空、不静默按旧规则渲染）──
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase | null>((resolve) => {
+      const request = indexedDB.open('lianhua-guangma-replay')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(null)
+    })
+    if (!db) return
+    const matches = await new Promise<Array<Record<string, unknown>>>((resolve) => {
+      const tx = db.transaction('matches', 'readonly')
+      const request = tx.objectStore('matches').getAll()
+      request.onsuccess = () => resolve(request.result as never)
+      request.onerror = () => resolve([])
+    })
+    const sample = matches[0]
+    if (!sample) return
+    // 直接往库里塞一条"未来版本"的记录：本程序不认识它的字段，但必须照常列出并提示
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction('matches', 'readwrite')
+      const request = tx.objectStore('matches').put({
+        ...sample, id: 'future-version-e2e', schemaVersion: 99,
+        rulesetName: '未来版本牌谱', matchName: '东风场', startedAt: Number(sample.startedAt) + 1,
+      })
+      request.onsuccess = () => resolve()
+      request.onerror = () => resolve()
+    })
+    db.close()
+  })
+  // 列表重新加载（关掉再打开）
+  await page.getByRole('button', { name: '关闭' }).click()
+  await page.getByTestId('open-replay').click()
+  await expect(rows).toHaveCount(4)
+  const futureRow = rowOf('未来版本牌谱')
+  await expect(futureRow.getByTestId('replay-version-notice')).toContainText('高于本程序')
+  await expect(futureRow.getByTestId('replay-version-notice')).toContainText('v99')
+  // 旧记录不受影响：正常记录不显示版本提示
+  expect(await rowOf('莲花广麻').getByTestId('replay-version-notice').count()).toBe(0)
+  // 清掉这条注入记录
+  page.once('dialog', (dialog) => void dialog.accept())
+  await futureRow.getByRole('button', { name: '删除' }).click()
+  await expect(rows).toHaveCount(3)
+  await page.screenshot({ path: `${OUT}/01b-import-roundtrip.png` })
 
   const viewer = page.getByTestId('replay-viewer')
   async function openReplay(label: string) {

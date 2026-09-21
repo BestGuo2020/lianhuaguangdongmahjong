@@ -7,6 +7,7 @@
 // 会议层同时负责：场次配置（引擎/规则/AI 指纹、座位控制）、场末收尾落库、
 // 以及"分析关闭时零成本"（enabled=false 时所有调用直接空转，不产生任何分配与写入）。
 import { fingerprintOf } from './codec'
+import type { StorageCapability } from './capability'
 import { createAnalysisRecorder, type AnalysisMatchInput, type AnalysisRecorder } from './recorder'
 import type { AnalysisStorage } from './storage'
 import type { AnalysisAreaStatus, AnalysisSeatControl } from './types'
@@ -44,6 +45,8 @@ export interface AnalysisSession {
   matchId(): string
   /** 引擎等外部组件持有的代理若未被创建（关闭态），返回 false。 */
   active(): boolean
+  /** 浏览器存储能力（§9.4／§10.11）；未接存储时为 null。 */
+  capability(): StorageCapability | null
 }
 
 function defaultId(): string {
@@ -102,6 +105,9 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
         ...(options.onError ? { onError: options.onError } : {}),
       })
       lastStatus = 'complete'
+      // §9.4：首次启用分析录制时检查持久化状态，未持久化就在这次明确操作里申请一次 persist()。
+      // 失败/被拒都只记录状态，不影响录制；也不会每次开局反复申请（探测模块自己记住）。
+      void options.storage?.capability?.().ensurePersistence().catch(() => {})
       target.beginMatch({
         engineBuild: input.engineBuild ?? 'lianhua-guangma@local',
         rulesVersion: input.rulesVersion,
@@ -121,10 +127,16 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
       const recorder = target
       const matchId = currentMatchId
       target = null
+      // 场末按 §9.4 复检一次同源容量（有节制的检查；不用它的读数覆盖逐块账本）
+      void options.storage?.capability?.().refreshEstimate().catch(() => {})
       if (!recorder) return { matchId, status: lastStatus, bytes: 0 }
       const result = await recorder.finish()
       lastStatus = result.status
       return { matchId, status: result.status, bytes: result.bytes }
+    },
+    /** 浏览器存储能力快照（持久化状态 + 最近一次容量估算），供诊断/容量基线工具读取。 */
+    capability() {
+      return options.storage?.capability?.() ?? null
     },
   }
 }

@@ -396,10 +396,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     // 否则只能看出"对不上"，看不出是记录侧多推/少推还是权威端推进方式不同。
     if (windowKind) entry.windowKind = windowKind
     const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number; tiles?: string[]; meld?: string[] }
+    // 牌一律记**牌码**（`south`），不转中文显示名：引擎候选是牌码，两边同口径才不会假性失配
+    // （§10.6 的第一个根因就是"记录存牌码、比较时只归一一侧"）。读取侧两种写法都认。
     if (record.tile !== undefined) entry.tile = record.tile
     // 吃/杠不带单张 tile，必须把组合记下来，否则复现时只能按 kind 取第一个候选（实测会吃错组合）
     const combination = record.tiles ?? record.meld
-    if (combination?.length) entry.tiles = combination.map(tile => tileName(tile as never))
+    if (combination?.length) entry.tiles = [...combination]
     if (record.index !== undefined) entry.handIndex = record.index
     if (record.from !== undefined) entry.from = record.from
     if (record.meldIndex !== undefined) entry.meldIndex = record.meldIndex
@@ -432,7 +434,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         options.analysis.reproduction({
           roundIndex: analysisRoundOpening.roundIndex,
           available: true,
-          initialWall: analysisRoundOpening.wall.map((tile) => tileName(tile)),
+          // 牌墙与翻精同样记**牌码**（与命令条目、决策前态一致；读取侧两种写法都认）
+          initialWall: [...analysisRoundOpening.wall],
           // 开局手牌不能由牌墙推出（引擎取 opening.players[].hand），因此必须单独记（§6）。
           initialHands: analysisRoundOpening.hands.map(hand => [...hand]),
           dealerDrawnIndex: analysisRoundOpening.dealerDrawnIndex,
@@ -443,7 +446,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           dealer: analysisRoundOpening.dealer,
           // 当局开局分数：§6 明列必需。缺了它，重跑从初始分起步，第 2 局以后的结束分数必然对不上。
           openingScores: [...analysisRoundOpening.openingScores],
-          ...(analysisRoundOpening.flipTile ? { flipTile: tileName(analysisRoundOpening.flipTile) } : {}),
+          ...(analysisRoundOpening.flipTile ? { flipTile: analysisRoundOpening.flipTile } : {}),
           flipStack: analysisRoundOpening.flipStack,
           // 完整权威命令序列（含过牌）+ 执行顺序：只有牌墙与展示步骤不足以精确复现（§6）。
           commands: analysisRoundCommands.map((entry) => ({ ...entry })),
@@ -579,8 +582,17 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     updateCountdown()
     schedule()
   }
-  async function request(body: Parameters<NonNullable<typeof worker>['request']>[0]) {
-    if (!worker || busy) return
+  /**
+   * 向权威发一条请求并应用回复。
+   * 返回回复（`null` = 没有发出/已过期）：分析录制需要它来判断"权威到底执行了什么"（§3.4）。
+   * `beforeApply` 在**应用回复之前**、也就是"局末快照"之前执行 —— 人类命令的接受与否必须在那之前定案，
+   * 否则那一局结束时会把这条命令漏掉（实测：人类对局的复现记录少一条命令，重放报"命令序列不完整"）。
+   */
+  async function request(
+    body: Parameters<NonNullable<typeof worker>['request']>[0],
+    beforeApply?: (next: BloodFlowWorkerView) => void,
+  ): Promise<BloodFlowWorkerView | null> {
+    if (!worker || busy) return null
     busy = true
     const epoch = generation
     try {
@@ -589,15 +601,18 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       const next = await worker.request<BloodFlowWorkerView>(
         options.recorder ? { ...body, replay: true } : body,
       )
-      if (epoch !== generation) return
+      if (epoch !== generation) return null
       busy = false
+      beforeApply?.(next)
       apply(next)
+      return next
     } catch (error) {
-      if (epoch !== generation) return
+      if (epoch !== generation) return null
       clear()
       transient.announce('对局已中断，请返回大厅重开', 'red')
       state.actionPrompt.value = null
       if (view.value) view.value = { ...view.value, ownActions: [], public: { ...view.value.public, status: 'interrupted' } }
+      return null
     }
   }
   function schedule() {
@@ -624,23 +639,25 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }
     const epoch = generation
     for (const bot of current.waitingSeats.filter(s => s !== 0 || options.autoplay)) later(() => {
-      if (epoch === generation && view.value?.window?.id === w.id) void actBot(bot, w.id, epoch, w.kind, current.waitingSeats)
+      if (epoch === generation && view.value?.window?.id === w.id) void actBot(bot, w.id, epoch)
     }, options.paceMs ?? 650)
     if (w.deadlineAt < Number.MAX_SAFE_INTEGER) later(() => {
       if (view.value?.window?.id === w.id) {
-        // 分析记录（§6）：该窗口没人决定、靠超时推进 —— 不记这条，重跑会与当时分叉
-        // （seat 用 -1 表示"不是某个座位的决定"；校验器遇到 expire 只推时钟并推进窗口）。
-        // 注意：这里不再做"该窗口已有命令就不记 expire"的过滤 —— 第 63 轮加过，但它假设
-        // "出现过命令 ⇒ 窗口已闭合"，在多人认领窗口上不成立（有人出命令、其余人到点静默），
-        // 会导致窗口的闭合方式彻底缺失、重放错开一位。录制侧一律如实记录，交由重放侧按序处理。
-        if (options.analysis) {
-          analysisRoundCommands.push(analysisExpireEntry(w.id, w.kind, current.waitingSeats))
-        }
-        void request({ kind: 'expire', windowId: w.id })
+        // 分析记录（§6）：该窗口没人决定、靠超时推进。**只有权威真的推进了窗口才记**：
+        // 提前发出的 expire 在 worker 里是无操作（`now < deadlineAt` 或窗口已被解决），
+        // 把它记成"靠超时推进"会让重放替引擎多做一次决定（§11 的"记录侧多压 expire"）。
+        // seat 用 -1 表示"不是某个座位的决定"；校验器遇到 expire 只推时钟并推进窗口。
+        const windowId = w.id, windowKind = w.kind, waitingSeats = current.waitingSeats
+        void request({ kind: 'expire', windowId }, (next) => {
+          if (!options.analysis) return
+          if ((next as { expireAdvanced?: boolean }).expireAdvanced === false) return
+          // 入列也要赶在 apply（局末快照）之前，否则这一条会被算进下一局
+          analysisRoundCommands.push(analysisExpireEntry(windowId, windowKind, waitingSeats))
+        })
       }
     }, Math.max(0, w.deadlineAt - Date.now()))
   }
-  async function actBot(seat: 0 | 1 | 2 | 3, windowId: string, epoch: number, watchedKind?: string, watchedSeats?: readonly number[]) {
+  async function actBot(seat: 0 | 1 | 2 | 3, windowId: string, epoch: number) {
     const active = worker, key = `${epoch}/${windowId}/${seat}`
     if (!active || pendingBots.has(key)) return
     pendingBots.add(key)
@@ -649,17 +666,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     try {
       const own = await active.request<BloodFlowWorkerView>({ kind: 'view', seat, replay: Boolean(options.recorder) })
       if (!current() || own.window?.id !== windowId) {
-        // 到点或已不再等待：本端没有作出决定，该窗口会按超时闭合。必须如实记一条 expire，
-        // 否则这个座位在记录里凭空消失，重放会与记录错开一位（配对轨迹实测到过）。
-        if (options.analysis) {
-          // 窗口类型取当时能拿到的那一份：座位视角与它相同则用座位视角，否则用主线程当前窗口；
-          // 都没匹配上（窗口已经推进）时退回**排定这个机器人计时器时看到的**那份（watchedKind），
-          // 该窗口的 kind 在排定时就已确定，不用猜也不会缺（§11 要求每条 expire 都带 kind）。
-          const kind = own.window?.id === windowId ? own.window.kind
-            : view.value?.window?.id === windowId ? view.value.window.kind : watchedKind
-          const seats = view.value?.window?.id === windowId ? view.value.waitingSeats : watchedSeats
-          analysisRoundCommands.push(analysisExpireEntry(windowId, kind, seats))
-        }
+        // 到点或已不再等待：本端没有作出决定 ⇒ **什么都不记**。
+        // 这个窗口是怎么闭合的，由"权威真正做了什么"那条路径记录：要么是别家被接受的动作，
+        // 要么是 schedule() 里那次真的推进了窗口的 expire（`expireAdvanced`）。
+        // 此前这里会补一条 expire（第 7 条结论的遗留做法），在窗口其实由命令闭合时纯属噪声，
+        // 实测每局都会多出一条、还得靠重放侧的前置过滤丢掉。
         return
       }
       // 分析记录：窗口与前态（含该座位的合法动作）。只读视角，不参与决策（§3.2、§10.1）。
@@ -690,9 +701,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       // 分析记录（§6）：机器人/模型座位的命令同样入序列（否则只有牌墙、无法精确复现）。
       // **必须带 windowId**：本端决策（单候选窗口、锁手窗口）也走这条分支，漏传的话校验器既看不见
       // 「该窗口已有命令」（前置过滤失效），又会把这条命令排到整个序列末尾 —— 实测重放因此比记录
-      // 错开一个窗口（记录里该窗口只剩 expire、重放找不到该窗口的动作而中止）。
+      // 错开一个窗口。**且必须被权威接受**：被拒的命令（窗口已关闭/该座位已决定）权威从未执行，
+      // 记进序列会让重放执行一条不存在的动作（§3.4：请求发出 ≠ 动作执行）。
+      const accepted = (next as { commandAccepted?: boolean }).commandAccepted
       if (options.analysis && action) {
-        analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined, windowId, own.window?.kind))
+        if (accepted !== false) {
+          analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined, windowId, own.window?.kind))
+        }
       } else if (options.analysis) {
         // 本端没有决策（无 provider ⇒ 权威机器人代决）：权威若回传了它实际提交的动作，
         // 就落成真命令（可复现）；否则如实落 auto（重跑时会说明"该窗口不是本端决定"）。
@@ -742,15 +757,24 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     }
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
-    // 分析记录（§6）：人类命令入序列（含过牌），带动作载荷以便赛后重跑复现。
-    if (options.analysis) {
-      const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
-      analysisRoundCommands.push(analysisCommandEntry(
-        current.seat, action, index >= 0 ? legalActionId(w.id, index) : undefined, w.id, w.kind,
-      ))
+    const legalIndex = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
+    if (options.externalAuthority) {
+      // 联机/远端权威：回复不在本端，权威命令序列由权威端自己的录制负责（§6）
+      options.externalAuthority.send(command)
+      return
     }
-    if (options.externalAuthority) options.externalAuthority.send(command)
-    else void request({ kind: 'command', command })
+    // 分析记录（§6）：人类命令**同步入列**（与"局末快照"同一拍，绝不会漏到下一局去），
+    // 并在回复到达、快照之前核对权威是否接受：被拒（窗口已关闭/该座位已决定）就当场撤回 ——
+    // 权威从未执行的命令记进序列，会让重放执行一条不存在的动作（§3.4：请求发出 ≠ 动作执行）。
+    const entry = options.analysis
+      ? analysisCommandEntry(current.seat, action, legalIndex >= 0 ? legalActionId(w.id, legalIndex) : undefined, w.id, w.kind)
+      : null
+    if (entry) analysisRoundCommands.push(entry)
+    void request({ kind: 'command', command }, (next) => {
+      if (!entry || (next as { commandAccepted?: boolean }).commandAccepted !== false) return
+      const index = analysisRoundCommands.indexOf(entry)
+      if (index >= 0) analysisRoundCommands.splice(index, 1)
+    })
   }
   /** 分析记录：已入账的结算（胡牌批次/杠）id，视角是累计的，同一结算只记一次引用（§5）。 */
   const analysisSettlementsSeen = new Set<string>()
@@ -782,10 +806,13 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     flipStack: state.flipStack.value ?? null,
     hands: state.players.map(player => [...player.hand]),
     dealerDrawnIndex,
-    jokers: state.jokerTiles.value.map(tile => tileName(tile)),
+    // 牌一律记**牌码**（`m1`/`south`）：引擎与命令条目本来就是这套写法，
+    // 记录里再混一种中文显示名只会让"两侧对等比较"多一个坑（§10.6 的第一个根因就是两边写法不同）。
+    // 读取侧两种都认（`tileFromName`），因此旧记录照样能读。
+    jokers: [...state.jokerTiles.value],
     flipSeat: state.dealer.value,
     wallBreakIndex: state.flipStack.value ?? 0,
-    flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]].map(tile => tileName(tile)),
+    flipTiles: [state.flipTile.value!, ring[state.flipStack.value! * 2 + 1]],
     // 开局分数（§6 明列必需）：不记的话重跑只能从初始分起步，第 2 局以后的结束分数永远对不上 ——
     // 实测四局里后三局的分数差恰好等于"当局开局分 − 2000"（牌流本身已逐条吻合）。
     // 与下面传给引擎的 `opening.players[].score` 同一时刻读，保证两侧同源。
