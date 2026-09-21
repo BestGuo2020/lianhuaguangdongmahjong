@@ -138,6 +138,24 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 
 用例在 vibehub 分支（仅存在于 vibehub，不被同步覆盖）：`tests/e2e/online-two-accounts-two-east-matches.spec.ts` 末尾的「线上两账号完成莲花麻将·血流东风场」两条测试；取证落盘在 `tmp/bf-online-evidence/`（双端截图 + stall 诊断 JSON）。部署产物与已验证提交一致（重新发布时「跳过 234 个未变化文件 / 需要上传 0 个文件」）。
 
+### 6.5 联机分析记录（§6）上线验收（2026-09-21，部署 `pnpm deploy:vibehub`）
+
+同两条血流用例再跑一次，这次额外验证**联机对局的分析记录**（房主局后产出赛后私有复现数据 →
+中继下发 → 两端各自落库）。构建产物 `assets/index-CDP6obsk.js` 与线上一致（重发时"需要上传 0 个文件"）。
+
+| 场景 | 房间 | 耗时 | 结果 |
+|---|---|---|---|
+| 2 真人 + 2 普通机器人 | `JUYTS7` | 5.9 分钟 | ✅ 双端各 4 局复现记录（`origin=authority`、牌墙 81 张、命令 140/142/144/124 条、缺口 0），终局排名一致 |
+| 2 真人 + 2 大模型机器人 | `HD8UWA` | 7.9 分钟 | ✅ 同上（命令 117/134/146/127 条）；首跑失败于 CDN 偶发（见下） |
+
+- 取证：`tmp/bf-online-evidence/analysis-bf-plain-ai-*.json`、`analysis-bf-llm-ai-*.json`（两端记录逐字相同）。
+- 复现判定在本地做（线上是生产构建、页面里没有校验器）：`pnpm test:e2e -- analysis-p2p -g 线上证据复核`
+  —— 用真校验器逐局重跑，命令全部消费、`kindMismatches=0`、结束分数与结算帧/终局名次一致，两场都通过。
+- 验收脚本的开关注入方式：线上默认关闭分析记录，用例用 `context.addInitScript` 在页面脚本之前挂
+  `lgm_analysis_enabled`（**不要**"设完再 reload"：那会把已登录页面打到另一个视图，后面找不到「创建房间」）。
+- 环境偶发：大模型场首跑时 `assets/MahjongTable3D-*.js` 动态导入失败（同一时段 `audio/bg.ogg` 也 520），
+  立刻复测同一 URL 是 200 ⇒ 平台 CDN 抖动，重跑通过；另一次 `update` 触发部署返回 HTTP 524，原样重试成功。
+
 ### 6.1 平台域名变更导致 TTS 断链（2026-09-14 修复）
 
 平台域名从 `*.lumigrav.space` 换到 **`gamesvibe.app`**（发布地址 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`），而两处只认旧域名的地方没有跟着改，表现为**大模型主题（`llm` / `llmAnime`）完全没有语音**：
