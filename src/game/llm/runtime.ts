@@ -127,6 +127,11 @@ function hooksForSeat(
   }
   return {
     onLlmMessage: deliver,
+    // AI 分析记录接缝（§5）：按座位原样转发。这里**必须**显式转发 —— hooksForSeat 会新建一个
+    // 对象并逐个列出键，漏掉就等于把调用方传进来的钩子静默丢掉（分析侧只会看到"没有任何尝试"）。
+    // 转发不做任何加工：候选、变量、模板 id 都是 llmController 侧的原始值。
+    ...(hooks.onDecisionRequest ? { onDecisionRequest: hooks.onDecisionRequest } : {}),
+    ...(hooks.onDecisionAnswer ? { onDecisionAnswer: hooks.onDecisionAnswer } : {}),
     onLlmFallback: (seat, meta) => {
       if (!admission(seat, meta).admitted) return
       try { void hooks.onLlmMessage?.(seat, '？', meta) } catch { /* 回退气泡不影响引擎动作 */ }
