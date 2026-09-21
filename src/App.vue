@@ -16,6 +16,7 @@ import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGa
 import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
 import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
+import { createLotusLegacyDecisionSink } from './game/replay/analysis/lotusLegacyAdapter'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createAnimeFixedTtsExecutor } from './game/llm/animeFixedTtsExecutor'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
@@ -133,8 +134,14 @@ watch(tableThemeName, (theme) => {
   lotusAnimeFixedTts.cancel()
   remoteAnimeFixedTts.cancel()
 }, { immediate: true })
+/**
+ * 翻精癞子的分析接缝（镜像 master 的公共改动 `50d66a5`）：必须在 `createLotusLlmControllers` **之前**建好 ——
+ * 控制器是 `aiControllers` 入参，钩子得先就位；反过来让引擎暴露钩子会绕成循环依赖。
+ * `recorder` 传 getter：分析会话在本文件里晚于控制器创建。
+ */
+const lotusLegacyAnalysisSink = createLotusLegacyDecisionSink({ recorder: () => analysis.port })
 const localLlm = shallowRef(createLocalLlmControllers(llmHook))
-const lotusLlm = shallowRef(createLotusLlmControllers(llmHook))
+const lotusLlm = shallowRef(createLotusLlmControllers({ ...llmHook, ...lotusLegacyAnalysisSink.hooks }))
 
 function preferLlmTableTheme(llmEnabled: boolean) {
   if (shouldAutoUseLlmTheme(llmEnabled, explicitTableThemeSelected.value)) tableThemeName.value = 'llm'
@@ -222,6 +229,9 @@ const lotusGame = useLotusGame({
   getTableThemeName: () => tableThemeName.value,
   animeFixedTts: lotusAnimeFixedTts,
   recorder: replay.hooks,
+  // 分析与接缝必须成对给：只给 hooks 不给 sink ⇒ 钩子找不到"在飞窗口"，记录静默缺失。
+  analysis: analysis.port,
+  analysisSink: lotusLegacyAnalysisSink,
 })
 const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
   getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts, countdownEnabled: false,
@@ -504,7 +514,8 @@ function applyLlmSettings() {
   nextLocalLlm.seeds = localLlmSeeds
   localLlm.value = nextLocalLlm
 
-  const nextLotusLlm = createLotusLlmControllers(llmHook)
+  // 重建控制器时必须继续带上分析接缝的钩子，否则保存一次 LLM 设置之后，翻精癞子的模型请求不再入账。
+  const nextLotusLlm = createLotusLlmControllers({ ...llmHook, ...lotusLegacyAnalysisSink.hooks })
   lotusGame.replaceAiControllers(nextLotusLlm.controllers)
   lotusLlmSeeds.splice(0, lotusLlmSeeds.length, ...nextLotusLlm.seeds)
   nextLotusLlm.seeds = lotusLlmSeeds
