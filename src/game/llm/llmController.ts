@@ -35,8 +35,10 @@ import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from 
 import { buildPrompt } from './prompt'
 import { requestPreparedDecision } from './preparedDecision'
 export { safeReasoningStatus } from './preparedDecision'
+import { LlmClientError, type PromptPair } from './client'
 import type { LlmProviderConfig } from './config'
-import type { CanonicalAction, StateSnapshotV1 } from './schema'
+import { tileName, type CanonicalAction, type DecisionRequest, type StateSnapshotV1 } from './schema'
+import type { AnalysisLegalAction } from '../replay/analysis/types'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { resolveDecisionSpeech, type DecisionSpeechFacts } from './decisionSpeech'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
@@ -64,6 +66,65 @@ export function createLlmStats(): LlmControllerStats {
   }
 }
 
+/**
+ * 一次真实模型请求的开始（分析记录接缝，见
+ * docs/blood-flow/design/analysis-two-variants-work-agreement.md §5）。
+ *
+ * 只在**真的发出了请求**时触发：没有候选、候选只有一个（被短路成本地策略）时不触发 ——
+ * 没有发生的请求不能记成一次尝试。不传钩子时这条路径一个分支都不进。
+ */
+export interface LlmDecisionRequestHookInput {
+  /** 决策者座位（绝对索引，不是本机视角的旋转座位）。 */
+  seat: number
+  /** 本次请求的引擎侧标识（经典本地引擎为 `${kind}-${seat}-${序号}`，见 core/controllers/llmContext.ts）。 */
+  requestId: string
+  /**
+   * 该请求所属的决策窗口。经典本地引擎没有独立的权威窗口号，因此这里就是引擎侧请求标识
+   * （请求内容里逐字带来的 `requestId`，事后可由同一份对局状态复算）；分析侧用它把
+   * attempt 关联到自己记录的窗口，不要在两侧各推一套编号。
+   */
+  windowId: string
+  /**
+   * 该座位此刻**模型可以选择**的动作。LLM 接缝能看到的动作词汇就是候选集，
+   * 引擎合法集合的超集在玩法引擎侧（两边用 `id` 对齐，见 `candidates`）。
+   */
+  legalActions: AnalysisLegalAction[]
+  /** 候选动作：`id` 是 `legalActions` 里的窗口内稳定 ID，`summary` 是提示词里的编号（A1/A2…）。 */
+  candidates: Array<{ id: string; label?: string; summary?: string; action: unknown }>
+  /** 真正发给这次请求的推荐（对应 `request.engineSuggestion`），不是事后补算。 */
+  recommended?: { candidateId: string; note?: string }
+  /** 提示词模板 id（按 id 去重只存一份正文，见 `decisionPromptTemplateId`）。 */
+  promptTemplateId: string
+  /**
+   * 实际发给模型的变量（逐字）。`user` 就是 `messages.user`，**必须**与发给模型的那一份逐字相等。
+   * `system` 是模板正文：接缝把它交给 `recorder.promptTemplate({ id, content })` 按 id **只存一次**，
+   * 之后不必再逐次复制（§4）。变量里不得出现 API Key / Authorization / Cookie。
+   */
+  promptVariables: unknown
+  provider: string
+  model: string
+  /** 墙钟（`Date.now()`）：只在两个进程间对齐"什么时候发的"，不用于耗时口径。 */
+  sentAt: number
+}
+
+/** 一次真实模型请求的结束（成功、解析失败、超时、异常都要如实上报，§4、§5）。 */
+export interface LlmDecisionAnswerHookInput {
+  requestId: string
+  /** 模型给出的牌桌原话（输出的 message 字段）；不是内部思考，也不是逐 token 流水（§4）。 */
+  raw: string
+  /** 解析到的候选 id；拿不到回答时为 null。 */
+  choice: string | null
+  /** `invalid` = 回答了但候选不存在/复核不合法；`timeout`/`error` = 请求本身失败。 */
+  outcome: 'success' | 'invalid' | 'timeout' | 'error'
+  /** 回退到本地策略时的原因（`outcome !== 'success'` 必须带；决策来源要据此记为 model-fallback）。 */
+  fallback?: { reason: string }
+  /** 供应商用量：本层拿不到就不填，绝不填 0 冒充（§3.3）。 */
+  usage?: unknown
+  /** 供应商返回的模型版本：本层拿不到就不填。 */
+  responseModel?: string
+  completedAt: number
+}
+
 export interface LlmControllerHooks {
   /** message 为纯展示文本（牌桌气泡/设置面板日志）：展示失败不影响动作执行（§7.4）。
    * seat 为说话者的座位绝对索引。 */
@@ -73,6 +134,146 @@ export interface LlmControllerHooks {
   /** 深度思考仅展示客户端生成的安全进度，不接收原始推理文本。 */
   onLlmStatus?(seat: number, active: boolean, text?: string): void | Promise<void>
   onReset?(): void
+  /** 一次真实请求开始：候选、推荐、模型与提示词引用。不传时零成本（§5）。 */
+  onDecisionRequest?(input: LlmDecisionRequestHookInput): void
+  /** 一次请求结束：原话回答、解析结果、失败与回退原因。不传时零成本（§5）。 */
+  onDecisionAnswer?(input: LlmDecisionAnswerHookInput): void
+}
+
+/** 提示词模板版本：`buildPrompt` 的正文随代码变化，正文变了必须递增这个号（§5 按版本去重存一次）。 */
+export const DECISION_PROMPT_TEMPLATE_VERSION = 1
+
+/** 提示词模板 id：正文由玩法摘要 + 台词风格决定，因此 id 随二者变化。 */
+export function decisionPromptTemplateId(ruleCode: string, style: string): string {
+  return `decision-prompt/${DECISION_PROMPT_TEMPLATE_VERSION}/${ruleCode}/${style}`
+}
+
+/** 窗口内稳定 ID（与血流 `legalActionId` 同一口径：`${windowId}/${下标}`）。 */
+function analysisLegalActionId(windowId: string, index: number): string {
+  return `${windowId}/${index}`
+}
+
+/**
+ * 把本层的规范动作折成分析用动作（方案 §3.3）。
+ * 吃牌带上组合：只有 `optionIndex` 无法区分吃了哪一组，重放时会吃错面子。
+ */
+function analysisLegalActionOf(
+  windowId: string,
+  index: number,
+  action: CanonicalAction,
+  input: DecisionInput,
+): AnalysisLegalAction {
+  const normalized: AnalysisLegalAction = { id: analysisLegalActionId(windowId, index), kind: action.kind }
+  switch (action.kind) {
+    case 'discard':
+      normalized.handIndex = action.handIndex
+      normalized.tile = input.hand[action.handIndex] ? tileName(input.hand[action.handIndex]) : undefined
+      break
+    case 'added-kong':
+      normalized.meldIndex = action.meldIndex
+      normalized.tile = input.melds[action.meldIndex] ? tileName(input.melds[action.meldIndex].tile) : undefined
+      break
+    case 'concealed-kong':
+      normalized.tile = tileName(action.tile)
+      break
+    case 'wind-kong':
+      break
+    case 'chi': {
+      const meld = input.chiOptions?.[action.optionIndex]
+      if (meld) normalized.meld = meld.tiles.map(tileName)
+      break
+    }
+    case 'gang':
+    case 'peng':
+      if (input.tile) normalized.tile = tileName(input.tile)
+      if (input.from !== undefined) normalized.from = input.from
+      break
+    default:
+      break
+  }
+  return normalized
+}
+
+/** 失败的收口口径：超时与其它异常分开记，回退原因取错误消息（截断，避免把整段响应写进记录）。 */
+function answerFailureOf(error: unknown): Pick<LlmDecisionAnswerHookInput, 'outcome' | 'fallback'> {
+  const timedOut = error instanceof LlmClientError
+    ? error.kind === 'timeout'
+    : error instanceof Error && error.name === 'AbortError'
+  const detail = error instanceof Error ? error.message : String(error)
+  return {
+    outcome: timedOut ? 'timeout' : 'error',
+    fallback: { reason: `${timedOut ? 'timeout' : 'error'}:${detail.slice(0, 120)}` },
+  }
+}
+
+/**
+ * 分析上报器：把一次请求的开始/结束按 §5 的形状整理出来。
+ * `hooks` 一个都没传时返回 null（调用方据此一个分支都不进）；整理过程自身绝不抛错 ——
+ * 分析记录失败最多丢一条记录，绝不能影响在飞的模型请求与对局（§9.5）。
+ */
+function createDecisionHookReporter(
+  hooks: LlmControllerHooks,
+  config: LlmProviderConfig,
+  input: DecisionInput,
+  request: DecisionRequest,
+  prompt: PromptPair,
+) {
+  const requestId = request.requestId
+  // 没有引擎请求标识时（例如自建调用方不传）给一个由座位与状态版本推出的确定性 id：
+  // 宁可标记成"非引擎请求"，也不要与别的窗口撞成同一个号。
+  const windowId = requestId || `request-${request.ruleCode}-${input.playerIndex}-${request.stateVersion}`
+  const candidates = request.candidates.map((candidate, index) => ({
+    id: analysisLegalActionId(windowId, index),
+    label: candidate.label,
+    // 提示词里的编号（A1/A2…）：把落库的 promptVariables.user 与候选对起来时要用它
+    summary: candidate.id,
+    action: candidate.action,
+  }))
+  const legalActions = request.candidates.map((candidate, index) =>
+    analysisLegalActionOf(windowId, index, candidate.action, input))
+  const suggestionIndex = request.engineSuggestion
+    ? request.candidates.findIndex((candidate) => candidate.id === request.engineSuggestion)
+    : -1
+  let started = false
+  return {
+    requested() {
+      if (!hooks.onDecisionRequest) return
+      started = true
+      try {
+        hooks.onDecisionRequest({
+          seat: input.playerIndex,
+          requestId,
+          windowId,
+          legalActions,
+          candidates,
+          ...(suggestionIndex >= 0
+            ? { recommended: { candidateId: analysisLegalActionId(windowId, suggestionIndex), note: 'engine-suggestion' } }
+            : {}),
+          promptTemplateId: decisionPromptTemplateId(request.ruleCode, config.style),
+          // 逐字保存实际发给模型的变量：`user` 与 messages.user 是同一份字符串，`system` 是模板正文
+          promptVariables: {
+            system: prompt.system,
+            user: prompt.user,
+            ruleCode: request.ruleCode,
+            decision: request.decision,
+            requestId,
+            stateVersion: request.stateVersion,
+            engineSuggestion: request.engineSuggestion ?? null,
+            candidateIds: request.candidates.map((candidate) => candidate.id),
+          },
+          provider: config.providerType ?? 'unknown',
+          model: config.model,
+          sentAt: Date.now(),
+        })
+      } catch { /* 上报失败不影响请求（§9.5） */ }
+    },
+    answered(result: Omit<LlmDecisionAnswerHookInput, 'requestId' | 'completedAt'>) {
+      if (!hooks.onDecisionAnswer || !started) return
+      try {
+        hooks.onDecisionAnswer({ requestId, ...result, completedAt: Date.now() })
+      } catch { /* 上报失败不影响请求（§9.5） */ }
+    },
+  }
 }
 
 export interface LlmMessageMeta {
@@ -125,12 +326,20 @@ async function decideCanonical(
     } catch { /* 回退提示不影响引擎动作 */ }
   }
   const prompt = buildPrompt(config.style, built.request)
+  // AI 分析记录接缝（§5）：只旁路上报这次请求的开始/结束，不参与决策；两个钩子都不传时为 null。
+  // 这里不 try/catch 之外的任何改动 —— 上报器内部已经吞掉自己的异常（§9.5）。
+  const report = hooks.onDecisionRequest || hooks.onDecisionAnswer
+    ? createDecisionHookReporter(hooks, config, input, built.request, prompt)
+    : null
+  report?.requested()
   try {
     const output = await requestPreparedDecision({config,decision:built.request,messages:prompt,
       seat:input.playerIndex,stats,reasoning,onStatus:(active,text)=>hooks.onLlmStatus?.(input.playerIndex,active,text)})
     const candidate = built.request.candidates.find((item) => item.id === output.choice)
     if (!candidate) {
       stats.fallbacks += 1
+      report?.answered({ raw: output.message ?? '', choice: output.choice ?? null, outcome: 'invalid',
+        fallback: { reason: 'choice-not-in-candidates' } })
       await notifyFallback()
       return built.fallbackAction
     }
@@ -138,6 +347,8 @@ async function decideCanonical(
     if (!isActionLegal(input, candidate.action)) {
       stats.invalidActions += 1
       stats.fallbacks += 1
+      report?.answered({ raw: output.message ?? '', choice: output.choice ?? null, outcome: 'invalid',
+        fallback: { reason: 'choice-illegal-after-recheck' } })
       await notifyFallback()
       return built.fallbackAction
     }
@@ -162,9 +373,11 @@ async function decideCanonical(
       // 气泡/TTS 是表现层；失败时仍执行已经通过合法性校验的模型动作。
     }
     stats.successes += 1
+    report?.answered({ raw: output.message ?? '', choice: output.choice ?? null, outcome: 'success' })
     return candidate.action
-  } catch {
+  } catch (error) {
     stats.fallbacks += 1
+    report?.answered({ raw: '', choice: null, ...answerFailureOf(error) })
     await notifyFallback()
     return built.fallbackAction
   }
