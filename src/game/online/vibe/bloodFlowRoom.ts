@@ -18,6 +18,13 @@ import { updatePlayerStats } from './vibeStats'
 import { watch } from 'vue'
 import { createBloodFlowDecisions, createBloodFlowReactions, type BloodFlowReaction } from '../../llm/bloodFlowRuntime'
 import { readLlmSettings, type LlmProviderPreset } from '../../llm/config'
+import { BLOOD_FLOW_LLM_AI } from '../../variants/lotus/bloodFlow/config'
+import type { BloodFlowSeatView } from '../../variants/lotus/bloodFlow/seatView'
+import type { EngineCommand } from '../../variants/lotus/bloodFlow/state'
+import {
+  decisionStateOf, legalActionId, seatLegalActions, windowKindOf, type BloodFlowViewLike,
+} from '../../replay/analysis/bloodFlowAdapter'
+import { createBloodFlowDecisionSink } from '../../replay/analysis/decisionSink'
 import type { HostLlmSeatSelection } from './vibeLlm'
 import {createReplayRecorder} from '../../replay/recorder'
 import {
@@ -41,6 +48,14 @@ import {
 import type {ReplayStorage} from '../../replay/storage'
 import {getRuleVariant} from '../../core/rules/ruleVariants'
 import {actionSpeechMatches,type BloodFlowActionSpeech} from '../../llm/bloodFlowSpeech'
+import type {AnalysisRecorder} from '../../replay/analysis/recorder'
+import type {AnalysisSeatControl} from '../../replay/analysis/types'
+import {
+  ANALYSIS_REPRODUCTION_FORMAT_VERSION,
+  decodeReproductionPayload,
+  reproductionFromPayload,
+  unavailableReproduction,
+} from '../../replay/analysis/onlineReproduction'
 
 interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 'playSoundAndWait' | 'getThemeName' | 'animeFixedTts' | 'paceMs'> {
   getSeat(): number
@@ -58,6 +73,22 @@ interface BloodFlowRoomOptions extends Pick<BloodFlowGameOptions, 'playSound' | 
    * 不传则联机回放整体关闭（零行为变化）。
    */
   replayStorage?: ReplayStorage | null
+  /**
+   * AI 分析记录（方案 docs/blood-flow/design/replay-ai-analysis-recording.md）。
+   * 联机时分析区由 App 的分析会话持有（`analysis.port` 这个稳定代理），本房间负责：
+   * 1. 把本机座位（客机）/ AI 座位（房主）的决策照常喂给记录器；
+   * 2. 房主在**局后**产出 §6 赛后私有复现数据（牌墙/手牌/开局参数 + 权威命令序列），
+   *    一份写进本机分析区，一份经既有中继下发给房间里的其他客户端；
+   * 3. 客机收到后校验并写进自己的分析区。
+   * 不传（或分析关闭）时整条路径零成本。
+   */
+  analysis?: AnalysisRecorder | null
+  /**
+   * 联机分析开场：把这一场的分析区场次 id 与座位口径交给 App 去 `analysis.start(...)`。
+   * **必须与展示回放同一个场次 id**（房主的回放录制器就是这把钥匙），否则客机那份分析数据
+   * 在"按展示回放清单回收"时会被当成悬空数据删掉（§9.2）。
+   */
+  onAnalysisMatchId?(detail: { matchId: string; seatControl: AnalysisSeatControl[]; mode: MatchType }): void
 }
 
 export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
@@ -90,7 +121,70 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     const preset = settings.presets.find(p => p.id === selected.presetId)
     return preset?.apiKey.trim() ? { ...preset, style: selected.style } : null
   }
-  const decisions = createBloodFlowDecisions({ provider,theme:()=>options.getThemeName?.()??'jade' })
+  const decisions = createBloodFlowDecisions({ provider,theme:()=>options.getThemeName?.()??'jade',
+    // §3/§4 分析记录接缝：AI/LLM 座位的候选、推荐、请求生命周期与来源接进录制器。
+    // 联机时这些座位由**房主**决定（权威的 decide 钩子），因此录制也只能在房主侧发生；
+    // 客机那份分析记录里没有 AI 座位的决策明细，只有自己的决策与权威端下发的复现数据。
+    analysis: options.analysis ? createBloodFlowDecisionSink({ recorder: options.analysis }) : null,
+    aiConfig: BLOOD_FLOW_LLM_AI,
+    metadata: () => ({ roundIndex: port.round.value, dealerIndex: port.dealer.value }) })
+
+  /**
+   * §3.2/§3.4：AI/LLM 座位的决策前态与选择也入账（房主侧）。
+   * 决策前态用的就是**权威实际交给该座位的视角**（`view` 参数），与单机路径同一口径，不另算一份。
+   * 执行回执不在这里记：那条判据是"权威是否真的执行了"，由权威回执驱动（见 applyReceipt）。
+   */
+  async function decideSeat(view: BloodFlowSeatView, isCurrent: () => boolean) {
+    const recorder = options.analysis
+    if (!recorder) return decisions.decide(view, isCurrent)
+    const window = view.window
+    const seat = view.seat
+    const actions = window ? seatLegalActions(view, seat) : []
+    const mono = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+    if (window) {
+      recorder.windowOpened({
+        windowId: window.id, seat, windowKind: windowKindOf(actions),
+        roundIndex: port.round.value, authorityEpoch: view.authorityEpoch, stateVersion: window.version,
+        state: decisionStateOf(view as BloodFlowViewLike, seat), openedAt: mono(),
+      })
+    }
+    const action = await decisions.decide(view, isCurrent)
+    if (!window) return action
+    const pickedIndex = action ? actions.findIndex(move => JSON.stringify(move) === JSON.stringify(action)) : -1
+    recorder.chosen({
+      windowId: window.id, seat, source: action ? 'unknown' : 'rule-auto',
+      legalActionId: pickedIndex >= 0 ? legalActionId(window.id, pickedIndex) : null, at: mono(),
+    })
+    // 记下"这一手是谁提的"，等权威回执到了再补执行状态（§3.4：请求发出 ≠ 动作执行）
+    if (action) pendingReceipts.set(`${window.id}/${seat}`, {
+      windowId: window.id, seat, ...(pickedIndex >= 0 ? { legalActionId: legalActionId(window.id, pickedIndex) } : {}),
+    })
+    return action
+  }
+
+  /** 等待执行回执的决策（窗口/座位 → 决策标识）。 */
+  const pendingReceipts = new Map<string, { windowId: string; seat: number; legalActionId?: string }>()
+
+  /**
+   * 权威对命令的处置 → 分析记录的执行回执（§3.4）：
+   * - `rejected`：权威从未执行这条决定 ⇒ **不记回执**（不能把没发生的事记成执行过）；
+   * - `accepted`：引擎接受了这条决定 ⇒ `executed`（房主侧能给出比客机更硬的判据，detail 里写明口径）；
+   * - `unknown`：调用失败/超时 ⇒ `state-changed`，如实说"不知道执行没执行"。
+   */
+  function applyReceipt(command: EngineCommand, outcome: 'accepted' | 'rejected' | 'unknown'): void {
+    const recorder = options.analysis
+    if (!recorder) return
+    const pending = pendingReceipts.get(`${command.windowId}/${command.seat}`)
+    if (!pending) return
+    pendingReceipts.delete(`${command.windowId}/${command.seat}`)
+    if (outcome === 'rejected') return
+    recorder.receipt({
+      windowId: pending.windowId, seat: pending.seat,
+      status: outcome === 'accepted' ? 'executed' : 'state-changed',
+      detail: outcome === 'accepted' ? 'authority-accepted' : 'authority-outcome-unknown',
+      ...(pending.legalActionId ? { executedLegalActionId: pending.legalActionId } : {}),
+    })
+  }
 
   // ── 联机牌谱（全知）：房主用权威的旁观视角录制 → 广播给全员 → 各自存本地 ──
   // 血流的房主权威跑在 BloodFlowAuthority（引擎在 worker 里），座位视角只有自己的手牌，
@@ -176,6 +270,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
         onManifestSeen: (id) => replayRegistry.note(id),
         // 落库后广播本机持有清单：让别人知道缺局可以找谁要（含"场次记录也缺"的情况）
         onSaved: (detail) => { if (detail.kind === 'match') void ensureReplayServer()?.announce(detail.matchId) },
+        // §6：分析复现数据走同一套中继，但**不进回放库**（回放是公开口径，分析含赛后私有数据）
+        onAnalysisPayload: (detail) => acceptAnalysisPayload(detail),
       })
     }
     return replayPeerRelay
@@ -206,6 +302,178 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     if (!peer) return false
     void peer.handle(raw)
     return true
+  }
+
+  // ── §6 赛后私有复现数据（联机分析记录）──
+  // 对局进行中谁都拿不到牌墙与对手暗手；只有房主的权威端在**局后**才产得出这份数据。
+  // 因此这里的分工是：房主局末产出 → 一份写本机分析区、一份经既有中继（清单+分片+回执）下发；
+  // 客机收全后**严格校验**再写自己的分析区。房主没开分析记录时不产出，客机如实记"未提供"。
+  /** 本场的分析区场次 id（与展示回放同一个钥匙）；房主在 attach 时定下，客机从快照信封里取。 */
+  let analysisMatchId = ''
+  /**
+   * 分析记录的关键节点（有界留痕）。线上验收与本地 e2e 排查"这一局为什么没有复现数据"时，
+   * 只有这条轨迹能区分：房主根本没产出、产出为空、写晚了（会话已结束）还是压根没收到客机那一份。
+   */
+  const analysisTrace: string[] = []
+  function traceAnalysis(message: string) {
+    analysisTrace.push(`${new Date().toISOString().slice(11, 23)} ${message}`)
+    if (analysisTrace.length > 60) analysisTrace.splice(0, analysisTrace.length - 60)
+    if (BF_DIAG) console.warn(`[bf-diag] 分析记录：${message}`)
+  }
+  /** 这一局是否已经有结论（收到了权威端的复现数据，或已如实记为"拿不到"）—— 迟到数据不再覆盖结论。 */
+  const reproductionDecided = new Set<number>()
+  /** 已结算但还没等到复现数据的局（房主不在时限内给出，就如实记"拿不到"）。 */
+  const reproductionAwaited = new Map<number, number>()
+  /** 房主侧：正在产出/广播复现数据的局（场末收尾要等它们落地，否则最后一局会被会话结束吞掉）。 */
+  const reproductionInFlight = new Set<number>()
+  /**
+   * 房主侧：**已结算但还没结清**的局。
+   *
+   * 为什么需要它：权威先广播结算帧、再调 `onRoundSettled` 产出复现数据，而客户端一侧的
+   * "本场结束"判定只需要结算帧 —— 场末可能在本机产出开始**之前**就到达（实测：加速用例下
+   * 最后一局的复现数据因此写晚了、被会话结束吞掉）。这里以"看到结算帧"为起点记账，
+   * 场末收尾就会等到本机那一份真的结清为止。
+   */
+  const hostReproductionPending = new Set<number>()
+  /** 等多久算"没收到"：正常一两秒就到（清单+分片+回执），20s 足够跨过一次丢包补发。 */
+  const REPRODUCTION_WAIT_MS = 20_000
+
+  /** 座位口径（绝对座位）：分析记录里必须按权威的座位编号，不能按本机视角的旋转后编号。 */
+  function analysisSeatControls(): AnalysisSeatControl[] {
+    const humans = new Set<number>([...options.getVerifiedBindings().values()])
+    const llm = new Set<number>((options.getPrivateAiSelections?.() ?? []).map(selection => selection.seat))
+    return [0, 1, 2, 3].map(seat => humans.has(seat) ? 'human' as const : llm.has(seat) ? 'llm' as const : 'local-ai' as const)
+  }
+
+  /** 通知 App 开一场分析记录（换场时先如实收尾上一场，避免错场归属）。 */
+  function announceAnalysisMatch(matchId: string) {
+    if (!matchId) return
+    analysisMatchId = matchId
+    traceAnalysis(`本场分析场次 id=${matchId}（${options.getIsHost() ? '房主' : '客机'}）`)
+    if (!options.analysis) return
+    options.onAnalysisMatchId?.({ matchId, seatControl: analysisSeatControls(), mode: options.getMode() })
+  }
+
+  /**
+   * 房主：局末产出这一局的复现数据。**先写本机分析区再广播** —— 本机记录不该依赖传输；
+   * 拿不到就如实记一条缺失（§6：不猜测补齐），绝不发一份缺字段的载荷让客机"复现"出另一个局面。
+   */
+  async function publishRoundReproduction(round: number): Promise<void> {
+    const active = authority, recorder = options.analysis
+    if (!active || !recorder || !analysisMatchId) {
+      traceAnalysis(`房主跳过第 ${round} 局：${!active ? '无权威' : !recorder ? '本机未开分析' : '无场次 id'}`)
+      hostReproductionPending.delete(round)
+      return
+    }
+    reproductionInFlight.add(round)
+    try {
+      const payload = await active.reproduction(analysisMatchId, round)
+      if (!payload) {
+        traceAnalysis(`房主第 ${round} 局拿不到复现数据（引擎未开记录或已推进到下一局）`)
+        recorder.noteGap({ scope: 'reproduction', from: round, reason: '权威端未能产出这一局的赛后复现数据（引擎未开启命令记录或已推进到下一局）' })
+        return
+      }
+      recorder.reproduction(reproductionFromPayload(payload))
+      traceAnalysis(`房主第 ${round} 局已写本机分析区（命令 ${payload.commands.length} 条，牌墙 ${payload.initialWall.length} 张）`)
+      try {
+        await ensureReplayHost()?.broadcastAnalysis(analysisMatchId, round, payload, ANALYSIS_REPRODUCTION_FORMAT_VERSION)
+        traceAnalysis(`房主第 ${round} 局已广播复现数据`)
+      } catch (error) {
+        traceAnalysis(`房主第 ${round} 局广播失败：${String(error).slice(0, 80)}`)
+      }
+    } finally {
+      reproductionInFlight.delete(round)
+      hostReproductionPending.delete(round)
+    }
+  }
+
+  /** 房主：看到某局结算帧 → 记下"本机还欠这一局一份复现数据"（场末收尾据此等待）。 */
+  function expectHostReproduction(round: number): void {
+    if (!options.analysis || !analysisMatchId || !authority) return
+    if (reproductionInFlight.has(round) || hostReproductionPending.has(round)) return
+    hostReproductionPending.add(round)
+  }
+
+  /**
+   * 客机：收到权威端的复现数据。载荷是**未受信任的网络输入**，字段校验不过就整份拒收并留痕，
+   * 半份数据写进分析区只会让赛后复现得出一个看似成功的错误结论。
+   */
+  function acceptAnalysisPayload(detail: { matchId: string; roundIndex: number | null; payload: unknown }): void {
+    const recorder = options.analysis
+    if (!recorder) return
+    if (!analysisMatchId || detail.matchId !== analysisMatchId) return
+    const decoded = decodeReproductionPayload(detail.payload)
+    const round = decoded.payload?.roundIndex ?? detail.roundIndex
+    if (round !== null && reproductionDecided.has(round)) {
+      // 该局已经归档（收到过一份，或已按"拿不到"记录）：迟到/重复的数据不覆盖结论，但要留痕
+      recorder.noteGap({ scope: 'reproduction', from: round, reason: '同一局的重复或迟到的赛后复现数据被丢弃' })
+      return
+    }
+    if (!decoded.payload) {
+      recorder.noteGap({ scope: 'reproduction', ...(detail.roundIndex ? { from: detail.roundIndex } : {}),
+        reason: `收到的赛后复现数据不合规：${decoded.reason}` })
+      if (round !== null) { reproductionDecided.add(round); reproductionAwaited.delete(round) }
+      return
+    }
+    if (detail.roundIndex !== null && decoded.payload.roundIndex !== detail.roundIndex) {
+      recorder.noteGap({ scope: 'reproduction', from: detail.roundIndex, reason: '赛后复现数据的局号与清单不一致' })
+      if (round !== null) { reproductionDecided.add(round); reproductionAwaited.delete(round) }
+      return
+    }
+    recorder.reproduction(reproductionFromPayload(decoded.payload))
+    if (round !== null) { reproductionDecided.add(round); reproductionAwaited.delete(round) }
+  }
+
+  /** 如实记一条"这一局拿不到复现数据"（§6：明确标记，不猜测补齐）。 */
+  function markReproductionUnavailable(round: number, reason: string): void {
+    if (!options.analysis || reproductionDecided.has(round)) return
+    reproductionDecided.add(round)
+    reproductionAwaited.delete(round)
+    options.analysis.noteGap({ scope: 'reproduction', from: round, reason })
+    options.analysis.reproduction(unavailableReproduction(round, reason))
+  }
+
+  /**
+   * 客机：某局结算了 → 开始等权威端那份数据。
+   * - 房主**没有**下发分析场次 id（房主未开分析记录）：当场如实记"未提供"，不必空等；
+   * - 有 id：等中继把数据送到，超过时限由 450ms 定时器兜底记"未收到"。
+   */
+  function awaitRoundReproduction(round: number): void {
+    if (!options.analysis || reproductionDecided.has(round)) return
+    if (!analysisMatchId) {
+      markReproductionUnavailable(round, '联机房主未开启分析记录，本局没有赛后复现数据')
+      return
+    }
+    if (!reproductionAwaited.has(round)) reproductionAwaited.set(round, Date.now())
+  }
+
+  /** 等够时限还没到：如实记"未收到"（丢包/放弃补发/房主中途退出都走这里）。 */
+  function sweepReproductionWaiting(now: number): void {
+    for (const [round, since] of [...reproductionAwaited]) {
+      if (now - since < REPRODUCTION_WAIT_MS) continue
+      markReproductionUnavailable(round, '未在时限内收到权威端的赛后复现数据（丢包或房主中断）')
+    }
+  }
+
+  /**
+   * 场末分析收尾（`analysis.finish()` **之前**必须调一次）：
+   * 给还在路上的复现数据一小段送达时间，仍未到/仍在产出的就如实结清。
+   *
+   * 为什么必须在会话结束之前：会话结束（flush → 清空 target）之后的写入会被直接丢弃，
+   * "还没收到"就会变成一片空白 —— 而空白正是 §6 最不能接受的那种含糊。
+   */
+  async function settleAnalysis(graceMs = 6_000): Promise<void> {
+    const deadline = Date.now() + Math.max(0, graceMs)
+    while ((reproductionAwaited.size || reproductionInFlight.size || hostReproductionPending.size) && Date.now() < deadline) {
+      await new Promise<void>(resolve => { setTimeout(resolve, 200) })
+    }
+    for (const round of [...reproductionAwaited.keys()]) {
+      markReproductionUnavailable(round, '场末仍未收到权威端的赛后复现数据')
+    }
+    for (const round of [...hostReproductionPending]) {
+      traceAnalysis(`场末仍未结清第 ${round} 局（房主侧复现数据产出超时）`)
+      hostReproductionPending.delete(round)
+    }
   }
 
   function replayContext(): BloodFlowRecordContext {
@@ -385,6 +653,18 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       if ('autoPlay' in message) options.onAutoPlayChanged?.(message.autoPlay === true)
       const replay = latestFrame === null || port.view.value?.public.status === 'paused'
       latestFrame = message
+      // §6：房主把本场分析场次 id 随帧带过来，客机据此把自己的分析记录挂在**同一场次**下
+      // （否则客机那份会被"按展示回放清单回收"当成悬空数据删掉）。换场时 id 变，同样在这里接管。
+      const announcedAnalysis = (message as { analysisMatchId?: string }).analysisMatchId
+      if (announcedAnalysis && announcedAnalysis !== analysisMatchId) announceAnalysisMatch(announcedAnalysis)
+      // §6：这一局结算了 →
+      // - 客机：开始等权威端那份赛后复现数据（房主没开分析就当场如实记"未提供"）；
+      // - 房主：记下"本机还欠这一局一份复现数据"（产出由 onRoundSettled 触发，可能晚于结算帧，
+      //   场末收尾要等它结清，否则最后一局会被会话结束吞掉）。
+      if (message.view.public.roundResult) {
+        if (authority) expectHostReproduction(message.round)
+        else awaitRoundReproduction(message.round)
+      }
       if (!current.view) return
       if(authority)for(const line of decisions.observe(current.view)){
         sendChunked(active, {kind:'blood_flow_action_speech',roomId:active.roomId,ruleVersion:version,speech:line} satisfies BloodFlowPacket)
@@ -445,6 +725,12 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     authority?.stop(); authority = null; room = null; replica = null
     decisions.cancel(); reactions.cancel(); pendingReactions.clear();pendingActionSpeech.clear()
     port.dispose(); port.view.value = null; port.result.value = null; port.phase.value = 'lobby'
+    // §6：还等着权威端复现数据的局，在离场时如实收尾（不能让"等不到"变成一片空白）。
+    // 房主自己不是等待方（它边产出边落库），这里的集合只会有客机那份记录。
+    for (const round of [...reproductionAwaited.keys()]) {
+      markReproductionUnavailable(round, '离开房间时仍未收到权威端的赛后复现数据')
+    }
+    reproductionAwaited.clear(); reproductionDecided.clear(); analysisMatchId = ''
     started = false; starting = false; latestFrame = null
   }
   function attach(active: VibeHubSDK.Room, firstOpening?: PromiseLike<HostOpeningData>, initialBindings?: Map<string, number>) {
@@ -469,14 +755,34 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
 
     if (options.getIsHost()) {
       const epoch = crypto.randomUUID()
+      // §6 分析记录：本场的场次 id。房主用**展示回放录制器的那把钥匙**（分析区与回放必须同一个 id，
+      // 否则分析数据在"按展示回放清单回收"时会被删掉），并立刻随快照下发给客机。
+      // 只要回放录制器在就下发：房主没开分析时客机仍需要这把钥匙来挂自己的分析记录，
+      // 只是那时客机拿不到赛后复现数据 —— 它会如实记成"未提供"。
+      if (replayRecorder) announceAnalysisMatch(replayRecorder.ensureMatchId())
+      else if (options.analysis) announceAnalysisMatch(crypto.randomUUID())
       const bindings = new Map([...(initialBindings ?? verified())].map(([peer, s]) => [peer, s as Seat]))
       bindings.set(active.peerId, 0)
       authority = new BloodFlowAuthority({ roomId: active.roomId, authorityEpoch: epoch, hostPeer: active.peerId,
-        mode: options.getMode(), seatByPeer: bindings, backend: createWorkerAuthorityBackend(),
-        decide: (view, current) => decisions.decide(view, current), cancelDecisions: decisions.cancel,
+        mode: options.getMode(), seatByPeer: bindings,
+        // §6：分析开启时让引擎记录权威命令序列（局后才能产出复现数据）；关闭时零成本。
+        backend: createWorkerAuthorityBackend({ recordCommands: Boolean(options.analysis) }),
+        decide: (view, current) => decideSeat(view, current), cancelDecisions: decisions.cancel,
+        // §3.4：把权威的处置结果接进分析记录（AI/LLM 座位的执行回执）
+        onCommand: (command, outcome) => applyReceipt(command, outcome),
+        // §6：把本场分析场次 id 随帧下发给客机（客机据此把自己的分析挂在同一场次下）。
+        // **与本机是否开分析无关**：这把钥匙就是展示回放的场次 id，房主没开分析时客机仍然需要它
+        // （否则客机那份分析数据会被"按展示回放清单回收"删掉）；只是那种情况下客机拿不到复现数据。
+        analysisMatchId: () => analysisMatchId || null,
         // 停滞取证：仅 ?bfdiag=1 时把 tick 的关键分支打到控制台（验收取证会收集这些行）。
         trace: BF_DIAG ? (message: string) => console.warn(`[bf-diag] 权威 tick：${message}`) : undefined,
-        onRoundSettled: view => { void reactions.run(view) },
+        // 局末两件事：当局感言（reactions）与 §6 赛后私有复现数据的产出与下发。
+        // 放在 onRoundSettled（已经结算）而不是更早：进行中下发牌墙/暗手就是泄露。
+        // 两条路径必须互不牵连：感言侧抛错也不能让复现数据不再产出（否则整局数据凭空消失）。
+        onRoundSettled: (view, round) => {
+          try { void reactions.run(view) } catch (error) { traceAnalysis(`第 ${round} 局局末感言抛错（不影响复现数据）：${String(error).slice(0, 80)}`) }
+          void publishRoundReproduction(round)
+        },
         send: (peer, message) => {
           if (room !== active || token !== lifecycle) return
           let packet = message
@@ -566,6 +872,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
       if (authority && replayRecorder) void sampleReplay()
       // 联机牌谱：半截会话定期回执催补（丢片只有靠回执才能发现）
       replayPeerRelay?.tick()
+      // §6：等够时限还没等到复现数据的局，如实记"未收到"
+      sweepReproductionWaiting(Date.now())
       if (authority) {
         const observed = verified(), bindings = new Map(authority.bindings)
         // Refresh verified peer IDs for existing seats, never drop a locked human merely
@@ -626,10 +934,13 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    * 「主机把窗口投影给了错的人」还是「客机收下却没暴露可操作项」。这里直接暴露两端引擎级现场：
    * 客机的 replica 窗口/等待座位/可操作项、主机的权威当前视图与座位绑定。
    */
-  if (BF_DIAG && typeof window !== 'undefined') {
+    if (BF_DIAG && typeof window !== 'undefined') {
     ;(window as unknown as { __bfDiag?: () => unknown }).__bfDiag = () => ({
       side: authority ? 'host' : replica ? 'guest' : 'idle',
       roomId: replica?.roomId ?? latestFrame?.roomId ?? null,
+      /** §6 分析记录轨迹：线上验收用它回答"这一局的复现数据去哪了"。 */
+      analysisTrace: [...analysisTrace],
+      analysisMatchId: analysisMatchId || null,
       tickCalls,
       tickRuns: authority?.tickRuns ?? null,
       chainBusyMs: authority ? Math.round(authority.chainBusyMs) : null,
@@ -663,7 +974,8 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
     })
   }
 
-  return { port, attach, stop, get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
+  return { port, attach, stop, settleAnalysis, analysisTrace: () => [...analysisTrace],
+    get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
       ruleVersion: version, authorityEpoch: latestFrame.authorityEpoch, enabled }) },
     interrupt: (reason: string) => { fail(reason); authority?.stop(); if (timer) clearInterval(timer); timer = null },
   }

@@ -187,6 +187,8 @@ const replay = useReplayRecorder({
     rulesetName: getRuleVariant(selectedRule.value).name,
     themeName: tableThemeName.value,
     humanSeat: 0,
+    // 本场是否开着分析录制：列表据此区分「分析：未开启」与「分析：缺少决策分析记录」（§10.7）
+    analysisRecorded: analysis.active(),
   }),
 })
 
@@ -218,12 +220,43 @@ const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait
   humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds, recorder: replay.hooks,
   // AI 分析记录：引擎拿到的是一个稳定代理（换场只换内部录制器）；关闭时为 null，零成本。
   analysis: analysis.port })
+/**
+ * 联机（P2P）分析记录开场（§6）：血流房间在拿到**本场分析区场次 id** 时调这里。
+ * 房主的场次 id 就是它那份展示回放的 id；客机从房主的快照信封里取 —— 两边同一个 id，
+ * 客机那份分析数据才不会在"按展示回放清单回收"时被当成悬空数据删掉（§9.2）。
+ */
+function startOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSeatControl[] }) {
+  if (!analysisEnabled.value || !detail.matchId) return
+  if (analysis.active()) {
+    if (analysis.matchId() === detail.matchId) return
+    // 上一场没正常收尾（中途换场/离开房间重开）：先如实收尾，避免这一场挂到上一场名下
+    void analysis.finish().then(() => beginOnlineAnalysis(detail))
+    return
+  }
+  beginOnlineAnalysis(detail)
+}
+function beginOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSeatControl[] }) {
+  analysis.start({
+    matchId: detail.matchId,
+    rulesetId: 'lotus-blood-flow',
+    rules: BLOOD_FLOW_CONFIG,
+    rulesVersion: BLOOD_FLOW_CONFIG.version,
+    // 联机时 AI/LLM 两套配置可能来自房主/各玩家的本机设置，这里记下本机口径（§3.1）
+    aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI },
+    aiStrategy: 'source-v2',
+    // 座位口径由房间给出（**绝对座位**）：客机视角是旋转过的，不能拿本机视角的座位号来标
+    seatControl: detail.seatControl,
+  })
+}
 const vibeRemoteGame = useVibeRemoteGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
   // 联机牌谱：房主生成全知牌谱广播给全员，各自存进同一个本地库（与单机回放共用一个列表）
   replayStorage: replay.storage,
+  // §6 联机分析记录：本机座位/AI 座位的决策 + 房主局后下发的赛后私有复现数据
+  analysis: analysis.port,
+  onAnalysisMatchId: startOnlineAnalysis,
   onLlmMessage: llmHook.onLlmMessage,
   getTableThemeName: () => tableThemeName.value,
   getCharacterId: () => animeCharacterId.value,
@@ -398,9 +431,13 @@ async function openReplay(matchId: string) {
 }
 // 回放落库时机：场末按引擎最终 standings 记录名次；中途回大厅按已打完的局收尾（标「未完成」）。
 // 分析录制开局：本地血流对局进入开局阶段时开一场（每场一个新录制器，引擎持稳定代理）。
+// 联机血流对局由房间在拿到场次 id 时调 `startOnlineAnalysis`（见上）。
 watch(() => (gameMode.value === 'local' && selectedRule.value === 'lotus-blood-flow' ? phase.value : null), (value) => {
   if (value !== 'opening' || analysis.active()) return
   analysis.start({
+    // 与展示回放**共用同一个场次 id**（§9.2）：否则分析数据在"按展示回放清单回收"时会被当成
+    // 悬空数据整场删掉，列表也无从显示这场是「完整」还是「已删除」。
+    matchId: replay.ensureMatchId(),
     rulesetId: 'lotus-blood-flow',
     rules: BLOOD_FLOW_CONFIG,
     rulesVersion: BLOOD_FLOW_CONFIG.version,
@@ -421,8 +458,12 @@ watch(matchFinished, (finished) => {
     score: entry.score,
     rank: entry.rank,
   })))
-  // 分析记录收尾：刷队列 → 返回分析区状态 → 按展示回放清单回收悬空分析区（§9.2、§9.5）。
-  void analysis.finish().then(async (result) => {
+  // §6：先把还在路上的赛后复现数据结清（等一小段，仍未到就如实记"未收到"/"权威端未提供"），
+  // **再**结束分析会话 —— 会话结束后的写入会被丢弃，"还没收到"就变成一片空白。
+  void (gameMode.value === 'remote'
+    ? vibeRemoteGame.settleBloodFlowAnalysis()
+    : Promise.resolve()
+  ).then(() => analysis.finish()).then(async (result) => {
     if (result.matchId && result.status !== 'complete') {
       console.warn('[analysis] 本场分析不完整（可在分析区查看缺失原因）', result)
     }

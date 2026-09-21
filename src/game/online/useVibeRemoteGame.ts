@@ -71,6 +71,8 @@ import {
   type RemoteReplayRequestMessage,
 } from '../replay/remoteRelay'
 import type { ReplayStorage } from '../replay/storage'
+import type { AnalysisRecorder } from '../replay/analysis/recorder'
+import type { AnalysisSeatControl } from '../replay/analysis/types'
 import { getRuleVariant } from '../core/rules/ruleVariants'
 import { RemotePlayerController } from './host/remotePlayerController'
 import { LotusRemotePlayerController } from './host/lotusRemotePlayerController'
@@ -282,6 +284,17 @@ interface UseVibeRemoteGameOptions {
    * 不传则联机回放整体关闭（零行为变化）。
    */
   replayStorage?: ReplayStorage | null
+  /**
+   * AI 分析记录（§6）：App 的分析会话代理。联机对局的分析由血流房间驱动 ——
+   * 本机座位（客机）/ AI 座位（房主）的决策照常入账，房主在局后产出赛后私有复现数据并下发。
+   * 不传或分析关闭时为 null：整条路径零成本。
+   */
+  analysis?: AnalysisRecorder | null
+  /**
+   * 联机分析开场：把这一场的分析区场次 id 与座位口径交给 App 去 `analysis.start(...)`。
+   * 房主在 attach 时定下（用展示回放录制器那把钥匙），客机从房主的快照信封里取。
+   */
+  onAnalysisMatchId?(detail: { matchId: string; seatControl: AnalysisSeatControl[]; mode: MatchType }): void
 }
 
 export function useVibeRemoteGame({
@@ -293,6 +306,8 @@ export function useVibeRemoteGame({
   getCharacterId = () => 'deepseek',
   animeFixedTts,
   replayStorage = null,
+  analysis = null,
+  onAnalysisMatchId,
 }: UseVibeRemoteGameOptions = {}) {
   // 本地 Mock 的多个标签页共享 localStorage，但每个标签页的 SDK peer 是独立的。
   // 用 peer 隔离应用层会话，避免旧会话恢复把不同标签页误合并成同一玩家。
@@ -507,6 +522,9 @@ export function useVibeRemoteGame({
     getSeat: () => mySeat.value, getMode: () => matchType.value, getIsHost: () => isHost.value,
     // 联机牌谱：血流房主用权威旁观视角录制全知牌谱并广播（未配置存储时整体关闭）
     replayStorage,
+    // §6 分析记录：本机座位/AI 座位的决策与赛后私有复现数据（分析关闭时为 null，零成本）
+    analysis,
+    ...(onAnalysisMatchId ? { onAnalysisMatchId } : {}),
     getPrivateAiSelections: () => hostLlmSelections,
     onAutoPlayChanged: enabled => { autoPlay.value = enabled },
     getVerifiedBindings: () => new Map(lobbySeats.value.map(s => [s.peerId, s.seat])),
@@ -2305,6 +2323,11 @@ export function useVibeRemoteGame({
 
   return defineGamePort({
     bloodFlowPort: bloodFlowRoom.port,
+    /**
+     * §6 场末分析收尾：把还在路上的赛后复现数据结清（等一小段，仍未到就如实记"未收到"）。
+     * **必须在 `analysis.finish()` 之前 await** —— 会话结束后的写入会被丢弃，"还没收到"就会变成空白。
+     */
+    settleBloodFlowAnalysis: (graceMs?: number) => bloodFlowRoom.settleAnalysis(graceMs),
     // 远程会话
     sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
     isHost, hostGame, roomSeats: lobbySeats, aiSeats: plannedAiSeats, roomTimeLimit, waitingNextRound, rulesetId,
