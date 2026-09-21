@@ -5,7 +5,7 @@ import {tileName} from '../core/rules/tiles'
 import {bloodFlowAiActions, decideBloodFlowAction, decideBloodFlowActionEv, bloodFlowKongValue} from '../variants/lotus/bloodFlow/ai'
 import type {BloodFlowAiConfig} from '../variants/lotus/bloodFlow/config'
 import {BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG} from '../variants/lotus/bloodFlow/config'
-import {bloodFlowEvContext} from '../variants/lotus/bloodFlow/evContext'
+import {bloodFlowEvContext, isFinalSelfDrawWin} from '../variants/lotus/bloodFlow/evContext'
 import {visibleTiles, type BloodFlowSeatView} from '../variants/lotus/bloodFlow/seatView'
 import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
 import {narrowActionsToRoute, type BigHandRoute} from '../variants/lotus/bloodFlow/bigHandRoute'
@@ -28,6 +28,7 @@ function label(action:BloodFlowAction,view:BloodFlowSeatView):string {
  * 返回收窄后的动作集与路线信息；未启用或无路线时原样返回。
  */
 function narrowToBigHandRoute(view:BloodFlowSeatView,actions:readonly BloodFlowAction[],aiConfig:BloodFlowAiConfig){
+  if(isFinalSelfDrawWin(view))return {actions,collapsed:false,route:null}
   const player=view.players[view.seat]
   const ownScore=player.score
   const topOpponent=Math.max(...view.players.filter(p=>p.seat!==view.seat).map(p=>p.score))
@@ -103,11 +104,12 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
         features.scoreDeltaBand=features.scoreDelta>=400?'高':features.scoreDelta>0?'中':'n/a'
       }
       features.specialPattern=view.ownScore?.items.map(p=>p.label).join('、')??'n/a'
-      if(!view.public.seats[view.seat].locked)features.risks.push('首次胡后锁手，不能再改手或吃碰杠；比较当前收益和后续听口')
+      if(isFinalSelfDrawWin(view))features.risks.push('末张自摸：胡后本局结束，改张不再有后续摸牌收益')
+      else if(!view.public.seats[view.seat].locked)features.risks.push('首次胡后锁手，不能再改手或吃碰杠；比较当前收益和后续听口')
     }
     if(evCtx){
       if(action.kind==='win'){
-        const declined=Boolean(view.ownScore&&view.ownScore.paymentPerPayer<evCtx.floor&&evCtx.potentialTotal>=aiConfig.potentialFloor)
+        const declined=Boolean(!isFinalSelfDrawWin(view)&&view.ownScore&&view.ownScore.paymentPerPayer<evCtx.floor&&evCtx.potentialTotal>=aiConfig.potentialFloor)
         features.ev={win:{immediateTotal:evCtx.immediateTotal,lockedChain:Math.round(evCtx.chainAfterWin),
           floor:evCtx.floor,floorStage:evCtx.floorStage,
           ...(declined?{declinedReason:evCtx.topDirections.map(d=>BLOOD_FLOW_CONFIG.patterns[d.id].label).join('、')||'牌型潜力'}:{})},

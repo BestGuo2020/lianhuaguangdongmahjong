@@ -39,6 +39,7 @@ export function computeReformHint(input: {
   hints: { current: WaitScores; discards: { discard: TileType; waits: WaitScores }[] }
   config?: BloodFlowAiConfig
 }): ReformHint | null {
+  if (input.wallCount <= 0) return null
   const config = input.config ?? BLOOD_FLOW_AI
   const payers = input.ownScore.source === 'self-draw' || input.ownScore.source === 'kong-bloom' ? 3 : 1
   const winTotal = input.ownScore.paymentPerPayer * payers
