@@ -161,12 +161,28 @@ export interface LlmControllerHooks {
       窗口 ID 在同一局面稳定且跨局不重复、`legalActionId` 与合法动作一一对应、结算四家变化之和为 0。
 - [ ] `tests/e2e/analysis-<variant>.spec.ts`：跑完整场 → 从分析库读回 → 断言 `parts` 形状、
       行内状态「分析：完整」、导出包自包含（记录 + 被引用配置 + 展示回放）；开关关掉后**零写入**。
+- [ ] **app-path 用例（2026-09-21 追加，必做）**：`tests/e2e/analysis-<variant>.spec.ts` 里再加一条
+      **走真实 App** 的用例（`page.goto('/')` → 从大厅开一场 → 打到一个 flush 点 → 从分析库读回并断言
+      `parts > 0`、`rulesetId === '<本玩法的 id>'`）。它锁住的正是"协调者在 `App.vue` 里补的那一行端口传递"
+      —— 引擎级 fixture 用例注入的是自己的 recorder，证明不了这一行。
 - [ ] 记录不得影响对局：同一场在"开关开/关"两种设置下的**结束分数与动作数完全一致**（这是本特性的硬护栏）。
 - [ ] LLM 座位：先记 `source: 'unknown'`（不接钩子）；接钩子后改为 `model` / `model-fallback` 并补单测。
 - [ ] 文档：`docs/blood-flow/design/analysis-<variant>.md` 写清字段口径、窗口 ID 规则、未做的部分。
 - [ ] 提交信息里写明"验证在哪棵树、跑了哪些命令、观察到什么数字"。
 
 **P1（§6 复现）**：不在本轮范围，单独排期（见方案文档 §4）。
+
+### 9.1 app-path 用例的三个坑（2026-09-21 实测，协调者踩过）
+
+1. **recorder 是缓冲写**：记录只在「累计 ≥48KiB」或「场末 / 中途退出收尾」时才落库。
+   打两三手就去读库一定是 0 —— 必须走到一个 **flush 点**：
+   一局打完（结算面板 →「返回大厅」触发引擎的中途退出收尾）或整场结束（App 的 `matchFinished` → `analysis.finish()`）。
+   读库前用 `expect.poll` 轮询（给 60s 余量）更稳。
+2. **托管按钮单机没有**：`GameTableHud` 的「托管」是 `v-if="showAutoPlay"`，而 `autoPlayEnabled` 只在
+   `gameMode === 'remote'` 时为真 ⇒ 单机对局里点不到（别浪费时间找它）。
+3. **手牌是 pointer 手势**：`.hand-tile-slot` 上挂的是 `pointerdown/pointerup/cancel`（`beginTileGesture` /
+   `finishTileGesture`），真正的"单击出牌"走内层 `MahjongTile` 的 `choose` → `handleTileActivation`。
+   直接 `click()` 外层 slot 只做到**选中**（实测牌被抬起但没打出）。要点到内层牌元素，或者按 pointer 序列驱动。
 
 ## 10. 冲突/僵局处理
 
