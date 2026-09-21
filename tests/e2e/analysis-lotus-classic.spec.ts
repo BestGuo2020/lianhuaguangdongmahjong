@@ -1,21 +1,29 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// 莲花广麻 P0 分析记录（约定 §9 的 DoD）。
+// 莲花广麻 P0+P1 分析记录（约定 §9 的 DoD；P1 见方案 §4）。
 //
-// 三条用例，两条路径：
+// 四条用例，两条路径：
 //
 // **引擎级探针**（`analysis-lotus-classic.html` fixture：真实 useGame + 真实分析区，但不经由 App）：
 //   ① 开关打开跑完整场 → 从**分析库**读回 → parts 形状、行内状态「分析：完整」、
-//      导出包自包含（记录 + 被引用配置 + 展示回放）；
-//   ② 开关关掉 → 零写入（库里不多一场、块数为 0）；
-//   ③ 开/关两种设置下同一场（同一随机序列）的**结束分数与动作数完全一致**（硬护栏）。
+//      导出包自包含（记录 + 被引用配置 + 展示回放）+ 复现数据逐局落库；
+//   ② **P1**：从落库读回的复现数据逐局重跑 ⇒ 命令逐条消费、结束分数与记录逐位相同，
+//      并做"改一张 postDealHands"的负向对照（必须报不一致且**一条命令都不喂**）；
+//   ③ 开关关掉 → 零写入（库里不多一场、块数为 0）；
+//   ④ 开/关两种设置下同一场（同一随机序列）的**结束分数与动作数完全一致**（硬护栏）。
 //
 // **app-path**（§9 追加的必做项：真实 App + 真实大厅流程，不由 fixture 注入 recorder）：
-//   ④ 正向：从大厅开一场莲花广麻 → 打到一个落库点 → 从分析库读回 `parts > 0` 且
+//   ⑤ 正向：从大厅开一场莲花广麻 → 打到一个落库点 → 从分析库读回 `parts > 0` 且
 //      `rulesetId === 'lotus-classic'` —— 锁住协调者在 App.vue 里补的 `analysis: analysis.port`
 //      那一行，以及 `rulesetId` 按 `selectedRule` 取值（不是硬编码血流）；
-//   ⑤ 负向：开关关掉走同一流程 → 库里零新增（那一行"既接上了、又听开关"两头都锁住）。
+//   ⑥ 负向：开关关掉走同一流程 → 库里零新增（那一行"既接上了、又听开关"两头都锁住）。
 test.setTimeout(300_000)
+
+// 串行：探针用例之间共享同一个分析库（IndexedDB），并行会互相污染"开关关掉零写入"这类计数。
+test.describe.configure({ mode: 'serial' })
+
+/** P1 的确定性重跑需要固定的牌墙与骰子 ⇒ 整场都钉死在这个 seed 上。 */
+const SEED = 20_260_921
 
 interface ProbeStatus {
   ready: boolean
@@ -56,24 +64,55 @@ interface ProbeStatus {
     records: number
     configurations: number
     replayRounds: number
+    // ── P1（赛后复现）──
+    reproductionParts: number
+    reproductionRounds: Array<{
+      roundIndex: number
+      ok: boolean
+      reason: string | null
+      scoresMatch: boolean | null
+      expectedScores: number[] | null
+      finalScores: number[]
+      kindMismatches: number
+      postDealChecked: boolean
+      postDealOk: boolean
+      openingChecked: boolean
+      openingOk: boolean
+      windowsOpened: number
+      commandsRecorded: number
+      commandsConsumed: number
+      commandsNotLegalAtRecordTime: number
+      withoutWindowId: number
+      unusedCommands: number
+      nonCommandEntries: number
+      gaps: string[]
+    }>
+    postDealTamper: { ok: boolean; reason: string | null; windowsOpened: number; commandsConsumed: number } | null
   }
 }
 
 const FIXTURE = '/tests/e2e/fixtures/analysis-lotus-classic.html'
 
-test('莲花广麻：记录落库形状、行内状态、导出自包含、开关关掉零写入、记录不影响对局', async ({ page }) => {
-  const pageErrors: string[] = []
-  page.on('pageerror', (error) => pageErrors.push(error.message))
-  await page.goto(FIXTURE)
+/** 跑一次探针并把探针自身的错误先卡住（后面的断言才有证据力）。 */
+async function runProbe(page: Page, query: string): Promise<ProbeStatus> {
+  await page.goto(`${FIXTURE}${query}`)
   await page.waitForFunction(() => {
     const probe = (window as unknown as { __analysisClassic?: ProbeStatus }).__analysisClassic
     return Boolean(probe?.ready || probe?.error)
-  }, undefined, { timeout: 240_000 })
+  }, undefined, { timeout: 280_000 })
   const probe = await page.evaluate(
     () => (window as unknown as { __analysisClassic: ProbeStatus }).__analysisClassic,
   )
-
   expect(probe.error, `探针出错：${probe.error}`).toBeNull()
+  return probe
+}
+
+test('莲花广麻：记录落库形状、行内状态、导出自包含、开关关掉零写入、记录不影响对局', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  // `replay=0`：这条用例只看记录形状与导出包（重跑由下面那条 P1 用例负责，避免重复付一次重跑的时间）
+  const probe = await runProbe(page, `?replay=0&seed=${SEED}`)
+
   expect(probe.errors, `录制报错：${probe.errors.join(' | ')}`).toEqual([])
   expect(pageErrors).toEqual([])
 
@@ -98,17 +137,19 @@ test('莲花广麻：记录落库形状、行内状态、导出自包含、开�
   expect(probe.on.choicesResolvable, '每条选择的 ID 必须落在该窗口的合法动作里').toBe(true)
   expect(probe.on.partsTotal).toBeGreaterThan(0)
 
-  // parts 形状：配置 + 前态 + 决策 + 结算；响应窗口另外按 §9.3 写一条该座位的手牌检查点。
+  // parts 形状：配置 + 前态 + 决策 + 结算 + **复现数据**；响应窗口另外按 §9.3 写一条该座位的手牌检查点。
   // 本轮没有 LLM 座位（无 llm 段）、没有中途退出（无 gaps 段）。
   expect(probe.on.partsByTag.config).toBeGreaterThanOrEqual(1)
   expect(probe.on.partsByTag.decisionState).toBeGreaterThan(0)
   expect(probe.on.partsByTag.decision).toBeGreaterThan(0)
   expect(probe.on.partsByTag.settlement).toBeGreaterThan(0)
   expect(probe.on.partsByTag.responderCheckpoint).toBeGreaterThan(0)
+  // P1（§2.1）：复现数据也要落库，且**每一局一条**（打了 N 局就有 N 条可重跑的起点）
+  expect(probe.on.partsByTag.reproduction, '每一局都要落一条复现数据').toBe(probe.on.rounds)
   expect(probe.on.partsByTag.llm ?? 0).toBe(0)
   expect(probe.on.partsByTag.gaps ?? 0).toBe(0)
   expect(Object.keys(probe.on.partsByTag).sort())
-    .toEqual(['config', 'decision', 'decisionState', 'responderCheckpoint', 'settlement'])
+    .toEqual(['config', 'decision', 'decisionState', 'reproduction', 'responderCheckpoint', 'settlement'])
 
   // 结算四家变化之和恒为 0（§5）
   expect(probe.on.settlementsBalanced, '结算必须四家守恒').toBe(true)
@@ -133,9 +174,74 @@ test('莲花广麻：记录落库形状、行内状态、导出自包含、开�
   expect(manifest.replayRounds).toBeGreaterThan(0)
   expect(manifest.includesReplay).toBe(true)
   expect(probe.on.exportBytes).toBeGreaterThan(0)
-  // P0 不做赛后复现（§6 是 P1）：唯一缺的应当只有复现数据这一项，不是"记录/配置/回放缺了"
-  expect(probe.on.exportMissing).toEqual(['复现数据（reproduction）'])
-  expect(probe.on.exportReproductionCapable).toBe(false)
+  // P1 之后这一场带着**内容完整**的复现数据 ⇒ 导出包必须如实声称"可以精确复现"（§2.4）。
+  // 判据不再是"有没有 reproduction 记录"，而是逐局看字段齐不齐（`reproductionCapability.ts`）——
+  // 广麻的清单里**没有**精牌/指示牌那几项（玩法里没有翻精），这正是"按 variant 分派"要立住的事。
+  expect(probe.on.exportReproductionCapable, 'P1 起复现数据字段齐全 ⇒ 应当声称可精确复现').toBe(true)
+  expect(probe.on.exportMissing, '可精确复现时不该再有任何缺失项').toEqual([])
+})
+
+test('P1 赛后复现：从落库读回的复现数据逐局重跑 ⇒ 到达同一结束状态（方案 §2、§4 的 DoD）', async ({ page }) => {
+  // 这条是 P1 的核心验收点：**不是**读字段对不对，而是拿记录里的"环状牌墙 + 开局骰子 + 庄家
+  // + 当局开局分 + 权威动作序列"重新跑一局，看能不能到达同一个结束状态（§2.3：不许拿"跑通"当"复现"）。
+  //
+  // 为什么必须在浏览器里跑：校验器要起真实 `useGame`（Vue 响应式 + 定时器链），
+  // vitest 环境里没有这套 DOM/定时器组合（§3.5）。同一段代码在 vitest 里由假时钟驱动
+  // （`replayLotusClassicRound.test.ts`，几秒），这里由**真实浏览器定时器**驱动。
+  test.setTimeout(900_000)
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  const probe = await runProbe(page, `?seed=${SEED}`)
+
+  expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
+  expect(probe.errors, `录制报错：${probe.errors.join(' | ')}`).toEqual([])
+  expect(probe.on.rounds, '应当打完东风场').toBeGreaterThanOrEqual(4)
+  console.log(`[analysis-lotus-classic] P1 重跑：复现数据 ${probe.on.reproductionParts} 条；`
+    + `逐局 ${probe.on.reproductionRounds.map((run) => `#${run.roundIndex} ok=${run.ok}`
+      + ` 命令 ${run.commandsConsumed}/${run.commandsRecorded} 窗口 ${run.windowsOpened}`
+      + ` 分数 ${run.finalScores.join('/')}`).join(' | ')}；`
+    + `篡改对照 ok=${probe.on.postDealTamper?.ok} 命令 ${probe.on.postDealTamper?.commandsConsumed}`)
+
+  // 复现数据逐局落库（跳过的局会在 `partsByTag.reproduction` 上少一条）
+  expect(probe.on.reproductionParts, '每一局都要有复现数据').toBe(probe.on.rounds)
+  expect(probe.on.reproductionRounds, '每一局都要真的重跑一次').toHaveLength(probe.on.reproductionParts)
+
+  for (const run of probe.on.reproductionRounds) {
+    const where = `第 ${run.roundIndex} 局`
+    expect(run.ok, `${where}重跑未到达同一结束状态：${run.reason ?? '（没有给出原因，这本身就是缺陷）'}`).toBe(true)
+    // ① 发牌后的手牌必须**交叉校验过**并且一致（§3.3）：这一步不一致就说明"发牌算法变了或记录与引擎不一致"
+    expect(run.postDealChecked, `${where}必须做发牌后手牌的交叉校验（没做就等于没验证）`).toBe(true)
+    expect(run.postDealOk, `${where}发牌后的手牌必须与记录一致`).toBe(true)
+    // ② 开牌断点由"牌墙 + 骰子 + 庄家"推出，重跑推出来的必须与记录一致
+    expect(run.openingChecked, `${where}必须校验开牌断点`).toBe(true)
+    expect(run.openingOk, `${where}开牌断点必须与记录一致`).toBe(true)
+    // ③ 结束分数与记录侧的结算完全一致（"同一结束状态"的机器判据）
+    expect(run.expectedScores, `${where}必须有可比的结束分数`).not.toBeNull()
+    expect(run.scoresMatch, `${where}结束分数必须与记录一致`).toBe(true)
+    expect(run.finalScores, `${where}结束分数`).toEqual(run.expectedScores)
+    // ④ 命令日志必须**逐条被消费**：漏跑一条、多跑一条、顺序错了都会在这里露出来（§2.2、§4）
+    expect(run.withoutWindowId, `${where}每条命令都要带 windowId（顺序判据）`).toBe(0)
+    expect(run.commandsRecorded, `${where}命令日志不能是空的（空的"全对上"是空转）`).toBeGreaterThan(0)
+    expect(run.commandsConsumed, `${where}记录里的命令必须全部被消费（不许跳过）`).toBe(run.commandsRecorded)
+    expect(run.unusedCommands, `${where}不许有没被消费的命令（重跑提前终局）`).toBe(0)
+    // §4「被拒动作不出现」，两个可观测形式都要立住：
+    // ① 日志里没有"不是命令口径"的条目（expire/auto 是血流权威端的概念，掺进来必须如实报错而不是过滤掉）；
+    // ② 每条命令在记录时都确实落在当时的合法动作里（P0 的合法动作下标 ≥ 0 ⇒ 带 legalActionId）。
+    expect(run.nonCommandEntries, `${where}命令日志里不该有非命令口径的条目`).toBe(0)
+    expect(run.commandsNotLegalAtRecordTime, `${where}每条命令在记录时都必须是合法动作（不许把被拒动作记进来）`).toBe(0)
+    expect(run.kindMismatches, `${where}窗口类型必须逐窗口对上`).toBe(0)
+    expect(run.gaps, `${where}重跑期间不得留缝：${run.gaps.join(' | ')}`).toEqual([])
+  }
+  // 一局至少一手牌，所以整场命令数必然多于局数 —— 顺带证明记的不是"每局一条"那种空壳
+  expect(probe.on.reproductionRounds.reduce((total, run) => total + run.commandsRecorded, 0))
+    .toBeGreaterThan(probe.on.rounds)
+
+  // ── 负向对照（§3.3、§4）：把记录改一张 ⇒ 必须报"发牌算法变了或记录与引擎不一致"并**停下来** ──
+  const tamper = probe.on.postDealTamper
+  expect(tamper, '夹具应当做"改了记录"的负向对照').not.toBeNull()
+  expect(tamper!.ok, '记录被动过就不能再声称复现成功').toBe(false)
+  expect(tamper!.reason, '失败原因必须点明是发牌/记录与引擎不一致').toContain('发牌算法变了或记录与引擎不一致')
+  expect(tamper!.commandsConsumed, '发现不一致之后不许再喂任何命令（更不许跳过它把这一局跑完）').toBe(0)
 })
 // ─────────────────────────── app-path（§9 追加的必做项） ───────────────────────────
 

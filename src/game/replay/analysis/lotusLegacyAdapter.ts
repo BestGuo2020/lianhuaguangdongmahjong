@@ -19,12 +19,11 @@
 // 靠的是这个字段，不是 ID 里的字面量。
 import type { Meld, TileType } from '../../core/contracts/types'
 import type { RuleSet } from '../../core/rules/ruleset'
-import { TILE_META } from '../../core/rules/tiles'
-import { tileFromName as llmTileFromName } from '../../llm/schema'
 import type { ChiMeld } from '../../variants/lotus/lotusRules'
 import { canChi, matchingCount, windKong } from '../../variants/lotus/lotusRules'
 import type { LlmDecisionAnswerHookInput, LlmDecisionRequestHookInput } from '../../llm/llmController'
 import { fingerprintOf } from './codec'
+import { actionMatchKey, canonicalTileKey, type LotusActionKeyLike } from './lotusActionKey'
 import type {
   AnalysisCandidate, AnalysisLegalAction, AnalysisLlmOutcome, AnalysisMaybe, AnalysisSettlement, AnalysisWindowKind,
 } from './types'
@@ -322,52 +321,15 @@ export function toLotusActionLike(action: unknown): LotusActionLike | null {
  * 可以参与匹配键的动作：`tile`/`meld` 既可能是本适配层的 `TileType` 牌码（`m5`），
  * 也可能是 LLM 接缝上报的**中文显示名**（`五万`，`llmController` 的 `analysisLegalActionOf`
  * 走的是 `tileName()`）。所以这里收宽松的 `string`。
+ *
+ * 实现与 `canonicalTileKey`/`actionMatchKey` 已经抽到 `lotusActionKey.ts`：广麻的重跑校验器
+ * 用的是**同一套**键函数（两个玩法的动作区分语义完全一致），分散成两份实现迟早会在
+ * "补杠看副露下标"这种细节上漂移。
  */
-export interface ActionKeyLike {
-  kind: string
-  tile?: string
-  handIndex?: number
-  meldIndex?: number
-  meld?: readonly string[]
-}
+export type ActionKeyLike = LotusActionKeyLike
 
-/**
- * 牌面 → **规范键（牌码）**。
- *
- * 仓库里有**两套中文牌名**，而且两张表都在用：
- * - `core/rules/tiles` 的 `TILE_META[].name` 是**中文数字**（`六筒`）—— 本适配层与展示层用这套；
- * - `llm/schema` 的 `tileName` 是**阿拉伯数字**（`6筒`）—— `llmController` 上报动作时用的正是它
- *   （`import { tileName } from './schema'`）。
- *
- * 所以匹配键必须统一回**牌码**，不能拿任一侧的显示名当键：早先我用中文数字那套去比，
- * 实测每一个吃候选都对不上（`chi|七筒,八筒,六筒` vs `chi|7筒,8筒,6筒`），落库时静默少候选。
- * 认不出来的字符串原样返回（不猜）。
- */
-export function canonicalTileKey(tile: string): string {
-  if (TILE_META[tile as TileType]) return tile
-  const byLlmTable = llmTileFromName(tile)
-  if (byLlmTable) return byLlmTable
-  const byCoreTable = (Object.keys(TILE_META) as TileType[]).find((code) => TILE_META[code]?.name === tile)
-  return byCoreTable ?? tile
-}
-
-/**
- * 窗口内区分动作的键（只取**能区分这个窗口内选项**的字段）：
- * 弃牌看手牌下标（同牌不同位置不是同一个选项）、补杠看副露下标、暗杠看牌、吃看组合，
- * 其余（胡/过/碰/直杠/风杠）在一个窗口里至多一个。`tile`/`from` 对吃与碰是冗余信息，不参与。
- *
- * 牌面一律过 `canonicalTileKey` 折回牌码，因此"控制器动作（牌码）、本适配层动作（牌码）、
- * 钩子上报动作（`llm/schema` 的中文名）"三方落在同一个键上。
- */
-export function actionMatchKey(action: ActionKeyLike): string {
-  switch (action.kind) {
-    case 'discard': return `discard|${action.handIndex ?? -1}`
-    case 'added-kong': return `added-kong|${action.meldIndex ?? -1}`
-    case 'concealed-kong': return `concealed-kong|${action.tile ? canonicalTileKey(action.tile) : ''}`
-    case 'chi': return `chi|${[...(action.meld ?? [])].map(canonicalTileKey).sort().join(',')}`
-    default: return action.kind
-  }
-}
+/** 见 `lotusActionKey.ts`：牌面 → 规范键（牌码），两套中文牌名（中文数字/阿拉伯数字）都认。 */
+export { actionMatchKey, canonicalTileKey }
 
 /** 控制器返回的动作在该窗口合法动作里的下标；对不上返回 -1（不记成任何候选）。 */
 export function chosenIndex(view: LotusSeatView, action: LotusActionLike | null): number {
