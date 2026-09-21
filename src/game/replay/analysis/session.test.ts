@@ -28,6 +28,33 @@ const config = {
 }
 
 describe('分析录制会话', () => {
+  // 回归：引擎侧"中途退出"走的是 `port.finish()`。此前它只结束录制器、不清会话 target，
+  // 于是 `session.active()` 一直是真 —— App 的守卫会跳过下一场的 start()，新对局的记录挂到上一场名下。
+  it('代理 finish() 结束整场：会话不再是 active，下一场换新 matchId', async () => {
+    const { session, storage } = setup()
+    const first = session.start({ ...config, seatControl: [...config.seatControl] })
+    session.port!.noteGap({ scope: 'match', reason: 'match-aborted' })
+    session.port!.windowOpened({
+      windowId: 'w1', seat: 0, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'e1', stateVersion: 1,
+      state: { id: 's1', legalActions: [{ id: 'w1/0', kind: 'discard' }] },
+    })
+    const finished = await session.port!.finish()
+    expect(finished.status, '中途退出必须如实标成不完整').toBe('partial')
+    expect(session.active(), '代理 finish 之后不应还是 active').toBe(false)
+    const aborted = await storage.read(first)
+    expect(aborted.parts.length, '已录到的数据必须刷进去，不能静默丢').toBeGreaterThan(0)
+    expect(aborted.meta?.status).toBe('partial')
+    expect(aborted.meta?.gaps.map(gap => gap.reason)).toContain('match-aborted')
+
+    // 下一场是新的场次 id，且不会再往上一场追加
+    const second = session.start({ ...config, seatControl: [...config.seatControl] })
+    expect(second).not.toBe(first)
+    await session.finish()
+    const afterSecond = await storage.read(first)
+    expect(afterSecond.meta?.gaps.filter(gap => gap.reason === 'match-aborted').length, '上一场不再被追加').toBe(1)
+    expect(second).toBe('match-2')
+  })
+
   it('开一场会写入配置（含规则/AI 指纹），决策落到该场名下', async () => {
     const { session, storage } = setup()
     const matchId = session.start({ ...config, seatControl: [...config.seatControl] })

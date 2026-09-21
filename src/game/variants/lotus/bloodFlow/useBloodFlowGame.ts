@@ -866,6 +866,14 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     matchLifecycle.returnToLobby()
     remoteOpeningId = ''; view.value = null
     options.externalAuthority?.leave()
+    // 中途退出（整场没打完）：把已经录到的分析数据**刷进分析区并如实标成不完整**（§9.5：不许静默丢），
+    // 同时结束本场会话 —— 否则会话一直是 active，下一场会被 App 的守卫跳过，
+    // 新对局的记录会挂到上一场的 matchId 上（错场归属，实测隐患）。
+    // 正常打完时 `matchFinished` 已为真：那条路径上 App 已经 finish 过一次，这里不再重复留痕。
+    if (options.analysis && !state.matchFinished.value) {
+      options.analysis.noteGap({ scope: 'match', reason: 'match-aborted' })
+      void options.analysis.finish().catch(() => {})
+    }
   }
 
   // 本窗口已提交决策后 ownActions 视为空：按钮与提示立即收起，等权威快照推进（防连点）。
