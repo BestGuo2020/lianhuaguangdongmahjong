@@ -415,7 +415,7 @@ llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
 
 ### 12.5 验证（跑了什么、看到什么数字）
 
-**单测**（`vue-tsc --noEmit` + `vitest run src`）：全绿 **1955 passed / 2 skipped（193 个文件）**。
+**单测**（`vue-tsc --noEmit` + `vitest run src`）：全绿 **1956 passed / 2 skipped（193 个文件）**。
 P1 新增两个文件：
 
 - `lotusReproduction.test.ts`（15 条）：快照口径（136 张、每种 4 张、全是牌码）、四家开局分、
@@ -425,7 +425,7 @@ P1 新增两个文件：
   上面那个"观测桩抛异常 ⇒ 窗口编号错乱"的坑，还有四条负向：篡改发牌、缺开局分、缺可比的结束分数、
   命令日志里混进 `expire` 条目（必须报错而不是过滤掉）。
 
-**e2e**（`tests/e2e/analysis-lotus-legacy.spec.ts`，**6 条全绿，共 4.1 分钟**；dev server 在 4178）：
+**e2e**（`tests/e2e/analysis-lotus-legacy.spec.ts`，**6 条全绿，共 3.8 分钟**；dev server 在 4178）：
 
 | 用例 | 结果 |
 |---|---|
@@ -435,7 +435,7 @@ P1 新增两个文件：
 | 分析关掉后零写入 | 0 块、0 场次、0 记录，`reproductionParts=0` |
 | 硬护栏（开/关同一副牌） | 分数 `-1200,-600,7500,2300` 两次相同；动作数相同；`rngDraws` 1552 = 1552 |
 | LLM 座位接缝 | 尝试 54 条、模板 1 条 |
-| app-path（真实 App） | 13 分块、`{"config":1,"decisionState":229,"decision":458,"responderCheckpoint":45,"settlement":5,"reproduction":5}` —— **真实 App 路径也逐局落了复现数据**（条数每次浮动：这条用例走真实 App、牌墙随机） |
+| app-path（真实 App） | 15 分块、`{"config":1,"decisionState":260,"decision":520,"responderCheckpoint":65,"settlement":6,"reproduction":6}` —— **真实 App 路径也逐局落了复现数据**（这一场连庄打到 6 局 ⇒ 6 条；条数每次浮动：这条用例走真实 App、牌墙随机） |
 
 `?replay=0` 可跳过逐局重跑（与复现无关的用例不必付这份时间）；`?analysis=0` 时一次都不跑（零成本）。
 
@@ -455,4 +455,5 @@ P1 新增两个文件：
    见「未做的部分」第 5 条。本轮已按那套流程镜像：master `c6a1114` → `sync:vibehub`（`5137093`，
    keep 文件被还原成 vibehub 版）→ 手动移植（3-way 基线 = 改动前的 master 版本）→ vibehub 门控
    （`vue-tsc --noEmit` 通过 + `vitest run src` = **2076 passed / 2 skipped**，含 `replayLotusRound.test.ts`）
-   → vibehub 提交 `25a6a72`。
+   → vibehub 提交 `25a6a72`。之后又补了一次校验器加固（master `fe30927`：非命令口径条目如实报错、
+   不靠上游过滤「跑绿」），同步为 vibehub `ad2d9ea`，vibehub 复跑门控 **2077 passed / 2 skipped**。
