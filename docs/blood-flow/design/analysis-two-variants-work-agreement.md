@@ -52,6 +52,24 @@ docs/blood-flow/design/analysis-two-variants-work-agreement.md   （本文件）
 
 不允许"我在自己分支里改一下公共文件，回头让对方解决冲突"。
 
+### 3.1 `App.vue` 的引擎端口传递：单写者（协调者）+ 固定顺序
+
+两条分支都需要在 `App.vue` 里给自己那个引擎加一行 `analysis: analysis.port`（`localGame` 给 A、`lotusGame` 给 B）。
+这一行**由协调者统一做**（App.vue 是冻结文件，只允许单写者；两行一次提交也避免两条分支抢同一处）：
+
+1. A/B 先在自己的引擎文件里把**选项字段**加好并提交
+   （A：`src/game/core/local/useGame.ts` 的 `UseGameOptions.analysis?`；B：`src/game/variants/lotus/lotusGame.ts` 的 `UseLotusGameOptions.analysis?`）——
+   这是各自分支的文件，字段类型照抄血流：`analysis?: AnalysisRecorder | null`；
+2. 把"字段已就绪"的提交 sha 报给协调者；
+3. 协调者在 master 上加 `App.vue` 的那一行（两条分支都就绪就一次加两行）→ `pnpm typecheck && pnpm test` → `pnpm sync:vibehub`；
+4. A/B `git merge master` 继续（这一行是"真实 App 路径"的最后一块）。
+
+**关键：这一步不阻塞 A/B 的其它工作**。e2e fixture 应该像血流的 `tests/e2e/fixtures/analysis-probe.ts` 那样
+**自己构造引擎 + 自己注入 recorder/session**（传 recorder 与传 null 各跑一遍即可验证"记录不影响对局"），
+完全不需要 App.vue 那一行；App.vue 那一行只用于"真实 App 里的整链验收"。
+
+§7.4 的"就地解"只是**合并时意外撞车的兜底**，不是"谁都可以先改冻结文件"的许可。
+
 ## 4. 已定好的公共地基（分叉前已完成，不要再动）
 
 | 项 | 内容 |
@@ -102,9 +120,24 @@ export interface LlmControllerHooks {
 |---|---|---|
 | `src/App.vue` | 公共地基（能力表已是共享？**不是**：App.vue 是 keep 文件 ⇒ 地基里的能力表也要镜像一次） | 地基提交后必须同步镜像，否则 vibehub 站点按老条件只开血流场次 |
 | `src/game/core/local/useGame.ts` | A（莲花广麻） | 选项 + 记录调用点两边各写一份 |
-| `src/game/variants/lotus/lotusGame.ts` | B | **共享文件**，不需要镜像 |
+| `src/game/variants/lotus/lotusGame.ts` | B（翻精癞子） | **也是 keep 文件**（脚本 `$vibehubKeep` 里就有它 —— 2026-09-21 由 B 核实并纠正，我原先写成"共享文件"是错的）：B 的改动同样要手动镜像 |
 
 联机侧（vibehub）改动是**串行**的：vibehub 工作区一次只能检出一条分支 ⇒ 约定「谁先合并到 master 谁先做镜像」。
+
+### 6.1 镜像 keep 文件的正确姿势（2026-09-21 实战）
+
+1. **顺序**：先 `pnpm sync:vibehub`（把 master 的共享文件带过来、keep 文件原样保留），**再**做镜像并提交 ——
+   反过来的话，下一次同步会把镜像覆盖掉。
+2. **手法：三方合并**，不要手工重放几百行：
+   - `base` = 合并前的 master 版本（`git show <A 合并前的 sha>:<路径>`）
+   - `ours` = vibehub 当前文件
+   - `theirs` = 合并后的 master 版本
+   - `git merge-file -p ours base theirs > merged`，检查无 `<<<<<<<` 后写回。
+3. **行尾陷阱**：vibehub 工作区是 **CRLF**，而 `git show` 输出是 **LF** ⇒ 不先统一行尾，
+   `git merge-file` 会把**每一行**都判成冲突（实测得到 1258 行冲突块）。先把 `ours` 转成 LF 再合并，
+   写回时再转回 CRLF。
+4. **验收**：`git diff --stat` 应显示"master 侧那点改动量"（例如 `+365/-3`），**不是**整文件重写；
+   然后 `pnpm typecheck` + `pnpm test`（vibehub 全量）。
 
 ## 7. 合并与同步协议
 
@@ -128,12 +161,28 @@ export interface LlmControllerHooks {
       窗口 ID 在同一局面稳定且跨局不重复、`legalActionId` 与合法动作一一对应、结算四家变化之和为 0。
 - [ ] `tests/e2e/analysis-<variant>.spec.ts`：跑完整场 → 从分析库读回 → 断言 `parts` 形状、
       行内状态「分析：完整」、导出包自包含（记录 + 被引用配置 + 展示回放）；开关关掉后**零写入**。
+- [ ] **app-path 用例（2026-09-21 追加，必做）**：`tests/e2e/analysis-<variant>.spec.ts` 里再加一条
+      **走真实 App** 的用例（`page.goto('/')` → 从大厅开一场 → 打到一个 flush 点 → 从分析库读回并断言
+      `parts > 0`、`rulesetId === '<本玩法的 id>'`）。它锁住的正是"协调者在 `App.vue` 里补的那一行端口传递"
+      —— 引擎级 fixture 用例注入的是自己的 recorder，证明不了这一行。
 - [ ] 记录不得影响对局：同一场在"开关开/关"两种设置下的**结束分数与动作数完全一致**（这是本特性的硬护栏）。
 - [ ] LLM 座位：先记 `source: 'unknown'`（不接钩子）；接钩子后改为 `model` / `model-fallback` 并补单测。
 - [ ] 文档：`docs/blood-flow/design/analysis-<variant>.md` 写清字段口径、窗口 ID 规则、未做的部分。
 - [ ] 提交信息里写明"验证在哪棵树、跑了哪些命令、观察到什么数字"。
 
 **P1（§6 复现）**：不在本轮范围，单独排期（见方案文档 §4）。
+
+### 9.1 app-path 用例的三个坑（2026-09-21 实测，协调者踩过）
+
+1. **recorder 是缓冲写**：记录只在「累计 ≥48KiB」或「场末 / 中途退出收尾」时才落库。
+   打两三手就去读库一定是 0 —— 必须走到一个 **flush 点**：
+   一局打完（结算面板 →「返回大厅」触发引擎的中途退出收尾）或整场结束（App 的 `matchFinished` → `analysis.finish()`）。
+   读库前用 `expect.poll` 轮询（给 60s 余量）更稳。
+2. **托管按钮单机没有**：`GameTableHud` 的「托管」是 `v-if="showAutoPlay"`，而 `autoPlayEnabled` 只在
+   `gameMode === 'remote'` 时为真 ⇒ 单机对局里点不到（别浪费时间找它）。
+3. **手牌是 pointer 手势**：`.hand-tile-slot` 上挂的是 `pointerdown/pointerup/cancel`（`beginTileGesture` /
+   `finishTileGesture`），真正的"单击出牌"走内层 `MahjongTile` 的 `choose` → `handleTileActivation`。
+   直接 `click()` 外层 slot 只做到**选中**（实测牌被抬起但没打出）。要点到内层牌元素，或者按 pointer 序列驱动。
 
 ## 10. 冲突/僵局处理
 
