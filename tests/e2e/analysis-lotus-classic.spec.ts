@@ -362,8 +362,13 @@ test('app-path：真实 App 开一场莲花广麻 → 分析库读回 parts>0 �
  * 与正向合起来锁住那一行的两头：既接上了（正向），又听开关（负向）。
  * 推进量与正向同一量级（`ROUNDS_TO_FLUSH` 局，正向实测在该量级内就落了库）：
  * 推进量不足的负向用例即使开关坏了也会读到 0，那就不算对照。
+ *
+ * 慢用例门控（协调者 2026-09-21 决定，见约定 §9.2）：正向那条留在默认套件（2.5 分钟，锁住 App.vue
+ * 的端口传递）；这条负向要 3.9 分钟、且与引擎级"开关关掉零写入"重复度高，因此与
+ * `analysis-human-round.spec.ts` 同口径 —— 设 `E2E_SLOW=1` 才跑。
  */
-test('app-path 负向：开关关掉 → 同一流程零新增', async ({ page }) => {
+test('app-path 负向：开关关掉 → 同一流程零新增（慢用例，E2E_SLOW=1 才跑）', async ({ page }) => {
+  test.skip(process.env.E2E_SLOW !== '1', '慢用例：设 E2E_SLOW=1 才运行（约 4 分钟，必须真推进到落库点）')
   test.setTimeout(900_000)
   await page.addInitScript(() => {
     // DEV 下开关默认开启（除非显式置 '0'）：在应用加载前就关掉
