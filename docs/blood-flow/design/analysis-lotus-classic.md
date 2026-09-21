@@ -252,7 +252,7 @@ P0 的结算是"分数每变一次记一条"。这在**荒庄**（`endDraw` 的�
 | 项 | 命令 | 结果 |
 |---|---|---|
 | 类型 | `pnpm typecheck` | 通过 |
-| 单测 | `pnpm test` | 194 files passed \| 1 skipped，**1979 tests passed**（+22：本层 16 + 重跑 7，另 1 条并入既有文件） |
+| 单测 | `pnpm test` | 194 files passed \| 1 skipped，**1979 tests passed**（较 P1 前的基线 1956 **+23**：`lotusClassicReproduction.test.ts` 16 条 + `replayLotusClassicRound.test.ts` 7 条） |
 | 快照口径 | `npx vitest run src/game/replay/analysis/lotusClassicReproduction.test.ts` | 16 passed |
 | 重跑 | `npx vitest run src/game/replay/analysis/replayLotusClassicRound.test.ts` | 7 passed（含"整场 3 局、庄家非 0"那条） |
 | 端到端 | `npx playwright test tests/e2e/analysis-lotus-classic.spec.ts --workers=1` | **3 passed / 1 skipped（3.6 分钟）** |
