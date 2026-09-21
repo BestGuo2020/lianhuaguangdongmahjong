@@ -12,6 +12,11 @@ import {
   type BloodFlowLedgerViewLike,
   type BloodFlowViewLike,
 } from './bloodFlowAdapter'
+import { BloodFlowEngine } from '../../variants/lotus/bloodFlow/engine'
+import { bloodFlowSeatView } from '../../variants/lotus/bloodFlow/seatView'
+import { SEATS } from '../../variants/lotus/bloodFlow/state'
+import type { GamePlayer, Meld, TileType } from '../../core/contracts/types'
+import { createWall } from '../../core/rules/tiles'
 
 // 血流视角 → 分析模型的纯适配（§3.2／§3.3／§3.4）：
 // 稳定 ID、窗口类型判定、前态提取、以及"这一手到底有没有生效"的口径。
@@ -102,6 +107,47 @@ describe('血流适配层', () => {
     expect(other.drawnTileIndex).toBe(-1)
     expect(other.melds).toBe(1)
     expect(other.legalActions.map((action) => action.kind)).toEqual(['peng', 'pass'])
+  })
+
+  // §10.4：导出的决策输入只含"当时合法可见"的信息 —— 私有牌墙与对手暗手不得进入分析记录。
+  // 用**真实引擎的座位视角**验证（而不是手搓快照），因为遮蔽是权威投影的职责。
+  it('决策输入不含私有牌墙与对手暗手：字段形状固定，别家只有张数（§10.4）', () => {
+    const pool = createWall()
+    const remove = (tile: TileType) => { const index = pool.indexOf(tile); if (index >= 0) pool.splice(index, 1) }
+    const flipTiles: [TileType, TileType] = ['p9', 'white']
+    flipTiles.forEach(remove)
+    const players = SEATS.map((seat): GamePlayer => ({
+      seat, name: `P${seat}`, avatar: '', score: 2_000,
+      hand: pool.splice(0, seat === 0 ? 14 : 13), melds: [], discards: [], redCount: 0, drawnTileIndex: -1,
+    }))
+    const engine = new BloodFlowEngine({
+      authorityEpoch: 'epoch', roundId: 'epoch/round/1',
+      opening: { players, wall: pool, flipTiles, jokers: ['red', 'green'],
+        headDrawn: 134 - pool.length, dealerDrawnIndex: players[0].hand.length - 1,
+        flipStack: 0, flipSeat: 0, wallBreakIndex: 2 },
+      now: () => 0, winBeatMs: 0,
+    })
+    const seatView = bloodFlowSeatView(engine, 2)
+
+    // 视角本身：只给牌墙**张数**，不给牌墙顺序；别家暗手是空数组 + 张数
+    expect(seatView.wallCount).toBe(engine.wall.length)
+    expect('wall' in (seatView as unknown as Record<string, unknown>)).toBe(false)
+    expect('discardActions' in (seatView as unknown as Record<string, unknown>), '旁观专属字段不得出现在座位视角').toBe(false)
+    for (const other of [0, 1, 3]) {
+      expect(seatView.players[other].hand, `别家（${other}）暗手必须遮蔽`).toEqual([])
+      expect(seatView.players[other].concealedTileCount).toBe(engine.players[other].hand.length)
+    }
+
+    const state = decisionStateOf(seatView, 2)
+    // 字段形状固定：多出任何字段都说明有人把新信息塞进了决策输入
+    expect(Object.keys(state).sort()).toEqual(['drawnTileIndex', 'hand', 'id', 'legalActions', 'melds'])
+    // 手牌只能是**该座位自己的**（与引擎里同一份），且不含别家的牌
+    expect(state.hand).toEqual(engine.players[2].hand)
+    expect(state.hand.length).toBeGreaterThanOrEqual(13)
+    // 记录文本里不得出现遮蔽前的对手张数痕迹，也不得出现完整牌墙（136 张的枚举）
+    const text = JSON.stringify(state)
+    expect(text).not.toContain('concealedTileCount')
+    expect(text).not.toContain('flipTiles')
   })
 
   it('结算流水从权威账本派生：批次与杠各一条、同源多响保留同一 batchId、去重后不重复记（§5）', () => {
