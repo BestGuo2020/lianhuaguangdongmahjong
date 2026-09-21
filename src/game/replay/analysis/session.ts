@@ -82,9 +82,32 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
     reproduction: (input) => target?.reproduction(input),
     noteGap: (gap) => target?.noteGap(gap),
     flush: async (reason) => { await target?.flush(reason) },
-    finish: async () => target?.finish() ?? { status: 'disabled' as AnalysisAreaStatus, bytes: 0 },
+    // 与 session.finish() 同一实现：引擎侧调它（中途退出）时同样会结束本场，避免下一场错场归属
+    finish: async () => {
+      const result = await finishMatch()
+      return { status: result.status, bytes: result.bytes }
+    },
     diagnostics: () => target?.diagnostics() ?? { decisions: 0, attempts: 0, pendingParts: 0, pendingBytes: 0, paused: false },
   } : null
+
+  /**
+   * 结束当前场次：刷队列 → 写缺失 → **清空 target**（下一场靠 `start()` 新建录制器）。
+   *
+   * 代理与 `session.finish()` 共用它：引擎侧在"中途退出"时也会调 `port.finish()`，
+   * 若只结束录制器而不清 target，会话会一直是 active —— App 的 `analysis.active()` 守卫
+   * 会跳过下一场的 `start()`，于是新对局的记录挂到上一场的 matchId 上（错场归属）。
+   */
+  async function finishMatch(): Promise<{ matchId: string; status: AnalysisAreaStatus; bytes: number }> {
+    const recorder = target
+    const matchId = currentMatchId
+    target = null
+    // 场末按 §9.4 复检一次同源容量（有节制的检查；不用它的读数覆盖逐块账本）
+    void options.storage?.capability?.().refreshEstimate().catch(() => {})
+    if (!recorder) return { matchId, status: lastStatus, bytes: 0 }
+    const result = await recorder.finish()
+    lastStatus = result.status
+    return { matchId, status: result.status, bytes: result.bytes }
+  }
 
   return {
     port,
@@ -124,15 +147,7 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
     },
 
     async finish() {
-      const recorder = target
-      const matchId = currentMatchId
-      target = null
-      // 场末按 §9.4 复检一次同源容量（有节制的检查；不用它的读数覆盖逐块账本）
-      void options.storage?.capability?.().refreshEstimate().catch(() => {})
-      if (!recorder) return { matchId, status: lastStatus, bytes: 0 }
-      const result = await recorder.finish()
-      lastStatus = result.status
-      return { matchId, status: result.status, bytes: result.bytes }
+      return await finishMatch()
     },
     /** 浏览器存储能力快照（持久化状态 + 最近一次容量估算），供诊断/容量基线工具读取。 */
     capability() {
