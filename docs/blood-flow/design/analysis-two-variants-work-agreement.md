@@ -52,6 +52,24 @@ docs/blood-flow/design/analysis-two-variants-work-agreement.md   （本文件）
 
 不允许"我在自己分支里改一下公共文件，回头让对方解决冲突"。
 
+### 3.1 `App.vue` 的引擎端口传递：单写者（协调者）+ 固定顺序
+
+两条分支都需要在 `App.vue` 里给自己那个引擎加一行 `analysis: analysis.port`（`localGame` 给 A、`lotusGame` 给 B）。
+这一行**由协调者统一做**（App.vue 是冻结文件，只允许单写者；两行一次提交也避免两条分支抢同一处）：
+
+1. A/B 先在自己的引擎文件里把**选项字段**加好并提交
+   （A：`src/game/core/local/useGame.ts` 的 `UseGameOptions.analysis?`；B：`src/game/variants/lotus/lotusGame.ts` 的 `UseLotusGameOptions.analysis?`）——
+   这是各自分支的文件，字段类型照抄血流：`analysis?: AnalysisRecorder | null`；
+2. 把"字段已就绪"的提交 sha 报给协调者；
+3. 协调者在 master 上加 `App.vue` 的那一行（两条分支都就绪就一次加两行）→ `pnpm typecheck && pnpm test` → `pnpm sync:vibehub`；
+4. A/B `git merge master` 继续（这一行是"真实 App 路径"的最后一块）。
+
+**关键：这一步不阻塞 A/B 的其它工作**。e2e fixture 应该像血流的 `tests/e2e/fixtures/analysis-probe.ts` 那样
+**自己构造引擎 + 自己注入 recorder/session**（传 recorder 与传 null 各跑一遍即可验证"记录不影响对局"），
+完全不需要 App.vue 那一行；App.vue 那一行只用于"真实 App 里的整链验收"。
+
+§7.4 的"就地解"只是**合并时意外撞车的兜底**，不是"谁都可以先改冻结文件"的许可。
+
 ## 4. 已定好的公共地基（分叉前已完成，不要再动）
 
 | 项 | 内容 |
