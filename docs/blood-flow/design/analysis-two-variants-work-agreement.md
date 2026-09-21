@@ -172,17 +172,37 @@ export interface LlmControllerHooks {
 
 **P1（§6 复现）**：不在本轮范围，单独排期（见方案文档 §4）。
 
-### 9.1 app-path 用例的三个坑（2026-09-21 实测，协调者踩过）
+### 9.1 app-path 用例的坑（2026-09-21 实测：协调者踩了两个、A 更正两个、A 又补一个）
 
-1. **recorder 是缓冲写**：记录只在「累计 ≥48KiB」或「场末 / 中途退出收尾」时才落库。
-   打两三手就去读库一定是 0 —— 必须走到一个 **flush 点**：
-   一局打完（结算面板 →「返回大厅」触发引擎的中途退出收尾）或整场结束（App 的 `matchFinished` → `analysis.finish()`）。
-   读库前用 `expect.poll` 轮询（给 60s 余量）更稳。
+1. **recorder 是缓冲写**：记录只在「累计 ≥48KiB」或「场末 / 中途退出收尾」时落库 ⇒ 用例必须真的推进到
+   **落库点**才算数。莲花广麻实测：自动刷盘发生在 **147 秒 / 第 1~2 局**前后（所以不必打完一整场）；
+   推进量不足的负向用例即使开关坏了也会读到 0，**要断言"确实推进到位"**，否则不算对照。
 2. **托管按钮单机没有**：`GameTableHud` 的「托管」是 `v-if="showAutoPlay"`，而 `autoPlayEnabled` 只在
    `gameMode === 'remote'` 时为真 ⇒ 单机对局里点不到（别浪费时间找它）。
 3. **手牌是 pointer 手势**：`.hand-tile-slot` 上挂的是 `pointerdown/pointerup/cancel`（`beginTileGesture` /
    `finishTileGesture`），真正的"单击出牌"走内层 `MahjongTile` 的 `choose` → `handleTileActivation`。
-   直接 `click()` 外层 slot 只做到**选中**（实测牌被抬起但没打出）。要点到内层牌元素，或者按 pointer 序列驱动。
+   点外层 slot 只做到**选中**（实测牌被抬起但没打出）；**点内层 `.mahjong-tile` 才能正常打出**。
+4. **「返回大厅」不在单机的一局结算面板上**（A 更正）：`SettlementOverlay.vue` 里它是
+   `v-if="matchFinished || finalRankingLab"`（最终排名面板）；单机一局打完只有「查看牌桌」和「继续」。
+   所以 app-path 靠的是**自动刷盘 + 场末收尾**，不要指望中途用「返回大厅」触发 flush。
+5. **一局结束必须点「继续」**（A 补的坑，最阴）：不点就永远停在结算面板上 —— 表现是"一直在点手牌、
+   看起来在打"，实则第一局早已结算、记录一条都没产生（A 首次就点了 1294 次手牌、parts=0）。
+   用例里要点「继续」进下一局，并把"已结算几局 / 是否场末 / 用时"写进失败信息。
+6. **IDB 细节**：`indexedDB.open` 对不存在的库会**新建一个空库**，随后开事务抛 `NotFoundError`。
+   读库前先问 `indexedDB.databases()`，不存在就返回空读数（负向用例里这个库本就不该被建出来）。
+
+### 9.2 哪些用例进默认套件（协调者 2026-09-21 决定）
+
+| 用例 | 时长 | 归属 |
+|---|---|---|
+| 引擎级探针（fixture 注入 recorder） | ~13 秒 | **默认套件** |
+| app-path 正向（真实 App → 落库 → `parts>0`、`rulesetId` 正确） | ~2.5 分钟 | **默认套件**（锁住协调者补的那一行端口传递） |
+| app-path 负向（开关关掉 → 零新增，同量级推进） | ~3.9 分钟 | **`E2E_SLOW=1` 才跑**（与引擎级"零写入"重复度高；同 `analysis-human-round.spec.ts` 口径） |
+
+**`ROUNDS_TO_FLUSH` 是实测值**（正向 1~2 局落库，取 3 作余量）：它跟着
+`ANALYSIS_BLOCK_TARGET_BYTES`（48KiB）与对局节奏走 —— 调小缓冲上限或加快牌墙后**必须同步上调**，
+否则正向会变成偶发失败、负向会变成"推进不够"的假对照。
+
 
 ## 10. 冲突/僵局处理
 
