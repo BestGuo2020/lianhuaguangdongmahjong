@@ -55,6 +55,7 @@ import {
 } from '../../../replay/analysis/bloodFlowAdapter'
 import type { AnalysisRecorder } from '../../../replay/analysis/recorder'
 import { createBloodFlowDecisionSink } from '../../../replay/analysis/decisionSink'
+import { commandEntryFromAction, expireEntry, type AnalysisCommandEntry } from '../../../replay/analysis/commandEntry'
 
 export interface BloodFlowGameOptions {
   playSound?: (name: string, volume?: number) => unknown
@@ -369,16 +370,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     openingScores: number[]
   } | null = null
   /** 分析记录（§6）：本局的权威命令序列（含过牌），按提交顺序记录；仅有牌墙不足以精确复现。 */
-  const analysisRoundCommands: Array<{
-    seat: number; kind: string; at: number
-    legalActionId?: string; windowId?: string; tile?: string; tiles?: string[]; handIndex?: number; from?: number | null; meldIndex?: number
-    /** 该条目所属窗口的类型（turn／meld／win 等）：赛后校验用它对照两侧同编号窗口（§11）。 */
-    windowKind?: string
-    /** expire 条目专用：记录当时的等待座位，便于判断"谁的响应缺失"。 */
-    waitingSeats?: number[]
-    /** 'auto' 表示该窗口当时没有本端决策（权威机器人代决）；'expire' 表示没人决定、靠超时推进。 */
-    resolution?: 'command' | 'auto' | 'expire'
-  }> = []
+  const analysisRoundCommands: AnalysisCommandEntry[] = []
   /**
    * 把动作折成可重跑的命令条目：**必须带载荷**（牌种、当时手牌索引、来源座位、副露下标），
    * 只记 kind 的话赛后无法重跑复现（§6、§10.6）。
@@ -387,25 +379,17 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
    * 与排序的唯一依据；windowKind 是 §11 里两侧同编号窗口类型对照的唯一依据。
    * 曾经漏传 windowId（本端决策分支），于是那些命令被排到序列末尾、记录里该窗口只剩 expire，
    * 重放因此错开一个窗口后中止。
+   *
+   * 具体映射与联机权威端（`BloodFlowEngine.recordCommands`）**共用同一个实现**：
+   * 两个写入方各写一套格式，正是 §10.6 里"牌码 vs 中文显示名"那类假性失配的根因。
    */
-  function analysisCommandEntry(seat: number, action: BloodFlowAction, legalActionId?: string, windowId?: string, windowKind?: string) {
-    const entry: (typeof analysisRoundCommands)[number] = { seat, kind: action.kind, at: Date.now() }
-    if (legalActionId) entry.legalActionId = legalActionId
-    if (windowId) entry.windowId = windowId
-    // 窗口类型随条目一起记（§11）：校验器据此把「同编号窗口」的 kind 两侧对照，
-    // 否则只能看出"对不上"，看不出是记录侧多推/少推还是权威端推进方式不同。
-    if (windowKind) entry.windowKind = windowKind
-    const record = action as unknown as { tile?: string; index?: number; from?: number | null; meldIndex?: number; tiles?: string[]; meld?: string[] }
-    // 牌一律记**牌码**（`south`），不转中文显示名：引擎候选是牌码，两边同口径才不会假性失配
-    // （§10.6 的第一个根因就是"记录存牌码、比较时只归一一侧"）。读取侧两种写法都认。
-    if (record.tile !== undefined) entry.tile = record.tile
-    // 吃/杠不带单张 tile，必须把组合记下来，否则复现时只能按 kind 取第一个候选（实测会吃错组合）
-    const combination = record.tiles ?? record.meld
-    if (combination?.length) entry.tiles = [...combination]
-    if (record.index !== undefined) entry.handIndex = record.index
-    if (record.from !== undefined) entry.from = record.from
-    if (record.meldIndex !== undefined) entry.meldIndex = record.meldIndex
-    return entry
+  function analysisCommandEntry(seat: number, action: BloodFlowAction, legalActionIdOfEntry?: string, windowId?: string, windowKind?: string) {
+    return commandEntryFromAction(seat, action, {
+      at: Date.now(),
+      ...(legalActionIdOfEntry ? { legalActionId: legalActionIdOfEntry } : {}),
+      ...(windowId ? { windowId } : {}),
+      ...(windowKind ? { windowKind } : {}),
+    })
   }
   /**
    * 靠超时推进的条目（§11）：除窗口 id 外还记下**当时的窗口 kind 与等待座位**。
@@ -413,10 +397,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
    * kind 对照，就能区分「记录侧多压/少压 expire」与「权威端推进方式与记录不一致」。
    */
   function analysisExpireEntry(windowId: string, windowKind?: string, waitingSeats?: readonly number[]) {
-    const entry: (typeof analysisRoundCommands)[number] = { seat: -1, kind: 'expire', at: Date.now(), resolution: 'expire', windowId }
-    if (windowKind) entry.windowKind = windowKind
-    if (waitingSeats) entry.waitingSeats = [...waitingSeats]
-    return entry
+    return expireEntry(windowId, windowKind, waitingSeats, Date.now())
   }
   function apply(next: BloodFlowWorkerView) {
     const previous = view.value
@@ -434,6 +415,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         options.analysis.reproduction({
           roundIndex: analysisRoundOpening.roundIndex,
           available: true,
+          // 来源：本机权威引擎（单机）。联机时这份数据由权威端在局后另外下发，见 onlineReproduction.ts。
+          origin: 'local',
           // 牌墙与翻精同样记**牌码**（与命令条目、决策前态一致；读取侧两种写法都认）
           initialWall: [...analysisRoundOpening.wall],
           // 开局手牌不能由牌墙推出（引擎取 opening.players[].hand），因此必须单独记（§6）。

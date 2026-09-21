@@ -22,6 +22,7 @@ import {
   sliceForManifest,
   type ReplayAckMessage,
   type ReplayManifest,
+  type ReplayPayloadKind,
   type ReplayReceiveSession,
   type ReplaySliceMessage,
 } from './transfer'
@@ -138,6 +139,11 @@ export interface RemoteReplayHost {
   broadcastRound(round: ReplayRound): Promise<ReplayManifest>
   /** 广播场次记录（很小；客机据此知道自己缺哪几局）。 */
   broadcastMatch(match: ReplayMatch): Promise<ReplayManifest>
+  /**
+   * 广播一局的 §6 赛后私有复现数据（权威端在**局后**调用）。
+   * 走同一套清单＋分片＋回执机制：大包丢失可见、可补发；载荷只有声明要分析的客户端会落库。
+   */
+  broadcastAnalysis(matchId: string, roundIndex: number, payload: unknown, schemaVersion: number): Promise<ReplayManifest>
   /** 客机回执：只补它缺的片；收全则清理。 */
   handleAck(ack: ReplayAckMessage): Promise<void>
   /** 客机请求补局：按局号重播。 */
@@ -152,14 +158,16 @@ export interface RemoteReplayHost {
 async function publishPayload(publisher: {
   send(message: object): void
   sliceChars?: number
+  schemaVersion?: number
   onManifest?(manifest: ReplayManifest): void
-}, kind: 'round' | 'match', value: ReplayRound | ReplayMatch, identity: {
+}, kind: ReplayPayloadKind, value: ReplayRound | ReplayMatch | unknown, identity: {
   id: string
   matchId: string
   roundIndex?: number
 }): Promise<{ manifest: ReplayManifest; base64: string }> {
   const { manifest, base64 } = await encodeReplayPayload(kind, value, identity,
-    publisher.sliceChars === undefined ? {} : { sliceChars: publisher.sliceChars })
+    { ...(publisher.sliceChars === undefined ? {} : { sliceChars: publisher.sliceChars }),
+      ...(publisher.schemaVersion === undefined ? {} : { schemaVersion: publisher.schemaVersion }) })
   publisher.onManifest?.(manifest)
   publisher.send({ kind: REPLAY_MANIFEST_KIND, manifest } satisfies RemoteReplayManifestMessage)
   for (const slice of sliceForManifest(manifest, base64)) {
@@ -175,19 +183,27 @@ export function roundManifestId(matchId: string, roundIndex: number): string {
 export function matchManifestId(matchId: string): string {
   return `${matchId}:match`
 }
+/**
+ * §6 赛后私有复现数据的清单 id：与展示牌谱**分开编号**，收方据此把两类载荷分流
+ * （分析数据进分析区，展示牌谱进回放库）。
+ */
+export function analysisManifestId(matchId: string, roundIndex: number): string {
+  return `${matchId}:analysis:${roundIndex}`
+}
 
 export function createRemoteReplayHost(options: RemoteReplayHostOptions): RemoteReplayHost {
   const now = options.now ?? (() => Date.now())
   const pending = new Map<string, { manifest: ReplayManifest; base64: string; attempts: number; at: number }>()
 
-  async function publish(kind: 'round' | 'match', value: ReplayRound | ReplayMatch, identity: {
+  async function publish(kind: ReplayPayloadKind, value: unknown, identity: {
     id: string
     matchId: string
     roundIndex?: number
-  }): Promise<ReplayManifest> {
+  }, schemaVersion?: number): Promise<ReplayManifest> {
     const { manifest, base64 } = await publishPayload({
       send: options.send,
       sliceChars: options.sliceChars,
+      ...(schemaVersion === undefined ? {} : { schemaVersion }),
       onManifest: (published) => options.registry?.note(published.id),
     }, kind, value, identity)
     pending.set(manifest.id, { manifest, base64, attempts: 0, at: now() })
@@ -200,6 +216,9 @@ export function createRemoteReplayHost(options: RemoteReplayHostOptions): Remote
     },
     async broadcastMatch(match) {
       return publish('match', match, { id: `${match.id}:match`, matchId: match.id })
+    },
+    async broadcastAnalysis(matchId, roundIndex, payload, schemaVersion) {
+      return publish('analysis', payload, { id: analysisManifestId(matchId, roundIndex), matchId, roundIndex }, schemaVersion)
     },
     async handleAck(ack) {
       const entry = pending.get(ack.id)
@@ -370,6 +389,12 @@ export interface RemoteReplayPeerOptions {
   gapRetryMs?: number
   /** 补局落地后的回调（诊断/测试用）。 */
   onGapFilled?: (detail: { matchId: string; roundIndex: number }) => void
+  /**
+   * §6 赛后私有复现数据到达（收全并通过校验）。
+   * `payload` 是**未受信任的网络数据**：调用方必须自己严格校验（见 `decodeReproductionPayload`），
+   * 这里只负责"片收全了、哈希对上了"。
+   */
+  onAnalysisPayload?: (detail: { matchId: string; roundIndex: number | null; payload: unknown }) => void
   /** 落库回调：宿主据此广播"本机持有清单"，让别人知道缺局可以找谁要。 */
   onSaved?: (detail: { kind: 'round' | 'match'; matchId: string; roundIndex?: number }) => void
 }
@@ -508,6 +533,17 @@ export function createRemoteReplayPeer(options: RemoteReplayPeerOptions): Remote
       return
     }
     sessions.delete(manifest.id)
+    if (manifest.payloadKind === 'analysis') {
+      // §6 赛后私有复现数据：不进回放库，直接交给宿主（写分析区由宿主负责）。
+      // 没接这个回调（本机没开分析）也要回执收全，免得房主一直等回执反复补发。
+      try {
+        options.onAnalysisPayload?.({ matchId: manifest.matchId, roundIndex: manifest.roundIndex ?? null, payload: decoded.value })
+      } catch (error) {
+        options.onRejected?.(`分析复现数据 ${manifest.id} 处理失败：${String(error).slice(0, 120)}`)
+      }
+      ack(manifest.id, [], 0)
+      return
+    }
     if (manifest.payloadKind === 'match') {
       const match = adaptReplayToSeat(decoded.value as ReplayMatch, options.getMySeat())
       await options.saveMatch(match)

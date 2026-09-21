@@ -15,6 +15,7 @@ import { resolveWinBatch } from './winBatch'
 import { summarizeRound } from './roundLifecycle'
 import { chooseFallbackDiscardIndex } from '../lotusAi'
 import { PACE_MS } from '../../../core/local/localGameConfig'
+import { commandEntryFromAction, expireEntry, type AnalysisCommandEntry } from '../../../replay/analysis/commandEntry'
 
 export interface BloodFlowEngineOptions {
   authorityEpoch: string
@@ -31,6 +32,14 @@ export interface BloodFlowEngineOptions {
   opening?: BloodFlowOpeningState
   /** Local worker exposes ordinary action boundaries; simulations/P2P stay synchronous. */
   paced?: boolean
+  /**
+   * 分析记录（§6）：开启后引擎自己维护"权威动作序列"与开局快照，供**权威端**在局后产出复现数据。
+   *
+   * 为什么由引擎记而不是由调用方记：单机路径的调用方（`useBloodFlowGame`）看得到每次提交，
+   * 但联机权威端把整个引擎放在 worker 里，机器人/超时兜底都在引擎内部发生 —— 只有引擎自己
+   * 才知道"到底哪些命令真的被执行了"。未开启时零成本（不分配、不记录）。
+   */
+  recordCommands?: boolean
 }
 
 /** Deterministic authority, with no timers, audio, Vue, reveal-hand or old endGame side effects.
@@ -47,6 +56,22 @@ export class BloodFlowEngine {
   readonly dealer: Seat
   readonly openingScores: [number, number, number, number]
   readonly seats = newSeatStates()
+  /**
+   * 分析记录（§6）：引擎**构造时**的开局快照（发牌结果与开局参数，未被对局修改过）。
+   * 权威端在局后据此产出复现数据 —— 局末再读 `this.players/this.wall` 拿到的是终局状态，
+   * 重跑会从另一个局面开始，那不是复现。
+   */
+  readonly initialOpening: BloodFlowOpeningState
+  /**
+   * 分析记录（§6）：引擎实际执行的权威动作序列（含**真正推进了窗口**的 expire）。
+   * 仅当 `options.recordCommands` 开启时才有内容。被拒的提交不入列 —— 请求发出 ≠ 动作执行（§3.4）。
+   */
+  readonly recordedCommands: AnalysisCommandEntry[] = []
+  /**
+   * 分析记录（§6）：开局骰子。§6 明列要存骰子 —— 联机权威端的骰子来自承诺洗牌，一定给得出来；
+   * 引擎自己掷骰的内部路径（模拟/无参开局）拿不到，就**不给值**，绝不事后编一个。
+   */
+  readonly initialDice: { first?: [number, number]; second?: [number, number] }
   readonly archives: SourceTileEvent[] = []
   readonly ledger: BloodFlowLedgerEntry[] = []
   readonly actions: TableActionEvent[] = []
@@ -96,6 +121,11 @@ export class BloodFlowEngine {
     this.dealer = options.dealer ?? 0
     this.currentPlayer = this.dealer
     const opening = options.opening ?? this.deal()
+    // 开局快照必须在**任何对局修改之前**留下：下面的庄家第 14 张规整会改动手牌，
+    // 对局过程还会继续改手牌/牌墙，局末再读就不是"初始"了（§6 要的是初始物理牌墙与四家初始手牌）。
+    this.initialOpening = structuredClone(opening)
+    this.initialDice = { ...(options.firstDice ? { first: [...options.firstDice] as [number, number] } : {}),
+      ...(options.secondDice ? { second: [...options.secondDice] as [number, number] } : {}) }
     this.players = structuredClone(opening.players)
     this.wall = [...opening.wall]; this.flipTiles = [...opening.flipTiles]; this.jokers = [...opening.jokers]
     this.flipStack = opening.flipStack; this.flipSeat = opening.flipSeat; this.wallBreakIndex = opening.wallBreakIndex
@@ -194,6 +224,13 @@ export class BloodFlowEngine {
   submit(command: EngineCommand): boolean {
     if (this.paused || this.interrupted || this.result || !this.window || command.authorityEpoch !== this.options.authorityEpoch
       || command.roundId !== this.options.roundId || !acceptWindowDecision(this.window, command, this.now())) return false
+    // 分析记录（§6）：**先记后解算** —— resolveWindow 会把窗口置空，之后就没法标注它属于哪个窗口了。
+    // 这一条正是"权威真正执行了什么"的唯一口径：被上面挡掉的提交不会走到这里。
+    if (this.options.recordCommands) {
+      this.recordedCommands.push(commandEntryFromAction(command.seat, command.action, {
+        at: this.now(), windowId: this.window.id, windowKind: this.window.kind,
+      }))
+    }
     if (windowComplete(this.window)) this.resolveWindow()
     this.assertConservation()
     return true
@@ -201,6 +238,12 @@ export class BloodFlowEngine {
   expire(now = this.now(), expectedWindowId = this.window?.id): void {
     const window = this.window
     if (this.paused || this.interrupted || !window || window.id !== expectedWindowId || now < window.deadlineAt) return
+    // 分析记录（§6/§11）：窗口**真的**靠超时推进了才记（无操作的 expire 记进去，重放会替引擎多做一次决定）。
+    // 记下当时的 kind 与等待座位：这两项是赛后区分"记录侧多压 expire"与"权威端推进方式不同"的唯一依据。
+    if (this.options.recordCommands) {
+      this.recordedCommands.push(expireEntry(window.id, window.kind,
+        SEATS.filter(seat => window.options[seat].length && !window.decisions[seat]), this.now()))
+    }
     for (const seat of SEATS) if (window.options[seat].length && !window.decisions[seat]) {
       // 锁手座位的胡是唯一选项（不得过胡）：超时兜底也必须走胡，否则等于「过」。
       // kong-priority 实验下改为：杠 > 胡（锁手后仍可先开杠，符合动作优先级）。

@@ -6,6 +6,7 @@ import { bloodFlowSeatView } from './seatView'
 import { decideBloodFlowAction, decideBloodFlowActionEv } from './ai'
 import { BLOOD_FLOW_AI } from './config'
 import { evaluateWaits } from '../patterns/evaluate'
+import type { EngineReproductionDump } from '../../../replay/analysis/onlineReproduction'
 
 export type EngineWorkerRequest = {
   id: number
@@ -23,6 +24,11 @@ export type EngineWorkerRequest = {
   | { kind: 'view'; seat: Seat }
   | { kind: 'pause' | 'resume' }
   | { kind: 'waits'; seat: Seat; discardIndex: number | null; windowId: string }
+  /**
+   * §6 赛后私有复现数据：开局快照 + 权威实际执行的命令序列。
+   * **只在局后**由权威端索取（进行中索取会把牌墙/暗手交给调用方，那是泄露）。
+   */
+  | { kind: 'reproduction' }
 )
 let engine: BloodFlowEngine | null = null
 self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
@@ -65,6 +71,19 @@ self.onmessage = ({ data }: MessageEvent<EngineWorkerRequest>) => {
     if (data.kind === 'pause') engine.pause()
     if (data.kind === 'resume') engine.resume()
     let viewSeat: Seat | null = data.kind === 'view' ? data.seat : 0
+    if (data.kind === 'reproduction') {
+      // §6：开局快照 + 权威实际执行的命令序列（含真正推进窗口的 expire）。
+      // `play` 的顺序与座位的 14 张规整无关：这里给的是**构造时**的快照，重跑从同一局面开始。
+      viewSeat = null
+      result = {
+        roundId: engine.options.roundId,
+        opening: engine.initialOpening,
+        openingScores: engine.openingScores,
+        dealer: engine.dealer,
+        commands: engine.recordedCommands,
+        dice: engine.initialDice,
+      } satisfies EngineReproductionDump
+    }
     if (data.kind === 'waits') {
       viewSeat = null
       if (engine.window?.id !== data.windowId) result = []

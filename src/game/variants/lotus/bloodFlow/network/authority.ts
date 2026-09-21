@@ -8,6 +8,7 @@ import type { Seat } from '../types'
 import { BLOOD_FLOW_CONFIG, BLOOD_FLOW_TIMING } from '../config'
 import type { BloodFlowPacket, NetworkOpening } from './protocol'
 import { decodeBloodFlowPacket } from './protocol'
+import { buildReproductionPayload, type AnalysisReproductionPayload, type EngineReproductionDump } from '../../../../replay/analysis/onlineReproduction'
 
 export interface BloodFlowAuthorityBackend {
   start(options: Omit<BloodFlowEngineOptions, 'random' | 'now'>): Promise<void>
@@ -17,10 +18,17 @@ export interface BloodFlowAuthorityBackend {
    * 只由房主的回放录制器调用，绝不进入任何下发报文。
    */
   spectator(): Promise<BloodFlowSeatView>
-  command(command: EngineCommand): Promise<void>
+  /** 提交一条权威命令；返回 `false` 明确表示引擎**拒绝**了它（旧实现返回 void，调用方按"未知"处理）。 */
+  command(command: EngineCommand): Promise<boolean | void>
   /** 机器人代决；返回权威实际提交的动作（旧实现可能返回 void，调用方需容错）。 */
   bot(seat: Seat, windowId: string): Promise<unknown | void>
   expire(windowId: string): Promise<void>
+  /**
+   * §6 赛后私有复现数据：开局快照 + 权威真正执行过的命令序列（引擎侧记录）。
+   * 只有权威端拿得到（普通客户端在对局中本就不该看到牌墙与对手暗手）；未实现/旧 worker 返回 undefined，
+   * 调用方据此如实标记"复现能力不足"，不得猜测补齐。
+   */
+  reproduction?(): Promise<EngineReproductionDump | null>
   pause(): Promise<void>
   resume(): Promise<void>
   close(): void
@@ -38,6 +46,17 @@ export interface BloodFlowAuthorityOptions {
   /** Uses the existing committed shuffle in the SDK adapter. */
   prepareOpening(round: number): Promise<Pick<BloodFlowEngineOptions, 'initialWall' | 'firstDice' | 'secondDice'>>
   onRoundSettled?(view: BloodFlowSeatView, round: number): void
+  /**
+   * §3.4：权威对每条命令的处置结果，供分析记录落"执行回执"。
+   * `accepted`＝引擎接受了这条决定（真执行），`rejected`＝引擎从未执行（窗口已关闭/该座位已决定），
+   * `unknown`＝调用失败或超时（**不知道**是否执行 —— 不许当成执行过）。
+   */
+  onCommand?(command: EngineCommand, outcome: 'accepted' | 'rejected' | 'unknown'): void
+  /**
+   * §6 分析记录：本场分析区的场次 id（房主侧与展示回放共用同一个）。给定时随每份快照下发，
+   * 客机据此把自己的分析记录挂在**同一场次**下；房主没开分析记录时返回 null，客机就如实记"未提供"。
+   */
+  analysisMatchId?(): string | null
   decide?(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null>
   cancelDecisions?(): void
   /** 机器人/大模型决策上限（毫秒）；缺省用 BLOOD_FLOW_TIMING.authorityBotDecisionTimeoutMs。 */
@@ -151,7 +170,7 @@ export class BloodFlowAuthority {
         if (!view) return
         if (!view.window || view.roundId !== c.roundId || view.window.id !== c.windowId || view.window.version !== c.stateVersion
           || !view.ownActions.some(a => sameAction(a, c.action))) return
-        await this.opBounded('command', () => this.options.backend.command(c))
+        await this.applyCommand(c)
         await this.publish()
       } else if (message.kind === 'blood_flow_continue') {
         if (message.authorityEpoch !== this.options.authorityEpoch || message.round !== this.round || !this.current?.public.roundResult) return
@@ -194,8 +213,11 @@ export class BloodFlowAuthority {
     const view = trim ? trimViewForDiet(rawView) : rawView
     const sentKong = trim ? (kongEvents ?? []).slice(-4) : kongEvents
     const requiredSeats=[...this.bindings.values()].filter(s=>!this.aiSeats.has(s))
+    // §6：分析记录场次 id 随帧下发（房主没开分析时为 undefined，客机据此如实标"未提供"）
+    const analysisMatchId = this.options.analysisMatchId?.() ?? null
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
       mode: this.options.mode, dealer: this.dealer, view, ...(sentKong?.length?{kongEvents:sentKong}:{}),
+      ...(analysisMatchId ? { analysisMatchId } : {}),
       ...(trim ? { diet: true as const } : {}),
       ...(view.public.roundResult?{continuation:{requiredSeats,readySeats:requiredSeats.filter(s=>this.confirmed.has(s))}}:{}) }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
@@ -282,8 +304,8 @@ export class BloodFlowAuthority {
             await this.publish(); break
           }
           if (choice.action && choice.own?.window) {
-            await this.opBounded('command', () => this.options.backend.command({ authorityEpoch: choice.own!.authorityEpoch,
-              roundId: choice.own!.roundId, windowId, stateVersion: choice.own!.window!.version, seat: choice.seat, action: choice.action! }))
+            await this.applyCommand({ authorityEpoch: choice.own!.authorityEpoch,
+              roundId: choice.own!.roundId, windowId, stateVersion: choice.own!.window!.version, seat: choice.seat, action: choice.action! })
           }
           // 权威编排层不需要机器人提交的动作（分析记录只用本地路径的返回值）：显式丢弃，保持 void
           else await this.opBounded('bot', async () => { await this.options.backend.bot(choice.seat, windowId) })
@@ -314,9 +336,45 @@ export class BloodFlowAuthority {
     return this.callBounded('spectator', () => this.options.backend.spectator(), null)
   }
 
+  /**
+   * §6 赛后私有复现数据（**只能在局后调用**）：把这一局的初始牌墙、四家初始手牌、开局参数与
+   * 权威真正执行过的命令序列交给调用方，由它写进本机分析区、并下发给房间里已声明要分析的客户端。
+   *
+   * 为什么必须在局后：对局进行中下发牌墙或对手暗手就是泄露（§6），因此这里还有一道硬闸门 ——
+   * 当前这一局没有 `roundResult`（还没结算）时直接拒绝。
+   *
+   * 返回 null 的每一种情形都必须被调用方如实记录（不得猜测补齐）：
+   * - 后端没实现 `reproduction`（旧 worker / 换成别的权威实现）；
+   * - 读取超时或抛错（有界调用，绝不拖住权威链）；
+   * - 引擎侧没有开启命令记录（`recordCommands`），或开局快照字段不全；
+   * - **拿到的快照不属于被请求的那一局**（权威已经推进到下一局）—— 这条最要紧：
+   *   错局的牌墙 + 本局的命令会让赛后"复现"出一个看似成功的错误结论。
+   */
+  async reproduction(matchId: string, round = this.round): Promise<AnalysisReproductionPayload | null> {
+    if (!this.options.backend.reproduction) return null
+    if (round !== this.round) return null
+    if (!this.current?.public.roundResult) return null
+    const roundId = `${this.options.authorityEpoch}/round/${round}`
+    const dump = await this.callBounded('reproduction', async () => (await this.options.backend.reproduction!()) ?? null, null)
+    if (!dump || dump.roundId !== roundId) return null
+    return buildReproductionPayload({ dump, matchId, roundIndex: round, authorityEpoch: this.options.authorityEpoch, roundId })
+  }
+
   /** 有界执行一个引擎/传输操作；返回 false 表示超时或失败（调用方应跳过本次并等下轮重试）。 */
   private async opBounded(label: string, run: () => Promise<void>): Promise<boolean> {
     return this.callBounded(label, async () => { await run(); return true }, false)
+  }
+
+  /**
+   * 提交一条权威命令并把处置结果告诉调用方（§3.4 的执行回执依据）。
+   * 三态必须分清：`false`＝引擎明确拒绝（从未执行）、`undefined`/超时＝**不知道**（不许当成执行过）。
+   */
+  private async applyCommand(command: EngineCommand): Promise<void> {
+    const outcome = await this.callBounded('command', async () => {
+      const accepted = await this.options.backend.command(command)
+      return accepted === false ? 'rejected' as const : 'accepted' as const
+    }, 'unknown' as const)
+    try { this.options.onCommand?.(command, outcome) } catch { /* 分析记录不得影响权威动作执行 */ }
   }
 
   /**

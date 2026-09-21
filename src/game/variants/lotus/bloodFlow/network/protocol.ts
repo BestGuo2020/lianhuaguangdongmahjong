@@ -36,9 +36,9 @@ export type BloodFlowPacket =
    * 背景：线上实测本局到东4局时全量快照可达 45KB，被切成 12 个分片广播；分片正是 SDK 侧最容易
    * 静默丢失的形态（见本文件 §联机验收策略里记录的"分片在订阅者处被丢弃"）。
    */
-  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean; diet?: true })
+  | (AuthorityEnvelope & { kind: 'blood_flow_snapshot'; mode: MatchType; dealer: Seat; view: BloodFlowSeatView; opening?: NetworkOpening; autoPlay?: boolean; diet?: true; analysisMatchId?: string })
   | (AuthorityEnvelope & { kind: 'win_batch'; batch: WinBatch })
-  | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat; diet?: true })
+  | (AuthorityEnvelope & { kind: 'round_settled'; view: BloodFlowSeatView; mode: MatchType; dealer: Seat; diet?: true; analysisMatchId?: string })
   | (BloodFlowEnvelope & { kind: 'blood_flow_error'; code: 'INCOMPATIBLE_RULE_VERSION' | 'INTERRUPTED' })
 
 const object = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -192,6 +192,9 @@ export function decodeBloodFlowPacket(value: unknown): BloodFlowPacket | null {
   if (value.kind === 'win_batch') return isWinBatch(value.batch) && value.batch.authorityEpoch === value.authorityEpoch ? value as BloodFlowPacket : null
   if (value.kind === 'blood_flow_snapshot' || value.kind === 'round_settled') {
     if(value.kongEvents!==undefined&&!isKongEvents(value.kongEvents,value.authorityEpoch,value.view?.roundId))return null
+    // §6：分析记录场次 id（房主那份分析区/展示回放的场次 id）。客机据此把自己的分析记录挂在**同一场次**下，
+    // 否则两边 id 不同，客机那份会被"按展示回放清单回收"当成悬空数据删掉。
+    if (value.analysisMatchId !== undefined && !text(value.analysisMatchId)) return null
     if (value.continuation !== undefined && (!object(value.continuation) || !only(value.continuation,['readySeats','requiredSeats'])
       || !['readySeats','requiredSeats'].every(k=>Array.isArray(value.continuation[k])&&value.continuation[k].length<=4
         &&value.continuation[k].every(seat)&&new Set(value.continuation[k]).size===value.continuation[k].length)
