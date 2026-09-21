@@ -21,7 +21,7 @@ import { decideBloodFlowAction } from '../ai'
 import { replayReproduction } from '../../../../replay/analysis/replayReproduction'
 import { reproductionFromPayload, unavailableReproduction } from '../../../../replay/analysis/onlineReproduction'
 
-function room(options: { recordCommands?: boolean; analysisMatchId?: string | null } = {}) {
+function room(options: { recordCommands?: boolean; analysisMatchId?: string | null; analysisServing?: boolean } = {}) {
   let now = 0
   const backend = createDirectAuthorityBackend(() => now, { winBeatMs: 0, recordCommands: options.recordCommands !== false })
   const queued: { peer: string; packet: BloodFlowPacket }[] = []
@@ -30,6 +30,7 @@ function room(options: { recordCommands?: boolean; analysisMatchId?: string | nu
     seatByPeer: new Map(SEATS.map(s => [`p${s}`, s])), now: () => now,
     prepareOpening: async round => ({ initialWall: buildRingWall(seededRandom(47 + round)), firstDice: [2, 3], secondDice: [3, 4] }),
     ...(options.analysisMatchId === undefined ? {} : { analysisMatchId: () => options.analysisMatchId ?? null }),
+    ...(options.analysisServing === undefined ? {} : { analysisServing: () => options.analysisServing! }),
     send: (peer, packet) => queued.push({ peer, packet }) })
   const flush = () => {
     const packets = queued.splice(0)
@@ -171,5 +172,29 @@ describe('拿不到时的记录口径（§6：明确标记，不猜测补齐）'
     const frames = (await start(room({ analysisMatchId: null }))).filter(entry => entry.packet.kind === 'blood_flow_snapshot')
     expect(frames.length).toBeGreaterThan(0)
     for (const frame of frames) expect(frame.packet).not.toHaveProperty('analysisMatchId')
+  })
+
+  // §6 房间级语义：客机要能一眼看出"这一场有没有赛后数据"，否则只能空等超时才知道房主没开。
+  it('本场是否提供赛后复现数据随帧下发（房间级开关），关着时明确发 false', async () => {
+    const serving = (await start(room({ analysisMatchId: 'match-9', analysisServing: true })))
+      .filter(entry => entry.packet.kind === 'blood_flow_snapshot' || entry.packet.kind === 'round_settled')
+    expect(serving.length).toBeGreaterThan(0)
+    for (const frame of serving) expect((frame.packet as { analysisReproduction?: boolean }).analysisReproduction).toBe(true)
+
+    const off = (await start(room({ analysisMatchId: 'match-9', analysisServing: false })))
+      .filter(entry => entry.packet.kind === 'blood_flow_snapshot' || entry.packet.kind === 'round_settled')
+    expect(off.length).toBeGreaterThan(0)
+    // 明确发 false（而不是不发）：客机据此当场记「房主未开启」，不必等 20s 超时
+    for (const frame of off) expect((frame.packet as { analysisReproduction?: boolean }).analysisReproduction).toBe(false)
+
+    // 未接线（老代码）时字段缺省 = 未知，客机按等待处理
+    const unknown = (await start(room({ analysisMatchId: 'match-9' })))
+      .filter(entry => entry.packet.kind === 'blood_flow_snapshot')
+    expect(unknown.length).toBeGreaterThan(0)
+    for (const frame of unknown) expect(frame.packet).not.toHaveProperty('analysisReproduction')
+
+    // 非布尔值必须被报文校验拒收（别让畸形帧把客机带进错误分支）
+    const broken = { ...(serving[0]!.packet as unknown as Record<string, unknown>), analysisReproduction: 'yes' }
+    expect(decodeBloodFlowPacket(broken)).toBeNull()
   })
 })

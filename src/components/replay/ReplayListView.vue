@@ -64,7 +64,8 @@ function toggleAnalysis(next: boolean) {
   flashHint(next ? '已开启 AI 分析记录，下一场生效' : '已关闭 AI 分析记录，下一场生效')
 }
 
-async function reload() {  loading.value = true
+async function reload() {
+  loading.value = true
   matches.value = await props.storage.list()
   const statuses: Record<string, AnalysisAreaStatus> = {}
   if (props.analysis?.available()) {
@@ -343,8 +344,14 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
               <option v-for="option in REPLAY_KEEP_OPTIONS" :key="option" :value="option">{{ option }} 场</option>
             </select>
           </label>
-          <!-- AI 分析记录开关（§9.2）：本机保存、可在此导出；下一场生效，不需要刷新页面 -->
-          <label v-if="analysis" class="replay-analysis-switch" title="把每场对局的决策与分析数据记在本机（不上传）。切换后下一场生效。">
+          <!-- AI 分析记录开关（§9.2）：本机保存、可在此导出；下一场生效，不需要刷新页面。
+               联机时是**房间级语义**：房主这一项决定本场是否记录并提供赛后数据（复现需要牌墙与暗手，
+               只有权威端给得出），其他人这一项只决定本机是否留存一份。 -->
+          <label
+            v-if="analysis"
+            class="replay-analysis-switch"
+            title="把每场对局的决策与赛后复现数据记在本机（不上传）。单机：本机记录这一场。联机：由房主的这一项决定本场是否记录并提供赛后数据（复现要牌墙与暗手，只有权威端给得出），其他人这一项只决定本机是否留存。切换后下一场生效。"
+          >
             <input
               type="checkbox"
               data-testid="replay-analysis-enabled"

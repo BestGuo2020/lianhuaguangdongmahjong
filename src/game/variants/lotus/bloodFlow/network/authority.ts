@@ -57,6 +57,13 @@ export interface BloodFlowAuthorityOptions {
    * 客机据此把自己的分析记录挂在**同一场次**下；房主没开分析记录时返回 null，客机就如实记"未提供"。
    */
   analysisMatchId?(): string | null
+  /**
+   * §6 分析记录（**房间级语义**）：本场权威端是否记录并提供赛后复现数据（即房主的分析开关）。
+   *
+   * 给定时随每份快照下发 `analysisReproduction`：客机据此当场知道"这一场有没有赛后数据"——
+   * 房主关着就立刻如实记「房主未开启」，不必空等超时；老版本不发这个字段，客机按"未知"继续等。
+   */
+  analysisServing?(): boolean
   decide?(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null>
   cancelDecisions?(): void
   /** 机器人/大模型决策上限（毫秒）；缺省用 BLOOD_FLOW_TIMING.authorityBotDecisionTimeoutMs。 */
@@ -213,11 +220,15 @@ export class BloodFlowAuthority {
     const view = trim ? trimViewForDiet(rawView) : rawView
     const sentKong = trim ? (kongEvents ?? []).slice(-4) : kongEvents
     const requiredSeats=[...this.bindings.values()].filter(s=>!this.aiSeats.has(s))
-    // §6：分析记录场次 id 随帧下发（房主没开分析时为 undefined，客机据此如实标"未提供"）
+    // §6：分析记录场次 id 随帧下发（房主没开分析时为 undefined，客机据此如实标"未提供"）。
+    // `analysisReproduction` 是**房间级语义**：本场到底有没有赛后复现数据（= 房主的分析开关）。
+    // 明确发 false 让客机当场记「房主未开启」，而不是空等 20 秒超时；未接线时（老代码）不发该字段。
     const analysisMatchId = this.options.analysisMatchId?.() ?? null
+    const analysisServing = this.options.analysisServing?.()
     const base = { ...this.envelope(), authorityEpoch: this.options.authorityEpoch, sequence: this.sequence, round: this.round,
       mode: this.options.mode, dealer: this.dealer, view, ...(sentKong?.length?{kongEvents:sentKong}:{}),
       ...(analysisMatchId ? { analysisMatchId } : {}),
+      ...(analysisServing === undefined ? {} : { analysisReproduction: analysisServing }),
       ...(trim ? { diet: true as const } : {}),
       ...(view.public.roundResult?{continuation:{requiredSeats,readySeats:requiredSeats.filter(s=>this.confirmed.has(s))}}:{}) }
     this.safeSend(peer, view.public.roundResult ? { ...base, kind: 'round_settled' }
