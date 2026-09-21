@@ -13,7 +13,11 @@ import type { AnalysisStorage } from './storage'
 import type { AnalysisAreaStatus, AnalysisSeatControl } from './types'
 
 export interface AnalysisSessionOptions {
-  enabled: boolean
+  /**
+   * 是否启用。**可以传取值函数**：UI 上的开关随时能切，作用点是"下一场 start()"
+   * （当前这一场已经在录的会录完 —— 中途换档只会让记录半途而废，不如让它收尾）。
+   */
+  enabled: boolean | (() => boolean)
   storage?: AnalysisStorage | null
   now?: () => number
   monotonic?: () => number
@@ -23,8 +27,9 @@ export interface AnalysisSessionOptions {
 }
 
 export interface AnalysisSession {
-  /** 传给引擎的稳定代理；分析关闭时是 null（引擎侧零成本）。 */
-  readonly port: AnalysisRecorder | null
+  /** 传给引擎的稳定代理（恒存在；开关关闭时所有写入空转）。 */
+  readonly port: AnalysisRecorder
+  /** 当前开关状态（实时读取）。 */
   enabled(): boolean
   /** 开一场：创建新的录制器并写入场次配置。返回场次 id。 */
   start(input: {
@@ -43,7 +48,7 @@ export interface AnalysisSession {
   finish(): Promise<{ matchId: string; status: AnalysisAreaStatus; bytes: number }>
   /** 当前（或最近一场）的场次 id。 */
   matchId(): string
-  /** 引擎等外部组件持有的代理若未被创建（关闭态），返回 false。 */
+  /** 当前这一场是否真的在录（开关打开 **且** 已 start）。 */
   active(): boolean
   /** 浏览器存储能力（§9.4／§10.11）；未接存储时为 null。 */
   capability(): StorageCapability | null
@@ -56,19 +61,23 @@ function defaultId(): string {
 
 /**
  * 创建分析会话。
- * `enabled: false` 时 `port` 为 null —— 调用方传进引擎后整条路径零成本（§9.2、§10.7）。
+ *
+ * 代理**恒存在**（不再随开关变 null）：开关是 UI 上随时可切的活值，作用点是下一场 `start()`；
+ * 关闭时所有写入都停在"没有 target"这一步，等于空转（§9.2、§10.7）。
+ * 需要判断"这一场到底在不在录"的地方读 `port.enabled`（= 开关打开且已 start），而不是代理是否存在。
  */
 export function createAnalysisSession(options: AnalysisSessionOptions): AnalysisSession {
-  const enabled = options.enabled
+  const isEnabled = () => (typeof options.enabled === 'function' ? options.enabled() : options.enabled)
   const now = options.now ?? (() => Date.now())
   const createId = options.createId ?? defaultId
   let target: AnalysisRecorder | null = null
   let currentMatchId = ''
-  let lastStatus: AnalysisAreaStatus = enabled ? 'missing' : 'disabled'
+  let lastStatus: AnalysisAreaStatus = isEnabled() ? 'missing' : 'disabled'
 
   /** 稳定代理：引擎持有它，换场只换 target。 */
-  const port: AnalysisRecorder | null = enabled ? {
-    get enabled() { return target?.enabled ?? false },
+  const port: AnalysisRecorder = {
+    /** "这一场真的在录"：开关打开且已 start（调用方用它决定要不要产出/下发私有数据）。 */
+    get enabled() { return isEnabled() && Boolean(target?.enabled) },
     paused: () => target?.paused() ?? false,
     beginMatch: (input) => target?.beginMatch(input) ?? '',
     windowOpened: (input) => target?.windowOpened(input),
@@ -89,7 +98,7 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
       return { status: result.status, bytes: result.bytes }
     },
     diagnostics: () => target?.diagnostics() ?? { decisions: 0, attempts: 0, pendingParts: 0, pendingBytes: 0, paused: false },
-  } : null
+  }
 
   /**
    * 结束当前场次：刷队列 → 写缺失 → **清空 target**（下一场靠 `start()` 新建录制器）。
@@ -112,12 +121,13 @@ export function createAnalysisSession(options: AnalysisSessionOptions): Analysis
 
   return {
     port,
-    enabled: () => enabled,
+    enabled: () => isEnabled(),
     active: () => Boolean(target),
     matchId: () => currentMatchId,
 
     start(input) {
-      if (!enabled || !port) return ''
+      // 开关关闭时不建录制器（这一场不录）；开关是活值，下一场 start() 会重新判断
+      if (!isEnabled()) return ''
       currentMatchId = input.matchId ?? createId()
       target = createAnalysisRecorder({
         enabled: true,

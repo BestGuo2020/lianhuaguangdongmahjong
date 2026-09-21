@@ -27,10 +27,16 @@ const props = defineProps<{
   available: boolean
   /** 独立分析区（§9.2）；未接线（联机或旧调用方）时为 null，行内不显示分析入口。 */
   analysis?: AnalysisStorage | null
+  /**
+   * AI 分析记录开关（§9.2：默认关闭，由玩家在这里打开）。
+   * 切换后**下一场生效**（当前这一场已经在录的会录完，中途换档只会让记录半途而废）。
+   */
+  analysisEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
+  'update:analysisEnabled': [value: boolean]
   view: [matchId: string]
 }>()
 
@@ -49,8 +55,16 @@ function flashHint(text: string) {
   hintTimer = globalThis.setTimeout(() => { hint.value = '' }, 2600) as unknown as number
 }
 
-async function reload() {
-  loading.value = true
+/**
+ * AI 分析记录开关（§9.2）：只把玩家的意图交给宿主（App 持有会话与持久化），
+ * 这里顺带回一句"下一场生效"，免得玩家以为没生效又去点。
+ */
+function toggleAnalysis(next: boolean) {
+  emit('update:analysisEnabled', next)
+  flashHint(next ? '已开启 AI 分析记录，下一场生效' : '已关闭 AI 分析记录，下一场生效')
+}
+
+async function reload() {  loading.value = true
   matches.value = await props.storage.list()
   const statuses: Record<string, AnalysisAreaStatus> = {}
   if (props.analysis?.available()) {
@@ -329,6 +343,17 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
               <option v-for="option in REPLAY_KEEP_OPTIONS" :key="option" :value="option">{{ option }} 场</option>
             </select>
           </label>
+          <!-- AI 分析记录开关（§9.2）：本机保存、可在此导出；下一场生效，不需要刷新页面 -->
+          <label v-if="analysis" class="replay-analysis-switch" title="把每场对局的决策与分析数据记在本机（不上传）。切换后下一场生效。">
+            <input
+              type="checkbox"
+              data-testid="replay-analysis-enabled"
+              :checked="analysisEnabled === true"
+              :disabled="busy"
+              @change="toggleAnalysis(($event.target as HTMLInputElement).checked)"
+            />
+            记录 AI 分析
+          </label>
           <span class="replay-list-count">已存 {{ matches.length }} 场，超出自动删除最旧</span>
           <button
             type="button"
@@ -446,6 +471,21 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
   background-color: var(--theme-panel, #0a231a);
   color: var(--theme-text, #f8f3df);
 }
+/* AI 分析记录开关（§9.2）：与控制条同一行，勾选态用主题强调色 */
+.replay-analysis-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.replay-analysis-switch input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--theme-accent, #e6c482);
+  cursor: pointer;
+}
+.replay-analysis-switch input:disabled { cursor: default; }
 .replay-list-hint { color: var(--theme-accent); }
 /* 导入用的隐藏文件输入：不用 display:none —— 那样 .click() 与自动化都不可靠 */
 .replay-import-input {
