@@ -5,12 +5,13 @@ import type { TableActionEvent, TileType } from '../../core/contracts/types'
 import { defineGamePort } from '../../core/contracts/gamePort'
 import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
 import type { AnalysisRecorder } from '../../replay/analysis/recorder'
-import type { LotusActionLike, LotusDecisionMethod, LotusSeatObservable, LotusWindowDescriptor } from '../../replay/analysis/lotusLegacyAdapter'
+import type { LotusActionLike, LotusDecisionMethod, LotusLegacyDecisionSink, LotusSeatObservable, LotusWindowDescriptor } from '../../replay/analysis/lotusLegacyAdapter'
 import {
   choiceTookEffect,
   chosenIndex,
   decisionStateOf,
   decisionWindowOf,
+  legalActionsOf,
   legalActionId,
   lotusSeatView,
   observableOf,
@@ -75,6 +76,12 @@ interface UseLotusGameOptions {
    * 不传时零成本、零行为变化 —— 记录层只旁路观测，不参与决策（§10.1）。
    */
   analysis?: AnalysisRecorder | null
+  /**
+   * LLM 记录接缝（可选）。**由 App 侧创建**（它必须在构造 `aiControllers` 之前就位，
+   * 见 `createLotusLegacyDecisionSink` 的说明），引擎这里只负责把"哪个窗口在飞"告诉它。
+   * 不传时零成本：`aiControllers` 里的模型请求不会被关联到任何分析窗口。
+   */
+  analysisSink?: LotusLegacyDecisionSink | null
 }
 
 export function useLotusGame({
@@ -90,6 +97,7 @@ export function useLotusGame({
   ruleset = LOTUS_RULESET,
   recorder,
   analysis,
+  analysisSink,
 }: UseLotusGameOptions = {}) {
   const state = createLotusGameState()
   const selectors = createLotusSelectors(state, ruleset)
@@ -326,12 +334,16 @@ export function useLotusGame({
           state: decisionStateOf(seatView),
         })
         analysisWindowCounter += 1
+        // 告诉 LLM 接缝"这个座位现在在飞的是这个窗口"：模型请求发生在下面的 `run()` 里，
+        // 钩子只会带 seat 过来（引擎侧 requestId 与分析窗口号是两套编号），靠这里查在飞的窗口。
+        analysisSink?.windowOpened({ seat, windowId, legalActions: legalActionsOf(seatView) })
         return seatView
       })
       : null
     const before = view ? observableOf(analysisTableSnapshot(), seat) : null
     const action = await run()
     if (recorder && view && before) {
+      analysisSink?.windowClosed(seat)
       safely('chosen', () => {
         const picked = toLotusActionLike(action)
         const index = chosenIndex(view, picked)
@@ -671,6 +683,9 @@ export function useLotusGame({
     // 窗口 ID 的计数器是"本局内第 N 次进入决策"（§3.1），所以每局从 1 重新开始。
     analysisWindowCounter = 0
     analysisOpenWindow.clear()
+    // 上一局若在窗口中途被中断，接缝里可能还留着"在飞"的窗口：换局时一律清掉，
+    // 免得新一局的模型请求被关联到上一局的窗口号上。
+    for (let seat = 0; seat < controllers.length; seat += 1) analysisSink?.windowClosed(seat)
   }, { flush: 'sync' })
   watch(state.result, (result) => {
     // 用对象身份去重：同一局的结算对象只会被折算一次；换局/换场都是新对象。

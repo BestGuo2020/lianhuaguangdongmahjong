@@ -51,6 +51,12 @@ interface ProbeStatus {
   storageMatches: number
   storageAvailable: boolean
   rngDraws: number
+  llmParts: number
+  promptTemplateParts: number
+  attemptUserSample: string | null
+  sentUserSample: string | null
+  decisionSources: string[]
+  attemptDecisionsWithoutModelSource: number
 }
 
 async function runProbe(page: import('@playwright/test').Page, query: string): Promise<ProbeStatus> {
@@ -172,4 +178,34 @@ test('硬护栏：同一副牌在分析开/关两种设置下，结束分数与�
   // 顺带确认"开"的那一次真的录到了（否则这条护栏是空转通过的）
   expect(on.partsByTag.decision, '开着分析的那一次必须真的录到决策').toBeGreaterThan(0)
   expect(off.storageBlocks, '关着的那一次不写').toBe(0)
+})
+
+test('LLM 座位：真实 LLM 控制器走接缝 ⇒ llm 记录、模板去重、落库变量与发给模型的逐字相等', async ({ page }) => {
+  // 这条覆盖的是**接线**：`useLotusGame({ analysisSink })` 必须在模型请求发生的那一刻
+  // 告诉接缝"该座位在飞的是哪个窗口"（钩子只带 seat 过来）。单测里 `windowOpened` 是手工调的，
+  // 抓不到这里的顺序错、座位错或窗口早关。
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  const probe = await runProbe(page, `?analysis=1&llm=1&seed=${SEED}`)
+
+  expect(pageErrors, `页面报错：${pageErrors.join(' | ')}`).toEqual([])
+  expect(probe.storageAvailable).toBe(true)
+  expect(probe.roundsPlayed, '应当打完东风场').toBeGreaterThanOrEqual(4)
+  expect(probe.storedStatus, '这一场仍应落成完整').toBe('complete')
+  console.log(`[analysis-lotus-legacy] LLM 座位：尝试 ${probe.llmParts} 条、模板 ${probe.promptTemplateParts} 条；`
+    + `来源 ${JSON.stringify(probe.decisionSources)}`)
+
+  // 真的发出过请求、也真的落了尝试（座位 1 的 LLM 控制器会打很多手）
+  expect(probe.llmParts, 'LLM 座位应当留下尝试记录').toBeGreaterThan(0)
+  // 来源必须归因到模型侧（§9 的 DoD：接钩子后改为 model / model-fallback）。
+  // **判据落在"有请求的那些决策"上**，而不是"LLM 座位一条 unknown 都不许有"：
+  // LLM 控制器在"必成杠上开花 / 已成和 / 无选项"这些分支上会短路成本地逻辑、根本不发请求
+  // （文档 §6 有对照表），那些窗口没有 llm 记录、来源也不是 model —— 此时 `unknown` 是如实的。
+  expect(probe.attemptDecisionsWithoutModelSource, '发过请求的决策必须归因到 model / model-fallback').toBe(0)
+  expect(probe.decisionSources.some((source) => source === 'model' || source === 'model-fallback')).toBe(true)
+  // 模板按 id 只存一次（打桩模型固定回同一个模板）
+  expect(probe.promptTemplateParts, '提示词模板必须按 id 去重只存一条').toBe(1)
+  // 落库的 user 与真正发给模型的 user 逐字相等（A 证明钩子↔请求体，这里证明钩子↔落库）
+  expect(probe.attemptUserSample, '落库尝试里应当有 user 变量').toBeTruthy()
+  expect(probe.attemptUserSample).toBe(probe.sentUserSample)
 })

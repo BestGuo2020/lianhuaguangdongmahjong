@@ -6,7 +6,8 @@
 
 ## 1. 一句话
 
-翻精癞子对局现在会把**决策前态 / 选择与来源 / 执行回执 / 结算**写进与血流共用的那个本机分析区；
+翻精癞子对局现在会把**决策前态 / 选择与来源 / 执行回执 / 模型请求 / 结算**写进与血流共用的那个本机分析区；
+LLM 座位接了约定 §5 的两个钩子（真发请求记 `model`、回退记 `model-fallback`）；
 记录层是纯旁路观测，同一副牌在"分析开/关"两种设置下结束分数与动作数**逐位相同**（§9 硬护栏）。
 
 ## 2. 接线方式：包在控制器外面，不动编排层
@@ -35,6 +36,9 @@
   完全一样，"记录不得影响对局"就不会被"少一个 tick"的差异污染。
 - 所有记录调用都过一个 `safely()` 保护口：记录侧异常只吞掉并留痕（`scope: 'recorder'`），
   绝不抛回编排层（§9.5、§10.2 的独立失败域）。
+
+> LLM 座位还要多一层「模型请求」的记录，走的是另一条路（约定 §5 的两个钩子），
+> 所有权放在 App 侧而不是引擎侧 —— 见 §6.1。
 
 ## 3. 窗口 ID 规则（§3.1 要求"可离线复算"）
 
@@ -105,18 +109,20 @@ roundId   = `round-${S}`                  S = 本局在整场里的序号（1 �
 |---|---|
 | `LotusHumanController` | `human` |
 | `LotusAiController`（本地启发式） | `rule-auto` |
-| 其余（LLM 控制器） | `unknown` |
+| `LotusLlmController`（接了 sink 之后） | `model` / `model-fallback`（由接缝按尝试与回退改写） |
+| 其余（未接钩子的 LLM 控制器） | `unknown` |
 
-**本阶段 LLM 座位记 `unknown`**：约定 §5 的两个钩子（`onDecisionRequest` / `onDecisionAnswer`）
-由 A 实现、还没进 master，所以这里不接 sink，也不冒充 `model`/`model-fallback`。
-实测一场：`human` 98 条、`rule-auto` 306 条（决策记录条数，见 §8 的说明），没有出现 `model` 系列。
+**本阶段 LLM 座位已接 sink**（见 §6.1）：真发请求的窗口记 `model`／回退时 `model-fallback`；
+控制器自己短路掉、根本没发请求的窗口仍记 `unknown` —— 这是如实的（确实没有模型参与），
+不是漏记。一场本地 AI 对局的实测：`human` 98 条、`rule-auto` 306 条（决策记录条数，见 §9 的说明）；
+LLM 座位的那一场：`llm` 尝试 54 条、模板 1 条、来源出现 `model` 与 `model-fallback`。
 
-> **接 sink 时的一个口径冲突（留给下一轮）**：A 的接缝把"请求内容里逐字带来的引擎侧 `requestId`"
+> **接 sink 时的一个口径冲突（已实现，见 §6.1）**：A 的接缝把"请求内容里逐字带来的引擎侧 `requestId`"
 > 当作 `windowId`。这在翻精癞子上**不能直接照搬**：`lotusTurnOrchestrator` 只在
 > `buildContext`(turn)、`offerNextClaim`(claim)、`requestChi`(chi) 三处调 `llm.meta()`，
 > **胡窗口 `offerHu` → `requestDiscardHu` 的 ctx 根本没带 `...llm.meta(...)`**，没有 `requestId` 可落；
 > 而且 `requestSeq` 是场次级单调计数、不是每局重来。因此本节这套自编号仍然是窗口的权威键，
-> sink 要**反着对**：由包装层维护"该座位当前打开的窗口"，钩子触发时按 `seat` 找到在飞的那个窗口，
+> sink 要**反着对**：由接缝维护"该座位当前打开的窗口"，钩子触发时按 `seat` 找到在飞的那个窗口，
 > 再把 `attemptStarted({ decisionWindowId })` 指过去 —— 不去匹配钩子里的 `requestId`。
 
 **而且这个缺口是自洽的（读 `LotusLlmController` 核实过，`src/game/llm/llmController.ts`）**：
@@ -132,9 +138,44 @@ LLM 控制器里**恰好只有那三个能拿到 requestId 的窗口**真的会�
 
 也就是说：**拿不到 requestId 的那两个窗口，正好就是永远不会有 attempt 的两个窗口** ——
 不需要为它们做任何特例，按 `seat` 找在飞窗口这一套就够了。
-推论（写给下一轮做 sink 的人）：**`llm` 记录会是 LLM 座位决策的严格子集**，
-不要断言"每个 LLM 座位的决策都有一条 llm 记录"；反过来，`candidates`/`recommended` 也只有
-真的走了模型的那些窗口才有。
+推论（也是接线后的实测结论）：**`llm` 记录是 LLM 座位决策的严格子集** ——
+上表里"有时有"的三个窗口也有各自的短路分支，短路时**根本不发请求**，那些窗口没有 `llm` 记录、
+决策来源也不会是 `model`（此时记 `unknown` 是如实的：确实没有模型参与）。
+反过来，**发过请求的决策必须归因到 `model` / `model-fallback`** —— e2e 的判据就落在这条上。
+
+## 6.1 LLM 记录接缝（已实现）
+
+`createLotusLegacyDecisionSink`（同在 `lotusLegacyAdapter.ts`）：
+
+- **所有权对调**：接缝由 **App 侧创建一次**、引擎侧登记窗口。原因是控制器在 `useLotusGame`
+  **之前**就构造好了（`aiControllers` 是它的入参），钩子必须在那之前就位；反过来让端口暴露钩子
+  会绕成"引擎要控制器、控制器要引擎"的循环依赖。所以接缝自己维护"该座位在飞的窗口"，
+  引擎在开窗/收窗时调 `windowOpened({ seat, windowId, legalActions })` / `windowClosed(seat)`。
+  App 侧因此要多两行：`createLotusLegacyDecisionSink({ recorder: analysis.port })`，
+  再把 `sink.hooks` 合并进 `createLotusLlmControllers` 的 hooks、把 `sink` 传给 `useLotusGame`。
+  两半必须**一起接**：只接 hooks 不传 sink，钩子会找不到在飞窗口（留痕、不落孤儿记录）。
+- **候选改挂**：钩子的 ID 是它自己那套编号（`${引擎侧 requestId}/${下标}`），必须按**动作内容**
+  改挂到本窗口的合法动作下标上，否则候选会指向一个不存在的合法动作。
+- **取动作的那一份**：必须用钩子的 `legalActions[]`（按 `id` 对应），**不能**用 `candidate.action` ——
+  后者是引擎侧的原始规范动作，**吃只有 `{kind:'chi', optionIndex}`，组合在合法动作表那一份上**。
+- **变量与模板**（§4）：`promptVariables.system` 是模板正文，交给 `recorder.promptTemplate({id, content})`
+  按 id 只存一次（录制器自己去重）；每次尝试只存其余变量，`user` 逐字保留。
+  不拆的话模板全文会在每条尝试里各留一份副本 —— 正是 §4 说的"全文提示词重复副本"。
+- **来源**：请求开始即记 `model`；回答带回 `fallback` 时改记 `model-fallback`
+  （`recorder.source()` 的运行时来源优先于包装层带回的 `unknown`，§3.4）。
+- **失败与回退**：`outcome` 直接映射（`invalid` → `candidate-missing`，`error` → `network-error`）；
+  `usage` / `responseModel` 只在钩子真的给了值时记，拿不到就不填（**不填 0 冒充**，§3.3）。
+
+### 两个实测踩到的坑（都已修，值得记住）
+
+1. **`candidate.action` 里没有吃的组合**（见上）。只看它会**静默丢掉每一个吃候选** ——
+   真机 e2e 才抓到（单测里手搓的数据恰好把组合放在了 `action` 上，于是"测过了"）。
+2. **仓库里有两套中文牌名**：`core/rules/tiles` 的 `TILE_META[].name` 是**中文数字**（`六筒`），
+   而 `llm/schema` 的 `tileName` 是**阿拉伯数字**（`6筒`）—— 而 `llmController` 用的是后者
+   （`import { tileName } from './schema'`）。两边都"是显示名"，直接比就是
+   `chi|七筒,八筒,六筒` vs `chi|7筒,8筒,6筒`，永远对不上。
+   **修法**：匹配键一律经 `canonicalTileKey` 折回**牌码**（两套显示名都反查得回去），
+   三方（控制器动作／本适配层动作／钩子上报动作）因此落在同一个键上。
 
 ## 7. 执行回执与结算折算（§3.4、§5）
 
@@ -173,15 +214,17 @@ LLM 控制器里**恰好只有那三个能拿到 requestId 的窗口**真的会�
 
 ## 9. 验证（在哪棵树、跑了什么、看到什么数字）
 
-工作树 `work/analysis-legacy`，分支 `feat/analysis-lotus-legacy`，基点 `bfe2708`（master 的公共地基）。
+工作树 `work/analysis-legacy`，分支 `feat/analysis-lotus-legacy`；基点 `bfe2708`（公共地基），
+现含 `merge master` 带来的 A 的钩子提交。
 
 ```
 pnpm typecheck                     # 通过
-pnpm test                          # 185 passed | 1 skipped（186 文件）；1878 passed | 2 skipped（1880 用例）
+pnpm test                          # 188 passed | 1 skipped（189 文件）；1923 passed | 2 skipped（1925 用例）
 npx vitest run src/game/replay/analysis/lotusLegacyAdapter.test.ts
-                                   # 22 passed（新增）
+                                   # 32 passed（投影/结算 22 + LLM 接缝 10）
 E2E_PORT=4176 E2E_SKIP_WEBSERVER=1 npx playwright test tests/e2e/analysis-lotus-legacy.spec.ts --workers=1
-                                   # 3 passed（27.8s），dev server 用 npx vite --port 4176 --force
+                                   # 4 passed（37.3s），dev server 用 npx vite --port 4176 --force
+npx playwright test tests/e2e/lotus-legacy.smoke.spec.ts   # 1 passed（改过 lotusGame 的回归）
 ```
 
 一场东风场（`?analysis=1&seed=20260921`，连庄在内打了 **5 局**）的实测读数：
@@ -190,6 +233,14 @@ E2E_PORT=4176 E2E_SKIP_WEBSERVER=1 npx playwright test tests/e2e/analysis-lotus-
 状态 complete；记录 {"config":1,"decisionState":202,"decision":404,"responderCheckpoint":42,"settlement":5}
 决策来源 {"human":98,"rule-auto":306}
 结算 5 条；展示回放 5 局；动作 {"roundStart":5,"draw":155,"discard":158,"tableAction":6,"roundEnd":5}
+```
+
+LLM 座位那一场（`?analysis=1&llm=1&seed=…`，座位 1 用真实 `LotusLlmController` + 打桩 fetch）：
+
+```
+llm 尝试 54 条；promptTemplate 1 条；来源出现 model 与 model-fallback
+发过请求的决策里没有一条来源不是模型侧（attemptDecisionsWithoutModelSource = 0）
+落库的 promptVariables.user === 发给模型的 messages.user
 ```
 
 > `decision` 404 条 = 202 条决策 × 2：录制器在 `chosen` 与 `receipt` **各推一份** decision
@@ -213,18 +264,20 @@ E2E_PORT=4176 E2E_SKIP_WEBSERVER=1 npx playwright test tests/e2e/analysis-lotus-
 
 1. **P1 赛后复现（§6）没做**：没有开局快照与权威命令日志，导出包会如实标
    `reproductionCapable: false`、`manifest.missing` 里写明缺"复现数据（reproduction）"。**不谎称可复现。**
-2. **LLM 座位未接钩子**：记 `source: 'unknown'`，因此没有 `llm` 记录（e2e 断言其条数为 0）。
-   等 A 的钩子提交进 master 后 `git merge master`，再按 §6 末尾的"反着对"办法接 sink，并补
-   "记录的变量与发给模型的 `messages.user` 逐字相等"的单测。
+2. **LLM 座位已接 sink**（§6.1），但**采样/思考开关没记**：钩子不暴露 temperature 这类参数，
+   所以 `AnalysisLlmAttempt.sampling` 只写 `{}`（留空，不编）。要补得先扩钩子。
 3. **逐笔杠分/跟庄流水没单列**：结算只到"每局一条 + 四家 delta"。牌桌的 `showScoreFlow` 能给出逐笔
    `{ playerIndex, amount }`，但它不带"是跟庄还是杠"的原因字段，硬记会得到一堆无法归因的 `score-flow`。
-4. **`App.vue` 的引擎端口那一行不由本分支改**：`src/App.vue` 在约定 §3 的冻结清单里，
-   给 `useLotusGame` 传 `analysis: analysis.port` 那一行由**协调者**走「公共改动」提交
-   （约定 §7.4 预告的正是这一处）。本节所有 e2e 走 `tests/e2e/fixtures/analysis-lotus-legacy.{html,ts}`，
-   按与 App **同一套接线**（会话 + 稳定代理 + 展示回放共用场次 id）直接挂载真实 `useLotusGame`，
-   记录链路完全同源；差的只有"大厅列表行内状态"那一层 UI —— 用例断言的是它读的那个**落库状态**
-   （`matches.status === 'complete'`）。App.vue 接上后，可以在 `replay.spec.ts` 里按血流的写法
-   补一条 `replay-analysis-status` 显示「分析：完整」的行内断言。
+4. **`App.vue` 不由本分支改**：`src/App.vue` 在约定 §3 的冻结清单里，由**协调者**走「公共改动」提交。
+   本分支的 P0 与 LLM 接缝在真实 App 上生效需要**三处**（都在 App.vue）：
+   ① `useLotusGame({ analysis: analysis.port })`；② `createLotusLegacyDecisionSink({ recorder: analysis.port })`
+   并把 `sink.hooks` 合并进 `createLotusLlmControllers` 的 hooks；③ 把 `sink` 作为 `analysisSink` 传给 `useLotusGame`。
+   ②③ 必须成对（只给 hooks 不给 sink ⇒ 钩子找不到在飞窗口）。
+   本文件的 e2e 走 `tests/e2e/fixtures/analysis-lotus-legacy.{html,ts}`，按与 App **同一套接线**
+   （会话 + 稳定代理 + 展示回放共用场次 id + 接缝）直接挂载真实 `useLotusGame`，
+   记录链路完全同源（含 `?llm=1` 那条真实 LLM 控制器用例）；差的只有"大厅列表行内状态"那一层 UI ——
+   用例断言的是它读的那个**落库状态**（`matches.status === 'complete'`）。
+   App.vue 接上后，可以在 `replay.spec.ts` 里按血流的写法补一条 `replay-status` 显示「分析：完整」的行内断言。
 5. **vibehub 镜像：约定写错了，`lotusGame.ts` 需要手动镜像（实测更正）**。
    约定 §1 与 §6 表里都把 `src/game/variants/lotus/lotusGame.ts` 标成"共享文件、不需要镜像"，
    但同步脚本 `scripts/sync-master-to-vibehub.ps1` 的 **`$vibehubKeep` 清单第 100 行就把

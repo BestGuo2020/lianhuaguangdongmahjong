@@ -19,10 +19,17 @@
 // 靠的是这个字段，不是 ID 里的字面量。
 import type { Meld, TileType } from '../../core/contracts/types'
 import type { RuleSet } from '../../core/rules/ruleset'
+import { TILE_META } from '../../core/rules/tiles'
+import { tileFromName as llmTileFromName } from '../../llm/schema'
 import type { ChiMeld } from '../../variants/lotus/lotusRules'
 import { canChi, matchingCount, windKong } from '../../variants/lotus/lotusRules'
+import type { LlmDecisionAnswerHookInput, LlmDecisionRequestHookInput } from '../../llm/llmController'
 import { fingerprintOf } from './codec'
-import type { AnalysisLegalAction, AnalysisSettlement, AnalysisWindowKind } from './types'
+import type {
+  AnalysisCandidate, AnalysisLegalAction, AnalysisLlmOutcome, AnalysisMaybe, AnalysisSettlement, AnalysisWindowKind,
+} from './types'
+import { known } from './types'
+import type { AnalysisRecorder } from './recorder'
 
 /** 触发一个决策窗口的控制器方法（编排层只在这五处询问座位）。 */
 export type LotusDecisionMethod =
@@ -312,16 +319,52 @@ export function toLotusActionLike(action: unknown): LotusActionLike | null {
 }
 
 /**
+ * 可以参与匹配键的动作：`tile`/`meld` 既可能是本适配层的 `TileType` 牌码（`m5`），
+ * 也可能是 LLM 接缝上报的**中文显示名**（`五万`，`llmController` 的 `analysisLegalActionOf`
+ * 走的是 `tileName()`）。所以这里收宽松的 `string`。
+ */
+export interface ActionKeyLike {
+  kind: string
+  tile?: string
+  handIndex?: number
+  meldIndex?: number
+  meld?: readonly string[]
+}
+
+/**
+ * 牌面 → **规范键（牌码）**。
+ *
+ * 仓库里有**两套中文牌名**，而且两张表都在用：
+ * - `core/rules/tiles` 的 `TILE_META[].name` 是**中文数字**（`六筒`）—— 本适配层与展示层用这套；
+ * - `llm/schema` 的 `tileName` 是**阿拉伯数字**（`6筒`）—— `llmController` 上报动作时用的正是它
+ *   （`import { tileName } from './schema'`）。
+ *
+ * 所以匹配键必须统一回**牌码**，不能拿任一侧的显示名当键：早先我用中文数字那套去比，
+ * 实测每一个吃候选都对不上（`chi|七筒,八筒,六筒` vs `chi|7筒,8筒,6筒`），落库时静默少候选。
+ * 认不出来的字符串原样返回（不猜）。
+ */
+export function canonicalTileKey(tile: string): string {
+  if (TILE_META[tile as TileType]) return tile
+  const byLlmTable = llmTileFromName(tile)
+  if (byLlmTable) return byLlmTable
+  const byCoreTable = (Object.keys(TILE_META) as TileType[]).find((code) => TILE_META[code]?.name === tile)
+  return byCoreTable ?? tile
+}
+
+/**
  * 窗口内区分动作的键（只取**能区分这个窗口内选项**的字段）：
  * 弃牌看手牌下标（同牌不同位置不是同一个选项）、补杠看副露下标、暗杠看牌、吃看组合，
  * 其余（胡/过/碰/直杠/风杠）在一个窗口里至多一个。`tile`/`from` 对吃与碰是冗余信息，不参与。
+ *
+ * 牌面一律过 `canonicalTileKey` 折回牌码，因此"控制器动作（牌码）、本适配层动作（牌码）、
+ * 钩子上报动作（`llm/schema` 的中文名）"三方落在同一个键上。
  */
-export function actionMatchKey(action: LotusActionLike): string {
+export function actionMatchKey(action: ActionKeyLike): string {
   switch (action.kind) {
     case 'discard': return `discard|${action.handIndex ?? -1}`
     case 'added-kong': return `added-kong|${action.meldIndex ?? -1}`
-    case 'concealed-kong': return `concealed-kong|${action.tile ?? ''}`
-    case 'chi': return `chi|${[...(action.meld ?? [])].sort().join(',')}`
+    case 'concealed-kong': return `concealed-kong|${action.tile ? canonicalTileKey(action.tile) : ''}`
+    case 'chi': return `chi|${[...(action.meld ?? [])].map(canonicalTileKey).sort().join(',')}`
     default: return action.kind
   }
 }
@@ -331,6 +374,270 @@ export function chosenIndex(view: LotusSeatView, action: LotusActionLike | null)
   if (!action) return -1
   const key = actionMatchKey(action)
   return seatActionsOf(view).findIndex((candidate) => actionMatchKey(candidate) === key)
+}
+
+// ─────────────────────────────── LLM 接缝（§4／§5） ───────────────────────────────
+//
+// 为什么放在这个文件里：约定 §1 给 B 的路径只有 `lotusLegacyAdapter.ts(+test)`，
+// 而方案 §1.4 要求每个玩法各有一份「决策接缝」的对应物（血流那份是 `decisionSink.ts`）。
+// 于是接缝与投影放在同一模块，分节隔开：`lotusSeatView` 及以上是**纯函数**，以下是**有副作用的接缝**。
+
+/** 钩子上报的动作是 `unknown`：只读我们认得的字段，认不出来就返回 null（不猜）。 */
+export function analysisActionLikeOf(action: unknown): AnalysisLegalAction | null {
+  if (!action || typeof action !== 'object') return null
+  const raw = action as { kind?: unknown; tile?: unknown; handIndex?: unknown; meldIndex?: unknown; meld?: unknown }
+  if (typeof raw.kind !== 'string') return null
+  const normalized: AnalysisLegalAction = { id: '', kind: raw.kind }
+  if (typeof raw.tile === 'string') normalized.tile = raw.tile
+  if (typeof raw.handIndex === 'number') normalized.handIndex = raw.handIndex
+  if (typeof raw.meldIndex === 'number') normalized.meldIndex = raw.meldIndex
+  if (Array.isArray(raw.meld) && raw.meld.every((tile) => typeof tile === 'string')) {
+    normalized.meld = [...(raw.meld as string[])]
+  }
+  return normalized
+}
+
+/**
+ * 把 LLM 接缝上报的候选／推荐**改挂到本窗口的合法动作上**（§3.3、§4）。
+ *
+ * 为什么必须改挂：钩子里的 ID 是它自己的编号空间（`${引擎侧 requestId}/${下标}`），
+ * 而分析区的决策按本适配层自己的窗口号建（§6）。两套编号混用会让候选指向一个不存在的合法动作。
+ * 按**动作内容**对齐（与血流 `mapCandidatesToLegalActions` 同一思路）；对不上的只计数，
+ * 不猜它的合法动作 ID、也不静默当成空集（§9.5 缺失要留痕）。
+ *
+ * **取动作必须优先用 `reportedLegalActions`（钩子的合法动作表），不能用 `candidate.action`**：
+ * 后者是**引擎侧**的原始规范动作 —— 吃只有 `{kind:'chi', optionIndex}`，组合在合法动作表那一份上。
+ * 只用 `candidate.action` 会把每一个吃候选都判成"认不出来"（实测：真机 e2e 抓到过一次，
+ * 落库时静默少一个候选）。两张表按 `id` 一一对应（钩子的约定）。
+ */
+export function rebaseHookCandidates(
+  windowId: string,
+  legalActions: readonly AnalysisLegalAction[],
+  input: {
+    /** 钩子上报的合法动作（带组合/下标语义的那一份）。 */
+    reportedLegalActions?: ReadonlyArray<AnalysisLegalAction>
+    candidates: ReadonlyArray<{ id: string; label?: string; summary?: string; action: unknown }>
+    recommended?: { candidateId: string; note?: string }
+  },
+): {
+  candidates: AnalysisCandidate[]
+  recommended?: AnalysisMaybe<{ legalActionId: string; note?: string }>
+  unmapped: number
+  /** 对不上的那些动作的匹配键（诊断用：只看数量查不出是哪种动作对不上）。 */
+  unmappedKeys: string[]
+} {
+  const indexOfKey = new Map<string, number>()
+  legalActions.forEach((action, index) => indexOfKey.set(actionMatchKey(action), index))
+  const reportedById = new Map<string, AnalysisLegalAction>()
+  for (const action of input.reportedLegalActions ?? []) {
+    if (action.id) reportedById.set(action.id, action)
+  }
+  const candidates: AnalysisCandidate[] = []
+  const indexById = new Map<string, number>()
+  const unmappedKeys: string[] = []
+  for (const candidate of input.candidates) {
+    const reported = reportedById.get(candidate.id) ?? analysisActionLikeOf(candidate.action)
+    const key = reported ? actionMatchKey(reported) : '(认不出来)'
+    const index = indexOfKey.get(key)
+    // 诊断要能直接看出"差在哪"：报对不上的键、原始动作，以及**本窗口同一类动作的键**
+    if (index === undefined) {
+      const sameKind = legalActions
+        .filter((action) => action.kind === reported?.kind)
+        .map((action) => actionMatchKey(action))
+      unmappedKeys.push(`${key || '(空键)'} <- ${JSON.stringify(reported ?? candidate.action).slice(0, 80)}`
+        + `（本窗口同类：${sameKind.join(' | ') || '无'}）`)
+      continue
+    }
+    indexById.set(candidate.id, index)
+    // 动作取**本窗口的**那一份：记录里的候选动作必须与 decisionState.legalActions 逐字一致
+    candidates.push({
+      legalActionId: legalActionId(windowId, index),
+      action: { ...legalActions[index]! },
+      ...(candidate.label ?? candidate.summary ? { reason: candidate.label ?? candidate.summary } : {}),
+    })
+  }
+  const recommendedIndex = input.recommended ? indexById.get(input.recommended.candidateId) : undefined
+  return {
+    candidates,
+    ...(recommendedIndex === undefined
+      ? {}
+      : {
+        recommended: known({
+          legalActionId: legalActionId(windowId, recommendedIndex),
+          ...(input.recommended!.note ? { note: input.recommended!.note } : {}),
+        }),
+      }),
+    unmapped: unmappedKeys.length,
+    unmappedKeys,
+  }
+}
+
+/**
+ * 把钩子的 `promptVariables` 拆成"模板正文"与"逐次变量"（§4）：
+ * `system` 是模板正文，交给 `recorder.promptTemplate({ id, content })` **按 id 只存一次**，
+ * 之后每次决策只存其余变量（`user` 仍是逐字的那一份）。
+ * 不拆的话，模板全文会在每一条尝试里各留一份副本 —— 正是 §4 明令不要的"全文提示词重复副本"。
+ */
+export function splitTemplateVariables(variables: unknown): { system: string | null; rest: Record<string, unknown> } {
+  if (!variables || typeof variables !== 'object' || Array.isArray(variables)) return { system: null, rest: {} }
+  const { system, ...rest } = variables as Record<string, unknown>
+  return { system: typeof system === 'string' ? system : null, rest }
+}
+
+/** 钩子的结束结果 → 分析区的结果枚举（`invalid` 是"回答了但候选不可用"）。 */
+const LLM_OUTCOME: Record<LlmDecisionAnswerHookInput['outcome'], AnalysisLlmOutcome> = {
+  success: 'success',
+  invalid: 'candidate-missing',
+  timeout: 'timeout',
+  error: 'network-error',
+}
+
+/** 用量只在钩子真的给了数字时才记（拿不到就不填，绝不填 0 冒充，§3.3）。 */
+export function usageOf(usage: unknown): Record<string, number> | null {
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(usage as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
+  }
+  return Object.keys(out).length ? out : null
+}
+
+export interface LotusLegacyDecisionSinkOptions {
+  recorder: AnalysisRecorder
+  onError?(detail: string): void
+}
+
+export interface LotusLegacyDecisionSink {
+  /** 合并进 `createLotusLlmControllers` 的 `LlmControllerHooks`（与既有钩子共存）。 */
+  hooks: {
+    onDecisionRequest(input: LlmDecisionRequestHookInput): void
+    onDecisionAnswer(input: LlmDecisionAnswerHookInput): void
+  }
+  /**
+   * 引擎侧：一个决策窗口开始（前态已落库、控制器即将被询问）。
+   * 钩子只知道 `seat`，所以由这里维护"该座位当前在飞的窗口"，钩子触发时按 seat 查它 ——
+   * 这正是 `LlmDecisionRequestHookInput.windowId` 注释里推荐的做法。
+   */
+  windowOpened(input: { seat: number; windowId: string; legalActions: readonly AnalysisLegalAction[] }): void
+  /** 引擎侧：窗口的决策已经作出（选择与来源已记），不再接受该窗口的尝试关联。 */
+  windowClosed(seat: number): void
+}
+
+/**
+ * 创建翻精癞子的 LLM 记录接缝（§4／§5）。钩子只在**真的发请求**时触发，所以这里不新增请求、
+ * 不改变回退行为；接缝自身绝不抛错，异常只上报一次（§9.5 独立失败域）。
+ *
+ * **由 App 侧创建一次、引擎侧登记窗口**（而不是由 `useLotusGame` 自己建）：
+ * 控制器是在 `useLotusGame` 之前就构造好的（`aiControllers` 是它的入参），
+ * 钩子必须在那之前就位；反过来让端口暴露钩子会绕成"引擎要控制器、控制器要引擎"的循环依赖。
+ * 于是所有权对调：接缝独立存在，引擎通过 `windowOpened`/`windowClosed` 告诉它"现在在飞的是哪个窗口"。
+ */
+export function createLotusLegacyDecisionSink(options: LotusLegacyDecisionSinkOptions): LotusLegacyDecisionSink {
+  const { recorder } = options
+  /** 引擎侧 `requestId` → 这次尝试（钩子的开始/结束只靠它关联）。 */
+  const attempts = new Map<string, { attemptId: string; windowId: string; seat: number }>()
+  /** 该座位当前在飞的窗口（钩子按 seat 查它）。 */
+  const inFlight = new Map<number, { windowId: string; legalActions: readonly AnalysisLegalAction[] }>()
+  let reported = false
+
+  function report(detail: string) {
+    if (reported) return
+    reported = true
+    try { options.onError?.(detail) } catch { /* 通知自身也要安全 */ }
+  }
+
+  function safe(run: () => void, label: string) {
+    try {
+      run()
+    } catch (error) {
+      report(`分析接缝 ${label} 失败：${String(error).slice(0, 160)}`)
+    }
+  }
+
+  return {
+    windowOpened(input) {
+      inFlight.set(input.seat, { windowId: input.windowId, legalActions: input.legalActions })
+    },
+
+    windowClosed(seat) {
+      inFlight.delete(seat)
+    },
+
+    hooks: {
+      onDecisionRequest(input) {
+        safe(() => {
+          const window = inFlight.get(input.seat)
+          if (!window) {
+            // 找不到在飞的窗口就不写：宁可留痕，也不落一条没有归属（关联不上决策）的尝试
+            report(`模型请求找不到对应的分析窗口（seat=${input.seat}）`)
+            return
+          }
+          const rebased = rebaseHookCandidates(window.windowId, window.legalActions, {
+            reportedLegalActions: input.legalActions,
+            candidates: input.candidates,
+            ...(input.recommended ? { recommended: input.recommended } : {}),
+          })
+          recorder.candidates({
+            windowId: window.windowId,
+            seat: input.seat,
+            legalActions: [...window.legalActions],
+            candidates: rebased.candidates,
+            ...(rebased.recommended ? { recommended: rebased.recommended } : {}),
+          })
+          if (rebased.unmapped > 0) {
+            report(`窗口 ${window.windowId}（seat=${input.seat}）有 ${rebased.unmapped} 个候选无法对应到本窗口的合法动作`
+              + `（未记录其合法 ID）：${rebased.unmappedKeys.join(' / ')}`)
+          }
+          const variables = splitTemplateVariables(input.promptVariables)
+          if (variables.system !== null) {
+            // 录制器按 id 去重：同一个模板再登记也是空操作（§4）
+            recorder.promptTemplate({ id: input.promptTemplateId, content: variables.system })
+          }
+          const attemptId = recorder.attemptStarted({
+            decisionWindowId: window.windowId,
+            seat: input.seat,
+            requestId: input.requestId,
+            attempt: 1,
+            provider: input.provider,
+            requestModel: input.model,
+            // 采样/思考开关：本层拿不到（钩子不暴露 temperature 这类参数）⇒ 留空，不编。
+            sampling: {},
+            promptTemplateId: input.promptTemplateId,
+            promptVariables: variables.rest,
+          })
+          // 来源先记模型；回退时在 answer 里改成 model-fallback（§4）
+          recorder.source({ windowId: window.windowId, seat: input.seat, source: 'model' })
+          if (attemptId) attempts.set(input.requestId, { attemptId, windowId: window.windowId, seat: input.seat })
+        }, 'onDecisionRequest')
+      },
+
+      onDecisionAnswer(input) {
+        const tracked = attempts.get(input.requestId)
+        if (!tracked) return
+        attempts.delete(input.requestId)
+        safe(() => {
+          const usage = usageOf(input.usage)
+          const fallback = input.fallback ? { reason: input.fallback.reason, strategy: 'lotus-local-ai' } : null
+          recorder.attemptFinished(tracked.attemptId, {
+            outcome: LLM_OUTCOME[input.outcome],
+            ...(input.responseModel ? { responseModel: known(input.responseModel) } : {}),
+            answer: known({
+              text: input.raw,
+              ...(input.choice ? { candidateId: input.choice } : {}),
+            }),
+            ...(fallback ? { fallback } : {}),
+            ...(usage ? { usage } : {}),
+          })
+          // 来源要跟着回退改：不然后续的本地兜底动作会被归因成模型的选择（§4、§10.1）
+          recorder.source({
+            windowId: tracked.windowId,
+            seat: tracked.seat,
+            source: fallback ? 'model-fallback' : 'model',
+          })
+        }, 'onDecisionAnswer')
+      },
+    },
+  }
 }
 
 /** 决策窗口（§3.1）：谁、什么时候、有哪些合法动作。窗口没有可选动作时返回 null。 */

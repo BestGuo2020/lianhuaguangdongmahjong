@@ -8,11 +8,17 @@
 // 查询参数：
 //   `?analysis=0` 关掉分析录制（用于「开关关掉后零写入」与「开/关同一副牌结果一致」两条硬护栏）
 //   `?seed=N`     固定牌墙与 AI 随机流（两次运行可复算；不给则用随机牌墙）
+//   `?llm=1`      座位 1 用真实 LLM 控制器（fetch 打桩），用来端到端验证 LLM 接缝的接线
 import { useLotusGame } from '../../../src/game/variants/lotus/lotusGame'
 import { buildRingWall } from '../../../src/game/variants/lotus/lotusWall'
 import { seededRandom } from '../../../src/game/variants/lotus/bloodFlow/simulation'
 import { createAnalysisSession } from '../../../src/game/replay/analysis/session'
 import { createAnalysisStorage } from '../../../src/game/replay/analysis/storage'
+import { createLotusLegacyDecisionSink } from '../../../src/game/replay/analysis/lotusLegacyAdapter'
+import { LotusAiController } from '../../../src/game/variants/lotus/lotusControllers'
+import { LotusLlmController, createLlmStats } from '../../../src/game/llm/llmController'
+import { ConditionalReasoningCoordinator } from '../../../src/game/llm/conditionalReasoning'
+import type { LlmProviderConfig } from '../../../src/game/llm/config'
 import { decodeAnalysisBlock, type AnalysisBlockPart } from '../../../src/game/replay/analysis/codec'
 import { buildAnalysisExport } from '../../../src/game/replay/analysis/export'
 import { createReplayRecorder } from '../../../src/game/replay/recorder'
@@ -69,6 +75,17 @@ interface ProbeStatus {
   storageAvailable: boolean
   /** 本场消耗的 Math.random 抽取次数：开/关两次必须相等，否则比的根本不是同一副牌。 */
   rngDraws: number
+  /** LLM 座位（`?llm=1`）：落库的尝试条数、模板条数，以及"模型请求真的发出去过"的证据。 */
+  llmParts: number
+  promptTemplateParts: number
+  /** 落库尝试里 user 变量的样本（用它与发给模型的请求体比对是否逐字相等）。 */
+  attemptUserSample: string | null
+  /** 打桩模型收到的请求体里那条 user 消息（与上一个字段比对）。 */
+  sentUserSample: string | null
+  /** 决策来源分布（LLM 座位接通后应出现 model / model-fallback）。 */
+  decisionSources: string[]
+  /** 有 llm 尝试却**没有**标成模型来源的决策条数（应为 0：有请求就必须归因到模型侧）。 */
+  attemptDecisionsWithoutModelSource: number
 }
 
 const status: ProbeStatus = {
@@ -80,6 +97,8 @@ const status: ProbeStatus = {
   gameEvents: { roundStart: 0, draw: 0, discard: 0, tableAction: 0, roundEnd: 0 },
   finalScores: [], roundsPlayed: 0, exportManifest: null, reproductionCapable: null,
   storageBlocks: 0, storageMatches: 0, storageAvailable: false, rngDraws: 0,
+  llmParts: 0, promptTemplateParts: 0, attemptUserSample: null, sentUserSample: null, decisionSources: [],
+  attemptDecisionsWithoutModelSource: 0,
 }
 ;(window as unknown as { __lotusLegacyProbe: ProbeStatus }).__lotusLegacyProbe = status
 
@@ -170,6 +189,40 @@ void (async () => {
       storage,
       onError: (detail) => status.errors.push(`分析记录：${detail}`),
     })
+    // LLM 记录接缝（`?llm=1` 才装）：与 App 侧同一套 —— 接缝先于控制器构造，
+    // 再把 `hooks` 合并进 `createLotusLlmControllers` 的入参。这里只为验证接线，
+    // 所以只给座位 1 一个真实 LLM 控制器，其余仍是本地 AI。
+    const useLlmSeat = params.get('llm') === '1'
+    const sink = useLlmSeat
+      ? createLotusLegacyDecisionSink({
+        recorder: session.port,
+        onError: (detail) => status.errors.push(`分析接缝：${detail}`),
+      })
+      : null
+    /** 打桩模型：回 A1（提示词里的第一个候选编号），并把收到的请求体抓下来。 */
+    const sentBodies: Array<{ messages?: Array<{ role: string; content: string }> }> = []
+    if (useLlmSeat) {
+      const sse = [
+        `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify({ choice: 'A1', message: '稳住。' }) }, finish_reason: null }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join('')
+      ;(window as unknown as { fetch: typeof fetch }).fetch = (async (_url: string, init?: RequestInit) => {
+        sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as (typeof sentBodies)[number])
+        return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+      }) as typeof fetch
+    }
+    const llmProvider: LlmProviderConfig = {
+      providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-e2e-lotus-legacy',
+      model: 'deepseek-chat', style: '稳健', timeoutMs: 8_000,
+    }
+    const aiControllers = useLlmSeat && sink
+      ? [
+        new LotusLlmController(llmProvider, sink.hooks, createLlmStats(), new ConditionalReasoningCoordinator()),
+        new LotusAiController({ turn: 0, afterKong: 0, claim: 0 }),
+        new LotusAiController({ turn: 0, afterKong: 0, claim: 0 }),
+      ]
+      : undefined
     // 展示回放录制器：内存 sink（夹具不测回放库），同时用作"对局侧动作计数"的独立观测点。
     const recorder = createReplayRecorder({
       sink: { saveMatch: () => {}, saveRound: () => {} },
@@ -204,6 +257,8 @@ void (async () => {
       countdownEnabled: false,
       recorder: hooks,
       analysis: session.port,
+      ...(aiControllers ? { aiControllers } : {}),
+      ...(sink ? { analysisSink: sink } : {}),
     }) as unknown as {
       phase: { value: string }
       result: { value: RoundResult | null }
@@ -356,6 +411,27 @@ void (async () => {
       }
       status.reproductionCapable = exported.reproductionCapable
     }
+
+    // ── LLM 接缝（`?llm=1`）：落库的尝试、模板去重，以及"落库的 user == 发给模型的 user" ──
+    status.decisionSources = [...new Set(decisions.map((decision) => String(decision.source ?? 'unknown')))].sort()
+    // 有请求的决策必须归因到模型侧。**反过来不成立**：LLM 座位在"必成杠上开花/已成和/无选项"
+    // 这些分支上会短路成本地逻辑、根本不发请求（见文档 §6 的表），那些窗口没有 llm 记录、
+    // 来源也不会是 model —— 此时 `unknown` 是如实的（确实没有模型参与），不是漏记。
+    status.attemptDecisionsWithoutModelSource = decisions.filter((decision) => {
+      const ids = decision.llmAttemptIds
+      if (!Array.isArray(ids) || ids.length === 0) return false
+      const source = String(decision.source ?? 'unknown')
+      return source !== 'model' && source !== 'model-fallback'
+    }).length
+    const attempts = area.parts.filter((part) => part.tag === 'llm').map((part) => part.value as {
+      promptVariables?: { user?: string }
+    })
+    status.llmParts = attempts.length
+    status.promptTemplateParts = area.parts.filter((part) => part.tag === 'promptTemplate').length
+    status.attemptUserSample = attempts.find((attempt) => attempt.promptVariables?.user)?.promptVariables?.user ?? null
+    status.sentUserSample = sentBodies
+      .map((body) => body.messages?.find((message) => message.role === 'user')?.content ?? null)
+      .find((content) => content !== null) ?? null
 
     status.ready = true
   } catch (error) {

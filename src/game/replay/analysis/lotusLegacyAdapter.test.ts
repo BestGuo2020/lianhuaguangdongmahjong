@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   actionMatchKey,
+  canonicalTileKey,
   chosenIndex,
   choiceTookEffect,
+  createLotusLegacyDecisionSink,
   decisionStateId,
   decisionStateOf,
   decisionWindowOf,
@@ -12,17 +14,32 @@ import {
   lotusSeatView,
   normalizeAction,
   observableOf,
+  rebaseHookCandidates,
   roundIdOf,
   seatActionsOf,
   settlementsFromRound,
+  splitTemplateVariables,
   toLotusActionLike,
+  usageOf,
   windowIdOf,
   windowKindOfMethod,
   type LotusSeatView,
   type LotusTableSnapshot,
   type LotusWindowDescriptor,
 } from './lotusLegacyAdapter'
+import { createAnalysisRecorder } from './recorder'
+import { createAnalysisMemoryStorage } from './storage'
 import { LOTUS_RULESET } from '../../variants/lotus/lotusRules'
+import { tileName } from '../../core/rules/tiles'
+import {
+  createLlmStats, LotusLlmController, type LlmDecisionRequestHookInput,
+} from '../../llm/llmController'
+import { ConditionalReasoningCoordinator } from '../../llm/conditionalReasoning'
+import { resetReasoningBudgetForTests } from '../../llm/reasoningBudget'
+import type { LlmProviderConfig } from '../../llm/config'
+import type { LotusTurnContext } from '../../variants/lotus/lotusControllers'
+import type { AnalysisBlockPart } from './codec'
+import type { AnalysisLegalAction } from './types'
 import type { Meld, TileType } from '../../core/contracts/types'
 
 // 莲花麻将·翻精癞子 → 分析模型的纯适配（§3.1／§3.2／§3.3／§3.4／§5）：
@@ -375,5 +392,419 @@ describe('翻精癞子适配层：结算折算（§5）', () => {
     expect(settlementsFromRound(input)[0].fingerprint).toBe(first[0].fingerprint)
     expect(settlementsFromRound({ ...input, endingScores: [2_400, 1_900, 1_900, 1_800] })[0].fingerprint)
       .not.toBe(first[0].fingerprint)
+  })
+})
+
+// ─────────────────────────── LLM 接缝（§4／§5、约定 §9） ───────────────────────────
+//
+// 分工：A 的 `llmControllerHooks.test.ts` 证明的是**钩子 ↔ 真正发给模型的请求体**逐字相等；
+// 这里证明的是**钩子 ↔ 落库记录**（接缝这一层没有把变量加工走样），两段合起来才是
+// "记录里的变量与 `messages.user` 逐字相等"这条判据的完整链路。
+
+const MATCH = 'match-lotus-legacy-sink'
+const WINDOW_ID = 'round-1/window/1'
+
+/** 真实录制器 + 内存分析区：断言的是**落库的记录**，不是端口调用。 */
+function harness() {
+  const errors: string[] = []
+  const storage = createAnalysisMemoryStorage()
+  const recorder = createAnalysisRecorder({ enabled: true, matchId: MATCH, rulesetId: 'lotus-legacy', storage })
+  recorder.beginMatch({
+    engineBuild: 'test', rulesVersion: 'lotus-legacy', rulesFingerprint: 'f', rules: {},
+    aiStrategy: 'source-v2', aiFingerprint: 'f', aiConfig: {}, seatControl: ['human', 'llm', 'llm', 'llm'],
+  })
+  const sink = createLotusLegacyDecisionSink({ recorder, onError: (detail) => errors.push(detail) })
+  /** 刷盘后读回落库记录（candidates 只在 decision 落库时随之下盘，所以断言前要先推一条 decision）。 */
+  const parts = async (): Promise<AnalysisBlockPart[]> => {
+    await recorder.flush('test')
+    return (await storage.read(MATCH)).parts
+  }
+  return { recorder, sink, errors, parts }
+}
+
+/** 该座位此刻的合法动作（与真实窗口同源）。 */
+function windowActions(hand: TileType[]): AnalysisLegalAction[] {
+  const snapshot: LotusTableSnapshot = {
+    players: [
+      { hand, melds: [], discards: [], drawnTileIndex: hand.length - 1, score: 2_000 },
+      { hand: [], melds: [], discards: [], score: 2_000 },
+    ],
+    jokers: [],
+    wildcardTiles: ['white'],
+  }
+  const view = lotusSeatView(snapshot, { windowId: WINDOW_ID, roundId: 'round-1', kind: 'draw-turn', seat: 0 }, RULESET)
+  return legalActionsOf(view)
+}
+
+/**
+ * 把本适配层的动作折成**钩子上报的写法**：`tile`/`meld` 走 `tileName()`（中文显示名），
+ * 与 `llmController` 的 `analysisLegalActionOf` 同口径；ID 用钩子自己的编号空间。
+ */
+function asHookAction(action: AnalysisLegalAction, requestId: string, index: number) {
+  return {
+    id: `${requestId}/${index}`,
+    kind: action.kind,
+    // `AnalysisLegalAction.tile` 声明成 string，但本适配层写进去的其实是 TileType 牌码
+    ...(action.tile ? { tile: tileName(action.tile as TileType) } : {}),
+    ...(action.handIndex !== undefined ? { handIndex: action.handIndex } : {}),
+    ...(action.meldIndex !== undefined ? { meldIndex: action.meldIndex } : {}),
+    ...(action.meld ? { meld: action.meld.map((tile) => tileName(tile as TileType)) } : {}),
+  }
+}
+
+function requestInput(overrides: Partial<LlmDecisionRequestHookInput> = {}): LlmDecisionRequestHookInput {
+  return {
+    seat: 0, requestId: 'turn-0-1', windowId: 'turn-0-1',
+    legalActions: [], candidates: [], promptTemplateId: 'decision-prompt/1/lotus-legacy/稳健',
+    promptVariables: { system: 'SYS-正文', user: 'USER-第一份', ruleCode: 'lotus-legacy', decision: 'turn' },
+    provider: 'deepseek', model: 'deepseek-chat', sentAt: 1_000,
+    ...overrides,
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  resetReasoningBudgetForTests()
+})
+
+describe('翻精癞子接缝：候选改挂到本窗口的合法动作（§3.3）', () => {
+  it('钩子的候选/推荐改挂到本窗口的 ID 空间；记录里的候选动作与合法动作逐字一致', async () => {
+    const { recorder, sink, parts } = harness()
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'p1', 'p2', 's3', 's4', 's5', 's6', 's7', 's8', 's9']
+    const mine = windowActions(hand)
+    expect(mine).toHaveLength(hand.length)
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: mine })
+
+    // 钩子只上报其中两个候选（LLM 侧的候选集是引擎合法集合的子集）
+    const picked = [mine[2]!, mine[5]!]
+    const candidates = picked.map((action, index) => ({
+      id: `turn-0-1/${index}`, label: `A${index + 1}`, action: asHookAction(action, 'turn-0-1', index),
+    }))
+    sink.hooks.onDecisionRequest(requestInput({
+      legalActions: picked.map((action, index) => asHookAction(action, 'turn-0-1', index)),
+      candidates,
+      recommended: { candidateId: candidates[1]!.id, note: 'engine-suggestion' },
+    }))
+    // candidates 只在 decision 落库时随之下盘：推一条选择（真实流程里由包装层做）
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 5), source: 'unknown' })
+
+    const decision = (await parts()).find((part) => part.tag === 'decision')!.value as {
+      candidates: Array<{ legalActionId: string; action: unknown }>
+      recommended?: { known: boolean; value: { legalActionId: string; note?: string } }
+      source: string
+    }
+    // 改挂成功：ID 是**本窗口**的编号（不是钩子那套 "${引擎侧 requestId}/下标"）
+    expect(decision.candidates.map((candidate) => candidate.legalActionId))
+      .toEqual([legalActionId(WINDOW_ID, 2), legalActionId(WINDOW_ID, 5)])
+    expect(decision.candidates[0]!.action).toEqual(mine[2])
+    expect(decision.recommended?.value.legalActionId).toBe(legalActionId(WINDOW_ID, 5))
+    expect(decision.recommended?.value.note).toBe('engine-suggestion')
+    // 来源：模型（不是 unknown）—— chosen 带回的 'unknown' 不得覆盖运行时确定的来源
+    expect(decision.source).toBe('model')
+  })
+
+  it('对不上的候选只计数、不猜 ID；找不到在飞窗口就不落孤儿记录（§9.5）', async () => {
+    const { sink, recorder, errors, parts } = harness()
+    const mine = windowActions(['m1', 'm2', 'm3', 'm4', 'm5'])
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: mine })
+    // 一个能对上、一个对不上（手里没有的牌）
+    sink.hooks.onDecisionRequest(requestInput({
+      legalActions: [],
+      candidates: [
+        { id: 'turn-0-1/0', action: asHookAction(mine[1]!, 'turn-0-1', 0) },
+        { id: 'turn-0-1/1', action: { kind: 'discard', handIndex: 99 } },
+      ],
+    }))
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 1), source: 'unknown' })
+    const decision = (await parts()).find((part) => part.tag === 'decision')!.value as { candidates: unknown[] }
+    expect(decision.candidates).toHaveLength(1)
+    expect(errors.some((detail) => detail.includes('无法对应到本窗口的合法动作'))).toBe(true)
+
+    // 窗口已关（或压根没登记）：不写任何尝试。
+    // 换一个干净的接缝来断言这条 —— 接缝的报错按设计**只通知一次**（避免刷屏），
+    // 上面那条"候选对不上"已经用掉了那次通知。
+    const before = (await parts()).filter((part) => part.tag === 'llm').length
+    const fresh = harness()
+    fresh.sink.hooks.onDecisionRequest(requestInput({ requestId: 'turn-0-9' }))
+    expect((await fresh.parts()).filter((part) => part.tag === 'llm')).toHaveLength(0)
+    expect(fresh.errors.some((detail) => detail.includes('找不到对应的分析窗口'))).toBe(true)
+    expect((await parts()).filter((part) => part.tag === 'llm').length).toBe(before)
+  })
+
+  it('吃的组合只在钩子的合法动作表上：必须按 id 取那一份，不能看 candidate.action（回归）', () => {
+    // 真实形状：钩子的 `candidates[].action` 是**引擎侧**动作——吃只有 `{kind:'chi', optionIndex}`，
+    // 组合在并行的 `legalActions[]` 上。早先只读 `candidate.action`，于是每一个吃候选都被判成
+    // "认不出来"，落库时静默少一个候选（真机 e2e 抓到的）。
+    const chiOption = { kind: 'sequence' as const, tiles: ['p1', 'p2', 'p3'] as TileType[] }
+    const snapshot: LotusTableSnapshot = {
+      players: [
+        // 0 号座刚弃了 p3；1 号座是它的下家，手上有 p1p2p3p4 ⇒ 可吃
+        { hand: [], melds: [], discards: ['p3'], score: 2_000 },
+        { hand: ['p1', 'p2', 'p3', 'p4', 'm1'], melds: [], discards: [], score: 2_000 },
+      ],
+      jokers: [],
+      wildcardTiles: ['white'],
+    }
+    const view = lotusSeatView(
+      snapshot,
+      { windowId: WINDOW_ID, roundId: 'round-1', kind: 'claim', seat: 1, from: 0, tile: 'p3' }, RULESET,
+    )
+    const mine = legalActionsOf(view)
+    const chiIndex = mine.findIndex((action) => action.kind === 'chi' && action.meld?.join(',') === chiOption.tiles.join(','))
+    expect(chiIndex, '该窗口应当有吃这个选项').toBeGreaterThanOrEqual(0)
+
+    const hookChi = { id: 'claim-1-9/2', kind: 'chi', tile: '三筒', from: 0, meld: ['一筒', '二筒', '三筒'] }
+    const rebased = rebaseHookCandidates(WINDOW_ID, mine, {
+      reportedLegalActions: [hookChi as AnalysisLegalAction],
+      // 引擎侧动作：没有组合，只有 optionIndex
+      candidates: [{ id: 'claim-1-9/2', label: '吃一筒+二筒+三筒', summary: 'C1', action: { kind: 'chi', optionIndex: 0 } }],
+    })
+    expect(rebased.unmapped, '吃候选必须能对上（组合来自合法动作表）').toBe(0)
+    expect(rebased.candidates.map((candidate) => candidate.legalActionId)).toEqual([legalActionId(WINDOW_ID, chiIndex)])
+  })
+
+  it('纯函数口径：牌码与**两套中文牌名**都折回同一个键；变量拆分不吞非对象输入', () => {
+    // 三套写法必须同键：牌码（m5）、核心表的中文数字（五万）、LLM 表用的阿拉伯数字（5万）
+    expect(actionMatchKey({ kind: 'concealed-kong', tile: 'm5' })).toBe('concealed-kong|m5')
+    expect(actionMatchKey({ kind: 'concealed-kong', tile: '五万' })).toBe('concealed-kong|m5')
+    expect(actionMatchKey({ kind: 'concealed-kong', tile: '5万' })).toBe('concealed-kong|m5')
+    // 吃：钩子的 `6筒,7筒,8筒` 与本适配层的 `p6,p7,p8` 必须是同一个键（回归：实测对不上过）
+    expect(actionMatchKey({ kind: 'chi', meld: ['p6', 'p7', 'p8'] }))
+      .toBe(actionMatchKey({ kind: 'chi', meld: ['6筒', '7筒', '8筒'] }))
+    expect(actionMatchKey({ kind: 'chi', meld: ['p6', 'p7', 'p8'] }))
+      .toBe(actionMatchKey({ kind: 'chi', meld: ['六筒', '七筒', '八筒'] }))
+    // 风牌两套写法也一样
+    expect(actionMatchKey({ kind: 'concealed-kong', tile: 'east' }))
+      .toBe(actionMatchKey({ kind: 'concealed-kong', tile: '东风' }))
+    // 认不出的字符串原样保留（不猜）
+    expect(canonicalTileKey('?')).toBe('?')
+    expect(splitTemplateVariables({ system: 'S', user: 'U' })).toEqual({ system: 'S', rest: { user: 'U' } })
+    expect(splitTemplateVariables('不是对象')).toEqual({ system: null, rest: {} })
+    expect(splitTemplateVariables(undefined)).toEqual({ system: null, rest: {} })
+    expect(usageOf({ prompt: 12, completion: 3, weird: 'x' })).toEqual({ prompt: 12, completion: 3 })
+    expect(usageOf(null)).toBeNull()
+    expect(usageOf({})).toBeNull()
+  })
+})
+
+describe('翻精癞子接缝：变量逐字相等与模板只存一次（§4）', () => {
+  it('落库的 user 与钩子上报的逐字相等；模板正文按 id 只存一条', async () => {
+    const { sink, recorder, parts } = harness()
+    const mine = windowActions(['m1', 'm2', 'm3', 'm4', 'm5'])
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: mine })
+    const system = '你是莲花麻将的牌手…\n（模板正文，含换行与空白）'
+    const user = '手牌：一万 二万 三万\n候选：\nA1 打一万\nA2 打二万'
+    sink.hooks.onDecisionRequest(requestInput({
+      requestId: 'turn-0-1',
+      promptVariables: { system, user, ruleCode: 'lotus-legacy' },
+    }))
+    sink.hooks.onDecisionAnswer({
+      requestId: 'turn-0-1', raw: '打一万。', choice: 'A1', outcome: 'success', completedAt: 1_100,
+    })
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 0), source: 'unknown' })
+
+    // 第二次请求：同一个模板 id、不同的变量
+    const user2 = '手牌：四万 五万\n候选：\nA1 打四万'
+    sink.hooks.onDecisionRequest(requestInput({
+      requestId: 'turn-0-2',
+      promptVariables: { system, user: user2, ruleCode: 'lotus-legacy' },
+    }))
+    sink.hooks.onDecisionAnswer({
+      requestId: 'turn-0-2', raw: '打四万。', choice: 'A1', outcome: 'success', completedAt: 1_200,
+    })
+
+    const all = await parts()
+    // 模板只存一次，正文逐字保留
+    const templates = all.filter((part) => part.tag === 'promptTemplate')
+    expect(templates).toHaveLength(1)
+    expect((templates[0]!.value as { id: string; content: unknown }).id).toBe('decision-prompt/1/lotus-legacy/稳健')
+    expect((templates[0]!.value as { content: unknown }).content).toBe(system)
+
+    // 每次尝试只存变量；user 逐字相等，模板正文不重复出现（§4 不存"全文提示词重复副本"）
+    const attempts = all.filter((part) => part.tag === 'llm').map((part) => part.value as {
+      promptVariables: Record<string, unknown>
+    })
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]!.promptVariables.user).toBe(user)
+    expect(attempts[1]!.promptVariables.user).toBe(user2)
+    for (const attempt of attempts) {
+      expect(attempt.promptVariables.system).toBeUndefined()
+      expect(JSON.stringify(attempt.promptVariables)).not.toContain('模板正文')
+    }
+  })
+
+  it('原话、结果与用量如实落库：拿不到的字段不填 0 冒充（§3.3）', async () => {
+    const { sink, recorder, parts } = harness()
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: windowActions(['m1', 'm2', 'm3', 'm4', 'm5']) })
+    sink.hooks.onDecisionRequest(requestInput({ requestId: 'turn-0-3' }))
+    sink.hooks.onDecisionAnswer({
+      requestId: 'turn-0-3', raw: '打三万。', choice: 'A2', outcome: 'success',
+      usage: { prompt_tokens: 820, completion_tokens: 12 }, responseModel: 'deepseek-chat-0912', completedAt: 1_300,
+    })
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 0), source: 'unknown' })
+
+    const attempt = (await parts()).find((part) => part.tag === 'llm')!.value as {
+      outcome: string
+      answer: { known: boolean; value: { text: string; candidateId?: string } }
+      usage?: Record<string, number>
+      responseModel: { known: boolean; value?: string }
+      timing: { durationMs?: number }
+    }
+    expect(attempt.outcome).toBe('success')
+    expect(attempt.answer.value).toEqual({ text: '打三万。', candidateId: 'A2' })
+    expect(attempt.usage).toEqual({ prompt_tokens: 820, completion_tokens: 12 })
+    expect(attempt.responseModel).toEqual({ known: true, value: 'deepseek-chat-0912' })
+    expect(attempt.timing.durationMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('翻精癞子接缝：失败与回退的来源（§4、§10.1）', () => {
+  it('请求失败 + 回退 ⇒ 决策来源是 model-fallback，不是 model', async () => {
+    const { sink, recorder, parts } = harness()
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: windowActions(['m1', 'm2', 'm3', 'm4', 'm5']) })
+    sink.hooks.onDecisionRequest(requestInput({ requestId: 'turn-0-4' }))
+    sink.hooks.onDecisionAnswer({
+      requestId: 'turn-0-4', raw: '', choice: null, outcome: 'timeout',
+      fallback: { reason: 'timeout' }, completedAt: 1_400,
+    })
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 0), source: 'unknown' })
+
+    const all = await parts()
+    const attempt = all.find((part) => part.tag === 'llm')!.value as {
+      outcome: string; fallback?: { reason: string; strategy: string }
+    }
+    expect(attempt.outcome).toBe('timeout')
+    expect(attempt.fallback).toEqual({ reason: 'timeout', strategy: 'lotus-local-ai' })
+    const decision = all.find((part) => part.tag === 'decision')!.value as {
+      source: string; llmAttemptIds?: string[]
+    }
+    // 本地兜底的动作绝不能被归因成模型的选择
+    expect(decision.source).toBe('model-fallback')
+    // 决策与尝试要互相关联得上
+    expect(decision.llmAttemptIds).toHaveLength(1)
+  })
+
+  it('回答但候选不可用 ⇒ candidate-missing；接缝自身抛错不冒泡（§9.5）', async () => {
+    const { sink, recorder, errors, parts } = harness()
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: windowActions(['m1', 'm2', 'm3', 'm4', 'm5']) })
+    sink.hooks.onDecisionRequest(requestInput({ requestId: 'turn-0-5' }))
+    sink.hooks.onDecisionAnswer({
+      requestId: 'turn-0-5', raw: '随便说说。', choice: 'ZZ', outcome: 'invalid',
+      fallback: { reason: '回答里的编号不在合法候选列表' }, completedAt: 1_500,
+    })
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 0), source: 'unknown' })
+    const recorded = (await parts()).find((part) => part.tag === 'llm')!.value as { outcome: string }
+    expect(recorded.outcome).toBe('candidate-missing')
+
+    // 录制器炸了也不得抛回模型请求路径
+    const boom = createLotusLegacyDecisionSink({
+      recorder: {
+        ...recorder,
+        attemptStarted: () => { throw new Error('落库炸了') },
+      } as unknown as Parameters<typeof createLotusLegacyDecisionSink>[0]['recorder'],
+      onError: (detail) => errors.push(detail),
+    })
+    boom.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: [] })
+    expect(() => boom.hooks.onDecisionRequest(requestInput({ requestId: 'turn-0-6' }))).not.toThrow()
+    expect(errors.some((detail) => detail.includes('落库炸了'))).toBe(true)
+  })
+})
+
+describe('翻精癞子接缝 × 真实 LotusLlmController（端到端逐字相等）', () => {
+  const API_KEY = 'sk-lotus-legacy-sink-secret'
+
+  function provider(): LlmProviderConfig {
+    return {
+      providerType: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', apiKey: API_KEY,
+      model: 'deepseek-chat', style: '稳健', timeoutMs: 8_000,
+    }
+  }
+
+  /** 假 SSE：把真正发出去的请求体抓下来，供"落库变量 == 发给模型"的断言使用。 */
+  function stubModelReply(reply: { choice: string; message: string } = { choice: 'A1', message: '稳住。' }) {
+    const sent: Array<{ messages?: Array<{ role: string; content: string }> }> = []
+    const sse = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(reply) }, finish_reason: null }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ].join('')
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)) as (typeof sent)[number])
+      return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    }) as never)
+    return sent
+  }
+
+  /** 一个会让 LLM 真正发请求的回合上下文（非和牌、无必成杠上开花、候选足够多）。 */
+  function turnContext(hand: TileType[]): LotusTurnContext {
+    return {
+      hand, melds: [], exposedMelds: 0, kongBloom: false, skipDraw: false, isDealer: true,
+      jokers: [], wildcardTiles: ['white'],
+      playerIndex: 0, scores: [2_000, 2_000, 2_000, 2_000],
+      peers: [0, 1, 2, 3].map(() => ({ discards: [], melds: [] })),
+      seatWind: '东', roundWind: '东', dealerIndex: 0, roundIndex: 1,
+      requestId: 'turn-0-1', stateVersion: '1:discard:60:0:0:56',
+      visibleTiles: [], publicTiles: [], upperLastDiscard: null, earlyRound: true, wallCount: 60,
+      turnOrigin: 'draw', drawnTile: null,
+    }
+  }
+
+  it('真实控制器的请求走接缝：落库的 user 与发给模型的 messages.user 逐字相等', async () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'p1', 'p2', 's3', 's4', 's5', 's6', 's7', 's8', 's9']
+    const sent = stubModelReply({ choice: 'A1', message: '这手先打一万。' })
+    const { sink, recorder, errors, parts } = harness()
+    // 引擎侧登记的窗口：合法动作与这一手的上下文同源
+    sink.windowOpened({ seat: 0, windowId: WINDOW_ID, legalActions: windowActions(hand) })
+
+    const controller = new LotusLlmController(provider(), sink.hooks, createLlmStats(), new ConditionalReasoningCoordinator())
+    await controller.requestTurn(turnContext(hand))
+    // 窗口关闭由包装层在同一拍做；这里按真实顺序收尾：请求 → 回答 → 落选择 → 关窗
+    recorder.chosen({ windowId: WINDOW_ID, seat: 0, legalActionId: legalActionId(WINDOW_ID, 0), source: 'unknown' })
+    sink.windowClosed(0)
+
+    expect(errors, `接缝不该报错：${errors.join(' | ')}`).toEqual([])
+    const all = await parts()
+    const attempt = all.find((part) => part.tag === 'llm')!.value as {
+      outcome: string
+      promptVariables: { user?: string; system?: unknown }
+      answer: { value: { text: string; candidateId?: string } }
+    }
+    // 真的发出去了请求、也真的落了一条尝试
+    expect(sent).toHaveLength(1)
+    expect(attempt.outcome).toBe('success')
+    // 落库的 user 与发给模型的 user 逐字相等（接缝没有加工走样）
+    const bodyUser = sent[0]!.messages!.find((message) => message.role === 'user')!.content
+    expect(attempt.promptVariables.user).toBe(bodyUser)
+    expect(attempt.promptVariables.system).toBeUndefined()
+    // 模板正文按 id 单独存一次
+    const templates = all.filter((part) => part.tag === 'promptTemplate')
+    expect(templates).toHaveLength(1)
+    expect((templates[0]!.value as { content: unknown }).content)
+      .toBe(sent[0]!.messages!.find((message) => message.role === 'system')!.content)
+    expect(attempt.answer.value.text).toBe('这手先打一万。')
+    // 决策来源是 model（不是 unknown）
+    expect((all.find((part) => part.tag === 'decision')!.value as { source: string }).source).toBe('model')
+    // 变量里不得出现 API Key（§4、§8）
+    expect(JSON.stringify(attempt)).not.toContain(API_KEY)
+  })
+
+  it('胡窗口与抢杠窗口不发请求 ⇒ 不会触发钩子（与"拿不到 requestId"是同一对）', async () => {
+    const sent = stubModelReply()
+    const { sink, errors } = harness()
+    // 点炮胡拿**13 张**听牌去胡那张弃牌（14 张是已经和了的手牌，再加一张就不成和）
+    const tenpai: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p5', 'p6', 'p7', 's7', 's8', 's9', 'east']
+    const controller = new LotusLlmController(provider(), sink.hooks, createLlmStats(), new ConditionalReasoningCoordinator())
+    // 点炮胡：确定性裁决，不问模型
+    const hu = await controller.requestDiscardHu({
+      hand: tenpai, exposedMelds: 0, tile: 'east', from: 1, dihu: false, jokers: [],
+      canPeng: false, canGang: false, chiOptions: [], visibleTiles: [],
+    })
+    // 抢杠：同样确定性
+    const rob = await controller.requestRobKong({ hand: tenpai, exposedMelds: 0, tile: 'east', from: 1, jokers: [] })
+    expect(hu.kind).toBe('win')
+    expect(rob).toBe('win')
+    // 两个窗口都没发过请求，也没触发过接缝
+    expect(sent).toHaveLength(0)
+    expect(errors).toEqual([])
   })
 })
