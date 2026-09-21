@@ -5,6 +5,7 @@ import type { LlmOutput } from './schema'
 import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
+import { isQuotaExhaustedResponse, pauseQuota, probeQuotaConnection, quotaStatus } from './providerAvailability'
 import { dashScopeThinkingBody, inferProviderDialect, isDashScopeEndpoint, resolveReasoningPolicy } from './reasoningPolicy'
 import {
   adaptiveReasoningBudget, isReasoningTemporarilySuppressed,
@@ -13,7 +14,7 @@ import {
 
 export class LlmClientError extends Error {
   constructor(
-    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning' | 'length',
+    readonly kind: 'http' | 'timeout' | 'network' | 'parse' | 'reasoning' | 'length' | 'quota' | 'quota-paused',
     message: string,
     readonly reasoningTokens = 0,
   ) {
@@ -283,7 +284,9 @@ async function callOnce(
   messages: ChatMessage[],
   signal?: AbortSignal,
   options: CallOnceOptions = {},
+  quotaProbe = false,
 ): Promise<ChatResponse> {
+  if (!quotaProbe && quotaStatus(config) !== 'available') throw new LlmClientError('quota-paused', '模型额度耗尽或正在重新连接，暂由本地 AI 接管')
   const url = normalizeBaseUrl(config.baseUrl)
   if (!url) throw new LlmClientError('parse', 'baseUrl 非法（可能包含 userinfo 或不支持协议）')
   const controller = new AbortController()
@@ -325,7 +328,12 @@ async function callOnce(
       signal: controller.signal,
     })
     if (!response.ok) {
-      const detail = (await response.text().catch(() => '')).slice(0, 200)
+      const body = await response.text().catch(() => '')
+      if (isQuotaExhaustedResponse(response.status, body)) {
+        pauseQuota(config)
+        throw new LlmClientError('quota', '模型额度耗尽，已暂停此连接的请求，暂由本地 AI 接管')
+      }
+      const detail = body.slice(0, 200)
       throw new LlmClientError('http', `HTTP ${response.status}: ${detail}`)
     }
     // 标准路径始终读取 SSE；少数兼容端点会忽略 stream=true 并退回普通 JSON，继续兼容。
@@ -450,6 +458,10 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
  * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅），但正文为空必须报错
  * —— 默认思考的型号没被关掉思考时，流里只有 reasoning_content，对局会一直拿到空回复。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
+  return probeQuotaConnection(config, () => testConnectionProbe(config))
+}
+
+async function testConnectionProbe(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
     const effectiveConfig = {
       ...config,
@@ -475,6 +487,7 @@ export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok
         allowReasoning: alwaysThinking,
         acceptReasoningResponse: true,
       },
+      true,
     )
     if (!response.content) {
       return {

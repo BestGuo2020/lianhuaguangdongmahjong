@@ -1,7 +1,9 @@
 import type { LlmRoundReaction } from './winLines'
 import { bloodFlowAnimeResultKey, bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { reactive } from 'vue'
-import { requestLlmDecision, type LlmDecisionOptions } from './client'
+import { LlmClientError, requestLlmDecision, type LlmDecisionOptions } from './client'
+import { pauseQuota, quotaStatus, takeQuotaNotice } from './providerAvailability'
+import { isFinalSelfDrawWin } from '../variants/lotus/bloodFlow/evContext'
 import { readLlmSettings, presetForSeat, styleForSeat, LLM_TTS_VOICE_OPTIONS, type LlmProviderPreset, type LlmStyle, type LlmTtsVoiceKey } from './config'
 import type { LlmControllerStats } from './llmController'
 import { getLocalTtsClient, resolveLocalTtsVoiceKey } from './localTtsClient'
@@ -13,7 +15,7 @@ import type { Seat, WinSource } from '../variants/lotus/bloodFlow/types'
 import { createEvaluatorService } from '../variants/lotus/patterns/evaluatorService'
 import type { evaluateWaits } from '../variants/lotus/patterns/evaluate'
 import { tileName } from '../core/rules/tiles'
-import { bloodFlowAiActions, bloodFlowDefensePolicy, bloodFlowKnownWins, bloodFlowOpponentRisk } from '../variants/lotus/bloodFlow/ai'
+import { bloodFlowAiActions, bloodFlowDefensePolicy, bloodFlowKnownWins, bloodFlowOpponentRisk, decideBloodFlowActionEv } from '../variants/lotus/bloodFlow/ai'
 import { BLOOD_FLOW_AI, type BloodFlowAiConfig } from '../variants/lotus/bloodFlow/config'
 import {
   bloodFlowEvGateFromEnv, evaluateEvGate, type BloodFlowEvGateConfig,
@@ -143,6 +145,7 @@ async function loadWaits(view: BloodFlowSeatView, signal: AbortSignal): Promise<
 export function createBloodFlowDecisions(options: { provider?: BloodFlowProviderLookup; request?: Request; waits?: typeof loadWaits; now?: () => number; aiConfig?: BloodFlowAiConfig; gate?: BloodFlowEvGateConfig; theme?:()=>string; metadata?:()=>BloodFlowDecisionMetadata; onStatus?:(seat:number,active:boolean,text:string|undefined,requestId:string,style:LlmStyle,voiceKey:Exclude<LlmTtsVoiceKey,'auto'>)=>void;
   /** AI 分析记录接缝（可选）：不传时整条路径零成本，也不改变任何决策行为（§10.1、§10.7）。 */
   analysis?: BloodFlowDecisionSink | null
+  onQuotaPaused?: (seat: Seat) => void
 } = {}) {
   const stats = reactive<LlmControllerStats>({ requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 })
   const jobs = new Map<string, { promise: Promise<BloodFlowAction | null>; controller: AbortController; current: () => boolean }>()
@@ -160,6 +163,20 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
   let winSequence = 0
   let serial = 0
   const speech=createBloodFlowActionSpeech(options.theme??(()=> 'jade'),options.now)
+  function localChoice(view: BloodFlowSeatView, action: BloodFlowAction | null,
+    source: 'local-strategy' | 'model-fallback', reason: string) {
+    if (action && view.window) {
+      options.analysis?.candidates({ windowId: view.window.id, seat: view.seat, legalActions: view.ownActions,
+        candidates: [{ id: 'local', action }], recommended: { candidateId: 'local', note: reason } })
+      options.analysis?.source({ windowId: view.window.id, seat: view.seat, source, reason })
+    }
+    return action
+  }
+  function quotaFallback(view: BloodFlowSeatView, provider: LlmProviderPreset, firstFailure: boolean) {
+    if (takeQuotaNotice(provider)) { try { options.onQuotaPaused?.(view.seat) } catch { /* notification only */ } }
+    return localChoice(view, decideBloodFlowActionEv(view, BLOOD_FLOW_AI),
+      firstFailure ? 'model-fallback' : 'local-strategy', firstFailure ? 'quota-exhausted' : 'quota-paused')
+  }
   return {
     stats,
     /** ε 闸门配置与计数（实验用；默认 epsilon=0 时 skipped 恒为 0）。 */
@@ -180,6 +197,11 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
     },
     decide(view: BloodFlowSeatView, isCurrent: () => boolean): Promise<BloodFlowAction | null> {
       if (!view.window || !view.ownActions.length || view.public.status !== 'playing' || view.public.roundResult) return Promise.resolve(null)
+      if (!isCurrent()) return Promise.resolve(null)
+      if (isFinalSelfDrawWin(view) && (view.ownScore?.paymentPerPayer ?? 0) > 0
+        && view.ownActions.every(a => a.kind === 'win' || a.kind === 'pass' || a.kind === 'discard')) {
+        return Promise.resolve(localChoice(view, view.ownActions.find(a => a.kind === 'win')!, 'local-strategy', 'terminal-self-draw'))
+      }
       const actions = bloodFlowAiActions(view)
       if (actions.length === 1) return Promise.resolve(actions[0])
       if (view.public.seats[view.seat].locked) return Promise.resolve(view.ownActions.find(a => a.kind === 'win') ?? view.ownActions.find(a => a.kind === 'discard') ?? null)
@@ -206,13 +228,14 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
         if (view.window) options.analysis?.source({ windowId: view.window.id, seat: view.seat, source: 'local-strategy' })
         return Promise.resolve(null)
       }
+      if (quotaStatus(provider) !== 'available') return Promise.resolve(quotaFallback(view, provider, false))
       const key = `${view.authorityEpoch}/${view.roundId}/${view.window.id}/${view.seat}`
       const existing = jobs.get(key); if (existing) return existing.promise
       const controller = new AbortController(), now = options.now ?? Date.now
       const startedAt=now()
       const budget = bloodFlowDecisionBudget(provider, view, startedAt)
       if (budget <= 0 || !isCurrent()) return Promise.resolve(null)
-      let timer: ReturnType<typeof setTimeout> | null = null, attempted = false
+      let timer: ReturnType<typeof setTimeout> | null = null, attempted = false, modelSucceeded = false
       const cancelled = new Promise<null>(resolve => controller.signal.addEventListener('abort', () => resolve(null), { once: true }))
       if (Number.isFinite(budget)) timer = setTimeout(() => controller.abort(), budget)
       const requestId = `${key}/request/${++serial}`
@@ -223,6 +246,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
       const task = (async () => {
         const waits = await (options.waits ?? loadWaits)(view, controller.signal)
         if (controller.signal.aborted || !isCurrent()) return null
+        if (quotaStatus(provider) !== 'available') return quotaFallback(view, provider, false)
         const built = bloodFlowDecisionPrompt(view, waits, requestId, provider.style, options.metadata?.(), provider.style, options.aiConfig)
         const remaining=Number.isFinite(budget)?Math.max(0,budget-(now()-startedAt)):Infinity
         if(remaining<=0||controller.signal.aborted||!isCurrent())return null
@@ -257,6 +281,7 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
           onStatus:(active,text)=>{if(requestedTheme===(options.theme?.()??'jade')&&(!active||isCurrent()))options.onStatus?.(view.seat,active,text,requestId,provider.style,voiceKey)}})
         if (controller.signal.aborted || !isCurrent()) return null
         const selected = built.candidates.find(c => c.id === response.choice)
+        modelSucceeded = Boolean(selected)
         if (!selected) stats.invalidActions++
         // AI 分析记录：最终回答（原文 + 解析到的候选）与结果。只有真正选中候选才算模型的选择，
         // 否则记 model-fallback（模型回答了但不可用，后续由兜底决定）——§4、§3.4。
@@ -288,18 +313,20 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
         }
         return selected?.action ?? null
       })().catch((error) => {
-        // AI 分析记录：请求失败/超时/异常的收口（§4 回退链路）。只记结果，不改变回退行为。
+        const quota = error instanceof LlmClientError && (error.kind === 'quota' || error.kind === 'quota-paused')
+        if (quota && error.kind === 'quota' && quotaStatus(provider) === 'available') pauseQuota(provider)
+        // 记录真实请求失败；明确额度暂停时返回本地动作，其他失败沿用调用方兜底。
         if (analysisAttemptId) {
           options.analysis?.attemptFinished(analysisAttemptId, {
-            outcome: controller.signal.aborted ? 'timeout' : 'network-error',
-            fallback: { reason: controller.signal.aborted ? 'timeout' : String(error).slice(0, 80), strategy: 'local-strategy' },
+            outcome: error instanceof LlmClientError && error.kind === 'quota-paused' ? 'cancelled' : controller.signal.aborted ? 'timeout' : 'network-error',
+            fallback: { reason: quota ? error.kind === 'quota' ? 'quota-exhausted' : 'quota-paused' : controller.signal.aborted ? 'timeout' : String(error).slice(0, 80), strategy: 'local-strategy' },
           })
           options.analysis?.source({ windowId: analysisWindowId, seat: view.seat, source: 'model-fallback' })
         }
-        return null
+        return quota && !controller.signal.aborted && isCurrent() ? quotaFallback(view, provider, error.kind === 'quota') : null
       })
       const promise = Promise.race([task, cancelled]).then(result => {
-        if (attempted) { if (result) stats.successes++; else stats.fallbacks++ }
+        if (attempted) { if (result && modelSucceeded) stats.successes++; else stats.fallbacks++ }
         return result
       }).finally(() => { if (timer) clearTimeout(timer); if (jobs.get(key)?.controller === controller) jobs.delete(key) })
       jobs.set(key, { promise, controller, current: isCurrent })
