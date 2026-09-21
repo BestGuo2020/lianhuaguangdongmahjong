@@ -934,7 +934,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
    * 「主机把窗口投影给了错的人」还是「客机收下却没暴露可操作项」。这里直接暴露两端引擎级现场：
    * 客机的 replica 窗口/等待座位/可操作项、主机的权威当前视图与座位绑定。
    */
-    if (BF_DIAG && typeof window !== 'undefined') {
+  if (BF_DIAG && typeof window !== 'undefined') {
     ;(window as unknown as { __bfDiag?: () => unknown }).__bfDiag = () => ({
       side: authority ? 'host' : replica ? 'guest' : 'idle',
       roomId: replica?.roomId ?? latestFrame?.roomId ?? null,
