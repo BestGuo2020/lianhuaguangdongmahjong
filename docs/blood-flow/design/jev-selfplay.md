@@ -40,8 +40,9 @@ node node_modules/vitest/vitest.mjs run --dir scripts jev-selfplay.test.ts
 
 # 批量（先起 OpenJev，见 §5；三臂 = blind,hint,baseline）
 $env:JEV_SELFPLAY_RUN='1'; $env:JEV_SELFPLAY_TAG='cpu-pilot'
-$env:JEV_BASE_URL='http://127.0.0.1:8000'; $env:JEV_BACKEND='openjev-qwen2.5-1.5b'
-$env:JEV_SELFPLAY_MATCHES='20'; $env:JEV_SELFPLAY_SEED='1000'
+$env:JEV_BASE_URL='http://127.0.0.1:8300'; $env:JEV_BACKEND='openjev-qwen2.5-1.5b-cpu-bf16'
+$env:JEV_SELFPLAY_MATCHES='10'; $env:JEV_SELFPLAY_SEED='1000'
+$env:JEV_SELFPLAY_TIMEOUT_MS='18000000'
 node node_modules/vitest/vitest.mjs run --dir scripts jev-selfplay-run.test.ts
 
 # 摘要
@@ -64,20 +65,34 @@ node scripts/analyze-jev-selfplay.mjs work/jev-selfplay/<run-id>
 
 ## 5. OpenJev CPU 部署（本机无独显；Intel NPU 不适用）
 
-Intel AI Boost NPU 走 OpenVINO 栈，OpenJev 是 torch + HF transformers 栈，**没有现成 NPU 路径**；按 CPU 推理部署，基座选小模型：
+Intel AI Boost NPU 走 OpenVINO 栈，OpenJev 是 torch + HF transformers 栈，**没有现成 NPU 路径**；按 CPU 推理部署，基座选小模型。
+
+**实际部署记录（2026-09-23，本机已按此装好）**：`D:\vueprojects\OpenJev`，Python 3.12.9 venv + `torch 2.14.0+cpu`（`--index-url https://download.pytorch.org/whl/cpu` 避开 CUDA 轮子）+ `pip install -e ".[hf,server]"`；基座 `Qwen/Qwen2.5-1.5B-Instruct`（HF 直连下载，缓存于 C 盘）；服务命令：
 
 ```powershell
-git clone https://github.com/GitHub30/OpenJev.git
-cd OpenJev
-uv venv; uv pip install -e ".[hf,server]"   # CPU 版 torch 即可；首次 serve 会下载基座（~3GB）
-uv run openjev serve --model Qwen/Qwen2.5-1.5B-Instruct --port 8000
+cd D:\vueprojects\OpenJev
+.venv\Scripts\openjev.exe serve --model Qwen/Qwen2.5-1.5B-Instruct --host 127.0.0.1 --port 8300 --dtype bfloat16
 ```
 
-- 基座建议 `Qwen/Qwen2.5-1.5B-Instruct`（中文牌局文本友好、CPU 可跑）；3B/7B 视实测延迟再升级。
-- 冒烟：`curl -X POST http://127.0.0.1:8000/v1/systemone -H "Authorization: Bearer local-dev" -H "Content-Type: application/json" -d '{\"state\":\"ping\",\"model\":\"jev-latest\",\"questions\":{\"ping\":{\"type\":\"noul\",\"instructions\":\"Is this a test?\"}}}'`
-- 设 `OPENJEV_API_KEY` 则校验 Bearer；本机跑可不设（客户端空 key 不发 Authorization 头）。
-- 延迟测定后把 p50/p95 写进 run-manifest 的备注或 digest 报告，再按 §4 定 N。
+- 端口用 **8300**：8000 与 e2e 的 backend uvicorn 默认端口冲突。只绑 127.0.0.1，不暴露局域网。
+- 冒烟：`Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8300/v1/systemone -ContentType 'application/json' -Body '{"state":"ping","model":"jev-latest","questions":{"ping":{"type":"noul","instructions":"Is this a connection test?"}}}'`
+- 未设 `OPENJEV_API_KEY` 则不校验 Bearer；客户端空 key 不发 Authorization 头。
 - CORS 只影响浏览器直连（未来上桌里程碑处理：vite proxy 或后端 `llm_relay.py` 转发）；无头 Node 不受影响。
+
+### 实测性能（2026-09-23，Intel Core Ultra 5 225H，14C/14T，CPU 推理）
+
+延迟探针：seed 9000 单场 blind 臂（26 个真实决策请求，state ≈1.5–2k tokens，criteria ≈12 项）：
+
+| dtype | p50 | p95 | 失败 | 单场总耗时 |
+|---|---:|---:|---:|---:|
+| float32 | 11.9s | 12.3s | 0 | ~322s |
+| bfloat16（采用） | 11.0s | 12.2s | 0 | ~302s |
+
+- bf16 仅快 ~7%（该负载未见 AMX 级收益），仍采用 bf16；瓶颈是**每请求重新 prefill state**（规则文本占大头），OpenJev 只在单请求内共享前缀 KV，跨请求无缓存。
+- 本地开销（引擎 + EV 候选层 + 记录）仅 ~10s/场：Jev HTTP 占单场耗时 ~97%。
+- **预算规则落地**：单场 blind/hint ≈ 5–6 分钟 → cpu-pilot 预算 ~3h → **N=10/臂**（seeds 1000–1009，tag `cpu-pilot`，属试跑档）；正式验收另跑（N≥20、seeds 5000+、可通宵）。
+- 提速选项（均未实施；改动即升模板版本或换 backend 标签）：state 规则文本瘦身、`Qwen2.5-0.5B-Instruct` 基座、`--system-prompt` 外置规则、更长 state 复用（需 OpenJev 侧跨请求缓存）。
+- 探针单场观察（**1 场样本，不构成任何结论**）：blind seat0 净分 −3060、17 次放炮、0 胡、EV 一致率 34.6%、平均 confidence 0.33、2 处高置信分歧标记。
 
 ### 校正飞轮（后续里程碑，不在本期）
 
