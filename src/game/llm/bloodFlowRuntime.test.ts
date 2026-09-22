@@ -68,7 +68,7 @@ describe('E08 decision and reaction isolation', () => {
     await service.decide(view(), () => true)
 
     expect(templates, '模板登记一次').toHaveLength(1)
-    expect(templates[0].id).toContain('bloodFlow-decision/v1')
+    expect(templates[0].id).toContain('bloodFlow-decision/v2')
     const sent = request.mock.calls[0] as any
     expect(started[0].promptTemplateId).toBe(templates[0].id)
     expect(started[0].promptVariables, '记录的变量必须与发给模型的一致').toEqual(JSON.parse(sent[0].messages.user))

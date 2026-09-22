@@ -28,6 +28,7 @@ import {buildDecisionSystemPrompt} from './prompt'
 import {configuredDecisionBudget, requestPreparedDecision} from './preparedDecision'
 import {ConditionalReasoningCoordinator} from './conditionalReasoning'
 import type {BloodFlowDecisionSink} from '../replay/analysis/decisionSink'
+import { bloodFlowRouteInstruction } from './bloodFlowRoutePrompt'
 
 type Request = typeof requestLlmDecision
 type Waits = ReturnType<typeof evaluateWaits>
@@ -78,9 +79,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
   const player = view.players[view.seat], visible = visibleTiles(view)
   const {candidates,request,bigHandRoute,collapsedByRoute,collapsedActions}=buildBloodFlowDecisionInput(view,requestId,metadata,aiConfig)
   const state = {
-    ruleSummary:collapsedByRoute
-      ? `${BLOOD_FLOW_PROMPT_RULES}已进入大牌路线（commitment）：引擎已决定放弃小胡继续做这条十六至三十二倍级牌型，候选里不会出现"胡"、吃碰杠，弃牌也只剩不掉路线的牌——你只需在这些牌里选"怎么打"，不要因为缺少选项而报错。`
-      : BLOOD_FLOW_PROMPT_RULES,
+    ruleSummary:BLOOD_FLOW_PROMPT_RULES + bloodFlowRouteInstruction({ candidates, request, bigHandRoute, collapsedByRoute, collapsedActions }),
     publicState:request.state, engineSuggestion:request.engineSuggestion,
     bigHandRoute: bigHandRoute
       ? { id: bigHandRoute.id, label: bigHandRoute.label, progress: Number(bigHandRoute.progress.toFixed(2)), need: bigHandRoute.need, committed: Boolean(collapsedByRoute) }
@@ -128,7 +127,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
  * 提示词模板版本（§4）：模板内容 = 系统提示 + 变量 JSON 的字段约定。
  * 风格或"是否允许台词"会改变模板正文，因此一并编进 id；改动模板正文时必须升版本号。
  */
-export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v1'
+export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v2'
 export function bloodFlowPromptTemplateId(decisionStyle: LlmStyle, speechAllowed: boolean): string {
   return `${BLOOD_FLOW_PROMPT_TEMPLATE_VERSION}/${decisionStyle}/${speechAllowed ? 'speech' : 'plain'}`
 }
