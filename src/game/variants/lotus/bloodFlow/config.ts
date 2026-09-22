@@ -163,6 +163,8 @@ export interface BloodFlowAiConfig {
   readonly bigHandRoute: BigHandRouteConfig
   /** LLM route advice never removes otherwise offered actions. */
   readonly routeAdviceOnly?: boolean
+  /** Narrow first-win opportunity safeguards; independently disable for historical controls. */
+  readonly winOpportunityGuards?: boolean
   /** 首胡自摸时，墙余不足不得仅因落后而用大牌路线撤胡；缺省 false 兼容旧评估配置。 */
   readonly routeOpportunityGuard?: boolean
   /** 吃／碰候选的番型估值纳入新副露；缺省 false 保留旧评估配置。 */
@@ -247,6 +249,7 @@ export const BLOOD_FLOW_AI: BloodFlowAiConfig = Object.freeze({  strategy: 'ev',
 export const BLOOD_FLOW_LLM_AI: BloodFlowAiConfig = Object.freeze({
   ...BLOOD_FLOW_AI,
   routeAdviceOnly: true,
+  winOpportunityGuards: true,
   chainForecast: 'legacy',
   opportunityCalibration: undefined,
   // Forecast and additional claim policies remain independently gated; route advice is enabled above.

@@ -1,0 +1,272 @@
+{
+  "kongEvents": [],
+  "authorityEpoch": "local-1",
+  "roundId": "round-1",
+  "version": 73,
+  "seat": 1,
+  "players": [
+    {
+      "seat": 0,
+      "name": "P0",
+      "avatar": "",
+      "score": 2000,
+      "hand": [],
+      "melds": [],
+      "discards": [
+        "m9",
+        "s8",
+        "green",
+        "m5",
+        "m7"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 13
+    },
+    {
+      "seat": 1,
+      "name": "P1",
+      "avatar": "",
+      "score": 2000,
+      "hand": [
+        "s6",
+        "s6",
+        "s7",
+        "p1",
+        "p2",
+        "p3",
+        "s4",
+        "east",
+        "south",
+        "west",
+        "m4"
+      ],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "p6",
+          "tiles": [
+            "p6",
+            "p7",
+            "p8"
+          ],
+          "from": 0
+        }
+      ],
+      "discards": [
+        "s8",
+        "m8",
+        "p9",
+        "west",
+        "m2"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": 10,
+      "concealedTileCount": 11
+    },
+    {
+      "seat": 2,
+      "name": "P2",
+      "avatar": "",
+      "score": 2000,
+      "hand": [],
+      "melds": [],
+      "discards": [
+        "south",
+        "north",
+        "green",
+        "p6"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 13
+    },
+    {
+      "seat": 3,
+      "name": "P3",
+      "avatar": "",
+      "score": 2000,
+      "hand": [],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "m8",
+          "tiles": [
+            "m6",
+            "m7",
+            "m8"
+          ],
+          "from": 2
+        }
+      ],
+      "discards": [
+        "s8",
+        "m6",
+        "north",
+        "p6",
+        "m5"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 10
+    }
+  ],
+  "currentPlayer": 1,
+  "wallCount": 62,
+  "headDrawn": 72,
+  "flipTile": "s6",
+  "jokers": [
+    "s6",
+    "s7"
+  ],
+  "flipStack": 56,
+  "flipSeat": 0,
+  "wallBreakIndex": 56,
+  "window": {
+    "id": "round-1/window/73",
+    "version": 73,
+    "kind": "turn",
+    "deadlineAt": 59300,
+    "opensAt": 19300,
+    "source": {
+      "kind": "draw",
+      "seat": 1,
+      "tile": "m4",
+      "id": "local-1/round-1/tile/43"
+    }
+  },
+  "ownActions": [
+    {
+      "kind": "win"
+    },
+    {
+      "kind": "pass"
+    },
+    {
+      "kind": "discard",
+      "index": 0
+    },
+    {
+      "kind": "discard",
+      "index": 1
+    },
+    {
+      "kind": "discard",
+      "index": 2
+    },
+    {
+      "kind": "discard",
+      "index": 3
+    },
+    {
+      "kind": "discard",
+      "index": 4
+    },
+    {
+      "kind": "discard",
+      "index": 5
+    },
+    {
+      "kind": "discard",
+      "index": 6
+    },
+    {
+      "kind": "discard",
+      "index": 7
+    },
+    {
+      "kind": "discard",
+      "index": 8
+    },
+    {
+      "kind": "discard",
+      "index": 9
+    },
+    {
+      "kind": "discard",
+      "index": 10
+    }
+  ],
+  "ownScore": {
+    "items": [
+      {
+        "id": "pinghu",
+        "label": "平胡",
+        "weight": 1
+      }
+    ],
+    "excluded": [],
+    "hardWin": false,
+    "source": "self-draw",
+    "opening": null,
+    "patternMultiplier": 1,
+    "eventMultiplier": 2,
+    "kongBonus": 0,
+    "halfPayment": false,
+    "openingApplied": false,
+    "uncappedMultiplier": 2,
+    "finalMultiplier": 2,
+    "capped": false,
+    "paymentPerPayer": 20
+  },
+  "waitingSeats": [
+    1
+  ],
+  "public": {
+    "ruleVersion": "lotus-blood-flow-v1",
+    "roundId": "round-1",
+    "status": "playing",
+    "seats": [
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      }
+    ],
+    "batches": [],
+    "roundResult": null
+  },
+  "actionEvents": [
+    {
+      "id": 1,
+      "type": "chi",
+      "actorIndex": 3,
+      "sourceIndex": 2,
+      "tile": "m8",
+      "meldIndex": 0
+    },
+    {
+      "id": 2,
+      "type": "chi",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "p6",
+      "meldIndex": 0
+    }
+  ],
+  "lastDiscardAction": {
+    "kind": "discard",
+    "seat": 0,
+    "tile": "m7",
+    "id": "local-1/round-1/tile/42"
+  }
+}

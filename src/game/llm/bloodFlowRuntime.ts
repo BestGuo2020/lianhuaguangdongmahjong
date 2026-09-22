@@ -1,3 +1,4 @@
+import { bloodFlowWinSafeguard } from './bloodFlowWinSafeguards'
 import type { LlmRoundReaction } from './winLines'
 import { bloodFlowAnimeResultKey, bloodFlowRoundReactionLine } from './bloodFlowRoundLines'
 import { reactive } from 'vue'
@@ -127,7 +128,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
  * 提示词模板版本（§4）：模板内容 = 系统提示 + 变量 JSON 的字段约定。
  * 风格或"是否允许台词"会改变模板正文，因此一并编进 id；改动模板正文时必须升版本号。
  */
-export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v3'
+export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v4'
 export function bloodFlowPromptTemplateId(decisionStyle: LlmStyle, speechAllowed: boolean): string {
   return `${BLOOD_FLOW_PROMPT_TEMPLATE_VERSION}/${decisionStyle}/${speechAllowed ? 'speech' : 'plain'}`
 }
@@ -201,9 +202,12 @@ export function createBloodFlowDecisions(options: { provider?: BloodFlowProvider
         && view.ownActions.every(a => a.kind === 'win' || a.kind === 'pass' || a.kind === 'discard')) {
         return Promise.resolve(localChoice(view, view.ownActions.find(a => a.kind === 'win')!, 'local-strategy', 'terminal-self-draw'))
       }
-      const actions = bloodFlowAiActions(view)
+      const aiConfig = options.aiConfig ?? BLOOD_FLOW_AI
+      const actions = bloodFlowAiActions(view, aiConfig)
       if (actions.length === 1) return Promise.resolve(actions[0])
       if (view.public.seats[view.seat].locked) return Promise.resolve(view.ownActions.find(a => a.kind === 'win') ?? view.ownActions.find(a => a.kind === 'discard') ?? null)
+      const safeguard = bloodFlowWinSafeguard(view, aiConfig)
+      if (safeguard) return Promise.resolve(localChoice(view, safeguard.action, 'local-strategy', safeguard.reason))
       /**
        * ε-容忍约束（2026-09-17）：本地最优与次优的价值差 ≤ ε ⇒ 模型怎么选都几乎无差别 ⇒
        * **不调用模型**，返回 null（调用方照常采用本地 EV 建议）。

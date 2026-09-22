@@ -51,6 +51,7 @@ export interface CandidateFeatures {
       immediateTotal: number
       lockedChain: number
       floor: number
+      floorWaived?: boolean
       floorStage: 'early' | 'mid' | 'late'
       declinedReason?: string
     }
