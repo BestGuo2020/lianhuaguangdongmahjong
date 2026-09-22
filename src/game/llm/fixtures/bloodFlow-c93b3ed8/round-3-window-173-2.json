@@ -1,0 +1,1034 @@
+{
+  "kongEvents": [
+    {
+      "kind": "kong",
+      "authorityEpoch": "local-3",
+      "roundId": "round-3",
+      "sequence": 1,
+      "id": "round-3/kong/1",
+      "actor": 0,
+      "kongKind": "discard",
+      "sourceSeat": 3,
+      "deltas": [
+        10,
+        0,
+        0,
+        -10
+      ],
+      "scoresAfter": [
+        1215,
+        4930,
+        865,
+        990
+      ]
+    }
+  ],
+  "authorityEpoch": "local-3",
+  "roundId": "round-3",
+  "version": 173,
+  "seat": 2,
+  "players": [
+    {
+      "seat": 0,
+      "name": "P0",
+      "avatar": "",
+      "score": 1125,
+      "hand": [],
+      "melds": [
+        {
+          "type": "gang",
+          "tile": "p4",
+          "tiles": [
+            "p4",
+            "p4",
+            "p4",
+            "p4"
+          ],
+          "from": 3
+        },
+        {
+          "type": "peng",
+          "tile": "m3",
+          "tiles": [
+            "m3",
+            "m3",
+            "m3"
+          ],
+          "from": 2
+        },
+        {
+          "type": "peng",
+          "tile": "s7",
+          "tiles": [
+            "s7",
+            "s7",
+            "s7"
+          ],
+          "from": 3
+        }
+      ],
+      "discards": [
+        "west",
+        "s8",
+        "red",
+        "m9",
+        "s9",
+        "m2"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 4
+    },
+    {
+      "seat": 1,
+      "name": "P1",
+      "avatar": "",
+      "score": 5130,
+      "hand": [],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "p9",
+          "tiles": [
+            "p7",
+            "p8",
+            "p9"
+          ],
+          "from": 0
+        },
+        {
+          "type": "chi",
+          "tile": "s1",
+          "tiles": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "from": 0
+        },
+        {
+          "type": "chi",
+          "tile": "s4",
+          "tiles": [
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "from": 0
+        }
+      ],
+      "discards": [
+        "east",
+        "s8",
+        "red",
+        "p6",
+        "east",
+        "s9",
+        "p9",
+        "s4"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 4
+    },
+    {
+      "seat": 2,
+      "name": "P2",
+      "avatar": "",
+      "score": 795,
+      "hand": [
+        "green",
+        "white",
+        "m1",
+        "m4",
+        "m9",
+        "p2",
+        "p9",
+        "s1",
+        "s9",
+        "east",
+        "south",
+        "west",
+        "north",
+        "p5"
+      ],
+      "melds": [],
+      "discards": [
+        "m8",
+        "m8",
+        "m5",
+        "p1",
+        "p7",
+        "m8",
+        "p8",
+        "m2",
+        "s1"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": 13,
+      "concealedTileCount": 14
+    },
+    {
+      "seat": 3,
+      "name": "P3",
+      "avatar": "",
+      "score": 950,
+      "hand": [],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "p5",
+          "tiles": [
+            "p5",
+            "p6",
+            "p7"
+          ],
+          "from": 2
+        }
+      ],
+      "discards": [
+        "east",
+        "m9",
+        "m5",
+        "p8",
+        "m7",
+        "m1",
+        "s2",
+        "s2",
+        "north"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 10
+    }
+  ],
+  "currentPlayer": 2,
+  "wallCount": 40,
+  "headDrawn": 93,
+  "flipTile": "green",
+  "jokers": [
+    "green",
+    "white"
+  ],
+  "flipStack": 42,
+  "flipSeat": 2,
+  "wallBreakIndex": 42,
+  "window": {
+    "id": "round-3/window/173",
+    "version": 173,
+    "kind": "turn",
+    "deadlineAt": 107620,
+    "opensAt": 67620,
+    "source": {
+      "kind": "draw",
+      "seat": 2,
+      "tile": "p5",
+      "id": "local-3/round-3/tile/92"
+    }
+  },
+  "ownActions": [
+    {
+      "kind": "win"
+    },
+    {
+      "kind": "pass"
+    },
+    {
+      "kind": "wind-kong"
+    },
+    {
+      "kind": "discard",
+      "index": 0
+    },
+    {
+      "kind": "discard",
+      "index": 1
+    },
+    {
+      "kind": "discard",
+      "index": 2
+    },
+    {
+      "kind": "discard",
+      "index": 3
+    },
+    {
+      "kind": "discard",
+      "index": 4
+    },
+    {
+      "kind": "discard",
+      "index": 5
+    },
+    {
+      "kind": "discard",
+      "index": 6
+    },
+    {
+      "kind": "discard",
+      "index": 7
+    },
+    {
+      "kind": "discard",
+      "index": 8
+    },
+    {
+      "kind": "discard",
+      "index": 9
+    },
+    {
+      "kind": "discard",
+      "index": 10
+    },
+    {
+      "kind": "discard",
+      "index": 11
+    },
+    {
+      "kind": "discard",
+      "index": 12
+    },
+    {
+      "kind": "discard",
+      "index": 13
+    }
+  ],
+  "ownScore": {
+    "items": [
+      {
+        "id": "concealed-hand",
+        "label": "门清",
+        "weight": 1
+      },
+      {
+        "id": "shiSanLan",
+        "label": "十三烂",
+        "weight": 2
+      }
+    ],
+    "excluded": [],
+    "hardWin": true,
+    "source": "self-draw",
+    "opening": null,
+    "patternMultiplier": 3,
+    "eventMultiplier": 2,
+    "kongBonus": 0,
+    "halfPayment": false,
+    "openingApplied": false,
+    "uncappedMultiplier": 12,
+    "finalMultiplier": 12,
+    "capped": false,
+    "paymentPerPayer": 120
+  },
+  "waitingSeats": [
+    2
+  ],
+  "public": {
+    "ruleVersion": "lotus-blood-flow-v1",
+    "roundId": "round-3",
+    "status": "playing",
+    "seats": [
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 6,
+        "locked": true,
+        "firstWinSequence": 4,
+        "recordIds": [
+          "local-3/round-3/batch/4/seat/1",
+          "local-3/round-3/batch/5/seat/1",
+          "local-3/round-3/batch/6/seat/1",
+          "local-3/round-3/batch/7/seat/1",
+          "local-3/round-3/batch/8/seat/1",
+          "local-3/round-3/batch/9/seat/1"
+        ]
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 2,
+        "locked": true,
+        "firstWinSequence": 2,
+        "recordIds": [
+          "local-3/round-3/batch/2/seat/3",
+          "local-3/round-3/batch/3/seat/3"
+        ]
+      }
+    ],
+    "batches": [
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 2,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/2",
+        "windowId": "round-3/window/109",
+        "source": {
+          "kind": "discard",
+          "seat": 1,
+          "tile": "s8",
+          "id": "local-3/round-3/tile/64"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/2/seat/3",
+            "batchId": "local-3/round-3/batch/2",
+            "winner": 3,
+            "ordinal": 1,
+            "sourceEventId": "local-3/round-3/tile/64",
+            "score": {
+              "items": [
+                {
+                  "id": "chicken",
+                  "label": "鸡胡",
+                  "weight": 0.5
+                }
+              ],
+              "excluded": [],
+              "hardWin": true,
+              "source": "discard",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 1,
+              "kongBonus": 0,
+              "halfPayment": true,
+              "openingApplied": false,
+              "uncappedMultiplier": 2,
+              "finalMultiplier": 2,
+              "capped": false,
+              "paymentPerPayer": 10
+            },
+            "deltas": [
+              0,
+              -10,
+              0,
+              10
+            ]
+          }
+        ],
+        "deltas": [
+          0,
+          -10,
+          0,
+          10
+        ],
+        "scoresAfter": [
+          1215,
+          4920,
+          865,
+          1000
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 2
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 3,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/3",
+        "windowId": "round-3/window/138",
+        "source": {
+          "kind": "discard",
+          "seat": 0,
+          "tile": "s8",
+          "id": "local-3/round-3/tile/78"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/3/seat/3",
+            "batchId": "local-3/round-3/batch/3",
+            "winner": 3,
+            "ordinal": 2,
+            "sourceEventId": "local-3/round-3/tile/78",
+            "score": {
+              "items": [
+                {
+                  "id": "chicken",
+                  "label": "鸡胡",
+                  "weight": 0.5
+                }
+              ],
+              "excluded": [],
+              "hardWin": true,
+              "source": "discard",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 1,
+              "kongBonus": 0,
+              "halfPayment": true,
+              "openingApplied": false,
+              "uncappedMultiplier": 2,
+              "finalMultiplier": 2,
+              "capped": false,
+              "paymentPerPayer": 10
+            },
+            "deltas": [
+              -10,
+              0,
+              0,
+              10
+            ]
+          }
+        ],
+        "deltas": [
+          -10,
+          0,
+          0,
+          10
+        ],
+        "scoresAfter": [
+          1205,
+          4920,
+          865,
+          1010
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 1
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 4,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/4",
+        "windowId": "round-3/window/141",
+        "source": {
+          "kind": "draw",
+          "seat": 1,
+          "tile": "m4",
+          "id": "local-3/round-3/tile/79"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/4/seat/1",
+            "batchId": "local-3/round-3/batch/4",
+            "winner": 1,
+            "ordinal": 1,
+            "sourceEventId": "local-3/round-3/tile/79",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "self-draw",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 2,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 2,
+              "finalMultiplier": 2,
+              "capped": false,
+              "paymentPerPayer": 20
+            },
+            "deltas": [
+              -20,
+              60,
+              -20,
+              -20
+            ]
+          }
+        ],
+        "deltas": [
+          -20,
+          60,
+          -20,
+          -20
+        ],
+        "scoresAfter": [
+          1185,
+          4980,
+          845,
+          990
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 2
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 5,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/5",
+        "windowId": "round-3/window/150",
+        "source": {
+          "kind": "discard",
+          "seat": 0,
+          "tile": "s6",
+          "id": "local-3/round-3/tile/83"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/5/seat/1",
+            "batchId": "local-3/round-3/batch/5",
+            "winner": 1,
+            "ordinal": 2,
+            "sourceEventId": "local-3/round-3/tile/83",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "discard",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 1,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 1,
+              "finalMultiplier": 1,
+              "capped": false,
+              "paymentPerPayer": 10
+            },
+            "deltas": [
+              -10,
+              10,
+              0,
+              0
+            ]
+          }
+        ],
+        "deltas": [
+          -10,
+          10,
+          0,
+          0
+        ],
+        "scoresAfter": [
+          1175,
+          4990,
+          845,
+          990
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 1
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 6,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/6",
+        "windowId": "round-3/window/153",
+        "source": {
+          "kind": "draw",
+          "seat": 1,
+          "tile": "south",
+          "id": "local-3/round-3/tile/84"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/6/seat/1",
+            "batchId": "local-3/round-3/batch/6",
+            "winner": 1,
+            "ordinal": 3,
+            "sourceEventId": "local-3/round-3/tile/84",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "self-draw",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 2,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 2,
+              "finalMultiplier": 2,
+              "capped": false,
+              "paymentPerPayer": 20
+            },
+            "deltas": [
+              -20,
+              60,
+              -20,
+              -20
+            ]
+          }
+        ],
+        "deltas": [
+          -20,
+          60,
+          -20,
+          -20
+        ],
+        "scoresAfter": [
+          1155,
+          5050,
+          825,
+          970
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 2
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 7,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/7",
+        "windowId": "round-3/window/158",
+        "source": {
+          "kind": "discard",
+          "seat": 2,
+          "tile": "m7",
+          "id": "local-3/round-3/tile/86"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/7/seat/1",
+            "batchId": "local-3/round-3/batch/7",
+            "winner": 1,
+            "ordinal": 4,
+            "sourceEventId": "local-3/round-3/tile/86",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "discard",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 1,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 1,
+              "finalMultiplier": 1,
+              "capped": false,
+              "paymentPerPayer": 10
+            },
+            "deltas": [
+              0,
+              10,
+              -10,
+              0
+            ]
+          }
+        ],
+        "deltas": [
+          0,
+          10,
+          -10,
+          0
+        ],
+        "scoresAfter": [
+          1155,
+          5060,
+          815,
+          970
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 3
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 8,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/8",
+        "windowId": "round-3/window/167",
+        "source": {
+          "kind": "discard",
+          "seat": 0,
+          "tile": "s4",
+          "id": "local-3/round-3/tile/90"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/8/seat/1",
+            "batchId": "local-3/round-3/batch/8",
+            "winner": 1,
+            "ordinal": 5,
+            "sourceEventId": "local-3/round-3/tile/90",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "discard",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 1,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 1,
+              "finalMultiplier": 1,
+              "capped": false,
+              "paymentPerPayer": 10
+            },
+            "deltas": [
+              -10,
+              10,
+              0,
+              0
+            ]
+          }
+        ],
+        "deltas": [
+          -10,
+          10,
+          0,
+          0
+        ],
+        "scoresAfter": [
+          1145,
+          5070,
+          815,
+          970
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 1
+        }
+      },
+      {
+        "authorityEpoch": "local-3",
+        "roundId": "round-3",
+        "sequence": 9,
+        "ruleVersion": "lotus-blood-flow-v1",
+        "batchId": "local-3/round-3/batch/9",
+        "windowId": "round-3/window/170",
+        "source": {
+          "kind": "draw",
+          "seat": 1,
+          "tile": "s6",
+          "id": "local-3/round-3/tile/91"
+        },
+        "winners": [
+          {
+            "id": "local-3/round-3/batch/9/seat/1",
+            "batchId": "local-3/round-3/batch/9",
+            "winner": 1,
+            "ordinal": 6,
+            "sourceEventId": "local-3/round-3/tile/91",
+            "score": {
+              "items": [
+                {
+                  "id": "pinghu",
+                  "label": "平胡",
+                  "weight": 1
+                }
+              ],
+              "excluded": [],
+              "hardWin": false,
+              "source": "self-draw",
+              "opening": null,
+              "patternMultiplier": 1,
+              "eventMultiplier": 2,
+              "kongBonus": 0,
+              "halfPayment": false,
+              "openingApplied": false,
+              "uncappedMultiplier": 2,
+              "finalMultiplier": 2,
+              "capped": false,
+              "paymentPerPayer": 20
+            },
+            "deltas": [
+              -20,
+              60,
+              -20,
+              -20
+            ]
+          }
+        ],
+        "deltas": [
+          -20,
+          60,
+          -20,
+          -20
+        ],
+        "scoresAfter": [
+          1125,
+          5130,
+          795,
+          950
+        ],
+        "nextAction": {
+          "kind": "draw",
+          "seat": 2
+        }
+      }
+    ],
+    "roundResult": null
+  },
+  "actionEvents": [
+    {
+      "id": 1,
+      "type": "chi",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "p9",
+      "meldIndex": 0
+    },
+    {
+      "id": 2,
+      "type": "chi",
+      "actorIndex": 3,
+      "sourceIndex": 2,
+      "tile": "p5",
+      "meldIndex": 0
+    },
+    {
+      "id": 3,
+      "type": "discard-gang",
+      "actorIndex": 0,
+      "sourceIndex": 3,
+      "tile": "p4",
+      "meldIndex": 0
+    },
+    {
+      "id": 4,
+      "type": "chi",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "s1",
+      "meldIndex": 1
+    },
+    {
+      "id": 5,
+      "type": "discard-win",
+      "actorIndex": 3,
+      "sourceIndex": 1,
+      "tile": "s8",
+      "meldIndex": -1
+    },
+    {
+      "id": 6,
+      "type": "chi",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "s4",
+      "meldIndex": 2
+    },
+    {
+      "id": 7,
+      "type": "discard-win",
+      "actorIndex": 3,
+      "sourceIndex": 0,
+      "tile": "s8",
+      "meldIndex": -1
+    },
+    {
+      "id": 8,
+      "type": "self-draw",
+      "actorIndex": 1,
+      "sourceIndex": null,
+      "tile": "m4",
+      "meldIndex": -1
+    },
+    {
+      "id": 9,
+      "type": "peng",
+      "actorIndex": 0,
+      "sourceIndex": 2,
+      "tile": "m3",
+      "meldIndex": 1
+    },
+    {
+      "id": 10,
+      "type": "discard-win",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "s6",
+      "meldIndex": -1
+    },
+    {
+      "id": 11,
+      "type": "self-draw",
+      "actorIndex": 1,
+      "sourceIndex": null,
+      "tile": "south",
+      "meldIndex": -1
+    },
+    {
+      "id": 12,
+      "type": "discard-win",
+      "actorIndex": 1,
+      "sourceIndex": 2,
+      "tile": "m7",
+      "meldIndex": -1
+    },
+    {
+      "id": 13,
+      "type": "peng",
+      "actorIndex": 0,
+      "sourceIndex": 3,
+      "tile": "s7",
+      "meldIndex": 2
+    },
+    {
+      "id": 14,
+      "type": "discard-win",
+      "actorIndex": 1,
+      "sourceIndex": 0,
+      "tile": "s4",
+      "meldIndex": -1
+    },
+    {
+      "id": 15,
+      "type": "self-draw",
+      "actorIndex": 1,
+      "sourceIndex": null,
+      "tile": "s6",
+      "meldIndex": -1
+    }
+  ],
+  "lastDiscardAction": {
+    "kind": "discard",
+    "seat": 0,
+    "tile": "s4",
+    "id": "local-3/round-3/tile/90"
+  }
+}

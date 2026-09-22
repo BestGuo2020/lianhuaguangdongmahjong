@@ -59,11 +59,11 @@ it('zeros future income in every forecast and in the actual LLM candidate featur
     config: BLOOD_FLOW_LLM_AI })).toBeNull()
 })
 
-it('does not broaden route release into positive-wall turns or final discard competition', () => {
+it('advisory routes retain positive-wall wins without bypassing final discard priority or inventing wins', () => {
   const v = view()
   const positive = buildBloodFlowDecisionInput({ ...v, wallCount: 1 }, 'one-left', {}, BLOOD_FLOW_LLM_AI)
-  expect(positive.collapsedByRoute).toBe(true)
-  expect(positive.candidates.some(c => c.action.kind === 'win')).toBe(false)
+  expect(positive.collapsedByRoute).toBe(false)
+  expect(positive.candidates.some(c => c.action.kind === 'win')).toBe(true)
   expect(bloodFlowEvContext({ ...v, wallCount: 1 }, BLOOD_FLOW_LLM_AI).chainAfterWin).toBeGreaterThan(0)
   const claim = view()
   claim.window = { ...claim.window!, kind: 'win', source: { ...claim.window!.source, kind: 'discard', seat: 0 } }

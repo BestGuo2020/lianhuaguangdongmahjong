@@ -7,6 +7,7 @@
 //
 // 约束：本模块只被 LLM 候选构造使用（`buildBloodFlowDecisionInput`），**不改引擎/普通 AI 的决策**。
 import type { Meld, TileType } from '../../../core/contracts/types'
+import { BLOOD_FLOW_PATTERNS } from './patternDefinitions'
 
 export type BigHandRouteId =
   | 'thirteenOrphans' | 'nineGates'
@@ -132,10 +133,20 @@ export const THIRTEEN_ORPHANS: readonly TileType[] = [
 const NUMERIC = /^([mps])([1-9])$/
 const ORPHAN_SET = new Set(THIRTEEN_ORPHANS)
 
-/**
- * 判定当前手牌是否已经"成立"某条大牌路线。只在**硬条件已满足**时才返回（低风险：手牌本身已经在路上）。
- * 只读本家暗手与副露；不考虑对手信息。
- */
+/** Each physical tile covers at most one required slot. Non-joker white only covers itself or a joker face. */
+export function coveredRouteTiles(hand: readonly TileType[], targets: readonly TileType[], jokers: readonly TileType[]): number {
+  const remaining = [...targets]
+  const take = (allowed: (tile: TileType) => boolean) => {
+    const i = remaining.findIndex(allowed)
+    if (i >= 0) remaining.splice(i, 1)
+  }
+  for (const tile of hand) if (!jokers.includes(tile) && tile !== 'white') take(t => t === tile)
+  for (const tile of hand) if (tile === 'white' && !jokers.includes(tile)) take(t => t === 'white' || jokers.includes(t))
+  for (const tile of hand) if (jokers.includes(tile)) take(() => true)
+  return targets.length - remaining.length
+}
+
+/** Detect a near route from this seat's hand only; progress is coverage, not a win probability. */
 export function detectBigHandRoute(
   hand: readonly TileType[],
   melds: readonly Readonly<Meld>[],
@@ -150,10 +161,10 @@ export function detectBigHandRoute(
   // 十三幺：门清（无副露）+ 已持足够多种幺九字牌。
   if (melds.length === 0) {
     const kinds = THIRTEEN_ORPHANS.filter(tile => hand.includes(tile)).length
-    const kindsAfterJokers = Math.min(13, kinds + jokerCount)
+    const kindsAfterJokers = coveredRouteTiles(hand, THIRTEEN_ORPHANS, jokers)
     if (kindsAfterJokers >= config.minOrphanKinds) {
       candidates.push({
-        id: 'thirteenOrphans', label: '十三幺', weight: 16,
+        id: 'thirteenOrphans', label: '十三幺', weight: BLOOD_FLOW_PATTERNS.thirteenOrphans.weight,
         progress: kindsAfterJokers / 13,
         need: THIRTEEN_ORPHANS.filter(tile => !hand.includes(tile)),
         keepers: hand.filter(tile => ORPHAN_SET.has(tile)),
@@ -170,13 +181,15 @@ export function detectBigHandRoute(
       const tiles = hand.filter(tile => tile.startsWith(suit))
       const naturalTiles = tiles.filter(tile => !wildcards.has(tile))
       const ranks = new Set(naturalTiles.map(tile => tile[1]))
-      const wildcardExtra = Math.min(9 - ranks.size, jokerCount)
-      if (ranks.size + wildcardExtra >= config.minSuitRanks && tiles.length + jokerCount >= config.minSuitTiles) {
+      const rankTargets = Array.from({length:9}, (_, i) => `${suit}${i+1}` as TileType)
+      const coveredRanks = coveredRouteTiles(hand, rankTargets, jokers)
+      const coveredShape = coveredRouteTiles(hand, [rankTargets[0],rankTargets[0],...rankTargets,rankTargets[8],rankTargets[8]], jokers)
+      if (coveredRanks >= config.minSuitRanks && coveredShape >= config.minSuitTiles) {
         const missing = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
           .filter(rank => !ranks.has(rank)).map(rank => `${suit}${rank}`)
         candidates.push({
-          id: 'nineGates', label: '九莲宝灯', weight: 16,
-          progress: Math.min(1, (ranks.size + wildcardExtra) / 9),
+          id: 'nineGates', label: '九莲宝灯', weight: BLOOD_FLOW_PATTERNS['nine-gates'].weight,
+          progress: coveredRanks / 9,
           need: missing as unknown as readonly string[],
           keepers: tiles,
           // 1-9 全自然 + 本门自然张数 ≥13 → 可自然完成（硬胡）
@@ -209,7 +222,7 @@ export function detectBigHandRoute(
       if (enabled.has('pureSuit') && suitMeldOk && mainTiles >= config.pureSuitMinTiles
         && foreignSuits + honorsAll <= config.pureSuitMaxForeign) {
         candidates.push({
-          id: 'pureSuit', label: '清一色', weight: 8,
+          id: 'pureSuit', label: '清一色', weight: BLOOD_FLOW_PATTERNS['pure-suit'].weight,
           progress: Math.min(1, mainTiles / Math.max(1, effective)),
           need: [`${suit} 门任意牌`] as unknown as readonly string[],
           keepers: hand.filter(tile => tile.startsWith(suit)),
@@ -221,7 +234,7 @@ export function detectBigHandRoute(
       if (enabled.has('mixedSuit') && honorMeldOk && mainTiles >= config.mixedSuitMinTiles
         && foreignSuits <= config.mixedSuitMaxForeign) {
         candidates.push({
-          id: 'mixedSuit', label: '混一色', weight: 4,
+          id: 'mixedSuit', label: '混一色', weight: BLOOD_FLOW_PATTERNS['mixed-suit'].weight,
           progress: Math.min(1, (mainTiles + honorsAll) / Math.max(1, effective)),
           need: [`${suit} 门或字牌`] as unknown as readonly string[],
           keepers: hand.filter(tile => tile.startsWith(suit) || !isSuitedTile(tile)),
@@ -247,7 +260,7 @@ export function detectBigHandRoute(
     const unitsWithJokers = realTriplets + pairUnits + jokerCount
     if (effectiveTriplets >= 2 && unitsWithJokers >= config.allTripletsMinUnits) {
       candidates.push({
-        id: 'allTriplets', label: '碰碰胡', weight: 4,
+        id: 'allTriplets', label: '碰碰胡', weight: BLOOD_FLOW_PATTERNS['all-triplets'].weight,
         progress: Math.min(1, unitsWithJokers / 5),
         need: ['刻子/杠（不要顺子）'] as unknown as readonly string[],
         keepers: hand.filter(tile => (counts.get(tile) ?? 0) >= 2),
