@@ -1,0 +1,4006 @@
+{
+  "sourceCommit": "2aa238b",
+  "seed": 950002,
+  "cases": [
+    {
+      "kongEvents": [
+        {
+          "kind": "kong",
+          "authorityEpoch": "route-regression",
+          "roundId": "case",
+          "sequence": 6,
+          "id": "case/kong/6",
+          "actor": 0,
+          "kongKind": "discard",
+          "sourceSeat": 2,
+          "deltas": [
+            10,
+            0,
+            -10,
+            0
+          ],
+          "scoresAfter": [
+            1630,
+            2770,
+            1790,
+            1810
+          ]
+        }
+      ],
+      "authorityEpoch": "route-regression",
+      "roundId": "case",
+      "version": 102,
+      "seat": 2,
+      "players": [
+        {
+          "name": "玩家1",
+          "avatar": "",
+          "seat": 0,
+          "score": 1290,
+          "hand": [],
+          "melds": [
+            {
+              "type": "peng",
+              "tile": "p8",
+              "tiles": [
+                "p8",
+                "p8",
+                "p8"
+              ],
+              "from": 2
+            },
+            {
+              "type": "gang",
+              "tile": "s7",
+              "tiles": [
+                "s7",
+                "s7",
+                "s7",
+                "s7"
+              ],
+              "from": 2
+            }
+          ],
+          "discards": [
+            "m1",
+            "m4",
+            "m7",
+            "s1",
+            "p1",
+            "m1",
+            "m1",
+            "s4",
+            "p1",
+            "m9",
+            "m6",
+            "green",
+            "m8",
+            "m5"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 7
+        },
+        {
+          "name": "玩家2",
+          "avatar": "",
+          "seat": 1,
+          "score": 3500,
+          "hand": [],
+          "melds": [],
+          "discards": [
+            "red",
+            "s1",
+            "p4",
+            "green",
+            "p1",
+            "green",
+            "p5",
+            "m2",
+            "m6",
+            "s4",
+            "s3",
+            "m6",
+            "s9",
+            "m5",
+            "p6"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 13
+        },
+        {
+          "name": "玩家3",
+          "avatar": "",
+          "seat": 2,
+          "score": 1510,
+          "hand": [
+            "p2",
+            "p2",
+            "p5",
+            "p6",
+            "p9",
+            "p9",
+            "p9",
+            "s6",
+            "s6",
+            "s6",
+            "south",
+            "white",
+            "white",
+            "p4"
+          ],
+          "melds": [],
+          "discards": [
+            "m9",
+            "s1",
+            "m6",
+            "m2",
+            "red",
+            "s4",
+            "m1",
+            "p3",
+            "s9",
+            "east",
+            "east",
+            "m7",
+            "m8"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": 13,
+          "concealedTileCount": 14
+        },
+        {
+          "name": "玩家4",
+          "avatar": "",
+          "seat": 3,
+          "score": 1700,
+          "hand": [],
+          "melds": [
+            {
+              "type": "chi",
+              "tile": "p3",
+              "tiles": [
+                "p1",
+                "p2",
+                "p3"
+              ],
+              "from": 2
+            },
+            {
+              "type": "chi",
+              "tile": "s2",
+              "tiles": [
+                "s2",
+                "s3",
+                "s4"
+              ],
+              "from": 2
+            }
+          ],
+          "discards": [
+            "m4",
+            "m4",
+            "m7",
+            "m9",
+            "s2",
+            "p4",
+            "s5",
+            "m3",
+            "s2",
+            "p4",
+            "east",
+            "m2",
+            "s2",
+            "m2"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 7
+        }
+      ],
+      "currentPlayer": 2,
+      "wallCount": 13,
+      "headDrawn": 120,
+      "flipTile": "west",
+      "jokers": [
+        "west",
+        "north"
+      ],
+      "flipStack": 43,
+      "flipSeat": 2,
+      "wallBreakIndex": 102,
+      "window": {
+        "id": "case/window/102",
+        "version": 102,
+        "kind": "turn",
+        "deadlineAt": 15000,
+        "opensAt": 0,
+        "source": {
+          "kind": "draw",
+          "seat": 2,
+          "tile": "p4",
+          "id": "route-regression/case/tile/138"
+        }
+      },
+      "ownActions": [
+        {
+          "kind": "win"
+        },
+        {
+          "kind": "pass"
+        },
+        {
+          "kind": "discard",
+          "index": 0
+        },
+        {
+          "kind": "discard",
+          "index": 1
+        },
+        {
+          "kind": "discard",
+          "index": 2
+        },
+        {
+          "kind": "discard",
+          "index": 3
+        },
+        {
+          "kind": "discard",
+          "index": 4
+        },
+        {
+          "kind": "discard",
+          "index": 5
+        },
+        {
+          "kind": "discard",
+          "index": 6
+        },
+        {
+          "kind": "discard",
+          "index": 7
+        },
+        {
+          "kind": "discard",
+          "index": 8
+        },
+        {
+          "kind": "discard",
+          "index": 9
+        },
+        {
+          "kind": "discard",
+          "index": 10
+        },
+        {
+          "kind": "discard",
+          "index": 11
+        },
+        {
+          "kind": "discard",
+          "index": 12
+        },
+        {
+          "kind": "discard",
+          "index": 13
+        }
+      ],
+      "ownScore": {
+        "items": [
+          {
+            "id": "concealed-hand",
+            "label": "门清",
+            "weight": 1
+          }
+        ],
+        "excluded": [],
+        "hardWin": false,
+        "source": "self-draw",
+        "opening": null,
+        "patternMultiplier": 1,
+        "eventMultiplier": 2,
+        "kongBonus": 0,
+        "halfPayment": false,
+        "openingApplied": false,
+        "uncappedMultiplier": 2,
+        "finalMultiplier": 2,
+        "capped": false,
+        "paymentPerPayer": 20
+      },
+      "waitingSeats": [
+        2
+      ],
+      "public": {
+        "ruleVersion": "lotus-blood-flow-v1",
+        "roundId": "case",
+        "status": "playing",
+        "seats": [
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 10,
+            "locked": true,
+            "firstWinSequence": 1,
+            "recordIds": [
+              "route-regression/case/batch/1/seat/1",
+              "route-regression/case/batch/2/seat/1",
+              "route-regression/case/batch/3/seat/1",
+              "route-regression/case/batch/4/seat/1",
+              "route-regression/case/batch/5/seat/1",
+              "route-regression/case/batch/7/seat/1",
+              "route-regression/case/batch/8/seat/1",
+              "route-regression/case/batch/9/seat/1",
+              "route-regression/case/batch/11/seat/1",
+              "route-regression/case/batch/12/seat/1"
+            ]
+          },
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 6,
+            "locked": true,
+            "firstWinSequence": 2,
+            "recordIds": [
+              "route-regression/case/batch/2/seat/3",
+              "route-regression/case/batch/4/seat/3",
+              "route-regression/case/batch/7/seat/3",
+              "route-regression/case/batch/9/seat/3",
+              "route-regression/case/batch/10/seat/3",
+              "route-regression/case/batch/11/seat/3"
+            ]
+          }
+        ],
+        "batches": [
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 1,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/1",
+            "windowId": "case/window/82",
+            "source": {
+              "kind": "discard",
+              "seat": 3,
+              "tile": "p9",
+              "id": "route-regression/case/tile/118"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/1/seat/1",
+                "batchId": "route-regression/case/batch/1",
+                "winner": 1,
+                "ordinal": 1,
+                "sourceEventId": "route-regression/case/tile/118",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  0,
+                  -50
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              0,
+              -50
+            ],
+            "scoresAfter": [
+              2000,
+              2050,
+              2000,
+              1950
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 2,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/2",
+            "windowId": "case/window/84",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "p3",
+              "id": "route-regression/case/tile/120"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/2/seat/1",
+                "batchId": "route-regression/case/batch/2",
+                "winner": 1,
+                "ordinal": 2,
+                "sourceEventId": "route-regression/case/tile/120",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/2/seat/3",
+                "batchId": "route-regression/case/batch/2",
+                "winner": 3,
+                "ordinal": 1,
+                "sourceEventId": "route-regression/case/tile/120",
+                "score": {
+                  "items": [
+                    {
+                      "id": "one-suit-three-steps",
+                      "label": "一色三步高",
+                      "weight": 4
+                    },
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  0,
+                  0,
+                  50
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              50,
+              0,
+              50
+            ],
+            "scoresAfter": [
+              1900,
+              2100,
+              2000,
+              2000
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 3,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/3",
+            "windowId": "case/window/85",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/121"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/3/seat/1",
+                "batchId": "route-regression/case/batch/3",
+                "winner": 1,
+                "ordinal": 3,
+                "sourceEventId": "route-regression/case/tile/121",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1800,
+              2400,
+              1900,
+              1900
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 4,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/4",
+            "windowId": "case/window/89",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "s8",
+              "id": "route-regression/case/tile/125"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/4/seat/1",
+                "batchId": "route-regression/case/batch/4",
+                "winner": 1,
+                "ordinal": 4,
+                "sourceEventId": "route-regression/case/tile/125",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "luxury-seven-pairs",
+                      "label": "豪华七对",
+                      "weight": 6
+                    }
+                  ],
+                  "excluded": [
+                    {
+                      "id": "sevenPairs",
+                      "includedBy": "luxury-seven-pairs"
+                    }
+                  ],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 7,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 7,
+                  "finalMultiplier": 7,
+                  "capped": false,
+                  "paymentPerPayer": 70
+                },
+                "deltas": [
+                  -70,
+                  70,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/4/seat/3",
+                "batchId": "route-regression/case/batch/4",
+                "winner": 3,
+                "ordinal": 2,
+                "sourceEventId": "route-regression/case/tile/125",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -80,
+              70,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1720,
+              2470,
+              1900,
+              1910
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 5,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/5",
+            "windowId": "case/window/90",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "south",
+              "id": "route-regression/case/tile/126"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/5/seat/1",
+                "batchId": "route-regression/case/batch/5",
+                "winner": 1,
+                "ordinal": 5,
+                "sourceEventId": "route-regression/case/tile/126",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1620,
+              2770,
+              1800,
+              1810
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 7,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/7",
+            "windowId": "case/window/94",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "p2",
+              "id": "route-regression/case/tile/130"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/7/seat/1",
+                "batchId": "route-regression/case/batch/7",
+                "winner": 1,
+                "ordinal": 6,
+                "sourceEventId": "route-regression/case/tile/130",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/7/seat/3",
+                "batchId": "route-regression/case/batch/7",
+                "winner": 3,
+                "ordinal": 3,
+                "sourceEventId": "route-regression/case/tile/130",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1570,
+              2820,
+              1790,
+              1820
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 8,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/8",
+            "windowId": "case/window/95",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/131"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/8/seat/1",
+                "batchId": "route-regression/case/batch/8",
+                "winner": 1,
+                "ordinal": 7,
+                "sourceEventId": "route-regression/case/tile/131",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1470,
+              3120,
+              1690,
+              1720
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 9,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/9",
+            "windowId": "case/window/97",
+            "source": {
+              "kind": "discard",
+              "seat": 2,
+              "tile": "s9",
+              "id": "route-regression/case/tile/133"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/9/seat/1",
+                "batchId": "route-regression/case/batch/9",
+                "winner": 1,
+                "ordinal": 8,
+                "sourceEventId": "route-regression/case/tile/133",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  -50,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/9/seat/3",
+                "batchId": "route-regression/case/batch/9",
+                "winner": 3,
+                "ordinal": 4,
+                "sourceEventId": "route-regression/case/tile/133",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  0,
+                  0,
+                  -10,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              -60,
+              10
+            ],
+            "scoresAfter": [
+              1470,
+              3170,
+              1630,
+              1730
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 3
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 10,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/10",
+            "windowId": "case/window/98",
+            "source": {
+              "kind": "draw",
+              "seat": 3,
+              "tile": "red",
+              "id": "route-regression/case/tile/134"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/10/seat/3",
+                "batchId": "route-regression/case/batch/10",
+                "winner": 3,
+                "ordinal": 5,
+                "sourceEventId": "route-regression/case/tile/134",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 2,
+                  "finalMultiplier": 2,
+                  "capped": false,
+                  "paymentPerPayer": 20
+                },
+                "deltas": [
+                  -20,
+                  -20,
+                  -20,
+                  60
+                ]
+              }
+            ],
+            "deltas": [
+              -20,
+              -20,
+              -20,
+              60
+            ],
+            "scoresAfter": [
+              1450,
+              3150,
+              1610,
+              1790
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 11,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/11",
+            "windowId": "case/window/100",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "s9",
+              "id": "route-regression/case/tile/136"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/11/seat/1",
+                "batchId": "route-regression/case/batch/11",
+                "winner": 1,
+                "ordinal": 9,
+                "sourceEventId": "route-regression/case/tile/136",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/11/seat/3",
+                "batchId": "route-regression/case/batch/11",
+                "winner": 3,
+                "ordinal": 6,
+                "sourceEventId": "route-regression/case/tile/136",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1390,
+              3200,
+              1610,
+              1800
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 12,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/12",
+            "windowId": "case/window/101",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/137"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/12/seat/1",
+                "batchId": "route-regression/case/batch/12",
+                "winner": 1,
+                "ordinal": 10,
+                "sourceEventId": "route-regression/case/tile/137",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1290,
+              3500,
+              1510,
+              1700
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          }
+        ],
+        "roundResult": null
+      },
+      "actionEvents": [
+        {
+          "id": 1,
+          "type": "chi",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "p3",
+          "meldIndex": 0
+        },
+        {
+          "id": 2,
+          "type": "chi",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "s2",
+          "meldIndex": 1
+        },
+        {
+          "id": 3,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 3,
+          "tile": "p9",
+          "meldIndex": -1
+        },
+        {
+          "id": 4,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "p3",
+          "meldIndex": -1
+        },
+        {
+          "id": 5,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "p3",
+          "meldIndex": -1
+        },
+        {
+          "id": 6,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        },
+        {
+          "id": 7,
+          "type": "peng",
+          "actorIndex": 0,
+          "sourceIndex": 2,
+          "tile": "p8",
+          "meldIndex": 0
+        },
+        {
+          "id": 8,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 9,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 10,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "south",
+          "meldIndex": -1
+        },
+        {
+          "id": 11,
+          "type": "discard-gang",
+          "actorIndex": 0,
+          "sourceIndex": 2,
+          "tile": "s7",
+          "meldIndex": 1
+        },
+        {
+          "id": 12,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "p2",
+          "meldIndex": -1
+        },
+        {
+          "id": 13,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "p2",
+          "meldIndex": -1
+        },
+        {
+          "id": 14,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        },
+        {
+          "id": 15,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 2,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 16,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 17,
+          "type": "self-draw",
+          "actorIndex": 3,
+          "sourceIndex": null,
+          "tile": "red",
+          "meldIndex": -1
+        },
+        {
+          "id": 18,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 19,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 20,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        }
+      ],
+      "lastDiscardAction": {
+        "kind": "discard",
+        "seat": 0,
+        "tile": "s9",
+        "id": "route-regression/case/tile/136"
+      }
+    },
+    {
+      "kongEvents": [
+        {
+          "kind": "kong",
+          "authorityEpoch": "route-regression",
+          "roundId": "case",
+          "sequence": 6,
+          "id": "case/kong/6",
+          "actor": 0,
+          "kongKind": "discard",
+          "sourceSeat": 2,
+          "deltas": [
+            10,
+            0,
+            -10,
+            0
+          ],
+          "scoresAfter": [
+            1630,
+            2770,
+            1790,
+            1810
+          ]
+        }
+      ],
+      "authorityEpoch": "route-regression",
+      "roundId": "case",
+      "version": 117,
+      "seat": 0,
+      "players": [
+        {
+          "name": "玩家1",
+          "avatar": "",
+          "seat": 0,
+          "score": 910,
+          "hand": [
+            "north",
+            "p6",
+            "p7",
+            "s3",
+            "s3",
+            "south",
+            "south",
+            "p8"
+          ],
+          "melds": [
+            {
+              "type": "peng",
+              "tile": "p8",
+              "tiles": [
+                "p8",
+                "p8",
+                "p8"
+              ],
+              "from": 2
+            },
+            {
+              "type": "gang",
+              "tile": "s7",
+              "tiles": [
+                "s7",
+                "s7",
+                "s7",
+                "s7"
+              ],
+              "from": 2
+            }
+          ],
+          "discards": [
+            "m1",
+            "m4",
+            "m7",
+            "s1",
+            "p1",
+            "m1",
+            "m1",
+            "s4",
+            "p1",
+            "m9",
+            "m6",
+            "green",
+            "m8",
+            "m5"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": 7,
+          "concealedTileCount": 8
+        },
+        {
+          "name": "玩家2",
+          "avatar": "",
+          "seat": 1,
+          "score": 4310,
+          "hand": [],
+          "melds": [],
+          "discards": [
+            "red",
+            "s1",
+            "p4",
+            "green",
+            "p1",
+            "green",
+            "p5",
+            "m2",
+            "m6",
+            "s4",
+            "s3",
+            "m6",
+            "s9",
+            "m5",
+            "p6"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 13
+        },
+        {
+          "name": "玩家3",
+          "avatar": "",
+          "seat": 2,
+          "score": 1050,
+          "hand": [],
+          "melds": [],
+          "discards": [
+            "m9",
+            "s1",
+            "m6",
+            "m2",
+            "red",
+            "s4",
+            "m1",
+            "p3",
+            "s9",
+            "east",
+            "east",
+            "m7",
+            "m8"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 13
+        },
+        {
+          "name": "玩家4",
+          "avatar": "",
+          "seat": 3,
+          "score": 1730,
+          "hand": [],
+          "melds": [
+            {
+              "type": "chi",
+              "tile": "p3",
+              "tiles": [
+                "p1",
+                "p2",
+                "p3"
+              ],
+              "from": 2
+            },
+            {
+              "type": "chi",
+              "tile": "s2",
+              "tiles": [
+                "s2",
+                "s3",
+                "s4"
+              ],
+              "from": 2
+            }
+          ],
+          "discards": [
+            "m4",
+            "m4",
+            "m7",
+            "m9",
+            "s2",
+            "p4",
+            "s5",
+            "m3",
+            "s2",
+            "p4",
+            "east",
+            "m2",
+            "s2",
+            "m2"
+          ],
+          "redCount": 0,
+          "drawnTileIndex": -1,
+          "concealedTileCount": 7
+        }
+      ],
+      "currentPlayer": 0,
+      "wallCount": 3,
+      "headDrawn": 130,
+      "flipTile": "west",
+      "jokers": [
+        "west",
+        "north"
+      ],
+      "flipStack": 43,
+      "flipSeat": 2,
+      "wallBreakIndex": 102,
+      "window": {
+        "id": "case/window/117",
+        "version": 117,
+        "kind": "turn",
+        "deadlineAt": 15000,
+        "opensAt": 0,
+        "source": {
+          "kind": "draw",
+          "seat": 0,
+          "tile": "p8",
+          "id": "route-regression/case/tile/153"
+        }
+      },
+      "ownActions": [
+        {
+          "kind": "win"
+        },
+        {
+          "kind": "pass"
+        },
+        {
+          "kind": "added-kong",
+          "meldIndex": 0
+        },
+        {
+          "kind": "discard",
+          "index": 0
+        },
+        {
+          "kind": "discard",
+          "index": 1
+        },
+        {
+          "kind": "discard",
+          "index": 2
+        },
+        {
+          "kind": "discard",
+          "index": 3
+        },
+        {
+          "kind": "discard",
+          "index": 4
+        },
+        {
+          "kind": "discard",
+          "index": 5
+        },
+        {
+          "kind": "discard",
+          "index": 6
+        },
+        {
+          "kind": "discard",
+          "index": 7
+        }
+      ],
+      "ownScore": {
+        "items": [
+          {
+            "id": "chicken",
+            "label": "鸡胡",
+            "weight": 0.5
+          }
+        ],
+        "excluded": [],
+        "hardWin": false,
+        "source": "self-draw",
+        "opening": null,
+        "patternMultiplier": 1,
+        "eventMultiplier": 2,
+        "kongBonus": 1,
+        "halfPayment": false,
+        "openingApplied": false,
+        "uncappedMultiplier": 2,
+        "finalMultiplier": 2,
+        "capped": false,
+        "paymentPerPayer": 20
+      },
+      "waitingSeats": [
+        0
+      ],
+      "public": {
+        "ruleVersion": "lotus-blood-flow-v1",
+        "roundId": "case",
+        "status": "playing",
+        "seats": [
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 17,
+            "locked": true,
+            "firstWinSequence": 1,
+            "recordIds": [
+              "route-regression/case/batch/1/seat/1",
+              "route-regression/case/batch/2/seat/1",
+              "route-regression/case/batch/3/seat/1",
+              "route-regression/case/batch/4/seat/1",
+              "route-regression/case/batch/5/seat/1",
+              "route-regression/case/batch/7/seat/1",
+              "route-regression/case/batch/8/seat/1",
+              "route-regression/case/batch/9/seat/1",
+              "route-regression/case/batch/11/seat/1",
+              "route-regression/case/batch/12/seat/1",
+              "route-regression/case/batch/13/seat/1",
+              "route-regression/case/batch/15/seat/1",
+              "route-regression/case/batch/16/seat/1",
+              "route-regression/case/batch/17/seat/1",
+              "route-regression/case/batch/19/seat/1",
+              "route-regression/case/batch/20/seat/1",
+              "route-regression/case/batch/21/seat/1"
+            ]
+          },
+          {
+            "winCount": 0,
+            "locked": false,
+            "firstWinSequence": null,
+            "recordIds": []
+          },
+          {
+            "winCount": 14,
+            "locked": true,
+            "firstWinSequence": 2,
+            "recordIds": [
+              "route-regression/case/batch/2/seat/3",
+              "route-regression/case/batch/4/seat/3",
+              "route-regression/case/batch/7/seat/3",
+              "route-regression/case/batch/9/seat/3",
+              "route-regression/case/batch/10/seat/3",
+              "route-regression/case/batch/11/seat/3",
+              "route-regression/case/batch/13/seat/3",
+              "route-regression/case/batch/14/seat/3",
+              "route-regression/case/batch/15/seat/3",
+              "route-regression/case/batch/17/seat/3",
+              "route-regression/case/batch/18/seat/3",
+              "route-regression/case/batch/19/seat/3",
+              "route-regression/case/batch/21/seat/3",
+              "route-regression/case/batch/22/seat/3"
+            ]
+          }
+        ],
+        "batches": [
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 1,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/1",
+            "windowId": "case/window/82",
+            "source": {
+              "kind": "discard",
+              "seat": 3,
+              "tile": "p9",
+              "id": "route-regression/case/tile/118"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/1/seat/1",
+                "batchId": "route-regression/case/batch/1",
+                "winner": 1,
+                "ordinal": 1,
+                "sourceEventId": "route-regression/case/tile/118",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  0,
+                  -50
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              0,
+              -50
+            ],
+            "scoresAfter": [
+              2000,
+              2050,
+              2000,
+              1950
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 2,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/2",
+            "windowId": "case/window/84",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "p3",
+              "id": "route-regression/case/tile/120"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/2/seat/1",
+                "batchId": "route-regression/case/batch/2",
+                "winner": 1,
+                "ordinal": 2,
+                "sourceEventId": "route-regression/case/tile/120",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/2/seat/3",
+                "batchId": "route-regression/case/batch/2",
+                "winner": 3,
+                "ordinal": 1,
+                "sourceEventId": "route-regression/case/tile/120",
+                "score": {
+                  "items": [
+                    {
+                      "id": "one-suit-three-steps",
+                      "label": "一色三步高",
+                      "weight": 4
+                    },
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  0,
+                  0,
+                  50
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              50,
+              0,
+              50
+            ],
+            "scoresAfter": [
+              1900,
+              2100,
+              2000,
+              2000
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 3,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/3",
+            "windowId": "case/window/85",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/121"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/3/seat/1",
+                "batchId": "route-regression/case/batch/3",
+                "winner": 1,
+                "ordinal": 3,
+                "sourceEventId": "route-regression/case/tile/121",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1800,
+              2400,
+              1900,
+              1900
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 4,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/4",
+            "windowId": "case/window/89",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "s8",
+              "id": "route-regression/case/tile/125"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/4/seat/1",
+                "batchId": "route-regression/case/batch/4",
+                "winner": 1,
+                "ordinal": 4,
+                "sourceEventId": "route-regression/case/tile/125",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "luxury-seven-pairs",
+                      "label": "豪华七对",
+                      "weight": 6
+                    }
+                  ],
+                  "excluded": [
+                    {
+                      "id": "sevenPairs",
+                      "includedBy": "luxury-seven-pairs"
+                    }
+                  ],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 7,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 7,
+                  "finalMultiplier": 7,
+                  "capped": false,
+                  "paymentPerPayer": 70
+                },
+                "deltas": [
+                  -70,
+                  70,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/4/seat/3",
+                "batchId": "route-regression/case/batch/4",
+                "winner": 3,
+                "ordinal": 2,
+                "sourceEventId": "route-regression/case/tile/125",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -80,
+              70,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1720,
+              2470,
+              1900,
+              1910
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 5,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/5",
+            "windowId": "case/window/90",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "south",
+              "id": "route-regression/case/tile/126"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/5/seat/1",
+                "batchId": "route-regression/case/batch/5",
+                "winner": 1,
+                "ordinal": 5,
+                "sourceEventId": "route-regression/case/tile/126",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1620,
+              2770,
+              1800,
+              1810
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 7,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/7",
+            "windowId": "case/window/94",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "p2",
+              "id": "route-regression/case/tile/130"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/7/seat/1",
+                "batchId": "route-regression/case/batch/7",
+                "winner": 1,
+                "ordinal": 6,
+                "sourceEventId": "route-regression/case/tile/130",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/7/seat/3",
+                "batchId": "route-regression/case/batch/7",
+                "winner": 3,
+                "ordinal": 3,
+                "sourceEventId": "route-regression/case/tile/130",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1570,
+              2820,
+              1790,
+              1820
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 8,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/8",
+            "windowId": "case/window/95",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/131"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/8/seat/1",
+                "batchId": "route-regression/case/batch/8",
+                "winner": 1,
+                "ordinal": 7,
+                "sourceEventId": "route-regression/case/tile/131",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1470,
+              3120,
+              1690,
+              1720
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 9,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/9",
+            "windowId": "case/window/97",
+            "source": {
+              "kind": "discard",
+              "seat": 2,
+              "tile": "s9",
+              "id": "route-regression/case/tile/133"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/9/seat/1",
+                "batchId": "route-regression/case/batch/9",
+                "winner": 1,
+                "ordinal": 8,
+                "sourceEventId": "route-regression/case/tile/133",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  -50,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/9/seat/3",
+                "batchId": "route-regression/case/batch/9",
+                "winner": 3,
+                "ordinal": 4,
+                "sourceEventId": "route-regression/case/tile/133",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  0,
+                  0,
+                  -10,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              -60,
+              10
+            ],
+            "scoresAfter": [
+              1470,
+              3170,
+              1630,
+              1730
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 3
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 10,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/10",
+            "windowId": "case/window/98",
+            "source": {
+              "kind": "draw",
+              "seat": 3,
+              "tile": "red",
+              "id": "route-regression/case/tile/134"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/10/seat/3",
+                "batchId": "route-regression/case/batch/10",
+                "winner": 3,
+                "ordinal": 5,
+                "sourceEventId": "route-regression/case/tile/134",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 2,
+                  "finalMultiplier": 2,
+                  "capped": false,
+                  "paymentPerPayer": 20
+                },
+                "deltas": [
+                  -20,
+                  -20,
+                  -20,
+                  60
+                ]
+              }
+            ],
+            "deltas": [
+              -20,
+              -20,
+              -20,
+              60
+            ],
+            "scoresAfter": [
+              1450,
+              3150,
+              1610,
+              1790
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 11,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/11",
+            "windowId": "case/window/100",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "s9",
+              "id": "route-regression/case/tile/136"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/11/seat/1",
+                "batchId": "route-regression/case/batch/11",
+                "winner": 1,
+                "ordinal": 9,
+                "sourceEventId": "route-regression/case/tile/136",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/11/seat/3",
+                "batchId": "route-regression/case/batch/11",
+                "winner": 3,
+                "ordinal": 6,
+                "sourceEventId": "route-regression/case/tile/136",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1390,
+              3200,
+              1610,
+              1800
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 12,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/12",
+            "windowId": "case/window/101",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "s5",
+              "id": "route-regression/case/tile/137"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/12/seat/1",
+                "batchId": "route-regression/case/batch/12",
+                "winner": 1,
+                "ordinal": 10,
+                "sourceEventId": "route-regression/case/tile/137",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1290,
+              3500,
+              1510,
+              1700
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 13,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/13",
+            "windowId": "case/window/103",
+            "source": {
+              "kind": "discard",
+              "seat": 2,
+              "tile": "p6",
+              "id": "route-regression/case/tile/139"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/13/seat/1",
+                "batchId": "route-regression/case/batch/13",
+                "winner": 1,
+                "ordinal": 11,
+                "sourceEventId": "route-regression/case/tile/139",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  -50,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/13/seat/3",
+                "batchId": "route-regression/case/batch/13",
+                "winner": 3,
+                "ordinal": 7,
+                "sourceEventId": "route-regression/case/tile/139",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  0,
+                  0,
+                  -10,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              -60,
+              10
+            ],
+            "scoresAfter": [
+              1290,
+              3550,
+              1450,
+              1710
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 3
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 14,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/14",
+            "windowId": "case/window/104",
+            "source": {
+              "kind": "draw",
+              "seat": 3,
+              "tile": "red",
+              "id": "route-regression/case/tile/140"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/14/seat/3",
+                "batchId": "route-regression/case/batch/14",
+                "winner": 3,
+                "ordinal": 8,
+                "sourceEventId": "route-regression/case/tile/140",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 2,
+                  "finalMultiplier": 2,
+                  "capped": false,
+                  "paymentPerPayer": 20
+                },
+                "deltas": [
+                  -20,
+                  -20,
+                  -20,
+                  60
+                ]
+              }
+            ],
+            "deltas": [
+              -20,
+              -20,
+              -20,
+              60
+            ],
+            "scoresAfter": [
+              1270,
+              3530,
+              1430,
+              1770
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 15,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/15",
+            "windowId": "case/window/106",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "m4",
+              "id": "route-regression/case/tile/142"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/15/seat/1",
+                "batchId": "route-regression/case/batch/15",
+                "winner": 1,
+                "ordinal": 12,
+                "sourceEventId": "route-regression/case/tile/142",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/15/seat/3",
+                "batchId": "route-regression/case/batch/15",
+                "winner": 3,
+                "ordinal": 9,
+                "sourceEventId": "route-regression/case/tile/142",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1210,
+              3580,
+              1430,
+              1780
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 16,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/16",
+            "windowId": "case/window/107",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "green",
+              "id": "route-regression/case/tile/143"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/16/seat/1",
+                "batchId": "route-regression/case/batch/16",
+                "winner": 1,
+                "ordinal": 13,
+                "sourceEventId": "route-regression/case/tile/143",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              1110,
+              3880,
+              1330,
+              1680
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 17,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/17",
+            "windowId": "case/window/109",
+            "source": {
+              "kind": "discard",
+              "seat": 2,
+              "tile": "m5",
+              "id": "route-regression/case/tile/145"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/17/seat/1",
+                "batchId": "route-regression/case/batch/17",
+                "winner": 1,
+                "ordinal": 14,
+                "sourceEventId": "route-regression/case/tile/145",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  0,
+                  50,
+                  -50,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/17/seat/3",
+                "batchId": "route-regression/case/batch/17",
+                "winner": 3,
+                "ordinal": 10,
+                "sourceEventId": "route-regression/case/tile/145",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  0,
+                  0,
+                  -10,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              50,
+              -60,
+              10
+            ],
+            "scoresAfter": [
+              1110,
+              3930,
+              1270,
+              1690
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 3
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 18,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/18",
+            "windowId": "case/window/110",
+            "source": {
+              "kind": "draw",
+              "seat": 3,
+              "tile": "s1",
+              "id": "route-regression/case/tile/146"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/18/seat/3",
+                "batchId": "route-regression/case/batch/18",
+                "winner": 3,
+                "ordinal": 11,
+                "sourceEventId": "route-regression/case/tile/146",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 2,
+                  "finalMultiplier": 2,
+                  "capped": false,
+                  "paymentPerPayer": 20
+                },
+                "deltas": [
+                  -20,
+                  -20,
+                  -20,
+                  60
+                ]
+              }
+            ],
+            "deltas": [
+              -20,
+              -20,
+              -20,
+              60
+            ],
+            "scoresAfter": [
+              1090,
+              3910,
+              1250,
+              1750
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 19,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/19",
+            "windowId": "case/window/112",
+            "source": {
+              "kind": "discard",
+              "seat": 0,
+              "tile": "m5",
+              "id": "route-regression/case/tile/148"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/19/seat/1",
+                "batchId": "route-regression/case/batch/19",
+                "winner": 1,
+                "ordinal": 15,
+                "sourceEventId": "route-regression/case/tile/148",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 5,
+                  "finalMultiplier": 5,
+                  "capped": false,
+                  "paymentPerPayer": 50
+                },
+                "deltas": [
+                  -50,
+                  50,
+                  0,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/19/seat/3",
+                "batchId": "route-regression/case/batch/19",
+                "winner": 3,
+                "ordinal": 12,
+                "sourceEventId": "route-regression/case/tile/148",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  -10,
+                  0,
+                  0,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              -60,
+              50,
+              0,
+              10
+            ],
+            "scoresAfter": [
+              1030,
+              3960,
+              1250,
+              1760
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 1
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 20,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/20",
+            "windowId": "case/window/113",
+            "source": {
+              "kind": "draw",
+              "seat": 1,
+              "tile": "m7",
+              "id": "route-regression/case/tile/149"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/20/seat/1",
+                "batchId": "route-regression/case/batch/20",
+                "winner": 1,
+                "ordinal": 16,
+                "sourceEventId": "route-regression/case/tile/149",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "sevenPairs",
+                      "label": "七对",
+                      "weight": 4
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 5,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 10,
+                  "finalMultiplier": 10,
+                  "capped": false,
+                  "paymentPerPayer": 100
+                },
+                "deltas": [
+                  -100,
+                  300,
+                  -100,
+                  -100
+                ]
+              }
+            ],
+            "deltas": [
+              -100,
+              300,
+              -100,
+              -100
+            ],
+            "scoresAfter": [
+              930,
+              4260,
+              1150,
+              1660
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 2
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 21,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/21",
+            "windowId": "case/window/115",
+            "source": {
+              "kind": "discard",
+              "seat": 2,
+              "tile": "s8",
+              "id": "route-regression/case/tile/151"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/21/seat/1",
+                "batchId": "route-regression/case/batch/21",
+                "winner": 1,
+                "ordinal": 17,
+                "sourceEventId": "route-regression/case/tile/151",
+                "score": {
+                  "items": [
+                    {
+                      "id": "concealed-hand",
+                      "label": "门清",
+                      "weight": 1
+                    },
+                    {
+                      "id": "luxury-seven-pairs",
+                      "label": "豪华七对",
+                      "weight": 6
+                    }
+                  ],
+                  "excluded": [
+                    {
+                      "id": "sevenPairs",
+                      "includedBy": "luxury-seven-pairs"
+                    }
+                  ],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 7,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 7,
+                  "finalMultiplier": 7,
+                  "capped": false,
+                  "paymentPerPayer": 70
+                },
+                "deltas": [
+                  0,
+                  70,
+                  -70,
+                  0
+                ]
+              },
+              {
+                "id": "route-regression/case/batch/21/seat/3",
+                "batchId": "route-regression/case/batch/21",
+                "winner": 3,
+                "ordinal": 13,
+                "sourceEventId": "route-regression/case/tile/151",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "discard",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 1,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 1,
+                  "finalMultiplier": 1,
+                  "capped": false,
+                  "paymentPerPayer": 10
+                },
+                "deltas": [
+                  0,
+                  0,
+                  -10,
+                  10
+                ]
+              }
+            ],
+            "deltas": [
+              0,
+              70,
+              -80,
+              10
+            ],
+            "scoresAfter": [
+              930,
+              4330,
+              1070,
+              1670
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 3
+            }
+          },
+          {
+            "authorityEpoch": "route-regression",
+            "roundId": "case",
+            "sequence": 22,
+            "ruleVersion": "lotus-blood-flow-v1",
+            "batchId": "route-regression/case/batch/22",
+            "windowId": "case/window/116",
+            "source": {
+              "kind": "draw",
+              "seat": 3,
+              "tile": "m9",
+              "id": "route-regression/case/tile/152"
+            },
+            "winners": [
+              {
+                "id": "route-regression/case/batch/22/seat/3",
+                "batchId": "route-regression/case/batch/22",
+                "winner": 3,
+                "ordinal": 14,
+                "sourceEventId": "route-regression/case/tile/152",
+                "score": {
+                  "items": [
+                    {
+                      "id": "pinghu",
+                      "label": "平胡",
+                      "weight": 1
+                    }
+                  ],
+                  "excluded": [],
+                  "hardWin": false,
+                  "source": "self-draw",
+                  "opening": null,
+                  "patternMultiplier": 1,
+                  "eventMultiplier": 2,
+                  "kongBonus": 0,
+                  "halfPayment": false,
+                  "openingApplied": false,
+                  "uncappedMultiplier": 2,
+                  "finalMultiplier": 2,
+                  "capped": false,
+                  "paymentPerPayer": 20
+                },
+                "deltas": [
+                  -20,
+                  -20,
+                  -20,
+                  60
+                ]
+              }
+            ],
+            "deltas": [
+              -20,
+              -20,
+              -20,
+              60
+            ],
+            "scoresAfter": [
+              910,
+              4310,
+              1050,
+              1730
+            ],
+            "nextAction": {
+              "kind": "draw",
+              "seat": 0
+            }
+          }
+        ],
+        "roundResult": null
+      },
+      "actionEvents": [
+        {
+          "id": 1,
+          "type": "chi",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "p3",
+          "meldIndex": 0
+        },
+        {
+          "id": 2,
+          "type": "chi",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "s2",
+          "meldIndex": 1
+        },
+        {
+          "id": 3,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 3,
+          "tile": "p9",
+          "meldIndex": -1
+        },
+        {
+          "id": 4,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "p3",
+          "meldIndex": -1
+        },
+        {
+          "id": 5,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "p3",
+          "meldIndex": -1
+        },
+        {
+          "id": 6,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        },
+        {
+          "id": 7,
+          "type": "peng",
+          "actorIndex": 0,
+          "sourceIndex": 2,
+          "tile": "p8",
+          "meldIndex": 0
+        },
+        {
+          "id": 8,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 9,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 10,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "south",
+          "meldIndex": -1
+        },
+        {
+          "id": 11,
+          "type": "discard-gang",
+          "actorIndex": 0,
+          "sourceIndex": 2,
+          "tile": "s7",
+          "meldIndex": 1
+        },
+        {
+          "id": 12,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "p2",
+          "meldIndex": -1
+        },
+        {
+          "id": 13,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "p2",
+          "meldIndex": -1
+        },
+        {
+          "id": 14,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        },
+        {
+          "id": 15,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 2,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 16,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 17,
+          "type": "self-draw",
+          "actorIndex": 3,
+          "sourceIndex": null,
+          "tile": "red",
+          "meldIndex": -1
+        },
+        {
+          "id": 18,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 19,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "s9",
+          "meldIndex": -1
+        },
+        {
+          "id": 20,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "s5",
+          "meldIndex": -1
+        },
+        {
+          "id": 21,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 2,
+          "tile": "p6",
+          "meldIndex": -1
+        },
+        {
+          "id": 22,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "p6",
+          "meldIndex": -1
+        },
+        {
+          "id": 23,
+          "type": "self-draw",
+          "actorIndex": 3,
+          "sourceIndex": null,
+          "tile": "red",
+          "meldIndex": -1
+        },
+        {
+          "id": 24,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "m4",
+          "meldIndex": -1
+        },
+        {
+          "id": 25,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "m4",
+          "meldIndex": -1
+        },
+        {
+          "id": 26,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "green",
+          "meldIndex": -1
+        },
+        {
+          "id": 27,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 2,
+          "tile": "m5",
+          "meldIndex": -1
+        },
+        {
+          "id": 28,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "m5",
+          "meldIndex": -1
+        },
+        {
+          "id": 29,
+          "type": "self-draw",
+          "actorIndex": 3,
+          "sourceIndex": null,
+          "tile": "s1",
+          "meldIndex": -1
+        },
+        {
+          "id": 30,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 0,
+          "tile": "m5",
+          "meldIndex": -1
+        },
+        {
+          "id": 31,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 0,
+          "tile": "m5",
+          "meldIndex": -1
+        },
+        {
+          "id": 32,
+          "type": "self-draw",
+          "actorIndex": 1,
+          "sourceIndex": null,
+          "tile": "m7",
+          "meldIndex": -1
+        },
+        {
+          "id": 33,
+          "type": "discard-win",
+          "actorIndex": 1,
+          "sourceIndex": 2,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 34,
+          "type": "discard-win",
+          "actorIndex": 3,
+          "sourceIndex": 2,
+          "tile": "s8",
+          "meldIndex": -1
+        },
+        {
+          "id": 35,
+          "type": "self-draw",
+          "actorIndex": 3,
+          "sourceIndex": null,
+          "tile": "m9",
+          "meldIndex": -1
+        }
+      ],
+      "lastDiscardAction": {
+        "kind": "discard",
+        "seat": 2,
+        "tile": "s8",
+        "id": "route-regression/case/tile/151"
+      }
+    }
+  ]
+}
