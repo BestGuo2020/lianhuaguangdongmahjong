@@ -6,6 +6,7 @@ import { BLOOD_FLOW_AI, BLOOD_FLOW_CONFIG } from './config'
 import type { BloodFlowSeatView } from './seatView'
 import { visibleTiles } from './seatView'
 import { forecastSelfDrawIncome, forecastCalibratedIncome } from './incomeForecast'
+import { isLastOpportunityRon } from './winOpportunity'
 import { forecastConditionalIncome } from './conditionalRon'
 import {
   chainEvEst, patternPotentialEv, patternPotentialTotal, patternPotentials,
@@ -52,6 +53,7 @@ export interface BloodFlowEvContext {
   chainAfterWin: number
   winEv: number
   floor: number
+  floorWaived: boolean
   floorStage: EvFloorStage
   /** 拒胡所需的改造潜力（Σ weight×progress²）。 */
   potentialTotal: number
@@ -93,7 +95,8 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
     ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
   const chainAfterWin = winOffered ? chain(lockedHand) : 0
   const winEv = immediateTotal + chainAfterWin
-  const floor = firstWinFloor(wallCount, config)
+  const floorWaived = isLastOpportunityRon(view, config)
+  const floor = floorWaived ? 0 : firstWinFloor(wallCount, config)
   const floorStage: EvFloorStage = wallCount <= config.lateGameWallCount ? 'late'
     : wallCount > config.earlyGameWallCount ? 'early' : 'mid'
   const potentialTotal = patternPotentialTotal(lockedHand, melds, jokers, config.sevenPairsModel)
@@ -136,7 +139,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
 
   return {
     locked, wallCount, drawnIndex, hand, melds, jokers, winOffered,
-    immediateTotal, chainAfterWin, winEv, floor, floorStage,
+    immediateTotal, chainAfterWin, winEv, floor, floorWaived, floorStage,
     potentialTotal, topDirections, developEv, reformCandidates, robEv,
   }
 }

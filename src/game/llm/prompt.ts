@@ -108,6 +108,7 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
   if (features.ev?.win) {
     const win = features.ev.win
     parts.push(`期望：立即${win.immediateTotal}+连锁${win.lockedChain}`)
+    if (win.floorWaived) parts.push('尾巡点炮：正常轮转至多一次本家摸牌，不因首胡门槛拒胡')
     if (win.declinedReason) {
       const stage = win.floorStage === 'early' ? '早局' : win.floorStage === 'late' ? '残局' : '中局'
       parts.push(`低于${stage}首胡门槛${win.floor}，潜力：${win.declinedReason}`)

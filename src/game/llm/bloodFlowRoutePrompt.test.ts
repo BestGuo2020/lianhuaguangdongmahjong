@@ -10,11 +10,11 @@ it.each(fixtures)('describes retained actions consistently at $key without chang
   const view = structuredClone(fixture.view) as unknown as BloodFlowSeatView
   const before = structuredClone(view)
   expect(view.players.filter(p => p.seat !== view.seat).every(p => !p.hand.length)).toBe(true)
-  const prompt = bloodFlowDecisionPrompt(view, [], fixture.key, undefined, {}, '稳健', { ...BLOOD_FLOW_LLM_AI, routeAdviceOnly:false, chainForecast:'legacy', opportunityCalibration:undefined })
+  const prompt = bloodFlowDecisionPrompt(view, [], fixture.key, undefined, {}, '稳健', { ...BLOOD_FLOW_LLM_AI, routeAdviceOnly:false, winOpportunityGuards:false, chainForecast:'legacy', opportunityCalibration:undefined })
   expect(prompt.candidates.map(c => c.label)).toEqual(fixture.expectedLabels)
   expect(prompt.request.engineSuggestion).toBe(fixture.expectedSuggestion)
   const data = JSON.parse(prompt.messages.user)
-  expect(prompt.templateId).toContain('bloodFlow-decision/v3/')
+  expect(prompt.templateId).toContain('bloodFlow-decision/v4/')
   expect(data.ruleSummary).not.toContain('候选里不会出现')
   expect(data.ruleSummary).not.toContain('引擎已决定放弃小胡')
   expect(data.ruleSummary).not.toContain('这条十六至三十二倍级牌型')

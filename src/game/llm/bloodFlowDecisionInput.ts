@@ -118,7 +118,7 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
       if(action.kind==='win'){
         const declined=Boolean(!isFinalSelfDrawWin(view)&&view.ownScore&&view.ownScore.paymentPerPayer<evCtx.floor&&evCtx.potentialTotal>=aiConfig.potentialFloor)
         features.ev={win:{immediateTotal:evCtx.immediateTotal,lockedChain:Math.round(evCtx.chainAfterWin),
-          floor:evCtx.floor,floorStage:evCtx.floorStage,
+          floor:evCtx.floor,floorStage:evCtx.floorStage,...(evCtx.floorWaived?{floorWaived:true}:{}),
           ...(declined?{declinedReason:evCtx.topDirections.map(d=>BLOOD_FLOW_CONFIG.patterns[d.id].label).join('、')||'牌型潜力'}:{})},
         ...(evCtx.robEv?{rob:evCtx.robEv}:{})}
       } else if(action.kind==='discard'){

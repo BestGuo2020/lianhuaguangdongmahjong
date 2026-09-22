@@ -13,7 +13,7 @@ const panels:PanelId[]=['legacy','attack','defensive','mixed']
 const mean=(v:number[])=>v.reduce((a,b)=>a+b,0)/v.length
 const quantile=(v:number[],q:number)=>[...v].sort((a,b)=>a-b)[Math.max(0,Math.ceil(v.length*q)-1)]!
 it('fixed independent LLM recommendation panel '+stage,()=>{
-  let control:BloodFlowAiConfig={...BLOOD_FLOW_LLM_AI,chainForecast:'legacy',opportunityCalibration:undefined,firstWinFloorEarly:40,firstWinFloorMid:20,firstWinFloorLate:10}
+  let control:BloodFlowAiConfig={...BLOOD_FLOW_LLM_AI,winOpportunityGuards:false,chainForecast:'legacy',opportunityCalibration:undefined,firstWinFloorEarly:40,firstWinFloorMid:20,firstWinFloorLate:10}
   if(stage==='floor'){
     const previous=JSON.parse(fs.readFileSync(dir+'/gate-source.json','utf8'))
     if(previous.adopt)control={...control,chainForecast:'source-v2',opportunityCalibration:BLOOD_FLOW_AI.opportunityCalibration}
