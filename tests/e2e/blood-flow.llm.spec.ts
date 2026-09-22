@@ -42,7 +42,8 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
         if (!ended) unsafeSpeech.push('reaction before round ended')
       } else {
         decisions++
-        const protectedTiles = [...payload.jokerTiles, '白板']
+        // Non-joker whiteboards participate in discard evaluation; only actual jokers are protected.
+        const protectedTiles = [...payload.jokerTiles]
         if (!payload.locked && payload.hand.some((t: string) => protectedTiles.includes(t))
           && payload.hand.some((t: string) => !protectedTiles.includes(t))) {
           protectedDecisions++
@@ -51,6 +52,12 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
           }
         }
         if (payload.publicPlayers?.some((p: any) => 'hand' in p) || JSON.stringify(payload).includes('not-a-real-key')) unsafeSpeech.push('private payload')
+        if (payload.bigHandRoute?.committed) {
+          expect(payload.ruleSummary).not.toContain('候选里不会出现')
+          if (payload.candidates.some((c: { label: string }) => c.label.startsWith('胡牌'))) {
+            expect(payload.ruleSummary).toContain('胡牌仍可选择')
+          }
+        }
       }
       if (!available) { await route.fulfill({ status: 503, body: 'offline' }); return }
       const choice = isReaction ? 'COMMENT' : payload.candidates[0].id
