@@ -13,7 +13,9 @@ export function bloodFlowRouteInstruction(input: {
   collapsedActions: readonly { action: BloodFlowAction }[]
   request: { engineSuggestion?: string }
 }): string {
-  if (!input.collapsedByRoute) return ''
+  if (!input.collapsedByRoute) return input.bigHandRoute
+    ? `可考虑${input.bigHandRoute.label}路线；路线仅作建议，没有因此移除候选。进度是结构覆盖指标，不代表已听或完成该牌型。结合剩余摸牌机会比较胡牌、改张和继续发育；落后不增加摸牌机会。`
+    : ''
   const available = [...new Set(input.candidates.map(c => ACTION_NAMES[c.action.kind]))]
   const removed = new Map<BloodFlowAction['kind'], number>()
   for (const { action } of input.collapsedActions) removed.set(action.kind, (removed.get(action.kind) ?? 0) + 1)

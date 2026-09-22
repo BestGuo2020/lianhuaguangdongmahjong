@@ -56,26 +56,26 @@ describe('大牌路线判定', () => {
     expect(detectBigHandRoute(ORPHANS13, [], ['white'], BLOOD_FLOW_BIG_HAND_ROUTE)).toBeNull()  // 默认关闭
   })
 
-  it('精牌感知①：必须靠精顶替时按软胡折算（160 点），因此不再为小胡轻易承诺', () => {
+  it('精牌感知①：十三幺32番，软胡320、硬胡640，沿用两倍承诺门槛', () => {
     const config = { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' as const }
     // 11 种自然幺九 + 一张精红中 → 等效 12 种 → 路线成立，但只能靠精完成（naturalOnly=false）
     const softHand: TileType[] = ['m1', 'm9', 'p1', 'p9', 's1', 's9', 'east', 'south', 'west', 'north', 'red', 'm5', 'm6', 'green']
     const soft = detectBigHandRoute(softHand, [], ['red'], config)!
     expect(soft.id).toBe('thirteenOrphans')
     expect(soft.naturalOnly).toBe(false)
-    expect(routePayoff(soft, 10)).toBe(160)                                  // 软胡：无硬胡 ×2
+    expect(routePayoff(soft, 10)).toBe(320)                                  // 软胡：无硬胡 ×2
     const actions = [{ kind: 'win' }, { kind: 'pass' }, ...softHand.map((_, index) => ({ kind: 'discard', index }))]
     const winKept = (payment: number) => narrowActionsToRoute(softHand, [], ['red'], actions, {
       config, basePoints: 10, immediateWinPayment: payment, wallCount: 30,
     }).actions.some(action => action.kind === 'win')
-    // 80 点小胡：160 ≥ 160 → 撤掉"胡"（承诺路线）
-    expect(winKept(80)).toBe(false)
-    // 100 点胡：160 < 200 → 保留"胡"（软胡不值得赌）
-    expect(winKept(100)).toBe(true)
-    // 13 种自然（硬胡）→ 320 点
+    // 160 点小胡：320 ≥ 320 → 撤掉"胡"（承诺路线）
+    expect(winKept(160)).toBe(false)
+    // 170 点胡：320 < 340 → 保留"胡"（软胡不值得赌）
+    expect(winKept(170)).toBe(true)
+    // 13 种自然（硬胡）→ 640 点
     const hardOne = detectBigHandRoute(ORPHANS13, [], ['white'], config)!
     expect(hardOne.naturalOnly).toBe(true)
-    expect(routePayoff(hardOne, 10)).toBe(320)
+    expect(routePayoff(hardOne, 10)).toBe(640)
   })
 
   it('精牌感知②：持有 ≥2 张精牌时，牌墙门槛从 20 放宽到 15', () => {
@@ -128,14 +128,14 @@ describe('大牌路线判定', () => {
     expect(routeKeepsProgress(dropJunk, [], [], route, config)).toBe(true)
     expect(routeKeepsProgress(dropOrphan, [], [], route, config)).toBe(false)
 
-    // 有精牌时：打掉一种幺九不算破坏（精牌能顶替）——这是刻意的行为
+    // 白板精也占一张物理牌，不能同时补自身和被打掉的另一种幺九
     const withJoker = detectBigHandRoute(ORPHANS13, [], ['white'], config)!
-    expect(routeKeepsProgress(ORPHANS13.filter((_, index) => index !== 0), [], ['white'], withJoker, config)).toBe(true)
+    expect(routeKeepsProgress(ORPHANS13.filter((_, index) => index !== 0), [], ['white'], withJoker, config)).toBe(false)
   })
 
-  it('路线完成收益高于立即胡（十六倍级硬胡 320 点 vs 十三烂 80 点）', () => {
+  it('路线完成收益高于立即胡（三十二番硬胡 640 点 vs 十三烂 80 点）', () => {
     const route = detectBigHandRoute(ORPHANS13, [], ['white'], { ...BLOOD_FLOW_BIG_HAND_ROUTE, mode: 'llm' })!
-    expect(routePayoff(route, 10)).toBe(320)
+    expect(routePayoff(route, 10)).toBe(640)
     expect(routePayoff(route, 10)).toBeGreaterThan(80 * BLOOD_FLOW_BIG_HAND_ROUTE.declineWinRatio)
   })
 })

@@ -86,10 +86,12 @@ describe('兜牌在引擎里的效果', () => {
   it('规则③落地：我方上限 16 倍（十三幺形态）→ 不兜，继续赌', () => {
     const seatView = view(RACING_HAND)
     expect(bloodFlowDefensePolicy(seatView).result.mode).toBe('push')
-    const exposure = bloodFlowSafetyExposure(seatView)
-    const index = chosenIndex(decideBloodFlowActionEv(seatView, BLOOD_FLOW_AI))
-    // 走的不是"只挑最小赔付"的兜牌路径：选的牌不是最便宜的那张
-    expect(exposure(RACING_HAND[index])).toBeGreaterThan(Math.min(...RACING_HAND.map(tile => exposure(tile))))
+    const action = decideBloodFlowActionEv(seatView, BLOOD_FLOW_AI)
+    // 攻击与安全可同时成立：正确的十三幺路线应打闲张，而不是要求主动打危险幺九。
+    expect(action).toEqual(decideBloodFlowActionEv(seatView, {
+      ...BLOOD_FLOW_AI, defense: { ...BLOOD_FLOW_AI.defense, mode: 'off' },
+    }))
+    expect(RACING_HAND[chosenIndex(action)]).toBe('m5')
   })
 
   it('兜牌的保证：打到全场最小赔付张（与"只按 EV"的实测对比一并记录）', () => {

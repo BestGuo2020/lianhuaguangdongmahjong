@@ -42,9 +42,11 @@ export interface CandidateFeatures {
   opponentRisk?: { tier: Band; payment: number; signals: string[] }
   /**
    * 血流 EV 策略注入（llmEvFeatures 开启时）：本地期望收益模型对候选的依据。
-   * 只是决策参考，真实计分以 currentWin 为准；模型覆盖默认建议时 message 须给理由。
+   * 只是决策参考，真实计分以 currentWin 为准；台词不承担决策理由。
    */
   ev?: {
+    income?: { immediate:number;future:number;total:number;horizonOwnDraws:number;model:string;
+      scope:'fixed-hand-gross';excludes:string[];anyWait?:boolean;waitCount?:number }
     win?: {
       immediateTotal: number
       lockedChain: number

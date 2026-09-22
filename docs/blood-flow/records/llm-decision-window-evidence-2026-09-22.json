@@ -1,0 +1,1541 @@
+[
+  {
+    "file": "round-1-window-83-2.json",
+    "wall": 57,
+    "variants": [
+      {
+        "name": "shipped",
+        "route": null,
+        "collapsed": false,
+        "recommended": "打出一筒",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 120,
+              "future": 415,
+              "total": 535,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 943
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 1068,
+              "total": 1068,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 13
+            }
+          },
+          {
+            "label": "打出二万",
+            "income": {
+              "immediate": 0,
+              "future": 1009,
+              "total": 1009,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 12
+            }
+          },
+          {
+            "label": "打出一筒",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 564,
+              "total": 564,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 593,
+              "total": 593,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出二条",
+            "income": {
+              "immediate": 0,
+              "future": 475,
+              "total": 475,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出三条",
+            "income": {
+              "immediate": 0,
+              "future": 504,
+              "total": 504,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出五条",
+            "income": {
+              "immediate": 0,
+              "future": 534,
+              "total": 534,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出六条",
+            "income": {
+              "immediate": 0,
+              "future": 445,
+              "total": 445,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出七条",
+            "income": {
+              "immediate": 0,
+              "future": 593,
+              "total": 593,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          }
+        ]
+      },
+      {
+        "name": "source-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "打出一筒",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 120,
+              "future": 199,
+              "total": 319,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 943
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 511,
+              "total": 511,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 13
+            }
+          },
+          {
+            "label": "打出二万",
+            "income": {
+              "immediate": 0,
+              "future": 483,
+              "total": 483,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 12
+            }
+          },
+          {
+            "label": "打出一筒",
+            "income": {
+              "immediate": 0,
+              "future": 1348,
+              "total": 1348,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 270,
+              "total": 270,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 284,
+              "total": 284,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出二条",
+            "income": {
+              "immediate": 0,
+              "future": 227,
+              "total": 227,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出三条",
+            "income": {
+              "immediate": 0,
+              "future": 241,
+              "total": 241,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出五条",
+            "income": {
+              "immediate": 0,
+              "future": 255,
+              "total": 255,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出六条",
+            "income": {
+              "immediate": 0,
+              "future": 213,
+              "total": 213,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出七条",
+            "income": {
+              "immediate": 0,
+              "future": 284,
+              "total": 284,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 1292,
+              "total": 1292,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 1292,
+              "total": 1292,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          }
+        ]
+      },
+      {
+        "name": "floor-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "打出一筒",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 120,
+              "future": 415,
+              "total": 535,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 943
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 1068,
+              "total": 1068,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 13
+            }
+          },
+          {
+            "label": "打出二万",
+            "income": {
+              "immediate": 0,
+              "future": 1009,
+              "total": 1009,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 12
+            }
+          },
+          {
+            "label": "打出一筒",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 564,
+              "total": 564,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 593,
+              "total": 593,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出二条",
+            "income": {
+              "immediate": 0,
+              "future": 475,
+              "total": 475,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出三条",
+            "income": {
+              "immediate": 0,
+              "future": 504,
+              "total": 504,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出五条",
+            "income": {
+              "immediate": 0,
+              "future": 534,
+              "total": 534,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出六条",
+            "income": {
+              "immediate": 0,
+              "future": 445,
+              "total": 445,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 6
+            }
+          },
+          {
+            "label": "打出七条",
+            "income": {
+              "immediate": 0,
+              "future": 593,
+              "total": 593,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          },
+          {
+            "label": "打出白板",
+            "income": {
+              "immediate": 0,
+              "future": 2700,
+              "total": 2700,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": true,
+              "waitCount": 34
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "round-3-window-130-1.json",
+    "wall": 49,
+    "variants": [
+      {
+        "name": "shipped",
+        "route": null,
+        "collapsed": false,
+        "recommended": "过",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 10,
+              "future": 11081,
+              "total": 11091,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 371
+          }
+        ]
+      },
+      {
+        "name": "source-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "过",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 10,
+              "future": 637,
+              "total": 647,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 371
+          }
+        ]
+      },
+      {
+        "name": "floor-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "胡牌（首次胡后锁手）",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 10,
+              "future": 11081,
+              "total": 11091,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 371
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "round-3-window-173-2.json",
+    "wall": 40,
+    "variants": [
+      {
+        "name": "shipped",
+        "route": null,
+        "collapsed": false,
+        "recommended": "胡牌（首次胡后锁手）",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 360,
+              "future": 1353,
+              "total": 1713,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 546
+          },
+          {
+            "label": "风杠"
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出四万",
+            "income": {
+              "immediate": 0,
+              "future": 1691,
+              "total": 1691,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九万",
+            "income": {
+              "immediate": 0,
+              "future": 1353,
+              "total": 1353,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 1522,
+              "total": 1522,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出九筒",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 1438,
+              "total": 1438,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九条",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出东风",
+            "income": {
+              "immediate": 0,
+              "future": 1015,
+              "total": 1015,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出南风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出西风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出北风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出五筒"
+          }
+        ]
+      },
+      {
+        "name": "source-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "胡牌（首次胡后锁手）",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 360,
+              "future": 1281,
+              "total": 1641,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 546
+          },
+          {
+            "label": "风杠"
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 1149,
+              "total": 1149,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出四万",
+            "income": {
+              "immediate": 0,
+              "future": 1543,
+              "total": 1543,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九万",
+            "income": {
+              "immediate": 0,
+              "future": 1281,
+              "total": 1281,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 1412,
+              "total": 1412,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出九筒",
+            "income": {
+              "immediate": 0,
+              "future": 1149,
+              "total": 1149,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 1346,
+              "total": 1346,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九条",
+            "income": {
+              "immediate": 0,
+              "future": 1149,
+              "total": 1149,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出东风",
+            "income": {
+              "immediate": 0,
+              "future": 624,
+              "total": 624,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出南风",
+            "income": {
+              "immediate": 0,
+              "future": 755,
+              "total": 755,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出西风",
+            "income": {
+              "immediate": 0,
+              "future": 755,
+              "total": 755,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出北风",
+            "income": {
+              "immediate": 0,
+              "future": 755,
+              "total": 755,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出五筒"
+          }
+        ]
+      },
+      {
+        "name": "floor-candidate",
+        "route": null,
+        "collapsed": false,
+        "recommended": "胡牌（首次胡后锁手）",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 360,
+              "future": 1353,
+              "total": 1713,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 546
+          },
+          {
+            "label": "风杠"
+          },
+          {
+            "label": "打出一万",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出四万",
+            "income": {
+              "immediate": 0,
+              "future": 1691,
+              "total": 1691,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九万",
+            "income": {
+              "immediate": 0,
+              "future": 1353,
+              "total": 1353,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出二筒",
+            "income": {
+              "immediate": 0,
+              "future": 1522,
+              "total": 1522,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出九筒",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 8
+            }
+          },
+          {
+            "label": "打出一条",
+            "income": {
+              "immediate": 0,
+              "future": 1438,
+              "total": 1438,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出九条",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 9
+            }
+          },
+          {
+            "label": "打出东风",
+            "income": {
+              "immediate": 0,
+              "future": 1015,
+              "total": 1015,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出南风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出西风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出北风",
+            "income": {
+              "immediate": 0,
+              "future": 1184,
+              "total": 1184,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ],
+              "anyWait": false,
+              "waitCount": 7
+            }
+          },
+          {
+            "label": "打出五筒"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "round-4-window-263-3.json",
+    "wall": 11,
+    "variants": [
+      {
+        "name": "shipped",
+        "route": "allTriplets",
+        "collapsed": false,
+        "recommended": "过",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 5,
+              "future": 687,
+              "total": 692,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 167
+          }
+        ]
+      },
+      {
+        "name": "source-candidate",
+        "route": "allTriplets",
+        "collapsed": false,
+        "recommended": "过",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 5,
+              "future": 26,
+              "total": 31,
+              "horizonOwnDraws": 8,
+              "model": "source-v2",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 167
+          }
+        ]
+      },
+      {
+        "name": "floor-candidate",
+        "route": "allTriplets",
+        "collapsed": false,
+        "recommended": "胡牌（首次胡后锁手）",
+        "candidates": [
+          {
+            "label": "胡牌（首次胡后锁手）",
+            "income": {
+              "immediate": 5,
+              "future": 687,
+              "total": 692,
+              "horizonOwnDraws": 8,
+              "model": "legacy",
+              "scope": "fixed-hand-gross",
+              "excludes": [
+                "opponent-payments",
+                "future-hand-improvements"
+              ]
+            }
+          },
+          {
+            "label": "过",
+            "develop": 167
+          }
+        ]
+      }
+    ]
+  }
+]
