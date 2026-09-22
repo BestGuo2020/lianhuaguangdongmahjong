@@ -1,0 +1,463 @@
+{
+  "sourceSha256": "03eaea6df75d92d2f88deaaed2194bcdb56631c93b8be0e0c6acda153d79d788",
+  "window": "round-2/window/215",
+  "seat": 1,
+  "melds": [
+    {
+      "type": "chi",
+      "tile": "m4",
+      "tiles": [
+        "m3",
+        "m4",
+        "m5"
+      ],
+      "from": 0
+    },
+    {
+      "type": "peng",
+      "tile": "m8",
+      "tiles": [
+        "m8",
+        "m8",
+        "m8"
+      ],
+      "from": 3
+    }
+  ],
+  "hand": [
+    "p5",
+    "s4",
+    "s4",
+    "red",
+    "red",
+    "green",
+    "green",
+    "red"
+  ],
+  "after": [
+    "p5",
+    "s4",
+    "red",
+    "red",
+    "green",
+    "green",
+    "red"
+  ],
+  "beforeDirections": [
+    {
+      "id": "little-three-dragons",
+      "weight": 16,
+      "progress": 0.6666666666666666,
+      "score": 7.111111111111111
+    },
+    {
+      "id": "big-three-dragons",
+      "weight": 24,
+      "progress": 0.6666666666666666,
+      "score": 10.666666666666666
+    },
+    {
+      "id": "little-four-winds",
+      "weight": 16,
+      "progress": 0.25,
+      "score": 1
+    },
+    {
+      "id": "big-four-winds",
+      "weight": 32,
+      "progress": 0.25,
+      "score": 2
+    },
+    {
+      "id": "three-concealed-triplets",
+      "weight": 6,
+      "progress": 0.6666666666666666,
+      "score": 2.6666666666666665
+    },
+    {
+      "id": "four-concealed-triplets",
+      "weight": 16,
+      "progress": 0.5,
+      "score": 4
+    },
+    {
+      "id": "shiSanLan",
+      "weight": 2,
+      "progress": 0.2916666666666667,
+      "score": 0.17013888888888892
+    }
+  ],
+  "afterDirections": [
+    {
+      "id": "little-three-dragons",
+      "weight": 16,
+      "progress": 0.6666666666666666,
+      "score": 7.111111111111111
+    }
+  ],
+  "beforeTotal": 27.614583333333336,
+  "afterTotal": 7.111111111111111,
+  "beforeIncome": {
+    "paymentPerPayer": 80,
+    "total": 240,
+    "multiplier": 8,
+    "hardLikely": false
+  },
+  "afterIncome": {
+    "paymentPerPayer": 20,
+    "total": 60,
+    "multiplier": 2,
+    "hardLikely": false
+  },
+  "beforeReform": {
+    "id": "A2",
+    "label": "打出四条",
+    "features": {
+      "shanten": 0,
+      "ukeire": 15,
+      "effectiveTiles": [
+        {
+          "tile": "2条",
+          "remaining": 3
+        },
+        {
+          "tile": "3条",
+          "remaining": 3
+        },
+        {
+          "tile": "4筒",
+          "remaining": 2
+        },
+        {
+          "tile": "4条",
+          "remaining": 2
+        },
+        {
+          "tile": "发财",
+          "remaining": 2
+        },
+        {
+          "tile": "5筒",
+          "remaining": 1
+        }
+      ],
+      "ready": true,
+      "waits": [
+        {
+          "tile": "2条",
+          "remaining": 3
+        },
+        {
+          "tile": "3条",
+          "remaining": 3
+        },
+        {
+          "tile": "4筒",
+          "remaining": 2
+        },
+        {
+          "tile": "4条",
+          "remaining": 2
+        },
+        {
+          "tile": "发财",
+          "remaining": 2
+        },
+        {
+          "tile": "5筒",
+          "remaining": 1
+        }
+      ],
+      "effectiveRemaining": 15,
+      "specialPattern": "none",
+      "safety": "低",
+      "efficiency": "unknown",
+      "risks": [],
+      "effectiveTotal": 8,
+      "waitsTotal": 8,
+      "opponentRisk": {
+        "tier": "中",
+        "payment": 160,
+        "signals": [
+          "已胡9次仍听"
+        ]
+      },
+      "ev": {
+        "reform": {
+          "chain": 4863,
+          "anyWait": false,
+          "waitCount": 8,
+          "patterns": [
+            "大三元",
+            "小三元",
+            "四暗刻"
+          ]
+        },
+        "income": {
+          "immediate": 0,
+          "future": 4863,
+          "total": 4863,
+          "horizonOwnDraws": 8,
+          "model": "legacy",
+          "scope": "fixed-hand-gross",
+          "excludes": [
+            "opponent-payments",
+            "future-hand-improvements"
+          ],
+          "anyWait": false,
+          "waitCount": 8
+        }
+      }
+    },
+    "summary": "A2 打出四条 ｜ 向听：0｜有效进张：15张｜进张：2条(剩3)、3条(剩3)、4筒(剩2)、4条(剩2)、发财(剩2)、5筒(剩1)｜打出后听牌：2条(剩3)、3条(剩3)、4筒(剩2)、4条(剩2)、发财(剩2)、5筒(剩1)｜共15张｜安全度：低｜风险赔付：约160点（中·已胡9次仍听）｜改张：连锁4863（8听口）｜方向：大三元、小三元、四暗刻"
+  },
+  "afterReform": {
+    "id": "A2",
+    "label": "打出四条",
+    "action": {
+      "kind": "discard",
+      "index": 1
+    },
+    "features": {
+      "shanten": 0,
+      "ukeire": 15,
+      "effectiveTiles": [
+        {
+          "tile": "2条",
+          "remaining": 3
+        },
+        {
+          "tile": "3条",
+          "remaining": 3
+        },
+        {
+          "tile": "4筒",
+          "remaining": 2
+        },
+        {
+          "tile": "4条",
+          "remaining": 2
+        },
+        {
+          "tile": "发财",
+          "remaining": 2
+        },
+        {
+          "tile": "5筒",
+          "remaining": 1
+        }
+      ],
+      "ready": true,
+      "waits": [
+        {
+          "tile": "2条",
+          "remaining": 3
+        },
+        {
+          "tile": "3条",
+          "remaining": 3
+        },
+        {
+          "tile": "4筒",
+          "remaining": 2
+        },
+        {
+          "tile": "4条",
+          "remaining": 2
+        },
+        {
+          "tile": "发财",
+          "remaining": 2
+        },
+        {
+          "tile": "5筒",
+          "remaining": 1
+        }
+      ],
+      "effectiveRemaining": 15,
+      "specialPattern": "none",
+      "safety": "低",
+      "efficiency": "unknown",
+      "risks": [],
+      "effectiveTotal": 8,
+      "waitsTotal": 8,
+      "opponentRisk": {
+        "tier": "中",
+        "payment": 160,
+        "signals": [
+          "已胡9次仍听"
+        ]
+      },
+      "ev": {
+        "reform": {
+          "chain": 2379,
+          "anyWait": false,
+          "waitCount": 8,
+          "patterns": [
+            "小三元"
+          ]
+        },
+        "income": {
+          "immediate": 0,
+          "future": 2379,
+          "total": 2379,
+          "horizonOwnDraws": 8,
+          "model": "legacy",
+          "scope": "fixed-hand-gross",
+          "excludes": [
+            "opponent-payments",
+            "future-hand-improvements"
+          ],
+          "anyWait": false,
+          "waitCount": 8
+        }
+      }
+    },
+    "legalityKey": "{\"kind\":\"discard\",\"index\":1}",
+    "canonical": {
+      "id": "A2",
+      "label": "打出四条",
+      "action": {
+        "kind": "discard",
+        "handIndex": 1
+      },
+      "features": {
+        "shanten": 0,
+        "ukeire": 15,
+        "effectiveTiles": [
+          {
+            "tile": "2条",
+            "remaining": 3
+          },
+          {
+            "tile": "3条",
+            "remaining": 3
+          },
+          {
+            "tile": "4筒",
+            "remaining": 2
+          },
+          {
+            "tile": "4条",
+            "remaining": 2
+          },
+          {
+            "tile": "发财",
+            "remaining": 2
+          },
+          {
+            "tile": "5筒",
+            "remaining": 1
+          }
+        ],
+        "ready": true,
+        "waits": [
+          {
+            "tile": "2条",
+            "remaining": 3
+          },
+          {
+            "tile": "3条",
+            "remaining": 3
+          },
+          {
+            "tile": "4筒",
+            "remaining": 2
+          },
+          {
+            "tile": "4条",
+            "remaining": 2
+          },
+          {
+            "tile": "发财",
+            "remaining": 2
+          },
+          {
+            "tile": "5筒",
+            "remaining": 1
+          }
+        ],
+        "effectiveRemaining": 15,
+        "specialPattern": "none",
+        "safety": "低",
+        "efficiency": "unknown",
+        "risks": [],
+        "effectiveTotal": 8,
+        "waitsTotal": 8,
+        "opponentRisk": {
+          "tier": "中",
+          "payment": 160,
+          "signals": [
+            "已胡9次仍听"
+          ]
+        },
+        "ev": {
+          "reform": {
+            "chain": 2379,
+            "anyWait": false,
+            "waitCount": 8,
+            "patterns": [
+              "小三元"
+            ]
+          },
+          "income": {
+            "immediate": 0,
+            "future": 2379,
+            "total": 2379,
+            "horizonOwnDraws": 8,
+            "model": "legacy",
+            "scope": "fixed-hand-gross",
+            "excludes": [
+              "opponent-payments",
+              "future-hand-improvements"
+            ],
+            "anyWait": false,
+            "waitCount": 8
+          }
+        }
+      },
+      "legalityKey": "{\"kind\":\"discard\",\"index\":1}"
+    },
+    "summary": "A2 打出四条 ｜ 向听：0｜有效进张：15张｜进张：2条(剩3)、3条(剩3)、4筒(剩2)、4条(剩2)、发财(剩2)、5筒(剩1)｜打出后听牌：2条(剩3)、3条(剩3)、4筒(剩2)、4条(剩2)、发财(剩2)、5筒(剩1)｜共15张｜安全度：低｜风险赔付：约160点（中·已胡9次仍听）｜改张：连锁2379（8听口）｜方向：小三元"
+  },
+  "beforeRecommendation": "打出四条",
+  "afterRecommendation": "打出四条",
+  "updatedHistoricalSuggestions": [
+    {
+      "key": "round-3/window/200/1",
+      "before": "过",
+      "after": "碰"
+    },
+    {
+      "key": "round-3/window/220/1",
+      "before": "胡牌（首次胡后锁手）",
+      "after": "打出红中"
+    }
+  ],
+  "replay": [
+    {
+      "round": 1,
+      "commands": 141,
+      "ledgerMatch": true,
+      "scoresMatch": true
+    },
+    {
+      "round": 2,
+      "commands": 119,
+      "ledgerMatch": true,
+      "scoresMatch": true
+    },
+    {
+      "round": 3,
+      "commands": 135,
+      "ledgerMatch": true,
+      "scoresMatch": true
+    },
+    {
+      "round": 4,
+      "commands": 130,
+      "ledgerMatch": true,
+      "scoresMatch": true
+    }
+  ]
+}

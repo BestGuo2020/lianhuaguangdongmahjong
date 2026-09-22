@@ -1,3 +1,4 @@
+import { canDevelopPatternWithMelds } from './patternReachability'
 // 血流本地 AI 的番型潜力与收益估算（纯函数，只读不改状态）。
 // 这些是决策用的估算器：完整 14 张才用于收益估算，且只服务排序与期望，
 // 实际结算仍由引擎的 evaluateWin 精确计算。经典玩法不 import 本模块。
@@ -209,6 +210,7 @@ export function patternPotentials(
   const effective = hand.length + 3 * melds.length
   const directions: PatternDirection[] = []
   const add = (id: PatternId, progress: number) => {
+    if (!canDevelopPatternWithMelds(id, melds)) return
     const weight = BLOOD_FLOW_CONFIG.patterns[id].weight
     if (progress > 0) directions.push({ id, weight, progress: Math.min(1, progress), score: weight * Math.min(1, progress) ** 2 })
   }
@@ -291,7 +293,7 @@ export function patternPotentials(
 
   // 三 / 四暗刻：暗刻 + 暗杠。
   {
-    let concealedUnits = melds.filter(m => m.type === 'angang').length
+    let concealedUnits = melds.filter(m => m.type === 'angang' && !m.windKong).length
     s.counts.forEach((count) => { if (count >= 3) concealedUnits += 1 })
     add('three-concealed-triplets', (concealedUnits + s.jokerCount) / 3)
     add('four-concealed-triplets', (concealedUnits + s.jokerCount) / 4)
@@ -369,7 +371,7 @@ function certainPatterns(
   const certain = new Set<PatternId>()
   const meldTiles = s.meldTiles
   const suited = s.suited
-  const suits = new Set(suited.map(suitOf))
+  const suits = new Set([...suited, ...meldTiles.filter(isSuited)].map(suitOf))
   const honors = s.honors.length + meldTiles.filter(isHonor).length
   const jokerCount = s.jokerCount
   const hasChiMeld = melds.some(m => m.type === 'chi')
@@ -390,7 +392,7 @@ function certainPatterns(
     if (jokerDemand <= jokerCount) certain.add('all-triplets')
   }
 
-  let concealedUnits = melds.filter(m => m.type === 'angang').length
+  let concealedUnits = melds.filter(m => m.type === 'angang' && !m.windKong).length
   s.counts.forEach((count) => { if (count >= 3) concealedUnits += 1 })
   if (concealedUnits >= 3) certain.add('three-concealed-triplets')
   if (concealedUnits >= 4) certain.add('four-concealed-triplets')
@@ -449,6 +451,9 @@ function certainPatterns(
   }
   const orphans = thirteenOrphansPotential(hand, wild)
   if (orphans >= 17) certain.add('thirteenOrphans')
+
+  // The same irreversible meld constraints apply to the legacy income estimate.
+  for (const id of certain) if (!canDevelopPatternWithMelds(id, melds)) certain.delete(id)
 
   // 排除关系（与 config.excludes 同口径）：被包含项不计。
   for (const id of [...certain]) {

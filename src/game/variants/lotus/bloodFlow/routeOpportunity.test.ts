@@ -1,30 +1,19 @@
-import { beforeAll, expect, it } from 'vitest'
-import { BloodFlowEngine } from './engine'
-import { bloodFlowSeatView, type BloodFlowSeatView } from './seatView'
+import { expect, it } from 'vitest'
+import fixtures from './routeOpportunity.fixture.json'
+import type { BloodFlowSeatView } from './seatView'
 import { decideBloodFlowActionEv } from './ai'
 import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from './config'
-import { seededRandom } from './simulation'
-import { SEATS } from './state'
 
 // Reproduce the historical trajectory with its original forecast, independent of production upgrades.
 const old = { ...BLOOD_FLOW_AI, chainForecast: 'legacy' as const, opportunityCalibration: undefined,
   routeOpportunityGuard: false, claimMeldProjection: false, claimReadyNetGuard: false }
 const enabled = { ...old, routeOpportunityGuard: true }
-const cases = new Map<number, BloodFlowSeatView>()
-beforeAll(() => {
-  const engine = new BloodFlowEngine({ authorityEpoch: 'route-regression', roundId: 'case', dealer: 1,
-    random: seededRandom(950002), now: () => 0, winBeatMs: 0 })
-  let steps = 0
-  while (!engine.result) {
-    if (++steps > 2000) throw new Error('Regression fixture stalled')
-    const seat = SEATS.find(s => engine.window!.options[s].length && !engine.window!.decisions[s])!
-    const view = bloodFlowSeatView(engine, seat)
-    if (!view.public.seats[seat].locked && view.ownActions.some(a => a.kind === 'win')
-      && ((seat === 0 && view.wallCount === 3) || (seat === 2 && view.wallCount === 13))) cases.set(seat, view)
-    expect(engine.submit(engine.command(seat, decideBloodFlowActionEv(view, old)!))).toBe(true)
-  }
-  expect(cases.size).toBe(2)
-}, 30_000)
+// Captured with the unmodified 2aa238b estimator. No opponents' concealed hands or future wall.
+// Loading fixed views prevents unrelated strategy fixes from changing the historical trajectory.
+const cases = new Map(fixtures.cases.map(raw => {
+  const view=structuredClone(raw) as unknown as BloodFlowSeatView
+  return [view.seat,view]
+}))
 
 it('recovers the two proven late wins and has an exact per-call rollback', () => {
   for (const view of cases.values()) {
