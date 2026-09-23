@@ -142,6 +142,7 @@ it('does not invent an enhanced tier for DashScope Kimi K3 but boosts GLM when n
   const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
   for (const [model, expected] of [
     ['kimi-k3', false], ['kimi-k2.7-code', false],
+    ['MiniMax-M2.5', false], ['MiniMax-M2.1', false],
     ['glm-5.3', true], ['glm-4.6v', true],
   ] as const) {
     const coordinator = new ConditionalReasoningCoordinator(DEFAULT_CONDITIONAL_REASONING)

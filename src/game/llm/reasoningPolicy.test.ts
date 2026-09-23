@@ -325,6 +325,8 @@ describe('截图所有型号的快速模式', () => {
     ['kimi-k2.7-code', 'kimi', 'reasoning-only'],
     ['Moonshot-Kimi-K2-Instruct', 'kimi', 'naturally-off'],
     ['kimi-k3', 'kimi', 'always-on'],
+    ['MiniMax-M2.5', 'minimax', 'reasoning-only'],
+    ['MiniMax-M2.1', 'minimax', 'reasoning-only'],
   ] as const)('%s uses %s / %s', (model, providerType, mode) => {
     expect(resolveReasoningPolicy({ providerType: 'qwen', baseUrl: dash, model }))
       .toMatchObject({ providerType, mode })
