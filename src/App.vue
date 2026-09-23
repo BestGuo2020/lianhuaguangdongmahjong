@@ -18,6 +18,10 @@ import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
 import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
 import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
 import { createLotusLegacyDecisionSink } from './game/replay/analysis/lotusLegacyAdapter'
+import { createLotusClassicDecisionSink } from './game/replay/analysis/lotusClassicDecisionSink'
+import { lotusClassicAnalysisConfig } from './game/replay/analysis/lotusClassicConfig'
+import { lotusLegacyAnalysisConfig } from './game/replay/analysis/lotusLegacyConfig'
+import { readLlmSettings } from './game/llm/config'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import type { GamePort } from './game/core/contracts/gamePort'
@@ -174,7 +178,8 @@ watch(tableThemeName, (theme) => {
  * getter 让接缝不必去调 App 的初始化顺序。
  */
 const lotusLegacyAnalysisSink = createLotusLegacyDecisionSink({ recorder: () => analysis.port })
-const localLlm = shallowRef(createLocalLlmControllers(llmHook, {
+const lotusClassicAnalysisSink = createLotusClassicDecisionSink({ recorder: () => analysis.port })
+const localLlm = shallowRef(createLocalLlmControllers({ ...llmHook, ...lotusClassicAnalysisSink.hooks }, {
   getThemeName: () => tableThemeName.value,
 }))
 const lotusLlm = shallowRef(createLotusLlmControllers({ ...llmHook, ...lotusLegacyAnalysisSink.hooks }, {
@@ -243,8 +248,11 @@ const replay = useReplayRecorder({
     rulesetName: getRuleVariant(selectedRule.value).name,
     themeName: tableThemeName.value,
     humanSeat: 0,
-    // 本场是否开着分析录制：列表据此区分「分析：未开启」与「分析：缺少决策分析记录」（§10.7）
-    analysisRecorded: analysis.active(),
+    // Capture the user's recording setting at replay creation; analysis.start runs on opening.
+    // The analysis area's final status and exported completeness are checked separately.
+    analysisRecorded: gameMode.value === 'local'
+      && ANALYSIS_CAPABLE_RULESETS.includes(selectedRule.value)
+      && analysisEnabled.value,
   }),
 })
 
@@ -262,6 +270,7 @@ const localGame = useGame({
   // AI 分析记录（§9.2）：本地玩法共用同一个稳定代理；未接线的玩法只是不写记录。
   // 这一行由协调者补（App.vue 是冻结文件，单写者；见 docs/blood-flow/design/analysis-two-variants-work-agreement.md §3.1）。
   analysis: analysis.port,
+  analysisSink: lotusClassicAnalysisSink,
 })
 const lotusGame = useLotusGame({
   playSound: playEffect,
@@ -585,15 +594,17 @@ watch(matchFinished, (finished) => {
 const ANALYSIS_CAPABLE_RULESETS: readonly RuleVariant[] = ['lotus-blood-flow', 'lotus-classic', 'lotus-legacy']
 /**
  * 某一玩法的分析快照口径（§3.1）。
- * 血流记完整规则与 AI 配置；还没接线的玩法**只记标识**，绝不冒充血流的配置
- * （两个玩法接线时各自补自己的 `rules` / `aiConfig`，见 docs/blood-flow/design/analysis-two-variants-work-agreement.md）。
+ * Each local variant records its own serializable rules and active AI settings.
+ * Never put API credentials or private URLs into an exported analysis package.
  */
 function analysisSnapshotFor(ruleset: RuleVariant) {
   if (ruleset === 'lotus-blood-flow') {
     return { rules: BLOOD_FLOW_CONFIG as unknown, rulesVersion: BLOOD_FLOW_CONFIG.version,
-      aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI } as unknown }
+      aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI } as unknown,
+      aiStrategy: 'source-v2' }
   }
-  return { rules: { id: ruleset } as unknown, rulesVersion: ruleset, aiConfig: null }
+  if (ruleset === 'lotus-classic') return lotusClassicAnalysisConfig(readLlmSettings(), localLlm.value.enabled)
+  return lotusLegacyAnalysisConfig(readLlmSettings(), lotusLlm.value.enabled)
 }
 watch(() => (gameMode.value === 'local' && ANALYSIS_CAPABLE_RULESETS.includes(selectedRule.value) ? phase.value : null), (value) => {
   if (value !== 'opening' || analysis.active()) return
@@ -607,7 +618,8 @@ watch(() => (gameMode.value === 'local' && ANALYSIS_CAPABLE_RULESETS.includes(se
     rulesVersion: snapshot.rulesVersion,
     // 本地 AI 与 LLM 两套配置都记下来：分析时要能分辨某一手是谁在什么配置下决定的（§3.1）。
     aiConfig: snapshot.aiConfig,
-    aiStrategy: 'source-v2',
+    aiStrategy: snapshot.aiStrategy,
+    ...('models' in snapshot ? { models: snapshot.models } : {}),
     // 本地单机的本家固定是 0 号座（与展示回放的 humanSeat 口径一致）。
     seatControl: players.value.map((player, seat): AnalysisSeatControl => (
       seat === 0 ? 'human' : (player?.playerKind === 'llm' || player?.isLlm) ? 'llm' : 'local-ai'
@@ -622,7 +634,7 @@ function applyLlmSettings() {
   // 保存事件只会在大厅触发；运行中的对局不会被切换模型打断。
   if (!showLobby.value || gameMode.value !== 'local') return
 
-  const nextLocalLlm = createLocalLlmControllers(llmHook, {
+  const nextLocalLlm = createLocalLlmControllers({ ...llmHook, ...lotusClassicAnalysisSink.hooks }, {
     getThemeName: () => tableThemeName.value,
   })
   localGame.replaceAiControllers(nextLocalLlm.controllers)

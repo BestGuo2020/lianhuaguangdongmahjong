@@ -10,6 +10,7 @@
 // 3. 没有权威回执 ⇒ 执行回执用"动作是否真的改了状态"判定；观察不到就保持 pending，
 //    **绝不**因为"函数被调用过"就记 executed（§3.2、§10.2）。
 import { fingerprintOf } from './codec'
+import type { TableActionType, TileType } from '../../core/contracts/types'
 import type { AnalysisDecisionState, AnalysisLegalAction, AnalysisSettlement, AnalysisWindowKind } from './types'
 
 /** 经典玩法的三类决策窗口。 */
@@ -244,4 +245,15 @@ export function roundKindOfResult(result: {
   if (result.draw) return 'draw'
   if (result.robbedKong) return 'robbed-kong-win'
   return result.winType === 'discard' ? 'win-discard' : 'self-draw'
+}
+
+/** Table animation events are observations; keep tile identity in engine codes. */
+export function actionFromTableAction(type: TableActionType, tile: TileType, meldIndex: number): LotusClassicActionLike | null {
+  if (type === 'peng' || type === 'chi') return { kind: type }
+  if (type === 'added-gang') return { kind: 'added-kong', meldIndex }
+  if (type === 'concealed-gang') return { kind: 'concealed-kong', tile }
+  if (type === 'wind-kong') return { kind: 'wind-kong' }
+  if (type === 'self-draw' || type === 'discard-win' || type === 'robbed-kong-win') return { kind: 'win' }
+  if (type === 'discard-gang' || type === 'flower-gang') return { kind: 'gang' }
+  return null
 }

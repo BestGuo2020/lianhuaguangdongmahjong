@@ -47,6 +47,55 @@ function build(overrides: Partial<Parameters<typeof buildAnalysisExport>[0]> = {
 }
 
 describe('分析包导出（§9.2、§9.3、§9.5）', () => {
+  it('经典玩法的可复现不掩盖缺失的选择、来源和配置', () => {
+    const classicMatch: ReplayMatch = { ...match, rulesetId: 'lotus-classic', analysisRecorded: false }
+    const oldConfig = { ...config, rules: { id: 'lotus-classic' }, aiConfig: {}, seatControl: ['human', 'llm', 'llm', 'llm'] }
+    const classicParts: AnalysisBlockPart[] = [
+      { tag: 'config', value: oldConfig },
+      { tag: 'decisionState', value: { id: '1/window/1/1', legalActions: [{ id: '1/window/1/0', kind: 'discard', tile: 'm1', handIndex: 0 }] } },
+      { tag: 'decision', value: { id: 'decision/m-1/1/window/1/1', matchId: 'm-1', windowId: '1/window/1', seat: 1, configId: oldConfig.id, source: 'unknown', choice: { known: false } } },
+      { tag: 'reproduction', value: {
+        roundIndex: 1, available: true, variant: 'lotus-classic', ringWall: Array(136).fill('m1'),
+        dice: { first: [1, 2] }, dealer: 0, openingScores: [1000, 1000, 1000, 1000],
+        postDealHands: [[], [], [], []], wallBreakIndex: 0,
+        commands: [{ seat: 1, kind: 'discard', at: 0, windowId: '1/window/1', legalActionId: '1/window/1/0', handIndex: 0 }],
+      } },
+      { tag: 'settlement', value: { roundIndex: 1, kind: 'score-flow' } },
+      { tag: 'settlement', value: { roundIndex: 1, kind: 'self-draw' } },
+    ]
+    const payload = build({ match: classicMatch, parts: classicParts, configurations: [oldConfig] })
+    expect(payload.reproductionCapable).toBe(true)
+    expect(payload.completeness).toBe('partial')
+    expect(payload.manifest.missing.join(' ')).toContain('实际选择未写入决策记录')
+    expect(payload.manifest.missing.join(' ')).toContain('实际来源未知')
+    expect(payload.manifest.missing.join(' ')).toContain('逐笔分数流水与整局净分汇总重叠')
+  })
+
+  it('翻精玩法的旧包即使可复现，也标出决策和逐笔账本缺口', () => {
+    const legacyMatch: ReplayMatch = { ...match, rulesetId: 'lotus-legacy', analysisRecorded: false }
+    const legacyConfig = { ...config, rules: { id: 'lotus-legacy' }, aiConfig: {}, seatControl: ['human', 'llm', 'llm', 'llm'] }
+    const legacyParts: AnalysisBlockPart[] = [
+      { tag: 'config', value: legacyConfig },
+      { tag: 'decisionState', value: { id: 'round-1/window/1/1', fingerprint: '', legalActions: [{ id: 'round-1/window/1/0', kind: 'win' }] } },
+      { tag: 'decision', value: { id: 'decision/m-1/round-1/window/1/1', matchId: 'm-1', windowId: 'round-1/window/1', seat: 1, configId: legacyConfig.id, source: 'unknown', choice: { known: false } } },
+      { tag: 'llm', value: { id: 'attempt/1', outcome: 'timeout', answer: { known: true, value: { text: '' } } } },
+      { tag: 'settlement', value: { roundIndex: 1, kind: 'win-discard', deltas: [-100, 300, -100, -100] } },
+      { tag: 'reproduction', value: {
+        roundIndex: 1, available: true, variant: 'lotus-legacy', ringWall: Array(136).fill('m1'),
+        dice: { first: [1, 2], second: [3, 4] }, dealer: 0, openingScores: [2000, 2000, 2000, 2000],
+        postDealHands: [[], [], [], []], jokers: ['m1', 'm2'], flipTile: 'm1', wallBreakIndex: 0,
+        commands: [{ seat: 1, kind: 'win', at: 0, windowId: 'round-1/window/1', legalActionId: 'round-1/window/1/0' }],
+      } },
+    ]
+    const payload = build({ match: legacyMatch, parts: legacyParts, configurations: [legacyConfig] })
+    expect(payload.reproductionCapable).toBe(true)
+    expect(payload.completeness).toBe('partial')
+    const missing = payload.manifest.missing.join(' ')
+    expect(missing).toContain('决策前态缺少内容指纹')
+    expect(missing).toContain('缺少逐笔计分')
+    expect(missing).toContain('失败的模型请求把空文本标为已知回答')
+  })
+
   it('自包含：记录、被引用的配置、展示回放三者都在包里，且引用判定为闭合', () => {
     const payload = build()
     expect(payload.kind).toBe('lianhua-analysis')
@@ -80,7 +129,7 @@ describe('分析包导出（§9.2、§9.3、§9.5）', () => {
 
   it('完整但没有复现数据 ⇒ 不能声称可精确复现（§10.6 的前提是记录足够）', () => {
     const payload = build({ parts: parts.filter(part => part.tag !== 'reproduction') })
-    expect(payload.completeness).toBe('complete')
+    expect(payload.completeness).toBe('partial')
     expect(payload.reproductionCapable).toBe(false)
     expect(payload.manifest.missing.join(' ')).toContain('复现数据')
   })
@@ -108,7 +157,7 @@ describe('分析包导出（§9.2、§9.3、§9.5）', () => {
       postDealHands: [], jokers: [], flipTile: null, commands: [],
     }
     const payload = build({ parts: [...parts.slice(0, 3), { tag: 'reproduction', value: incomplete }] })
-    expect(payload.completeness).toBe('complete')
+    expect(payload.completeness).toBe('partial')
     expect(payload.reproductionCapable, '缺字段就不能声称可精确复现').toBe(false)
     const missing = payload.manifest.missing.join(' ')
     for (const field of ['ringWall', 'dice.first', 'dice.second', 'openingScores', 'commands', 'postDealHands']) {

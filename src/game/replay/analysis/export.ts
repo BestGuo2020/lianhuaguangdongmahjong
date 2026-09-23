@@ -12,7 +12,7 @@
 import type { ReplayMatch, ReplayRound } from '../types'
 import { REPLAY_SCHEMA_VERSION } from '../types'
 import { downloadJsonFile } from '../export'
-import { ANALYSIS_FORMAT_VERSION, type AnalysisAreaStatus, type AnalysisCompleteness, type AnalysisReproduction } from './types'
+import { ANALYSIS_FORMAT_VERSION, type AnalysisAreaStatus, type AnalysisCompleteness, type AnalysisConfigRecord, type AnalysisDecision, type AnalysisReproduction, type AnalysisSettlement } from './types'
 import { reproductionDeficiencies } from './reproductionCapability'
 import type { AnalysisBlockPart } from './codec'
 
@@ -24,6 +24,7 @@ export interface AnalysisExportPayload {
   exportedAt: number
   /** 分析区状态（未开启／完整／部分缺失／已删除）。 */
   status: AnalysisAreaStatus
+  /** Content-level completeness: a stored stream can still lack decision evidence. */
   completeness: AnalysisCompleteness
   /** 缺了哪一段、为什么（§9.5）；空数组表示没有已知缺失。 */
   gaps: Array<{ scope: string; from?: number; to?: number; reason: string }>
@@ -86,6 +87,72 @@ function configIdOf(value: unknown): string | null {
   return record && typeof record === 'object' && typeof record.id === 'string' ? record.id : null
 }
 
+/** A replay can be exact while its AI analysis is incomplete. */
+function localAnalysisIssues(input: BuildAnalysisExportInput): string[] {
+  if (!['lotus-classic', 'lotus-legacy'].includes(input.match.rulesetId) || !input.parts.length) return []
+  const decisions = new Map<string, AnalysisDecision>()
+  const commands: Array<{ windowId?: string; seat: number; legalActionId?: string }> = []
+  const settlements = new Map<number, AnalysisSettlement[]>()
+  for (const part of input.parts) {
+    if (part.tag === 'decision') {
+      const decision = part.value as AnalysisDecision
+      if (decision?.windowId) decisions.set(`${decision.windowId}#${decision.seat}`, decision)
+    } else if (part.tag === 'reproduction') {
+      commands.push(...((part.value as AnalysisReproduction)?.commands ?? []))
+    } else if (part.tag === 'settlement') {
+      const record = part.value as AnalysisSettlement
+      if (typeof record?.roundIndex === 'number') {
+        const round = settlements.get(record.roundIndex) ?? []
+        round.push(record)
+        settlements.set(record.roundIndex, round)
+      }
+    }
+  }
+  const issues: string[] = []
+  const unlinkedChoices = commands.filter((command) => {
+    if (!command.windowId || !command.legalActionId) return false
+    const decision = decisions.get(`${command.windowId}#${command.seat}`)
+    return !decision?.choice?.known || decision.choice.value.legalActionId !== command.legalActionId
+  }).length
+  if (unlinkedChoices) issues.push(`${unlinkedChoices} 个命令的实际选择未写入决策记录`)
+  if ([...decisions.values()].some((decision) => decision.matchId !== input.match.id)) {
+    issues.push('决策记录与展示牌谱的场次 ID 不一致')
+  }
+  const unknownSources = [...decisions.values()].filter((decision) => decision.source === 'unknown').length
+  if (unknownSources) issues.push(`${unknownSources} 个决策的实际来源未知`)
+  const attempts = new Set(input.parts.filter((part) => part.tag === 'llm').map((part) => (part.value as { id?: string }).id))
+  const unlinkedAttempts = [...decisions.values()].filter((decision) => (
+    (decision.source === 'model' || decision.source === 'model-fallback')
+    && !decision.llmAttemptIds?.some((id) => attempts.has(id))
+  )).length
+  if (unlinkedAttempts) issues.push(`${unlinkedAttempts} 个模型决策缺少请求尝试`)
+  const configs = input.configurations as AnalysisConfigRecord[]
+  if (configs.some((config) => Object.keys(config.rules ?? {}).length <= 1 || Object.keys(config.aiConfig ?? {}).length === 0)) {
+    issues.push('规则或 AI 配置仅有占位信息')
+  }
+  if (configs.some((config) => config.seatControl?.includes('llm') && !config.models?.length)) {
+    issues.push('大模型座位缺少实际请求型号配置')
+  }
+  const states = input.parts.filter((part) => part.tag === 'decisionState')
+  if (states.some((part) => !(part.value as { fingerprint?: string }).fingerprint)) {
+    issues.push('决策前态缺少内容指纹')
+  }
+  if (input.match.analysisRecorded === false) issues.push('展示牌谱标记分析未开启，但分析记录实际存在')
+  if (input.match.rulesetId === 'lotus-classic' && [...settlements.values()].some((round) => round.length > 1
+    && round.some((record) => record.kind === 'score-flow')
+    && round.some((record) => !record.kind.startsWith('round-end/') && record.kind !== 'score-flow'))) {
+    issues.push('逐笔分数流水与整局净分汇总重叠')
+  }
+  if (input.match.rulesetId === 'lotus-legacy' && [...settlements.values()].some((round) => (
+    !round.some((record) => record.kind.startsWith('round-end/'))
+  ))) issues.push('仅有整局净分，缺少逐笔计分与局末标记')
+  if (input.parts.some((part) => part.tag === 'llm' && (() => {
+    const attempt = part.value as { outcome?: string; answer?: { known?: boolean; value?: { text?: string } } }
+    return attempt.outcome !== 'success' && attempt.answer?.known && !attempt.answer.value?.text
+  })())) issues.push('失败的模型请求把空文本标为已知回答')
+  return issues
+}
+
 /**
  * 打包分析包。`available` 之外的一切都如实反映输入：缺记录就是缺记录，不补造。
  * 纯函数，便于单测；下载由 `downloadAnalysisExport` 负责（浏览器专用）。
@@ -114,14 +181,16 @@ export function buildAnalysisExport(input: BuildAnalysisExportInput): AnalysisEx
     })
     .filter((issue): issue is string => Boolean(issue))
   for (const issue of reproductionIssues) missing.push(`复现数据不完整（${issue}）`)
+  const analysisIssues = localAnalysisIssues(input)
+  missing.push(...analysisIssues.map((issue) => `决策分析不完整（${issue}）`))
   const configReferencesClosed = wantedConfigs.every(id => providedConfigs.has(id))
   return {
     schemaVersion: ANALYSIS_FORMAT_VERSION,
     kind: 'lianhua-analysis',
     exportedAt: input.exportedAt ?? Date.now(),
     status: input.status,
-    completeness: input.status === 'deleted' ? 'missing' : complete ? 'complete' : records.length ? 'partial' : 'missing',
-    gaps: [...(input.gaps ?? [])],
+    completeness: input.status === 'deleted' ? 'missing' : complete && !missing.length ? 'complete' : records.length ? 'partial' : 'missing',
+    gaps: [...(input.gaps ?? []), ...analysisIssues.map((reason) => ({ scope: 'decision-analysis', reason }))],
     reproductionCapable: complete && hasReproduction && !reproductionIssues.length && configReferencesClosed,
     manifest: {
       records: counts,

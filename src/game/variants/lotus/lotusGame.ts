@@ -13,10 +13,10 @@ import {
   decisionWindowOf,
   legalActionsOf,
   legalActionId,
+  lotusSettlementFromScoreChange,
   lotusSeatView,
   observableOf,
   roundIdOf,
-  settlementsFromRound,
   toLotusActionLike,
   windowIdOf,
   windowKindOfMethod,
@@ -227,8 +227,25 @@ export function useLotusGame({
     before: LotusSeatObservable
     action: LotusActionLike | null
   }>()
-  /** 本局开局分数（结算折算的基准，§5）；在开局阶段捕获，与传给引擎的开局读数同一时刻。 */
-  let analysisOpeningScores: number[] = []
+  /** Last observed scores, initialized at the start of each round. */
+  let analysisLastScores: number[] = []
+  let analysisScoreSequence = 0
+  let analysisScoreCause: string | null = null
+
+  function recordAnalysisScoreChange(kind: string) {
+    if (!analysis || analysisRoundSequence === 0) return
+    const after = state.players.map((player) => player.score)
+    const before = analysisLastScores
+    if (!before.length || after.every((score, seat) => score === before[seat])) return
+    analysisLastScores = after
+    analysisScoreSequence += 1
+    safely('score-flow', () => analysis.settlement(lotusSettlementFromScoreChange({
+      roundIndex: analysisRoundSequence,
+      roundId: roundIdOf(analysisRoundSequence),
+      before, after, kind,
+      sourceEventId: `score-${analysisRoundSequence}-${analysisScoreSequence}`,
+    })))
+  }
   // ── P1 §6：本局的**复现数据**（重跑起点 + 权威动作日志） ──────────────
   //
   // 与 P0 的"决策记录"共用同一批汇聚点，但两件事不同：P0 记的是"**当时决策是什么**"，
@@ -384,9 +401,13 @@ export function useLotusGame({
       safely('chosen', () => {
         const picked = toLotusActionLike(action)
         const index = chosenIndex(view, picked)
+        const source = raw instanceof LotusHumanController ? 'human'
+          : raw instanceof LotusAiController ? 'local-strategy'
+            : method === 'requestDiscardHu' || method === 'requestRobKong'
+              || (method === 'requestTurn' && picked?.kind === 'win') ? 'rule-auto' : 'unknown'
         recorder.chosen({
           windowId: view.windowId, seat,
-          source: raw instanceof LotusHumanController ? 'human' : raw instanceof LotusAiController ? 'rule-auto' : 'unknown',
+          source,
           legalActionId: index >= 0 ? legalActionId(view.windowId, index) : null,
         })
         analysisOpenWindow.set(seat, { windowId: view.windowId, seat, before, action: picked })
@@ -487,6 +508,22 @@ export function useLotusGame({
       recorder.tableAction({ type, actorIndex, sourceIndex, tile, meldIndex }, replayFrame())
     }
   }
+  if (analysis) {
+    const baseShowTableAction = transient.showTableAction
+    transient.showTableAction = (type, actorIndex, sourceIndex, tile, meldIndex) => {
+      baseShowTableAction(type, actorIndex, sourceIndex, tile, meldIndex)
+      if (type === 'concealed-gang') {
+        analysisScoreCause = state.players[actorIndex]?.melds[meldIndex]?.windKong ? 'kong-wind' : 'kong-concealed'
+      } else if (type === 'added-gang') analysisScoreCause = 'kong-added'
+      else if (type === 'discard-gang') analysisScoreCause = 'kong-discard'
+    }
+    const baseShowScoreFlow = transient.showScoreFlow
+    transient.showScoreFlow = (deltas) => {
+      baseShowScoreFlow(deltas)
+      recordAnalysisScoreChange(analysisScoreCause ?? 'score-flow')
+      analysisScoreCause = null
+    }
+  }
 
   // 跟庄：开局第一圈，庄家首弃后三闲家各出一张同牌 → 庄家向三家各付底分。
   const followDealer = createFollowDealerTracker({
@@ -494,6 +531,7 @@ export function useLotusGame({
     dealerIndex: () => state.dealer.value,
     baseScore: ruleset.baseScore,
     onTrigger: (deltas) => {
+      analysisScoreCause = 'follow-dealer'
       transient.showScoreFlow(deltas)
       transient.announce('跟庄')
     },
@@ -785,7 +823,7 @@ export function useLotusGame({
     analysisRoundCommands.length = 0
   }
 
-  /** 局末结算折算（§5）：每局一条，`deltas = 局末分 − 开局分`（四家之和恒等于牌流的守恒量）。 */
+  /** Final win/draw transfer plus one zero-delta round-end marker. */
   function recordAnalysisSettlement() {
     if (!analysis) return
     const roundIndex = analysisRoundSequence
@@ -793,14 +831,14 @@ export function useLotusGame({
     settleOpenReceipts('round-end')
     const roundId = roundIdOf(roundIndex)
     safely('settlement', () => {
-      const records = settlementsFromRound({
-        roundIndex,
-        roundId,
-        openingScores: analysisOpeningScores,
-        endingScores: state.players.map((player) => player.score),
-        result: state.result.value,
-      })
-      for (const record of records) analysis.settlement(record)
+      const result = state.result.value
+      const resultKind = result?.draw ? 'draw' : `win-${result?.winType ?? 'unknown'}`
+      recordAnalysisScoreChange(resultKind)
+      const endingScores = state.players.map((player) => player.score)
+      analysis.settlement(lotusSettlementFromScoreChange({
+        roundIndex, roundId, before: endingScores, after: endingScores,
+        kind: `round-end/${resultKind}`, sourceEventId: `${roundId}/end`,
+      }))
     })
   }
 
@@ -810,7 +848,9 @@ export function useLotusGame({
     if (phase !== 'opening') return
     // 连庄也算新的一局（"已打局数 + 1"），所以序号在这里加一，与展示回放同一套口径。
     analysisRoundSequence += 1
-    analysisOpeningScores = state.players.map((player) => player.score)
+    analysisLastScores = state.players.map((player) => player.score)
+    analysisScoreSequence = 0
+    analysisScoreCause = null
     // 窗口 ID 的计数器是"本局内第 N 次进入决策"（§3.1），所以每局从 1 重新开始。
     analysisWindowCounter = 0
     analysisOpenWindow.clear()

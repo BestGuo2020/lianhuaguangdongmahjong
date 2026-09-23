@@ -471,6 +471,8 @@ export interface LotusLegacyDecisionSinkOptions {
    * 而接缝的 hooks 又必须在构造控制器时给出去 —— 传 getter 就不必为了接缝去调 App 的初始化顺序。
    */
   recorder: AnalysisRecorder | (() => AnalysisRecorder | null | undefined)
+  /** Actual local strategy used after a failed request; classic and flip-joker differ. */
+  fallbackStrategy?: string
   onError?(detail: string): void
 }
 
@@ -591,14 +593,13 @@ export function createLotusLegacyDecisionSink(options: LotusLegacyDecisionSinkOp
           const recorder = recorderOf()
           if (!recorder) return
           const usage = usageOf(input.usage)
-          const fallback = input.fallback ? { reason: input.fallback.reason, strategy: 'lotus-local-ai' } : null
+          const fallback = input.fallback ? { reason: input.fallback.reason, strategy: options.fallbackStrategy ?? 'lotus-local-ai' } : null
           recorder.attemptFinished(tracked.attemptId, {
             outcome: LLM_OUTCOME[input.outcome],
             ...(input.responseModel ? { responseModel: known(input.responseModel) } : {}),
-            answer: known({
-              text: input.raw,
-              ...(input.choice ? { candidateId: input.choice } : {}),
-            }),
+            ...(input.raw || input.choice
+              ? { answer: known({ text: input.raw, ...(input.choice ? { candidateId: input.choice } : {}) }) }
+              : { answer: { known: false as const } }),
             ...(fallback ? { fallback } : {}),
             ...(usage ? { usage } : {}),
           })
@@ -635,6 +636,7 @@ export function decisionWindowOf(view: LotusSeatView): {
  */
 export interface LotusDecisionState {
   id: string
+  fingerprint: string
   hand: string[]
   drawnTileIndex: number
   melds: number
@@ -647,12 +649,19 @@ export function decisionStateId(view: LotusSeatView): string {
 }
 
 export function decisionStateOf(view: LotusSeatView): LotusDecisionState {
+  const legalActions = legalActionsOf(view)
   return {
     id: decisionStateId(view),
+    fingerprint: fingerprintOf({
+      windowId: view.windowId, seat: view.seat, kind: view.kind,
+      hand: view.hand, drawnTileIndex: view.drawnTileIndex,
+      melds: view.melds, jokers: view.jokers, response: view.response,
+      others: view.others, legalActions,
+    }),
     hand: [...view.hand],
     drawnTileIndex: view.drawnTileIndex,
     melds: view.melds.length,
-    legalActions: legalActionsOf(view),
+    legalActions,
   }
 }
 
@@ -682,7 +691,7 @@ export function observableOf(snapshot: LotusTableSnapshot, seat: number): LotusS
  *
  * 翻精癞子是 Vue 状态机，没有权威回执，所以只能看"该座位自己的可见变化"：
  * - 弃牌 ⇒ 牌河变长；碰/吃/杠 ⇒ 副露变多或手牌变短（暗杠/风杠不留副露）；胡 ⇒ 分数变化；
- * - 过牌 ⇒ 以上都没有变化才算生效。
+ * - 过牌 ⇒ 没有自己的弃牌或副露变化；引擎随后可能已补摸，手牌张数可以变化。
  * 判定不出来就返回 false，由调用方记成 `state-changed` —— 选择被接受 ≠ 动作执行成功。
  */
 export function choiceTookEffect(
@@ -694,7 +703,6 @@ export function choiceTookEffect(
   if (action.kind === 'pass') {
     return after.discardCount === before.discardCount
       && after.meldCount === before.meldCount
-      && after.handCount === before.handCount
   }
   if (action.kind === 'win') return after.score !== before.score
   if (action.kind === 'added-kong' || action.kind === 'concealed-kong' || action.kind === 'wind-kong') {
@@ -750,4 +758,29 @@ export function settlementsFromRound(input: LotusRoundSettlementInput): Analysis
     // 指纹取"分数向量"：与展示回放结算比对时用它，整场分数是否守恒也能一眼看出（§5）。
     fingerprint: fingerprintOf({ openingScores: [...openingScores], endingScores: [...endingScores] }),
   }]
+}
+
+/** One actual transfer, or a zero-delta round-end marker for replay score checks. */
+export function lotusSettlementFromScoreChange(input: {
+  roundIndex: number
+  roundId: string
+  before: readonly number[]
+  after: readonly number[]
+  kind: string
+  sourceEventId: string
+}): AnalysisSettlement {
+  const deltas = input.after.map((score, seat) => score - (input.before[seat] ?? 0))
+  return {
+    id: `settlement/${input.roundId}/${input.sourceEventId}`,
+    roundIndex: input.roundIndex,
+    roundId: input.roundId,
+    sourceEventId: input.sourceEventId,
+    kind: input.kind,
+    winners: deltas.map((delta, seat) => delta > 0 ? seat : -1).filter((seat) => seat >= 0),
+    payers: deltas.map((delta, seat) => delta < 0 ? seat : -1).filter((seat) => seat >= 0),
+    deltas,
+    scoresAfter: [...input.after],
+    batchId: input.sourceEventId,
+    fingerprint: fingerprintOf({ before: input.before, after: input.after, kind: input.kind }),
+  }
 }

@@ -37,7 +37,7 @@ interface ProbeStatus {
   windowIdSeatConflicts: number
   decisionsWithoutState: number
   decisionStatesWithoutActions: number
-  settlements: Array<{ roundIndex: number; deltas: number[]; sum: number; kind: string; winners: number[] }>
+  settlements: Array<{ roundIndex: number; deltas: number[]; scoresAfter: number[]; sum: number; kind: string; winners: number[] }>
   settlementsNotBalanced: number
   replayRounds: number
   gameEvents: { roundStart: number; draw: number; discard: number; tableAction: number; roundEnd: number }
@@ -115,7 +115,8 @@ test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口
   // 记录侧一律按"已打局数"编号（与展示回放同一套口径），所以这里只要求不少于 4。
   expect(probe.roundsPlayed, '应当打完东风场').toBeGreaterThanOrEqual(4)
   expect(probe.gameEvents.roundEnd, '每局都要有局末结算').toBe(probe.roundsPlayed)
-  const roundIndexes = probe.settlements.map((entry) => entry.roundIndex).sort((a, b) => a - b)
+  const roundEnds = probe.settlements.filter((entry) => entry.kind.startsWith('round-end/'))
+  const roundIndexes = roundEnds.map((entry) => entry.roundIndex).sort((a, b) => a - b)
   console.log(`[analysis-lotus-legacy] 场次 ${probe.matchId} 状态 ${probe.storedStatus}；`
     + `打了 ${probe.roundsPlayed} 局（连庄在内）；记录 ${JSON.stringify(probe.partsByTag)}；`
     + `决策来源 ${JSON.stringify(probe.decisionsBySource)}；结算 ${probe.settlements.length} 条；`
@@ -136,9 +137,9 @@ test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口
 
   // ── ③ 人类 + 本地 AI 座位的来源如实标注（§3.4）：LLM 未接线 ⇒ 只能是这两种 ──
   expect(probe.decisionsBySource.human, '人类座位必须有决策记录').toBeGreaterThan(0)
-  expect(probe.decisionsBySource['rule-auto'], '本地 AI 座位必须有决策记录').toBeGreaterThan(0)
+  expect(probe.decisionsBySource['local-strategy'], '本地 AI 座位必须有决策记录').toBeGreaterThan(0)
   expect(Object.keys(probe.decisionsBySource).sort(), '本阶段不该出现 model/model-fallback（钩子未接）')
-    .toEqual(['human', 'rule-auto'])
+    .toEqual(['human', 'local-strategy'])
 
   // ── ④ 窗口 ID 唯一且每条决策都带；一个窗口只属于一个座位；前态与决策一一对应（§3.1、§3.2）──
   expect(probe.decisionsWithoutWindowId, '窗口 ID 不得缺失（§3.1：缺 ID 的条目数为 0）').toBe(0)
@@ -149,15 +150,22 @@ test('翻精癞子：真实引擎跑完一场 → 记录形状、遮蔽、窗口
   expect(probe.distinctDecisions, '去重后的决策数应与前态数一致').toBe(probe.decisionStateIds.length)
   expect(new Set(probe.decisionWindowIds).size, '窗口 ID 不得重复').toBe(probe.decisionWindowIds.length)
 
-  // ── ⑤ 结算折算：每局一条，四家变化之和为 0（§5）──
+  // ── ⑤ 逐笔转移 + 每局一个零分结束标记，四家变化之和为 0（§5）──
   expect(probe.settlementsNotBalanced, '四家分数变化之和必须为 0').toBe(0)
-  expect(probe.settlements.length, '每一局都要有一条结算').toBe(probe.gameEvents.roundEnd)
+  expect(roundEnds.length, '每一局都要有一个结束标记').toBe(probe.gameEvents.roundEnd)
+  expect(roundEnds.every((entry) => entry.deltas.every((delta) => delta === 0))).toBe(true)
   // 局号按"已打局数"逐局递增（连庄不重复、不跳号）——这正是不能用 `state.round` 当键的原因
   expect(roundIndexes).toEqual(Array.from({ length: probe.roundsPlayed }, (_, index) => index + 1))
   for (const settlement of probe.settlements) {
     expect(settlement.deltas, `第 ${settlement.roundIndex} 局的 delta 必须是四家`).toHaveLength(4)
     expect(settlement.sum, `第 ${settlement.roundIndex} 局分数变化之和`).toBe(0)
   }
+  let runningScores = [2000, 2000, 2000, 2000]
+  for (const settlement of probe.settlements) {
+    runningScores = runningScores.map((score, seat) => score + settlement.deltas[seat]!)
+    expect(settlement.scoresAfter, `第 ${settlement.roundIndex} 局 ${settlement.kind} 流水必须首尾相接`).toEqual(runningScores)
+  }
+  expect(runningScores).toEqual(probe.finalScores)
 
   // ── ⑥ 导出包自包含：记录 + 被引用配置 + 展示回放（§9.1）──
   const manifest = probe.exportManifest

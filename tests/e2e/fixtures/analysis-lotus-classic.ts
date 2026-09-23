@@ -16,6 +16,8 @@ import { useGame } from '../../../src/game/core/local/useGame'
 import { createWall } from '../../../src/game/core/rules/tiles'
 import { createAnalysisStorage, type AnalysisStorage } from '../../../src/game/replay/analysis/storage'
 import { createAnalysisSession } from '../../../src/game/replay/analysis/session'
+import { lotusClassicAnalysisConfig } from '../../../src/game/replay/analysis/lotusClassicConfig'
+import { emptyLlmSettings } from '../../../src/game/llm/config'
 import { analysisAreaLabel } from '../../../src/game/replay/analysis/status'
 import { buildAnalysisExport } from '../../../src/game/replay/analysis/export'
 import { decodeAnalysisBlock, utf8Bytes, type AnalysisBlockPart } from '../../../src/game/replay/analysis/codec'
@@ -26,8 +28,6 @@ import { replayLotusClassicRound } from '../../../src/game/replay/analysis/repro
 import type { AnalysisReproduction } from '../../../src/game/replay/analysis/types'
 import type { AnalysisRecorder } from '../../../src/game/replay/analysis/recorder'
 import type { ReplayMatch, ReplayRecorderHooks, ReplayRound } from '../../../src/game/replay/types'
-
-const MATCH_ID = 'e2e-lotus-classic'
 
 interface MatchOutcome {
   finished: boolean
@@ -49,6 +49,7 @@ interface ProbeStatus {
   /** 开关打开那一场：记录内容 + 落库判据。 */
   on: MatchOutcome & {
     matchId: string
+    exportMatchId: string | null
     status: string | null
     /** 用真实 analysisAreaLabel 判定的行内文案（等价于列表行「分析：完整」）。 */
     label: string
@@ -117,7 +118,7 @@ const status: ProbeStatus = {
   off: { finished: false, rounds: 0, steps: 0, events: 0, eventTrace: [], scores: [], matchesBefore: 0, matchesAfter: 0, blocksForMatch: 0 },
   on: {
     finished: false, rounds: 0, steps: 0, events: 0, eventTrace: [], scores: [],
-    matchId: '', status: null, label: '', partsByTag: {}, partsTotal: 0,
+    matchId: '', exportMatchId: null, status: null, label: '', partsByTag: {}, partsTotal: 0,
     windows: 0, choices: 0, receipts: 0, uniqueWindowIds: false, choicesResolvable: false,
     settlementsBalanced: false, settlements: 0,
     exportManifest: null, exportBytes: 0, exportMissing: [], exportReproductionCapable: false,
@@ -322,14 +323,20 @@ void (async () => {
 
     // ── ② 开关打开：同一会话形状、固定 matchId，跑同一场 ──
     const session = createAnalysisSession({ enabled: true, storage, onError: (detail) => status.errors.push(`开：${detail}`) })
+    // Keep analysis and display replay on the same match id, as the real App does.
+    const replay = createReplayRecorder({
+      sink: { saveMatch: () => {}, saveRound: () => {} },
+      meta: () => ({
+        rulesetId: 'lotus-classic', rulesetName: '莲花广麻', themeName: 'jade',
+        humanSeat: 0, analysisRecorded: true,
+      }),
+    })
+    const matchId = replay.ensureMatchId()
     session.start({
-      matchId: MATCH_ID,
+      matchId,
       rulesetId: 'lotus-classic',
       // 与 App 的 analysisSnapshotFor 同口径：P0 先记规则标识；完整规则正文待协调者的公共改动补齐
-      rules: { id: 'lotus-classic' },
-      rulesVersion: 'lotus-classic',
-      aiConfig: null,
-      aiStrategy: 'source-v2',
+      ...lotusClassicAnalysisConfig(emptyLlmSettings(), false),
       seatControl: ['human', 'local-ai', 'local-ai', 'local-ai'],
       engineBuild: 'e2e-analysis-lotus-classic',
     })
@@ -355,14 +362,6 @@ void (async () => {
       },
       receipt: (input) => { receipts += 1; return port.receipt(input) },
     }
-    // 展示回放：内存 sink（探针不测回放库），只为导出包提供"记录 + 展示回放"两半
-    const replay = createReplayRecorder({
-      sink: { saveMatch: () => {}, saveRound: () => {} },
-      meta: () => ({
-        rulesetId: 'lotus-classic', rulesetName: '莲花广麻', themeName: 'jade',
-        humanSeat: 0, analysisRecorded: true,
-      }),
-    })
     const outcome = await playMatch(proxy, replay.hooks, seed)
     const replayMatch = replay.finishAuto() as ReplayMatch | null
     const replayRounds = replay.snapshot().rounds as ReplayRound[]
@@ -371,9 +370,9 @@ void (async () => {
     const { parts, matches } = await readAnalysisDb()
     const partsByTag: Record<string, number> = {}
     for (const part of parts) partsByTag[part.tag] = (partsByTag[part.tag] ?? 0) + 1
-    const meta = matches.find((entry) => entry.matchId === MATCH_ID) ?? null
+    const meta = matches.find((entry) => entry.matchId === matchId) ?? null
     const storedStatus = (meta?.status as string | undefined) ?? null
-    const configurations = await storage.readConfigs(MATCH_ID)
+    const configurations = await storage.readConfigs(matchId)
     const settlements = parts.filter((part) => part.tag === 'settlement').map((part) => part.value as {
       deltas: number[]; scoresAfter: number[]
     })
@@ -387,6 +386,7 @@ void (async () => {
     const settings = {
       ...outcome,
       matchId: session.matchId(),
+      exportMatchId: exported?.match.id ?? null,
       status: storedStatus,
       label: analysisAreaLabel({ analysisRecorded: true }, (storedStatus ?? undefined) as never),
       partsByTag,

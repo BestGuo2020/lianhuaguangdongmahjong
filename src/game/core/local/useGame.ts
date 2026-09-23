@@ -6,12 +6,14 @@ import type { ReplayFrameSource, ReplayRecorderHooks } from '../../replay/types'
 import type { AnalysisChoiceSource, AnalysisExecutionStatus } from '../../replay/analysis/types'
 import type { AnalysisCommandEntry } from '../../replay/analysis/commandEntry'
 import type { AnalysisRecorder } from '../../replay/analysis/recorder'
+import type { LotusClassicDecisionSink } from '../../replay/analysis/lotusClassicDecisionSink'
 import {
   buildLotusClassicReproduction,
   lotusClassicCommandEntry,
   ringWallDeficiencies,
 } from '../../replay/analysis/lotusClassicReproduction'
 import {
+  actionFromTableAction,
   choiceTookEffect,
   decisionStateOf,
   decisionWindowId,
@@ -77,6 +79,8 @@ interface UseGameOptions {
    * 不传或关闭时所有写入空转、零成本；记录代码自身永不抛错，绝不影响对局（§9.5）。
    */
   analysis?: AnalysisRecorder | null
+  /** Local LLM request/answer correlator; receives this engine's current window. */
+  analysisSink?: LotusClassicDecisionSink | null
 }
 
 export function useGame({
@@ -92,6 +96,7 @@ export function useGame({
   ruleset = DEFAULT_RULESET,
   recorder,
   analysis = null,
+  analysisSink = null,
 }: UseGameOptions = {}) {
   const state = createLocalGameState()
   const selectors = createLocalGameSelectors(state, ruleset)
@@ -401,11 +406,18 @@ export function useGame({
     return true
   }
 
-  /** 座位控制方式：接管或回退不能只看开局角色（§3.1）。LLM 座位本轮先记 unknown（§9 的 DoD）。 */
-  function analysisSourceOf(seat: number): AnalysisChoiceSource {
+  /** The sink supplies model/fallback provenance when a real request occurs. */
+  function analysisSourceOf(seat: number, kind: LotusClassicWindowKind, actions: LotusClassicActionLike[], action: LotusClassicActionLike | null): AnalysisChoiceSource {
     if (controllers[seat] === humanController) return 'human'
+    if (controllers[seat] instanceof AiController) return 'local-strategy'
     const player = state.players[seat]
-    return player?.isLlm || player?.playerKind === 'llm' ? 'unknown' : 'rule-auto'
+    if (player?.isLlm || player?.playerKind === 'llm') {
+      // CoreLlmController resolves these in the rules engine without a request.
+      if (action?.kind === 'win' || kind === 'rob-kong'
+        || (kind === 'claim' && actions.every((candidate) => candidate.kind === 'pass'))) return 'rule-auto'
+      return 'unknown'
+    }
+    return 'unknown'
   }
 
   /**
@@ -428,6 +440,7 @@ export function useGame({
       analysisPending.delete(seat)
       const windowId = decisionWindowId(String(analysisRoundIndex), analysisWindowSeq)
       const view = analysisView(seat, windowId, kind, actions)
+      const decisionState = decisionStateOf(view, seat)
       analysis.windowOpened({
         windowId,
         seat,
@@ -437,11 +450,13 @@ export function useGame({
         // 同一窗口内稳定、跨局不重复（口径见 docs/blood-flow/design/analysis-lotus-classic.md）
         authorityEpoch: `round-${analysisRoundIndex}`,
         stateVersion: analysisWindowSeq,
-        state: decisionStateOf(view, seat),
+        state: decisionState,
         openedAt: monotonicNow(),
       })
+      analysisSink?.windowOpened({ seat, windowId, legalActions: decisionState.legalActions })
       return (action) => {
         try {
+          analysisSink?.windowClosed(seat)
           const index = action
             ? actions.findIndex((candidate) => analysisSameAction(candidate, action))
             : -1
@@ -449,7 +464,7 @@ export function useGame({
             windowId,
             seat,
             legalActionId: index >= 0 ? legalActionId(windowId, index) : null,
-            source: analysisSourceOf(seat),
+            source: analysisSourceOf(seat, kind, actions, action),
             at: monotonicNow(),
           })
           // P1 §6：在**同一个汇聚点**再落一条可重跑的命令（形状 = `AnalysisCommandEntry`）。
@@ -570,13 +585,7 @@ export function useGame({
     const baseShowTableAction = transientEvents.showTableAction
     transientEvents.showTableAction = (type, actorIndex, sourceIndex, tile, meldIndex) => {
       baseShowTableAction(type, actorIndex, sourceIndex, tile, meldIndex)
-      const observed: LotusClassicActionLike | null = type === 'peng' || type === 'chi' ? { kind: type }
-        : type === 'added-gang' ? { kind: 'added-kong', meldIndex }
-          : type === 'concealed-gang' ? { kind: 'concealed-kong', tile: tileName(tile) }
-            : type === 'wind-kong' ? { kind: 'wind-kong' }
-              : type === 'self-draw' || type === 'discard-win' || type === 'robbed-kong-win' ? { kind: 'win' }
-                : type === 'discard-gang' || type === 'flower-gang' ? { kind: 'gang' }
-                  : null
+      const observed = actionFromTableAction(type, tile, meldIndex)
       if (observed) analysisSettleReceipt(actorIndex, observed)
     }
   }
@@ -848,36 +857,26 @@ export function useGame({
   }
 
   /**
-   * 局末结算折算（§5）。
-   *
-   * 职责与 `analysisFlushScores` 分开：那个记**局中**的分数流动（跟庄/杠分），本函数**兜底**记
-   * "本局结束了，但整局分数一次都没变过"那种情况（典型是荒庄：`endDraw` 的罚符恰好四家相抵）。
-   * 为什么需要这条兜底：P1 要拿记录侧的结束状态去比重跑的结束分数，而**每条结算是按分数变化记的**——
-   * 一次变化都没有的局就一条记录都没有，那一局于是"无从比对"。让它空着等于把"没记"伪装成"缺数据"。
-   *
-   * 分工否则会重复记：若本局有过分数变化，`analysisFlushScores` 的末次读数就是局末分，
-   * 这里发现"没有任何变化"就什么也不写（同一次结束绝不落两条流水）。
-   * 时间上成立：引擎的分数写入（`finalizeWin` 与 `endDraw`）都发生在 `state.result` 落定**之前**
-   * （见 `settlementTimeline`），而分数 watch 推给 `analysisFlushScores` 的是一次**微任务**——
-   * 本函数在 `state.result` 的同步 watch 里跑，看到的是"局末分 vs 上一次读数"的原始差别。
+   * Flush the final transfer first, then write a zero-delta round-end marker.
+   * The old opening-to-ending summary duplicated every earlier score-flow entry.
+   * A marker still supplies ending scores for no-transfer draws and the replayer.
    */
   function recordAnalysisSettlement() {
     if (!analysis || analysisRoundSettled) return
     analysisRoundSettled = true
     // 局都结束了，还挂着的回执不会再有"下一个窗口"来收尾（§3.2 的 pending 语义）。
     analysisPending.clear()
+    analysisFlushScores()
     const endingScores = state.players.map((player) => player.score)
-    // 本局分数有过变化 ⇒ `analysisFlushScores` 已经记过（或马上会记）局末那一段，这里不再重复。
-    if (endingScores.some((score, seat) => score !== (analysisLastScores[seat] ?? 0))) return
     if (analysisOpeningScores.length !== endingScores.length) return
     analysisSettlementSeq += 1
     try {
       analysis.settlement(settlementsFromScoreChange({
         roundIndex: analysisRoundIndex,
         roundId: String(analysisRoundIndex),
-        before: [...analysisOpeningScores],
+        before: endingScores,
         after: endingScores,
-        kind: analysisRoundEndKind ?? roundKindOfResult(state.result.value),
+        kind: `round-end/${analysisRoundEndKind ?? roundKindOfResult(state.result.value)}`,
         sourceEventId: `round-${analysisRoundIndex}`,
       }))
     } catch { /* 记录失败不影响对局 */ }
