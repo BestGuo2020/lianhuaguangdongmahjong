@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# 远端实验编排（AutoDL 实例上、tmux 内一次跑完）：
-#   bash /root/jev/run-experiments.sh
-# 顺序：合并训练集 → E2a 冒烟 → E1(7B zero-shot) → E1b(1.5B zero-shot) → E2(LoRA 蒸馏)
-#       → E2 评估（门槛判定依据）→ 温度校正。门槛判定与 E3/E4 决策由代理读日志后做，脚本不越权。
-# 日志：/root/jev/logs/{run.log, e2a.log, e1-7b.json, e1b-1.5b.json, e2-train.log, e2-eval.json, e2-cal.log}
-# 纪律：set -e 任一步失败即停（GPU 空转也是钱）；每步带时间戳进 run.log 供预算记账。
+# 远端实验编排（AutoDL 实例上 nohup 后台一次跑完）：
+#   nohup bash run-experiments.sh > exp-nohup.out 2>&1 &
+# 顺序：PREP → E2a 冒烟 → E1(7B zero-shot) → E1b(1.5B zero-shot) → E2(LoRA 蒸馏)
+#       → E2 评估（门槛依据）→ 温度校正。日志 /root/jev/logs/，set -e 失败即停。
+# 门槛判定与 E3/E4 决策由代理读日志后做，脚本不越权。
+# 显存/时间保守组合（六轮 OOM 实测后）：rows=2 + fp16（峰值 ~14GB）+ 子集 2500
+# （2.5s/step ×1.5 争用余量 → 03:10-04:05 完成，硬停 04:27）。
 set -euo pipefail
 export HF_HOME=/root/autodl-tmp/hf
-# 基座走 ModelScope 下载的本地目录（HF 直连在数据中心 IP 实测失败）
-MODEL15=/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct
-MODEL7=/root/autodl-tmp/models/Qwen2.5-7B-Instruct
-# AutoDL 的 conda 只在交互 shell 进 PATH；nohup 非交互运行必须手动 source
+# AutoDL 的 conda 只在交互 shell 进 PATH；nohup 非交互必须手动 source
 if ! command -v python >/dev/null 2>&1; then
   source /root/miniconda3/etc/profile.d/conda.sh
   conda activate base
 fi
+# 基座为 ModelScope 下载的本地目录（HF 直连在数据中心 IP 实测失败）
+MODEL15=/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct
+MODEL7=/root/autodl-tmp/models/Qwen2.5-7B-Instruct
 cd /root/OpenJev
 LOG=/root/jev/logs
 mkdir -p "$LOG" /root/jev/ckpt
@@ -26,16 +27,14 @@ if [ ! -f /root/jev/train-v3-all.jsonl ]; then
   cat /root/jev/train-v3.jsonl /root/jev/train-v3-ext.jsonl > /root/jev/train-v3-all.jsonl
 fi
 wc -l /root/jev/train-v3-all.jsonl | tee -a "$LOG/run.log"   # 期望 7413
-# 预算裁剪（实测稳态 4.1s/step @ rows=2）：3500 条 ≈ 4.0h → ~03:20 完成，留 ~1h 抗争用余量；
-# 5000/全量会顶破 04:27 硬停线。偏离「全量」已记录；门槛判定口径不变。
-head -n 3500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub3500.jsonl
-wc -l /root/jev/train-sub3500.jsonl | tee -a "$LOG/run.log"
+head -n 1200 /root/jev/train-v3-all.jsonl > /root/jev/train-sub1200.jsonl
+wc -l /root/jev/train-sub1200.jsonl | tee -a "$LOG/run.log"
 
-step E2A-SMOKE   # 训练循环机制验证（本地 Windows/CPU 段错误，只能在此验证）；不过不进 E2
+step E2A-SMOKE   # 宽样本 3 步冒烟（数学+显存门控）；不过不进 E2
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke \
-  --epochs 1 --max-steps 3 --grad-accum 1 --max-len 4096 --dtype bfloat16 \
+  --epochs 1 --max-steps 3 --grad-accum 1 --max-len 4096 --dtype bfloat16 --chunk-rows 1 \
   2>&1 | tee "$LOG/e2a.log"
 
 step E1-7B-ZEROSHOT
@@ -46,15 +45,12 @@ step E1B-1.5B-ZEROSHOT
 openjev eval -m "$MODEL15" --dtype bfloat16 \
   --data /root/jev/dev-v3.jsonl 2>&1 | tee "$LOG/e1b-1.5b.json"
 
-step E2-LORA-1.5B   # 7413 条全量；max-len 4096（2048 会静默丢 19-26% 样本）
-#   显存/时间口径：chunk forward 包 activation checkpoint（logits 不进图）；
-#   --chunk-rows 4：chunk-rows=1 实测 5.1s/step → 7413 步 10.5h 超预算；4 行/chunk
-#   forward 次数降 4 倍（峰值瞬态 ~20GB，32GB 切片仍安全），ETA ≈3.1h；
-#   --epochs 1 保时间预算（偏离 2 epochs 已记录；门槛未过则如实报告不偷加）。
+step E2-LORA-1.5B   # 子集 1200；naive chunk fn rows=1（实测峰值 16.3GB、5.1s/step；
+#   1.7h 基准 ×1.5 争用余量 → 03:15-04:15 完成，硬停 04:27）；max-len 4096；epochs 1
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
-  --data /root/jev/train-sub3500.jsonl --eval-data /root/jev/dev-v3.jsonl \
+  --data /root/jev/train-sub1200.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
-  --grad-accum 1 --chunk-rows 2 \
+  --grad-accum 1 --chunk-rows 1 \
   2>&1 | tee "$LOG/e2-train.log"
 
 step E2-EVAL-LORA   # 门槛判定依据：accuracy>=0.50 且 NLL<=1.5 才进 E4
