@@ -6,9 +6,9 @@ import type { LlmProviderConfig } from './config'
 import { LLM_CONNECTION_TEST_TIMEOUT_MS, normalizeBaseUrl } from './config'
 import { withFeedbackRetry } from './prompt'
 import { isQuotaExhaustedResponse, pauseQuota, probeQuotaConnection, quotaStatus } from './providerAvailability'
-import { dashScopeThinkingBody, inferProviderDialect, isDashScopeEndpoint, resolveReasoningPolicy } from './reasoningPolicy'
+import { dashScopeThinkingBody, inferProviderDialect, isDashScopeEndpoint, hasMandatoryReasoning, resolveReasoningPolicy } from './reasoningPolicy'
 import {
-  adaptiveReasoningBudget, isReasoningTemporarilySuppressed,
+  adaptiveReasoningBudget, isReasoningTemporarilySuppressed, REASONING_ONLY_INITIAL_TOKENS,
   recordReasoningLength, recordReasoningSuccess,
 } from './reasoningBudget'
 
@@ -153,7 +153,7 @@ function providerExtraBody(
   // DashScope 兼容模式：千问「JSON 模式 + 思考」同开时返回空正文（finish=stop、
   // content 与 reasoning_content 都为空），因此千问深思路径不带 response_format——
   // 提示词本身已强制 JSON 输出，解析仍走 extractJsonObject。
-  const qwenDeepReasoning = reasoning && resolved.providerType === 'qwen'
+  const qwenDeepReasoning = (reasoning || hasMandatoryReasoning(resolved)) && resolved.providerType === 'qwen'
   if (structuredOutput && !qwenDeepReasoning && (resolved.providerType === 'qwen'
     || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
     || relayKimiThinking)) {
@@ -391,7 +391,8 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     if (left <= 0) throw new LlmClientError('timeout', '总预算耗尽')
     const config = { ...options.config, timeoutMs: left }
     const reasoningPolicy = resolveReasoningPolicy(config, options.reasoning === true)
-    const alwaysThinking = reasoningPolicy.mode === 'always-on'
+    const alwaysThinking = hasMandatoryReasoning(reasoningPolicy)
+    const reasoningOnly = reasoningPolicy.mode === 'reasoning-only'
     const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
     const glmFlash = reasoningPolicy.providerType === 'glm'
       && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)
@@ -409,8 +410,9 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
       : undefined
     const initialDeepReasoningMaxTokens = orcaLongReasoning
       ? 65_536
-      : relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
-    const deepReasoningMaxTokens = options.reasoning
+      : reasoningOnly ? REASONING_ONLY_INITIAL_TOKENS : relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
+    const adaptiveThinking = options.reasoning === true || reasoningOnly
+    const deepReasoningMaxTokens = adaptiveThinking
       ? adaptiveReasoningBudget(config, reasoningPolicy, initialDeepReasoningMaxTokens)
       : initialDeepReasoningMaxTokens
     const acceptReasoningResponse = options.reasoning === true
@@ -426,19 +428,19 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           extraBody,
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
-          maxTokens: options.reasoning
+          maxTokens: adaptiveThinking
             ? deepReasoningMaxTokens
             : (quickReasoningMaxTokens ?? (alwaysThinking ? 512 : undefined)),
           onReasoningProgress: options.onReasoningProgress,
         },
       )
       const parsed = parseLlmOutput(response.content, options.candidateIds)
-      if (options.reasoning) {
+      if (adaptiveThinking) {
         recordReasoningSuccess(config, reasoningPolicy, response.reasoningTokens)
       }
       return parsed
     } catch (error) {
-      if (options.reasoning && error instanceof LlmClientError && error.kind === 'length') {
+      if (adaptiveThinking && error instanceof LlmClientError && error.kind === 'length') {
         recordReasoningLength(
           config, reasoningPolicy, deepReasoningMaxTokens, error.reasoningTokens,
         )
@@ -454,7 +456,8 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
 }
 
 /** 设置页「测试连接」（§9.1）：探测供应商可用性；Key 不回显、不落日志。
- * 连接测试只看「是否连通且有内容」：finish_reason=length 不算失败
+ * 普通连接测试只看连通与正文；纯思考型号另要求完整的 PING 动作 JSON，截断不得报成功。
+ * 普通探测的 finish_reason=length 不算失败
  * （模型回一大段话被 max_tokens 截断恰恰证明链路通畅），但正文为空必须报错
  * —— 默认思考的型号没被关掉思考时，流里只有 reasoning_content，对局会一直拿到空回复。 */
 export async function testLlmConnection(config: LlmProviderConfig): Promise<{ ok: boolean; message: string }> {
@@ -469,7 +472,8 @@ async function testConnectionProbe(config: LlmProviderConfig): Promise<{ ok: boo
       timeoutEnabled: true,
     }
     const reasoningPolicy = resolveReasoningPolicy(effectiveConfig)
-    const alwaysThinking = reasoningPolicy.mode === 'always-on'
+    const alwaysThinking = hasMandatoryReasoning(reasoningPolicy)
+    const reasoningOnly = reasoningPolicy.mode === 'reasoning-only'
     const modelName = effectiveConfig.model.trim().toLowerCase().split('/').pop() ?? ''
     const cappedAlwaysQuick = alwaysThinking && (
       (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
@@ -477,18 +481,22 @@ async function testConnectionProbe(config: LlmProviderConfig): Promise<{ ok: boo
     )
     const response = await callOnce(
       effectiveConfig,
-      [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
+      reasoningOnly
+        ? [{ role: 'system', content: 'Return only JSON {"choice":"PING","message":""}. Do not put the final answer in reasoning fields.' }, { role: 'user', content: 'Choose PING.' }]
+        : [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }],
       undefined,
       {
-        maxTokens: alwaysThinking && !cappedAlwaysQuick ? 512 : 8,
-        strictLength: false,
-        allowEmptyContent: true,
+        maxTokens: reasoningOnly ? adaptiveReasoningBudget(effectiveConfig, reasoningPolicy, REASONING_ONLY_INITIAL_TOKENS)
+          : alwaysThinking && !cappedAlwaysQuick ? 512 : 8,
+        strictLength: reasoningOnly,
+        allowEmptyContent: !reasoningOnly,
         extraBody: providerExtraBody(effectiveConfig, false),
         allowReasoning: alwaysThinking,
         acceptReasoningResponse: true,
       },
       true,
     )
+    if (reasoningOnly) parseLlmOutput(response.content, ['PING'])
     if (!response.content) {
       return {
         ok: false,
