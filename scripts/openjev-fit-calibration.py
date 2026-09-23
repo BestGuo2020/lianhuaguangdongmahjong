@@ -24,6 +24,8 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser(description='One-pass temperature calibration + eval for OpenJev')
     parser.add_argument('--model', default='Qwen/Qwen2.5-1.5B-Instruct')
+    parser.add_argument('--adapter', default=None,
+                        help='LoRA adapter 目录（与 openjev serve --adapter 同口径）；蒸馏模型必须带，否则校正的是基座')
     parser.add_argument('--dtype', default='bfloat16')
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--train', required=True)
@@ -54,9 +56,11 @@ def main() -> int:
     def get_engine() -> SystemOneEngine:
         if 'engine' not in engine_holder:
             started = time.time()
-            print(f'loading backend {args.model} ({args.dtype}/{args.device}) ...', flush=True)
-            engine_holder['engine'] = SystemOneEngine(
-                backend=load_backend(args.model, device=args.device, dtype=args.dtype))
+            adapter_note = f' + adapter {args.adapter}' if args.adapter else ''
+            print(f'loading backend {args.model}{adapter_note} ({args.dtype}/{args.device}) ...', flush=True)
+            engine_holder['engine'] = SystemOneEngine(backend=load_backend(
+                args.model, device=args.device, dtype=args.dtype,
+                **({'adapter': args.adapter} if args.adapter else {})))
             print(f'backend ready in {time.time() - started:.1f}s', flush=True)
         return engine_holder['engine']
 
@@ -133,6 +137,7 @@ def main() -> int:
 
     report = {
         'model': args.model,
+        'adapter': args.adapter,
         'dtype': args.dtype,
         'device': args.device,
         'sampleSeed': args.sample_seed,

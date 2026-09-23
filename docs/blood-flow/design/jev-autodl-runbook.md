@@ -44,6 +44,10 @@ cd /root/OpenJev && source /etc/network_turbo 2>/dev/null || true
 # E1：7B zero-shot 在 dev 上的成绩单（对照 1.5B-校准版：acc 26.4% / NLL 1.866 / ECE 0.140）
 openjev eval -m Qwen/Qwen2.5-7B-Instruct --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
+# E1b：1.5B zero-shot 全量 dev（858 条）——与 E2 LoRA 同口径的参照系
+#      （此前的 26.4%/1.866 是 250 条子采样 + 温度校正后的数字，口径不同，只作背景参考）
+openjev eval -m Qwen/Qwen2.5-1.5B-Instruct --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+
 # E2：LoRA 蒸馏 1.5B（train 全量，2 epochs，max-len 必须 4096——v3 state ~2.5k token，
 #     默认 2048 会静默跳过大部分样本；brier 0.5 按 OpenJev README 推荐同时压 NLL+Brier）
 python scripts/train_calibrated.py --model Qwen/Qwen2.5-1.5B-Instruct \
@@ -61,12 +65,14 @@ openjev eval -m Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3
 #     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5
 
 # 达标后：给胜出模型重新拟合温度（GPU 上分钟级；dev 全量 858）
+#   ⚠️ 必须带 --adapter：校正对象是「基座+LoRA」的组合，不带就校到基座头上（张冠李戴）
 python /root/jev/openjev-fit-calibration.py --device cuda \
+  --model Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3 \
   --train /root/jev/train-v3-all.jsonl --dev /root/jev/dev-v3.jsonl \
   --train-limit 800 --dev-limit 0 --sample-seed 7 \
   --cache-dir /root/jev/cache-gpu --output /root/jev/calibration-lora.json \
   --metrics /root/jev/metrics-lora.json
-# 注意：--dev-limit 0 = dev 全量；若该模型要 serve，fit 脚本的 dev 评估顺带出 T* 后指标
+# 注意：--dev-limit 0 = dev 全量；E3 胜出时 --model/--adapter/缓存目录相应换成 7B 的
 ```
 
 ## 5. 预声明门槛（跑之前写死）
