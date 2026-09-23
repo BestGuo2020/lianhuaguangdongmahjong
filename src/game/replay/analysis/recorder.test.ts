@@ -61,6 +61,33 @@ it('keeps terminal, first quota fallback and suspended local provenance in expor
 })
 
 describe('分析录制核心（P0）', () => {
+  it('没有模型候选钩子时仍从引擎合法动作记录真人与自动胡牌', async () => {
+    const { recorder, storage } = setup()
+    recorder.beginMatch({ ...matchInput, seatControl: [...matchInput.seatControl] })
+    recorder.windowOpened({
+      windowId: 'human-turn', seat: 0, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'local', stateVersion: 1,
+      state: { id: 'human-state', legalActions: [
+        { id: 'human-turn/0', kind: 'discard', tile: 'm5', handIndex: 0 },
+      ] },
+    })
+    recorder.chosen({ windowId: 'human-turn', seat: 0, legalActionId: 'human-turn/0', source: 'human' })
+    recorder.windowOpened({
+      windowId: 'auto-win', seat: 1, windowKind: 'draw-turn', roundIndex: 1, authorityEpoch: 'local', stateVersion: 2,
+      state: { id: 'win-state', legalActions: [{ id: 'auto-win/0', kind: 'win' }] },
+    })
+    recorder.chosen({ windowId: 'auto-win', seat: 1, legalActionId: 'auto-win/0', source: 'rule-auto' })
+    await recorder.finish()
+
+    const decisions = await readParts(storage, 'decision') as AnalysisDecision[]
+    expect(decisions[0]?.choice).toEqual({
+      known: true, value: { legalActionId: 'human-turn/0', action: { id: 'human-turn/0', kind: 'discard', tile: 'm5', handIndex: 0 } },
+    })
+    expect(decisions[1]?.choice).toEqual({
+      known: true, value: { legalActionId: 'auto-win/0', action: { id: 'auto-win/0', kind: 'win' } },
+    })
+    expect(decisions.every((decision) => !('legalActions' in decision))).toBe(true)
+  })
+
   // §4：提示词模板按版本去重存一次，决策侧只保存实际变量输入（不重复存模板全文）
   it('提示词模板按 id 去重：同一模板只落一条，不同版本各落一条', async () => {
     const { recorder, storage } = setup()

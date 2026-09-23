@@ -3,6 +3,7 @@
 // 结算四家变化之和为 0、以及"被拒动作不产生记录"这条口径的前提（choiceTookEffect 不猜）。
 import { describe, expect, it } from 'vitest'
 import {
+  actionFromTableAction,
   choiceTookEffect,
   decisionStateId,
   decisionStateOf,
@@ -17,6 +18,11 @@ import {
   type LotusClassicSeatView,
   type LotusClassicViewLike,
 } from './lotusClassicAdapter'
+
+it('暗杠回执保留牌码，能与所选暗杠语义动作一致', () => {
+  expect(actionFromTableAction('concealed-gang', 's9', 0)).toEqual({ kind: 'concealed-kong', tile: 's9' })
+  expect(actionFromTableAction('added-gang', 's9', 2)).toEqual({ kind: 'added-kong', meldIndex: 2 })
+})
 
 /**
  * 三个牌面集合**刻意互不重叠**（决策者只用数牌万/条、牌墙只用筒、别家只用字牌）：

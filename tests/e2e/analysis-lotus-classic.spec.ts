@@ -46,6 +46,7 @@ interface ProbeStatus {
     eventTrace: string[]
     scores: number[]
     matchId: string
+    exportMatchId: string | null
     status: string | null
     label: string
     partsByTag: Record<string, number>
@@ -129,7 +130,8 @@ test('莲花广麻：记录落库形状、行内状态、导出自包含、开�
   expect(probe.off.blocksForMatch, '关掉开关不应写入任何分块').toBe(0)
 
   // ① 开关打开：记录真的写进去了
-  expect(probe.on.matchId).toBe('e2e-lotus-classic')
+  expect(probe.on.matchId).toBeTruthy()
+  expect(probe.on.exportMatchId).toBe(probe.on.matchId)
   expect(probe.on.windows).toBeGreaterThan(0)
   expect(probe.on.choices).toBe(probe.on.windows)
   expect(probe.on.receipts).toBeGreaterThan(0)

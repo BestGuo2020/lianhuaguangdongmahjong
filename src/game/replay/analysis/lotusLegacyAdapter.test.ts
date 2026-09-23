@@ -255,7 +255,8 @@ describe('翻精癞子适配层：前态投影与遮蔽（§10.4）', () => {
     const view = lotusSeatView(table(), windowOf(), RULESET)
     const state = decisionStateOf(view)
     // 多出任何字段都说明有人把新信息塞进了决策输入
-    expect(Object.keys(state).sort()).toEqual(['drawnTileIndex', 'hand', 'id', 'legalActions', 'melds'])
+    expect(Object.keys(state).sort()).toEqual(['drawnTileIndex', 'fingerprint', 'hand', 'id', 'legalActions', 'melds'])
+    expect(state.fingerprint).toMatch(/^fnv1a-/)
     expect(state.hand).toEqual(WINNING_HAND)
     expect(state.drawnTileIndex).toBe(13)
     expect(state.melds).toBe(0)
@@ -307,6 +308,8 @@ describe('翻精癞子适配层：执行回执（§3.4、§10.2）', () => {
     expect(choiceTookEffect(before, { ...before, score: 2_400 }, { kind: 'win' })).toBe(true)
     // 过牌 ⇒ 什么都没变才算生效
     expect(choiceTookEffect(before, before, { kind: 'pass' })).toBe(true)
+    // The next turn can draw before the receipt observer runs; this does not override the pass.
+    expect(choiceTookEffect(before, { ...before, handCount: before.handCount + 1 }, { kind: 'pass' })).toBe(true)
     expect(choiceTookEffect(before, { ...before, discardCount: 5 }, { kind: 'pass' })).toBe(false)
   })
 
@@ -674,6 +677,7 @@ describe('翻精癞子接缝：失败与回退的来源（§4、§10.1）', () =
       outcome: string; fallback?: { reason: string; strategy: string }
     }
     expect(attempt.outcome).toBe('timeout')
+    expect((attempt as typeof attempt & { answer?: { known: boolean } }).answer).toEqual({ known: false })
     expect(attempt.fallback).toEqual({ reason: 'timeout', strategy: 'lotus-local-ai' })
     const decision = all.find((part) => part.tag === 'decision')!.value as {
       source: string; llmAttemptIds?: string[]

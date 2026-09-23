@@ -13,6 +13,8 @@ import { useLotusGame } from '../../../src/game/variants/lotus/lotusGame'
 import { buildRingWall } from '../../../src/game/variants/lotus/lotusWall'
 import { seededRandom } from '../../../src/game/variants/lotus/bloodFlow/simulation'
 import { createAnalysisSession } from '../../../src/game/replay/analysis/session'
+import { lotusLegacyAnalysisConfig } from '../../../src/game/replay/analysis/lotusLegacyConfig'
+import { emptyLlmSettings } from '../../../src/game/llm/config'
 import { createAnalysisStorage } from '../../../src/game/replay/analysis/storage'
 import { createLotusLegacyDecisionSink } from '../../../src/game/replay/analysis/lotusLegacyAdapter'
 import { LotusAiController } from '../../../src/game/variants/lotus/lotusControllers'
@@ -53,7 +55,7 @@ interface ProbeStatus {
   /** 有状态缺合法动作、或有决策缺前态的条数（都应为 0）。 */
   decisionsWithoutState: number
   decisionStatesWithoutActions: number
-  settlements: Array<{ roundIndex: number; deltas: number[]; sum: number; kind: string; winners: number[] }>
+  settlements: Array<{ roundIndex: number; deltas: number[]; scoresAfter: number[]; sum: number; kind: string; winners: number[] }>
   /** 结算里"四家变化之和不为 0"的条数（§5 判据，应为 0）。 */
   settlementsNotBalanced: number
   /** 展示回放的局数与动作计数（与是否开分析无关的对局侧量，用于开/关一致性）。 */
@@ -331,15 +333,17 @@ void (async () => {
     const matchId = recorder.ensureMatchId()
     if (status.analysisEnabled) {
       // 与 App 同口径：分析场次与展示回放**共用同一个场次 id**（§9.2）。
+      const snapshot = lotusLegacyAnalysisConfig(emptyLlmSettings(), false)
       session.start({
         matchId,
         rulesetId: 'lotus-legacy',
-        rules: { id: 'lotus-legacy' },
-        rulesVersion: 'lotus-legacy',
-        aiConfig: null,
-        aiStrategy: 'source-v2',
-        // 本机单机：0 号座是人类，其余是本地启发式 AI（LLM 座位本阶段不接钩子，见文档）。
-        seatControl: ['human', 'local-ai', 'local-ai', 'local-ai'],
+        ...snapshot,
+        ...(useLlmSeat ? {
+          aiStrategy: 'mixed-local-controllers',
+          aiConfig: { controllerBySeat: ['LotusHumanController', 'LotusLlmController', 'LotusAiController', 'LotusAiController'] },
+          models: [{ seat: 1, provider: 'deepseek', requestModel: llmProvider.model, responseModel: { known: false as const }, sampling: {} }],
+        } : {}),
+        seatControl: ['human', useLlmSeat ? 'llm' : 'local-ai', 'local-ai', 'local-ai'],
         engineBuild: 'e2e-analysis-lotus-legacy',
       })
     }
@@ -421,12 +425,12 @@ void (async () => {
       .filter((decision) => !stateIds.has(String(decision.stateId ?? ''))).length
 
     for (const part of area.parts.filter((entry) => entry.tag === 'settlement')) {
-      const record = part.value as { roundIndex?: number; deltas?: number[]; kind?: string; winners?: number[] }
+      const record = part.value as { roundIndex?: number; deltas?: number[]; scoresAfter?: number[]; kind?: string; winners?: number[] }
       const deltas = record.deltas ?? []
       const sum = deltas.reduce((total, delta) => total + delta, 0)
       if (sum !== 0) status.settlementsNotBalanced += 1
       status.settlements.push({
-        roundIndex: record.roundIndex ?? 0, deltas, sum,
+        roundIndex: record.roundIndex ?? 0, deltas, scoresAfter: record.scoresAfter ?? [], sum,
         kind: String(record.kind ?? ''), winners: record.winners ?? [],
       })
     }

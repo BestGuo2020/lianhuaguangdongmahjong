@@ -181,6 +181,9 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
   /** 运行时（决策运行时）确定的来源：优先级高于调用方在 chosen() 里报的 'unknown'。 */
   const runtimeSources = new Map<string, AnalysisChoiceSource>()
   const decisions = new Map<string, AnalysisDecision>()
+  // The engine's legal actions exist even when no model request/candidate hook runs
+  // (human turns and rule-short-circuited wins). Keep them outside decision records.
+  const legalActionsByWindow = new Map<string, AnalysisLegalAction[]>()
   const attempts = new Map<string, AnalysisLlmAttempt>()
   const gaps: Array<{ scope: string; from?: number; to?: number; reason: string }> = []
 
@@ -296,6 +299,11 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
     windowOpened(input) {
       const decision = decisionFor(input.windowId, input.seat)
       if (!decision) return
+      if (input.state.legalActions?.length) {
+        legalActionsByWindow.set(key(input.windowId, input.seat), input.state.legalActions.map((action) => ({
+          ...action, ...(action.meld ? { meld: [...action.meld] } : {}),
+        })))
+      }
       decision.roundIndex = input.roundIndex
       decision.authorityEpoch = input.authorityEpoch
       decision.stateVersion = input.stateVersion
@@ -372,9 +380,13 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
       if (input.restricted?.length) decision.restricted = input.restricted.map((item) => ({ ...item }))
       if (input.estimates) decision.estimates = structuredClone(input.estimates)
       if (input.recommended) decision.recommended = structuredClone(input.recommended)
-      // 合法动作集写在决策上（与 decisionState 通过 stateId 关联，读取侧按 id 拼装）
-      ;(decision as AnalysisDecision & { legalActions?: AnalysisLegalAction[] }).legalActions =
-        input.legalActions.map((action) => ({ ...action, ...(action.meld ? { meld: [...action.meld] } : {}) }))
+      // Older callers may omit legalActions from windowOpened; candidates still
+      // supplies the same engine set. Never serialize a second copy on decision.
+      if (!legalActionsByWindow.has(key(input.windowId, input.seat))) {
+        legalActionsByWindow.set(key(input.windowId, input.seat), input.legalActions.map((action) => ({
+          ...action, ...(action.meld ? { meld: [...action.meld] } : {}),
+        })))
+      }
     },
 
     source(input) {
@@ -386,7 +398,7 @@ export function createAnalysisRecorder(options: AnalysisRecorderOptions): Analys
     chosen(input) {
       const decision = decisionFor(input.windowId, input.seat)
       if (!decision) return
-      const legal = (decision as AnalysisDecision & { legalActions?: AnalysisLegalAction[] }).legalActions ?? []
+      const legal = legalActionsByWindow.get(key(input.windowId, input.seat)) ?? []
       const picked = input.legalActionId === null ? null : legal.find((action) => action.id === input.legalActionId) ?? null
       const hasWinCandidate = legal.some((action) => WIN_KINDS.has(action.kind))
       const pickedIsWin = picked ? WIN_KINDS.has(picked.kind) : false
