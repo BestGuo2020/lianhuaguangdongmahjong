@@ -7,6 +7,11 @@
 # 纪律：set -e 任一步失败即停（GPU 空转也是钱）；每步带时间戳进 run.log 供预算记账。
 set -euo pipefail
 export HF_HOME=/root/autodl-tmp/hf
+# AutoDL 的 conda 只在交互 shell 进 PATH；nohup 非交互运行必须手动 source
+if ! command -v python >/dev/null 2>&1; then
+  source /root/miniconda3/etc/profile.d/conda.sh
+  conda activate base
+fi
 cd /root/OpenJev
 LOG=/root/jev/logs
 mkdir -p "$LOG" /root/jev/ckpt
