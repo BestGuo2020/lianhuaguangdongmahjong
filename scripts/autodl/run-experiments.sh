@@ -42,13 +42,13 @@ step E1B-1.5B-ZEROSHOT
 openjev eval -m "$MODEL15" --dtype bfloat16 \
   --data /root/jev/dev-v3.jsonl 2>&1 | tee "$LOG/e1b-1.5b.json"
 
-step E2-LORA-1.5B   # 7413 条全量 2 epochs；max-len 4096（2048 会静默丢 19-26% 样本）
-#   --grad-accum 1 是显存口径：单样本 autograd 图（分块 logits+中间量）≈15GB，accum=2
-#   同时驻留两样本图 → 30GB OOM（实测）；accum=1 每样本 backward 后释放，总 forward 量
-#   不变（步数×每步样本守恒），仅更新频率变化（蒸馏可接受，偏离已记录）。
+step E2-LORA-1.5B   # 7413 条全量；max-len 4096（2048 会静默丢 19-26% 样本）
+#   显存/时间口径：chunk forward 包 activation checkpoint（logits 不进图，峰值 ~10GB）；
+#   代价每 chunk 多一次 forward → --epochs 1 保时间预算（偏离 2 epochs 已记录；
+#   LoRA r16 于 7.4k 样本单epoch 通常足够，门槛未过则如实报告不偷加）。
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
-  --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5 \
+  --output /root/jev/ckpt/lora-1.5b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
   --grad-accum 1 \
   2>&1 | tee "$LOG/e2-train.log"
 
