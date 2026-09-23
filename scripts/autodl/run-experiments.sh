@@ -50,7 +50,7 @@ step E2-LORA-1.5B   # 7413 条全量；max-len 4096（2048 会静默丢 19-26% �
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
-  --grad-accum 1 --chunk-rows 4 \
+  --grad-accum 1 --chunk-rows 3 \
   2>&1 | tee "$LOG/e2-train.log"
 
 step E2-EVAL-LORA   # 门槛判定依据：accuracy>=0.50 且 NLL<=1.5 才进 E4
