@@ -5,7 +5,10 @@
 //   blind = 仅动作名（label）；hint = 动作名 + **v2 紧凑特征短语**（向听/进张/听口/安全/风险赔付/EV/杠净值）。
 // - v2 变更（2026-09-23，cpu-pilot 结案驱动）：v1 直接复用 candidateLine 长特征行，1.5B 基座利用率极低
 //   （一致率仅比 blind +2.6pp）；v2 压成「label·短token」格式，只保留决策相关的关键数值信号。
-//   升版本即换模板 id（jev-bf-{mode}-v2）；旧记录按当时落库的 promptTemplate 自包含可读。
+// - v3 变更（2026-09-23，采集数据质检发现）：claim 判定改读 `request.state.decision`——真实的
+//   buildBloodFlowDecisionInput 返回的 request 顶层**没有** decision 字段，v2 及之前响应窗口
+//   一律错发出牌 instructions（「轮到本家行动」）。v2 采集数据作废重采，v3 起 claim/turn 指令正确。
+//   升版本即换模板 id（jev-bf-{mode}-v3）；旧记录按当时落库的 promptTemplate 自包含可读。
 // - engineSuggestion / bigHandRoute **绝不进入请求**（不泄漏本地推荐，保证盲判臂公平）；
 //   它们只写入 promptVariables 供分析记录计算「Jev vs 本地推荐」一致率。
 // - v2 仍只发主 choice 问题；noul/score 附加问属于后续模板版本。
@@ -15,7 +18,7 @@ import type { JevCandidate } from './jevClient'
 export type JevBloodFlowMode = 'blind' | 'hint'
 
 /** 模板版本：state/criteria/instructions 形状变更时必须递增（分析记录按 id 去重存模板）。 */
-export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 2
+export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 3
 
 export function jevBloodFlowTemplateId(mode: JevBloodFlowMode): string {
   return `jev-bf-${mode}-v${JEV_BLOOD_FLOW_TEMPLATE_VERSION}`
@@ -42,11 +45,12 @@ export interface JevCandidateFeaturesLite {
   kongValue?: { net?: number }
 }
 
-/** buildBloodFlowDecisionInput 返回值中本模块用到的结构子集（便于测试夹具，不绑定完整类型）。 */
+/** buildBloodFlowDecisionInput 返回值中本模块用到的结构子集（便于测试夹具，不绑定完整类型）。
+ * 注意：decision（turn/claim）在 `request.state.decision`（StateSnapshotV1），request 顶层没有该字段——
+ * v2 曾读错位置导致 claim 窗口发出牌指令，v3 起以 state.decision 为唯一来源。 */
 export interface JevBloodFlowDecisionLike {
   request: {
-    decision: string
-    state: Record<string, unknown>
+    state: { decision?: string } & Record<string, unknown>
     engineSuggestion?: string
   }
   candidates: Array<{ id: string; label: string; summary?: string; features?: JevCandidateFeaturesLite }>
@@ -129,7 +133,7 @@ export function buildJevBloodFlowRequest(input: {
 }): JevBloodFlowRequest {
   const { decision, mode, requestId } = input
   const templateId = jevBloodFlowTemplateId(mode)
-  const claim = decision.request.decision === 'claim'
+  const claim = decision.request.state.decision === 'claim'
   const instructions = claim ? JEV_BLOOD_FLOW_CLAIM_INSTRUCTIONS : JEV_BLOOD_FLOW_TURN_INSTRUCTIONS
   const state: Record<string, unknown> = {
     template: templateId,
