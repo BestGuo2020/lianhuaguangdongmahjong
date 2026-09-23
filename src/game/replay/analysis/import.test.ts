@@ -32,7 +32,12 @@ const parts: AnalysisBlockPart[] = [
   { tag: 'config', value: config },
   { tag: 'decisionState', value: { id: 'state/1' } },
   { tag: 'decision', value: { id: 'decision/1', configId: 'config/m-1/1' } },
-  { tag: 'reproduction', value: { roundIndex: 1, available: true, commands: [] } },
+  { tag: 'reproduction', value: {
+    roundIndex: 1, available: true, initialWall: ['m1'], initialHands: [[], [], [], []],
+    dealer: 0, dealerDrawnIndex: 13, flipTiles: ['m1', 'm2'], jokers: ['m1', 'm2'],
+    flipStack: 0, flipSeat: 0, wallBreakIndex: 0, openingScores: [2000, 2000, 2000, 2000],
+    commands: [{ seat: 0, kind: 'discard', at: 0, handIndex: 0 }],
+  } },
 ]
 
 function pack(overrides: { parts?: AnalysisBlockPart[]; configurations?: unknown[]; rounds?: ReplayRound[]; status?: 'complete' | 'partial' | 'deleted' } = {}) {
