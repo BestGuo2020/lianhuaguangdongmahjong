@@ -8,6 +8,12 @@ set -euo pipefail
 # AutoDL「学术资源加速」（HF/GitHub 提速；镜像没有该脚本就跳过）
 [ -f /etc/network_turbo ] && source /etc/network_turbo || true
 
+# AutoDL 的 conda 只在交互 shell 进 PATH；非交互 ssh（nohup/管道）必须手动 source
+if ! command -v python >/dev/null 2>&1; then
+  source /root/miniconda3/etc/profile.d/conda.sh
+  conda activate base
+fi
+
 # 磁盘布局：系统盘常只有 30GB（镜像占 ~15-20GB），1.5B+7B 模型缓存 ~18GB 放不下；
 # 模型缓存与全部产物放 50GB 数据盘（/root/autodl-tmp，实例存续期内持久），
 # 用符号链接保持 runbook 里的 /root/OpenJev、/root/jev 路径不变。

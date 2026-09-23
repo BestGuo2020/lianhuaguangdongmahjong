@@ -34,15 +34,16 @@ scp -i $env:USERPROFILE\.ssh\autodl_jev -P <端口> <本地文件> root@<host>:<
 | `work/jev-calibration/dev-v3.jsonl`（858 行） | **唯一裁判集**（不参与任何拟合；模型选择用它即视为轻度复用，已记录） |
 | `scripts/openjev-fit-calibration.py` | GPU 版温度校正+评估（`--device cuda`） |
 | `scripts/autodl/setup-openjev.sh` | 一键装环境 |
-| `scripts/autodl/run-experiments.sh` | 编排脚本：tmux 内一次跑完 E2a→E1→E1b→E2→评估→校准，日志落 `/root/jev/logs/`，`set -e` 失败即停 |
+| `scripts/autodl/run-experiments.sh` | 编排脚本：nohup 后台一次跑完 E2a→E1→E1b→E2→评估→校准，日志落 `/root/jev/logs/`，`set -e` 失败即停 |
 
 远端合并：`cat train-v3.jsonl train-v3-ext.jsonl > train-v3-all.jsonl`
 
 ## 4. 远端实验序列（命令即口径）
 
-下列序列的可执行形态是 `scripts/autodl/run-experiments.sh`（随包上传，`tmux new -s exp` 后
-`bash /root/jev/run-experiments.sh` 一次跑完；日志在 `/root/jev/logs/`，代理 ssh 轮询日志即可，
-不需要逐步交互）。正文命令保留为口径参考与单步排障用。门槛判定（E2 评估数字）与 E3/E4
+下列序列的可执行形态是 `scripts/autodl/run-experiments.sh`（随包上传；镜像无 tmux，用
+`nohup bash /root/jev/run-experiments.sh > /root/jev/logs/nohup.out 2>&1 &` 后台跑；
+代理 ssh 轮询日志即可，不需要逐步交互）。脚本自带 conda source（非交互 ssh 没有 conda PATH）。
+正文命令保留为口径参考与单步排障用。门槛判定（E2 评估数字）与 E3/E4
 决策由代理读 `logs/e2-eval.json` 后做，脚本不越权。
 
 ```bash
@@ -120,7 +121,7 @@ python /root/jev/openjev-fit-calibration.py --device cuda \
 ## 7. E4：pilot（远端 serve + 本地 runner，SSH 隧道）
 
 ```powershell
-# 实例上（tmux/nohup 里跑，防掉线）：
+# 实例上（nohup 后台跑，防掉线；镜像无 tmux）：
 openjev serve -m Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3 `
   --calibration /root/jev/calibration-lora.json --dtype bfloat16 --host 127.0.0.1 --port 8300
 
