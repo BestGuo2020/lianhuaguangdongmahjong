@@ -8,10 +8,18 @@ set -euo pipefail
 # AutoDL「学术资源加速」（HF/GitHub 提速；镜像没有该脚本就跳过）
 [ -f /etc/network_turbo ] && source /etc/network_turbo || true
 
-cd /root
+# 磁盘布局：系统盘常只有 30GB（镜像占 ~15-20GB），1.5B+7B 模型缓存 ~18GB 放不下；
+# 模型缓存与全部产物放 50GB 数据盘（/root/autodl-tmp，实例存续期内持久），
+# 用符号链接保持 runbook 里的 /root/OpenJev、/root/jev 路径不变。
+export HF_HOME=/root/autodl-tmp/hf
+mkdir -p /root/autodl-tmp/hf /root/autodl-tmp/jev /root/autodl-tmp/jev/ckpt
+ln -sfn /root/autodl-tmp/jev /root/jev
+
+cd /root/autodl-tmp
 if [ ! -d OpenJev ]; then
   git clone --depth 1 https://github.com/GitHub30/OpenJev.git
 fi
+ln -sfn /root/autodl-tmp/OpenJev /root/OpenJev
 cd OpenJev
 # 镜像自带 CUDA 版 torch（>=2.1 即满足依赖，pip 不会重装巨型轮子）；补 server/train 附加依赖
 pip install -e ".[hf,server,train]"
