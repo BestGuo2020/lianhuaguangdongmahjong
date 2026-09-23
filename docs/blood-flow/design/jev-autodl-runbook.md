@@ -34,10 +34,16 @@ scp -i $env:USERPROFILE\.ssh\autodl_jev -P <端口> <本地文件> root@<host>:<
 | `work/jev-calibration/dev-v3.jsonl`（858 行） | **唯一裁判集**（不参与任何拟合；模型选择用它即视为轻度复用，已记录） |
 | `scripts/openjev-fit-calibration.py` | GPU 版温度校正+评估（`--device cuda`） |
 | `scripts/autodl/setup-openjev.sh` | 一键装环境 |
+| `scripts/autodl/run-experiments.sh` | 编排脚本：tmux 内一次跑完 E2a→E1→E1b→E2→评估→校准，日志落 `/root/jev/logs/`，`set -e` 失败即停 |
 
 远端合并：`cat train-v3.jsonl train-v3-ext.jsonl > train-v3-all.jsonl`
 
 ## 4. 远端实验序列（命令即口径）
+
+下列序列的可执行形态是 `scripts/autodl/run-experiments.sh`（随包上传，`tmux new -s exp` 后
+`bash /root/jev/run-experiments.sh` 一次跑完；日志在 `/root/jev/logs/`，代理 ssh 轮询日志即可，
+不需要逐步交互）。正文命令保留为口径参考与单步排障用。门槛判定（E2 评估数字）与 E3/E4
+决策由代理读 `logs/e2-eval.json` 后做，脚本不越权。
 
 ```bash
 # 每个 ssh 会话开头都要带（非交互 shell 不读 .bashrc）：模型缓存与产物在数据盘
