@@ -3,6 +3,7 @@
 // 覆盖：纯本地四人局（守恒/回放/分析包）、mock /v1/systemone 真 HTTP 往返（记录形状）、
 // Jev 端点不可用时的 EV 回退（对局必须完整跑完）、同种子确定性。
 import { createServer, type Server } from 'node:http'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AddressInfo } from 'node:net'
 import type { LlmProviderConfig } from '../src/game/llm/config'
@@ -94,18 +95,33 @@ describe('jev-selfplay 冒烟', () => {
     expect(payload.reproductionCapable).toBe(true)
   }, 300_000)
 
-  it('jev-blind 座位走真 HTTP mock：请求形状正确、记录 model 来源与概率', async () => {
+  it('jev-blind 座位走真 HTTP mock：请求形状正确、记录 model 来源与概率；collect 的 claim 行带 claim 指令', async () => {
     servedRequests = 0
     lastRequestBody = null
+    const collectPath = 'work/jev-smoke-collect.jsonl'
+    if (existsSync(collectPath)) rmSync(collectPath)
     const result = await runJevSelfplayMatch({
       matchSeed: 7,
       seats: ['jev-blind', 'ev', 'ev', 'ev'],
       jev: { config: jevConfig(baseUrl), backend: 'mock' },
       engineBuild: 'test',
+      collect: { path: collectPath, mode: 'hint' },
     })
     expect(servedRequests).toBeGreaterThan(0)
     expect(result.rounds[0].jev.requests).toBe(servedRequests)
     expect(result.rounds[0].jev.failures).toBe(0)
+    expect(result.collectedSamples).toBeGreaterThan(0)
+    // 集成回归（v2 bug）：claim 窗口的 instructions 必须由真实 request.state.decision 驱动
+    const lines = readFileSync(collectPath, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+    expect(lines).toHaveLength(result.collectedSamples)
+    const claimLines = lines.filter((line) => line.state.situation.decision === 'claim')
+    const turnLines = lines.filter((line) => line.state.situation.decision === 'turn')
+    expect(turnLines.length).toBeGreaterThan(0)
+    expect(claimLines.length, 'seed 7 单局应出现至少一个响应窗口样本').toBeGreaterThan(0)
+    expect(claimLines.every((line) => String(line.questions.action.instructions).includes('claimTile'))).toBe(true)
+    expect(turnLines.every((line) => String(line.questions.action.instructions).includes('轮到本家行动'))).toBe(true)
+    expect(lines.every((line) => line.state.template === 'jev-bf-hint-v3')).toBe(true)
+    rmSync(collectPath)
     // wire 形状：state 为对象、主问题为 choice、criteria 值不含推荐标记
     expect(lastRequestBody).not.toBeNull()
     expect(lastRequestBody!.state).toBeTypeOf('object')

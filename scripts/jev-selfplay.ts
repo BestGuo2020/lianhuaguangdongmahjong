@@ -228,7 +228,7 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
           mode, rules: BLOOD_FLOW_PROMPT_RULES,
           turnInstructions: JEV_BLOOD_FLOW_TURN_INSTRUCTIONS,
           claimInstructions: JEV_BLOOD_FLOW_CLAIM_INSTRUCTIONS,
-          criteria: mode === 'blind' ? '候选仅动作名（label）' : '候选附 v2 紧凑特征短语（label·tokens：向/进/听/安/险/得/链/门/改/抢/发/EV/杠净/收，不含推荐标记）',
+          criteria: mode === 'blind' ? '候选仅动作名（label）' : '候选附紧凑特征短语（label·tokens：向/进/听/安/险/得/链/门/改/抢/发/EV/杠净/收，不含推荐标记）',
         }),
       })),
     })

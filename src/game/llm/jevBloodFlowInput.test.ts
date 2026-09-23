@@ -1,4 +1,5 @@
-// Jev 血流请求构造单测（模板 v2）：A/B 两臂的公平性约束（state 一致、推荐不泄漏）与紧凑 criteria 渲染。
+// Jev 血流请求构造单测（模板 v3）：A/B 两臂的公平性约束（state 一致、推荐不泄漏）、紧凑 criteria 渲染、
+// 以及 claim/turn 指令必须由 request.state.decision 驱动（v2 回归：request 顶层没有 decision 字段）。
 import { describe, expect, it } from 'vitest'
 import { BLOOD_FLOW_PROMPT_RULES } from './bloodFlowDecisionInput'
 import {
@@ -6,13 +7,19 @@ import {
   jevBloodFlowTemplateId, type JevBloodFlowDecisionLike,
 } from './jevBloodFlowInput'
 
-function decisionFixture(overrides: Partial<JevBloodFlowDecisionLike['request']> = {}): JevBloodFlowDecisionLike {
+function decisionFixture(overrides: {
+  decision?: 'turn' | 'claim'
+  state?: Record<string, unknown>
+  engineSuggestion?: string
+} = {}): JevBloodFlowDecisionLike {
   return {
     request: {
-      decision: 'turn',
-      state: { hand: ['3万', '5筒'], wallCount: 40, claimTile: null, claimFrom: null },
-      engineSuggestion: 'A1',
-      ...overrides,
+      state: {
+        decision: overrides.decision ?? 'turn',
+        hand: ['3万', '5筒'], wallCount: 40, claimTile: null, claimFrom: null,
+        ...(overrides.state ?? {}),
+      },
+      engineSuggestion: 'engineSuggestion' in overrides ? overrides.engineSuggestion : 'A1',
     },
     candidates: [
       {
@@ -31,11 +38,11 @@ function decisionFixture(overrides: Partial<JevBloodFlowDecisionLike['request']>
   }
 }
 
-describe('buildJevBloodFlowRequest（v2）', () => {
-  it('盲判臂：criteria 只含动作名；模板 id 升 v2；promptVariables 与 engineSuggestion 正确', () => {
+describe('buildJevBloodFlowRequest（v3）', () => {
+  it('盲判臂：criteria 只含动作名；模板 id 升 v3；promptVariables 与 engineSuggestion 正确', () => {
     const built = buildJevBloodFlowRequest({ decision: decisionFixture(), mode: 'blind', requestId: 'r1' })
-    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(2)
-    expect(built.templateId).toBe('jev-bf-blind-v2')
+    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(3)
+    expect(built.templateId).toBe('jev-bf-blind-v3')
     expect(built.candidates).toEqual([
       { id: 'A0', description: '打出3万' },
       { id: 'A1', description: '打出5筒' },
