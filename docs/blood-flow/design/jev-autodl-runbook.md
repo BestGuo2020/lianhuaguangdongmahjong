@@ -49,20 +49,23 @@ scp -i $env:USERPROFILE\.ssh\autodl_jev -P <端口> <本地文件> root@<host>:<
 ```bash
 # 每个 ssh 会话开头都要带（非交互 shell 不读 .bashrc）：模型缓存与产物在数据盘
 export HF_HOME=/root/autodl-tmp/hf
+# 基座为 ModelScope 下载的本地目录（HF 直连在数据中心 IP 实测 OSError）
+MODEL15=/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct
+MODEL7=/root/autodl-tmp/models/Qwen2.5-7B-Instruct
 cd /root/OpenJev && source /etc/network_turbo 2>/dev/null || true
 
 # E1：7B zero-shot 在 dev 上的成绩单（对照 1.5B-校准版：acc 26.4% / NLL 1.866 / ECE 0.140）
-openjev eval -m Qwen/Qwen2.5-7B-Instruct --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+openjev eval -m $MODEL7 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
 # E1b：1.5B zero-shot 全量 dev（858 条）——与 E2 LoRA 同口径的参照系
 #      （此前的 26.4%/1.866 是 250 条子采样 + 温度校正后的数字，口径不同，只作背景参考）
-openjev eval -m Qwen/Qwen2.5-1.5B-Instruct --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+openjev eval -m $MODEL15 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
 # E2a（远端 5 分钟冒烟，必做勿跳）：训练循环在本地 Windows/CPU 上段错误（0xC0000005，
 #   与数据无关——数据管线已在本地用真实 tokenizer 验证 5/5：gold 索引/候选数/长度全对），
 #   训练机制只能在目标 GPU 环境验证；冒烟不过就地排查，不进 E2。
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
-python scripts/train_calibrated.py --model Qwen/Qwen2.5-1.5B-Instruct \
+python scripts/train_calibrated.py --model $MODEL15 \
   --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke --epochs 1 --max-steps 3 \
   --grad-accum 2 --max-len 4096 --dtype bfloat16
 # 预期输出：trainable params 行、"100 training decisions"、3 条 step loss、saved LoRA adapter
@@ -72,12 +75,12 @@ python scripts/train_calibrated.py --model Qwen/Qwen2.5-1.5B-Instruct \
 #   （scripts/openjev-token-probe.py，2026-09-23 实测），默认 2048 会**静默跳过 19–26% 样本**；
 #   4096 全覆盖且留余量（该参数只做过滤不做 padding，放大无计算代价）。
 #   brier 0.5 按 OpenJev README 推荐（NLL+Brier 同时压，兼顾准确率与校准）。
-python scripts/train_calibrated.py --model Qwen/Qwen2.5-1.5B-Instruct \
+python scripts/train_calibrated.py --model $MODEL15 \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5
 
 # E2 评估（训练脚本尾部也会打 eval，这里用统一口径再跑一次并留档）
-openjev eval -m Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3 \
+openjev eval -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
   --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
 # E3（条件触发：E2 未达标且 E1 acc≥35% 且预算余量>3h）：7B LoRA 子集训练
@@ -90,14 +93,14 @@ openjev eval -m Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3
 #   ② 仍 OOM → 放弃 E3 如实记录——**不许**拆候选分批（joint softmax 损失要求全候选同批，
 #   拆批会改变损失语义，产物就不是"蒸馏"了）。
 #   head -n 2500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub.jsonl
-#   python scripts/train_calibrated.py --model Qwen/Qwen2.5-7B-Instruct \
+#   python scripts/train_calibrated.py --model $MODEL7 \
 #     --data /root/jev/train-sub.jsonl --eval-data /root/jev/dev-v3.jsonl \
 #     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5
 
 # 达标后：给胜出模型重新拟合温度（GPU 上分钟级；dev 全量 858）
 #   ⚠️ 必须带 --adapter：校正对象是「基座+LoRA」的组合，不带就校到基座头上（张冠李戴）
 python /root/jev/openjev-fit-calibration.py --device cuda \
-  --model Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3 \
+  --model $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
   --train /root/jev/train-v3-all.jsonl --dev /root/jev/dev-v3.jsonl \
   --train-limit 800 --dev-limit 0 --sample-seed 7 \
   --cache-dir /root/jev/cache-gpu --output /root/jev/calibration-lora.json \
@@ -122,7 +125,7 @@ python /root/jev/openjev-fit-calibration.py --device cuda \
 
 ```powershell
 # 实例上（nohup 后台跑，防掉线；镜像无 tmux）：
-openjev serve -m Qwen/Qwen2.5-1.5B-Instruct --adapter /root/jev/ckpt/lora-1.5b-v3 `
+openjev serve -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 `
   --calibration /root/jev/calibration-lora.json --dtype bfloat16 --host 127.0.0.1 --port 8300
 
 # 本地隧道（另开窗口挂着）：
