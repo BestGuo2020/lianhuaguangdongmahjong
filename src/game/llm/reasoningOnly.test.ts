@@ -136,3 +136,24 @@ it('records an actual blood-flow action as model success and submits it to the a
   expect(engine.submit(engine.command(2,action!))).toBe(true)
   service.cancel()
 })
+
+
+it('does not invent an enhanced tier for DashScope Kimi K3 but boosts GLM when needed', async () => {
+  const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  for (const [model, expected] of [
+    ['kimi-k3', false], ['kimi-k2.7-code', false],
+    ['glm-5.3', true], ['glm-4.6v', true],
+  ] as const) {
+    const coordinator = new ConditionalReasoningCoordinator(DEFAULT_CONDITIONAL_REASONING)
+    const admit = vi.spyOn(coordinator, 'admit').mockReturnValue({ enabled: true, reasons: ['audit'] } as never)
+    const request = vi.fn(async () => ({ choice: 'A0', message: '' }))
+    await requestPreparedDecision({
+      config: { ...config, providerType: 'qwen', baseUrl: dash, model },
+      messages, decision: { candidates: [{ id: 'A0' }] } as never, seat: 2,
+      stats: { requests: 0 } as never, reasoning: coordinator, request,
+    })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect((request.mock.calls as any)[0][0].reasoning).toBe(expected)
+    expect(admit).toHaveBeenCalledTimes(expected ? 1 : 0)
+  }
+})

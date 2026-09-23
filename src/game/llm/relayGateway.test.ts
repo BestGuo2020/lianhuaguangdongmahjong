@@ -75,11 +75,10 @@ describe('千问 Token Plan 预置走自家透传网关', () => {
     expect(avatarFolderFor(TOKEN_PLAN_VENDOR_URL)).toBe('qwen')
   })
 
-  it('网关地址不是厂商官方域名（方言退化为 compatible），但仍强制关闭千问思考', () => {
+  it('token-plan 透传网关保留百炼参数方言并强制关闭千问思考', () => {
     const template = tokenPlanTemplate()
-    // 走网关后 hostname 是自家网关，官方端点表当然匹配不上——这是预期的，
-    // 关键是决策参数不能因此变化（qwen 分支不依赖方言）。
-    expect(inferProviderDialect(template.baseUrl)).toBe('compatible')
+    // 网关透传至百炼；保留官方方言，第三方托管型号也能使用正确思考参数。
+    expect(inferProviderDialect(template.baseUrl)).toBe('official')
     expect(resolveReasoningPolicy({
       baseUrl: template.baseUrl, model: template.model, providerType: 'qwen',
     })).toMatchObject({

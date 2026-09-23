@@ -1,4 +1,4 @@
-import { inferLlmProviderType, type LlmProviderConfig, type LlmProviderType } from './config'
+import { inferLlmProviderType, providerTypeFromModel, type LlmProviderConfig, type LlmProviderType } from './config'
 
 export type ReasoningPolicyMode = 'explicit-off' | 'explicit-on' | 'always-on' | 'naturally-off' | 'reasoning-only' | 'unknown'
 
@@ -23,6 +23,7 @@ export function inferProviderDialect(baseUrl: string): ProviderDialect {
   let host = ''
   try { host = new URL(baseUrl).hostname.toLowerCase() } catch { return 'compatible' }
   if (host === 'api.orcarouter.ai') return 'orcarouter'
+  if (isDashScopeEndpoint(baseUrl)) return 'official'
   // token-plan 是百炼的另一个官方接入点，与 dashscope 同方言。
   if (/^(?:api\.deepseek\.com|dashscope\.aliyuncs\.com|token-plan\.cn-beijing\.maas\.aliyuncs\.com|api\.moonshot\.(?:cn|ai)|ark\.[^.]+\.volces\.com|api\.minimax\.(?:chat|io)|api\.openai\.com|open\.bigmodel\.cn|api\.z\.ai|api\.anthropic\.com)$/.test(host)) {
     return 'official'
@@ -32,10 +33,12 @@ export function inferProviderDialect(baseUrl: string): ProviderDialect {
 
 /** DashScope/百炼托管端点：千问与别家模型（glm / kimi / deepseek…）都挂在这里。 */
 export function isDashScopeEndpoint(baseUrl: string): boolean {
-  let host = ''
-  try { host = new URL(baseUrl).hostname.toLowerCase() } catch { return false }
+  let url: URL
+  try { url = new URL(baseUrl) } catch { return false }
+  const host = url.hostname.toLowerCase()
   return /(?:^|\.)dashscope\.aliyuncs\.com$/.test(host)
-    || /^token-plan\.[a-z0-9-]+\.maas\.aliyuncs\.com$/.test(host)
+    || (/(?:^|\.)maas\.aliyuncs\.com$/.test(host) && url.pathname.includes('/compatible-mode/'))
+    || url.pathname.startsWith('/api/llm/relay/token-plan')
 }
 
 /**
@@ -85,26 +88,31 @@ export function resolveReasoningPolicy(
   reasoning = false,
 ): ReasoningPolicy {
   const inferredProviderType = inferLlmProviderType(config.baseUrl, config.model)
-  // 「自定义」只代表 OpenAI 兼容传输；仍可按完整模型 ID 追加已知厂商参数。
-  const providerType = !config.providerType || config.providerType === 'custom'
-    ? inferredProviderType
-    : config.providerType
+  // 百炼等聚合端点上换型号时，已知厂商型号优先于旧预置（例如 Qwen 预置改为 GLM）。
+  const providerType = providerTypeFromModel(config.model)
+    ?? (!config.providerType || config.providerType === 'custom' ? inferredProviderType : config.providerType)
   const qualifiedModel = config.model.trim().toLowerCase()
   const model = qualifiedModel.slice(qualifiedModel.lastIndexOf('/') + 1)
   const dialect = inferProviderDialect(config.baseUrl)
+  const dashScope = isDashScopeEndpoint(config.baseUrl)
 
   switch (providerType) {
     case 'deepseek':
       if (/(?:reasoner|(^|[-_.])r1(?:[-_.]|$))/.test(model)) {
         return policy(providerType, 'reasoning-only', 'DeepSeek Reasoner/R1 属于推理专用模型，无法保证关闭思考')
       }
+      // 百炼仅这两个 V4 固定版本支持 low；其他混合型号普通出牌保持非思考。
+      if (dashScope && /^deepseek-v4-(?:flash-0731|pro-0813)$/.test(model)) {
+        return policy(providerType, 'explicit-on', '已开启 DeepSeek 思考并按场景调整强度', {
+          reasoning_effort: reasoning ? 'high' : 'low',
+        }, true)
+      }
       return reasoning
-        ? policy(providerType, 'explicit-on', '已开启 DeepSeek 条件思考', {
-          thinking: { type: 'enabled' }, reasoning_effort: 'medium',
-        })
-        : policy(providerType, 'explicit-off', '已强制关闭 DeepSeek 思考模式', {
-          thinking: { type: 'disabled' },
-        })
+        ? policy(providerType, 'explicit-on', '已开启 DeepSeek 条件思考', dashScope
+          ? (/^deepseek-v4-(?:flash|pro)(?:[.-]|$)/.test(model) ? { reasoning_effort: 'high' } : {})
+          : { thinking: { type: 'enabled' }, reasoning_effort: 'medium' })
+        : policy(providerType, 'explicit-off', '已强制关闭 DeepSeek 思考模式', dashScope
+          ? {} : { thinking: { type: 'disabled' } })
     case 'qwen':
       // 型号名漏识别 = 不下发 enable_thinking=false = 默认思考的型号只出思考、content 全空（qwen3-32b 实测）。
       if (QWEN_THINKING_ONLY.test(model)) {
@@ -126,23 +134,26 @@ export function resolveReasoningPolicy(
       return policy(providerType, 'unknown', '无法确认该千问型号是否支持非思考模式')
     case 'kimi':
       if (/^kimi-k3(?:[.-]|$)/.test(model)) {
-        return policy(providerType, 'always-on', 'Kimi K3 始终思考', {
+        // 百炼 K3 只接受 max；不能把其它端点的 low/high 方言直接透传过去。
+        return policy(providerType, 'always-on',
+          dashScope ? '百炼 Kimi K3 始终思考且仅支持 max，无法调低强度' : 'Kimi K3 始终思考',
+          dashScope ? {} : {
           reasoning_effort: reasoning ? 'high' : 'low',
         })
       }
-      if (model.includes('thinking')) {
-        return policy(providerType, 'reasoning-only', 'Kimi Thinking 型号始终思考，等待最终回复后解析动作')
+      if (/^kimi-k2[.-]7-code(?:[.-]|$)/.test(model) || model.includes('thinking')) {
+        return policy(providerType, 'reasoning-only', '该 Kimi 型号始终思考，等待最终回复后解析动作')
       }
       if (/^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(model)) {
         return reasoning
           ? policy(providerType, 'explicit-on', '已开启 Kimi K2.5/K2.6 条件思考', {
-            thinking: { type: 'enabled' }, temperature: 1, top_p: 0.95,
+            ...(dashScope ? {} : { thinking: { type: 'enabled' } }), temperature: 1, top_p: 0.95,
           })
           : policy(providerType, 'explicit-off', '已强制关闭 Kimi 思考模式', {
-            thinking: { type: 'disabled' }, temperature: 0.6, top_p: 0.95,
+            ...(dashScope ? {} : { thinking: { type: 'disabled' } }), temperature: 0.6, top_p: 0.95,
           }, true)
       }
-      if (/^(?:kimi-k2|moonshot-v1)/.test(model)) {
+      if (/^(?:kimi-k2|moonshot-v1|moonshot-kimi-k2-instruct)/.test(model)) {
         return policy(providerType, 'naturally-off', '该 Kimi 型号本身不输出思考链')
       }
       return policy(providerType, 'unknown', '无法确认该 Kimi 型号是否支持非思考模式')
@@ -183,12 +194,13 @@ export function resolveReasoningPolicy(
       if (model.includes('thinking')) {
         return policy(providerType, 'reasoning-only', '显式 Thinking 型号始终思考，等待最终回复后解析动作')
       }
-      if (/^glm-5\.3-flash(?:[.-]|$)/.test(model)) {
-        const effort = reasoning && dialect === 'orcarouter' ? 'medium' : 'low'
-        return policy(providerType, 'always-on',
-          dialect === 'official' ? 'GLM-5.3-Flash 官方接口始终思考' : 'GLM-5.3-Flash 始终思考', {
-            reasoning_effort: effort,
-          })
+      if (/^glm-5\.3-flashx?(?:[.-]|$)/.test(model)) {
+        const effort = reasoning
+          ? dialect === 'official' ? 'high' : dialect === 'orcarouter' ? 'medium' : 'low'
+          : 'low'
+        return policy(providerType, 'always-on', 'GLM-5.3 Flash 系列始终思考', {
+          reasoning_effort: effort,
+        })
       }
       if (/^glm-5\.3(?:[.-]|$)/.test(model)) {
         const effort = reasoning
@@ -198,15 +210,18 @@ export function resolveReasoningPolicy(
           reasoning_effort: effort,
         })
       }
-      if (/^glm-(?:4\.(?:5|6|7)|5)(?:[.-]|$)/.test(model)) {
-        // 与 DeepSeek 分支一致：条件命中时才开启思考，普通决策显式关闭。
+      if (dashScope && /^glm-5(?:\.(?:1|2))?(?:[.-]|$)/.test(model)) {
+        return policy(providerType, 'explicit-on', '百炼 GLM 默认低强度思考，疑难时提高强度', {
+          reasoning_effort: reasoning ? 'high' : 'low',
+        }, true)
+      }
+      if (/^glm-(?:4\.(?:5|6|7)v?|5)(?:[.-]|$)/.test(model)) {
+        // GLM-4.5V/4.6V 与文本版一样支持切换；无 low 档时普通出牌保持快速模式。
         return reasoning
-          ? policy(providerType, 'explicit-on', '已开启 GLM 条件思考', {
-            thinking: { type: 'enabled' },
-          })
-          : policy(providerType, 'explicit-off', '已强制关闭 GLM 思考模式', {
-            thinking: { type: 'disabled' },
-          })
+          ? policy(providerType, 'explicit-on', '已开启 GLM 条件思考', dashScope
+            ? {} : { thinking: { type: 'enabled' } })
+          : policy(providerType, 'explicit-off', '已强制关闭 GLM 思考模式', dashScope
+            ? {} : { thinking: { type: 'disabled' } })
       }
       if (/^glm-4(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'naturally-off', '该 GLM 型号本身不是思考模型')

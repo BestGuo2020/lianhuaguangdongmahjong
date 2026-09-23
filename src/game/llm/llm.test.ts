@@ -871,7 +871,7 @@ describe('testLlmConnection', () => {
     expect(captured.max_tokens).toBe(65_536)
   })
 
-  it('Kimi K3 普通路径使用 low/128，不传 thinking 与采样参数', async () => {
+  it('Kimi K3 普通路径使用 low 且不截断输出、不传采样参数', async () => {
     let captured: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       captured = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -893,14 +893,14 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(captured).toMatchObject({
-      model: 'kimi/kimi-k3', reasoning_effort: 'low', max_tokens: 128,
+      model: 'kimi/kimi-k3', reasoning_effort: 'low',
     })
     expect(captured.thinking).toBeUndefined()
     expect(captured.temperature).toBeUndefined()
     expect(captured.top_p).toBeUndefined()
   })
 
-  it('GLM-5.3 Flash 普通决策使用 low/512、JSON Object 并接受推理流', async () => {
+  it('GLM-5.3 Flash 普通决策使用 low、JSON Object 并接受推理流', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -922,7 +922,7 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
     expect(capturedBody).toMatchObject({
-      model: 'z-ai/glm-5.3-flash', max_tokens: 512, reasoning_effort: 'low',
+      model: 'z-ai/glm-5.3-flash', reasoning_effort: 'low',
       response_format: { type: 'json_object' },
     })
     expect(capturedBody.thinking).toBeUndefined()
@@ -948,7 +948,7 @@ describe('testLlmConnection', () => {
     })
   })
 
-  it('GLM-5.3 Flash 官方疑难请求保持官方允许的 low/1024', async () => {
+  it('GLM-5.3 Flash 官方疑难请求提高到 high/1024', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -964,11 +964,11 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning: true,
     })
     expect(capturedBody).toMatchObject({
-      max_tokens: 1024, reasoning_effort: 'low', response_format: { type: 'json_object' },
+      max_tokens: 1024, reasoning_effort: 'high', response_format: { type: 'json_object' },
     })
   })
 
-  it('GLM-5.3 Flash 官方普通请求使用 low/128', async () => {
+  it('GLM-5.3 Flash 官方普通请求使用 low 且不截断输出', async () => {
     let capturedBody: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -984,7 +984,7 @@ describe('testLlmConnection', () => {
       messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
     })
     expect(capturedBody).toMatchObject({
-      max_tokens: 128, reasoning_effort: 'low', response_format: { type: 'json_object' },
+      reasoning_effort: 'low', response_format: { type: 'json_object' },
     })
   })
 
@@ -1205,5 +1205,64 @@ describe('LLM 人设（persona）', () => {
     expect(avatarFolderOf(preset)).toBe('claude')
     expect(avatarFor(preset, '稳健')).toContain('img/llm/claude/llm-avatar-wenjian.png')
     expect(avatarFolderOf({ ...preset, avatarFolder: 'gpt' })).toBe('gpt')
+  })
+})
+
+
+describe('DashScope 免费额度第三方模型请求体', () => {
+  const hosted = (model: string): LlmProviderConfig => ({
+    ...config, providerType: 'qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model,
+  })
+  async function capture(model: string, reasoning = false) {
+    let body: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body)) as Record<string, unknown>
+      const thinking = reasoning || model !== 'glm-4.6v'
+      return new Response(JSON.stringify({ choices: [{
+        message: { content: '{"choice":"A1","message":"稳住。"}',
+          ...(thinking ? { reasoning_content: '内部思考' } : {}) },
+        finish_reason: 'stop',
+      }] }), { headers: { 'Content-Type': 'application/json' } })
+    }) as never)
+    await expect(requestLlmDecision({
+      config: hosted(model), messages: { system: 's', user: 'u' }, candidateIds: ['A1'], reasoning,
+    })).resolves.toMatchObject({ choice: 'A1' })
+    return body
+  }
+
+  it('Qwen 预置换 GLM-5.3 时真正发送低强度，疑难时提升到 high', async () => {
+    const quick = await capture('glm-5.3')
+    expect(quick).toMatchObject({ model: 'glm-5.3', enable_thinking: true, reasoning_effort: 'low' })
+    expect(quick).not.toHaveProperty('max_tokens')
+    expect(quick).not.toHaveProperty('thinking')
+    const deep = await capture('glm-5.3', true)
+    expect(deep).toMatchObject({ enable_thinking: true, reasoning_effort: 'high' })
+  })
+
+  it('GLM-4.6V 普通关闭思考，条件触发才开启', async () => {
+    const quick = await capture('glm-4.6v')
+    expect(quick).toMatchObject({ enable_thinking: false })
+    expect(quick).not.toHaveProperty('thinking')
+    const deep = await capture('glm-4.6v', true)
+    expect(deep).toMatchObject({ enable_thinking: true })
+    expect(deep).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('DeepSeek 固定版 low/high 与 Kimi K3 不支持 low 的边界', async () => {
+    const quick = await capture('deepseek-v4-flash-0731')
+    expect(quick).toMatchObject({ enable_thinking: true, reasoning_effort: 'low' })
+    expect(quick).not.toHaveProperty('thinking')
+    const deep = await capture('deepseek-v4-flash-0731', true)
+    expect(deep).toMatchObject({ enable_thinking: true, reasoning_effort: 'high' })
+    const kimi = await capture('kimi-k3')
+    expect(kimi).toMatchObject({ enable_thinking: true })
+    for (const key of ['reasoning_effort', 'max_tokens', 'temperature', 'top_p']) {
+      expect(kimi).not.toHaveProperty(key)
+    }
+    const code = await capture('kimi-k2.7-code')
+    for (const key of ['reasoning_effort', 'temperature', 'top_p']) {
+      expect(code).not.toHaveProperty(key)
+    }
   })
 })
