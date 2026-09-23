@@ -302,6 +302,7 @@ async function callOnce(
     && /^claude-sonnet-5(?:[.-]|$)/.test(modelName))
     || (resolvedProvider === 'kimi'
       && /^(?:kimi-k3|kimi-k2[.-]7-code|kimi-k2-thinking)(?:[.-]|$)/.test(modelName))
+    || (resolvedProvider === 'minimax' && /^minimax-m(?:1|2)(?:[.-]|$)/.test(modelName))
   // DashScope 上别家模型（glm / kimi / deepseek…）的原生思考参数无效，统一改用 enable_thinking。
   const dashScopeThinking = isDashScopeEndpoint(config.baseUrl)
     ? dashScopeThinkingBody(resolveReasoningPolicy(config, options.allowReasoning === true).mode)

@@ -1266,3 +1266,27 @@ describe('DashScope 免费额度第三方模型请求体', () => {
     }
   })
 })
+
+
+it.each(['MiniMax-M2.5', 'MiniMax-M2.1'])(
+  '%s uses only supported DashScope parameters and parses final content', async (model) => {
+    let body: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body)) as Record<string, unknown>
+      return new Response(JSON.stringify({ choices: [{
+        message: { reasoning_content: '只供内部推理', content: '{"choice":"A1","message":"稳住。"}' },
+        finish_reason: 'stop',
+      }] }), { headers: { 'Content-Type': 'application/json' } })
+    }) as never)
+    const hosted = { ...config, providerType: 'qwen' as const,
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model }
+    await expect(requestLlmDecision({
+      config: hosted, messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(body.model).toBe(model)
+    expect(body.max_tokens).toBeGreaterThanOrEqual(8192)
+    for (const key of ['temperature', 'top_p', 'thinking', 'enable_thinking', 'reasoning_effort', 'response_format']) {
+      expect(body).not.toHaveProperty(key)
+    }
+  },
+)

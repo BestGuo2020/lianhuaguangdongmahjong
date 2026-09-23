@@ -168,6 +168,9 @@ export function resolveReasoningPolicy(
       }
       return policy(providerType, 'unknown', '无法确认该豆包接入点是否支持非思考模式')
     case 'minimax':
+      if (dashScope && /^minimax-m2\.(?:1|5)(?:[.-]|$)/.test(model)) {
+        return policy(providerType, 'reasoning-only', '百炼 MiniMax M2.1/M2.5 仅思考，未提供 low 强度档')
+      }
       if (/^minimax-m(?:1|2)(?:[.-]|$)/.test(model)) {
         return policy(providerType, 'reasoning-only', 'MiniMax M1/M2 系列为推理模型，当前没有可靠关闭开关')
       }
