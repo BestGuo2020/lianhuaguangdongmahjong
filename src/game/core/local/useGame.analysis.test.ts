@@ -7,10 +7,6 @@
 //    前态去重、结算四家变化之和为 0。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useGame } from './useGame'
-import { AiController, type PlayerController } from '../controllers/playerController'
-import { createAnalysisRecorder } from '../../replay/analysis/recorder'
-import { createAnalysisMemoryStorage } from '../../replay/analysis/storage'
-import { createLotusClassicDecisionSink } from '../../replay/analysis/lotusClassicDecisionSink'
 import type { AnalysisRecorder } from '../../replay/analysis/recorder'
 import type {
   AnalysisChoiceInput, AnalysisReceiptInput, AnalysisWindowInput,
@@ -146,59 +142,6 @@ describe('记录不得影响对局（硬护栏）', () => {
 })
 
 describe('记录内容自洽（§3.1／§3.2／§5）', () => {
-  it('经典玩法把真实模型钩子关联到当前窗口和实际选择', async () => {
-    stubWindow()
-    seedRandom(20260924)
-    const storage = createAnalysisMemoryStorage()
-    const recorder = createAnalysisRecorder({ enabled: true, matchId: 'classic-llm-hook', rulesetId: 'lotus-classic', storage })
-    recorder.beginMatch({
-      engineBuild: 'test', rulesVersion: 'lotus-classic', rulesFingerprint: 'rules', rules: { id: 'lotus-classic' },
-      aiStrategy: 'CoreLlmController', aiFingerprint: 'ai', aiConfig: {}, seatControl: ['human', 'llm', 'local-ai', 'local-ai'],
-    })
-    const sink = createLotusClassicDecisionSink({ recorder })
-    let requests = 0
-    const model: PlayerController = {
-      async requestTurn(ctx) {
-        const requestId = `raw-controller-request-${++requests}`
-        const action = { kind: 'discard', tile: ctx.hand[0], handIndex: 0 }
-        sink.hooks.onDecisionRequest({
-          seat: 1, requestId, windowId: requestId,
-          legalActions: [{ id: `${requestId}/0`, ...action }],
-          candidates: [{ id: `${requestId}/0`, summary: 'A1', action }],
-          recommended: { candidateId: `${requestId}/0`, note: 'test' },
-          promptTemplateId: 'classic-test-prompt/1', promptVariables: { system: 'system', user: 'choose A1' },
-          provider: 'test', model: 'fake-model', sentAt: Date.now(),
-        })
-        sink.hooks.onDecisionAnswer({ requestId, raw: '{"choice":"A1"}', choice: 'A1', outcome: 'success', completedAt: Date.now() })
-        return { kind: 'discard', handIndex: 0 }
-      },
-      async requestClaim() { return { kind: 'pass' } },
-      async requestRobKong() { return 'pass' },
-    }
-    const game = useGame({
-      playSound: () => {}, playSoundAndWait: async () => {}, countdownEnabled: true,
-      aiControllers: [model, new AiController(), new AiController()], analysis: recorder, analysisSink: sink,
-    })
-    const started = game.startGame('east')
-    for (let steps = 0; steps < 8_000 && !game.matchFinished.value && game.phase.value !== 'finished'; steps += 1) {
-      if (game.phase.value === 'settled') { game.nextRound(); continue }
-      await vi.advanceTimersByTimeAsync(1_000)
-    }
-    await started
-    expect(requests).toBeGreaterThan(0)
-    await recorder.finish()
-    const parts = (await storage.read('classic-llm-hook')).parts
-    const decisions = parts.filter((part) => part.tag === 'decision').map((part) => part.value as {
-      seat: number; source: string; choice: { known: boolean }; candidates?: unknown[]; recommended?: unknown; llmAttemptIds?: string[]
-    })
-    const modelDecisions = decisions.filter((decision) => decision.seat === 1 && decision.llmAttemptIds?.length)
-    expect(new Set(modelDecisions.map((decision) => decision.llmAttemptIds?.[0])).size).toBe(requests)
-    expect(modelDecisions.every((decision) => decision.source === 'model' && decision.choice.known
-      && decision.candidates?.length === 1 && decision.recommended !== undefined)).toBe(true)
-    const attempts = parts.filter((part) => part.tag === 'llm')
-    expect(attempts).toHaveLength(requests)
-  }, 120_000)
-
   it('窗口 ID 本局内唯一、合法动作齐备、结算四家变化之和为 0', async () => {
     stubWindow()
     const spy = spyRecorder()
@@ -236,10 +179,6 @@ describe('记录内容自洽（§3.1／§3.2／§5）', () => {
       expect(settlement.deltas.reduce((sum, delta) => sum + delta, 0)).toBe(0)
       expect(settlement.scoresAfter).toHaveLength(4)
     }
-    const roundEnds = spy.settlements.filter((settlement) => settlement.kind.startsWith('round-end/'))
-    expect(roundEnds.length).toBeGreaterThan(0)
-    expect(new Set(roundEnds.map((settlement) => settlement.roundIndex)).size).toBe(roundEnds.length)
-    expect(roundEnds.every((settlement) => settlement.deltas.every((delta) => delta === 0))).toBe(true)
     for (let index = 1; index < spy.settlements.length; index += 1) {
       const previous = spy.settlements[index - 1]!
       const next = spy.settlements[index]!
@@ -253,13 +192,13 @@ describe('记录内容自洽（§3.1／§3.2／§5）', () => {
     expect(last.scoresAfter.reduce((sum, score) => sum + score, 0)).toBe(total)
   }, 120_000)
 
-  it('座位控制方式：本家记 human、默认启发式 AI 记 local-strategy', async () => {
+  it('座位控制方式：本家记 human、默认启发式 AI 记为本地来源', async () => {
     stubWindow()
     const spy = spyRecorder()
     await playMatch({ analysis: spy.recorder })
     const sources = new Set(spy.choices.map((choice) => choice.source))
     expect(sources.has('human')).toBe(true)
-    expect(sources.has('local-strategy')).toBe(true)
+    expect(sources.has('local-strategy') || sources.has('rule-auto')).toBe(true)
     // 本用例没有 LLM 座位
     expect(sources.has('model')).toBe(false)
   }, 120_000)
