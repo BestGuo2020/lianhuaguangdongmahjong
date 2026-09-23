@@ -317,9 +317,10 @@ async function callOnce(
         model: config.model,
         messages,
         ...(omitDefaultSampling ? {} : { temperature: 0.4, top_p: 1 }),
-        ...(options.allowReasoning && resolvedProvider === 'openai'
-          ? { max_completion_tokens: options.maxTokens ?? 512 }
-          : { max_tokens: options.maxTokens ?? 64 }),
+        // Ordinary decisions use the provider's output allowance; only explicit budgets send a cap.
+        ...(options.maxTokens == null ? {} : options.allowReasoning && resolvedProvider === 'openai'
+          ? { max_completion_tokens: options.maxTokens }
+          : { max_tokens: options.maxTokens }),
         stream: true,
         n: 1,
         ...(options.extraBody ?? {}),

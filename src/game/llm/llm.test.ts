@@ -62,6 +62,27 @@ describe('parseLlmOutput', () => {
 })
 
 describe('requestLlmDecision：重试语义', () => {
+  it.each([
+    ['deepseek-v4-flash', 'deepseek'],
+    ['qwen-long', 'qwen'],
+    ['glm-4.5-air', 'glm'],
+  ] as const)('%s 普通决策不设置应用侧输出 token 上限', async (model, providerType) => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"choice":"A1","message":"稳住。"}' }, finish_reason: 'stop' }],
+      }), { headers: { 'Content-Type': 'application/json' } })
+    }) as never)
+
+    await expect(requestLlmDecision({
+      config: { ...config, providerType, model },
+      messages: { system: 's', user: 'u' }, candidateIds: ['A1'],
+    })).resolves.toEqual({ choice: 'A1', message: '稳住。' })
+    expect(capturedBody).not.toHaveProperty('max_tokens')
+    expect(capturedBody).not.toHaveProperty('max_completion_tokens')
+  })
+
   it('所有决策使用 SSE，但原始 reasoning_content 只转换为无内容的进度脉冲', async () => {
     let capturedBody: Record<string, unknown> = {}
     const progress = vi.fn()
