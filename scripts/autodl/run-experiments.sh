@@ -29,7 +29,7 @@ wc -l /root/jev/train-v3-all.jsonl | tee -a "$LOG/run.log"   # 期望 7413
 
 step E2A-SMOKE   # 训练循环机制验证（本地 Windows/CPU 段错误，只能在此验证）；不过不进 E2
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
-python scripts/train_calibrated.py --model "$MODEL15" \
+python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke \
   --epochs 1 --max-steps 3 --grad-accum 2 --max-len 4096 --dtype bfloat16 \
   2>&1 | tee "$LOG/e2a.log"
@@ -43,7 +43,7 @@ openjev eval -m "$MODEL15" --dtype bfloat16 \
   --data /root/jev/dev-v3.jsonl 2>&1 | tee "$LOG/e1b-1.5b.json"
 
 step E2-LORA-1.5B   # 7413 条全量 2 epochs；max-len 4096（2048 会静默丢 19-26% 样本）
-python scripts/train_calibrated.py --model "$MODEL15" \
+python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5 \
   2>&1 | tee "$LOG/e2-train.log"
