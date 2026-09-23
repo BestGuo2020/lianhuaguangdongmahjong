@@ -38,13 +38,15 @@ print('transformers', transformers.__version__, '| peft', peft.__version__)
 assert torch.cuda.is_available(), '实例没有可用 GPU——检查租机配置'
 PY
 
-# 预下载基座（HF 缓存进 ~/.cache，之后训练/评估/serve 免等待）
-python - <<'PY'
-from transformers import AutoModelForCausalLM, AutoTokenizer
-for m in ['Qwen/Qwen2.5-1.5B-Instruct', 'Qwen/Qwen2.5-7B-Instruct']:
-    print('downloading', m, flush=True)
-    AutoTokenizer.from_pretrained(m)
-    AutoModelForCausalLM.from_pretrained(m)
-PY
+# 预下载基座：走 ModelScope 镜像（AutoDL 内网友好、免登录；HF 直连在数据中心 IP 上实测 OSError）
+# 下载为完整仓库目录，后续所有 --model/-m 一律用本地路径（见 runbook 的 MODEL15/MODEL7）
+pip install modelscope --quiet --disable-pip-version-check
+mkdir -p /root/autodl-tmp/models
+for m in Qwen2.5-1.5B-Instruct Qwen2.5-7B-Instruct; do
+  if [ ! -d "/root/autodl-tmp/models/$m" ]; then
+    modelscope download --model "Qwen/$m" --local_dir "/root/autodl-tmp/models/$m"
+  fi
+done
+ls /root/autodl-tmp/models/Qwen2.5-1.5B-Instruct | head -5
 
 echo SETUP_OK
