@@ -148,11 +148,19 @@ const MODEL_PROVIDER_RULES: Array<[RegExp, LlmProviderType]> = [
   [/(?:anthropic|\bclaude)/, 'claude'],
 ]
 
-export function inferLlmProviderType(baseUrl: string, model: string): LlmProviderType {
+/** Aggregators may host several vendors; a recognizable model ID wins over a saved preset type. */
+export function providerTypeFromModel(model: string): LlmProviderType | null {
   const modelName = model.toLowerCase()
   for (const [pattern, providerType] of MODEL_PROVIDER_RULES) {
     if (pattern.test(modelName)) return providerType
   }
+  return null
+}
+
+export function inferLlmProviderType(baseUrl: string, model: string): LlmProviderType {
+  const modelName = model.toLowerCase()
+  const fromModel = providerTypeFromModel(modelName)
+  if (fromModel) return fromModel
   const source = `${baseUrl} ${modelName}`
   if (/(?:dashscope|\.maas\.aliyuncs|qwen|qwq)/.test(source)) return 'qwen'
   return 'custom'

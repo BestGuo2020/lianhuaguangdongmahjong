@@ -155,7 +155,7 @@ function providerExtraBody(
   // 提示词本身已强制 JSON 输出，解析仍走 extractJsonObject。
   const qwenDeepReasoning = (reasoning || hasMandatoryReasoning(resolved)) && resolved.providerType === 'qwen'
   if (structuredOutput && !qwenDeepReasoning && (resolved.providerType === 'qwen'
-    || (resolved.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
+    || (resolved.providerType === 'glm' && /^glm-5\.3-flashx?(?:[.-]|$)/.test(modelName))
     || relayKimiThinking)) {
     body.response_format = { type: 'json_object' }
   }
@@ -300,7 +300,8 @@ async function callOnce(
   const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
   const omitDefaultSampling = (resolvedProvider === 'claude'
     && /^claude-sonnet-5(?:[.-]|$)/.test(modelName))
-    || (resolvedProvider === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
+    || (resolvedProvider === 'kimi'
+      && /^(?:kimi-k3|kimi-k2[.-]7-code|kimi-k2-thinking)(?:[.-]|$)/.test(modelName))
   // DashScope 上别家模型（glm / kimi / deepseek…）的原生思考参数无效，统一改用 enable_thinking。
   const dashScopeThinking = isDashScopeEndpoint(config.baseUrl)
     ? dashScopeThinkingBody(resolveReasoningPolicy(config, options.allowReasoning === true).mode)
@@ -396,7 +397,7 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const reasoningOnly = reasoningPolicy.mode === 'reasoning-only'
     const modelName = config.model.trim().toLowerCase().split('/').pop() ?? ''
     const glmFlash = reasoningPolicy.providerType === 'glm'
-      && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName)
+      && /^glm-5\.3-flashx?(?:[.-]|$)/.test(modelName)
     const dialect = inferProviderDialect(config.baseUrl)
     const relayKimiThinking = options.reasoning === true
       && reasoningPolicy.providerType === 'kimi'
@@ -405,10 +406,6 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
     const orcaLongReasoning = options.reasoning === true
       && dialect === 'orcarouter'
       && ['deepseek', 'qwen', 'kimi'].includes(reasoningPolicy.providerType)
-    const quickReasoningMaxTokens = options.reasoning !== true
-      ? (glmFlash ? (dialect === 'official' ? 128 : 512)
-        : reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName) ? 128 : undefined)
-      : undefined
     const initialDeepReasoningMaxTokens = orcaLongReasoning
       ? 65_536
       : reasoningOnly ? REASONING_ONLY_INITIAL_TOKENS : relayKimiThinking ? 2048 : glmFlash ? 1024 : 512
@@ -429,9 +426,8 @@ export async function requestLlmDecision(options: LlmDecisionOptions): Promise<L
           extraBody,
           allowReasoning: options.reasoning === true || alwaysThinking,
           acceptReasoningResponse,
-          maxTokens: adaptiveThinking
-            ? deepReasoningMaxTokens
-            : (quickReasoningMaxTokens ?? (alwaysThinking ? 512 : undefined)),
+          // Quick decisions rely on the provider's output allowance, including always-thinking models.
+          maxTokens: adaptiveThinking ? deepReasoningMaxTokens : undefined,
           onReasoningProgress: options.onReasoningProgress,
         },
       )
@@ -478,7 +474,7 @@ async function testConnectionProbe(config: LlmProviderConfig): Promise<{ ok: boo
     const modelName = effectiveConfig.model.trim().toLowerCase().split('/').pop() ?? ''
     const cappedAlwaysQuick = alwaysThinking && (
       (reasoningPolicy.providerType === 'kimi' && /^kimi-k3(?:[.-]|$)/.test(modelName))
-      || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flash(?:[.-]|$)/.test(modelName))
+      || (reasoningPolicy.providerType === 'glm' && /^glm-5\.3-flashx?(?:[.-]|$)/.test(modelName))
     )
     const response = await callOnce(
       effectiveConfig,

@@ -86,7 +86,7 @@ describe('LLM 非思考能力矩阵', () => {
     const orca = { ...config('custom', 'z-ai/glm-5.3-flash'), baseUrl: 'https://api.orcarouter.ai/v1' }
     const relay = config('custom', 'z-ai/glm-5.3-flash')
     expect(resolveReasoningPolicy(official)).toMatchObject({ mode: 'always-on', requestBody: { reasoning_effort: 'low' } })
-    expect(resolveReasoningPolicy(official, true).requestBody).toEqual({ reasoning_effort: 'low' })
+    expect(resolveReasoningPolicy(official, true).requestBody).toEqual({ reasoning_effort: 'high' })
     expect(resolveReasoningPolicy(orca, true).requestBody).toEqual({ reasoning_effort: 'medium' })
     expect(resolveReasoningPolicy(relay, true).requestBody).toEqual({ reasoning_effort: 'low' })
   })
@@ -235,4 +235,106 @@ describe('LLM 非思考能力矩阵', () => {
     // token-plan 是百炼的另一个接入点，同样按 DashScope 处理
     expect(isDashScopeEndpoint('https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1')).toBe(true)
   })
+})
+
+
+describe('截图中百炼托管型号', () => {
+  const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  const hosted = (model: string) => ({ baseUrl: dash, model, providerType: 'qwen' as const })
+
+  it.each(['glm-4.5v', 'glm-4.6v', 'glm-4.6v-flash', 'glm-4.6v-flashx'])(
+    '%s 即使沿用千问预置也按可切换的 GLM 视觉模型处理', (model) => {
+      const quick = resolveReasoningPolicy(hosted(model))
+      const deep = resolveReasoningPolicy(hosted(model), true)
+      expect(quick).toMatchObject({ providerType: 'glm', mode: 'explicit-off' })
+      expect(deep).toMatchObject({ providerType: 'glm', mode: 'explicit-on' })
+      expect(dashScopeThinkingBody(quick.mode)).toEqual({ enable_thinking: false })
+      expect(dashScopeThinkingBody(deep.mode)).toEqual({ enable_thinking: true })
+    },
+  )
+
+  it.each(['glm-5', 'glm-5.1', 'glm-5.2', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx'])(
+    '%s 普通低强度，条件触发后提高到 high', (model) => {
+      const quick = resolveReasoningPolicy(hosted(model))
+      const deep = resolveReasoningPolicy(hosted(model), true)
+      expect(quick).toMatchObject({ providerType: 'glm', requestBody: { reasoning_effort: 'low' } })
+      expect(deep).toMatchObject({ providerType: 'glm', requestBody: { reasoning_effort: 'high' } })
+      expect(dashScopeThinkingBody(quick.mode)).toEqual({ enable_thinking: true })
+      expect(dashScopeThinkingBody(deep.mode)).toEqual({ enable_thinking: true })
+    },
+  )
+
+  it.each(['deepseek-v4-flash-0731', 'deepseek-v4-pro-0813'])(
+    '%s 使用支持的 low/high 强度，不误判为千问', (model) => {
+      expect(resolveReasoningPolicy(hosted(model))).toMatchObject({
+        providerType: 'deepseek', mode: 'explicit-on', requestBody: { reasoning_effort: 'low' },
+      })
+      expect(resolveReasoningPolicy(hosted(model), true)).toMatchObject({
+        providerType: 'deepseek', mode: 'explicit-on', requestBody: { reasoning_effort: 'high' },
+      })
+    },
+  )
+
+  it('不支持 low 的托管型号保持可调用，不发送无效强度', () => {
+    expect(resolveReasoningPolicy(hosted('deepseek-r1'))).toMatchObject({
+      providerType: 'deepseek', mode: 'reasoning-only', requestBody: {},
+    })
+    expect(resolveReasoningPolicy(hosted('kimi-k3'))).toMatchObject({
+      providerType: 'kimi', mode: 'always-on', requestBody: {},
+    })
+    expect(resolveReasoningPolicy(hosted('kimi-k2.7-code'))).toMatchObject({
+      providerType: 'kimi', mode: 'reasoning-only', requestBody: {},
+    })
+    expect(resolveReasoningPolicy(hosted('kimi-k2-thinking'))).toMatchObject({
+      providerType: 'kimi', mode: 'reasoning-only', requestBody: {},
+    })
+    expect(resolveReasoningPolicy(hosted('Moonshot-Kimi-K2-Instruct'))).toMatchObject({
+      providerType: 'kimi', mode: 'naturally-off', requestBody: {},
+    })
+  })
+
+  it('识别百炼业务空间和自己的 token-plan 透传地址', () => {
+    const maas = 'https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1'
+    const relay = 'https://www.bestguo.top:58000/api/llm/relay/token-plan'
+    expect(isDashScopeEndpoint(maas)).toBe(true)
+    expect(isDashScopeEndpoint(relay)).toBe(true)
+    expect(inferProviderDialect(maas)).toBe('official')
+  })
+})
+
+
+describe('截图所有型号的快速模式', () => {
+  const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  it.each([
+    ['glm-5', 'glm', 'explicit-on'], ['glm-4.5-air', 'glm', 'explicit-off'],
+    ['glm-5.1', 'glm', 'explicit-on'], ['glm-5.2', 'glm', 'explicit-on'],
+    ['glm-5.3', 'glm', 'always-on'], ['glm-4.5', 'glm', 'explicit-off'],
+    ['glm-4.6', 'glm', 'explicit-off'], ['glm-4.7', 'glm', 'explicit-off'],
+    ['deepseek-r1-distill-qwen-7b', 'deepseek', 'reasoning-only'],
+    ['deepseek-r1-distill-qwen-32b', 'deepseek', 'reasoning-only'],
+    ['deepseek-v4-flash-0731', 'deepseek', 'explicit-on'],
+    ['deepseek-r1', 'deepseek', 'reasoning-only'],
+    ['deepseek-v4-pro', 'deepseek', 'explicit-off'],
+    ['deepseek-r1-distill-qwen-14b', 'deepseek', 'reasoning-only'],
+    ['deepseek-v4-pro-0813', 'deepseek', 'explicit-on'],
+    ['deepseek-v3.1', 'deepseek', 'explicit-off'],
+    ['deepseek-v3.2', 'deepseek', 'explicit-off'],
+    ['deepseek-v4-flash', 'deepseek', 'explicit-off'],
+    ['kimi-k2.5', 'kimi', 'explicit-off'],
+    ['kimi-k2-thinking', 'kimi', 'reasoning-only'],
+    ['kimi-k2.7-code', 'kimi', 'reasoning-only'],
+    ['Moonshot-Kimi-K2-Instruct', 'kimi', 'naturally-off'],
+    ['kimi-k3', 'kimi', 'always-on'],
+  ] as const)('%s uses %s / %s', (model, providerType, mode) => {
+    expect(resolveReasoningPolicy({ providerType: 'qwen', baseUrl: dash, model }))
+      .toMatchObject({ providerType, mode })
+  })
+
+  it.each(['glm-4.5v', 'glm-4.6v', 'glm-4.6v-flash', 'glm-4.6v-flashx'])(
+    '%s on the official Z.ai endpoint sends its native thinking toggle', (model) => {
+      const config = { providerType: 'glm' as const, baseUrl: 'https://api.z.ai/api/paas/v4', model }
+      expect(resolveReasoningPolicy(config).requestBody).toEqual({ thinking: { type: 'disabled' } })
+      expect(resolveReasoningPolicy(config, true).requestBody).toEqual({ thinking: { type: 'enabled' } })
+    },
+  )
 })

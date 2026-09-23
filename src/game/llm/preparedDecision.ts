@@ -23,9 +23,15 @@ export async function requestPreparedDecision(options:{
   request?:typeof requestLlmDecision
 }) {
   const {stats,reasoning,config}=options
+  const quickPolicy=resolveReasoningPolicy(config)
   const policy=resolveReasoningPolicy(config,true)
-  const alwaysThinking=hasMandatoryReasoning(policy)
-  const supports=(policy.mode==='explicit-on'||policy.mode==='always-on')&&!isConditionalReasoningSuppressed(config)
+  const alwaysThinking=hasMandatoryReasoning(quickPolicy)
+  // A thinking-only model with no supported effort tier (e.g. Kimi K3 on DashScope)
+  // must not enter a capped deep request that cannot actually increase its strength.
+  const adjustable=quickPolicy.mode!==policy.mode
+    || JSON.stringify(quickPolicy.requestBody)!==JSON.stringify(policy.requestBody)
+  const supports=(policy.mode==='explicit-on'||policy.mode==='always-on')
+    &&adjustable&&!isConditionalReasoningSuppressed(config)
   // The existing coordinator reserves 45s around a 40s deep request. A shorter
   // authority window never gains that reserve or extends its actual deadline.
   const reserve=Math.max(0,reasoning.config.minRemainingBudgetMs-reasoning.config.deadlineMs)
