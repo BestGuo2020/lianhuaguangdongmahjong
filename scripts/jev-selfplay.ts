@@ -17,7 +17,7 @@ import { appendFileSync } from 'node:fs'
 import type { MatchType } from '../src/game/core/contracts/types'
 import type { LlmProviderConfig } from '../src/game/llm/config'
 import { LlmClientError } from '../src/game/llm/client'
-import { requestJevDecision } from '../src/game/llm/jevClient'
+import { requestJevDecision, requestSystemOne } from '../src/game/llm/jevClient'
 import {
   JEV_BLOOD_FLOW_CLAIM_INSTRUCTIONS, JEV_BLOOD_FLOW_TURN_INSTRUCTIONS,
   buildJevBloodFlowRequest, jevBloodFlowTemplateId, type JevBloodFlowMode,
@@ -47,7 +47,10 @@ import {
 } from '../src/game/replay/bloodFlowRecorder'
 import type { ReplayMatch, ReplayRound, ReplayStanding } from '../src/game/replay/types'
 
-export type SelfplaySeatPolicy = 'jev-blind' | 'jev-hint' | 'ev' | 'heuristic'
+export type SelfplaySeatPolicy = 'jev-blind' | 'jev-hint' | 'ev' | 'heuristic' | 'ev-jev-fusion'
+
+/** 融合预注册常量（记录 jev-autodl-gpu §七）：fusionScore = evIncome − λ·pDanger，λ=400 点。 */
+export const FUSION_LAMBDA = 400
 
 export interface JevSelfplayJevOptions {
   /** /v1/systemone 端点配置（baseUrl 指服务根，如 http://127.0.0.1:8000）。 */
@@ -426,6 +429,84 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
           completedAt: monotonic(),
         })
         return { action: engineOptions[index], legalActionId: legalActions[index].id, source: 'model' as AnalysisChoiceSource }
+      }
+
+      // 融合座位（选项 4）：EV 仍是司机，Jev 只供危险度读数（noul）重排弃牌候选。
+      // 预注册（记录 §七）：fusionScore(c) = evIncome(c) − FUSION_LAMBDA·pDanger(c)；
+      // 仅在弃牌候选间重排；非弃牌动作与查询失败一律保持 EV 原选择。
+      if (policy === 'ev-jev-fusion') {
+        const evAction = decideBloodFlowActionEv(view, BLOOD_FLOW_LLM_AI) ?? engineOptions[0]
+        const input = buildBloodFlowDecisionInput(view, requestId, { roundIndex, dealerIndex: dealer }, BLOOD_FLOW_LLM_AI)
+        const discardCands = input.candidates.filter((c) => c.action.kind === 'discard')
+        const evIndex = findLegalIndex(engineOptions, evAction as unknown as BloodFlowAction)
+        if (evAction.kind !== 'discard' || discardCands.length < 2 || !options.jev) {
+          const c0 = evIndex >= 0 ? evIndex : 0
+          return { action: engineOptions[c0], legalActionId: legalActions[c0].id, source: 'local-strategy' as AnalysisChoiceSource }
+        }
+        const me = view.players[seat] as { hand: string[]; discards: string[]; melds: Array<{ type: string; tile: string }>; score: number; drawnTileIndex?: number }
+        const probeState = {
+          mode: 'danger-probe-v1',
+          hand: [...me.hand],
+          drawnTile: me.drawnTileIndex != null && me.drawnTileIndex >= 0 ? me.hand[me.drawnTileIndex] ?? null : null,
+          discards: view.players.map((p) => [...p.discards]),
+          melds: view.players.map((p) => p.melds.map((m) => ({ kind: m.type, tile: m.tile }))),
+          scores: view.players.map((p) => p.score),
+          wallLeft: view.wallCount,
+          jokers: [...view.jokers],
+          flipTile: view.flipTile ?? null,
+        }
+        const questions: Record<string, { type: 'noul'; instructions: string }> = {}
+        discardCands.forEach((c, i) => {
+          questions[`d${i}`] = {
+            type: 'noul',
+            instructions: `座位0 现在打出 ${c.label.replace('打出', '')}：是否会立刻被任一对手胡牌（点炮）？`,
+          }
+        })
+        const attemptId = recorder?.attemptStarted({
+          decisionWindowId: window.id, seat, requestId, attempt: 1,
+          provider: 'jev-fusion', requestModel: options.jev.config.model,
+          sampling: { lambda: FUSION_LAMBDA, mode: 'danger-rerank' },
+          promptVariables: { nDiscardCandidates: discardCands.length },
+          sentAt: monotonic(),
+        }) ?? ''
+        let pDangers: number[] | null = null
+        try {
+          const res = await requestSystemOne({
+            config: options.jev.config,
+            request: { state: probeState, model: options.jev.config.model, questions },
+          })
+          pDangers = discardCands.map((_c, i) => {
+            const v = res.answers[`d${i}`]?.noul
+            return typeof v === 'number' ? v : 0.25
+          })
+          recorder?.attemptFinished(attemptId, {
+            outcome: 'success', responseModel: UNKNOWN,
+            answer: known({ text: '', note: JSON.stringify({ pDangers }) }),
+            completedAt: monotonic(),
+          })
+        } catch {
+          recorder?.attemptFinished(attemptId, {
+            outcome: 'network-error', responseModel: UNKNOWN,
+            fallback: { reason: 'jev-fusion 危险度查询失败，回退纯 EV', strategy: 'ev' },
+            completedAt: monotonic(),
+          })
+        }
+        let picked: BloodFlowAction = evAction
+        if (pDangers) {
+          const dangers = pDangers
+          const score = (i: number) => {
+            const evTotal = discardCands[i].features?.ev?.income?.total
+            const evIncome = typeof evTotal === 'number' ? evTotal : 0
+            return evIncome - FUSION_LAMBDA * dangers[i]
+          }
+          let best = 0
+          for (let i = 1; i < discardCands.length; i += 1) if (score(i) > score(best)) best = i
+          const bi = findLegalIndex(engineOptions, discardCands[best].action as unknown as BloodFlowAction)
+          if (bi >= 0) picked = engineOptions[bi]
+        }
+        const pi = findLegalIndex(engineOptions, picked)
+        const pc = pi >= 0 ? pi : 0
+        return { action: engineOptions[pc], legalActionId: legalActions[pc].id, source: 'local-strategy' as AnalysisChoiceSource }
       }
 
       // 本地策略座位（ev = EV 策略；heuristic = 旧启发式）。

@@ -82,3 +82,18 @@ Jev 请求失败 1、执行异常 0。预注册均值条款（≤−100）触发
 - `summary.json`（座位/分数/名次/逐局收支/Jev 请求统计）
 
 日间 GPU 窗口 ≈0.6h（E4 16min + 表演赛 ~10min）。实例与隧道保持待命供复跑。
+
+## 七、选项 4 信号源融合（止损阀已过，pilot 预注册）
+
+**信号检验（work/jev-signal-*/metrics.json）**：n=547 个 seat0 弃牌决策（E4 30 场存档补问），
+realizedRon 122（base rate 22.3%）；**AUC 0.716**；分桶实现率单调 9.5%→21.3%→58.6%
+（[0.3,0.4)/[0.4,0.5)/[0.5,0.6)）；中 bands 过度自信（meanP 0.43 vs 实现 0.21）→
+融合用 λ 加权重排而非原始概率阈值。预注册 kill 阀：AUC≤0.55 杀、≥0.60 进 pilot → **PROCEED**。
+
+**融合 pilot 预注册（跑前写死）**：
+- 臂：`fusion`（seat0 = ev-jev-fusion）vs `baseline`（纯 EV），N=30，**seeds 4000–4029**（未用过）；
+- 融合规则：fusionScore(c) = evIncome(c) − **400**·pDanger(c)，仅在弃牌候选间重排；
+  EV 最优为非弃牌动作、或 Jev 查询失败 → 保持 EV 原选择（失败回退记 attempt fallback）；
+  pDanger = 单请求多 noul（每弃牌候选一问）；
+- 结案标准沿用预注册阈值（≥+50 采用 / ≤−100 或 CI 上界<0 拒绝 / 其余不采用）；
+- 预算：新窗口 ≤2h / ¥10；超限停机报告。
