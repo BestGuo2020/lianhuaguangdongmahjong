@@ -69,7 +69,7 @@ openjev eval -m $MODEL15 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
 python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
   --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke --epochs 1 --max-steps 3 \
-  --grad-accum 2 --max-len 4096 --dtype bfloat16
+  --grad-accum 1 --max-len 4096 --dtype bfloat16
 # 预期输出：trainable params 行、"100 training decisions"、3 条 step loss、saved LoRA adapter
 
 # E2：LoRA 蒸馏 1.5B（train 全量 7413 条，2 epochs）
@@ -79,7 +79,10 @@ python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
 #   brier 0.5 按 OpenJev README 推荐（NLL+Brier 同时压，兼顾准确率与校准）。
 python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
-  --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5
+  --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5 \
+  --grad-accum 1
+#   （--grad-accum 1 是显存口径：单样本图 ≈15GB，accum≥2 驻留多样本图 → 30GB OOM 实测；
+#     总 forward 量不变，仅更新频率变化）
 
 # E2 评估（训练脚本尾部也会打 eval，这里用统一口径再跑一次并留档）
 openjev eval -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
@@ -94,7 +97,8 @@ openjev eval -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
 #   head -n 2500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub.jsonl
 #   python /root/jev/train_calibrated_chunked.py --model $MODEL7 \
 #     --data /root/jev/train-sub.jsonl --eval-data /root/jev/dev-v3.jsonl \
-#     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5
+#     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
+#     --grad-accum 1
 
 # 达标后：给胜出模型重新拟合温度（GPU 上分钟级；dev 全量 858）
 #   ⚠️ 必须带 --adapter：校正对象是「基座+LoRA」的组合，不带就校到基座头上（张冠李戴）
