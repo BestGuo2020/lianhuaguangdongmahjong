@@ -43,13 +43,14 @@ openjev eval -m "$MODEL15" --dtype bfloat16 \
   --data /root/jev/dev-v3.jsonl 2>&1 | tee "$LOG/e1b-1.5b.json"
 
 step E2-LORA-1.5B   # 7413 条全量；max-len 4096（2048 会静默丢 19-26% 样本）
-#   显存/时间口径：chunk forward 包 activation checkpoint（logits 不进图，峰值 ~10GB）；
-#   代价每 chunk 多一次 forward → --epochs 1 保时间预算（偏离 2 epochs 已记录；
-#   LoRA r16 于 7.4k 样本单epoch 通常足够，门槛未过则如实报告不偷加）。
+#   显存/时间口径：chunk forward 包 activation checkpoint（logits 不进图）；
+#   --chunk-rows 4：chunk-rows=1 实测 5.1s/step → 7413 步 10.5h 超预算；4 行/chunk
+#   forward 次数降 4 倍（峰值瞬态 ~20GB，32GB 切片仍安全），ETA ≈3.1h；
+#   --epochs 1 保时间预算（偏离 2 epochs 已记录；门槛未过则如实报告不偷加）。
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
-  --grad-accum 1 \
+  --grad-accum 1 --chunk-rows 4 \
   2>&1 | tee "$LOG/e2-train.log"
 
 step E2-EVAL-LORA   # 门槛判定依据：accuracy>=0.50 且 NLL<=1.5 才进 E4
