@@ -77,11 +77,23 @@ def load_examples(path: str, renderer: HFPromptRenderer, prompt_config: PromptCo
 
 
 def candidate_logprobs(model, example: Example, pad_id: int, device, chunk_rows: int = 1) -> torch.Tensor:
-    """Per-candidate summed token log-probs, chunked forwards + position-sliced logsumexp.
+    """Per-candidate summed token log-probs, chunked forwards + activation checkpointing.
 
     数学等价于上游单批实现：每个候选的 logprob = 其各目标 token 位置的
     (logit[target] - logsumexp(logits[position, :])) 之和；候选之间无耦合。
+    内存结构性保证：每 chunk 的 forward 包在 activation checkpoint 里（no-grad 执行、
+    backward 时重算），全宽 logits 张量（~4.9GB/chunk）不进入 autograd 图——实测
+    basic slicing + contiguous/clone 等各种"切断"手法都仍被 CastBackward/IndexBackward
+    保留存储引用，只有 checkpoint 是结构性保证。代价 = 每 chunk 多一次 forward。
     """
+    from torch.utils.checkpoint import checkpoint as _ckpt
+
+    def chunk_sel(ids, mask, i, pos0, ntok):
+        def fn():
+            logits = model(input_ids=ids, attention_mask=mask, use_cache=False).logits
+            return logits[i, pos0:pos0 + ntok, :].float()
+        return _ckpt(fn, use_reentrant=False)
+
     rows = [example.prefix + c for c in example.candidates]
     outs: list[torch.Tensor] = []
     for start in range(0, len(rows), max(1, chunk_rows)):
@@ -93,13 +105,11 @@ def candidate_logprobs(model, example: Example, pad_id: int, device, chunk_rows:
             ids[i, : len(r)] = torch.tensor(r)
             mask[i, : len(r)] = 1
         ids, mask = ids.to(device), mask.to(device)
-        logits = model(input_ids=ids, attention_mask=mask, use_cache=False).logits  # 保持模型 dtype
         pos0 = len(example.prefix) - 1
         for i, row in enumerate(batch):
-            c = row[len(example.prefix):]          # 候选段（整行 = prefix + 候选；别把整行当候选）
-            positions = torch.arange(pos0, pos0 + len(c), device=device)
+            c = row[len(example.prefix):]          # 候选段（整行 = prefix + 候选）
             targets = torch.tensor(c, device=device)
-            sel = logits[i, positions, :].float()          # [len(c), V]：len(c) 通常 1–2，极小
+            sel = chunk_sel(ids, mask, i, pos0, len(c))       # [len(c), V]，极小；图经 checkpoint 边界
             lse = torch.logsumexp(sel, dim=-1)
             got = sel.gather(1, targets.unsqueeze(1)).squeeze(1)
             outs.append((got - lse).sum())
