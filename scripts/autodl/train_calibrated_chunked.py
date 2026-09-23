@@ -95,7 +95,8 @@ def candidate_logprobs(model, example: Example, pad_id: int, device, chunk_rows:
         ids, mask = ids.to(device), mask.to(device)
         logits = model(input_ids=ids, attention_mask=mask, use_cache=False).logits  # 保持模型 dtype
         pos0 = len(example.prefix) - 1
-        for i, c in enumerate(batch):
+        for i, row in enumerate(batch):
+            c = row[len(example.prefix):]          # 候选段（整行 = prefix + 候选；别把整行当候选）
             positions = torch.arange(pos0, pos0 + len(c), device=device)
             targets = torch.tensor(c, device=device)
             sel = logits[i, positions, :].float()          # [len(c), V]：len(c) 通常 1–2，极小
