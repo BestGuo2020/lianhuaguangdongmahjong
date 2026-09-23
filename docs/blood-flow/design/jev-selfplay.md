@@ -54,6 +54,7 @@ node scripts/analyze-jev-selfplay.mjs work/jev-selfplay/<run-id>
 - **对照**：`blind` / `hint` / `baseline` 三臂共用同一种子列（同牌墙同开局）；被测座位恒为 seat0，其余三座同一本地 EV 策略。每场 1 局、每臂 N 场，**每场是一个样本点**（同场窗口不独立、不跨场相加收益差）。
 - **种子分区**：调参/试跑用 1000–1999；正式验收必须用未参与过任何调整的种子（5000 起）。不得复用已看过的回放当独立留出。
 - **预算规则（CPU 现实）**：正式跑之前先在真实 OpenJev 端点上测单决策延迟（≥20 个真实决策请求，记 p50/p95）；每臂场数 N = 可接受总时长 ÷（p95 × 每场 jev 决策数 + 每场本地开销 ~20s）。延迟没测之前不定 N，**不用 mock 延迟冒充真实延迟**。
+- **方差下限（2026-09-23 修订，v3 扩样实测教训）**：单场配对差 sd≈1400 点，N=10 的批次 se≈450——**结案批次每臂 N≥30 对，或 ROUNDS≥4 的多局场压方差**；N=10 只允许冒烟/延迟探针，不允许触发采用/拒绝条款。首批+扩样合并判定时，扩样必须预声明（场数、种子段、合并口径、不再扩样）。
 - **主指标**：seat0 每场净分（配对差 arm − baseline 的均值 + bootstrap 95% CI）。
 - **副指标**：seat0 名次、胡牌次数、放炮次数、EV 一致率、置信分桶一致率、拒胡数、Jev 失败/回退率、单决策延迟。
 - **结案标准（本批次）**：
@@ -94,9 +95,12 @@ cd D:\vueprojects\OpenJev
 - 提速选项（均未实施；改动即升模板版本或换 backend 标签）：state 规则文本瘦身、`Qwen2.5-0.5B-Instruct` 基座、`--system-prompt` 外置规则、更长 state 复用（需 OpenJev 侧跨请求缓存）。
 - 探针单场观察（**1 场样本，不构成任何结论**）：blind seat0 净分 −3060、17 次放炮、0 胡、EV 一致率 34.6%、平均 confidence 0.33、2 处高置信分歧标记。
 
-### 校正飞轮（后续里程碑，不在本期）
+### 校正飞轮（第一轮已实现，2026-09-23）
 
-OpenJev 支持温度缩放（`openjev calibrate`）与 JSONL gold 标签的 LoRA 微调（`scripts/train_calibrated.py`）。本地 EV 引擎可批量生成 gold（state/questions 取 jev 臂分析包，gold=engineSuggestion），大模型复盘修正过的窗口可回流为高价值样本——蒸馏出「麻将专用 Jev」。生成 gold 数据集的脚本留待校正里程碑实现。
+- **gold 采集**：`scripts/jev-selfplay-collect.test.ts`（门控 `JEV_SELFPLAY_COLLECT=1`）——四座全 EV 跑局，每个 ≥2 候选且有 `engineSuggestion` 的决策点落一行 OpenJev 格式 `{state, questions:{action}, gold:{action}}` 到 `work/jev-calibration/<tag>.jsonl`（含 manifest）。样本与 pilot 请求**同源构造**（同一个 `buildJevBloodFlowRequest`），模板漂移即校准数据失效。产物规模：~91 样本/场（train 20 场=1821 行，dev 10 场=858 行，claim 行占 ~20%）。
+- **温度校正**：`scripts/openjev-fit-calibration.py`（用 OpenJev 的 venv 跑）——单遍评分缓存 logprobs（断点续跑），train 黄金分割拟合 choice 温度，dev 在同一份缓存上给 T=1 与 T* 两组 accuracy/NLL/ECE（温度缩放不改 argmax，accuracy 前后相同）。不用 CLI `calibrate`+`eval` 是因为它们要 3 遍评分（CPU 上每遍数小时）。产物：`calibration-v3.json`（`openjev serve --calibration` 直接可用）+ `metrics-v3.json`。
+- **模板 v3**（2026-09-23）：v2 质检发现 claim 窗口错发出牌指令（`request` 顶层没有 `decision` 字段，真实来源是 `request.state.decision`；单测夹具手写了该字段所以没拦住）。v3 修复并在自对弈冒烟里加了**集成回归**（真实决策输入 → collect 的 claim 行必须带 claim 指令）。v2 采集数据作废，`*-v3` 重采。
+- **后续轮次**：LoRA 微调（`scripts/train_calibrated.py`，CPU 不现实，需 GPU）；DAgger 式迭代采集（用 Jev 自己的轨迹补采状态分布偏移）；gold 不只用 engineSuggestion（大模型复盘修正过的窗口回流）。
 
 ## 6. 已知限制
 
