@@ -21,7 +21,7 @@ PY
 CUDA_LAUNCH_BLOCKING=1 python train_calibrated_chunked.py \
   --model /root/autodl-tmp/models/Qwen2.5-1.5B-Instruct \
   --data /root/jev/train-smoke-wide.jsonl --output /root/jev/ckpt/smoke3 \
-  --epochs 1 --max-steps 1 --grad-accum 1 --max-len 4096 --dtype bfloat16 \
+  --epochs 1 --max-steps 1 --grad-accum 1 --max-len 4096 --dtype bfloat16 --chunk-rows 2 \
   > /root/jev/blocking.log 2>&1
 echo REMOTE_EXIT=$?
 tail -6 /root/jev/blocking.log

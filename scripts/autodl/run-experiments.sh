@@ -26,6 +26,10 @@ if [ ! -f /root/jev/train-v3-all.jsonl ]; then
   cat /root/jev/train-v3.jsonl /root/jev/train-v3-ext.jsonl > /root/jev/train-v3-all.jsonl
 fi
 wc -l /root/jev/train-v3-all.jsonl | tee -a "$LOG/run.log"   # 期望 7413
+# 预算裁剪（实测稳态 4.1s/step @ rows=2）：3500 条 ≈ 4.0h → ~03:20 完成，留 ~1h 抗争用余量；
+# 5000/全量会顶破 04:27 硬停线。偏离「全量」已记录；门槛判定口径不变。
+head -n 3500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub3500.jsonl
+wc -l /root/jev/train-sub3500.jsonl | tee -a "$LOG/run.log"
 
 step E2A-SMOKE   # 训练循环机制验证（本地 Windows/CPU 段错误，只能在此验证）；不过不进 E2
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
@@ -48,9 +52,9 @@ step E2-LORA-1.5B   # 7413 条全量；max-len 4096（2048 会静默丢 19-26% �
 #   forward 次数降 4 倍（峰值瞬态 ~20GB，32GB 切片仍安全），ETA ≈3.1h；
 #   --epochs 1 保时间预算（偏离 2 epochs 已记录；门槛未过则如实报告不偷加）。
 python /root/jev/train_calibrated_chunked.py --model "$MODEL15" \
-  --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
+  --data /root/jev/train-sub3500.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
-  --grad-accum 1 --chunk-rows 3 \
+  --grad-accum 1 --chunk-rows 2 \
   2>&1 | tee "$LOG/e2-train.log"
 
 step E2-EVAL-LORA   # 门槛判定依据：accuracy>=0.50 且 NLL<=1.5 才进 E4

@@ -77,39 +77,44 @@ def load_examples(path: str, renderer: HFPromptRenderer, prompt_config: PromptCo
 
 
 def candidate_logprobs(model, example: Example, pad_id: int, device, chunk_rows: int = 1) -> torch.Tensor:
-    """Per-candidate summed token log-probs, chunked forwards + activation checkpointing.
+    """Per-candidate summed token log-probs; chunked forwards + activation checkpointing.
 
-    数学等价于上游单批实现：每个候选的 logprob = 其各目标 token 位置的
-    (logit[target] - logsumexp(logits[position, :])) 之和；候选之间无耦合。
-    内存结构性保证：每 chunk 的 forward 包在 activation checkpoint 里（no-grad 执行、
-    backward 时重算），全宽 logits 张量（~4.9GB/chunk）不进入 autograd 图——实测
-    basic slicing + contiguous/clone 等各种"切断"手法都仍被 CastBackward/IndexBackward
-    保留存储引用，只有 checkpoint 是结构性保证。代价 = 每 chunk 多一次 forward。
+    数学等价于上游单批实现：logprob = Σ_t (logit[target_t] - logsumexp(logits[pos0+t, :]))。
+    实现要点（前三版实测教训）：
+    - 每个 chunk **一次** checkpointed forward，fn 返回该 chunk 全部行的目标位置切片
+      （tuple 输出）；checkpoint no-grad 执行 → 全宽 logits（rows×1720×151936）只是瞬态，
+      不进 autograd 图；backward 重算一次。5d03fb6 版按行各做整批 forward（冗余数倍）已废弃。
+    - 不用 KV-cache 单 token 步：transformers 5.17 共享 DynamicCache 在半精度下对后续候选
+      渐进污染（fp32 CPU 前几个候选精确、后续候选偏差达 18 nats），结构性不可靠，已废弃。
+    峰值显存 ≈ weights + 单 chunk 瞬态 logits（rows=4 ≈ 20GB）+ 激活，32GB 切片安全。
     """
     from torch.utils.checkpoint import checkpoint as _ckpt
 
-    def chunk_sel(ids, mask, i, pos0, ntok):
-        def fn():
-            logits = model(input_ids=ids, attention_mask=mask, use_cache=False).logits
-            return logits[i, pos0:pos0 + ntok, :].float()
-        return _ckpt(fn, use_reentrant=False)
-
     rows = [example.prefix + c for c in example.candidates]
+    ntoks = [len(c) for c in example.candidates]
+    pos0 = len(example.prefix) - 1
+    cr = max(1, chunk_rows)
     outs: list[torch.Tensor] = []
-    for start in range(0, len(rows), max(1, chunk_rows)):
-        batch = rows[start:start + max(1, chunk_rows)]
+    for start in range(0, len(rows), cr):
+        batch = rows[start:start + cr]
+        ns = ntoks[start:start + cr]
         width = max(len(r) for r in batch)
         ids = torch.full((len(batch), width), pad_id, dtype=torch.long)
         mask = torch.zeros_like(ids)
         for i, r in enumerate(batch):
             ids[i, : len(r)] = torch.tensor(r)
             mask[i, : len(r)] = 1
-        ids, mask = ids.to(device), mask.to(device)
-        pos0 = len(example.prefix) - 1
+        ids = ids.to(device)
+        mask = mask.to(device)
+
+        def fn(ids=ids, mask=mask, ns=ns):
+            logits = model(input_ids=ids, attention_mask=mask, use_cache=False).logits
+            return tuple(logits[i, pos0:pos0 + n, :].float() for i, n in enumerate(ns))
+
+        sels = _ckpt(fn, use_reentrant=False)
         for i, row in enumerate(batch):
-            c = row[len(example.prefix):]          # 候选段（整行 = prefix + 候选）
-            targets = torch.tensor(c, device=device)
-            sel = chunk_sel(ids, mask, i, pos0, len(c))       # [len(c), V]，极小；图经 checkpoint 边界
+            targets = torch.tensor(row[len(example.prefix):], device=device)
+            sel = sels[i]                                   # [n, V] 小
             lse = torch.logsumexp(sel, dim=-1)
             got = sel.gather(1, targets.unsqueeze(1)).squeeze(1)
             outs.append((got - lse).sum())
