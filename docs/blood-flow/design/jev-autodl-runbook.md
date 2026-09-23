@@ -61,11 +61,13 @@ openjev eval -m $MODEL7 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 #      （此前的 26.4%/1.866 是 250 条子采样 + 温度校正后的数字，口径不同，只作背景参考）
 openjev eval -m $MODEL15 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
-# E2a（远端 5 分钟冒烟，必做勿跳）：训练循环在本地 Windows/CPU 上段错误（0xC0000005，
-#   与数据无关——数据管线已在本地用真实 tokenizer 验证 5/5：gold 索引/候选数/长度全对），
-#   训练机制只能在目标 GPU 环境验证；冒烟不过就地排查，不进 E2。
+# E2a（远端 5 分钟冒烟，必做勿跳）：训练循环用 vendored 修复版 train_calibrated_chunked.py。
+#   根因（本地 Windows/CPU 段错误 0xC0000005 与远端 32GB CUDA OOM 同病）：上游
+#   train_calibrated.py 把全部候选行单批 forward 并对全词表全宽度 logits.float()+log_softmax
+#   ≈ [14×2k×151936]×4B ≈ 39GB。修复版逐候选行 forward + 目标位置 logsumexp，
+#   联合 softmax 损失语义不变（decision_loss 输入逐候选 logprob 之和，候选间无耦合），峰值 ~5GB。
 head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
-python scripts/train_calibrated.py --model $MODEL15 \
+python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
   --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke --epochs 1 --max-steps 3 \
   --grad-accum 2 --max-len 4096 --dtype bfloat16
 # 预期输出：trainable params 行、"100 training decisions"、3 条 step loss、saved LoRA adapter
@@ -75,7 +77,7 @@ python scripts/train_calibrated.py --model $MODEL15 \
 #   （scripts/openjev-token-probe.py，2026-09-23 实测），默认 2048 会**静默跳过 19–26% 样本**；
 #   4096 全覆盖且留余量（该参数只做过滤不做 padding，放大无计算代价）。
 #   brier 0.5 按 OpenJev README 推荐（NLL+Brier 同时压，兼顾准确率与校准）。
-python scripts/train_calibrated.py --model $MODEL15 \
+python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
   --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
   --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5
 
@@ -84,16 +86,13 @@ openjev eval -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
   --dtype bfloat16 --data /root/jev/dev-v3.jsonl
 
 # E3（条件触发：E2 未达标且 E1 acc≥35% 且预算余量>3h）：7B LoRA 子集训练
-#   ⚠️ 显存口径（2026-09-23 本地冒烟实测教训：train_calibrated 把**一个样本的全部候选**
-#   （12–16 个 × ~2k token）打成单批 forward+backward——1.5B bf16 在 24GB 上 ~11GB 没问题；
-#   7B bf16 ≈ 权重 15GB + 激活 ~18GB 必 OOM（本地 fp32 宽批直接段错误 0xC0000005）。
-#   对策（按序）：① 训练前给 model 开 gradient_checkpointing（实例上 python -c 一行补丁或
-#   sed 注入 train_calibrated.py 的 model.config.use_cache=False 之后：
-#   `model.gradient_checkpointing_enable()`，激活省 ~70%、慢 ~30%）；
-#   ② 仍 OOM → 放弃 E3 如实记录——**不许**拆候选分批（joint softmax 损失要求全候选同批，
-#   拆批会改变损失语义，产物就不是"蒸馏"了）。
+#   显存口径（chunked 版）：7B bf16 权重 15GB + 单行 logits ~4.9GB（含 autograd 保留 ~10GB）
+#   + 激活 ~4GB ≈ 29GB / 31.5GB——贴边。对策（按序）：① 仍 OOM 则加
+#   `model.gradient_checkpointing_enable()`（vendored 脚本里 use_cache=False 之后一行）；
+#   ② 仍 OOM → 放弃 E3 如实记录——**不许**改损失语义（joint softmax 要求全候选同向量，
+#   chunk 只切 forward 不切损失输入，这是修复版的边界）。
 #   head -n 2500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub.jsonl
-#   python scripts/train_calibrated.py --model $MODEL7 \
+#   python /root/jev/train_calibrated_chunked.py --model $MODEL7 \
 #     --data /root/jev/train-sub.jsonl --eval-data /root/jev/dev-v3.jsonl \
 #     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5
 
