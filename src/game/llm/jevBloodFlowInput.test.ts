@@ -1,9 +1,9 @@
-// Jev 血流请求构造单测：A/B 两臂的公平性约束（state 一致、推荐不泄漏）与 criteria 渲染。
+// Jev 血流请求构造单测（模板 v2）：A/B 两臂的公平性约束（state 一致、推荐不泄漏）与紧凑 criteria 渲染。
 import { describe, expect, it } from 'vitest'
 import { BLOOD_FLOW_PROMPT_RULES } from './bloodFlowDecisionInput'
 import {
-  JEV_BLOOD_FLOW_TEMPLATE_VERSION, buildJevBloodFlowRequest, jevBloodFlowTemplateId,
-  type JevBloodFlowDecisionLike,
+  JEV_BLOOD_FLOW_TEMPLATE_VERSION, buildJevBloodFlowRequest, compactCandidateDescription,
+  jevBloodFlowTemplateId, type JevBloodFlowDecisionLike,
 } from './jevBloodFlowInput'
 
 function decisionFixture(overrides: Partial<JevBloodFlowDecisionLike['request']> = {}): JevBloodFlowDecisionLike {
@@ -15,17 +15,27 @@ function decisionFixture(overrides: Partial<JevBloodFlowDecisionLike['request']>
       ...overrides,
     },
     candidates: [
-      { id: 'A0', label: '打出3万', summary: 'A0 打出3万 ｜ 向听：1｜有效进张：12张' },
-      { id: 'A1', label: '打出5筒', summary: 'A1 打出5筒 ｜ 向听：2｜听牌：否' },
-      { id: 'A2', label: '胡牌（首次胡后锁手）', summary: 'A2 胡牌（首次胡后锁手）' },
+      {
+        id: 'A0', label: '打出3万',
+        features: { shanten: 1, ukeire: 12, safety: '中', ev: { income: { total: 340 } } },
+      },
+      {
+        id: 'A1', label: '打出5筒',
+        features: { shanten: 2, ready: false },
+      },
+      {
+        id: 'A2', label: '胡牌（首次胡后锁手）',
+        features: { specialPattern: '清一色', ev: { win: { immediateTotal: 240, lockedChain: 1180, floor: 480 } } },
+      },
     ],
   }
 }
 
-describe('buildJevBloodFlowRequest', () => {
-  it('盲判臂：criteria 只含动作名；模板 id、promptVariables 与 engineSuggestion 正确', () => {
+describe('buildJevBloodFlowRequest（v2）', () => {
+  it('盲判臂：criteria 只含动作名；模板 id 升 v2；promptVariables 与 engineSuggestion 正确', () => {
     const built = buildJevBloodFlowRequest({ decision: decisionFixture(), mode: 'blind', requestId: 'r1' })
-    expect(built.templateId).toBe(`jev-bf-blind-v${JEV_BLOOD_FLOW_TEMPLATE_VERSION}`)
+    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(2)
+    expect(built.templateId).toBe('jev-bf-blind-v2')
     expect(built.candidates).toEqual([
       { id: 'A0', description: '打出3万' },
       { id: 'A1', description: '打出5筒' },
@@ -40,12 +50,12 @@ describe('buildJevBloodFlowRequest', () => {
     expect(built.engineSuggestion).toBe('A1')
   })
 
-  it('提示臂：criteria 为特征行（去候选 id 前缀）；无特征候选退化为动作名', () => {
+  it('提示臂：criteria 为 v2 紧凑短语（label·tokens），无 features 候选退化为动作名', () => {
     const built = buildJevBloodFlowRequest({ decision: decisionFixture(), mode: 'hint', requestId: 'r1' })
     expect(built.candidates).toEqual([
-      { id: 'A0', description: '打出3万 ｜ 向听：1｜有效进张：12张' },
-      { id: 'A1', description: '打出5筒 ｜ 向听：2｜听牌：否' },
-      { id: 'A2', description: '胡牌（首次胡后锁手）' },
+      { id: 'A0', description: '打出3万·向1·进12·安中·EV+340' },
+      { id: 'A1', description: '打出5筒·向2' },
+      { id: 'A2', description: '胡牌（首次胡后锁手）·清一色·得240·链1180·门480' },
     ])
   })
 
@@ -57,7 +67,6 @@ describe('buildJevBloodFlowRequest', () => {
     expect(blindRest).toEqual(hintRest)
     expect(blindTemplate).toBe(jevBloodFlowTemplateId('blind'))
     expect(hintTemplate).toBe(jevBloodFlowTemplateId('hint'))
-    // 推荐不泄漏：state 序列化里没有 engineSuggestion 字段，criteria 描述里没有推荐标记
     const serialized = JSON.stringify(blind.state) + JSON.stringify(hint.state)
       + JSON.stringify(blind.candidates) + JSON.stringify(hint.candidates)
       + blind.instructions + hint.instructions
@@ -85,5 +94,35 @@ describe('buildJevBloodFlowRequest', () => {
     })
     expect('engineSuggestion' in built.promptVariables).toBe(false)
     expect(built.engineSuggestion).toBeUndefined()
+  })
+})
+
+describe('compactCandidateDescription（v2 token 词表）', () => {
+  it('杠净值（负值带符号）', () => {
+    expect(compactCandidateDescription('暗杠5筒', { kongValue: { net: -30 } })).toBe('暗杠5筒·杠净-30')
+    expect(compactCandidateDescription('直杠', { kongValue: { net: 45 } })).toBe('直杠·杠净+45')
+  })
+  it('过牌发育期望与抢杠两值', () => {
+    expect(compactCandidateDescription('过', { ev: { developEv: 180 } })).toBe('过·发180')
+    expect(compactCandidateDescription('过', { ev: { rob: { winEv: 320, passEv: 180 } } })).toBe('过·抢320/过180')
+  })
+  it('对手风险赔付与听口', () => {
+    expect(compactCandidateDescription('打出9条', {
+      ready: true, waitsTotal: 2, opponentRisk: { tier: '高', payment: 640 },
+    })).toBe('打出9条·听2口·险高640')
+  })
+  it('win/reform 在场时不重复渲染 EV 毛收入', () => {
+    expect(compactCandidateDescription('打出1万', {
+      ev: { income: { total: 500 }, reform: { chain: 220, anyWait: true } },
+    })).toBe('打出1万·改220任')
+  })
+  it('无 features 或无可渲染信号时退化为 label', () => {
+    expect(compactCandidateDescription('碰', undefined)).toBe('碰')
+    expect(compactCandidateDescription('碰', {})).toBe('碰')
+    expect(compactCandidateDescription('打出2万', { shanten: 'n/a', ukeire: 'n/a', ready: 'unknown' })).toBe('打出2万')
+  })
+  it('收益档只在没有 EV 数值时兜底', () => {
+    expect(compactCandidateDescription('胡牌', { scoreDeltaBand: '高' })).toBe('胡牌·收高')
+    expect(compactCandidateDescription('打出3万', { scoreDeltaBand: '高', ev: { income: { total: 120 } } })).toBe('打出3万·EV+120')
   })
 })
