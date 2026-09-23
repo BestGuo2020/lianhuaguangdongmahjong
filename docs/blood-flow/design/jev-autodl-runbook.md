@@ -11,8 +11,9 @@
 ## 1. 实例规格与镜像
 
 - GPU：**RTX 4090 24GB 优先，3090 24GB 亦可**（按时计费；两台都够 1.5B 全量 LoRA 与 7B 推理；7B LoRA bf16 在 24GB 上贴边，用子集+max-len 4096 控制显存）。
-- 镜像：基础镜像选 **PyTorch 2.x（≥2.1）/ CUDA 12.x / Python ≥3.10**。
-- 数据盘默认即可（模型缓存 ~20GB + 产物 <1GB）。
+- **vGPU 切片（如 vGPU-32GB ¥1.58/时）可接受**：显存切片独占（32GB 比 4090 宽裕，利于 7B 预案），但**算力与邻居分时共享**——墙钟时间随邻居负载波动（列表"空闲/总量 1/8"即邻居数）。租时两查：①有独享 4090 ≤¥2.2/时有货则优先独享（时间可预期）；②租 vGPU 则接受波动，且**预算 8h 上限若在门槛点不够跑 E4，停机向用户申请追加，不擅自超支**。
+- 镜像：基础镜像选 **PyTorch 2.x（≥2.1）/ CUDA 12.x / Python ≥3.10**（驱动 595/CUDA≤13.2 的机器向下兼容 12.x 运行时）。
+- 磁盘：**系统盘 30GB 只跑系统**；模型缓存与全部产物在 50GB 数据盘（`HF_HOME=/root/autodl-tmp/hf`，setup 脚本已处理并符号链接 /root/jev、/root/OpenJev）。
 - 区域：有货即可（国内区域对本机延迟无感——瓶颈在推理不在网络）。
 
 ## 2. SSH 公钥与连通
@@ -39,6 +40,8 @@ scp -i $env:USERPROFILE\.ssh\autodl_jev -P <端口> <本地文件> root@<host>:<
 ## 4. 远端实验序列（命令即口径）
 
 ```bash
+# 每个 ssh 会话开头都要带（非交互 shell 不读 .bashrc）：模型缓存与产物在数据盘
+export HF_HOME=/root/autodl-tmp/hf
 cd /root/OpenJev && source /etc/network_turbo 2>/dev/null || true
 
 # E1：7B zero-shot 在 dev 上的成绩单（对照 1.5B-校准版：acc 26.4% / NLL 1.866 / ECE 0.140）
