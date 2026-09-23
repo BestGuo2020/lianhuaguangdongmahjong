@@ -24,13 +24,15 @@ import { expect, it } from 'vitest'
 import type { LlmProviderConfig } from '../src/game/llm/config'
 import { runJevSelfplayMatch, type JevSelfplayMatchResult, type SelfplaySeatPolicy } from './jev-selfplay'
 
-type Arm = 'blind' | 'hint' | 'baseline'
+type Arm = 'blind' | 'hint' | 'baseline' | 'fusion'
 
 const ARM_SEATS: Record<Arm, readonly [SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy]> = {
   // 被测座位恒为 seat 0；其余三座为同一本地 EV 策略（配对比较只改被测者）。
   blind: ['jev-blind', 'ev', 'ev', 'ev'],
   hint: ['jev-hint', 'ev', 'ev', 'ev'],
   baseline: ['ev', 'ev', 'ev', 'ev'],
+  // 选项 4：EV 司机 + Jev 危险度读数重排弃牌（λ=400 预注册）
+  fusion: ['ev-jev-fusion', 'ev', 'ev', 'ev'],
 }
 
 function envNumber(name: string, fallback: number): number {
@@ -43,7 +45,7 @@ it.skipIf(process.env.JEV_SELFPLAY_RUN !== '1')('Jev 自对弈批量运行并落
   const tag = process.env.JEV_SELFPLAY_TAG ?? 'smoke'
   const arms = (process.env.JEV_SELFPLAY_ARMS ?? 'blind,hint,baseline').split(',').map((arm) => arm.trim()) as Arm[]
   for (const arm of arms) {
-    if (!ARM_SEATS[arm]) throw new Error(`未知臂：${arm}（可选 blind,hint,baseline）`)
+    if (!ARM_SEATS[arm]) throw new Error(`未知臂：${arm}（可选 blind,hint,baseline,fusion）`)
   }
   const matches = envNumber('JEV_SELFPLAY_MATCHES', 4)
   const rounds = envNumber('JEV_SELFPLAY_ROUNDS', 1)

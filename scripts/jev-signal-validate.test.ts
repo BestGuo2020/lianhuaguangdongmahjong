@@ -60,13 +60,22 @@ it.skipIf(process.env.JEV_SIGNAL_RUN !== '1')('Jev 危险度信号检验（选�
     }
     for (const d of decisions) {
       const st = states.get(d.stateId as string)
-      const rp = st?.replay as { roundIndex?: number; stepIndex?: number } | undefined
-      if (!st || !rp) continue
-      const round = rounds.get(rp.roundIndex as number)
+      if (!st) continue
+      const roundIdx = d.roundIndex as number
+      const round = rounds.get(roundIdx)
       if (!round) continue
       const steps = (round.steps as Step[]) ?? []
-      const idx = rp.stepIndex as number
-      if (idx < 0 || idx > steps.length) continue
+      // 序号对齐：decisionState 不带 replay.stepIndex（runner 未传），改用同轮 seat0
+      // 弃牌决策序列 ↔ 步骤流 seat0 discard 步骤序列的第 k 项对齐（两者同序）。
+      const roundDecisions = decisions
+        .filter((x) => (x.roundIndex as number) === roundIdx)
+        .sort((a, b) => ((a.timing as { submittedAt?: number })?.submittedAt ?? 0)
+          - ((b.timing as { submittedAt?: number })?.submittedAt ?? 0))
+      const k = roundDecisions.indexOf(d)
+      const discardStepIdxs: number[] = []
+      steps.forEach((s, i) => { if (s.t === 'discard' && s.seat === 0) discardStepIdxs.push(i) })
+      const idx = discardStepIdxs[k]
+      if (idx === undefined) continue
       // 重建公开局面：anchor + steps[0..idx)
       const anchor = round.anchor as {
         hands: string[][]; melds: unknown[][]; discards: string[][]; scores: number[]; wallLeft: number
@@ -90,12 +99,13 @@ it.skipIf(process.env.JEV_SIGNAL_RUN !== '1')('Jev 危险度信号检验（选�
           if (step.state.melds) melds[step.seat] = [...step.state.melds] as unknown[]
         }
       }
-      const action = (d.choice as { value: { action: { kind: string; tile?: string } } }).value.action
-      const tile = action.tile
+      const step0 = steps[idx]
+      const tile = step0.tile
+        ?? (d.choice as { value: { action: { tile?: string } } }).value.action.tile
       if (!tile) continue
       // 实现结果：弃牌后紧邻的 win 步骤 from===0 且 tile 相同
       let realizedRon = false
-      for (let j = idx; j < Math.min(steps.length, idx + 8); j += 1) {
+      for (let j = idx + 1; j < Math.min(steps.length, idx + 8); j += 1) {
         const s = steps[j]
         if (s.t === 'discard' && s.seat === 0) break
         if (s.t === 'win' && s.from === 0 && s.tile === tile) { realizedRon = true; break }
@@ -131,7 +141,7 @@ it.skipIf(process.env.JEV_SIGNAL_RUN !== '1')('Jev 危险度信号检验（选�
       const pDanger = json.answers?.danger?.noul
       if (typeof pDanger !== 'number') throw new Error('serve 未返回 danger.noul')
       samples.push({
-        match: (payload.match as { id?: string })?.id, round: rp.roundIndex, step: idx,
+        match: (payload.match as { id?: string })?.id, round: roundIdx, step: idx,
         tile, pDanger, realizedRon, wallLeft,
       })
     }
