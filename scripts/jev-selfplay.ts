@@ -13,6 +13,7 @@
 // 显式 CLI（冒烟）：node node_modules/vitest/vitest.mjs run --dir scripts jev-selfplay.test.ts
 // 批量落盘：node node_modules/vitest/vitest.mjs run --dir scripts jev-selfplay-run.test.ts
 import { performance } from 'node:perf_hooks'
+import { appendFileSync } from 'node:fs'
 import type { MatchType } from '../src/game/core/contracts/types'
 import type { LlmProviderConfig } from '../src/game/llm/config'
 import { LlmClientError } from '../src/game/llm/client'
@@ -55,6 +56,20 @@ export interface JevSelfplayJevOptions {
   backend?: string
 }
 
+/**
+ * gold 数据采集（校正飞轮第一步）：每个决策点落一行 OpenJev calibrate/eval 格式样本
+ * `{state, questions:{action}, gold:{action: engineSuggestion}}`。
+ * 与 pilot 请求构造走**同一个** buildJevBloodFlowRequest（模板漂移即校准数据失效，必须同源）。
+ */
+export interface JevSelfplayCollectOptions {
+  /** 输出 JSONL 路径（逐行追加；调用方负责文件不存在/轮转）。 */
+  path: string
+  /** 用哪个模式的 criteria 渲染采集（默认 hint——校正主要服务 hint 臂）。 */
+  mode?: JevBloodFlowMode
+  /** 样本上限；达到后不再追加（缺省不限）。 */
+  maxSamples?: number
+}
+
 export interface JevSelfplayOptions {
   /** 场次种子：各局种子由它确定性派生（matchSeed + roundIndex*7919）。 */
   matchSeed: number
@@ -68,6 +83,8 @@ export interface JevSelfplayOptions {
   matchType?: MatchType
   /** 关闭分析采集（只跑对局与展示回放）。默认开启。 */
   analysis?: boolean
+  /** gold 数据采集（校正飞轮）；与 jev 座位可共存但通常配全 EV 座位使用（无需服务端点）。 */
+  collect?: JevSelfplayCollectOptions
   signal?: AbortSignal
   onDecision?: (info: {
     roundIndex: number; seat: number; policy: SelfplaySeatPolicy
@@ -100,6 +117,8 @@ export interface JevSelfplayMatchResult {
   /** 分析区读取结果（未开启分析时为 null）。 */
   analysis: { parts: number; configurations: number; status: string; complete: boolean } | null
   exportPayload: AnalysisExportPayload | null
+  /** 本次调用追加的 gold 样本行数（未开启 collect 时为 0）。 */
+  collectedSamples: number
   totalElapsedMs: number
 }
 
@@ -151,6 +170,8 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
   const jevConfig = options.jev?.config
   const jevProvider = `jev${options.jev?.backend ? `:${options.jev.backend}` : ''}`
   const engineBuild = options.engineBuild ?? 'unknown'
+  const collect = options.collect
+  let collectedSamples = 0
   const monotonic = () => performance.now()
   const matchStartedAt = monotonic()
 
@@ -207,7 +228,7 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
           mode, rules: BLOOD_FLOW_PROMPT_RULES,
           turnInstructions: JEV_BLOOD_FLOW_TURN_INSTRUCTIONS,
           claimInstructions: JEV_BLOOD_FLOW_CLAIM_INSTRUCTIONS,
-          criteria: mode === 'blind' ? '候选仅动作名（label）' : '候选附 candidateLine 特征行（不含推荐标记）',
+          criteria: mode === 'blind' ? '候选仅动作名（label）' : '候选附 v2 紧凑特征短语（label·tokens：向/进/听/安/险/得/链/门/改/抢/发/EV/杠净/收，不含推荐标记）',
         }),
       })),
     })
@@ -309,6 +330,25 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
           ? known({ legalActionId: legalActions[recommendedIndex].id, note: '本地 EV 引擎推荐（engineSuggestion）' })
           : UNKNOWN,
       })
+
+      // gold 采集（校正飞轮）：与 pilot 请求同源构造，保证校准数据与实际请求分布一致。
+      // 只收「推荐存在且已映射进合法动作集」的样本；单候选窗口在上面已提前返回。
+      if (collect && recommendedIndex !== undefined && suggestionId !== undefined
+        && collectedSamples < (collect.maxSamples ?? Number.POSITIVE_INFINITY)) {
+        const sample = buildJevBloodFlowRequest({ decision: input, mode: collect.mode ?? 'hint', requestId })
+        appendFileSync(collect.path, `${JSON.stringify({
+          state: sample.state,
+          questions: {
+            action: {
+              type: 'choice',
+              instructions: sample.instructions,
+              criteria: Object.fromEntries(sample.candidates.map((candidate) => [candidate.id, candidate.description ?? null])),
+            },
+          },
+          gold: { action: suggestionId },
+        })}\n`, 'utf8')
+        collectedSamples += 1
+      }
 
       if (policy === 'jev-blind' || policy === 'jev-hint') {
         const mode: JevBloodFlowMode = policy === 'jev-blind' ? 'blind' : 'hint'
@@ -538,6 +578,7 @@ export async function runJevSelfplayMatch(options: JevSelfplayOptions): Promise<
     replayRounds: snapshot.rounds,
     analysis,
     exportPayload,
+    collectedSamples,
     totalElapsedMs: monotonic() - matchStartedAt,
   }
 }
