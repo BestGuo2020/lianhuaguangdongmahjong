@@ -22,16 +22,16 @@ const LLM_SEEDS = ['deepseek', 'qwen', 'gpt'].map((characterId, index) => ({
 }))
 
 test.setTimeout(180_000)
-for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', false]] as const) {
-  test(`${theme} / model ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
+for (const [theme, available, pureThinking] of [['jade', true, false], ['llm', true, false], ['llmAnime', false, false], ['llm', true, true]] as const) {
+  test(`${theme} / ${pureThinking ? 'pure thinking' : 'model'} ${available ? 'available' : 'unavailable'} preserves play and gates round reactions`, async ({ page }) => {
     let decisions = 0, reactions = 0, tts = 0, roundTts = 0, animeRoundTts = 0, momentTts = 0, protectedDecisions = 0
     const momentTexts = new Set<string>()
     const unsafeSpeech: string[] = []
-    await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
+    await page.addInitScript((pureThinking: boolean) => localStorage.setItem('llm.providers', JSON.stringify({ configVersion: 2, enabled: true,
       activeId: 'fixture', seatIds: [null, null, null, null], seatStyles: [null, null, null, null], presets: [{
         id: 'fixture', name: 'Fixture', providerType: 'custom', apiKey: 'not-a-real-key', baseUrl: 'https://model.example.test/v1',
-        model: 'fixture-model', style: '稳健', timeoutMs: 40_000,
-      }] })))
+        model: pureThinking ? 'qwen3-vl-235b-a22b-thinking' : 'fixture-model', style: '稳健', timeoutMs: 40_000,
+      }] })), pureThinking)
     await page.route('https://model.example.test/**', async route => {
       const body = route.request().postDataJSON()
       const isReaction = body.messages[0].content.includes('本局血流已结束')
@@ -64,6 +64,17 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
       // 胡牌窗口故意不给 message：真实对局里锁手连胡、单候选窗口同样不请求模型，
       // 这条路径必须落到血流即时台词库（模型原话优先由单测 `bloodFlowCommonDecision` 锁定）。
       const message = isReaction ? '这一局结束了，下局再来' : payload.currentWin ? '' : '这张先走。'
+      if (pureThinking) {
+        expect(body.enable_thinking).toBeUndefined()
+        expect(body.response_format).toBeUndefined()
+        expect(body.max_tokens).toBeGreaterThanOrEqual(8192)
+        await route.fulfill({contentType:'text/event-stream',body:[
+          'data: '+JSON.stringify({choices:[{delta:{reasoning_content:'synthetic reasoning marker'}}]}),
+          'data: '+JSON.stringify({choices:[{finish_reason:'stop',delta:{content:JSON.stringify({choice,message})}}]}),
+          'data: [DONE]',
+        ].join('\n\n')+'\n\n'})
+        return
+      }
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
         content: JSON.stringify({ choice, message, important: true, mandatory: true }),
       } }] }) })
@@ -120,6 +131,12 @@ for (const [theme, available] of [['jade', true], ['llm', true], ['llmAnime', fa
     if (!available) {
       // Model failures still allow the original fixed round lines and TTS fallback.
       expect(await page.evaluate(() => (window as any).__bfLlmPort.llmStats.fallbacks)).toBeGreaterThan(0)
+    }
+    if (pureThinking) {
+      const stats=await page.evaluate(() => ({...((window as any).__bfLlmPort.llmStats)}))
+      expect(stats.successes).toBeGreaterThan(0)
+      expect(stats.fallbacks).toBe(0)
+      expect(stats.thinkingRequests).toBeGreaterThan(0)
     }
     expect(unsafeSpeech).toEqual([])
     await page.evaluate(() => (window as any).__bfLlmPort.returnToLobby())

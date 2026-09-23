@@ -11,6 +11,11 @@ export interface ReasoningPolicy {
   acceptReasoningResponse: boolean
 }
 
+/** Intrinsic reasoning is not an optional per-seat enhancement and cannot be disabled. */
+export function hasMandatoryReasoning(policy: Pick<ReasoningPolicy, 'mode'>): boolean {
+  return policy.mode === 'always-on' || policy.mode === 'reasoning-only'
+}
+
 export type ProviderDialect = 'official' | 'orcarouter' | 'compatible'
 
 /** 预置官方端点与已知聚合端点使用各自参数方言；未知自定义中转保持保守兼容。 */
@@ -103,7 +108,7 @@ export function resolveReasoningPolicy(
     case 'qwen':
       // 型号名漏识别 = 不下发 enable_thinking=false = 默认思考的型号只出思考、content 全空（qwen3-32b 实测）。
       if (QWEN_THINKING_ONLY.test(model)) {
-        return policy(providerType, 'reasoning-only', '该千问型号属于推理专用模型，无法关闭思考')
+        return policy(providerType, 'reasoning-only', '该千问型号始终思考，等待最终回复后解析动作')
       }
       // 千问 3 开源尺寸默认开启思考（qwen3-32b / qwen3-235b-a22b / qwen3.8-27b …），必须显式关闭；
       // 商业版 qwen3.x 与 qwen-max/plus/flash/turbo 系列的混合思考同样用 enable_thinking 控制。
@@ -126,7 +131,7 @@ export function resolveReasoningPolicy(
         })
       }
       if (model.includes('thinking')) {
-        return policy(providerType, 'reasoning-only', 'Kimi Thinking 型号属于推理专用模型，请改用 K2.5/K2.6')
+        return policy(providerType, 'reasoning-only', 'Kimi Thinking 型号始终思考，等待最终回复后解析动作')
       }
       if (/^kimi-k2[.-](?:5|6)(?:[.-]|$)/.test(model)) {
         return reasoning
@@ -161,7 +166,7 @@ export function resolveReasoningPolicy(
       return policy(providerType, 'unknown', '无法确认该 MiniMax 型号是否支持非思考模式')
     case 'openai':
       if (/^o(?:1|3|4)(?:[.-]|$)/.test(model)) {
-        return policy(providerType, 'reasoning-only', 'OpenAI o 系列属于推理模型，不适合实时麻将决策')
+        return policy(providerType, 'reasoning-only', 'OpenAI o 系列始终思考，等待最终回复后解析动作')
       }
       if (/^gpt-5(?:[.-]|$)/.test(model)) {
         return reasoning
@@ -176,7 +181,7 @@ export function resolveReasoningPolicy(
       return policy(providerType, 'unknown', '无法确认该 OpenAI 型号是否能关闭推理')
     case 'glm':
       if (model.includes('thinking')) {
-        return policy(providerType, 'reasoning-only', '显式 Thinking 型号不用于实时麻将决策')
+        return policy(providerType, 'reasoning-only', '显式 Thinking 型号始终思考，等待最终回复后解析动作')
       }
       if (/^glm-5\.3-flash(?:[.-]|$)/.test(model)) {
         const effort = reasoning && dialect === 'orcarouter' ? 'medium' : 'low'

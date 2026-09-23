@@ -2,7 +2,7 @@ import {isConditionalReasoningSuppressed, requestLlmDecision, type PromptPair} f
 import type {LlmProviderConfig} from './config'
 import type {LlmControllerStats} from './llmController'
 import {ConditionalReasoningCoordinator, type ReasoningDecision} from './conditionalReasoning'
-import {resolveReasoningPolicy} from './reasoningPolicy'
+import {hasMandatoryReasoning,resolveReasoningPolicy} from './reasoningPolicy'
 
 const SAFE_REASONING_STAGES = ['正在观察公开牌局','正在整理规则约束','正在比较可行动作','正在评估攻守节奏','正在复核最终选择'] as const
 export function safeReasoningStatus(sequence:number):string {
@@ -24,8 +24,8 @@ export async function requestPreparedDecision(options:{
 }) {
   const {stats,reasoning,config}=options
   const policy=resolveReasoningPolicy(config,true)
-  const alwaysThinking=policy.mode==='always-on'
-  const supports=(policy.mode==='explicit-on'||alwaysThinking)&&!isConditionalReasoningSuppressed(config)
+  const alwaysThinking=hasMandatoryReasoning(policy)
+  const supports=(policy.mode==='explicit-on'||policy.mode==='always-on')&&!isConditionalReasoningSuppressed(config)
   // The existing coordinator reserves 45s around a 40s deep request. A shorter
   // authority window never gains that reserve or extends its actual deadline.
   const reserve=Math.max(0,reasoning.config.minRemainingBudgetMs-reasoning.config.deadlineMs)
@@ -35,17 +35,18 @@ export async function requestPreparedDecision(options:{
   const remaining=options.budgetMs===undefined?reasoning.config.minRemainingBudgetMs
     :Math.min(options.remainingAuthorityMs??Infinity,configuredDecisionBudget(config)+reserve)
   const useReasoning=supports&&reasoning.admit(options.decision,options.seat,remaining).enabled
-  let sequence=0,statusActive=useReasoning,thinkingCounted=false
+  let sequence=0,statusActive=useReasoning||policy.mode==='reasoning-only',thinkingCounted=false
   const notify=async(active:boolean,text?:string)=>{try{await options.onStatus?.(active,text)}catch{/* display only */}}
   const countThinking=()=>{if(!thinkingCounted){thinkingCounted=true;stats.thinkingRequests=(stats.thinkingRequests??0)+1}}
   stats.requests++
   if(alwaysThinking)countThinking()
   if(useReasoning){stats.reasoningRequests=(stats.reasoningRequests??0)+1;stats.enhancedReasoningRequests=(stats.enhancedReasoningRequests??0)+1;countThinking()}
-  if(statusActive)await notify(true)
+  if(statusActive)await notify(true,policy.mode==='reasoning-only'?safeReasoningStatus(++sequence):undefined)
   let stopAbortWait=()=>{}
   try {
     if(options.signal?.aborted)throw new DOMException('Request cancelled','AbortError')
-    const budget=options.budgetMs===undefined?undefined:configuredDecisionBudget(config,options.budgetMs)
+    const budget=options.budgetMs===undefined&&options.remainingAuthorityMs===undefined?undefined
+      :configuredDecisionBudget(config,Math.min(options.budgetMs??Infinity,options.remainingAuthorityMs??Infinity))
     const pending=(options.request??requestLlmDecision)({
       config:budget===undefined?config:{...config,timeoutMs:budget,timeoutEnabled:Number.isFinite(budget)},
       messages:options.messages,candidateIds:options.decision.candidates.map(c=>c.id),signal:options.signal,

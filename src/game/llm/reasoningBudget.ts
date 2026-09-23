@@ -1,6 +1,8 @@
 import type { LlmProviderConfig } from './config'
 import type { ReasoningPolicy } from './reasoningPolicy'
 
+/** Initial combined reasoning/final-output allowance; subsequent calls use measured usage. */
+export const REASONING_ONLY_INITIAL_TOKENS = 8192
 const MAX_REASONING_TOKENS = 65_536
 const FINAL_RESPONSE_RESERVE = 96
 const MAX_SAMPLES = 32
