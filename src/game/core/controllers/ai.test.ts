@@ -50,6 +50,15 @@ describe('decideTurn 弃牌', () => {
 })
 
 describe('chooseDiscardIndex 弃牌启发式', () => {
+  it('开局手牌有白板时仍先打普通孤张字牌，不拆对子', () => {
+    const hand: TileType[] = [
+      'm2', 'm2', 'm5', 'm5', 'm7', 'p2', 'p3', 'p4', 'p7', 's8',
+      'west', 'green', 'white', 'white',
+    ]
+    const index = chooseDiscardIndex(hand, () => 0, 0, DEFAULT_RULESET, { wallCount: 79, visibleTiles: hand })
+    expect(['west', 'green']).toContain(hand[index])
+  })
+
   it('优先打掉无对无靠的孤张', () => {
     // east 是唯一孤张，其余 m1m2m3 成顺、p5p5 成对
     const hand: TileType[] = ['m1', 'm2', 'm3', 'p5', 'p5', 'east']

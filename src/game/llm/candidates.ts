@@ -126,8 +126,10 @@ function isTenpai(input: DecisionInput, hand: TileType[]): boolean {
   })
 }
 
-/** 基础牌效分：同牌×4 + 相邻靠张×2 + 字牌罚 6（与两套启发式一致的确定性简化）。 */
-export function heuristicScore(hand: TileType[], tile: TileType, protectedTiles: ReadonlySet<TileType> = new Set()): number {
+/** Lower means a better discard. Classic singleton honors cannot form sequences. */
+export function heuristicScore(
+  hand: TileType[], tile: TileType, protectedTiles: ReadonlySet<TileType> = new Set(), classic = false,
+): number {
   const same = matchingCount(hand, tile) - 1
   const suited = /^([mps])([1-9])$/.exec(tile)
   let neighbors = 0
@@ -136,7 +138,11 @@ export function heuristicScore(hand: TileType[], tile: TileType, protectedTiles:
     neighbors += hand.includes(`${suited[1]}${rank - 1}` as TileType) ? 1 : 0
     neighbors += hand.includes(`${suited[1]}${rank + 1}` as TileType) ? 1 : 0
   }
-  const honor = suited ? 0 : 6
+  // White is a joker and red is exposed automatically; neither gets this preference.
+  // Keep pairs/triplets of ordinary honors valuable instead of blindly throwing them.
+  const ordinarySingletonHonor = classic && same === 0
+    && (tile === 'east' || tile === 'south' || tile === 'west' || tile === 'north' || tile === 'green')
+  const honor = ordinarySingletonHonor ? -6 : suited ? 0 : 6
   return same * 4 + neighbors * 2 + honor + (protectedTiles.has(tile) ? 100 : 0)
 }
 
@@ -431,7 +437,7 @@ export function buildDecisionRequest(input: DecisionInput): BuiltRequest {
   if (candidates.length === 0) return { request: null, fallbackAction: null }
   // 引擎建议：确定性启发式（random=0），映射到候选 ID
   const suggestionAction = input.decision === 'turn'
-    ? suggestionForTurn(input)
+    ? suggestionForTurn(input, candidates)
     : suggestionForClaim(input)
   const suggestionId = suggestionAction
     ? candidates.find((candidate) => actionsMatch(candidate.action, suggestionAction))?.id
@@ -496,15 +502,46 @@ function turnCandidates(input: DecisionInput): Candidate[] {
       features: { shanten: 'n/a', ukeire: 'n/a', effectiveTiles: 'n/a', ready: 'unknown' as const, waits: 'n/a' as const, effectiveRemaining: 'n/a' as const, specialPattern: 'none', safety: 'unknown' as const, efficiency: '差', risks: [] },
       legalityKey: `discard:${tile}`,
     })
-    discardScores.push({ index: candidates.length - 1, heuristic: heuristicScore(input.hand, tile, protectedTiles) })
+    discardScores.push({ index: candidates.length - 1, heuristic: heuristicScore(input.hand, tile, protectedTiles, !isLotus(input)) })
   })
-  // 听口/安全度回填 + 确定性档位
-  const bands = bandedEfficiency(discardScores.map((d) => ({ index: d.index, heuristic: d.heuristic })), 'discard')
+  // Legacy keeps its existing shape-based bands. Classic computes every discard's
+  // shanten/ukeire and uses that same ordering for both the label and suggestion.
+  const bands = isLotus(input)
+    ? bandedEfficiency(discardScores.map((d) => ({ index: d.index, heuristic: d.heuristic })), 'discard')
+    : new Map<number, '优' | '中' | '差'>()
   candidates.forEach((candidate, index) => {
     if (candidate.action.kind !== 'discard') return
-    candidate.features = buildCandidateFeatures(input, candidate.action, bands.get(index) ?? '中')
+    candidate.features = buildCandidateFeatures(input, candidate.action, bands.get(index) ?? 'unknown')
   })
+  if (!isLotus(input)) {
+    const ordered = orderedClassicDiscards(input, candidates)
+    ordered.forEach((candidate, rank) => {
+      const fraction = ordered.length <= 1 ? 0 : rank / (ordered.length - 1)
+      candidate.features.efficiency = fraction <= 0.34 ? '优' : fraction <= 0.67 ? '中' : '差'
+    })
+  }
   return candidates
+}
+
+/** Use the features already shown to the model, with shape as the final tie-break. */
+function orderedClassicDiscards(input: DecisionInput, candidates: Candidate[]): Candidate[] {
+  const protectedTiles = protectedDiscardTiles(input)
+  const numberOr = (value: number | string | undefined, fallback: number) => typeof value === 'number' ? value : fallback
+  return candidates.filter((candidate) => candidate.action.kind === 'discard').sort((left, right) => {
+    const shanten = numberOr(left.features.shanten, Infinity) - numberOr(right.features.shanten, Infinity)
+    if (shanten) return shanten
+    const ukeire = numberOr(right.features.ukeire, -1) - numberOr(left.features.ukeire, -1)
+    if (ukeire) return ukeire
+    const remaining = numberOr(right.features.effectiveRemaining, -1) - numberOr(left.features.effectiveRemaining, -1)
+    if (remaining) return remaining
+    const leftTile = input.hand[left.action.kind === 'discard' ? left.action.handIndex : -1]!
+    const rightTile = input.hand[right.action.kind === 'discard' ? right.action.handIndex : -1]!
+    const shape = heuristicScore(input.hand, leftTile, protectedTiles, true)
+      - heuristicScore(input.hand, rightTile, protectedTiles, true)
+    if (shape) return shape
+    return (left.action.kind === 'discard' ? left.action.handIndex : 0)
+      - (right.action.kind === 'discard' ? right.action.handIndex : 0)
+  })
 }
 
 function claimCandidates(input: DecisionInput): Candidate[] {
@@ -559,7 +596,7 @@ function concealedKongsOf(input: DecisionInput): TileType[] {
   return DEFAULT_RULESET.win.concealedKongs(input.hand)
 }
 
-function suggestionForTurn(input: DecisionInput): CanonicalAction | null {
+function suggestionForTurn(input: DecisionInput, candidates: Candidate[]): CanonicalAction | null {
   if (isLotus(input)) {
     const decision = lotusDecideTurn({
       hand: input.hand, melds: input.melds, exposedMelds: input.exposedMelds, kongBloom: input.kongBloom ?? false,
@@ -573,7 +610,9 @@ function suggestionForTurn(input: DecisionInput): CanonicalAction | null {
     hand: input.hand, melds: input.melds, exposedMelds: input.exposedMelds, kongBloom: input.kongBloom ?? false,
     ruleset: DEFAULT_RULESET,
   }, () => 0)
-  return decision.kind === 'win' ? null : decision as CanonicalAction
+  if (decision.kind === 'win') return null
+  if (decision.kind !== 'discard') return decision as CanonicalAction
+  return orderedClassicDiscards(input, candidates)[0]?.action ?? decision as CanonicalAction
 }
 
 function suggestionForClaim(input: DecisionInput): CanonicalAction | null {
