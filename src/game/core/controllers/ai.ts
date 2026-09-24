@@ -355,7 +355,9 @@ export function chooseDiscardIndex(
       neighbors += hand.includes(`${suitMatch[1]}${number - 1}` as TileType) ? 1 : 0
       neighbors += hand.includes(`${suitMatch[1]}${number + 1}` as TileType) ? 1 : 0
     }
-    const penalty = tile === 'white' ? 10 : 0
+    const ordinarySingletonHonor = ruleset.id === 'lotus-classic' && same === 0
+      && (tile === 'east' || tile === 'south' || tile === 'west' || tile === 'north' || tile === 'green')
+    const penalty = tile === 'white' ? 10 : ordinarySingletonHonor ? -6 : 0
     // 基础分：越低越先打（孤张优先）
     const base = same * 4 + neighbors * 2 + penalty + random()
     const risk = feedRisk(tile, context)
