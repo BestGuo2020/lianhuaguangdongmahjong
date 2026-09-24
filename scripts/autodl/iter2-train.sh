@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # 蒸馏迭代第二轮远端训练（nohup 后台）：
 #   nohup bash iter2-train.sh > iter2-nohup.out 2>&1 &
-# 数据 = head-3000(teacher, 二级应急裁剪：日间争用 9.25s/step 触发速率应急后按夜间 4.8s/step 重算)
-#        + dagger-v1（学生轨迹+教师标签）；rows=2 + 1 epoch + bf16 + brier 0.5。
+# 数据 = head-500(teacher 锚, 防灾难遗忘) + dagger-v1（学生轨迹+教师标签）= 2422 条。
+# 日间减数据排程（用户否决夜间空闲待命后改）：日间 9.25s/step × 2422 ≈ 6.2h ≤ 8h 窗口零空闲。
+# 三级应急（预注册应急链补充，书面）：10 分钟稳态 >9.5s/step → 仅 dagger（1922，4.9h）。
+# rows=2 + 1 epoch + bf16 + brier 0.5 + expandable_segments。
 # 门槛（预注册）由代理读 logs-iter2/train.log 的 eval 行判定：acc>=0.75 且 NLL<=1.2 才进 pilot。
 set -euo pipefail
 export HF_HOME=/root/autodl-tmp/hf
@@ -16,7 +18,7 @@ cd /root/OpenJev
 LOG=/root/jev/logs-iter2
 mkdir -p "$LOG" /root/jev/ckpt
 
-head -n 3000 /root/jev/train-v3-all.jsonl > /root/jev/train2-teacher.jsonl
+head -n 500 /root/jev/train-v3-all.jsonl > /root/jev/train2-teacher.jsonl
 cat /root/jev/train2-teacher.jsonl /root/jev/dagger-v1.jsonl > /root/jev/train2-all.jsonl
 wc -l /root/jev/train2-all.jsonl | tee -a "$LOG/run.log"
 
