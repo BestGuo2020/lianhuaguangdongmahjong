@@ -5,7 +5,7 @@ import type { Meld, TileType } from '../core/contracts/types'
 import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import { matchingCount, applyKongScore } from '../core/rules/rules'
 import { decideTurn as coreDecideTurn, decideClaim as coreDecideClaim } from '../core/controllers/ai'
-import { decideTurn as lotusDecideTurn, decideClaim as lotusDecideClaim } from '../variants/lotus/lotusAi'
+import { decideTurn as lotusDecideTurn, decideClaim as lotusDecideClaim, chooseDiscardIndex as lotusChooseDiscardIndex } from '../variants/lotus/lotusAi'
 import {
   LOTUS_RULESET, evaluateBasePattern, windKong, waitingTiles as lotusWaitingTiles, type BasePattern, type ChiMeld,
 } from '../variants/lotus/lotusRules'
@@ -523,6 +523,21 @@ function turnCandidates(input: DecisionInput): Candidate[] {
   return candidates
 }
 
+/** A narrow classic-only guard: a model discard is dominated on both immediate progress metrics. */
+export function inferiorClassicDiscard(request: DecisionRequest, selected: Candidate): boolean {
+  if (request.ruleCode !== 'lotus-classic' || request.decision !== 'turn'
+    || selected.action.kind !== 'discard' || !request.engineSuggestion) return false
+  const recommended = request.candidates.find((candidate) => candidate.id === request.engineSuggestion)
+  if (recommended?.action.kind !== 'discard') return false
+  const chosenShanten = selected.features.shanten
+  const suggestedShanten = recommended.features.shanten
+  const chosenUkeire = selected.features.ukeire
+  const suggestedUkeire = recommended.features.ukeire
+  return typeof chosenShanten === 'number' && typeof suggestedShanten === 'number'
+    && typeof chosenUkeire === 'number' && typeof suggestedUkeire === 'number'
+    && chosenShanten > suggestedShanten && chosenUkeire <= suggestedUkeire
+}
+
 /** Use the features already shown to the model, with shape as the final tie-break. */
 function orderedClassicDiscards(input: DecisionInput, candidates: Candidate[]): Candidate[] {
   const protectedTiles = protectedDiscardTiles(input)
@@ -597,6 +612,25 @@ function concealedKongsOf(input: DecisionInput): TileType[] {
 }
 
 function suggestionForTurn(input: DecisionInput, candidates: Candidate[]): CanonicalAction | null {
+  // 碰/吃后没有摸牌：即使暗手凑成胡牌形状，本窗口也只能弃牌。
+  // 两套常规回合 AI 都先查胡/杠，不能让它们在 skipDraw 窗口生成非法建议。
+  if (input.skipDraw) {
+    if (!isLotus(input)) return orderedClassicDiscards(input, candidates)[0]?.action ?? null
+    const index = lotusChooseDiscardIndex(input.hand, jokersOf(input), () => 0, {
+      exposedMelds: input.exposedMelds,
+      visibleTiles: input.visibleTiles,
+      publicTiles: input.publicTiles,
+      upperLastDiscard: input.upperLastDiscard ?? undefined,
+      earlyRound: input.earlyRound,
+      wallCount: input.wallCount,
+      melds: input.melds,
+    })
+    const tile = input.hand[index]
+    return candidates.find((candidate) => candidate.action.kind === 'discard'
+      && input.hand[candidate.action.handIndex] === tile)?.action
+      ?? candidates.find((candidate) => candidate.action.kind === 'discard')?.action
+      ?? null
+  }
   if (isLotus(input)) {
     const decision = lotusDecideTurn({
       hand: input.hand, melds: input.melds, exposedMelds: input.exposedMelds, kongBloom: input.kongBloom ?? false,

@@ -217,7 +217,7 @@ export interface AnalysisDecision {
 // ─────────────────────────────── §4 LLM 专有补充 ───────────────────────────────
 
 export type AnalysisLlmOutcome =
-  | 'success' | 'network-error' | 'timeout' | 'cancelled' | 'parse-failed' | 'candidate-missing'
+  | 'success' | 'network-error' | 'timeout' | 'cancelled' | 'parse-failed' | 'candidate-missing' | 'policy-rejected'
 
 export interface AnalysisLlmAttempt {
   id: string

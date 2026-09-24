@@ -175,7 +175,9 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
   items.push(request.candidates.map((candidate) => candidateLine(candidate, request.ruleCode)).join('\n'))
 
   items.push('【输出】严格 JSON，不要输出任何其他内容：')
-  items.push(`{"choice": "${request.candidates[0].id}", "message": "有点意思。"}`)
+  // Keep the JSON example consistent with the default reference; a hard-coded
+  // first candidate can unintentionally anchor the model to a worse action.
+  items.push(`{"choice": "${request.engineSuggestion ?? request.candidates[0].id}", "message": "有点意思。"}`)
   const user = [
     ...items,
     'choice 必须是上面列出的编号；message 必须非空、≤16 字，且只能说牌桌内的话。',

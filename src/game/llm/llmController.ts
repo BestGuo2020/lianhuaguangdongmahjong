@@ -31,7 +31,7 @@ import { hasReadyDiscard, projectKongBloom } from '../variants/lotus/kongProject
 import { decideRobKong as coreDecideRobKong } from '../core/controllers/ai'
 import { DEFAULT_RULESET } from '../core/rules/ruleset'
 import type { TileType } from '../core/contracts/types'
-import { buildDecisionRequest, protectedDiscardTiles, type DecisionInput } from './candidates'
+import { buildDecisionRequest, inferiorClassicDiscard, protectedDiscardTiles, type DecisionInput } from './candidates'
 import { buildPrompt } from './prompt'
 import { requestPreparedDecision } from './preparedDecision'
 export { safeReasoningStatus } from './preparedDecision'
@@ -121,8 +121,8 @@ export interface LlmDecisionAnswerHookInput {
   raw: string
   /** 解析到的候选 id；拿不到回答时为 null。 */
   choice: string | null
-  /** `invalid` = 回答了但候选不存在/复核不合法；`timeout`/`error` = 请求本身失败。 */
-  outcome: 'success' | 'invalid' | 'timeout' | 'error'
+  /** `guarded` = 合法候选被经典玩法的确定性牌效护栏拒绝；`invalid` = 非法候选。 */
+  outcome: 'success' | 'invalid' | 'guarded' | 'timeout' | 'error'
   /** 回退到本地策略时的原因（`outcome !== 'success'` 必须带；决策来源要据此记为 model-fallback）。 */
   fallback?: { reason: string }
   /** 供应商用量：本层拿不到就不填，绝不填 0 冒充（§3.3）。 */
@@ -356,6 +356,13 @@ async function decideCanonical(
       stats.fallbacks += 1
       report?.answered({ raw: output.message ?? '', choice: output.choice ?? null, outcome: 'invalid',
         fallback: { reason: 'choice-illegal-after-recheck' } })
+      await notifyFallback()
+      return built.fallbackAction
+    }
+    if (inferiorClassicDiscard(built.request, candidate)) {
+      stats.fallbacks += 1
+      report?.answered({ raw: output.message ?? '', choice: output.choice ?? null, outcome: 'guarded',
+        fallback: { reason: 'classic-discard-dominated-by-recommendation' } })
       await notifyFallback()
       return built.fallbackAction
     }

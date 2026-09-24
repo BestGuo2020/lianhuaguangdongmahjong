@@ -200,6 +200,28 @@ describe('onDecisionRequest：候选、推荐、模板与变量（§5）', () =>
 })
 
 describe('onDecisionAnswer：结果、原话与回退原因（§5）', () => {
+  it('经典玩法模型选了严格劣于推荐的弃牌时回退，并保留原回答', async () => {
+    stubModelReply({ choice: 'A1', message: '先打这一张。' })
+    const { hooks, requests, answers } = recorder()
+    const controller = new CoreLlmController(provider(), hooks, createLlmStats())
+    const hand = [
+      'm6', 'm7', 'm8', 'p6', 'p6', 'p7', 'p8', 'p8', 'p9',
+      's1', 's4', 's4', 'west', 'p1',
+    ] as TurnContext['hand']
+    const action = await controller.requestTurn(turnContext({ hand, visibleTiles: hand, wallCount: 40 }))
+    const request = requests[0]!
+    const recommended = request.legalActions.find((candidate) => candidate.id === request.recommended?.candidateId)!
+    expect(recommended.kind).toBe('discard')
+    expect(action).toEqual({ kind: 'discard', handIndex: recommended.handIndex })
+    expect(hand[recommended.handIndex!]).toBe('west')
+    expect(answers[0]).toMatchObject({
+      outcome: 'guarded', choice: 'A1', raw: '先打这一张。',
+      fallback: { reason: 'classic-discard-dominated-by-recommendation' },
+    })
+    expect(controller.stats.fallbacks).toBe(1)
+    expect(controller.stats.successes).toBe(0)
+  })
+
   it('成功：带上模型原话与解析到的候选', async () => {
     stubModelReply({ choice: 'A2', message: '这手先过。' })
     const { hooks, answers } = recorder()
