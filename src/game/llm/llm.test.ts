@@ -246,6 +246,38 @@ describe('buildDecisionRequest：候选枚举与特征', () => {
     expect(built.request?.candidates.every((c) => c.action.kind === 'discard')).toBe(true)
   })
 
+  it('碰后暗手虽然成胡形，也只能推荐合法弃牌（经典与翻精）', () => {
+    const classic = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-classic', skipDraw: true,
+      hand: ['m1', 'm2', 'm3', 'p3', 'p4', 's2', 's3', 's6', 's6', 'white', 'white'],
+      melds: [{ type: 'peng', tile: 'south', tiles: ['south', 'south', 'south'], from: 0 }],
+      exposedMelds: 1,
+    }))
+    const classicTwoPeng = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-classic', skipDraw: true,
+      hand: ['m1', 'm2', 'm3', 'm7', 's2', 's3', 'white', 'white'],
+      melds: [
+        { type: 'peng', tile: 'south', tiles: ['south', 'south', 'south'], from: 0 },
+        { type: 'peng', tile: 's6', tiles: ['s6', 's6', 's6'], from: 2 },
+      ],
+      exposedMelds: 2,
+    }))
+    const legacy = buildDecisionRequest(baseInput({
+      ruleCode: 'lotus-legacy', skipDraw: true,
+      hand: ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'east'],
+      melds: [{ type: 'peng', tile: 'south', tiles: ['south', 'south', 'south'], from: 0 }],
+      exposedMelds: 1, jokerTiles: [], wildcardTiles: ['white'],
+    }))
+    for (const built of [classic, classicTwoPeng, legacy]) {
+      const request = built.request!
+      expect(request.candidates.length).toBeGreaterThan(0)
+      expect(request.candidates.every((candidate) => candidate.action.kind === 'discard')).toBe(true)
+      expect(request.engineSuggestion).toBeTruthy()
+      expect(request.candidates.find((candidate) => candidate.id === request.engineSuggestion)?.action.kind).toBe('discard')
+      expect(built.fallbackAction?.kind).toBe('discard')
+    }
+  })
+
   it('莲花：有东南西北时出乱风杠候选；suggestion 存在', () => {
     const input = baseInput({
       ruleCode: 'lotus-legacy', hand: ['east', 'south', 'west', 'north', 'm3', 'm3', 'm5'],
@@ -359,7 +391,7 @@ describe('prompt 构建', () => {
     expect(prompt.system).not.toContain('广东麻将桌上的牌友')
     expect(prompt.user).toContain('【候选动作】')
     expect(prompt.user).toContain('A1')
-    expect(prompt.user).toContain('{"choice": "A1"')
+    expect(prompt.user).toContain(`{"choice": "${built.request!.engineSuggestion}"`)
     expect(prompt.user).toContain('【默认参考】')
     expect(prompt.system).not.toContain('游戏引擎')
     expect(prompt.system).toContain('烟雾弹')

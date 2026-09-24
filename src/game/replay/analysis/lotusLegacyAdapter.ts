@@ -446,10 +446,11 @@ export function splitTemplateVariables(variables: unknown): { system: string | n
   return { system: typeof system === 'string' ? system : null, rest }
 }
 
-/** 钩子的结束结果 → 分析区的结果枚举（`invalid` 是"回答了但候选不可用"）。 */
+/** 钩子的结束结果 → 分析区的结果枚举；guarded 保留有效但被策略护栏拒绝的原回答。 */
 const LLM_OUTCOME: Record<LlmDecisionAnswerHookInput['outcome'], AnalysisLlmOutcome> = {
   success: 'success',
   invalid: 'candidate-missing',
+  guarded: 'policy-rejected',
   timeout: 'timeout',
   error: 'network-error',
 }

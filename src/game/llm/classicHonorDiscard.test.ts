@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import type { TileType } from '../core/contracts/types'
-import { buildDecisionRequest, heuristicScore } from './candidates'
+import { buildDecisionRequest, heuristicScore, inferiorClassicDiscard } from './candidates'
+import { buildPrompt } from './prompt'
 
 it('classic model prompt ranks an ordinary singleton honor as a useful discard and suggests it', () => {
   const hand: TileType[] = [
@@ -40,4 +41,43 @@ it('classic suggestion follows a ready discard rather than the cheap shape short
   expect(suggested.features.shanten).toBe(0)
   expect(suggested.features.efficiency).toBe('优')
   expect(['出5条', '出8条']).toContain(suggested.label)
+})
+
+it('rejects only a clearly dominated classic discard, preserving ambiguous tradeoffs', () => {
+  const hand: TileType[] = [
+    'm6', 'm7', 'm8', 'p6', 'p6', 'p7', 'p8', 'p8', 'p9',
+    's1', 's4', 's4', 'west', 'p1',
+  ]
+  const request = buildDecisionRequest({
+    ruleCode: 'lotus-classic', decision: 'turn', playerIndex: 2,
+    hand, melds: [], exposedMelds: 0, wallCount: 40, visibleTiles: hand,
+  }).request!
+  const first = request.candidates.find((candidate) => candidate.id === 'A1')!
+  const recommended = request.candidates.find((candidate) => candidate.id === request.engineSuggestion)!
+  expect(hand[first.action.kind === 'discard' ? first.action.handIndex : -1]).toBe('m6')
+  expect(hand[recommended.action.kind === 'discard' ? recommended.action.handIndex : -1]).toBe('west')
+  expect(buildPrompt('稳健', request).user).toContain(`{"choice": "${request.engineSuggestion}", "message": "有点意思。"}`)
+  expect(inferiorClassicDiscard(request, first)).toBe(true)
+  expect(inferiorClassicDiscard(request, recommended)).toBe(false)
+  // A higher ukeire can be an intentional tradeoff for temporarily higher shanten.
+  const tradeoff = { ...first, features: { ...first.features,
+    ukeire: (recommended.features.ukeire as number) + 1 } }
+  expect(inferiorClassicDiscard(request, tradeoff)).toBe(false)
+  const sameShanten = { ...first, features: { ...first.features,
+    shanten: recommended.features.shanten, ukeire: 0 } }
+  expect(inferiorClassicDiscard(request, sameShanten)).toBe(false)
+  expect(inferiorClassicDiscard({ ...request, ruleCode: 'lotus-legacy' }, first)).toBe(false)
+
+  // A second recorded shape: both ukeire values are zero at high shanten,
+  // so the one-shanten regression alone is enough to reject the model's A1.
+  const farHand: TileType[] = [
+    'm3', 'm6', 'm9', 'p2', 'p5', 's3', 's6', 's7',
+    'south', 'west', 'west', 'green', 'white', 'm1',
+  ]
+  const farRequest = buildDecisionRequest({
+    ruleCode: 'lotus-classic', decision: 'turn', playerIndex: 3,
+    hand: farHand, melds: [], exposedMelds: 0, wallCount: 80, visibleTiles: farHand,
+  }).request!
+  const farFirst = farRequest.candidates.find((candidate) => candidate.id === 'A1')!
+  expect(inferiorClassicDiscard(farRequest, farFirst)).toBe(true)
 })

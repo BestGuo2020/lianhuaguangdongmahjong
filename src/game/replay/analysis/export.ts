@@ -147,8 +147,9 @@ function localAnalysisIssues(input: BuildAnalysisExportInput): string[] {
     !round.some((record) => record.kind.startsWith('round-end/'))
   ))) issues.push('仅有整局净分，缺少逐笔计分与局末标记')
   if (input.parts.some((part) => part.tag === 'llm' && (() => {
-    const attempt = part.value as { outcome?: string; answer?: { known?: boolean; value?: { text?: string } } }
-    return attempt.outcome !== 'success' && attempt.answer?.known && !attempt.answer.value?.text
+    const attempt = part.value as { outcome?: string; answer?: { known?: boolean; value?: { text?: string; candidateId?: string } } }
+    return attempt.outcome !== 'success' && attempt.answer?.known
+      && !attempt.answer.value?.text && !attempt.answer.value?.candidateId
   })())) issues.push('失败的模型请求把空文本标为已知回答')
   return issues
 }
