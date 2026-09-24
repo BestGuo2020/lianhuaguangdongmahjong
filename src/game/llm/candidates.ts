@@ -559,6 +559,50 @@ function orderedClassicDiscards(input: DecisionInput, candidates: Candidate[]): 
   })
 }
 
+/** Early legacy local AI skips full progress; correct only risk-neutral regressions using evaluated candidates. */
+function legacyEarlyDiscardSuggestion(
+  input: DecisionInput, candidates: Candidate[], action: CanonicalAction,
+): CanonicalAction {
+  if (action.kind !== 'discard' || input.wallCount == null || input.wallCount <= 60) return action
+  const tile = input.hand[action.handIndex]
+  const baseline = candidates.find((candidate) => candidate.action.kind === 'discard'
+    && input.hand[candidate.action.handIndex] === tile)
+  const baselineShanten = baseline?.features.shanten
+  const baselineUkeire = baseline?.features.ukeire
+  if (!baseline || typeof baselineShanten !== 'number' || typeof baselineUkeire !== 'number') return action
+
+  const safetyRank = (value: Candidate['features']['safety']) =>
+    value === '高' ? 2 : value === '中' ? 1 : value === '低' ? 0 : -1
+  const opponentRisk = (candidate: Candidate) => candidate.features.opponentRisk?.payment ?? 0
+  const opponentTier = (candidate: Candidate) => {
+    const tier = candidate.features.opponentRisk?.tier
+    return tier === '高' ? 2 : tier === '中' ? 1 : tier === '低' ? 0 : 0
+  }
+  const alternatives = candidates.filter((candidate) => {
+    if (candidate.action.kind !== 'discard' || typeof candidate.features.shanten !== 'number'
+      || typeof candidate.features.ukeire !== 'number') return false
+    const improvement = candidate.features.shanten < baselineShanten
+      || (candidate.features.shanten === baselineShanten && candidate.features.ukeire > baselineUkeire)
+    return improvement
+      && safetyRank(candidate.features.safety) >= safetyRank(baseline.features.safety)
+      && opponentRisk(candidate) <= opponentRisk(baseline)
+      && opponentTier(candidate) <= opponentTier(baseline)
+      && candidate.features.risks.length <= baseline.features.risks.length
+      && (baseline.features.specialPattern === 'none'
+        || candidate.features.specialPattern === baseline.features.specialPattern)
+  }).sort((left, right) => {
+    const shanten = (left.features.shanten as number) - (right.features.shanten as number)
+    if (shanten) return shanten
+    const ukeire = (right.features.ukeire as number) - (left.features.ukeire as number)
+    if (ukeire) return ukeire
+    const safety = safetyRank(right.features.safety) - safetyRank(left.features.safety)
+    if (safety) return safety
+    return (left.action.kind === 'discard' ? left.action.handIndex : 0)
+      - (right.action.kind === 'discard' ? right.action.handIndex : 0)
+  })
+  return alternatives[0]?.action ?? baseline.action
+}
+
 function claimCandidates(input: DecisionInput): Candidate[] {
   const candidates: Candidate[] = []
   const canGang = input.canGang ?? false
@@ -626,10 +670,11 @@ function suggestionForTurn(input: DecisionInput, candidates: Candidate[]): Canon
       melds: input.melds,
     })
     const tile = input.hand[index]
-    return candidates.find((candidate) => candidate.action.kind === 'discard'
+    const suggested = candidates.find((candidate) => candidate.action.kind === 'discard'
       && input.hand[candidate.action.handIndex] === tile)?.action
       ?? candidates.find((candidate) => candidate.action.kind === 'discard')?.action
       ?? null
+    return suggested ? legacyEarlyDiscardSuggestion(input, candidates, suggested) : null
   }
   if (isLotus(input)) {
     const decision = lotusDecideTurn({
@@ -638,7 +683,8 @@ function suggestionForTurn(input: DecisionInput, candidates: Candidate[]): Canon
       upperLastDiscard: input.upperLastDiscard ?? undefined, earlyRound: input.earlyRound, wallCount: input.wallCount,
       ruleset: LOTUS_RULESET,
     }, () => 0)
-    return decision.kind === 'win' ? null : decision as CanonicalAction
+    if (decision.kind === 'win') return null
+    return legacyEarlyDiscardSuggestion(input, candidates, decision as CanonicalAction)
   }
   const decision = coreDecideTurn({
     hand: input.hand, melds: input.melds, exposedMelds: input.exposedMelds, kongBloom: input.kongBloom ?? false,
