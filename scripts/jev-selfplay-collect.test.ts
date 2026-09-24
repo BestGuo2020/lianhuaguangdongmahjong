@@ -14,6 +14,10 @@ import { runJevSelfplayMatch, type SelfplaySeatPolicy } from './jev-selfplay'
 
 const EV_SEATS: readonly [SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy] =
   ['ev', 'ev', 'ev', 'ev']
+// DAgger 补采：seat0 换学生策略（JEV_COLLECT_STUDENT=1），其余三座 EV；
+// 学生轨迹上的状态由教师（engineSuggestion）打标签 = DAgger 的核心。
+const STUDENT_SEATS: readonly [SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy, SelfplaySeatPolicy] =
+  ['jev-hint', 'ev', 'ev', 'ev']
 
 it.skipIf(process.env.JEV_SELFPLAY_COLLECT !== '1')('采集 OpenJev 校正用 gold JSONL', async () => {
   const tag = process.env.JEV_COLLECT_TAG ?? 'train'
@@ -22,6 +26,9 @@ it.skipIf(process.env.JEV_SELFPLAY_COLLECT !== '1')('采集 OpenJev 校正用 go
   const mode = (process.env.JEV_COLLECT_MODE ?? 'hint') as JevBloodFlowMode
   if (!Number.isFinite(matches) || matches < 1) throw new Error('JEV_COLLECT_MATCHES 必须是正数')
   if (mode !== 'hint' && mode !== 'blind') throw new Error(`未知采集模式：${mode}`)
+  const student = process.env.JEV_COLLECT_STUDENT === '1'
+  const seats = student ? STUDENT_SEATS : EV_SEATS
+  if (student && !process.env.JEV_BASE_URL) throw new Error('JEV_COLLECT_STUDENT=1 需要 JEV_BASE_URL')
   const dir = 'work/jev-calibration'
   mkdirSync(dir, { recursive: true })
   const path = `${dir}/${tag}.jsonl`
@@ -35,10 +42,24 @@ it.skipIf(process.env.JEV_SELFPLAY_COLLECT !== '1')('采集 OpenJev 校正用 go
     const result = await runJevSelfplayMatch({
       matchSeed: seed,
       rounds: 1,
-      seats: EV_SEATS,
+      seats,
       engineBuild,
       analysis: false,
       collect: { path, mode },
+      ...(student ? {
+        jev: {
+          config: {
+            providerType: 'custom' as const,
+            baseUrl: process.env.JEV_BASE_URL ?? 'http://127.0.0.1:8300',
+            apiKey: 'local',
+            model: process.env.JEV_MODEL ?? 'jev-latest',
+            style: '稳健' as const,
+            timeoutMs: 60_000,
+            timeoutEnabled: true,
+          },
+          backend: process.env.JEV_BACKEND ?? 'openjev-qwen2.5-1.5b-lora-v3-cal',
+        },
+      } : {}),
     })
     samples += result.collectedSamples
     perMatch.push({ seed, samples: result.collectedSamples, elapsedMs: Math.round(result.totalElapsedMs) })
@@ -50,7 +71,9 @@ it.skipIf(process.env.JEV_SELFPLAY_COLLECT !== '1')('采集 OpenJev 校正用 go
     templateId: jevBloodFlowTemplateId(mode),
     matches,
     seedRange: [seedBase, seedBase + matches - 1],
-    policy: 'ev-all-seats; gold=engineSuggestion (BLOOD_FLOW_LLM_AI)',
+    policy: student
+      ? 'DAgger: seat0=student(current LoRA), seats1-3=EV; gold=engineSuggestion (BLOOD_FLOW_LLM_AI)'
+      : 'ev-all-seats; gold=engineSuggestion (BLOOD_FLOW_LLM_AI)',
     engineBuild,
     samples,
     samplesPerMatch: samples / matches,
