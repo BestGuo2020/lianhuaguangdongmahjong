@@ -1251,7 +1251,7 @@ describe('DashScope 免费额度第三方模型请求体', () => {
     let body: Record<string, unknown> = {}
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       body = JSON.parse(String(init.body)) as Record<string, unknown>
-      const thinking = reasoning || model !== 'glm-4.6v'
+      const thinking = reasoning || !['glm-4.6v', 'glm-5'].includes(model)
       return new Response(JSON.stringify({ choices: [{
         message: { content: '{"choice":"A1","message":"稳住。"}',
           ...(thinking ? { reasoning_content: '内部思考' } : {}) },
@@ -1271,6 +1271,15 @@ describe('DashScope 免费额度第三方模型请求体', () => {
     expect(quick).not.toHaveProperty('thinking')
     const deep = await capture('glm-5.3', true)
     expect(deep).toMatchObject({ enable_thinking: true, reasoning_effort: 'high' })
+  })
+
+  it('自定义百炼 GLM-5 普通出牌发送关闭思考，疑难决策仍可开启', async () => {
+    const quick = await capture('glm-5')
+    expect(quick).toMatchObject({ model: 'glm-5', enable_thinking: false })
+    expect(quick).not.toHaveProperty('reasoning_effort')
+    expect(quick).not.toHaveProperty('thinking')
+    const deep = await capture('glm-5', true)
+    expect(deep).toMatchObject({ model: 'glm-5', enable_thinking: true, reasoning_effort: 'high' })
   })
 
   it('GLM-4.6V 普通关闭思考，条件触发才开启', async () => {

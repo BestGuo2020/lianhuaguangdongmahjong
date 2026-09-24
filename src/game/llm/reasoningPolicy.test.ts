@@ -253,7 +253,20 @@ describe('截图中百炼托管型号', () => {
     },
   )
 
-  it.each(['glm-5', 'glm-5.1', 'glm-5.2', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx'])(
+  it('自定义百炼 GLM-5 普通出牌关闭思考，疑难决策仍开启高强度', () => {
+    const hosted = {
+      baseUrl: 'https://example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      model: 'glm-5', providerType: 'custom' as const,
+    }
+    const quick = resolveReasoningPolicy(hosted)
+    const deep = resolveReasoningPolicy(hosted, true)
+    expect(quick).toMatchObject({ providerType: 'glm', mode: 'explicit-off', requestBody: {} })
+    expect(deep).toMatchObject({ providerType: 'glm', mode: 'explicit-on', requestBody: { reasoning_effort: 'high' } })
+    expect(dashScopeThinkingBody(quick.mode)).toEqual({ enable_thinking: false })
+    expect(dashScopeThinkingBody(deep.mode)).toEqual({ enable_thinking: true })
+  })
+
+  it.each(['glm-5.1', 'glm-5.2', 'glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx'])(
     '%s 普通低强度，条件触发后提高到 high', (model) => {
       const quick = resolveReasoningPolicy(hosted(model))
       const deep = resolveReasoningPolicy(hosted(model), true)
@@ -306,7 +319,7 @@ describe('截图中百炼托管型号', () => {
 describe('截图所有型号的快速模式', () => {
   const dash = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
   it.each([
-    ['glm-5', 'glm', 'explicit-on'], ['glm-4.5-air', 'glm', 'explicit-off'],
+    ['glm-5', 'glm', 'explicit-off'], ['glm-4.5-air', 'glm', 'explicit-off'],
     ['glm-5.1', 'glm', 'explicit-on'], ['glm-5.2', 'glm', 'explicit-on'],
     ['glm-5.3', 'glm', 'always-on'], ['glm-4.5', 'glm', 'explicit-off'],
     ['glm-4.6', 'glm', 'explicit-off'], ['glm-4.7', 'glm', 'explicit-off'],

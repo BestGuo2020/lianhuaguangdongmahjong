@@ -214,6 +214,11 @@ export function resolveReasoningPolicy(
         })
       }
       if (dashScope && /^glm-5(?:\.(?:1|2))?(?:[.-]|$)/.test(model)) {
+        // GLM-5 supports non-thinking on DashScope. Keep the expensive high tier
+        // for admitted conditional reasoning instead of every ordinary discard.
+        if (model === 'glm-5' && !reasoning) {
+          return policy(providerType, 'explicit-off', '百炼 GLM-5 普通决策关闭思考')
+        }
         return policy(providerType, 'explicit-on', '百炼 GLM 默认低强度思考，疑难时提高强度', {
           reasoning_effort: reasoning ? 'high' : 'low',
         }, true)
