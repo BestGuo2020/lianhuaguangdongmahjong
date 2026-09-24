@@ -391,7 +391,7 @@ describe('prompt 构建', () => {
     expect(prompt.system).not.toContain('广东麻将桌上的牌友')
     expect(prompt.user).toContain('【候选动作】')
     expect(prompt.user).toContain('A1')
-    expect(prompt.user).toContain(`{"choice": "${built.request!.engineSuggestion}"`)
+    expect(prompt.user).toContain('仅包含 choice 与 message 两个字符串字段')
     expect(prompt.user).toContain('【默认参考】')
     expect(prompt.system).not.toContain('游戏引擎')
     expect(prompt.system).toContain('烟雾弹')
@@ -399,7 +399,7 @@ describe('prompt 构建', () => {
     expect(prompt.system).toContain('公开事实必须如实')
     expect(prompt.user).toContain('你是庄家')
     expect(prompt.system).not.toContain('不要使用“稳稳”一词')
-    expect(prompt.user).toContain('"message": "有点意思。"')
+    expect(prompt.user).toContain('choice 填你选中的候选编号')
     expect(prompt.user).toContain('message 必须非空')
     expect(prompt.user).toContain('【你的暗手（不含副露/杠组）】')
     expect(prompt.system).toContain('规则摘要未列出的特殊牌型一律视为不支持')
@@ -430,8 +430,8 @@ describe('prompt 构建', () => {
     }))
     const claimPrompt = buildPrompt('稳健', claim.request!).user
     expect(claimPrompt).toContain('【当前弃牌】「上家」打出「3万」')
-    expect(claimPrompt).toContain('{"choice": "Z", "message": "有点意思。"}')
-    expect(claimPrompt).not.toContain('{"choice": "A1"')
+    expect(claimPrompt).toContain('仅包含 choice 与 message 两个字符串字段')
+    expect(claimPrompt.slice(claimPrompt.indexOf('【输出】'))).not.toMatch(/"choice"\s*:/)
   })
 
   it('明确标注碰与杠，第四张弃牌不会自动并入已有碰组', () => {
@@ -473,6 +473,7 @@ describe('prompt 构建', () => {
     expect(prompt.user).toContain('白板只能替代上述精牌面或白板本身')
     expect(prompt.user).toContain('支持的特殊牌型：七对、十三幺、十三烂、七星十三烂')
     expect(prompt.user).not.toContain('不支持七对')
+    expect(prompt.user.slice(prompt.user.indexOf('【输出】'))).not.toMatch(/"choice"\s*:/)
   })
 })
 

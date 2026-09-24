@@ -56,7 +56,17 @@ it('rejects only a clearly dominated classic discard, preserving ambiguous trade
   const recommended = request.candidates.find((candidate) => candidate.id === request.engineSuggestion)!
   expect(hand[first.action.kind === 'discard' ? first.action.handIndex : -1]).toBe('m6')
   expect(hand[recommended.action.kind === 'discard' ? recommended.action.handIndex : -1]).toBe('west')
-  expect(buildPrompt('稳健', request).user).toContain(`{"choice": "${request.engineSuggestion}", "message": "有点意思。"}`)
+  const prompt = buildPrompt('稳健', request).user
+  expect(prompt).toContain(`【默认参考】选择「${request.engineSuggestion}」`)
+  const outputInstruction = (user: string) => user.slice(user.indexOf('【输出】'))
+  expect(outputInstruction(prompt)).not.toContain(request.engineSuggestion)
+  // 对照同一局面、只换默认参考：输出格式不得再次塞入任何候选编号。
+  const alternativePrompt = buildPrompt('稳健', { ...request, engineSuggestion: first.id }).user
+  expect(alternativePrompt).toContain(`【默认参考】选择「${first.id}」`)
+  expect(outputInstruction(alternativePrompt)).toBe(outputInstruction(prompt))
+  for (const candidate of request.candidates) {
+    expect(outputInstruction(prompt)).not.toContain(`"${candidate.id}"`)
+  }
   expect(inferiorClassicDiscard(request, first)).toBe(true)
   expect(inferiorClassicDiscard(request, recommended)).toBe(false)
   // A higher ukeire can be an intentional tradeoff for temporarily higher shanten.

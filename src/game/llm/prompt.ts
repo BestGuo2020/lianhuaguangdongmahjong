@@ -174,13 +174,12 @@ export function buildPrompt(style: string, request: DecisionRequest): { system: 
   items.push('【候选动作】（必须从中选一个，编号不要写错）：')
   items.push(request.candidates.map((candidate) => candidateLine(candidate, request.ruleCode)).join('\n'))
 
-  items.push('【输出】严格 JSON，不要输出任何其他内容：')
-  // Keep the JSON example consistent with the default reference; a hard-coded
-  // first candidate can unintentionally anchor the model to a worse action.
-  items.push(`{"choice": "${request.engineSuggestion ?? request.candidates[0].id}", "message": "有点意思。"}`)
+  // A filled-in choice example repeats one candidate after the comparison and
+  // can anchor the model's selection. Describe the JSON fields without an ID.
+  items.push('【输出】只输出一个 JSON 对象，不要 Markdown 或其他文字；仅包含 choice 与 message 两个字符串字段。')
   const user = [
     ...items,
-    'choice 必须是上面列出的编号；message 必须非空、≤16 字，且只能说牌桌内的话。',
+    'choice 填你选中的候选编号；message 必须非空、≤16 字，且只能说牌桌内的话。',
   ].join('\n')
 
   return { system: buildDecisionSystemPrompt(style, {name: RULE_NAMES[request.ruleCode]}), user }
