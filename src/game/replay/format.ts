@@ -1,7 +1,7 @@
 // 回放列表与牌谱的纯文案工具（全部无副作用，便于单测）。
 import type { MatchType, TileType } from '../core/contracts/types'
 import { tileName } from '../core/rules/tiles'
-import type { ReplayMatch, ReplayMeldKind, ReplayStep } from './types'
+import type { ReplayMatch, ReplayMeldKind, ReplayPlayer, ReplayRound, ReplayRoundFinal, ReplayStep } from './types'
 import { REPLAY_SCHEMA_VERSION } from './types'
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -94,6 +94,38 @@ export function stepSummary(step: ReplayStep): string {
     default:
       return tile
   }
+}
+
+/** 摘要的主语是赢家；点炮是出牌者的动作，不能接在赢家姓名后。 */
+export function replayWinLabel(winType: ReplayRoundFinal['winType']): string {
+  if (winType === 'discard') return '胡牌'
+  if (winType === 'robbed-kong') return '抢杠'
+  if (winType === 'tianhu') return '天胡'
+  if (winType === 'dihu') return '地胡'
+  return '自摸'
+}
+
+export function replayMatchSummary(
+  rounds: readonly ReplayRound[],
+  players: readonly ReplayPlayer[],
+  humanSeat: number,
+): string {
+  const last = rounds.reduce<ReplayRound | undefined>(
+    (latest, round) => !latest || round.roundIndex > latest.roundIndex ? round : latest,
+    undefined,
+  )
+  if (!last?.final) return ''
+  if (last.final.draw) return `${last.roundLabel} 荒庄`
+  const winner = last.final.winSeat
+  if (winner == null) return `${last.roundLabel} 本局结束`
+  const name = players[winner]?.name ?? ''
+  return `${last.roundLabel} ${name}${replayWinLabel(last.final.winType)}${winner === humanSeat ? '（本家）' : ''}`
+}
+
+/** 旧录制仍可观看；再次导出时只用末局的权威结果修正错误摘要。 */
+export function replayMatchWithCurrentSummary(match: ReplayMatch, rounds: readonly ReplayRound[]): ReplayMatch {
+  const summary = replayMatchSummary(rounds, match.players, match.humanSeat)
+  return summary && summary !== match.summary ? { ...match, summary } : match
 }
 
 /** 列表副标题：局数 · 位次 · 净胜分。 */

@@ -7,7 +7,7 @@ import type { RoundResult } from '../core/contracts/gamePort'
 import type { RuleVariant } from '../core/rules/ruleVariants'
 import { MATCH_HANDS } from '../core/local/localGameConfig'
 import type { TableThemeName } from '../../theme/themeIdentity'
-import { roundLabelFor } from './format'
+import { replayMatchSummary, roundLabelFor } from './format'
 import { toPlain } from './plain'
 import {
   REPLAY_SCHEMA_VERSION,
@@ -222,19 +222,6 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     })
   }
 
-  function summaryOf(recorded: ReplayRound[], players: ReplayPlayer[], humanSeat: number): string {
-    const last = recorded[recorded.length - 1]
-    if (!last?.final) return ''
-    if (last.final.draw) return `${last.roundLabel} 荒庄`
-    const winner = last.final.winSeat
-    const kind = last.final.winType === 'discard' ? '点炮'
-      : last.final.winType === 'robbed-kong' ? '抢杠'
-        : last.final.winType === 'tianhu' ? '天胡'
-          : last.final.winType === 'dihu' ? '地胡' : '自摸'
-    const name = winner != null ? players[winner]?.name ?? '' : ''
-    return `${last.roundLabel} ${name}${kind}${winner === humanSeat ? '（本家）' : ''}`
-  }
-
   function computedStandings(current: ReplayMatch): ReplayStanding[] | undefined {
     const last = rounds[rounds.length - 1]
     if (!last?.final) return undefined
@@ -261,7 +248,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     current.finalStandings = resolved
     current.myRank = mine?.rank
     current.myScore = mine?.score ?? rounds[rounds.length - 1].final?.scores[humanSeat]
-    current.summary = summaryOf(rounds, current.players, humanSeat)
+    current.summary = replayMatchSummary(rounds, current.players, humanSeat)
     const record = toPlain(current)
     safeSave(() => options.sink.saveMatch(record))
     return record

@@ -12,6 +12,7 @@
 import type { ReplayMatch, ReplayRound } from '../types'
 import { REPLAY_SCHEMA_VERSION } from '../types'
 import { downloadJsonFile } from '../export'
+import { replayMatchWithCurrentSummary } from '../format'
 import { ANALYSIS_FORMAT_VERSION, type AnalysisAreaStatus, type AnalysisCompleteness, type AnalysisConfigRecord, type AnalysisDecision, type AnalysisReproduction, type AnalysisSettlement } from './types'
 import { reproductionDeficiencies } from './reproductionCapability'
 import type { AnalysisBlockPart } from './codec'
@@ -185,6 +186,7 @@ export function buildAnalysisExport(input: BuildAnalysisExportInput): AnalysisEx
   const analysisIssues = localAnalysisIssues(input)
   missing.push(...analysisIssues.map((issue) => `决策分析不完整（${issue}）`))
   const configReferencesClosed = wantedConfigs.every(id => providedConfigs.has(id))
+  const exportedMatch = replayMatchWithCurrentSummary(input.match, input.rounds)
   return {
     schemaVersion: ANALYSIS_FORMAT_VERSION,
     kind: 'lianhua-analysis',
@@ -202,12 +204,12 @@ export function buildAnalysisExport(input: BuildAnalysisExportInput): AnalysisEx
       configReferencesClosed,
       missing,
     },
-    match: input.match,
+    match: exportedMatch,
     configurations: [...input.configurations],
     records,
     replay: {
       schemaVersion: REPLAY_SCHEMA_VERSION,
-      match: input.match,
+      match: exportedMatch,
       rounds: [...input.rounds].sort((a, b) => a.roundIndex - b.roundIndex),
     },
   }

@@ -47,6 +47,23 @@ function build(overrides: Partial<Parameters<typeof buildAnalysisExport>[0]> = {
 }
 
 describe('分析包导出（§9.2、§9.3、§9.5）', () => {
+  it('旧分析包再次导出时，两份场次元数据都修正点炮摘要', () => {
+    const stale = {
+      ...match,
+      summary: '东4局 本家点炮（本家）',
+      players: [{ seat: 0, name: '本家', avatar: '', startScore: 2000 }],
+    }
+    const last = {
+      roundIndex: 9,
+      roundLabel: '东4局',
+      final: { draw: false, winSeat: 0, winType: 'discard' },
+    } as ReplayRound
+    const payload = build({ match: stale, rounds: [last] })
+    expect(payload.match.summary).toBe('东4局 本家胡牌（本家）')
+    expect(payload.replay.match.summary).toBe('东4局 本家胡牌（本家）')
+    expect(stale.summary).toBe('东4局 本家点炮（本家）')
+  })
+
   it('经典玩法的可复现不掩盖缺失的选择、来源和配置', () => {
     const classicMatch: ReplayMatch = { ...match, rulesetId: 'lotus-classic', analysisRecorded: false }
     const oldConfig = { ...config, rules: { id: 'lotus-classic' }, aiConfig: {}, seatControl: ['human', 'llm', 'llm', 'llm'] }
