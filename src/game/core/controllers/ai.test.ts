@@ -96,6 +96,34 @@ describe('chooseDiscardIndex 弃牌启发式', () => {
     const index = chooseDiscardIndex(hand, () => 0, 0, DEFAULT_RULESET, { visibleTiles })
     expect(hand[index]).toBe('south')
   })
+
+  it('回放三处本可听牌的手牌在早巡和中巡都不再漏听', () => {
+    const fixtures: Array<{ hand: TileType[]; exposedMelds: number }> = [
+      {
+        // 3/window/62：原 AI 出 4 筒仍一向听；打 5 条可听。
+        hand: ['m6', 'm6', 'm6', 'p5', 'p6', 's3', 's3', 's5', 's5', 's6', 'west', 'west', 'white', 'p4'],
+        exposedMelds: 0,
+      },
+      {
+        // 3/window/66：原 AI 出 6 筒仍一向听；打 5 条可听。
+        hand: ['m6', 'm6', 'm6', 'p5', 'p6', 's3', 's3', 's5', 's5', 's6', 'west', 'west', 'white', 's3'],
+        exposedMelds: 0,
+      },
+      {
+        // 6/window/24：已有一组副露，原 AI 出 7 万仍一向听；打 6 万可听。
+        hand: ['m5', 'm6', 'm6', 'm7', 'p3', 'p3', 'p6', 'p6', 's2', 's2', 'white'],
+        exposedMelds: 1,
+      },
+    ]
+    for (const { hand, exposedMelds } of fixtures) {
+      for (const wallCount of [80, 40]) {
+        const index = chooseDiscardIndex(hand, () => 0, exposedMelds, DEFAULT_RULESET, { wallCount, visibleTiles: hand })
+        const after = hand.filter((_, candidateIndex) => candidateIndex !== index)
+        expect(DEFAULT_RULESET.win.waitingTiles(after, exposedMelds).length).toBeGreaterThan(0)
+        expect(hand[index]).not.toBe('white')
+      }
+    }
+  })
 })
 
 describe('decideClaim 吃碰杠响应', () => {

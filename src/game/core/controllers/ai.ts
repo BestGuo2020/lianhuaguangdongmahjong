@@ -363,6 +363,36 @@ export function chooseDiscardIndex(
     const risk = feedRisk(tile, context)
     return { index, tile, preliminaryScore: base + risk }
   })
+  const structural = canBeTenpai(hand.length - 1, exposedMelds)
+  if (structural) {
+    // The shape shortlist can miss a ready discard altogether. Check distinct
+    // tiles for live waits before using it, without running full shanten DFS.
+    const visible = context.visibleTiles ?? hand
+    const visibleCounts = new Map<TileType, number>()
+    for (const tile of visible) visibleCounts.set(tile, (visibleCounts.get(tile) ?? 0) + 1)
+    const seen = new Set<TileType>()
+    const ready: Array<{ index: number; tile: TileType; waitCount: number; remaining: number; shape: number }> = []
+    for (const candidate of preliminary) {
+      if (seen.has(candidate.tile)) continue
+      seen.add(candidate.tile)
+      const after = hand.filter((_, index) => index !== candidate.index)
+      const waits = ruleset.win.waitingTiles(after, exposedMelds)
+      if (!waits.length) continue
+      const remaining = [...new Set(waits)].reduce((total, tile) =>
+        total + Math.max(0, 4 - (visibleCounts.get(tile) ?? 0)), 0)
+      if (remaining > 0) ready.push({
+        index: candidate.index, tile: candidate.tile, waitCount: waits.length,
+        remaining, shape: candidate.preliminaryScore,
+      })
+    }
+    if (ready.length) {
+      const ordinary = ready.filter((candidate) => candidate.tile !== 'white')
+      const choices = ordinary.length ? ordinary : ready
+      choices.sort((a, b) => b.remaining - a.remaining
+        || b.waitCount - a.waitCount || a.shape - b.shape || a.index - b.index)
+      return choices[0].index
+    }
+  }
   // 先用低成本结构分筛出最可能的 2 张，再做精确向听/进张；避免每回合 14×DFS。
   const shortlist = new Set<number>()
   const shortlistedTiles = new Set<TileType>()
@@ -372,7 +402,6 @@ export function chooseDiscardIndex(
     shortlist.add(item.index)
     if (shortlist.size >= 2) break
   }
-  const structural = canBeTenpai(hand.length - 1, exposedMelds)
   const shouldEvaluateProgress = context.wallCount == null || context.wallCount <= 60
   const scored = preliminary.map((item) => {
     if (!shortlist.has(item.index) || !structural || !shouldEvaluateProgress) {
