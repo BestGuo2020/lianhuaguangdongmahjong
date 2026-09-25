@@ -362,6 +362,14 @@ describe('录制器：收尾状态与名次', () => {
     expect(match.summary).toContain('东2局')
   })
 
+  it('点炮胡摘要以赢家为主语，不把赢家写成点炮者', () => {
+    const { recorder } = harness()
+    const frame = makeFrame({ round: 4 })
+    recorder.hooks.roundStart(frame)
+    recorder.hooks.roundEnd({ draw: false, winnerIndex: 0, winType: 'discard', winTile: 'east' }, frame)
+    expect(recorder.finish('finished')?.summary).toBe('东4局 玩家1胡牌（本家）')
+  })
+
   it('传入权威 standings 时以它为准', () => {
     const { recorder } = harness()
     recordRounds(recorder, [{ round: 1, scores: [1000, 1000, 1000, 1000] }])

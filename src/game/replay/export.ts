@@ -1,6 +1,7 @@
 // 牌谱导出：把一场回放（场次 + 各局事件流）打包成 JSON，供玩家自行留存/分享。
 // 纯函数部分可测；只有 downloadReplayExport 触碰 DOM（浏览器专用）。
 import { REPLAY_SCHEMA_VERSION, type ReplayMatch, type ReplayRound } from './types'
+import { replayMatchWithCurrentSummary } from './format'
 
 export interface ReplayExportPayload {
   /** 导出格式版本，供将来迁移。 */
@@ -21,7 +22,7 @@ export function buildReplayExport(
     schemaVersion: REPLAY_SCHEMA_VERSION,
     kind: 'lianhua-replay',
     exportedAt,
-    match,
+    match: replayMatchWithCurrentSummary(match, rounds),
     rounds: [...rounds].sort((a, b) => a.roundIndex - b.roundIndex),
   }
 }

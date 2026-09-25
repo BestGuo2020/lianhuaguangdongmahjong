@@ -8,7 +8,7 @@ import ReplayEventLog from './ReplayEventLog.vue'
 import ReplayInfoBoard from './ReplayInfoBoard.vue'
 import ReplayTimeline from './ReplayTimeline.vue'
 import { useReplayPlayer } from '../../game/replay/useReplayPlayer'
-import { formatDelta, formatRank } from '../../game/replay/format'
+import { formatDelta, formatRank, replayWinLabel } from '../../game/replay/format'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { displayImageSrc } from '../../game/core/presentation/imagePreload'
 import { themePresentationByName, themePresentationCssVariables } from '../../theme/themePresentation'
@@ -57,10 +57,7 @@ const resultBanner = computed(() => {
   // 血流一局可能多次胡牌，没有单一赢家：只报「本局结束」，各家胡牌次数由结算帧分数与牌谱体现。
   if (final.winSeat == null) return `${head}本局结束`
   const winner = props.match.players[final.winSeat]?.name ?? ''
-  const kind = final.winType === 'discard' ? '点炮'
-    : final.winType === 'robbed-kong' ? '抢杠'
-      : final.winType === 'tianhu' ? '天胡'
-        : final.winType === 'dihu' ? '地胡' : '自摸'
+  const kind = replayWinLabel(final.winType)
   const points = final.points ? ` · ${formatDelta(final.points * 3)}分` : ''
   return `${head}${winner} ${kind}${points}`
 })

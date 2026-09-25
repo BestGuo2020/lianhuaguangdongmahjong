@@ -71,6 +71,17 @@ describe('牌谱导出', () => {
     expect(JSON.parse(JSON.stringify(payload)).rounds).toHaveLength(2)
   })
 
+  it('旧牌谱重新导出时修正误写为点炮的摘要', () => {
+    const stale = { ...MATCH, summary: '东2局 本家点炮（本家）' }
+    const last = {
+      ...round(2, '东2局'),
+      final: { draw: false, winSeat: 0, winType: 'discard' },
+    } as ReplayRound
+    const payload = buildReplayExport(stale, [last])
+    expect(payload.match.summary).toBe('东2局 本家胡牌（本家）')
+    expect(stale.summary).toBe('东2局 本家点炮（本家）')
+  })
+
   it('文件名带玩法、本地时间与场次短 id，且跨平台安全', () => {
     const name = replayExportFilename(MATCH, 1_700_000_950_000)
     expect(name).toMatch(/^replay-lotus-classic-\d{8}-\d{4}-3f8a1c2e\.json$/)
