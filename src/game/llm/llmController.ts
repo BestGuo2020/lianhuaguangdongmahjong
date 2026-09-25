@@ -42,6 +42,7 @@ import type { AnalysisLegalAction } from '../replay/analysis/types'
 import type { LlmSpeechPriority } from './speechPolicy'
 import { resolveDecisionSpeech, type DecisionSpeechFacts } from './decisionSpeech'
 import { ConditionalReasoningCoordinator } from './conditionalReasoning'
+import { keepUsefulLotusChiOptions } from './lotusNoGainChi'
 
 export interface LlmControllerStats {
   requests: number
@@ -624,6 +625,11 @@ export class LotusLlmController implements LotusController {
       kind: 'discard-gang', hand: ctx.hand, exposedMelds: ctx.exposedMelds,
       jokers: ctx.jokers, tile: ctx.tile, visibleTiles: ctx.visibleTiles,
     }).guaranteedKongBloom) return { kind: 'gang' }
+    const chiOptions = keepUsefulLotusChiOptions({
+      hand: ctx.hand, exposedMelds: ctx.exposedMelds, claimedTile: ctx.tile,
+      chiOptions: ctx.chiOptions, jokers: ctx.jokers,
+    })
+    if (!ctx.canPeng && !ctx.canGang && !chiOptions.length) return { kind: 'pass' }
     const action = await decideCanonical(this.config, {
       ruleCode: 'lotus-legacy',
       decision: 'claim',
@@ -633,19 +639,24 @@ export class LotusLlmController implements LotusController {
       exposedMelds: ctx.exposedMelds,
       canPeng: ctx.canPeng,
       canGang: ctx.canGang,
-      chiOptions: ctx.chiOptions,
+      chiOptions,
       tile: ctx.tile,
       from: ctx.from,
       jokerTiles: ctx.jokerTiles ?? ctx.jokers,
       wildcardTiles: ctx.wildcardTiles,
       ...metaOf(ctx),
     }, this.hooks, this.stats, this.reasoning)
-    if (action === null) return this.fallback.requestClaim(ctx)
-    return mapLotusClaimAction(action, ctx.chiOptions)
+    if (action === null) return this.fallback.requestClaim({ ...ctx, chiOptions })
+    return mapLotusClaimAction(action, chiOptions)
   }
 
   async requestChi(ctx: LotusChiContext): Promise<LotusChiAction> {
     if (!ctx.chiOptions.length) return { kind: 'pass' }
+    const chiOptions = keepUsefulLotusChiOptions({
+      hand: ctx.hand, exposedMelds: 0, claimedTile: ctx.tile,
+      chiOptions: ctx.chiOptions, jokers: ctx.jokers,
+    })
+    if (!chiOptions.length) return { kind: 'pass' }
     const action = await decideCanonical(this.config, {
       ruleCode: 'lotus-legacy',
       decision: 'claim',
@@ -653,15 +664,15 @@ export class LotusLlmController implements LotusController {
       hand: ctx.hand,
       melds: [],
       exposedMelds: 0,
-      chiOptions: ctx.chiOptions,
+      chiOptions,
       tile: ctx.tile,
       from: ctx.from,
       jokerTiles: ctx.jokerTiles ?? ctx.jokers,
       wildcardTiles: ctx.wildcardTiles,
       ...metaOf(ctx),
     }, this.hooks, this.stats, this.reasoning)
-    if (action === null) return this.fallback.requestChi(ctx)
-    if (action.kind === 'chi') return { kind: 'chi', meld: ctx.chiOptions[action.optionIndex] }
+    if (action === null) return this.fallback.requestChi({ ...ctx, chiOptions })
+    if (action.kind === 'chi') return { kind: 'chi', meld: chiOptions[action.optionIndex] }
     return { kind: 'pass' }
   }
 
