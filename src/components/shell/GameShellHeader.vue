@@ -61,7 +61,7 @@ function hideBrokenPreview(event: Event) {
 function chooseTheme(theme: TableThemeName) {
   themeMenuOpen.value = false
   if (theme !== props.themeName) {
-    saveTableThemePreference(theme)
+    if (props.gameMode === 'local') saveTableThemePreference(theme)
     emit('changeTheme', theme)
   }
 }

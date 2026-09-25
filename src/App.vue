@@ -194,6 +194,8 @@ function preferLlmTableTheme(llmEnabled: boolean) {
 
 // 本地配置在 setup 阶段同步读取；无 URL 明确主题时，首屏直接采用大模型专属主题。
 preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
+// 联机房间的主题仅用于该房间；返回单机时恢复进入联机前的本地主题。
+const localTableThemeName = ref<TableThemeName>(tableThemeName.value)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
 const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
@@ -442,7 +444,12 @@ const remoteActions = {
   // 暂离（返回大厅）：保留座位与会话，只断开牌桌连接；退出本场：回主大厅但座位仍保留可重进。
   stepOutToLobby: () => activeRemote.value.remoteActions.stepOutToLobby(),
   leaveMatch: () => activeRemote.value.remoteActions.leaveMatch(),
-  resumeSession: () => activeRemote.value.remoteActions.resumeSession(),
+  resumeSession: () => {
+    // 刷新后当前单机规则可能与保存的联机房间不同；先切到对应联机协议再重进。
+    const session = storedSession.value
+    if (session?.rulesetId) selectedRule.value = session.rulesetId
+    return activeRemote.value.remoteActions.resumeSession()
+  },
   updateCharacter: (characterId: string) => activeRemote.value.remoteActions.updateCharacter(characterId),
 }
 
@@ -459,7 +466,9 @@ watch(animeCharacterId, (value) => {
 })
 
 // 联机房间的大模型能力可能在恢复会话或房间元数据返回后才生效。
-watch(effectiveLlmEnabled, (enabled) => preferLlmTableTheme(enabled), { immediate: true })
+watch(effectiveLlmEnabled, (enabled) => {
+  if (gameMode.value === 'remote') preferLlmTableTheme(enabled)
+}, { immediate: true })
 
 const { roomMeta } = useRoomAvailability(gameMode, roomId)
 
@@ -488,9 +497,14 @@ watch(() => wakuAuth.authenticated.value, (authenticated) => {
 })
 
 // 玩家改选其他模式时放弃「登录后自动进联机」的等待。
-watch(gameMode, (mode) => {
+watch(gameMode, (mode, previousMode) => {
+  if (mode === 'remote' && previousMode === 'local') {
+    localTableThemeName.value = tableThemeName.value
+  } else if (mode === 'local' && previousMode === 'remote') {
+    tableThemeName.value = localTableThemeName.value
+  }
   if (mode !== 'remote') pendingRemoteLogin.value = false
-})
+}, { flush: 'sync' })
 
 // 联机接口返回 401 AUTH_REQUIRED 时提示重新登录（不跳转、不弹窗）。
 function handleAuthRequired() {
