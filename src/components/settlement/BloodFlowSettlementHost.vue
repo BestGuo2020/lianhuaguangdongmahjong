@@ -69,7 +69,7 @@ defineExpose({showSummary,showDetails,showTable})
         <BloodFlowRoundSummary v-else-if="result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :round-label="roundLabel" :bubbles="bubbles" />
       </div>
       <p v-if="pending" class="bf-ready-status" role="status">{{ state.continuation?.ready ? `已准备，等待其他玩家（${state.continuation.readySeats.length}/${state.continuation.requiredSeats.length}）` : state.continuation ? '正在确认准备状态…' : '正在进入下一局…' }}</p>
-      <p v-if="state.status==='interrupted'" class="bf-ready-status" role="status">连接已中断，保留本局结果。恢复后可重新准备。</p>
+      <p v-if="state.status==='interrupted'&&online" class="bf-ready-status" role="status">连接已中断，保留本局结果。恢复后可重新准备。</p>
       <footer>
         <button v-if="view==='details'&&detailsReturn!=='table'&&result" type="button" @click="view=detailsReturn">返回结算</button>
         <button type="button" @click="showTable">{{ view==='details'?'返回牌桌':'查看牌桌' }}</button>
