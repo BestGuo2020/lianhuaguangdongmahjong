@@ -4,6 +4,7 @@
 //    同源本地字节、不会再触发校验请求，解码结果已在浏览器图片缓存里）。
 //
 // 两者语义一致：失败静默，失败项不记入，后续调用仍会重试。
+import { ref } from 'vue'
 
 // 本页已成功预取过的 URL：再次调用（主题往返、房间元数据轮询、设置重存）不再创建请求，
 // 是否联网完全交给浏览器缓存，本模块不重复发起。失败的不记入，后续调用仍会重试。
@@ -12,6 +13,8 @@ const loaded = new Set<string>()
 /** 原始 URL → blob URL；存活到页面结束（与 tileAssets 的 objectUrls 同口径）。 */
 const materialized = new Map<string, string>()
 const materializing = new Map<string, Promise<void>>()
+/** 图片异步物化完成后通知已经挂载的头像与立绘重新读取 blob URL。 */
+export const materializedImageVersion = ref(0)
 
 function loadOne(url: string): Promise<boolean> {
   // 非浏览器环境（vitest 的 node 环境、SSR）：没有 Image，视为未加载，不触网。
@@ -55,6 +58,7 @@ async function materializeOne(url: string): Promise<void> {
   const objectUrl = URL.createObjectURL(await response.blob())
   await warmDecode(objectUrl)
   materialized.set(url, objectUrl)
+  materializedImageVersion.value += 1
 }
 
 /**
@@ -78,6 +82,7 @@ export function materializeImages(urls: Iterable<string | null | undefined>): Pr
 
 /** 已物化好的 blob URL；还没就绪返回 null（调用方回退原始 URL）。 */
 export function materializedImageSrc(url: string | null | undefined): string | null {
+  void materializedImageVersion.value
   if (!url) return null
   return materialized.get(url) ?? null
 }
