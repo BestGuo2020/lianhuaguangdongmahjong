@@ -92,6 +92,9 @@ type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?
 
 /** worker 回复：座位视角，录制开启时额外带一份旁观视角（本地专用）。 */
 type BloodFlowWorkerView = BloodFlowSeatView & { replay?: BloodFlowSeatView }
+/** 网络语音是表现层；单机规则动作与结算最多等这一段时间。 */
+const LOCAL_DISCARD_SPEECH_WAIT_MS = 4_000
+const LOCAL_ROUND_SPEECH_WAIT_MS = 12_000
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
@@ -574,9 +577,28 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       try {
         const speech = reactions.run(next)
         roundSpeechBusy.value = true
-        void speech.catch(error => {
+        const completed = speech.catch(error => {
           console.warn('[blood-flow] round speech failed; continuing the match', error)
-        }).finally(() => { roundSpeechBusy.value = false })
+        })
+        if (options.externalAuthority) {
+          void completed.finally(() => { roundSpeechBusy.value = false })
+        } else {
+          const speechEpoch = generation
+          let timeout: ReturnType<typeof setTimeout> | undefined
+          const safetyGate = new Promise<'timeout'>(resolve => {
+            timeout = setTimeout(() => resolve('timeout'), LOCAL_ROUND_SPEECH_WAIT_MS)
+          })
+          void Promise.race([completed.then(() => 'complete' as const), safetyGate])
+            .then(outcome => {
+              if (outcome === 'timeout' && speechEpoch === generation) {
+                reactions.cancel()
+                cancelReactionSpeech()
+              }
+            }).finally(() => {
+              if (timeout !== undefined) clearTimeout(timeout)
+              if (speechEpoch === generation) roundSpeechBusy.value = false
+            })
+        }
       } catch (error) {
         roundSpeechBusy.value = false
         console.warn('[blood-flow] round speech failed; continuing the match', error)
@@ -1020,9 +1042,21 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       later(()=>{if(actionBubbles.value[seat]?.id===id){const copy={...actionBubbles.value};delete copy[seat];actionBubbles.value=copy}},5000)
     }
     let played=false
-    try{played=await playDecisionSpeech({seat,text:line.text,voiceKey:line.voiceKey,style:line.style,priority:'normal',
-      signal:controller.signal,isCurrent:alive,showBubble})}
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      const speech = playDecisionSpeech({ seat, text: line.text, voiceKey: line.voiceKey, style: line.style,
+        priority: 'normal', signal: controller.signal, isCurrent: alive, showBubble })
+      const safetyGate = new Promise<false>(resolve => {
+        timeout = setTimeout(() => {
+          showBubble()
+          controller.abort()
+          resolve(false)
+        }, LOCAL_DISCARD_SPEECH_WAIT_MS)
+      })
+      played = await Promise.race([speech, safetyGate])
+    }
     finally{
+      if (timeout !== undefined) clearTimeout(timeout)
       pendingDiscardSpeech.delete(controller)
       // Keep successful playback cancellable through its second half, until
       // round/leave cleanup. The set is bounded by this round's action lines.

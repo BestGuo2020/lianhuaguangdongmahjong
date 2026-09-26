@@ -68,6 +68,7 @@ test('three real DeepSeek opponents complete a local blood-flow east match', asy
     if (request.url().startsWith('https://api.deepseek.com/')) requestFailures.push(request.failure()?.errorText ?? 'request failed')
   })
   page.on('pageerror', error => fatalErrors.push(error.message))
+  page.on('crash', () => fatalErrors.push('Chromium page crashed'))
   page.on('console', message => {
     if (message.type() === 'error' && (message.text().includes('[blood-flow]') || message.text().includes('[blood-flow-worker]'))) {
       fatalErrors.push(message.text())
@@ -75,6 +76,7 @@ test('three real DeepSeek opponents complete a local blood-flow east match', asy
   })
 
   await page.goto(process.env.BLOOD_FLOW_TARGET_URL ?? '/?bloodFlow=1')
+  page.setDefaultTimeout(5_000)
   await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
   await page.getByRole('button', { name: /莲花麻将·血流/ }).click()
   await page.getByRole('button', { name: '确定', exact: true }).click()
@@ -125,7 +127,7 @@ test('three real DeepSeek opponents complete a local blood-flow east match', asy
       lastChange = Date.now()
     }
     if (Date.now() - lastChange > 120_000) {
-      const diagnostic = await page.evaluate(() => {
+      const diagnostic = await Promise.race([page.evaluate(() => {
         const hud = document.querySelector<HTMLElement>('.game-table-hud')
         return {
           phase: hud?.dataset.phase ?? 'no-hud',
@@ -137,9 +139,10 @@ test('three real DeepSeek opponents complete a local blood-flow east match', asy
           announcements: [...document.querySelectorAll<HTMLElement>('[role="status"]')].map(node => node.textContent?.trim().slice(0, 80) ?? ''),
           worker: (window as unknown as { __bfWorkerTrace?: unknown }).__bfWorkerTrace,
         }
-      })
+      }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Browser page stopped responding to diagnostics')), 5_000))])
       console.log('[deepseek-live] stalled state', JSON.stringify(diagnostic))
-      await page.screenshot({ path: 'test-results/blood-flow-deepseek-stall.png' })
+      await Promise.race([page.screenshot({ path: 'test-results/blood-flow-deepseek-stall.png', timeout: 5_000 }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Stalled page screenshot timed out')), 5_000))]).catch(() => {})
       throw new Error(`No model request or human action for 120 seconds: ${JSON.stringify(diagnostic)}`)
     }
     if (Date.now() - lastProgress > 30_000) {
