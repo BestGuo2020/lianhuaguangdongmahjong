@@ -142,6 +142,23 @@ describe('图片物化（blob URL + 预热解码）', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('并发调用同一 URL 时第二个调用也等待首次抓取完成', async () => {
+    const { materializeImages, materializedImageSrc } = await loadModule()
+    let finish!: (response: Response) => void
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+    const first = materializeImages(['/a.jpg'])
+    let secondFinished = false
+    const second = materializeImages(['/a.jpg']).then(() => { secondFinished = true })
+    await Promise.resolve()
+    expect(secondFinished).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    finish(new Response(new Blob(['image']), { status: 200 }))
+    await Promise.all([first, second])
+    expect(secondFinished).toBe(true)
+    expect(materializedImageSrc('/a.jpg')).toBe('blob:mock/1')
+  })
+
   it('抓取失败静默且之后可重试', async () => {
     const { materializeImages, materializedImageSrc } = await loadModule()
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>

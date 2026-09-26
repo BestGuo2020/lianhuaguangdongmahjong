@@ -65,8 +65,10 @@ async function materializeOne(url: string): Promise<void> {
 export function materializeImages(urls: Iterable<string | null | undefined>): Promise<void> {
   if (typeof fetch === 'undefined' || typeof URL?.createObjectURL !== 'function') return Promise.resolve()
   const targets = [...new Set(urls)]
-    .filter((url): url is string => Boolean(url) && !materialized.has(url) && !materializing.has(url))
+    .filter((url): url is string => Boolean(url) && !materialized.has(url))
   return Promise.all(targets.map((url) => {
+    const existing = materializing.get(url)
+    if (existing) return existing
     const task = materializeOne(url).catch(() => { /* 失败静默，之后可重试 */ })
     materializing.set(url, task)
     void task.finally(() => materializing.delete(url))
