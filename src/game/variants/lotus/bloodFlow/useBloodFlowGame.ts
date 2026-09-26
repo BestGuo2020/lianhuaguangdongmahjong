@@ -97,19 +97,35 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
   const common = createCommonGameSelectors(state, MATCH_NAMES)
   const view = shallowRef<BloodFlowSeatView | null>(null)
+  let replayFailed = false
+  let analysisFailed = false
+  function safelyRecord(label: string, run: () => void) {
+    if (replayFailed) return
+    try { run() } catch (error) {
+      replayFailed = true
+      console.warn(`[blood-flow] replay ${label} failed; continuing the match`, error)
+    }
+  }
+  function safelyAnalyze(label: string, run: (recorder: AnalysisRecorder) => void) {
+    if (!options.analysis || analysisFailed) return
+    try { run(options.analysis) } catch (error) {
+      analysisFailed = true
+      console.warn(`[blood-flow] analysis ${label} failed; continuing the match`, error)
+    }
+  }
   /** 对局回放：血流旁观视角的增量状态（仅录制开启时使用）。 */
   const replayRecordState = createBloodFlowRecordState()
   /** 把一份旁观视角折成回放事件（录制关闭时为零成本空操作）。 */
   function recordReplaySpectator(spectator: BloodFlowSeatView) {
     const recorder = options.recorder
     if (!recorder) return
-    recordBloodFlowView(recorder, spectator, replayContext(), replayRecordState)
+    safelyRecord('view', () => recordBloodFlowView(recorder, spectator, replayContext(), replayRecordState))
   }
   /** 局末收尾（幂等）：旁观视角与座位视角两条链都调用它。 */
   function recordReplaySettle(view: BloodFlowSeatView) {
     const recorder = options.recorder
     if (!recorder) return
-    recordBloodFlowSettle(recorder, view, replayContext(), replayRecordState)
+    safelyRecord('settlement', () => recordBloodFlowSettle(recorder, view, replayContext(), replayRecordState))
   }
   function replayContext(): BloodFlowRecordContext {
     return {
@@ -222,7 +238,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     return actions.some(a => a.kind === 'gang' || a.kind === 'concealed-kong'
       || a.kind === 'added-kong' || a.kind === 'wind-kong')
   }
-  function clear() {
+  function clear(keepWorker = false) {
     // 重开一局/离开牌桌都要回到默认 BGM，避免「多胡」曲目残留到下一局或大厅。
     winMusic.release()
     continuation.value=undefined
@@ -233,7 +249,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     completedRemoteOpenings.clear(); pendingRemote = null
     timers.forEach(clearTimeout); timers.clear()
     waiters.forEach(resolve => resolve()); waiters.clear()
-    worker?.close(); worker = null
+    // 单机同一场的下一局复用已加载的规则 worker：换局不应再次依赖脚本网络请求。
+    if (!keepWorker) { worker?.close(); worker = null }
     hintWorker?.cancel(); hintWorker = null
     hintKey = ''; hintBusy = false; waitQuerySerial++; handHints.value = null
     actionAudio.reset()
@@ -412,8 +429,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       recordReplaySettle(next)
       // 分析记录（§6）：局末一次性落库本局的**完整初始牌墙**与开局参数。
       // 只本地保存：联机时普通客户端本就不该拿到牌墙，权威端才有（这里就是本地权威）。
-      if (options.analysis && analysisRoundOpening) {
-        options.analysis.reproduction({
+      if (analysisRoundOpening) {
+        safelyAnalyze('reproduction', (analysis) => analysis.reproduction({
           roundIndex: analysisRoundOpening.roundIndex,
           available: true,
           // 来源：本机权威引擎（单机）。联机时这份数据由权威端在局后另外下发，见 onlineReproduction.ts。
@@ -434,24 +451,28 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           flipStack: analysisRoundOpening.flipStack,
           // 完整权威命令序列（含过牌）+ 执行顺序：只有牌墙与展示步骤不足以精确复现（§6）。
           commands: analysisRoundCommands.map((entry) => ({ ...entry })),
-        })
+        }))
         analysisRoundCommands.length = 0
         analysisRoundOpening = null
       }
     }
     }
     // 分析记录（§5）：权威账本的新结算也在这里入账 —— 与录制共用同一汇聚点，绕过 request 的路径同样覆盖。
-    if (options.analysis) {
+    safelyAnalyze('settlement', (analysis) => {
       for (const settlement of settlementsFromView(next as unknown as BloodFlowLedgerViewLike, state.round.value, analysisSettlementsSeen)) {
-        options.analysis.settlement(settlement)
+        analysis.settlement(settlement)
       }
-    }
+    })
     // 全场胡牌张数到阈值换 HuMusic、局末切回默认 BGM（淡出→换曲→淡入在音频层）。
-    winMusic.update(winMusicState)
+    try { winMusic.update(winMusicState) } catch (error) {
+      console.warn('[blood-flow] music update failed; continuing the match', error)
+    }
     // 窗口已推进/结束 → 解除本窗口的提交闩锁，恢复按钮可操作性。
     if (next.window?.id !== submittedWindowId.value) submittedWindowId.value = ''
     for(const [controller,current] of pendingDiscardSpeech)if(!current())controller.abort()
-    decisions.cancelStale()
+    try { decisions.cancelStale() } catch (error) {
+      console.warn('[blood-flow] decision cleanup failed; continuing the match', error)
+    }
     const toLocal = (seat: number) => (seat - next.seat + 4) % 4
     const seeds = [options.humanPlayerSeed, ...(options.aiPlayerSeeds ?? [])]
     state.players.splice(0, state.players.length, ...next.players.map((_, i) => {
@@ -531,10 +552,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (themeName === 'llmAnime' && voiceActionTypes.has(action.type)) fixedVoiceEvents.add(action.id)
       transient.showTableAction(action.type, toLocal(action.actorIndex), action.sourceIndex === null ? null : toLocal(action.sourceIndex), action.tile, action.meldIndex)
     }
-    if (pendingWin) scheduleWinVoices(pendingWin, next, multiWin ? BLOOD_FLOW_TIMING.multiWinIntroMs : 0)
+    if (pendingWin) try { scheduleWinVoices(pendingWin, next, multiWin ? BLOOD_FLOW_TIMING.multiWinIntroMs : 0) } catch (error) {
+      console.warn('[blood-flow] win voice failed; continuing the match', error)
+    }
     // 联机 LLM 台词由服务端下发（llm_message/llm_audio，模型原话 + 服务端 TTS），
     // 客户端不再按快照拼模板台词——避免与服务端原话重复出声。
-    if(!options.externalAuthority)for(const line of decisions.observe(next))void presentActionSpeech(line)
+    if (!options.externalAuthority) try {
+      for (const line of decisions.observe(next)) void presentActionSpeech(line)
+    } catch (error) {
+      console.warn('[blood-flow] action speech failed; continuing the match', error)
+    }
     if (next.public.roundResult) {
       cancelActionSpeech()
       const result = next.public.roundResult
@@ -544,9 +571,16 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       state.matchFinished.value = state.round.value >= BLOOD_FLOW_CONFIG.rounds[state.matchType.value]
       // 局末感言为本地模板台词（不发模型请求），联机与单机都播，避免联机结算没有台词。
       // roundSpeechBusy 让结算面板与局间倒计时等感言播完（用户要求，2026-09-10）。
-      const speech = reactions.run(next)
-      roundSpeechBusy.value = true
-      void speech.finally(() => { roundSpeechBusy.value = false })
+      try {
+        const speech = reactions.run(next)
+        roundSpeechBusy.value = true
+        void speech.catch(error => {
+          console.warn('[blood-flow] round speech failed; continuing the match', error)
+        }).finally(() => { roundSpeechBusy.value = false })
+      } catch (error) {
+        roundSpeechBusy.value = false
+        console.warn('[blood-flow] round speech failed; continuing the match', error)
+      }
     }
     void refreshWaits()
     if (previous && (next.transition?.kind === 'draw' && next.transition.id !== previous.transition?.id
@@ -572,6 +606,24 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
    * `beforeApply` 在**应用回复之前**、也就是"局末快照"之前执行 —— 人类命令的接受与否必须在那之前定案，
    * 否则那一局结束时会把这条命令漏掉（实测：人类对局的复现记录少一条命令，重放报"命令序列不完整"）。
    */
+  async function recoverLocalView(
+    active: NonNullable<typeof worker>,
+    epoch: number,
+    openingRequest?: Parameters<NonNullable<typeof worker>['request']>[0],
+  ): Promise<BloodFlowWorkerView | null> {
+    try {
+      const next = await active.request<BloodFlowWorkerView>(openingRequest ?? {
+        kind: 'view', seat: 0, replay: Boolean(options.recorder && !replayFailed),
+      })
+      if (epoch !== generation) return null
+      submittedWindowId.value = ''
+      apply(next)
+      return next
+    } catch (error) {
+      if (epoch === generation) console.error('[blood-flow] local authority recovery failed', error)
+      return null
+    }
+  }
   async function request(
     body: Parameters<NonNullable<typeof worker>['request']>[0],
     beforeApply?: (next: BloodFlowWorkerView) => void,
@@ -587,13 +639,19 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       )
       if (epoch !== generation) return null
       busy = false
-      beforeApply?.(next)
+      try { beforeApply?.(next) } catch (error) {
+        console.warn('[blood-flow] optional recording failed; continuing the match', error)
+      }
       apply(next)
       return next
     } catch (error) {
       if (epoch !== generation) return null
+      console.error('[blood-flow] local authority request failed', { kind: body.kind, round: state.round.value, error })
+      busy = false
+      const active = worker
+      const recovered = active ? await recoverLocalView(active, epoch, body.kind === 'start' ? body : undefined) : null
+      if (recovered) return recovered
       clear()
-      transient.announce('对局已中断，请返回大厅重开', 'red')
       state.actionPrompt.value = null
       if (view.value) view.value = { ...view.value, ownActions: [], public: { ...view.value.public, status: 'interrupted' } }
       return null
@@ -660,22 +718,31 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       // 分析记录：窗口与前态（含该座位的合法动作）。只读视角，不参与决策（§3.2、§10.1）。
       const actions = seatLegalActions(own, seat)
       const analysisMono = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
-      options.analysis?.windowOpened({
+      safelyAnalyze('window', analysis => analysis.windowOpened({
         windowId, seat, windowKind: windowKindOf(actions),
         roundIndex: state.round.value, authorityEpoch: own.authorityEpoch, stateVersion: own.window?.version ?? 0,
         state: decisionStateOf(own, seat), openedAt: analysisMono(),
-      })
-      const action = await decisions.decide(own, current)
+      }))
+      let action: BloodFlowAction | null
+      try { action = await decisions.decide(own, current) } catch (error) {
+        // 模型、候选或本地策略失败时交给权威 worker 的普通 AI；不能中断单机对局。
+        console.warn('[blood-flow] local decision failed; using worker bot', error)
+        action = null
+      }
       if (!current()) return
       // 分析记录：选择与来源。来源（本地策略／模型／回退）由 LLM 运行时在下一层补充，这里先如实标 unknown。
       const pickedIndex = action ? actions.findIndex(move => JSON.stringify(move) === JSON.stringify(action)) : -1
-      options.analysis?.chosen({
+      safelyAnalyze('choice', analysis => analysis.chosen({
         windowId, seat, source: action ? 'unknown' : 'rule-auto',
         legalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : null, at: analysisMono(),
-      })
+      }))
       if(action?.kind==='discard'){
-        const line=decisions.prepareDiscard(own,action)
-        if(line)await presentDiscardSpeech(line,current)
+        try {
+          const line=decisions.prepareDiscard(own,action)
+          if(line)await presentDiscardSpeech(line,current)
+        } catch (error) {
+          console.warn('[blood-flow] discard speech failed; continuing the action', error)
+        }
       }
       // Audio may have waited across a deadline, leave, or authority refresh.
       if (!current()) return
@@ -688,31 +755,36 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       // 错开一个窗口。**且必须被权威接受**：被拒的命令（窗口已关闭/该座位已决定）权威从未执行，
       // 记进序列会让重放执行一条不存在的动作（§3.4：请求发出 ≠ 动作执行）。
       const accepted = (next as { commandAccepted?: boolean }).commandAccepted
-      if (options.analysis && action) {
-        if (accepted !== false) {
-          analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined, windowId, own.window?.kind))
-        }
-      } else if (options.analysis) {
+      safelyAnalyze('bot command', () => {
+        if (action) {
+          if (accepted !== false) {
+            analysisRoundCommands.push(analysisCommandEntry(seat, action, pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined, windowId, own.window?.kind))
+          }
+        } else {
         // 本端没有决策（无 provider ⇒ 权威机器人代决）：权威若回传了它实际提交的动作，
         // 就落成真命令（可复现）；否则如实落 auto（重跑时会说明"该窗口不是本端决定"）。
-        const botAction = (next as { botAction?: BloodFlowAction }).botAction
-        if (botAction) analysisRoundCommands.push(analysisCommandEntry(seat, botAction, undefined, windowId, own.window?.kind))
-        else analysisRoundCommands.push({ seat, kind: 'auto', at: Date.now(), resolution: 'auto', windowId, windowKind: own.window?.kind })
-      }
+          const botAction = (next as { botAction?: BloodFlowAction }).botAction
+          if (botAction) analysisRoundCommands.push(analysisCommandEntry(seat, botAction, undefined, windowId, own.window?.kind))
+          else analysisRoundCommands.push({ seat, kind: 'auto', at: Date.now(), resolution: 'auto', windowId, windowKind: own.window?.kind })
+        }
+      })
       if (epoch === generation && (!view.value || next.version >= view.value.version)) apply(next)
       // 分析记录：执行回执。只有该座位出现可见变化才算执行成功；否则记 state-changed（§3.4、§10.2）。
       if (action) {
-        options.analysis?.receipt({
+        safelyAnalyze('receipt', analysis => analysis.receipt({
           windowId, seat,
           status: choiceTookEffect(own as BloodFlowViewLike, next as BloodFlowViewLike, seat, action) ? 'executed' : 'state-changed',
           eventId: `${next.roundId ?? own.roundId}/${windowId}`,
           executedLegalActionId: pickedIndex >= 0 ? legalActionId(windowId, pickedIndex) : undefined,
-        })
+        }))
       }
-    } catch {
+    } catch (error) {
       if (epoch === generation) {
-        clear(); transient.announce('对局已中断，请返回大厅重开', 'red')
-        if (view.value) view.value = { ...view.value, ownActions: [], public: { ...view.value.public, status: 'interrupted' } }
+        console.error('[blood-flow] local bot turn failed', { seat, round: state.round.value, windowId, error })
+        if (!await recoverLocalView(active, epoch)) {
+          clear()
+          if (view.value) view.value = { ...view.value, ownActions: [], public: { ...view.value.public, status: 'interrupted' } }
+        }
       }
     }
     finally { pendingBots.delete(key) }
@@ -726,19 +798,19 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     submittedWindowId.value = w.id
     state.actionPrompt.value = null
     // 分析记录：人类决策（窗口、前态与合法动作、选择）。回执由下面的 watcher 在窗口推进时补（§3.4）。
-    if (options.analysis) {
+    safelyAnalyze('human choice', analysis => {
       const index = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
-      options.analysis.windowOpened({
+      analysis.windowOpened({
         windowId: w.id, seat: current.seat, windowKind: windowKindOf(current.ownActions),
         roundIndex: state.round.value, authorityEpoch: current.authorityEpoch, stateVersion: w.version,
         state: decisionStateOf(current as BloodFlowViewLike, current.seat),
       })
-      options.analysis.chosen({
+      analysis.chosen({
         windowId: w.id, seat: current.seat, source: 'human',
         legalActionId: index >= 0 ? legalActionId(w.id, index) : null,
       })
       pendingHumanChoice = { windowId: w.id, seat: current.seat, action, before: current as BloodFlowViewLike }
-    }
+    })
     const command: EngineCommand = { authorityEpoch: current.authorityEpoch, roundId: current.roundId,
       stateVersion: w.version, windowId: w.id, seat: current.seat, action }
     const legalIndex = current.ownActions.findIndex(move => JSON.stringify(move) === JSON.stringify(action))
@@ -750,9 +822,10 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     // 分析记录（§6）：人类命令**同步入列**（与"局末快照"同一拍，绝不会漏到下一局去），
     // 并在回复到达、快照之前核对权威是否接受：被拒（窗口已关闭/该座位已决定）就当场撤回 ——
     // 权威从未执行的命令记进序列，会让重放执行一条不存在的动作（§3.4：请求发出 ≠ 动作执行）。
-    const entry = options.analysis
-      ? analysisCommandEntry(current.seat, action, legalIndex >= 0 ? legalActionId(w.id, legalIndex) : undefined, w.id, w.kind)
-      : null
+    let entry: AnalysisCommandEntry | null = null
+    safelyAnalyze('human command', () => {
+      entry = analysisCommandEntry(current.seat, action, legalIndex >= 0 ? legalActionId(w.id, legalIndex) : undefined, w.id, w.kind)
+    })
     if (entry) analysisRoundCommands.push(entry)
     void request({ kind: 'command', command }, (next) => {
       if (!entry || (next as { commandAccepted?: boolean }).commandAccepted !== false) return
@@ -772,11 +845,11 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     const next = view.value
     if (!pending || !next || nextWindowId === pending.windowId) return
     pendingHumanChoice = null
-    options.analysis?.receipt({
+    safelyAnalyze('human receipt', analysis => analysis.receipt({
       windowId: pending.windowId, seat: pending.seat,
       status: choiceTookEffect(pending.before, next as BloodFlowViewLike, pending.seat, pending.action) ? 'executed' : 'state-changed',
       detail: 'window-advanced',
-    })
+    }))
   })
   async function beginEngine() {
     if (!dealerTile || !state.players.length) return
@@ -808,7 +881,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       headDrawn: state.wallHeadDrawn.value, dealerDrawnIndex, flipStack: state.flipStack.value!,
       flipSeat: state.flipSeat.value!, wallBreakIndex: state.wallBreakIndex.value,
     }
-    worker = createBloodFlowWorkerClient()
+    worker ??= createBloodFlowWorkerClient()
     hintWorker = createEvaluatorService()
     await request({ kind: 'start', options: { authorityEpoch: `local-${generation}`, roundId: `round-${state.round.value}`,
       dealer: state.dealer.value as 0 | 1 | 2 | 3, opening,
@@ -825,19 +898,25 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     beginTurn: () => { void beginEngine() }, endGame: () => { throw new Error('Blood-flow cannot enter old endGame') },
     humanPlayerSeed: options.humanPlayerSeed, playerSeeds: options.aiPlayerSeeds,
   })
-  function startGame(mode?: MatchType, startOptions: GameStartOptions & { initialWall?: TileType[]; openingDice?: [number, number]; openingSecondDice?: [number, number] } = {}) {
+  function startLocalRound(mode: MatchType | undefined,
+    startOptions: GameStartOptions & { initialWall?: TileType[]; openingDice?: [number, number]; openingSecondDice?: [number, number] },
+    keepWorker: boolean) {
     if (options.externalAuthority) throw new Error('Only the room authority can start this game')
-    clear(); opening.cancel(); options.animeFixedTts?.reset()
+    if (mode) { replayFailed = false; analysisFailed = false }
+    clear(keepWorker); opening.cancel(); options.animeFixedTts?.reset()
     view.value = null; heardAction = 0; heardDiscard = ''; lockedAutoWindow = ''
     ring = startOptions.initialWall ? [...startOptions.initialWall] : buildRingWall(); dealerTile = null
     return opening.start(mode, { ...startOptions, initialWall: ring })
+  }
+  function startGame(mode?: MatchType, startOptions: GameStartOptions & { initialWall?: TileType[]; openingDice?: [number, number]; openingSecondDice?: [number, number] } = {}) {
+    return startLocalRound(mode, startOptions, false)
   }
   function nextRound(startOptions?: Parameters<typeof startGame>[1]) {
     if (state.phase.value !== 'settled' || state.matchFinished.value) return
     reactions.cancel(); cancelReactionSpeech()
     if (options.externalAuthority) return options.externalAuthority.nextRound()
     state.round.value++; state.dealer.value = (state.dealer.value + 1) % 4
-    return startGame(undefined, startOptions)
+    return startLocalRound(undefined, startOptions ?? {}, true)
   }
   const matchLifecycle = createMatchLifecycle({ state, clearTimers: clear, startGame })
   function returnToLobby() {
@@ -855,7 +934,7 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
     // 新对局的记录会挂到上一场的 matchId 上（错场归属，实测隐患）。
     // 正常打完时 `matchFinished` 已为真：那条路径上 App 已经 finish 过一次，这里不再重复留痕。
     if (options.analysis && !state.matchFinished.value) {
-      options.analysis.noteGap({ scope: 'match', reason: 'match-aborted' })
+      safelyAnalyze('abort', analysis => analysis.noteGap({ scope: 'match', reason: 'match-aborted' }))
       void options.analysis.finish().catch(() => {})
     }
   }
