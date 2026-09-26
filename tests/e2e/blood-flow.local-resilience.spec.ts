@@ -81,3 +81,38 @@ test('a transient worker start error retries the same local round', async ({ pag
   expect(await page.evaluate(() => (window as any).__resilienceGame.view.value?.public.status)).not.toBe('interrupted')
   expect(await page.evaluate(() => (window as any).__resilienceGame.announcement.value?.text ?? '')).not.toContain('返回大厅重开')
 })
+
+test('a stalled round voice releases the local settlement gate', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('llm.providers', JSON.stringify({
+    configVersion: 2, enabled: true, activeId: 'fixture',
+    seatIds: [null, null, null, null], seatStyles: [null, null, null, null],
+    presets: [{ id: 'fixture', name: 'Fixture', providerType: 'custom', apiKey: 'fixture-only',
+      baseUrl: 'https://model.example.test/v1', model: 'fixture', style: '稳健', timeoutMs: 40000 }],
+  })))
+  await page.route('https://model.example.test/**', route => {
+    const input = JSON.parse(route.request().postDataJSON().messages[1].content)
+    return route.fulfill({ json: { choices: [{ finish_reason: 'stop', message: {
+      content: JSON.stringify({ choice: input.candidates[0].id, message: '' }),
+    } }] } })
+  })
+  await page.route('**/api/local-tts/synthesize', () => {})
+  await page.goto('/?bloodFlow=1&theme=jade')
+  await page.evaluate(async () => {
+    const [{ useBloodFlowGame }, { buildRingWall }, { seededRandom }] = await Promise.all([
+      import('/src/game/variants/lotus/bloodFlow/useBloodFlowGame.ts'),
+      import('/src/game/variants/lotus/lotusWall.ts'),
+      import('/src/game/variants/lotus/bloodFlow/simulation.ts'),
+    ])
+    let game: ReturnType<typeof useBloodFlowGame>
+    game = useBloodFlowGame({ autoplay: true, paceMs: 0, countdownEnabled: false,
+      getThemeName: () => game?.view.value?.public.roundResult ? 'llm' : 'jade',
+      playSoundAndWait: async () => {} })
+    ;(window as any).__resilienceGame = game
+    await game.startGame('east', { initialWall: buildRingWall(seededRandom(91)),
+      openingDice: [2, 3], openingSecondDice: [1, 4] })
+  })
+  await expect.poll(() => page.evaluate(() => (window as any).__resilienceGame.phase.value),
+    { timeout: 100_000, intervals: [500] }).toBe('settled')
+  await expect.poll(() => page.evaluate(() => (window as any).__resilienceGame.capabilities.value.bloodFlow.roundSpeechBusy),
+    { timeout: 18_000, intervals: [250] }).toBe(false)
+})

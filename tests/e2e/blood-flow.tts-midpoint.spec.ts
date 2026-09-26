@@ -11,7 +11,7 @@ function wave(){
   return b
 }
 test.setTimeout(60000)
-for(const mode of ['success','muted','synthesis-fail','media-fail','leave-synthesis','leave-playing','leave-tail','mute-playing','deadline']) {
+for(const mode of ['success','muted','synthesis-fail','synthesis-hang','media-fail','leave-synthesis','leave-playing','leave-tail','mute-playing','deadline']) {
   test(`blood-flow TTS gate: ${mode}`,async({page},testInfo)=>{
     let synthCalls=0,release!:()=>void
     const gate=new Promise<void>(r=>{release=r})
@@ -73,13 +73,14 @@ for(const mode of ['success','muted','synthesis-fail','media-fail','leave-synthe
       expect(await page.evaluate(()=>Object.keys((window as any).__midpointGame.capabilities.value.bloodFlow.actionBubbles))).toEqual([])
       if(mode==='leave-synthesis')await page.evaluate(()=>(window as any).__midpointGame.returnToLobby())
       if(mode==='deadline')await page.waitForFunction(()=>(window as any).__midpointExpired)
-      release()
+      if(mode!=='synthesis-hang')release()
       if(mode==='leave-synthesis'||mode==='deadline'){
         await page.waitForTimeout(300)
         expect(await commands()).toEqual([])
         expect(await page.evaluate(()=>(window as any).__ttsAudios.length)).toBe(0)
-      }else if(mode==='synthesis-fail'||mode==='media-fail'){
-        await expect.poll(async()=>(await commands()).length).toBe(1)
+      }else if(mode==='synthesis-fail'||mode==='media-fail'||mode==='synthesis-hang'){
+        await expect.poll(async()=>(await commands()).length,{timeout:10_000}).toBe(1)
+        if(mode==='synthesis-hang')release()
       }else{
         await page.waitForFunction(()=>{const a=(window as any).__ttsAudios[0];return a?.currentTime>=.5})
         expect(await commands()).toEqual([])
@@ -99,7 +100,8 @@ for(const mode of ['success','muted','synthesis-fail','media-fail','leave-synthe
           expect(await page.evaluate(()=>(window as any).__ttsAudios[0].paused)).toBe(true)
         }
       }
-      expect(synthCalls).toBe(1)
+      // 503 会按现有网关策略从同源代理再试外部网关；两次失败后仍须放行规则动作。
+      expect(synthCalls).toBe(mode==='synthesis-fail'?2:1)
     }
     if(!mode.startsWith('leave-')&&mode!=='deadline'){
       await expect.poll(()=>page.evaluate(()=>(window as any).__midpointGame.view.value?.lastDiscardAction?.seat)).toBe((await commands())[0].seat)
