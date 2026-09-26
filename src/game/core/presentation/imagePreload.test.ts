@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { watchEffect } from 'vue'
 
 // 模块记录「已预取成功的 URL」，因此每个用例都用 vi.resetModules + 动态导入拿全新实例。
 const requested: string[] = []
@@ -131,6 +132,15 @@ describe('图片物化（blob URL + 预热解码）', () => {
     expect(materializedImageSrc('/b.jpg')).toBe('blob:mock/2')
     // blob URL 被解码预热过（解码失败也不影响引用）
     expect(requested).toContain('blob:mock/1')
+  })
+
+  it('图片物化完成会通知已挂载的渲染方从原始 URL 切到 blob', async () => {
+    const { materializeImages, displayImageSrc } = await loadModule()
+    const observed: string[] = []
+    const stop = watchEffect(() => { observed.push(displayImageSrc('/a.jpg')) }, { flush: 'sync' })
+    await materializeImages(['/a.jpg'])
+    expect(observed).toEqual(['/a.jpg', 'blob:mock/1'])
+    stop()
   })
 
   it('已物化的 URL 再次调用不再抓取', async () => {

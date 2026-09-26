@@ -39,6 +39,10 @@ test('Kimi self and DeepSeek opponents have decoded action art before the table 
     })
     expect(active).toHaveLength(6)
     expect(active.every(url => url?.startsWith('blob:'))).toBe(true)
+    await expect(page.locator('.user-identity img.avatar')).toHaveAttribute('src', active[2]!)
+    for (const seat of ['left', 'top', 'right']) {
+      await expect(page.locator(`.seat-${seat} img.avatar`)).toHaveAttribute('src', active[5]!)
+    }
     const cueImage = page.locator('.anime-action-cue img')
     await expect(cueImage).toHaveAttribute('src', active[0]!)
     expect(await cueImage.evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true)
