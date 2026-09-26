@@ -84,8 +84,15 @@ test('独立二次元主题可选本家角色并保持现有 LLM 默认推荐不
   await page.getByRole('button', { name: /开始东风场/ }).click()
   await expect(page.locator('.table-loading')).toBeHidden({ timeout: 30_000 })
   await expect(page.locator('.game-table-hud')).toHaveAttribute('data-table-theme', 'llmAnime')
-  // 二次元主题的本家头像来自所选角色（img/llm/<角色>/），由主题表现层覆盖权威 avatar。
-  await expect(page.locator('.user-identity img.avatar')).toHaveAttribute('src', /\/img\/llm\/qwen\//)
+  // 二次元主题的本家头像来自所选角色；预热成功后以已解码的 blob URL 呈现。
+  const selectedAvatar = await page.evaluate(async () => {
+    const [{ animeCharacterAvatarUrl }, { displayImageSrc }] = await Promise.all([
+      import('/src/game/llm/animeCharacterPreference.ts'),
+      import('/src/game/core/presentation/imagePreload.ts'),
+    ])
+    return displayImageSrc(animeCharacterAvatarUrl('qwen'))
+  })
+  await expect(page.locator('.user-identity img.avatar')).toHaveAttribute('src', selectedAvatar)
   expect(pageErrors).toEqual([])
 })
 
@@ -119,9 +126,16 @@ test('llm 主题只有本家/真人是非大模型头像，其他主题不显示
   // 本家/真人：本地默认头像（avatars/*.svg），不是大模型人设头像。
   const selfAvatar = page.locator('.user-identity img.avatar')
   await expect(selfAvatar).toHaveAttribute('src', /\/avatars\/[a-z-]+\.svg$/)
-  // 三个大模型座位保留各自人设头像（img/llm/<供应商>/）。
+  // 三个大模型座位保留 DeepSeek 人设头像；预热后允许用同一图片的 blob URL。
+  const deepseekAvatar = await page.evaluate(async () => {
+    const [{ animeCharacterAvatarUrl }, { displayImageSrc }] = await Promise.all([
+      import('/src/game/llm/animeCharacterPreference.ts'),
+      import('/src/game/core/presentation/imagePreload.ts'),
+    ])
+    return displayImageSrc(animeCharacterAvatarUrl('deepseek'))
+  })
   for (const seat of ['left', 'top', 'right']) {
-    await expect(page.locator(`.seat-${seat} img.avatar`)).toHaveAttribute('src', /\/img\/llm\//)
+    await expect(page.locator(`.seat-${seat} img.avatar`)).toHaveAttribute('src', deepseekAvatar)
   }
 
   // 热切换到非 llmAnime 主题后，本家仍是本地默认头像，不出现二次元角色形象。

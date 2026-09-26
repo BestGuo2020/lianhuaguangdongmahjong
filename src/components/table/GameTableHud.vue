@@ -19,6 +19,7 @@ import { useEffectPlayer } from '../../game/core/presentation/useAudio'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { displayImageSrc } from '../../game/core/presentation/imagePreload'
+import { preloadAnimeCharacterAssets } from '../../game/core/presentation/llmAnimeAssets'
 import { animeCharacterAccent } from '../../game/core/presentation/animeCharacterPalette'
 import {
   resolveRoundResultPresentation,
@@ -158,10 +159,24 @@ watch(()=>[props.bloodFlow?.sourceEvent?.id,props.user.drawnTileIndex,props.user
   if(c.width&&c.height)ownDrawScreen.value={sourceId:source.id,x:(b.x+b.width/2-c.x)/c.width,y:(b.y+b.height/2-c.y)/c.height}
 },{immediate:true,flush:'post'})
 
-function handleTableReady() {
+async function handleTableReady() {
   tableLoadRetry.succeed()
-  tableReady.value = true
   tableLoadError.value = ''
+  const theme = props.themeName
+  const attempt = tableLoadAttempt.value
+  if (theme === 'llmAnime') {
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        preloadAnimeCharacterAssets(props.players.map(player => player.characterId)),
+        new Promise<void>(resolve => { timeout = setTimeout(resolve, 5_000) }),
+      ])
+    } catch { /* 立绘预热失败时牌桌仍按原始 URL 加载 */ } finally {
+      if (timeout !== undefined) clearTimeout(timeout)
+    }
+  }
+  if (theme !== props.themeName || attempt !== tableLoadAttempt.value) return
+  tableReady.value = true
   emit('ready')
 }
 
@@ -239,6 +254,11 @@ watch(() => props.themeName, () => {
   tableReady.value = false
   tableLoadError.value = ''
 })
+watch(() => `${props.themeName}:${props.players.map(player => player.characterId ?? '').join('|')}`, () => {
+  if (props.themeName === 'llmAnime') {
+    void preloadAnimeCharacterAssets(props.players.map(player => player.characterId)).catch(() => {})
+  }
+}, { immediate: true })
 type ActionCueLabWindow = Window & {
   __setTableActionCueLab?: (type: TableActionEvent['type'] | null, actorIndex?: number) => void
 }

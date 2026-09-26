@@ -59,9 +59,9 @@ describe('llmAnime 立绘与头像预取', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('预取全部角色头像与每角色两张立绘（鸣牌卡/胡牌卡）', async () => {
+  it('显式全量预取时覆盖全部角色头像与每角色两张立绘', async () => {
     const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
-    await preloadAnimeCharacterAssets()
+    await preloadAnimeCharacterAssets(ANIME_CHARACTER_IDS)
 
     for (const id of ANIME_CHARACTER_IDS) {
       expect(requested).toContain(animeCharacterAvatarUrl(id))
@@ -89,7 +89,7 @@ describe('llmAnime 立绘与头像预取', () => {
   it('单张图失败不阻塞预取（首次使用时仍按需加载）', async () => {
     MockImage.fail = true
     const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
-    await expect(preloadAnimeCharacterAssets()).resolves.toBeUndefined()
+    await expect(preloadAnimeCharacterAssets(ANIME_CHARACTER_IDS)).resolves.toBeUndefined()
     expect(requested).toHaveLength(uniqueUrls)
   })
 
@@ -109,7 +109,7 @@ describe('llmAnime 立绘与头像预取', () => {
 
     const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
     const { materializedImageSrc } = await import('./imagePreload')
-    await preloadAnimeCharacterAssets()
+    await preloadAnimeCharacterAssets(ANIME_CHARACTER_IDS)
 
     // 24 张立绘 + 11 张唯一头像全部物化
     expect(objectUrls).toHaveLength(ANIME_CHARACTER_IDS.length * 2
@@ -122,5 +122,82 @@ describe('llmAnime 立绘与头像预取', () => {
     // 物化成功的不再走 img 预取兜底：所有 Image 请求都是 blob（预热解码），没有原始路径
     expect(requested.filter((url) => !url.startsWith('blob:'))).toEqual([])
     expect(requested).toHaveLength(objectUrls.length)
+  })
+
+  it('默认只物化本家 Kimi 与三家 DeepSeek，不下载其他角色立绘', async () => {
+    const settings = { configVersion: 2, enabled: true, activeId: 'deepseek',
+      presets: [{ id: 'deepseek', name: 'DeepSeek', providerType: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1', apiKey: 'test-only', model: 'deepseek-v4-flash',
+        style: '稳健', timeoutMs: 40000 }],
+      seatIds: [null, null, null, null], seatStyles: [null, null, null, null] }
+    const stored = new Map([['llm-anime.character.v1', 'kimi'], ['llm.providers', JSON.stringify(settings)]])
+    vi.stubGlobal('localStorage', { getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => { stored.set(key, value) },
+      removeItem: (key: string) => { stored.delete(key) } })
+    const NativeURL = globalThis.URL
+    class MockURL extends NativeURL {
+      static createObjectURL = () => 'blob:preloaded'
+    }
+    vi.stubGlobal('URL', MockURL)
+    const fetched: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      const url = String(input)
+      fetched.push(url)
+      return new Response(new Blob(['card']), { status: 200 })
+    }))
+
+    const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
+    const { materializedImageSrc } = await import('./imagePreload')
+    await preloadAnimeCharacterAssets()
+    expect(fetched).toHaveLength(6)
+    expect(fetched.every(url => url.includes('/kimi/') || url.includes('/deepseek/'))).toBe(true)
+    for (const id of ['kimi', 'deepseek']) {
+      expect(materializedImageSrc(animeActionArtUrl(id, 'peng'))).toBe('blob:preloaded')
+      expect(materializedImageSrc(animeActionArtUrl(id, 'hu'))).toBe('blob:preloaded')
+      expect(materializedImageSrc(animeCharacterAvatarUrl(id))).toBe('blob:preloaded')
+    }
+  })
+
+  it('牌桌只等待实际 Kimi 与 DeepSeek 座位，不等待其余角色', async () => {
+    const fetched: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      fetched.push(String(input))
+      return new Response(new Blob(['card']), { status: 200 })
+    }))
+    const NativeURL = globalThis.URL
+    class MockURL extends NativeURL {
+      static createObjectURL = () => 'blob:active'
+    }
+    vi.stubGlobal('URL', MockURL)
+    const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
+    const { materializedImageSrc } = await import('./imagePreload')
+    await preloadAnimeCharacterAssets(['kimi', 'deepseek', 'deepseek', 'deepseek'])
+    expect(fetched).toHaveLength(6)
+    expect(fetched.every(url => url.includes('/kimi/') || url.includes('/deepseek/'))).toBe(true)
+    expect(materializedImageSrc(animeActionArtUrl('kimi', 'hu'))).toBe('blob:active')
+    expect(materializedImageSrc(animeActionArtUrl('deepseek', 'peng'))).toBe('blob:active')
+  })
+
+  it('首次物化失败的立绘在再次进入主题时重试', async () => {
+    const target = animeActionArtUrl('deepseek', 'peng')!
+    let failedOnce = false
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (String(input) === target && !failedOnce) {
+        failedOnce = true
+        throw new Error('temporary image failure')
+      }
+      return new Response(new Blob(['card']), { status: 200 })
+    }))
+    const NativeURL = globalThis.URL
+    class MockURL extends NativeURL {
+      static createObjectURL = () => 'blob:retry'
+    }
+    vi.stubGlobal('URL', MockURL)
+    const { preloadAnimeCharacterAssets } = await import('./llmAnimeAssets')
+    const { materializedImageSrc } = await import('./imagePreload')
+    await preloadAnimeCharacterAssets()
+    expect(materializedImageSrc(target)).toBeNull()
+    await preloadAnimeCharacterAssets()
+    expect(materializedImageSrc(target)).toBe('blob:retry')
   })
 })

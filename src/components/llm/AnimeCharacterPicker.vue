@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import { ANIME_CHARACTERS, type CharacterId } from '../../game/llm/animeCharacters'
 import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
+import { preloadAnimeCharacterAssets } from '../../game/core/presentation/llmAnimeAssets'
 
 const props = defineProps<{ modelValue: CharacterId }>()
-defineEmits<{ 'update:modelValue': [value: CharacterId] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: CharacterId] }>()
 
 const failedAvatars = ref(new Set<CharacterId>())
 const currentCharacter = computed(() => (
@@ -13,6 +14,11 @@ const currentCharacter = computed(() => (
 
 function markAvatarFailed(characterId: CharacterId) {
   failedAvatars.value = new Set(failedAvatars.value).add(characterId)
+}
+
+function selectCharacter(characterId: CharacterId) {
+  void preloadAnimeCharacterAssets([characterId]).catch(() => {})
+  emit('update:modelValue', characterId)
 }
 </script>
 
@@ -47,7 +53,7 @@ function markAvatarFailed(characterId: CharacterId) {
           :aria-label="`${character.label}：${character.description}`"
           :aria-checked="modelValue === character.id"
           :class="{ active: modelValue === character.id }"
-          @click="$emit('update:modelValue', character.id)"
+          @click="selectCharacter(character.id)"
         >
           <span class="anime-character-thumb">
             <img
