@@ -92,9 +92,9 @@ type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?
 
 /** worker 回复：座位视角，录制开启时额外带一份旁观视角（本地专用）。 */
 type BloodFlowWorkerView = BloodFlowSeatView & { replay?: BloodFlowSeatView }
-/** 网络语音是表现层；单机规则动作与结算最多等这一段时间。 */
+/** 单机弃牌动作不会被网络语音长期阻塞；局末只限制每句语音开口前的等待。 */
 const LOCAL_DISCARD_SPEECH_WAIT_MS = 4_000
-const LOCAL_ROUND_SPEECH_WAIT_MS = 12_000
+const LOCAL_ROUND_SPEECH_START_WAIT_MS = 4_000
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
@@ -580,25 +580,8 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
         const completed = speech.catch(error => {
           console.warn('[blood-flow] round speech failed; continuing the match', error)
         })
-        if (options.externalAuthority) {
-          void completed.finally(() => { roundSpeechBusy.value = false })
-        } else {
-          const speechEpoch = generation
-          let timeout: ReturnType<typeof setTimeout> | undefined
-          const safetyGate = new Promise<'timeout'>(resolve => {
-            timeout = setTimeout(() => resolve('timeout'), LOCAL_ROUND_SPEECH_WAIT_MS)
-          })
-          void Promise.race([completed.then(() => 'complete' as const), safetyGate])
-            .then(outcome => {
-              if (outcome === 'timeout' && speechEpoch === generation) {
-                reactions.cancel()
-                cancelReactionSpeech()
-              }
-            }).finally(() => {
-              if (timeout !== undefined) clearTimeout(timeout)
-              if (speechEpoch === generation) roundSpeechBusy.value = false
-            })
-        }
+        const speechEpoch = generation
+        void completed.finally(() => { if (speechEpoch === generation) roundSpeechBusy.value = false })
       } catch (error) {
         roundSpeechBusy.value = false
         console.warn('[blood-flow] round speech failed; continuing the match', error)
@@ -1161,8 +1144,22 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       if (!isCurrent()) return
       const seat = (line.seat - current.seat + 4) % 4
       roundBubbles.value = { ...roundBubbles.value, [seat]: { text: line.text, id: ++bubbleSerial, persistent: true } }
-      if (canPlayLocalLlmAudio()) await getLocalTtsClient().speak(seat, line.text, line.voiceKey, line.style, 'important',
-        { isCurrent, signal: controller.signal, waitForCompletion: true })
+      if (canPlayLocalLlmAudio()) {
+        let startupTimer: ReturnType<typeof setTimeout> | undefined
+        const started = () => {
+          if (startupTimer !== undefined) clearTimeout(startupTimer)
+          startupTimer = undefined
+        }
+        try {
+          const startup = options.externalAuthority ? null : new Promise<void>(resolve => {
+            startupTimer = setTimeout(() => { controller.abort(); resolve() }, LOCAL_ROUND_SPEECH_START_WAIT_MS)
+          })
+          const playback = getLocalTtsClient().speak(seat, line.text, line.voiceKey, line.style, 'important',
+            { isCurrent, signal: controller.signal, waitForCompletion: true, onStarted: started })
+          if (startup) await Promise.race([playback, startup])
+          else await playback
+        } finally { started() }
+      }
     }).catch(() => {}).finally(() => { signal?.removeEventListener('abort', abort); speechControllers.delete(controller) })
     speechChain = operation
     return operation
