@@ -28,4 +28,19 @@ describe('roundSpeechGate', () => {
     await expect(stalled).resolves.toBeUndefined()
     await expect(gate.wait('new-round')).resolves.toBeUndefined()
   })
+
+  it('waits for local audio playback even after the server announces the final line', async () => {
+    const gate = createRoundSpeechGate()
+    let finishAudio!: () => void
+    const audio = new Promise<void>((resolve) => { finishAudio = resolve })
+    gate.track('round-a', audio)
+    let settled = false
+    void gate.wait('round-a').then(() => { settled = true })
+    gate.complete('round-a')
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishAudio()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(true)
+  })
 })

@@ -227,6 +227,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isOptional(raw.purpose, (value) => value === 'commentary' || value === 'action' || value === 'round-reaction')
           && isOptional(raw.actionKind, (value): value is string => isString(value) && ['discard', 'pass', 'chi', 'peng', 'gang', 'win', 'added-kong', 'concealed-kong', 'wind-kong'].includes(value))
           && isOptional(raw.speechSource, (value) => value === 'model-message' || value === 'fixed-line')
+          && isOptional(raw.hasAudio, isBoolean)
       case 'llm_status':
         return isIntegerBetween(raw.seat, 0, 3) && isBoolean(raw.active)
           && isOptional(raw.text, (value): value is string => (

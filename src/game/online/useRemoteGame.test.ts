@@ -3,6 +3,7 @@ import { useRemoteGame } from './useRemoteGame'
 import type { GamePlayer, TileType } from '../core/contracts/types'
 import type { ServerPlayerDto } from './protocol/dto'
 import { AnimeFixedTtsExecutor } from '../llm/animeFixedTtsExecutor'
+import { registerLlmAudioPlayer } from '../core/presentation/llmAudioBus'
 
 // ─── Mock WebSocket / fetch / window ──────────────────────
 
@@ -564,6 +565,43 @@ describe('useRemoteGame 结算展示与延迟队列', () => {
     mockSocket!.receive({ kind: 'round_speech_done', presentationKey: 'match-1:round-1' })
     await Promise.resolve()
     expect(game.phase.value).toBe('settled')
+  })
+
+  it('服务端发言结束后仍等客机真正播完最后一句', async () => {
+    let finishAudio!: (played: boolean) => void
+    let startAudio!: () => void
+    const audio = new Promise<boolean>((resolve) => { finishAudio = resolve })
+    const unregister = registerLlmAudioPlayer((_url, _seat, _id, _priority, hooks) => {
+      startAudio = () => hooks?.onStarted?.()
+      return audio
+    }, () => true)
+    try {
+      const bubbles: Array<[number, string]> = []
+      const game = await connectGame({ onLlmMessage: (seat, text) => { bubbles.push([seat, text]) } })
+      mockSocket!.receive(makeSnapshot({
+        phase: 'settled', roundSpeechPending: true,
+        result: { winnerIndex: 2, presentationKey: 'match-1:round-1' },
+        winPresentation: { winnerIndex: 2, tile: 'm1', sourceIndex: -1, robbedKong: false,
+          robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1 },
+        winningPlayerIndex: 2,
+      }))
+      mockSocket!.receive({ kind: 'llm_message', id: 7, seat: 1, text: '本局稳住。',
+        priority: 'important', purpose: 'round-reaction', hasAudio: true })
+      expect(bubbles).toEqual([])
+      mockSocket!.receive({ kind: 'llm_audio', messageId: 7, seat: 1,
+        audioUrl: `/api/tts/audio/${'a'.repeat(64)}.mp3`, cached: true,
+        priority: 'important', purpose: 'round-reaction' })
+      startAudio()
+      expect(bubbles).toEqual([[3, '本局稳住。']])
+      mockSocket!.receive({ kind: 'round_speech_done', presentationKey: 'match-1:round-1' })
+      await vi.advanceTimersByTimeAsync(6_100)
+      expect(game.phase.value).toBe('revealing')
+      finishAudio(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(game.phase.value).toBe('settled')
+    } finally {
+      unregister()
+    }
   })
 
   it('settled 快照触发赢牌动画序列，result 座位索引映射正确', async () => {

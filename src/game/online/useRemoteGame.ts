@@ -27,6 +27,7 @@ import { createSettlementTimeline } from './presentation/settlementTimeline'
 import { createRemoteGameState } from './state/remoteGameState'
 import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
 import { createRoundSpeechGate } from './presentation/roundSpeechGate'
+import { playLocalLlmAudioUntilMidpoint } from '../core/presentation/llmAudioBus'
 import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import { createRequestCoordinator } from './orchestration/requestCoordinator'
 import { createRemoteActionController } from './orchestration/remoteActionController'
@@ -148,6 +149,8 @@ export function useRemoteGame({
   const mySeatLocal = computed(() => (mySeat.value >= 0 ? mySeat.value : -1))
   const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
   const roundSpeechGate = createRoundSpeechGate()
+  let activeRoundSpeechKey: string | null = null
+  const pendingRoundBubbles = new Map<number, { key: string; seat: number; text: string }>()
 
   const settlementTimeline = createSettlementTimeline({
     state: {
@@ -409,6 +412,8 @@ export function useRemoteGame({
       updatePresentationAudioMode()
       settlementTimeline.cancel()
       roundSpeechGate.reset()
+      activeRoundSpeechKey = null
+      pendingRoundBubbles.clear()
       animeFixedTts?.cancel()
       presentedWinActions.clear()
       snapshotReconciler.clearPending()
@@ -430,11 +435,18 @@ export function useRemoteGame({
       // （暂离后立刻点「回到牌桌」就可能撞上），此时必须保留会话，否则「继续对局」入口消失。
       if (TERMINAL_REJOIN_ERRORS.has(msg.code)) roomLifecycle.clearSession()
     },
-    state_snapshot: (msg) => snapshotReconciler.apply(msg),
+    state_snapshot: (msg) => {
+      if (msg.roundSpeechPending && msg.result?.presentationKey) {
+        activeRoundSpeechKey = msg.result.presentationKey
+      } else if (msg.phase !== 'settled') activeRoundSpeechKey = null
+      snapshotReconciler.apply(msg)
+    },
     table_theme: (msg) => {
       roomTableThemeName.value = msg.theme
     },
     round_start: (msg) => {
+      activeRoundSpeechKey = null
+      pendingRoundBubbles.clear()
       fallbackSettlementSequence += 1
       animeFixedTts?.reset()
       presentedWinActions.clear()
@@ -447,15 +459,39 @@ export function useRemoteGame({
     score_flow: transientEventPresenter.handleScoreFlow,
     announcement: transientEventPresenter.handleAnnouncement,
     llm_message: (msg) => {
-      if (!shouldSuppressLegacyAnimeSpeech(getThemeName(), msg)) onLlmMessage(toLocal(msg.seat), msg.text)
+      if (shouldSuppressLegacyAnimeSpeech(getThemeName(), msg)) return
+      if (msg.purpose === 'round-reaction' && msg.hasAudio && activeRoundSpeechKey) {
+        pendingRoundBubbles.set(msg.id, { key: activeRoundSpeechKey, seat: toLocal(msg.seat), text: msg.text })
+      } else onLlmMessage(toLocal(msg.seat), msg.text)
     },
     llm_status: (msg) => onLlmStatus(toLocal(msg.seat), msg.active, msg.text),
     llm_audio: (msg) => {
       if (!shouldSuppressLegacyAnimeSpeech(getThemeName(), msg)) {
-        playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId, msg.priority ?? 'normal')
+        const url = `${API_BASE}${msg.audioUrl}`
+        if (msg.purpose === 'round-reaction') {
+          const bubble = pendingRoundBubbles.get(msg.messageId)
+          pendingRoundBubbles.delete(msg.messageId)
+          let shown = false
+          const showBubble = () => {
+            if (shown || !bubble || bubble.key !== activeRoundSpeechKey) return
+            shown = true
+            onLlmMessage(bubble.seat, bubble.text)
+          }
+          const playback = playLocalLlmAudioUntilMidpoint(url, msg.seat, msg.messageId, 'important',
+            { waitForCompletion: true, onStarted: showBubble })
+          void playback.then(showBubble, showBubble)
+          if (activeRoundSpeechKey) roundSpeechGate.track(activeRoundSpeechKey, playback)
+        } else playLlmAudio(url, msg.seat, msg.messageId, msg.priority ?? 'normal')
       }
     },
-    round_speech_done: (msg) => roundSpeechGate.complete(msg.presentationKey),
+    round_speech_done: (msg) => {
+      for (const [id, bubble] of pendingRoundBubbles) {
+        if (bubble.key !== msg.presentationKey) continue
+        onLlmMessage(bubble.seat, bubble.text)
+        pendingRoundBubbles.delete(id)
+      }
+      roundSpeechGate.complete(msg.presentationKey)
+    },
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
@@ -521,6 +557,8 @@ export function useRemoteGame({
     continue_prompt: () => {},
     match_finished: (msg) => {
       roundSpeechGate.reset()
+      activeRoundSpeechKey = null
+      pendingRoundBubbles.clear()
       fallbackSettlementSequence += 1
       matchLifecycle.finishMatch(msg.finalScores)
     },
@@ -536,6 +574,8 @@ export function useRemoteGame({
   function closeConnection() {
     roomSocket.close()
     roundSpeechGate.reset()
+    activeRoundSpeechKey = null
+    pendingRoundBubbles.clear()
     clearTimers()
   }
 
@@ -543,6 +583,8 @@ export function useRemoteGame({
 
   function resetAll() {
     roundSpeechGate.reset()
+    activeRoundSpeechKey = null
+    pendingRoundBubbles.clear()
     fallbackSettlementSequence += 1
     presentedWinActions.clear()
     matchLifecycle.resetAll()

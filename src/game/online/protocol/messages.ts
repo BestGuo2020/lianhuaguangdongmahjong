@@ -21,6 +21,8 @@ interface LlmSpeechMetadata {
   purpose?: LlmSpeechPurpose
   actionKind?: LlmSpeechActionKind
   speechSource?: LlmSpeechSource
+  /** 局末台词有服务端音频时，气泡随客户端实际开播出现。 */
+  hasAudio?: boolean
 }
 
 export interface RoundStartMessage {
