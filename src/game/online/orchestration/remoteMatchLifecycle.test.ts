@@ -100,12 +100,14 @@ describe('remoteMatchLifecycle', () => {
   })
 
   it('返回房间大厅时保留房间会话，只清理牌桌并刷新房间', () => {
-    const { state, lifecycle, refreshRoom } = setup()
+    const { state, lifecycle, refreshRoom, snapshots } = setup()
     state.roomId.value = 'ABC123'
     state.rejoinCode.value = 'CODE'
     state.mySeat.value = 2
     state.matchFinished.value = true
     state.phase.value = 'finished'
+    state.round.value = 4
+    state.honba.value = 2
     state.players.push(player(2))
     lifecycle.returnToLobby()
 
@@ -114,6 +116,9 @@ describe('remoteMatchLifecycle', () => {
     expect(state.roomId.value).toBe('ABC123')
     expect(state.rejoinCode.value).toBe('CODE')
     expect(state.mySeat.value).toBe(2)
+    expect(state.round.value).toBe(1)
+    expect(state.honba.value).toBe(0)
+    expect(snapshots.reset).toHaveBeenCalled()
     expect(refreshRoom).toHaveBeenCalled()
   })
 

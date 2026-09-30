@@ -40,6 +40,8 @@ export interface ServerSnapshot {
   players: ServerPlayerDto[]
   seat: number
   result: RoundResult | null
+  /** 服务端局末 LLM 发言尚未结束；客户端可先播胡牌演出，结算面板等完成消息。 */
+  roundSpeechPending?: boolean
   announcement: Announcement | null
   matchFinished: boolean
   lastDiscard: LastDiscard | null

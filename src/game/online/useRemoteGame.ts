@@ -26,6 +26,7 @@ import { createOpeningTimeline } from './presentation/openingTimeline'
 import { createSettlementTimeline } from './presentation/settlementTimeline'
 import { createRemoteGameState } from './state/remoteGameState'
 import { createSnapshotReconciler } from './orchestration/snapshotReconciler'
+import { createRoundSpeechGate } from './presentation/roundSpeechGate'
 import { createServerMessageRouter } from './orchestration/serverMessageRouter'
 import { createRequestCoordinator } from './orchestration/requestCoordinator'
 import { createRemoteActionController } from './orchestration/remoteActionController'
@@ -146,6 +147,7 @@ export function useRemoteGame({
   // ── 座位映射（服务端座位 → 本地索引）────────────────────
   const mySeatLocal = computed(() => (mySeat.value >= 0 ? mySeat.value : -1))
   const toLocal = (serverSeat: number) => toLocalSeat(serverSeat, mySeatLocal.value)
+  const roundSpeechGate = createRoundSpeechGate()
 
   const settlementTimeline = createSettlementTimeline({
     state: {
@@ -159,6 +161,9 @@ export function useRemoteGame({
     getThemeName,
     getCharacterIds: () => players.map((player) => player.characterId),
     animeFixedTts,
+    waitForRoundSpeech: (snapshot) => snapshot.roundSpeechPending && snapshot.result?.presentationKey
+      ? roundSpeechGate.wait(snapshot.result.presentationKey)
+      : undefined,
   })
   const openingTimeline = createOpeningTimeline({
     state: {
@@ -394,12 +399,16 @@ export function useRemoteGame({
       matchType.value = msg.mode
       rulesetId.value = msg.rulesetId ?? 'lotus-classic'
       roomTableThemeName.value = msg.theme ?? 'jade'
+      // 恢复终局房间时，首次 REST 回读可能早于 WS 确认座位；立刻补算房主身份。
+      isCreator.value = creatorSeat.value != null && msg.seat === creatorSeat.value
+      void roomLifecycle.refreshRoom()
       wsStatus.value = 'connected'
       sessionStatus.value = 'connected'
       sessionError.value = ''
       roomSocket.confirmSession()
       updatePresentationAudioMode()
       settlementTimeline.cancel()
+      roundSpeechGate.reset()
       animeFixedTts?.cancel()
       presentedWinActions.clear()
       snapshotReconciler.clearPending()
@@ -446,6 +455,7 @@ export function useRemoteGame({
         playLlmAudio(`${API_BASE}${msg.audioUrl}`, msg.seat, msg.messageId, msg.priority ?? 'normal')
       }
     },
+    round_speech_done: (msg) => roundSpeechGate.complete(msg.presentationKey),
     hand_result: (msg) => {
       // settled 快照是主路径；这里只兜底断线边缘丢快照的情况。
       if (isShowingRoundResult() || result.value || !players.length || openingTimeline.isRunning()) return
@@ -510,6 +520,7 @@ export function useRemoteGame({
     },
     continue_prompt: () => {},
     match_finished: (msg) => {
+      roundSpeechGate.reset()
       fallbackSettlementSequence += 1
       matchLifecycle.finishMatch(msg.finalScores)
     },
@@ -524,12 +535,14 @@ export function useRemoteGame({
 
   function closeConnection() {
     roomSocket.close()
+    roundSpeechGate.reset()
     clearTimers()
   }
 
   // ── 重置 ───────────────────────────────────────────────
 
   function resetAll() {
+    roundSpeechGate.reset()
     fallbackSettlementSequence += 1
     presentedWinActions.clear()
     matchLifecycle.resetAll()

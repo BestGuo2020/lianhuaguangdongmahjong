@@ -28,6 +28,7 @@ function harness(reduced = true, options: {
   characterIds?: unknown[]
   lastDiscard?: { tile: string; from: number; id: number } | null
   lastDiscardSound?: Promise<void> | null
+  waitForRoundSpeech?: (snapshot: ServerSnapshot) => Promise<void> | undefined
 } = {}) {
   const state = {
     phase: ref<GamePhase>('playing'), result: ref<any>(null), winEffect: ref<any>(null),
@@ -52,6 +53,7 @@ function harness(reduced = true, options: {
     getThemeName: () => options.themeName ?? 'jade',
     getCharacterIds: () => options.characterIds ?? [],
     animeFixedTts: options.executor,
+    waitForRoundSpeech: options.waitForRoundSpeech,
   })
   return { state, sounds, timeline }
 }
@@ -79,6 +81,22 @@ describe('settlementTimeline', () => {
     await vi.advanceTimersByTimeAsync(REDUCED_WIN_REVEAL_DURATION)
     expect(state.phase.value).toBe('settled')
     expect(state.result.value?.winnerIndex).toBe(0)
+  })
+
+  it('starts the win cue before server LLM speech ends and opens settlement afterward', async () => {
+    let finishSpeech!: () => void
+    const speech = new Promise<void>((resolve) => { finishSpeech = resolve })
+    const { state, timeline } = harness(true, { waitForRoundSpeech: () => speech })
+    timeline.start(snapshot({ roundSpeechPending: true, result: { winnerIndex: 2, presentationKey: 'round-1' } }))
+    expect(state.phase.value).toBe('win-effect')
+    await vi.advanceTimersByTimeAsync(REDUCED_WIN_CUE_LEAD_DURATION + REDUCED_WIN_CUE_EXIT_DURATION
+      + REDUCED_WIN_EFFECT_DURATION + REDUCED_WIN_REVEAL_DURATION)
+    expect(state.phase.value).toBe('revealing')
+    expect(state.result.value).toBeNull()
+    finishSpeech()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(state.phase.value).toBe('settled')
   })
 
   it('settles a draw immediately without a reveal pause', async () => {

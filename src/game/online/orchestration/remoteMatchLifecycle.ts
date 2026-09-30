@@ -151,9 +151,25 @@ export function createRemoteMatchLifecycle({
   function returnToLobby() {
     if (!state.matchFinished.value) return
     settlement.cancel()
+    opening.cancel()
     requests.reset()
-    snapshots.clearPending()
+    snapshots.reset()
     clearRoundBarrier()
+    // 下一场从东1局开始；不能让上一场的轮次和开局表现留在房间面板。
+    state.round.value = 1
+    state.dealer.value = 0
+    state.honba.value = 0
+    state.diceValues.value = [1, 1]
+    state.secondDice.value = [1, 1]
+    state.flipTile.value = null
+    state.jokerTiles.value = []
+    state.wildcardTiles.value = []
+    state.flipStack.value = null
+    state.openingStack.value = null
+    state.wallBreakIndex.value = 0
+    state.openingStage.value = null
+    state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
+    state.userDrewThisTurn.value = false
     state.matchFinished.value = false
     state.result.value = null
     state.winEffect.value = null

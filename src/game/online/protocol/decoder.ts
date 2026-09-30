@@ -158,6 +158,7 @@ function isSnapshot(message: JsonObject): boolean {
     && isNumber(message.headDrawn) && isNumber(message.currentPlayer)
     && isArrayOf(message.players, isPlayer) && isNumber(message.seat)
     && isNullable(message.result, isRoundResult)
+    && isOptional(message.roundSpeechPending, isBoolean)
     && isNullable(message.announcement, isAnnouncement)
     && isBoolean(message.matchFinished)
     // 终局一致性：phase=finished 当且仅当 matchFinished=true（房主/后端同源发送）。
@@ -241,6 +242,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isOptional(raw.actionKind, (value): value is string => isString(value) && ['discard', 'pass', 'chi', 'peng', 'gang', 'win', 'added-kong', 'concealed-kong', 'wind-kong'].includes(value))
           && isOptional(raw.speechSource, (value) => value === 'model-message' || value === 'fixed-line')
       case 'hand_result': return isRoundResult(raw.result)
+      case 'round_speech_done': return isString(raw.presentationKey)
       case 'continue_prompt': return isNumber(raw.total)
       case 'match_finished':
         return isString(raw.roomId) && isString(raw.mode) && MATCH_TYPES.has(raw.mode)

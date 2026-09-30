@@ -54,6 +54,7 @@ export type ServerMessage =
   | { kind: 'llm_status'; seat: number; active: boolean; text?: string }
   | ({ kind: 'llm_audio'; messageId: number; seat: number; audioUrl: string; cached: boolean; priority?: LlmSpeechPriority } & LlmSpeechMetadata)
   | { kind: 'hand_result'; result: RoundResult }
+  | { kind: 'round_speech_done'; presentationKey: string }
   | { kind: 'continue_prompt'; total: number }
   | { kind: 'match_finished'; roomId: string; mode: MatchType; rulesetId?: RuleVariant; finalScores: Array<{ seat: number; name: string; score: number }> }
   | { kind: 'room_closed' }

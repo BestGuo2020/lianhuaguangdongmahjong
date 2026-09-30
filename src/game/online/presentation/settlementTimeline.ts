@@ -41,6 +41,7 @@ export interface SettlementTimelineOptions {
   getThemeName?: () => string
   getCharacterIds?: () => readonly unknown[]
   animeFixedTts?: AnimeFixedTtsExecutor
+  waitForRoundSpeech?: (snapshot: ServerSnapshot) => Promise<void> | undefined
 }
 
 export function createSettlementTimeline({
@@ -53,6 +54,7 @@ export function createSettlementTimeline({
   getThemeName = () => 'jade',
   getCharacterIds = () => [],
   animeFixedTts,
+  waitForRoundSpeech,
 }: SettlementTimelineOptions) {
   let serial = 0
   const timers = new Set<number>()
@@ -100,12 +102,14 @@ export function createSettlementTimeline({
     currentSerial: number,
   ) {
     const speech = queueFixedRound(snapshot, mappedResult)
+    const serverSpeech = waitForRoundSpeech?.(snapshot)
     const finish = () => {
       if (serial !== currentSerial) return
       state.phase.value = 'settled'
       state.result.value = mappedResult
     }
-    if (speech) void speech.then(finish, finish)
+    const pending = speech && serverSpeech ? Promise.all([speech, serverSpeech]) : speech ?? serverSpeech
+    if (pending) void pending.then(finish, finish)
     else finish()
   }
 

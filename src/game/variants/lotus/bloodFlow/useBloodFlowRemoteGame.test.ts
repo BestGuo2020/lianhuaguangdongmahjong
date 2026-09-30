@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useBloodFlowRemoteGame } from './useBloodFlowRemoteGame'
+import { registerLlmAudioPlayer } from '../../../core/presentation/llmAudioBus'
+import * as localTtsClient from '../../../llm/localTtsClient'
 
 const api = vi.hoisted(() => ({
   createRoom: vi.fn(), joinRoom: vi.fn(), getRoom: vi.fn(), readyRoom: vi.fn(),
@@ -123,6 +125,15 @@ describe('useBloodFlowRemoteGame', () => {
     expect(capture.open).toHaveBeenCalled()
   })
 
+  it('keeps the room usable and explains a rematch still finishing on the server', async () => {
+    const module = makeModule()
+    module.roomId.value = 'R1'
+    api.startRoom.mockRejectedValueOnce(new Error('MATCH_FINISHING'))
+    await expect(module.remoteActions.startMatch([])).rejects.toThrow('MATCH_FINISHING')
+    expect(module.sessionError.value).toContain('上一场仍在收尾')
+    expect(module.roomId.value).toBe('R1')
+  })
+
   it('routes rejoin_ok and bf_snapshot into the authority port', async () => {
     const module = makeModule()
     expect(capture.onMessage).not.toBeNull()
@@ -219,6 +230,15 @@ describe('useBloodFlowRemoteGame', () => {
     capture.onMessage!({ kind: 'rejoin_ok', seat: 0, rejoin: true, roomId: 'R1', mode: 'east',
       rulesetId: 'lotus-blood-flow', nickname: '甲', rejoinCode: 'C1' })
     expect(capture.sent).toContainEqual({ kind: 'auto', enabled: false })
+  })
+
+  it('终局重进拿到座位号后重新确认房主身份', async () => {
+    api.getRoom.mockResolvedValue({ ...ROOM_INFO_LOBBY, status: 'finished' })
+    const module = makeModule()
+    module.roomId.value = 'R1'
+    capture.onMessage!({ kind: 'rejoin_ok', seat: 0, rejoin: true, roomId: 'R1', mode: 'east',
+      rulesetId: 'lotus-blood-flow', nickname: '甲', rejoinCode: 'C1' })
+    await vi.waitFor(() => expect(module.isCreator.value).toBe(true))
   })
 
   it('联机座位身份按快照落地；客户端不再自拼 LLM 模板台词（改由服务端原话）', async () => {
@@ -403,6 +423,39 @@ describe('useBloodFlowRemoteGame', () => {
       expect(module.capabilities.value.bloodFlow?.roundResult).toBeTruthy()
       expect(module.capabilities.value.bloodFlow?.roundSpeechBusy).toBe(false)
     })
+  })
+
+  it('远端局末 TTS 启动挂起时也按单机的四秒上限释放结算闸门', async () => {
+    vi.useFakeTimers()
+    const unregister = registerLlmAudioPlayer(() => true, () => true)
+    const tts = vi.spyOn(localTtsClient, 'getLocalTtsClient').mockReturnValue({
+      speak: () => new Promise<boolean>(() => {}),
+    } as never)
+    try {
+      const module = useBloodFlowRemoteGame({
+        playSound: () => {}, playSoundAndWait: async () => {},
+        getThemeName: () => 'llm', animeFixedTts: fixedTtsStub as never,
+      })
+      const result = { ruleVersion: 'lotus-blood-flow-v1', roundId: 'round-0', reason: 'wall-exhausted',
+        openingScores: [2000, 2000, 2000, 2000], endingScores: [2000, 2000, 2000, 2000],
+        winNet: [0, 0, 0, 0], kongNet: [0, 0, 0, 0], winCounts: [0, 0, 0, 0],
+        ranks: [1, 1, 1, 1], ledger: [] }
+      const view = { ...VIEW,
+        players: VIEW.players.map((player, seat) => seat === 1
+          ? { ...player, playerKind: 'llm', isLlm: true, style: '高冷', voiceKey: 'qwen' }
+          : player),
+        public: { ...VIEW.public, status: 'settled', roundResult: result },
+      }
+      capture.onMessage!({ kind: 'bf_snapshot', view, round: 1, mode: 'east', dealer: 0 })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(module.capabilities.value.bloodFlow?.roundSpeechBusy).toBe(true)
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(module.capabilities.value.bloodFlow?.roundSpeechBusy).toBe(false)
+    } finally {
+      tts.mockRestore()
+      unregister()
+      vi.useRealTimers()
+    }
   })
 
   it('服务端模型原话：llm_message 落气泡、llm_audio 走 llm 音频队列', async () => {

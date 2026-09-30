@@ -167,6 +167,15 @@ async function connectGame(options: Parameters<typeof useRemoteGame>[0] = {}) {
 // ─── 测试用例 ─────────────────────────────────────────────
 
 describe('useRemoteGame 座位旋转与快照应用', () => {
+  it('终局重进握手确认座位后恢复房主身份', async () => {
+    const game = await connectGame()
+    game.creatorSeat.value = 2
+    game.isCreator.value = false
+    mockSocket!.receive({ kind: 'rejoin_ok', seat: 2, rejoin: true, roomId: 'ABC123',
+      mode: 'east', nickname: '测试', rejoinCode: 'AAAA-BBBB' })
+    expect(game.isCreator.value).toBe(true)
+  })
+
   it('重连后上报连接级表现音频模式，主题切换可更新', async () => {
     let themeName = 'llmAnime'
     const game = await connectGame({ getThemeName: () => themeName })
@@ -535,6 +544,28 @@ describe('useRemoteGame 网络信号（连接健康度）', () => {
 })
 
 describe('useRemoteGame 结算展示与延迟队列', () => {
+  it('WS 大模型发言与胡牌演出并行，发言完成前不打开结算', async () => {
+    const game = await connectGame()
+    mockSocket!.receive(makeSnapshot({
+      phase: 'settled',
+      roundSpeechPending: true,
+      result: { winnerIndex: 2, presentationKey: 'match-1:round-1' },
+      winPresentation: { winnerIndex: 2, tile: 'm1', sourceIndex: -1, robbedKong: false,
+        robbedKongPlayerIndex: -1, robbedKongMeldIndex: -1 },
+      winningPlayerIndex: 2,
+    }))
+    expect(game.phase.value).toBe('win-effect')
+    await vi.advanceTimersByTimeAsync(6_100)
+    expect(game.phase.value).toBe('revealing')
+    expect(game.result.value).toBeNull()
+    mockSocket!.receive({ kind: 'round_speech_done', presentationKey: 'another-round' })
+    await Promise.resolve()
+    expect(game.phase.value).toBe('revealing')
+    mockSocket!.receive({ kind: 'round_speech_done', presentationKey: 'match-1:round-1' })
+    await Promise.resolve()
+    expect(game.phase.value).toBe('settled')
+  })
+
   it('settled 快照触发赢牌动画序列，result 座位索引映射正确', async () => {
     const game = await connectGame()
     const winnerResult = {

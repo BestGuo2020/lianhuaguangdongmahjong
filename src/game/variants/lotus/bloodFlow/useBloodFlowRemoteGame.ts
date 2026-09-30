@@ -39,6 +39,7 @@ const SESSION_ERROR_TEXT: Record<string, string> = {
   NOT_CREATOR: '只有房主能设置大模型预留',
   LLM_NOT_ENABLED: '本房间未启用大模型补位',
   INVALID_LLM_SEATS: '该模型当前不可用，请让房主改选其他模型',
+  MATCH_FINISHING: '上一场仍在收尾，请稍后再试',
 }
 
 function readableSessionError(error: unknown, fallback: string): string {
@@ -116,6 +117,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
         const payload = message as { seat?: number; nickname?: string }
         if (typeof payload.seat === 'number') mySeat.value = payload.seat
         if (typeof payload.nickname === 'string') nickname.value = payload.nickname
+        // 首次房间回读可能在 WS 座位号到达前完成；终局不再轮询，必须在此补算房主。
+        void refreshRoom().catch(() => {})
         socket.confirmSession()
         sessionStatus.value = 'lobby'
         // 重连成功即视为会话健康：清掉上一次的错误提示。
@@ -259,9 +262,15 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   async function startMatch(llmSeats: Array<LlmSeatRequest> = []) {
     if (!roomId.value) return
-    await startRoom(roomId.value, llmSeats)
-    sessionStatus.value = 'lobby'
-    socket.open()
+    sessionError.value = ''
+    try {
+      await startRoom(roomId.value, llmSeats)
+      sessionStatus.value = 'lobby'
+      socket.open()
+    } catch (error) {
+      sessionError.value = readableSessionError(error, '开局失败')
+      throw error
+    }
   }
 
   /**

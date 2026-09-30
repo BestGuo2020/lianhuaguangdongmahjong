@@ -94,6 +94,7 @@ const REMOTE_ERROR_TEXT: Record<string, string> = {
   NOT_CREATOR: '只有房主能设置大模型预留',
   LLM_NOT_ENABLED: '本房间未启用大模型补位',
   INVALID_LLM_SEATS: '该模型当前不可用，请让房主改选其他模型',
+  MATCH_FINISHING: '上一场仍在收尾，请稍后再试',
 }
 
 function readableError(error: unknown, fallback: string): string {
