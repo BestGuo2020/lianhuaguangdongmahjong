@@ -52,7 +52,6 @@ interface Props {
   winPresentation: WinPresentation | null
   revealHands: boolean
   matchFinished: boolean
-  canRematch?: boolean
   winningPlayerIndex: number
   dealer: number
   isUserTurn: boolean
@@ -109,7 +108,6 @@ const emit = defineEmits<{
   toggleAutoPlay: []
   nextRound: []
   returnToLobby: []
-  rematch: []
   leaveMatch: []
 }>()
 
@@ -540,8 +538,8 @@ function onAvatarError(entry: GamePlayer) {
       <BloodFlowWinPresentation :cue="bloodFlowCue" :now="presentationNow" :players="players" :theme-name="themeName" :local-seat="user.seat" :compact="compactBloodFlowEffects" />
       <BloodFlowSettlementHost ref="settlementHost" :state="bloodFlow" :players="players" :local-seat="user.seat" :theme-name="themeName"
         :presentation-busy="presentationBusy" :online="online === true"
-        :match-finished="matchFinished" :can-rematch="canRematch" :round-label="roundLabel" @visible-change="settlementVisible=$event"
-        @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" @rematch="$emit('rematch')" @leave-match="$emit('leaveMatch')" />
+        :match-finished="matchFinished" :round-label="roundLabel" @visible-change="settlementVisible=$event"
+        @next-round="$emit('nextRound')" @return-to-lobby="$emit('returnToLobby')" @leave-match="$emit('leaveMatch')" />
     </template>
     <Transition name="table-loading">
       <div
