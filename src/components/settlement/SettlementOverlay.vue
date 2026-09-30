@@ -21,6 +21,7 @@ interface Props {
   result: RoundResult | null
   resultVisible: boolean
   matchFinished: boolean
+  canRematch?: boolean
   dealer: number
   waitingNextRound: boolean
   gameMode: GameMode
@@ -40,6 +41,7 @@ defineEmits<{
   'update:resultVisible': [value: boolean]
   nextRound: []
   returnToLobby: []
+  rematch: []
   report: [name: string]
 }>()
 
@@ -209,6 +211,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
           </article>
         </div>
         <div class="settlement-footer final-footer">
+          <button v-if="gameMode === 'remote' && canRematch" @click="$emit('rematch')">再来一场</button>
           <button @click="$emit('returnToLobby')">返回大厅</button>
           <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
         </div>
