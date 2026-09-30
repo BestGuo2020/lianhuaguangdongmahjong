@@ -43,7 +43,7 @@
 `$masterOnly`（脚本内数组）里的路径在 vibehub 上不存在，同步时会被 `git rm`；**新增 WS 专属文件后必须同步维护这个数组**，否则 master 新增的文件会以「staged add」进入 vibehub，而它 import 的 WS 模块已被删除 → vibehub 构建/测试直接挂。
 
 - `src/game/online/api/**`（REST 房间/账号/审核接口）
-- `src/game/online/session/remoteRoomLifecycle.{ts,test.ts}`、`session/useRoomAvailability.ts`、`session/useWakuDemoAuth.ts`
+- `src/game/online/session/remoteRoomLifecycle.{ts,test.ts}`、`session/useRoomAvailability.{ts,test.ts}`、`session/useWakuDemoAuth.ts`
 - `src/game/online/transport/roomSocket.{ts,test.ts}`、`src/game/online/useRemoteGame.{ts,test.ts}`
 - `src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`）：血流 **WS** 联机入口，import 了上面这些 WS 模块；vibehub 的 P2P 血流走自己的 `src/game/online/vibe/bloodFlowRoom.ts`
 - `src/components/lobby/roomSeatLlm.{ts,test.ts}`：房间面板「预留座位」纯逻辑，import 了 `online/api/roomApi`；vibehub 的房间面板是 keep 文件，不使用它
