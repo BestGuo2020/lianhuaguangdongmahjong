@@ -94,7 +94,7 @@ type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?
 type BloodFlowWorkerView = BloodFlowSeatView & { replay?: BloodFlowSeatView }
 /** 单机弃牌动作不会被网络语音长期阻塞；局末只限制每句语音开口前的等待。 */
 const LOCAL_DISCARD_SPEECH_WAIT_MS = 4_000
-const LOCAL_ROUND_SPEECH_START_WAIT_MS = 4_000
+const ROUND_SPEECH_START_WAIT_MS = 4_000
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
   const state = createLotusGameState()
@@ -1151,13 +1151,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
           startupTimer = undefined
         }
         try {
-          const startup = options.externalAuthority ? null : new Promise<void>(resolve => {
-            startupTimer = setTimeout(() => { controller.abort(); resolve() }, LOCAL_ROUND_SPEECH_START_WAIT_MS)
+          const startup = new Promise<void>(resolve => {
+            startupTimer = setTimeout(() => { controller.abort(); resolve() }, ROUND_SPEECH_START_WAIT_MS)
           })
           const playback = getLocalTtsClient().speak(seat, line.text, line.voiceKey, line.style, 'important',
             { isCurrent, signal: controller.signal, waitForCompletion: true, onStarted: started })
-          if (startup) await Promise.race([playback, startup])
-          else await playback
+          await Promise.race([playback, startup])
         } finally { started() }
       }
     }).catch(() => {}).finally(() => { signal?.removeEventListener('abort', abort); speechControllers.delete(controller) })
