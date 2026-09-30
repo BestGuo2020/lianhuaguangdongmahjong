@@ -7,8 +7,8 @@ import { themePresentationByName, themePresentationCssVariables } from '../../th
 import BloodFlowRoundLedger from './BloodFlowRoundLedger.vue'
 import BloodFlowRoundSummary from './BloodFlowRoundSummary.vue'
 import BloodFlowFinalRanking from './BloodFlowFinalRanking.vue'
-const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;canRematch?:boolean;roundLabel?:string;presentationBusy?:boolean;online?:boolean}>()
-const emit=defineEmits<{nextRound:[];returnToLobby:[];rematch:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
+const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;roundLabel?:string;presentationBusy?:boolean;online?:boolean}>()
+const emit=defineEmits<{nextRound:[];returnToLobby:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
 type View='table'|'round'|'final'|'details'
 const view=ref<View>('table'), detailsReturn=ref<View>('table'), filterSeat=ref<number|null>(null), requested=ref(false)
 const restored=ref(false), opened=new Set<string>()
@@ -77,7 +77,6 @@ defineExpose({showSummary,showDetails,showTable})
         <button v-if="view==='final'" type="button" @click="view='round'">最后一局结果</button>
         <button v-if="view==='round'&&matchFinished" type="button" @click="view='final'">最终排名</button>
         <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局'+(countdown>0?' ('+countdown+')':'') }}</button>
-        <button v-if="result&&matchFinished&&online&&canRematch" type="button" class="bf-primary" @click="$emit('rematch')">再来一场</button>
         <button v-if="requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
         <!-- 返回大厅：联机=暂离（不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」）；
              单机=结束本场对局回大厅（单机没有座位/重进码，两者本就是同一件事，也没有房间可回）。 -->

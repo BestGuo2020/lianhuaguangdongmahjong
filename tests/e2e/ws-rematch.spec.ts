@@ -6,7 +6,7 @@ test.skip(existsSync('src/game/online/transport/vibeRoomTransport.ts'), 'WebSock
 test.setTimeout(120_000)
 
 for (const rulesetId of ['lotus-classic', 'lotus-blood-flow'] as const) {
-  test(`${rulesetId}: 房主在终局一键开始下一场`, async ({ page }) => {
+  test(`${rulesetId}: 终局返回大厅，房主从房间面板再开一场`, async ({ page }) => {
     let starts = 0
     await page.addInitScript((rule) => {
       localStorage.setItem('lgm_disclaimer_agreed', '1')
@@ -97,10 +97,14 @@ for (const rulesetId of ['lotus-classic', 'lotus-blood-flow'] as const) {
       return route.fulfill({ json: { roomId: 'ROOM01', status: 'playing' } })
     })
 
-    await page.goto('/', { waitUntil: 'commit' })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.locator('.continue-session').click()
-    await expect(page.getByRole('button', { name: '再来一场' })).toBeVisible({ timeout: 45_000 })
-    await page.getByRole('button', { name: '再来一场' }).click()
+    await expect(page.getByRole('button', { name: '返回大厅' })).toBeVisible({ timeout: 45_000 })
+    await expect(page.getByRole('button', { name: '再来一场' })).toHaveCount(0)
+    await page.getByRole('button', { name: '返回大厅' }).click()
+    await expect(page.locator('.room-panel')).toBeVisible()
+    await expect(page.locator('.room-start')).toBeEnabled()
+    await page.locator('.room-start').click()
     await expect.poll(() => starts).toBe(1)
     await page.evaluate(() => (window as Window & { __resumeMatch?: () => void }).__resumeMatch?.())
     await expect(page.locator('.game-table-hud')).toBeVisible({ timeout: 30_000 })
