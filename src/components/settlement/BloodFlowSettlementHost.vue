@@ -7,8 +7,8 @@ import { themePresentationByName, themePresentationCssVariables } from '../../th
 import BloodFlowRoundLedger from './BloodFlowRoundLedger.vue'
 import BloodFlowRoundSummary from './BloodFlowRoundSummary.vue'
 import BloodFlowFinalRanking from './BloodFlowFinalRanking.vue'
-const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;canRematch?:boolean;roundLabel?:string;presentationBusy?:boolean;online?:boolean}>()
-const emit=defineEmits<{nextRound:[];returnToLobby:[];rematch:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
+const props=defineProps<{state:BloodFlowTableState;players:GamePlayer[];localSeat:number;themeName:TableThemeName;matchFinished:boolean;roundLabel?:string;presentationBusy?:boolean;online?:boolean}>()
+const emit=defineEmits<{nextRound:[];returnToLobby:[];leaveMatch:[];visibleChange:[visible:boolean]}>()
 type View='table'|'round'|'final'|'details'
 const view=ref<View>('table'), detailsReturn=ref<View>('table'), filterSeat=ref<number|null>(null), requested=ref(false)
 const restored=ref(false), opened=new Set<string>()
@@ -77,12 +77,10 @@ defineExpose({showSummary,showDetails,showTable})
         <button v-if="view==='final'" type="button" @click="view='round'">最后一局结果</button>
         <button v-if="view==='round'&&matchFinished" type="button" @click="view='final'">最终排名</button>
         <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局'+(countdown>0?' ('+countdown+')':'') }}</button>
-        <button v-if="result&&matchFinished&&online&&canRematch" type="button" class="bf-primary" @click="$emit('rematch')">再来一场</button>
         <button v-if="requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
         <!-- 返回大厅：联机=暂离（不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」）；
              单机=结束本场对局回大厅（单机没有座位/重进码，两者本就是同一件事，也没有房间可回）。 -->
-        <button v-if="result" type="button" :title="!online?'结束本场对局并返回大厅':matchFinished?'回房间大厅（房间保留，准备态保留，可直接再开一场）':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">{{ !online?'返回大厅':matchFinished?'返回房间':'返回大厅' }}</button>
-        <span v-if="result&&matchFinished&&online&&canRematch===false" class="bf-ready-status">返回房间后等待房主开始下一场</span>
+        <button v-if="result" type="button" :title="!online?'结束本场对局并返回大厅':matchFinished?'返回房间大厅，保留座位与准备态':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">返回大厅</button>
         <!-- 退出本场：仅联机有意义（回主大厅，座位保留可重进原座位），需二次确认；单机隐藏。 -->
         <button v-if="result&&!matchFinished&&online" type="button" class="bf-quiet" @click="confirmLeaveMatch">退出本场</button>
       </footer>

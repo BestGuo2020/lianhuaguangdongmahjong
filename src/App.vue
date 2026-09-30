@@ -575,20 +575,6 @@ function leaveMatchFromPanel() {
   if (!window.confirm('退出本场？本场将由 AI 代打（座位与重进码保留），你可以在大厅用「继续对局」回到原座位。')) return
   void remoteActions.leaveMatch()
 }
-const rematching = ref(false)
-async function rematchRemote() {
-  if (rematching.value || gameMode.value !== 'remote' || !matchFinished.value || !isCreator.value) return
-  rematching.value = true
-  returnToLobby()
-  try {
-    // 后端会等上一场任务完成收尾；保留房间座位、准备态和大模型预留。
-    await remoteActions.startMatch()
-  } catch {
-    // startMatch 已把可读错误写到房间面板；留在面板可直接重试。
-  } finally {
-    rematching.value = false
-  }
-}
 const showLobby = computed(() => (
   phase.value === 'lobby'
   || (gameMode.value === 'remote' && Boolean(roomId.value) && players.value.length === 0)
@@ -789,7 +775,6 @@ function changeTableTheme(theme: TableThemeName) {
         :win-presentation="winPresentation"
         :reveal-hands="revealHands"
         :match-finished="matchFinished"
-        :can-rematch="gameMode === 'remote' && isCreator"
         :winning-player-index="winningPlayerIndex"
         :dealer="dealer"
         :is-user-turn="isUserTurn"
@@ -832,7 +817,6 @@ function changeTableTheme(theme: TableThemeName) {
         @ready="handleTableReady"
         @next-round="nextRound"
         @return-to-lobby="returnToLobby"
-        @rematch="rematchRemote"
         @leave-match="leaveMatchFromPanel"
       />
 
@@ -895,7 +879,6 @@ function changeTableTheme(theme: TableThemeName) {
         v-model:result-visible="resultVisible"
         :result="result"
         :match-finished="matchFinished"
-        :can-rematch="gameMode === 'remote' && isCreator"
         :dealer="dealer"
         :waiting-next-round="waitingNextRound"
         :game-mode="gameMode"
@@ -909,7 +892,6 @@ function changeTableTheme(theme: TableThemeName) {
         :theme-name="tableThemeName"
         @next-round="nextRound"
         @return-to-lobby="returnToLobby"
-        @rematch="rematchRemote"
         @report="reportPlayer"
       />
       <StatsOverlay
