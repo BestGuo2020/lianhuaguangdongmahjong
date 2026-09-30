@@ -27,8 +27,9 @@ export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>
   watch(() => (roomMeta.value?.llmProviders ?? []).map((provider) => provider.avatar),
     (avatars) => { void materializeImages(avatars) }, { immediate: true })
 
-  watch([gameMode, roomId], ([mode, id]) => {
-    if (mode === 'remote' && !id) {
+  watch([gameMode, roomId], ([mode]) => {
+    // 房间面板同样需要提供商列表：刷新或重进房间时，不能只依赖进入大厅时的旧元数据。
+    if (mode === 'remote') {
       void refresh()
       if (pollingTimer == null) pollingTimer = window.setInterval(refresh, 5000)
     } else {

@@ -21,6 +21,19 @@ export type RoomSeatLlmState =
   | { kind: 'reserved'; providerId: string; style: ServerLlmStyle | null }
   | { kind: 'auto' }
 
+/** 房主仅可在待开局或已结束时编辑；失效预留即使提供商列表为空也必须能清除。 */
+export function canEditLlmSeat(
+  isCreator: boolean,
+  roomStatus: string | undefined,
+  effectiveLlmEnabled: boolean,
+  providerCount: number,
+  isReserved: boolean,
+): boolean {
+  return isCreator
+    && (roomStatus === 'lobby' || roomStatus === 'finished')
+    && ((effectiveLlmEnabled && providerCount > 0) || isReserved)
+}
+
 /** 某座位的档位：真人已占 / 已预留给大模型 / 自动（真人可占）。 */
 export function seatLlmState(
   seat: number,

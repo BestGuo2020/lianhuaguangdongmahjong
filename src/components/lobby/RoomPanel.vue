@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { animeCharacterAvatarUrl } from '../../game/llm/animeCharacterPreference'
 import { resolveAnimeCharacter, type CharacterId } from '../../game/llm/animeCharacters'
 import {
+  canEditLlmSeat,
   isReservationUnavailable,
   pickValue,
   pickValueForSeat,
@@ -113,6 +114,13 @@ function unavailableReservation(seat: number) {
   return reserved ? isReservationUnavailable(reserved, props.llmProviders) : false
 }
 
+function canEditSeat(seat: number) {
+  return canEditLlmSeat(
+    props.isCreator, props.roomStatus, props.effectiveLlmEnabled,
+    props.llmProviders.length, seatState(seat).kind === 'reserved',
+  )
+}
+
 function onPickChange(seat: number, event: Event) {
   const value = (event.target as HTMLSelectElement).value
   pendingPicks.value = { ...pendingPicks.value, [seat]: value }
@@ -183,7 +191,7 @@ function startPayload() {
           <em v-else class="unready">未准备</em>
         </template>
         <span
-          v-else-if="isCreator && effectiveLlmEnabled && llmProviders.length"
+          v-else-if="canEditSeat(index)"
           class="room-seat-provider-wrap"
         >
           <img :src="robotIconUrl" alt="" aria-hidden="true">

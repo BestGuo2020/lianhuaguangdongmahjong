@@ -110,6 +110,7 @@ try {
     'src/game/online/session/remoteRoomLifecycle.ts'
     'src/game/online/session/remoteRoomLifecycle.test.ts'
     'src/game/online/session/useRoomAvailability.ts'
+    'src/game/online/session/useRoomAvailability.test.ts'
     'src/game/online/session/useWakuDemoAuth.ts'
     'src/game/online/transport/roomSocket.ts'
     'src/game/online/transport/roomSocket.test.ts'

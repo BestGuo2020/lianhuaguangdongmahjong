@@ -1,6 +1,7 @@
 // 房间面板「空位」语义（房主选模型 = 该座预留给大模型，真人不可占）的纯逻辑单测。
 import { describe, expect, it } from 'vitest'
 import {
+  canEditLlmSeat,
   isReservationUnavailable,
   pickValue,
   pickValueForSeat,
@@ -24,6 +25,20 @@ const PROVIDERS: LlmProviderInfo[] = [
 
 const seat = (index: number, nickname = `P${index}`): RoomSeatState => ({
   seat: index, nickname, ready: false, connected: true,
+})
+
+describe('canEditLlmSeat', () => {
+  it('终局可调整提供商，也可在列表缺失时清除旧预留', () => {
+    expect(canEditLlmSeat(true, 'finished', true, 2, false)).toBe(true)
+    expect(canEditLlmSeat(true, 'finished', true, 0, true)).toBe(true)
+    expect(canEditLlmSeat(true, 'finished', false, 0, true)).toBe(true)
+  })
+
+  it('进行中、非房主或没有可选提供商的空座不可编辑', () => {
+    expect(canEditLlmSeat(true, 'playing', true, 2, true)).toBe(false)
+    expect(canEditLlmSeat(false, 'finished', true, 2, true)).toBe(false)
+    expect(canEditLlmSeat(true, 'lobby', true, 0, false)).toBe(false)
+  })
 })
 
 describe('seatLlmState', () => {
