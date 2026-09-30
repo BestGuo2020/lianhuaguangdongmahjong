@@ -22,6 +22,7 @@ describe('血流结算页按钮合同', () => {
     const button = /<button v-if="result"[^>]*:title="([^"]*)"[^>]*@click="\$emit\('returnToLobby'\)"[^>]*>([^<]*)<\/button>/.exec(source)
     expect(button, '未找到「返回大厅」按钮').not.toBeNull()
     expect(button![1]).toContain('matchFinished')
+    expect(button![1]).not.toContain('返回房间')
     expect(button![2]).toBe('返回大厅')
     expect(source).not.toContain('>返回房间</button>')
   })
