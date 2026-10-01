@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
+// 源码变更后 vite dev 首次重打包可能超过默认 30s（R6.23 记录的环境慢载，
+// 与 local-game.smoke.spec.ts 同一放开关口）。
+test.setTimeout(120_000)
 
 test('莲花麻将（旧版翻精）本地开局并亮出精指示牌', async ({ page }) => {
   const pageErrors: string[] = []
