@@ -224,6 +224,42 @@ describe('翻精癞子适配层：合法动作', () => {
     expect(seatActionsOf(noRob).map((action) => action.kind)).toEqual(['pass'])
   })
 
+  it('听任意只能自摸：弃牌/抢杠窗口不给 win，摸牌窗口照常', () => {
+    // 翻精 m5 → 精为 m5/m6；4 面子 + 单吊精 = 听全部 34 种（听任意）。
+    const anyWait: TileType[] = [
+      'm1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3',
+      'east', 'east', 'east', 'm5',
+    ]
+    const jokers = ['m5', 'm6'] as TileType[]
+    // 弃牌响应窗口：s7 补进成胡，但听任意 → 不提供 win（与编排层同口径）
+    const claim = lotusSeatView(
+      table({ jokers, players: [{ hand: anyWait, melds: [], discards: [], score: 2_000 }] }),
+      windowOf({ kind: 'claim', seat: 0, from: 3, tile: 's7' }), RULESET,
+    )
+    expect(claim.canWin).toBe(false)
+    expect(seatActionsOf(claim).map((action) => action.kind)).not.toContain('win')
+    // 抢杠窗口同样封锁
+    const rob = lotusSeatView(
+      table({ jokers, players: [{ hand: anyWait, melds: [], discards: [], score: 2_000 }] }),
+      windowOf({ kind: 'rob-kong', seat: 0, from: 2, tile: 's7' }), RULESET,
+    )
+    expect(rob.canWin).toBe(false)
+    expect(seatActionsOf(rob).map((action) => action.kind)).toEqual(['pass'])
+    // 摸牌（自摸）窗口不受影响：14 张成胡照常给 win
+    const drawn = lotusSeatView(
+      table({ jokers, players: [{ hand: [...anyWait, 's7'], melds: [], discards: [], drawnTileIndex: 13, score: 2_000 }] }),
+      windowOf(), RULESET,
+    )
+    expect(drawn.canWin).toBe(true)
+    // 普通单骑听 s7：弃牌窗口照常给 win
+    const plain: TileType[] = [...anyWait.slice(0, 12), 's7']
+    const plainClaim = lotusSeatView(
+      table({ jokers, players: [{ hand: plain, melds: [], discards: [], score: 2_000 }] }),
+      windowOf({ kind: 'claim', seat: 0, from: 3, tile: 's7' }), RULESET,
+    )
+    expect(plainClaim.canWin).toBe(true)
+  })
+
   it('决策窗口：合法动作与 ID 一一对应；没有可选动作时不是窗口', () => {
     const view = lotusSeatView(table(), windowOf(), RULESET)
     const window = decisionWindowOf(view)

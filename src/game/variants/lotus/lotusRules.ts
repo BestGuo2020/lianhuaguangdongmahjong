@@ -566,6 +566,29 @@ export function waitingTiles(hand: TileType[], exposedMeldCount: number, jokers:
   return TILE_TYPES.filter((tile) => isWinningHand([...hand, tile], exposedMeldCount, jokers, [], jokerSubstitutes))
 }
 
+/**
+ * 听任意：听口覆盖全部 34 种牌（典型形态是单吊精牌），与听牌面板 any=true 同口径。
+ * 产品规则（2026-10 确认）：莲花麻将听任意**只能自摸**——点炮胡（含地胡）与抢杠胡
+ * 均不成立，只有摸牌成胡可胡（杠上开花属自摸，保留）。后端 LotusLegacyRuleSet.is_any_wait
+ * 同一口径（manager.find_claims / can_rob_kong 封锁）。
+ */
+export function isAnyWait(hand: TileType[], exposedMeldCount: number, jokers: TileType[], jokerSubstitutes: TileType[] = ['white']): boolean {
+  return waitingTiles(hand, exposedMeldCount, jokers, jokerSubstitutes).length === TILE_TYPES.length
+}
+
+/** 点炮胡（吃胡）：手牌补入弃牌成胡，且非听任意——听任意只能自摸，不提供吃胡。 */
+export function canWinOnDiscard(
+  hand: TileType[],
+  tile: TileType,
+  exposedMeldCount: number,
+  jokers: TileType[],
+  ordinaryJokers: TileType[] = [],
+  jokerSubstitutes: TileType[] = ['white'],
+): boolean {
+  if (!isWinningHand([...hand, tile], exposedMeldCount, jokers, ordinaryJokers, jokerSubstitutes)) return false
+  return !isAnyWait(hand, exposedMeldCount, jokers, jokerSubstitutes)
+}
+
 export interface TingEntry {
   tile: TileType
   fan: number
@@ -668,13 +691,15 @@ export function windKong(hand: TileType[], _jokers: TileType[]): boolean {
 
 export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCount: number, jokers: TileType[], jokerSubstitutes: TileType[] = []): boolean {
   const allJokers = effectiveJokers(jokers, jokerSubstitutes)
-  return isWinningHand(
+  if (!isWinningHand(
     [...hand, kongTile],
     exposedMeldCount,
     jokers,
     allJokers.includes(kongTile) ? [kongTile] : [],
     jokerSubstitutes,
-  )
+  )) return false
+  // 听任意只能自摸：抢杠胡一并不提供（与后端 LotusLegacyRuleSet.can_rob_kong 同口径）。
+  return !isAnyWait(hand, exposedMeldCount, jokers, jokerSubstitutes.length ? jokerSubstitutes : ['white'])
 }
 
 /**
