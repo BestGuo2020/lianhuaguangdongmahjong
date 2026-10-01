@@ -5,9 +5,11 @@ import {
   canChi,
   canPeng,
   canRobKong,
+  canWinOnDiscard,
   computeJokers,
   concealedKongs,
   evaluateBasePattern,
+  isAnyWait,
   isQiXingShiSanLan,
   isSevenPairs,
   isShiSanLan,
@@ -344,5 +346,45 @@ describe('听牌', () => {
   it('癞子面也可以是听口（补入增加癞子数）', () => {
     const hand: TileType[] = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'p2', 'p3', 'p4', 's7', 's7', 's7', 'north']
     expect(waitingTiles(hand, 0, ['north', 'white'])).toContain('north')
+  })
+})
+
+// 听任意只能自摸（2026-10 规则）：听口覆盖全部 34 种（典型是单吊精）时，
+// 点炮胡（含地胡）与抢杠胡均不成立，仅摸牌成胡可胡。
+describe('听任意仅自摸', () => {
+  const FAN_JOKERS = computeJokers('m5')   // ['m5', 'm6']
+  // 4 面子 + 单吊精 m5：补任意牌都能与精成对 → 听全部 34 种。
+  const ANY_WAIT: TileType[] = [
+    'm1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3',
+    'east', 'east', 'east', 'm5',
+  ]
+  // 同型但单骑 s7：普通听口（s7 + 两张精面），远未全听。
+  const PLAIN_TENPAI: TileType[] = [
+    'm1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3',
+    'east', 'east', 'east', 's7',
+  ]
+
+  it('单吊精覆盖全部 34 种听口 → isAnyWait；普通单骑不是', () => {
+    expect(isAnyWait(ANY_WAIT, 0, FAN_JOKERS)).toBe(true)
+    expect(waitingTiles(ANY_WAIT, 0, FAN_JOKERS)).toHaveLength(34)
+    expect(isAnyWait(PLAIN_TENPAI, 0, FAN_JOKERS)).toBe(false)
+  })
+
+  it('听任意：弃牌补进成胡，但不提供点炮胡（自摸判定不受影响）', () => {
+    expect(isWinningHand([...ANY_WAIT, 's7'], 0, FAN_JOKERS, [], ['white'])).toBe(true)
+    expect(canWinOnDiscard(ANY_WAIT, 's7', 0, FAN_JOKERS)).toBe(false)
+    expect(canWinOnDiscard(ANY_WAIT, 'white', 0, FAN_JOKERS)).toBe(false)
+  })
+
+  it('普通单骑：点炮胡照常提供', () => {
+    expect(canWinOnDiscard(PLAIN_TENPAI, 's7', 0, FAN_JOKERS)).toBe(true)
+    expect(canWinOnDiscard(PLAIN_TENPAI, 'p4', 0, FAN_JOKERS)).toBe(false)
+  })
+
+  it('听任意不可抢杠胡；普通听口抢杠照旧', () => {
+    expect(canRobKong(ANY_WAIT, 's7', 0, FAN_JOKERS, ['white'])).toBe(false)
+    expect(canRobKong(ANY_WAIT, 'm5', 0, FAN_JOKERS, ['white'])).toBe(false)
+    expect(canRobKong(PLAIN_TENPAI, 's7', 0, FAN_JOKERS, ['white'])).toBe(true)
+    expect(canRobKong(PLAIN_TENPAI, 'p4', 0, FAN_JOKERS, ['white'])).toBe(false)
   })
 })

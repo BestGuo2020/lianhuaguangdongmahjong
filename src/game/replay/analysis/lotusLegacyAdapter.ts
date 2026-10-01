@@ -20,7 +20,7 @@
 import type { Meld, TileType } from '../../core/contracts/types'
 import type { RuleSet } from '../../core/rules/ruleset'
 import type { ChiMeld } from '../../variants/lotus/lotusRules'
-import { canChi, matchingCount, windKong } from '../../variants/lotus/lotusRules'
+import { canChi, canWinOnDiscard, matchingCount, windKong } from '../../variants/lotus/lotusRules'
 import type { LlmDecisionAnswerHookInput, LlmDecisionRequestHookInput } from '../../llm/llmController'
 import { fingerprintOf } from './codec'
 import { actionMatchKey, canonicalTileKey, type LotusActionKeyLike } from './lotusActionKey'
@@ -185,9 +185,13 @@ export function lotusSeatView(
     ? Boolean(responseTile) && ruleset.win.canRobKong(hand, responseTile!, exposedMelds, {
       jokers, jokerSubstitutes: wildcardTiles,
     })
-    : ruleset.win.isWinningHand(winningTiles, exposedMelds, {
-      jokers, ordinaryJokers, jokerSubstitutes: wildcardTiles,
-    })
+    : responseTile && ruleset.id === 'lotus-legacy'
+      // 弃牌响应窗口：与编排层 canWinDiscard 同口径——听任意只能自摸，
+      // 分析记录不能把引擎根本不会提供的吃胡标成合法动作。
+      ? canWinOnDiscard(hand, responseTile, exposedMelds, jokers, ordinaryJokers, wildcardTiles)
+      : ruleset.win.isWinningHand(winningTiles, exposedMelds, {
+        jokers, ordinaryJokers, jokerSubstitutes: wildcardTiles,
+      })
   const concealed = ruleset.win.concealedKongs(hand, { jokers })
   const addedKongIndexes = melds.reduce<number[]>((out, meld, index) => {
     // 与编排层 `handleAction` 的补杠判定同源：必须是碰出来的面子且手里还有同牌。

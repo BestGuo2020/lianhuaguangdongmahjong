@@ -332,3 +332,106 @@ describe('莲花麻将吃牌副露', () => {
     expect(claimContext?.publicTiles).not.toContain('p9')
   })
 })
+
+// 听任意只能自摸（2026-10 规则）：全听口（单吊精）时引擎不提供点炮胡与抢杠询问。
+describe('莲花麻将听任意仅自摸', () => {
+  // 4 面子 + 单吊精 m5（翻精 m5 → 精为 m5/m6）：补任意牌都成胡 → 听任意。
+  const ANY_WAIT: TileType[] = [
+    'm1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3',
+    'east', 'east', 'east', 'm5',
+  ]
+  const PLAIN_TENPAI: TileType[] = [
+    'm1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3',
+    'east', 'east', 'east', 's7',
+  ]
+
+  function rig(hand: TileType[], hooks: {
+    onHu?: () => void
+    onRob?: () => void
+    endGame?: () => void
+    declareAddedKong?: () => void
+  } = {}) {
+    const state = createLotusGameState()
+    state.players.push(
+      player(0, [...hand]),
+      player(1),
+      player(2),
+      player(3, [], ['s7']),
+    )
+    state.jokerTiles.value = ['m5', 'm6']
+    const controller: LotusController = {
+      requestTurn: async () => ({ kind: 'discard', handIndex: 0 }),
+      requestDiscardHu: async () => { hooks.onHu?.(); return { kind: 'win' } },
+      requestClaim: async () => ({ kind: 'pass' }),
+      requestChi: async () => ({ kind: 'pass' }),
+      requestRobKong: async () => { hooks.onRob?.(); return 'win' },
+    }
+    const tableContext: ActionContext = {
+      players: state.players,
+      currentPlayer: state.currentPlayer,
+      showTableAction: vi.fn(),
+      showScoreFlow: vi.fn(),
+      playSound: vi.fn(),
+    }
+    const orchestrator = createLotusTurnOrchestrator({
+      state,
+      controllers: [controller, controller, controller, controller],
+      tableContext,
+      structuralMeldCount: () => 0,
+      drawFor: async () => true,
+      performConcealedKong: async () => {},
+      performWindKong: async () => {},
+      declareAddedKong: () => { hooks.declareAddedKong?.() },
+      settleAddedKong: () => undefined,
+      discardTile: () => undefined,
+      endDraw: () => undefined,
+      endGame: () => { hooks.endGame?.() },
+      announce: () => {},
+      // 抢杠询问经 later 调度：立即执行回调（与本文件既有响应测试同法）。
+      later: (callback) => { callback(); return 0 },
+    })
+    return { state, orchestrator }
+  }
+
+  it('听任意：弃牌补进成胡也不询问吃胡', async () => {
+    let huAsked = false
+    const { orchestrator } = rig(ANY_WAIT, { onHu: () => { huAsked = true } })
+    orchestrator.routeDiscard(3, 's7')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(huAsked).toBe(false)
+  })
+
+  it('普通单骑听：点炮胡照常询问并结算', async () => {
+    let huAsked = false
+    let settled = false
+    const { orchestrator } = rig(PLAIN_TENPAI, {
+      onHu: () => { huAsked = true },
+      endGame: () => { settled = true },
+    })
+    orchestrator.routeDiscard(3, 's7')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(huAsked).toBe(true)
+    expect(settled).toBe(true)
+  })
+
+  it('听任意：补杠不产生抢杠询问，直接走补杠结算', () => {
+    let robAsked = false
+    let declared = false
+    const { orchestrator } = rig(ANY_WAIT, {
+      onRob: () => { robAsked = true },
+      declareAddedKong: () => { declared = true },
+    })
+    orchestrator.requestAddedKong(3, 0, 's7')
+    expect(declared).toBe(true)
+    expect(robAsked).toBe(false)
+  })
+
+  it('普通单骑听：抢杠询问照常', () => {
+    let robAsked = false
+    const { orchestrator } = rig(PLAIN_TENPAI, { onRob: () => { robAsked = true } })
+    orchestrator.requestAddedKong(3, 0, 's7')
+    expect(robAsked).toBe(true)
+  })
+})

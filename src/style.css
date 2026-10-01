@@ -3319,7 +3319,6 @@ button { font: inherit; }
   text-align: center;
 }
 .room-code-label { justify-self: end; }
-.room-code strong { margin: 0; color: var(--theme-text); }
 .room-code-copied { justify-self: start; visibility: hidden; margin-left: 8px; border-color: color-mix(in srgb, var(--theme-positive) 55%, transparent); background: color-mix(in srgb, var(--theme-positive) 12%, transparent); color: var(--theme-positive); opacity: 0; }
 .room-code-copied.visible { visibility: visible; opacity: 1; }
 .room-code:focus-visible { outline: 3px solid var(--theme-accent); outline-offset: 3px; }

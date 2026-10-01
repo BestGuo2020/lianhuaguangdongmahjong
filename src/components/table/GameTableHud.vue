@@ -715,7 +715,7 @@ function onAvatarError(entry: GamePlayer) {
           <span class="wait-remaining">{{ item.remaining }}张</span>
         </div>
       </div>
-      <template v-else-if="activeWaits.any"><strong>听任意</strong><em>{{ activeWaits.remaining }}张</em></template>
+      <template v-else-if="activeWaits.any"><strong>听任意</strong><em v-if="rulesetId === 'lotus-legacy'">仅自摸</em><em>{{ activeWaits.remaining }}张</em></template>
       <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
 

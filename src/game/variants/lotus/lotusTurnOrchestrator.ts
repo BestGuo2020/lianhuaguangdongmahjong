@@ -5,7 +5,7 @@ import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
-import { canChi, matchingCount, type ChiMeld, LOTUS_RULESET, windKong } from './lotusRules'
+import { canChi, canWinOnDiscard, matchingCount, type ChiMeld, LOTUS_RULESET, windKong } from './lotusRules'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
@@ -66,14 +66,14 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   function canWinDiscard(playerIndex: number, tile: TileType) {
     const player = state.players[playerIndex]
     if (!player) return false
-    return ruleset.win.isWinningHand(
-      [...player.hand, tile],
+    // 听任意只能自摸：全听口（单吊精）不提供点炮胡（地胡依附点炮一并失效）。
+    return canWinOnDiscard(
+      player.hand,
+      tile,
       options.structuralMeldCount(playerIndex),
-      {
-        jokers: state.jokerTiles.value,
-        ordinaryJokers: (state.jokerTiles.value.includes(tile) || state.wildcardTiles.value.includes(tile)) ? [tile] : [],
-        jokerSubstitutes: state.wildcardTiles.value,
-      },
+      state.jokerTiles.value,
+      (state.jokerTiles.value.includes(tile) || state.wildcardTiles.value.includes(tile)) ? [tile] : [],
+      state.wildcardTiles.value,
     )
   }
 
