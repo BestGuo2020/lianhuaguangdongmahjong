@@ -724,15 +724,19 @@ button { font: inherit; }
 .rules-panel .disclaimer-block ol { margin: 0 0 8px; padding-left: 20px; }
 .rules-panel .disclaimer-block li { margin-bottom: 4px; color: #9db0a6; font-size: 12px; line-height: 1.65; }
 .disclaimer-backdrop { z-index: 110; }
-.disclaimer-card { width: min(660px, 92vw); max-height: 88%; padding: 30px 34px 26px; overflow: hidden; }
-.disclaimer-card h2 { margin-bottom: 14px; font-size: clamp(24px, 2.6vw, 34px); }
-.disclaimer-scroll { max-height: 56vh; padding-right: 6px; overflow-y: auto; text-align: left; }
+/* 声明卡固定为「标题 / 正文滚动区 / 按钮行」三段：正文吸收剩余高度，按钮行永远留在卡内。
+   此前正文写死 max-height:56vh + 卡片 overflow:hidden，短屏（横屏手机）上标题+正文+按钮总高
+   超过 max-height:88% 后按钮行被整行裁掉，只剩一条细边，玩家找不到「同意并继续」。 */
+.disclaimer-card { display: flex; flex-direction: column; gap: 14px; width: min(660px, 92vw); max-height: min(88%, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 16px)); padding: 30px 34px 26px; overflow: hidden; }
+.disclaimer-card h2 { flex: none; margin-bottom: 0; font-size: clamp(24px, 2.6vw, 34px); }
+.disclaimer-scroll { flex: 1 1 auto; min-height: 0; max-height: 56vh; padding-right: 6px; overflow-y: auto; overscroll-behavior: contain; text-align: left; }
 .disclaimer-scroll h3 { margin: 15px 0 6px; color: #eccb7d; font: 800 15px "Noto Serif SC", serif; letter-spacing: .08em; }
 .disclaimer-scroll h3:first-child { margin-top: 0; }
 .disclaimer-scroll p { margin: 0 0 8px; color: #c4d0c9; font-size: 13px; line-height: 1.75; }
 .disclaimer-scroll ol { margin: 0 0 8px; padding-left: 22px; }
 .disclaimer-scroll li { margin-bottom: 5px; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
-.disclaimer-card .result-actions { margin-top: 16px; }
+.disclaimer-card .result-actions { flex: none; flex-wrap: wrap; gap: 10px; margin-top: 0; }
+.disclaimer-card .result-actions button { flex: 0 1 auto; max-width: 100%; min-width: min(170px, 42%); }
 
 .result-backdrop { position: absolute; z-index: 90; inset: 0; display: grid; place-items: center; background: rgba(2,8,6,.78); backdrop-filter: blur(4px); }
 .result-card { position: relative; width: min(590px, 91vw); padding: 43px 42px 34px; border: 1px solid #b58a3c; border-radius: 8px; background: radial-gradient(circle at 50% 0, rgba(155,106,44,.2), transparent 42%), linear-gradient(145deg, #17352b, #081711 78%); box-shadow: 0 25px 70px #000; text-align: center; }
@@ -2721,6 +2725,18 @@ button { font: inherit; }
     font-size: 13px;
   }
   .result-disclaimer-note { margin-bottom: 0; }
+  /* 用户声明：短屏收窄内边距与标题，正文吃掉剩余高度，两个按钮各占半行（≥44px 热区）。 */
+  .disclaimer-card {
+    width: min(660px, calc(100cqw - var(--safe-left) - var(--safe-right) - 12px));
+    padding: 16px max(16px, var(--safe-right)) 16px max(16px, var(--safe-left));
+    gap: 10px;
+  }
+  .disclaimer-card h2 { font-size: clamp(19px, 5cqh, 26px); }
+  .disclaimer-scroll { max-height: none; }
+  .disclaimer-scroll p,
+  .disclaimer-scroll li { font-size: 12px; line-height: 1.6; }
+  .disclaimer-card .result-actions { gap: 8px; }
+  .disclaimer-card .result-actions button { flex: 1 1 0; min-width: 0; max-width: none; }
   .round-rankings article { min-height: 44px; }
   .round-rankings span,
   .round-rankings em { font-size: 12px; }
