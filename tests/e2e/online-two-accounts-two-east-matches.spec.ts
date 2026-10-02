@@ -638,6 +638,62 @@ async function acceptDisclaimerIfShown(page: Page) {
   }
 }
 
+/**
+ * 用户声明弹窗验收（2026-10-02 手机端按钮裁切修复后新增）：
+ * 新账号会话进入联机时声明必须先弹出，「同意并继续 / 不同意，返回」必须完整落在卡片内、
+ * 不小于 44×44 触控热区、正文区与按钮行不重叠；接受后写入 localStorage 且弹窗关闭。
+ * 历史缺陷：正文写死 56vh + 卡片 overflow:hidden，短屏上按钮行被整行裁掉只剩一条细边。
+ */
+async function expectDisclaimerAndAccept(page: Page, role: 'host' | 'client', testInfo: TestInfo) {
+  const card = page.locator('.disclaimer-card')
+  await expect(card, `${role} 端进入联机时用户声明未弹出`).toBeVisible({ timeout: 30_000 })
+  // 入场动画（result-in .48s，起始 scale .94）会让几何量偏小，等 Transition 移除活跃类后再量。
+  await expect(page.locator('.disclaimer-backdrop')).not.toHaveClass(/modal-enter-active/, { timeout: 8_000 })
+  await expect(card.getByRole('heading', { name: '用户声明' })).toBeVisible()
+  const metrics = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const value = document.querySelector(selector)?.getBoundingClientRect()
+      return value ? {
+        x: value.x, y: value.y, width: value.width, height: value.height, right: value.right, bottom: value.bottom,
+      } : null
+    }
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      card: rect('.disclaimer-card'),
+      scroll: rect('.disclaimer-scroll'),
+      accept: rect('.disclaimer-card .result-actions button:not(.secondary)'),
+      decline: rect('.disclaimer-card .result-actions button.secondary'),
+    }
+  })
+  expect(metrics.card, `${role} 端声明卡缺失`).not.toBeNull()
+  for (const [label, button] of [['同意并继续', metrics.accept], ['不同意，返回', metrics.decline]] as const) {
+    expect(button, `${role} 端「${label}」按钮缺失`).not.toBeNull()
+    expect(button!.x, `${role} 端「${label}」左溢出卡片`).toBeGreaterThanOrEqual(metrics.card!.x - 0.5)
+    expect(button!.right, `${role} 端「${label}」右溢出卡片`).toBeLessThanOrEqual(metrics.card!.right + 0.5)
+    expect(button!.y, `${role} 端「${label}」上溢出卡片`).toBeGreaterThanOrEqual(metrics.card!.y - 0.5)
+    expect(button!.bottom, `${role} 端「${label}」下溢出卡片（被裁切）`).toBeLessThanOrEqual(metrics.card!.bottom + 0.5)
+    expect(button!.right, `${role} 端「${label}」超出视口宽`).toBeLessThanOrEqual(metrics.viewport.width)
+    expect(button!.bottom, `${role} 端「${label}」超出视口高`).toBeLessThanOrEqual(metrics.viewport.height)
+    expect(button!.width, `${role} 端「${label}」触控热区不足 44px`).toBeGreaterThanOrEqual(44)
+    expect(button!.height, `${role} 端「${label}」触控热区不足 44px`).toBeGreaterThanOrEqual(44)
+  }
+  expect(metrics.scroll!.bottom, `${role} 端声明正文区与按钮行重叠`).toBeLessThanOrEqual(metrics.accept!.y + 0.5)
+  const shot = await page.screenshot({ timeout: 8000 }).catch(() => null)
+  if (shot) {
+    if (process.env.ONLINE_EVIDENCE_DIR) {
+      mkdirSync(process.env.ONLINE_EVIDENCE_DIR, { recursive: true })
+      writeFileSync(`${process.env.ONLINE_EVIDENCE_DIR}/disclaimer-${role}.png`, shot)
+    }
+    await testInfo.attach(`disclaimer-${role}`, { body: shot, contentType: 'image/png' })
+  }
+  await page.getByRole('button', { name: '同意并继续' }).click({ timeout: 15_000 })
+  await expect(card, `${role} 端接受声明后弹窗未关闭`).toBeHidden()
+  expect(await page.evaluate(() => localStorage.getItem('lgm_disclaimer_agreed')), `${role} 端未记住声明同意`).toBe('1')
+  console.log(`[DISCLAIMER] ${role} 端声明完整可点（卡片 ${Math.round(metrics.card!.width)}×${Math.round(metrics.card!.height)}，`
+    + `同意按钮 ${Math.round(metrics.accept!.width)}×${Math.round(metrics.accept!.height)}）`)
+  return metrics
+}
+
 async function waitForOpeningOrTableLoadError(page: Page, side: string) {
   const opening = page.locator('.opening-overlay')
   const finalLoadError = page.locator('.table-loading.has-error')
@@ -2868,6 +2924,148 @@ test('Phase 11V 线上两账号完成莲花麻将完整东风场', async ({}, te
       await expect(page.locator('.lobby')).toBeVisible()
     }
     console.log(`[PHASE11V-ONLINE] 完整东风场通过：两端东1～东4结算及最终排名一致，均已返回大厅。房间 ${roomCode}`)
+  } finally {
+    await closeAccountBrowserPair(pair)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 莲花广麻（经典广麻）线上整场 + 用户声明验收（2026-10-02）。
+// ①两个全新账号会话进入联机时必须先弹「用户声明」，两端「同意并继续」完整可见可点；
+// ②东风场（2 真人 + 2 普通引擎 AI）东1～东4 双端结算与最终排名一致。
+// ─────────────────────────────────────────────────────────────────────────────
+test('线上两账号完成莲花广麻东风场并验收用户声明', async ({}, testInfo) => {
+  test.setTimeout(2_400_000)
+  const pair = await launchAccountBrowserPair()
+  let pages: [Page, Page] | null = null
+  const observed: [string[], string[]] = [[], []]
+  const settled: [Set<string>, Set<string>] = [new Set(), new Set()]
+  const applicationErrors: string[] = []
+  const samples: Array<{ hand: string; scores: number[] }> = []
+  const disclaimerMetrics: Record<string, unknown> = {}
+  let roomCode = ''
+  try {
+    pages = [await authenticateAccount(pair, 0, ONLINE.accounts[0]), await authenticateAccount(pair, 1, ONLINE.accounts[1])]
+    const [host, client] = pages
+    pages.forEach((page) => page.on('pageerror', error => {
+      // SDK 自身的外网拒绝单独计入诊断；应用异常才是本次构建回归。
+      if (!/vibehub\.js/.test(error.stack ?? '')) applicationErrors.push(error.message)
+    }))
+    for (const [index, page] of pages.entries()) {
+      await expect(page.locator('.lobby-layout')).toBeVisible()
+      // 声明门按 localStorage 记录：全新浏览器进程必须未同意，否则本次弹窗验收无效。
+      expect(
+        await page.evaluate(() => localStorage.getItem('lgm_disclaimer_agreed')),
+        `账号 ${index + 1} 会话已同意过声明，无法验收弹窗`,
+      ).toBeNull()
+    }
+    await enterOnlineLobby(host, '广麻验收房主', 'host')
+    // Playwright 默认 actionTimeout 为 0（不超时）；这里给每一步显式超时，卡住时快速失败而不是长挂。
+    const step = { timeout: 60_000 }
+    await host.getByRole('button', { name: '创建房间', exact: true }).click(step)
+    await host.locator('.game-settings button', { hasText: '玩法' }).click(step)
+    // 规则选项按钮的可访问名是「莲花广麻 默认 白板癞子 · …」（badge「默认」夹在名称与亮点之间），
+    // 因此不能用 /^莲花广麻 白板癞子/；在规则选择器容器里按 hasText 定位。
+    await host.locator('.rule-picker-options button', { hasText: /^莲花广麻/ }).click(step)
+    await host.getByRole('button', { name: '确定', exact: true }).click(step)
+    await host.getByRole('button', { name: '确认创建', exact: true }).click(step)
+    disclaimerMetrics.host = await expectDisclaimerAndAccept(host, 'host', testInfo)
+    await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 60_000 })
+    roomCode = (await host.locator('.room-code strong').innerText()).trim()
+    await expect(host.locator('.room-game-config')).toContainText('东风场')
+    await expect(host.locator('.room-game-config')).toContainText('莲花广麻')
+    await enterOnlineLobby(client, '广麻验收客人', 'client')
+    await client.getByRole('button', { name: '加入房间', exact: true }).click(step)
+    await client.getByPlaceholder('输入 6 位房间码').fill(roomCode, step)
+    await client.getByRole('button', { name: '确认加入', exact: true }).click(step)
+    disclaimerMetrics.client = await expectDisclaimerAndAccept(client, 'client', testInfo)
+    await waitForRoomReady(host, client, roomCode)
+    // 本轮验证两真人 + 普通引擎 AI 完整对局，不注入模型 Key 或改变生产规则。
+    await expect(host.locator('.room-seat.llm-planned')).toHaveCount(0)
+    await attachDualScreenshots(pages, testInfo, 'online-classic-room')
+    await host.getByRole('button', { name: '准备 / 取消准备', exact: true }).click(step)
+    await client.getByRole('button', { name: '准备 / 取消准备', exact: true }).click(step)
+    await expect(host.locator('.room-start')).toBeEnabled({ timeout: 30_000 })
+    await host.locator('.room-start').click(step)
+    await Promise.all(pages.map(page => installHostAutoPlayer(page)))
+    const deadline = Date.now() + 1_800_000
+    let lastProgress = 0
+    let lastHand = ''
+    let handStarted = Date.now()
+    const verified = new Set<string>()
+    while (Date.now() < deadline) {
+      const labels = await Promise.all(pages.map(readRoundLabel))
+      labels.forEach((label, index) => {
+        const marker = roundToken(label)
+        if (marker && !observed[index].includes(marker)) observed[index].push(marker)
+      })
+      const token = handToken(labels[0])
+      if (token && token !== lastHand) {
+        lastHand = token
+        handStarted = Date.now()
+        console.log(`[ONLINE-CLASSIC] 进入 ${token}`)
+      }
+      const finals = await Promise.all(pages.map(page => page.locator('.final-backdrop').isVisible()))
+      if (finals.every(Boolean)) break
+      if (Date.now() - handStarted > 480_000) throw new Error(`${lastHand} 超过 8 分钟未推进`)
+      // 结算退场与下一局标题可能短暂同屏；在一次 DOM 读取中绑定 phase、局号和分数。
+      const settlements = await Promise.all(pages.map(page => page.evaluate(() => {
+        const hud = document.querySelector<HTMLElement>('.game-table-hud')
+        const overlay = document.querySelector<HTMLElement>('.round-settlement')
+        if (hud?.dataset.phase !== 'settled' || !overlay?.getClientRects().length || /modal-leave/.test(overlay.className)) return null
+        return {
+          label: document.querySelector('.round-info')?.textContent?.trim() ?? '',
+          summary: overlay.querySelector('.settlement-card > h2')?.textContent?.trim() ?? '',
+          scores: [...overlay.querySelectorAll('.round-rankings article')].map(article => ({
+            name: [...(article.querySelector('.player-line')?.childNodes ?? [])].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim(),
+            score: Number(article.querySelector(':scope > b')?.textContent?.trim()),
+            delta: Number(article.querySelector('em')?.textContent?.trim()),
+          })).sort((a, b) => a.name.localeCompare(b.name)),
+        }
+      })))
+      if (token && settlements.every(s => s && handToken(s.label) === token && roundToken(s.summary) === roundToken(labels[0]))) {
+        if (!verified.has(token)) {
+          const scores = settlements.map(s => s!.scores)
+          for (const entries of scores) expect(entries).toHaveLength(4)
+          for (const entries of scores) for (const entry of entries) {
+            expect(entry.name).not.toBe('')
+            expect(Number.isFinite(entry.score)).toBe(true)
+            expect(Number.isFinite(entry.delta)).toBe(true)
+          }
+          expect(scores[1]).toEqual(scores[0])
+          samples.push({ hand: token, scores: scores[0].map(player => player.score) })
+          settled.forEach(set => set.add(token))
+          verified.add(token)
+          await attachDualScreenshots(pages, testInfo, `online-classic-${token.replace(':', '-')}-settlement`)
+          console.log(`[ONLINE-CLASSIC] ${token} 双端结算一致`)
+        }
+        await Promise.all(pages.map(clickContinueIfAvailable))
+      }
+      if (Date.now() - lastProgress > 30_000) {
+        console.log(`[ONLINE-CLASSIC] ${labels.join(' | ')}；已验收 ${verified.size} 次结算`)
+        lastProgress = Date.now()
+      }
+      await host.waitForTimeout(350)
+    }
+    for (const seen of observed) expect(seen).toEqual(['东1局', '东2局', '东3局', '东4局'])
+    for (const set of settled) for (const round of ['东1局', '东2局', '东3局', '东4局']) expect([...set].some(token => token.startsWith(round))).toBe(true)
+    await Promise.all(pages.map(page => expect(page.locator('.final-backdrop')).toBeVisible()))
+    const standings = await Promise.all(pages.map(readFinalStandings))
+    expect(standings[0]).toHaveLength(4)
+    expect(standings[1]).toEqual(standings[0])
+    expect(applicationErrors).toEqual([])
+    await attachDualScreenshots(pages, testInfo, 'online-classic-final')
+    const resultJson = JSON.stringify({
+      roomCode, ruleset: 'lotus-classic', observed, settlements: samples, standings: standings[0],
+      disclaimer: disclaimerMetrics, applicationErrors,
+    }, null, 2)
+    await testInfo.attach('online-classic-east-result', { body: resultJson, contentType: 'application/json' })
+    if (process.env.ONLINE_EVIDENCE_DIR) writeFileSync(`${process.env.ONLINE_EVIDENCE_DIR}/result.json`, resultJson)
+    for (const page of pages) {
+      await page.locator('.final-backdrop').getByRole('button', { name: '返回大厅', exact: true }).click()
+      await expect(page.locator('.lobby')).toBeVisible()
+    }
+    console.log(`[ONLINE-CLASSIC] 莲花广麻东风场通过：声明两端弹出且完整可点，东1～东4 双端结算与最终排名一致。房间 ${roomCode}`)
   } finally {
     await closeAccountBrowserPair(pair)
   }
