@@ -95,6 +95,7 @@ function isRoundResult(value: unknown): value is RoundResult {
     && isOptional(value.multiplier, isNumber)
     && isOptional(value.totalMultiplier, isNumber)
     && isOptional(value.horsePoints, isNumber)
+    && isOptional(value.redPoints, isNumber)
     && isOptional(value.points, isNumber)
     && isOptional(value.totalWon, isNumber)
     && isOptional(value.tenpai, (item): item is number[] => isArrayOf(item, isNumber))

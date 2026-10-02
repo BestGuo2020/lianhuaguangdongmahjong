@@ -89,6 +89,8 @@ export interface RoundResult {
   multiplier?: number
   totalMultiplier?: number
   horsePoints?: number
+  /** 红中加成分（经典广麻：每张已亮红中 × 底分）。 */
+  redPoints?: number
   points?: number
   totalWon?: number
   details?: RoundScoreDetail[]
