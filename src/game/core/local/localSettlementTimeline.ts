@@ -136,12 +136,13 @@ export function createLocalSettlementTimeline(options: LocalSettlementTimelineOp
       // 买马从牌头摸走：头部物理消耗，推进牌头计数保持 3D 牌山一致。
       state.wallHeadDrawn.value += horses.length
       const score = ruleset.score.scoreHand({
-        dealer: winnerIndex === state.dealer.value,
         noJoker: !winner.hand.includes('white'),
         fourRed: Boolean(endOptions.fourRed),
         kongBloom: Boolean(endOptions.kongBloom),
         horseHits: hits,
         robbedKong: Boolean(endOptions.robbedKong),
+        // 红中逐张加算：winner.redCount 在摸到红中亮出时已累加（四红中时为 4）。
+        redCount: winner.redCount,
       })
       const totalWon = ruleset.score.applyWinScore(
         state.players,

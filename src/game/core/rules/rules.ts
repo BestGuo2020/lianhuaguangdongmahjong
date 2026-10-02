@@ -31,18 +31,18 @@ export function applyWinScore(
   winnerIndex: number,
   points: number,
   payerIndex: number | null = null,
-  dealerIndex: number | null = null,
+  // 广麻已取消庄家倍率（2026-09 用户定案，对齐《江西莲花广麻》文档）：
+  // 庄家不再双付，参数仅为兼容 RuleSet 接口保留。
+  _dealerIndex: number | null = null,
 ) {
   const payers = Number.isInteger(payerIndex)
     ? [payerIndex]
     : players.map((_, index) => index).filter((index) => index !== winnerIndex)
   let totalWon = 0
   payers.forEach((index) => {
-    // 庄家胡牌的倍数已计入 points；闲家胡牌时，庄家单独支付双倍。
-    const payment = winnerIndex !== dealerIndex && index === dealerIndex ? points * 2 : points
-    players[index].score -= payment
-    players[winnerIndex].score += payment
-    totalWon += payment
+    players[index].score -= points
+    players[winnerIndex].score += points
+    totalWon += points
   })
   return totalWon
 }
@@ -162,23 +162,29 @@ export function drawHorses(wall: TileType[], amount = 8, seat: HorseSeat = 0) {
   return { horses, hits: horses.filter((tile) => isHorseForSeat(tile, seat)).length }
 }
 
-export function scoreHand({ dealer = false, noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false }: ScoreHandOptions): ScoreHandResult {
+export function scoreHand({ noJoker = false, fourRed = false, kongBloom = false, horseHits = 0, robbedKong = false, redCount = 0 }: ScoreHandOptions): ScoreHandResult {
   const details: Array<{ label: string; multiplier?: number; points?: number }> = [
-    { label: robbedKong ? '抢杠胡' : '自摸', multiplier: 1 },
+    { label: fourRed ? '四红中' : robbedKong ? '抢杠胡' : '自摸', multiplier: 1 },
   ]
   let multiplier = 1
-  if (dealer) { multiplier *= 2; details.push({ label: '庄家', multiplier: 2 }) }
-  if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }
-  if (fourRed) { multiplier *= 4; details.push({ label: '四红中', multiplier: 4 }) }
-  if (kongBloom) { multiplier *= 2; details.push({ label: '杠上开花', multiplier: 2 }) }
+  // 四红中固定 ×1：摸到即胡的特殊胡型，不叠无癞子/杠上开花（2026-09 用户定案，
+  // 对齐《江西莲花广麻》文档：胡分 1 + 红中逐张加算）。广麻已取消庄家倍率。
+  if (!fourRed) {
+    if (noJoker) { multiplier *= 2; details.push({ label: '无癞子', multiplier: 2 }) }
+    if (kongBloom) { multiplier *= 2; details.push({ label: '杠上开花', multiplier: 2 }) }
+  }
   const horsePoints = horseHits * BASE_SCORE
-  const totalMultiplier = multiplier + horseHits
+  const redPoints = redCount * BASE_SCORE
+  const totalMultiplier = multiplier + horseHits + redCount
   if (horseHits > 0) {
     details.push({ label: `中马 ${horseHits} 张`, points: horsePoints })
   }
-  // 中马始终按张数加底分：底分 × 已知倍数 + 中马数 × 底分。
-  const points = multiplier * BASE_SCORE + horsePoints
-  return { multiplier, totalMultiplier, horsePoints, points, details }
+  if (redCount > 0) {
+    details.push({ label: `红中 ${redCount} 张`, points: redPoints })
+  }
+  // 中马与红中始终按张数加底分：底分 × 倍数 + 中马数 × 底分 + 红中数 × 底分。
+  const points = multiplier * BASE_SCORE + horsePoints + redPoints
+  return { multiplier, totalMultiplier, horsePoints, redPoints, points, details }
 }
 
 /**

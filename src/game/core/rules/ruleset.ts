@@ -17,6 +17,8 @@ export interface ScoreHandOptions {
   kongBloom?: boolean
   horseHits?: number
   robbedKong?: boolean
+  /** 赢家已亮出的红中张数：每张按一份底分加算（经典广麻）。 */
+  redCount?: number
 }
 
 export interface ScoreHandDetail {
@@ -29,6 +31,8 @@ export interface ScoreHandResult {
   multiplier: number
   totalMultiplier: number
   horsePoints: number
+  /** 红中加成分（经典广麻：每张已亮红中 × 底分）；其他玩法可省略。 */
+  redPoints?: number
   points: number
   details: ScoreHandDetail[]
 }

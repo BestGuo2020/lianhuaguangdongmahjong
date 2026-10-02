@@ -98,12 +98,17 @@ describe('买马与计分', () => {
     expect(hits).toBe(4) // m4、p8、白、北
   })
 
-  it('倍数累乘后，中马按张数乘底分加算', () => {
-    const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2 })
-    expect(score.multiplier).toBe(16)
-    expect(score.totalMultiplier).toBe(18)
+  it('四红中固定 ×1（不叠庄家/无癞子），红中与中马按张数加底分', () => {
+    const score = scoreHand({ dealer: true, noJoker: true, fourRed: true, horseHits: 2, redCount: 4 })
+    expect(score.multiplier).toBe(1)
+    expect(score.totalMultiplier).toBe(7)
     expect(score.horsePoints).toBe(200)
-    expect(score.points).toBe(1800)
+    expect(score.redPoints).toBe(400)
+    expect(score.points).toBe(700)
+    expect(score.details[0]).toEqual({ label: '四红中', multiplier: 1 })
+    expect(score.details).not.toContainEqual({ label: '庄家', multiplier: 2 })
+    expect(score.details).not.toContainEqual({ label: '无癞子', multiplier: 2 })
+    expect(score.details).toContainEqual({ label: '红中 4 张', points: 400 })
   })
 
   it('杠上开花翻倍并写入计分明细', () => {
@@ -114,12 +119,15 @@ describe('买马与计分', () => {
     expect(score.details).toContainEqual({ label: '杠上开花', multiplier: 2 })
   })
 
-  it('总分严格按底分乘已知倍数再加中马底分', () => {
-    const score = scoreHand({ dealer: true, noJoker: true, horseHits: 3 })
+  it('总分 = 底分 × 倍数 + 中马底分 + 红中底分（庄家倍率已取消）', () => {
+    const score = scoreHand({ dealer: true, noJoker: true, horseHits: 3, redCount: 2 })
 
-    expect(score.multiplier).toBe(4)
+    expect(score.multiplier).toBe(2)
     expect(score.totalMultiplier).toBe(7)
+    expect(score.redPoints).toBe(200)
     expect(score.points).toBe(700)
+    expect(score.details).not.toContainEqual({ label: '庄家', multiplier: 2 })
+    expect(score.details).toContainEqual({ label: '红中 2 张', points: 200 })
   })
 })
 
@@ -176,14 +184,14 @@ describe('开杠与抢杠计分', () => {
     expect(gamePlayers.map((player) => player.score)).toEqual([1000, 1180, 1000, 820])
   })
 
-  it('闲家胡牌时庄家支付双倍，其他闲家正常支付', () => {
+  it('庄家倍率已取消：闲家胡牌时三家同额支付', () => {
     const gamePlayers = players()
 
-    expect(applyWinScore(gamePlayers, 1, 100, null, 0)).toBe(400)
-    expect(gamePlayers.map((player) => player.score)).toEqual([800, 1400, 900, 900])
+    expect(applyWinScore(gamePlayers, 1, 100, null, 0)).toBe(300)
+    expect(gamePlayers.map((player) => player.score)).toEqual([900, 1300, 900, 900])
   })
 
-  it('庄家胡牌时每位闲家均支付已翻倍的胡牌分', () => {
+  it('庄家胡牌时每位闲家同额支付胡牌分（无庄家翻倍）', () => {
     const gamePlayers = players()
 
     expect(applyWinScore(gamePlayers, 0, 200, null, 0)).toBe(600)
