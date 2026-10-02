@@ -160,6 +160,22 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
   复现缺口 0，证据带回本地用真校验器复核通过（`analysis-bf-plain-ai-mub11amo.json`、
   `analysis-bf-llm-ai-mub1bnz5.json`）。
 
+### 6.6 莲花广麻东风场 + 用户声明线上验收（2026-10-02，部署 `vibehubcli update --slug B5AJupT1`）
+
+手机端「用户声明」按钮裁切修复（master `e71e7d6`，见 `docs/llm-anime-theme-implementation-plan.md` §15.6 的 Phase R6.24）发布到 vibehub 后的线上整场验收。用例新增在 vibehub 专属的 `tests/e2e/online-two-accounts-two-east-matches.spec.ts`：「线上两账号完成莲花广麻东风场并验收用户声明」（东风场 · 莲花广麻 `lotus-classic`、2 真人 + 2 普通引擎 AI），进入联机时先验收声明弹窗，再打满东1～东4：
+
+| 场景 | 房间 | 耗时 | 结果 |
+|---|---|---|---|
+| 两端桌面视口（1280×720） | `54PHS2` | 8.3 分钟 | ✅ 双端进联机时声明弹出；卡片 590×631、两个按钮各 170×49 完整落在卡片内；东1～东4 共 7 次结算（东4 连庄至 3 本场）双端逐字一致、终局排名一致、应用异常 0 |
+| 客机手机横屏（844×390，`ONLINE_MOBILE_CLIENT=1`，触控） | `NJUDM9` | 6.5 分钟 | ✅ 同上；客机声明卡片 660×336、**同意按钮 309×44**（粗指针横屏规则生效：两个按钮各占半行）；东1～东4 共 5 次结算双端一致 |
+
+- 声明的验收口径（`expectDisclaimerAndAccept`）：弹窗必须出现（不出现即失败，不同于其它用例的「出现才点」）→ 两个按钮都必须完整落在卡片矩形内、不超出视口、不小于 44×44 触控热区 → 正文滚动区在按钮行上方不重叠 → 点击「同意并继续」后弹窗关闭且 `lgm_disclaimer_agreed=1`。
+- 取证：`work/vibehub-theme11v/tmp/online-classic-east/`（两端桌面）与 `tmp/online-classic-east-mobile/`（客机手机横屏），含 `disclaimer-{host,client}.png`、逐局双端截图与 `result.json`（房间码/逐局分数/终局名次/声明几何）。
+- 复现命令（vibehub 工作区；账号与 URL 由 `tmp/online_test` 提供，OAuth 由用例内完成）：
+  `$env:E2E_SKIP_WEBSERVER='1'; $env:ONLINE_EVIDENCE_DIR='tmp/online-classic-east-mobile'; $env:ONLINE_MOBILE_CLIENT='1'; npx playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts --grep "莲花广麻东风场并验收用户声明" --project=chromium --workers=1`
+- 首跑踩坑（已修）：规则选择项的可访问名是「莲花广麻 **默认** 白板癞子 · …」（badge「默认」夹在名称与亮点之间），沿用 11V 的 `/^莲花麻将 翻精癞子/` 写法在广麻上匹配不到；而 Playwright 默认 `actionTimeout=0` 会**永久等待**（首跑挂 10 分钟无输出）。现改为 `.rule-picker-options button` + `hasText: /^莲花广麻/`，并给建房/加入/准备/开始每一步显式 60s 超时。
+- 备注：vibehub 的声明**文案**是它自己的（P2P 房主权威说明），`src/content/disclaimer.ts` 属 keep 文件；本次同步的只有共享的 `src/style.css` 布局修复，因此线上两端看到的文案不同但按钮几何同一套。
+
 ### 6.1 平台域名变更导致 TTS 断链（2026-09-14 修复）
 
 平台域名从 `*.lumigrav.space` 换到 **`gamesvibe.app`**（发布地址 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`），而两处只认旧域名的地方没有跟着改，表现为**大模型主题（`llm` / `llmAnime`）完全没有语音**：
