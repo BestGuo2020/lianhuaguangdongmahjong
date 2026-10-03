@@ -123,10 +123,10 @@ const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? '底分 1
 .legacy-payment-examples .legacy-payment-intro { font-size: 12px; }
 .legacy-payment-examples ol { margin: 12px 0 0; padding-left: 20px; }
 .legacy-payment-examples li { padding: 10px 0; border-top: 1px solid var(--theme-border, rgba(255,255,255,.12)); }
-.legacy-payment-examples li::marker { color: var(--theme-accent, #b18c48); font-weight: 700; }
+.legacy-payment-examples li::marker { color: var(--theme-accent-text, #b18c48); font-weight: 700; }
 .legacy-payment-examples h4 { margin: 0 0 6px; color: var(--theme-text, #f0dfba); font-size: 13px; }
 .legacy-payment-examples .legacy-payment-flow { overflow-wrap: anywhere; font-size: 12px; }
 .legacy-payment-flow strong { color: var(--theme-text, #f0dfba); white-space: nowrap; }
-.legacy-payment-examples .legacy-payment-total { margin-top: 5px; color: var(--theme-accent, #c2aa73); font-weight: 700; font-size: 12px; }
+.legacy-payment-examples .legacy-payment-total { margin-top: 5px; color: var(--theme-accent-text, #c2aa73); font-weight: 700; font-size: 12px; }
 .legacy-payment-examples .legacy-payment-note { margin-top: 4px; font-size: 11px; }
 </style>

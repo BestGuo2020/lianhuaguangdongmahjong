@@ -8,10 +8,15 @@ import ReplayListView from '../../../src/components/replay/ReplayListView.vue'
 import LlmSettingsPanel from '../../../src/components/llm/LlmSettingsPanel.vue'
 import GameShellHeader from '../../../src/components/shell/GameShellHeader.vue'
 import BloodFlowRoundLedger from '../../../src/components/settlement/BloodFlowRoundLedger.vue'
+import BloodFlowRoundSummary from '../../../src/components/settlement/BloodFlowRoundSummary.vue'
+import BloodFlowFinalRanking from '../../../src/components/settlement/BloodFlowFinalRanking.vue'
+import ReplayTimeline from '../../../src/components/replay/ReplayTimeline.vue'
+import ReplayInfoBoard from '../../../src/components/replay/ReplayInfoBoard.vue'
 import { TABLE_THEME_NAMES, type TableThemeName } from '../../../src/theme/themeIdentity'
 import { themePresentationByName, themePresentationCssVariables } from '../../../src/theme/themePresentation'
 import { useAudio } from '../../../src/game/core/presentation/useAudio'
 import type { ReplayMatch } from '../../../src/game/replay/types'
+import type { ReplayRound } from '../../../src/game/replay/types'
 import type { ReplayStorage } from '../../../src/game/replay/storage'
 import type { AnalysisStorage } from '../../../src/game/replay/analysis/storage'
 import type { GamePlayer } from '../../../src/game/core/contracts/types'
@@ -34,8 +39,8 @@ const players: GamePlayer[] = [0, 1, 2, 3].map(seat => ({ seat, name: `玩家${s
 const ledger: BloodFlowPublicState = { ruleVersion: 'lotus-blood-flow-v1', roundId: 'theme-fixture', status: 'settled',
   seats: [0, 1, 2, 3].map(() => ({ winCount: 0, locked: false, recordIds: [] })) as BloodFlowPublicState['seats'], batches: [],
   roundResult: { ruleVersion: 'lotus-blood-flow-v1', roundId: 'theme-fixture', reason: 'wall-exhausted',
-    openingScores: [2000, 2000, 2000, 2000], endingScores: [2000, 2000, 2000, 2000],
-    winNet: [0, 0, 0, 0], kongNet: [0, 0, 0, 0], winCounts: [0, 0, 0, 0], ranks: [1, 1, 1, 1], ledger: [] } }
+    openingScores: [2000, 2000, 2000, 2000], endingScores: [2300, 1700, 2000, 2000],
+    winNet: [300, -300, 0, 0], kongNet: [0, 0, 0, 0], winCounts: [1, 0, 0, 0], ranks: [1, 4, 2, 2], ledger: [] } }
 
 createApp({ setup() { useAudio(); return () => h('main', { class: 'game-app', 'data-table-theme': theme.value,
   style: themePresentationCssVariables(themePresentationByName(theme.value)) }, [
@@ -45,7 +50,7 @@ createApp({ setup() { useAudio(); return () => h('main', { class: 'game-app', 'd
     TABLE_THEME_NAMES.map(name => h('option', { value: name }, name))),
     h('select', { 'data-testid': 'utility-surface', 'aria-label': 'Fixture surface', value: surface.value,
       onChange: (event: Event) => { surface.value = (event.target as HTMLSelectElement).value } },
-    ['rules', 'stats', 'replay', 'llm', 'ledger', 'room', 'audio'].map(name => h('option', { value: name }, name))),
+    ['rules', 'stats', 'replay', 'llm', 'ledger', 'room', 'audio', 'round', 'final', 'timeline', 'info'].map(name => h('option', { value: name }, name))),
     h('button', { 'data-testid': 'utility-room-state', onClick: () => { llmActive.value = !llmActive.value } }, 'Toggle room LLM'),
   ]),
   h(GameShellHeader, { gameMode: 'local', phase: 'discard', hasPlayers: true, matchName: '东风场', roundLabel: '东一局',
@@ -56,6 +61,13 @@ createApp({ setup() { useAudio(); return () => h('main', { class: 'game-app', 'd
   h(ReplayListView, { open: surface.value === 'replay', storage: replayStorage, available: true, analysis: analysisStorage }),
   h(LlmSettingsPanel, { open: surface.value === 'llm', themeName: theme.value, messages: [], stats: { requests: 0, successes: 0, fallbacks: 0, messages: 0, invalidActions: 0 } }),
   h(BloodFlowRoundLedger, { open: surface.value === 'ledger', state: ledger, players, localSeat: 0, themeName: theme.value }),
+  ['round', 'final'].includes(surface.value) ? h('div', { class: 'result-backdrop' }, [
+    h('section', { style: { width: 'min(860px, 96vw)', padding: '20px', background: 'var(--theme-panel)', color: 'var(--theme-text)' } }, [
+      h(surface.value === 'round' ? BloodFlowRoundSummary : BloodFlowFinalRanking, { result: ledger.roundResult!, players, localSeat: 0, themeName: theme.value }),
+    ]),
+  ]) : null,
+  surface.value === 'timeline' ? h(ReplayTimeline, { rounds: [{ id: 'fixture-round', roundLabel: '东一局' }] as ReplayRound[], roundIndex: 0, frameIndex: 0, frameCount: 20, frame: null, playing: false, speed: 1 }) : null,
+  surface.value === 'info' ? h(ReplayInfoBoard, { match: futureMatch, round: { id: 'fixture-round', roundLabel: '东一局', honba: 0, anchor: { scores: [2300, 1700, 2000, 2000] } } as ReplayRound, frame: null }) : null,
   surface.value === 'room' ? h('div', { style: { padding: '140px 20px 20px' } }, [h(RoomPanel, {
     roomId: 'STYLE1', roomTimeLimit: null, roomStatus: 'lobby', roomSeats: [null, null, null, null], reservedSeats: [], mySeat: -1,
     isCreator: true, sessionStatus: 'connected', allOccupiedReady: false, matchStarting: false, copied: false, leaving: false, closing: false,

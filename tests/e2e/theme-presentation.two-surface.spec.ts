@@ -5,7 +5,7 @@ const evidence = 'test-results/theme-presentation/phase12'
 const coral = 'rgb(189, 91, 72)'
 
 async function primary(button: Locator) {
-  await expect(button).toHaveCSS('background-image', 'linear-gradient(rgb(189, 91, 72), rgb(159, 64, 53))')
+  await expect(button).toHaveCSS('background-image', 'linear-gradient(rgb(168, 73, 59), rgb(136, 53, 44))')
   await expect(button).toHaveCSS('color', 'rgb(255, 248, 236)')
 }
 

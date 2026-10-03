@@ -69,13 +69,13 @@ button { font: inherit; }
   box-shadow: 0 22px 60px rgba(0, 0, 0, .48), inset 0 0 35px rgba(255, 214, 121, .04);
 }
 
-.orientation-card .eyebrow { margin: 18px 0 5px; color: var(--theme-accent); font-size: 10px; letter-spacing: .28em; }
+.orientation-card .eyebrow { margin: 18px 0 5px; color: var(--theme-accent-text); font-size: 10px; letter-spacing: .28em; }
 .orientation-card h2 { margin: 0; color: var(--theme-text); font: 700 28px Georgia, "Microsoft YaHei", serif; }
 .orientation-card > p:not(.eyebrow) { margin: 12px auto 20px; color: var(--theme-text-muted); font-size: 14px; line-height: 1.7; }
-.orientation-card button { width: 100%; min-height: 44px; padding: 12px 16px; border: 1px solid var(--theme-border); border-radius: 10px; color: var(--theme-text); background: var(--theme-button); font-weight: 800; cursor: pointer; }
+.orientation-card button { width: 100%; min-height: 44px; padding: 12px 16px; border: 1px solid var(--theme-border); border-radius: 10px; color: var(--theme-button-text); background: var(--theme-button); font-weight: 800; cursor: pointer; }
 .orientation-card button:hover { box-shadow: 0 0 0 1px var(--theme-accent); }
 .orientation-card button:active { box-shadow: inset 0 2px 5px rgba(0,0,0,.3); }
-.orientation-card small { display: block; margin-top: 13px; color: var(--theme-accent); line-height: 1.5; }
+.orientation-card small { display: block; margin-top: 13px; color: var(--theme-accent-text); line-height: 1.5; }
 
 /* 门禁是 game-app 的兄弟节点，主题变体必须作用于门禁自身。 */
 .orientation-gate[data-table-theme="happyMahjong"] .orientation-card { border-width: 2px; border-radius: 24px; }
@@ -119,11 +119,13 @@ button { font: inherit; }
   --theme-text-muted: #aebdb1;
   --theme-border: #b99249;
   --theme-accent: #dfbd68;
+  --theme-accent-text: #dfbd68;
   --theme-accent-secondary: #79a487;
   --theme-positive: #78c996;
-  --theme-negative: #e98378;
+  --theme-negative: #f19c90;
   --theme-top-bar: linear-gradient(180deg, rgba(4,14,10,.9), rgba(4,19,14,.48), transparent);
   --theme-button: linear-gradient(180deg, rgba(31,71,54,.94), rgba(9,31,23,.96));
+  --theme-button-text: var(--theme-text);
   --theme-tooltip: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -162,14 +164,16 @@ button { font: inherit; }
   --theme-panel: #0e3b48;
   --theme-panel-elevated: #185c6c;
   --theme-text: #fff9e8;
-  --theme-text-muted: #b9d8d6;
+  --theme-text-muted: #cfeae7;
   --theme-border: #efc85b;
   --theme-accent: #f7ca4e;
+  --theme-accent-text: #f7ca4e;
   --theme-accent-secondary: #f07a5d;
-  --theme-positive: #7bd6a3;
-  --theme-negative: #ff8478;
+  --theme-positive: #9ee8b8;
+  --theme-negative: #ffc6ba;
   --theme-top-bar: linear-gradient(180deg, rgba(6,40,49,.94), rgba(7,47,57,.62), transparent);
   --theme-button: linear-gradient(180deg, #f8d35e, #e9a83f);
+  --theme-button-text: #163640;
   --theme-tooltip: linear-gradient(155deg, rgba(20,82,95,.98), rgba(7,36,45,.99) 72%);
 }
 .game-app[data-table-theme="rosewood"] {
@@ -181,11 +185,13 @@ button { font: inherit; }
   --theme-text-muted: #d0bba3;
   --theme-border: #c99a4c;
   --theme-accent: #e0b45c;
+  --theme-accent-text: #e0b45c;
   --theme-accent-secondary: #b7523f;
   --theme-positive: #82bf8d;
-  --theme-negative: #e67465;
+  --theme-negative: #f89b8b;
   --theme-top-bar: linear-gradient(180deg, rgba(30,10,6,.94), rgba(57,22,13,.60), transparent);
   --theme-button: linear-gradient(180deg, #74402b, #3d1c12);
+  --theme-button-text: var(--theme-text);
   --theme-tooltip: linear-gradient(155deg, rgba(75,31,20,.98), rgba(32,12,8,.99) 72%);
 }
 .game-app[data-table-theme="llm"] {
@@ -197,11 +203,13 @@ button { font: inherit; }
   --theme-text-muted: #aebce2;
   --theme-border: #76d9ff;
   --theme-accent: #76d9ff;
+  --theme-accent-text: #76d9ff;
   --theme-accent-secondary: #9a8af0;
   --theme-positive: #65d5b1;
   --theme-negative: #ff7f93;
   --theme-top-bar: linear-gradient(180deg, rgba(3,8,27,.96), rgba(8,20,54,.64), transparent);
   --theme-button: linear-gradient(180deg, rgba(28,61,130,.96), rgba(8,24,62,.98));
+  --theme-button-text: var(--theme-text);
   --theme-tooltip: linear-gradient(155deg, rgba(17,38,88,.98), rgba(5,14,42,.99) 72%);
 }
 .game-app[data-table-theme="llmAnime"] {
@@ -213,11 +221,13 @@ button { font: inherit; }
   --theme-text-muted: #c8c4b9;
   --theme-border: #9d9282;
   --theme-accent: #bd5b48;
+  --theme-accent-text: #f2aa96;
   --theme-accent-secondary: #78d8e8;
   --theme-positive: #70bf89;
-  --theme-negative: #ed786a;
+  --theme-negative: #ffa698;
   --theme-top-bar: linear-gradient(180deg, rgba(8,14,11,.96), rgba(20,31,26,.66), transparent);
-  --theme-button: linear-gradient(180deg, #bd5b48, #9f4035);
+  --theme-button: linear-gradient(180deg, #a8493b, #88352c);
+  --theme-button-text: var(--theme-text);
   --theme-tooltip: linear-gradient(155deg, rgba(36,48,41,.98), rgba(12,20,16,.99) 72%);
 }
 
@@ -264,7 +274,7 @@ button { font: inherit; }
 .theme-menu::-webkit-scrollbar-track { background: color-mix(in srgb, var(--theme-panel) 82%, transparent); border-radius: 8px; }
 .theme-menu::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-panel)); border-radius: 8px; }
 .theme-menu::before { content: ""; position: absolute; top: -5px; right: 14px; width: 9px; height: 9px; border-top: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent); border-left: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent); background: var(--theme-panel-elevated); transform: rotate(45deg); }
-.theme-menu > p { grid-column: 1 / -1; margin: 2px 7px 3px; color: var(--theme-accent); font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
+.theme-menu > p { grid-column: 1 / -1; margin: 2px 7px 3px; color: var(--theme-accent-text); font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
 .top-bar .theme-menu > button { display: grid; grid-template-columns: 58px minmax(0, 1fr) 10px; gap: 8px; align-items: center; width: 100%; height: auto; min-height: 68px; padding: 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; text-align: left; }
 .theme-menu > button:hover, .theme-menu > button.active { border-color: color-mix(in srgb, var(--theme-border) 48%, transparent); background: color-mix(in srgb, var(--theme-accent) 12%, transparent); }
 .theme-menu > button > span { min-width: 0; }
@@ -278,7 +288,7 @@ button { font: inherit; }
 .theme-menu > button.active > i { border-color: var(--theme-accent); background: var(--theme-accent); }
 .audio-menu { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: min(224px, calc(100vw - 12px)); padding: 8px; border: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent); border-radius: 9px; background: var(--theme-tooltip); box-shadow: 0 18px 42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.05); }
 .audio-menu::before { content: ""; position: absolute; top: -5px; right: 14px; width: 9px; height: 9px; border-top: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent); border-left: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent); background: var(--theme-panel-elevated); transform: rotate(45deg); }
-.audio-menu > p { margin: 2px 7px 7px; color: var(--theme-accent); font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
+.audio-menu > p { margin: 2px 7px 7px; color: var(--theme-accent-text); font-size: 14px; letter-spacing: .2em; white-space: nowrap; }
 .top-bar .audio-menu > button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: auto; min-height: 45px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; }
 .audio-menu > button:hover { border-color: color-mix(in srgb, var(--theme-border) 48%, transparent); background: color-mix(in srgb, var(--theme-accent) 12%, transparent); }
 .audio-menu > button:disabled { opacity: .46; cursor: not-allowed; }
@@ -424,10 +434,10 @@ button { font: inherit; }
 
 .player-seat { position: absolute; z-index: 7; color: var(--theme-text); transform-style: preserve-3d; }
 .avatar-wrap { position: relative; display: flex; align-items: center; gap: 7px; min-width: 112px; padding: 5px 9px 5px 5px; border: 1px solid color-mix(in srgb, var(--theme-border) 36%, transparent); border-radius: 28px 9px 9px 28px; background: linear-gradient(90deg, color-mix(in srgb, var(--theme-panel) 92%, transparent), color-mix(in srgb, var(--theme-panel) 58%, transparent)); box-shadow: 0 5px 18px rgba(0,0,0,.24); }
-.avatar { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border: 2px solid var(--theme-border); border-radius: 50%; background: radial-gradient(circle at 35% 28%, var(--theme-surface), var(--theme-panel) 70%); color: var(--theme-accent); font: 700 17px "Noto Serif SC", serif; box-shadow: inset 0 0 0 2px rgba(0,0,0,.35), 0 2px 7px #000; }
+.avatar { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border: 2px solid var(--theme-border); border-radius: 50%; background: radial-gradient(circle at 35% 28%, var(--theme-surface), var(--theme-panel) 70%); color: var(--theme-accent-text); font: 700 17px "Noto Serif SC", serif; box-shadow: inset 0 0 0 2px rgba(0,0,0,.35), 0 2px 7px #000; }
 .player-info { display: flex; flex-direction: column; gap: 2px; }
 .player-info strong { max-width: 118px; overflow: hidden; color: var(--theme-text); font-size: clamp(13px, 1.1vw, 18px); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px #000; }
-.player-info span { color: var(--theme-accent); font-size: clamp(13px, 1vw, 17px); font-weight: 700; text-shadow: 0 1px 3px #000; }
+.player-info span { color: var(--theme-accent-text); font-size: clamp(13px, 1vw, 17px); font-weight: 700; text-shadow: 0 1px 3px #000; }
 .dealer-badge { position: absolute; z-index: 4; top: -7px; left: -5px; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; background: #b8272f; color: white; font: 700 11px serif; box-shadow: 0 1px 5px #000; }
 .turn-dot { position: absolute; right: -5px; width: 9px; height: 9px; border-radius: 50%; background: var(--theme-accent); box-shadow: 0 0 9px var(--theme-accent); animation: pulse 1s infinite; }
 .player-seat.active .avatar-wrap { border-color: var(--theme-accent); box-shadow: 0 0 16px color-mix(in srgb, var(--theme-accent) 32%, transparent); }
@@ -550,7 +560,7 @@ button { font: inherit; }
 .user-identity .avatar { width: 48px; height: 48px; font-size: 21px; }
 .user-identity > div:last-child { display: flex; flex-direction: column; gap: 2px; font-size: clamp(13px, 1.05vw, 17px); }
 .user-identity strong { color: var(--theme-text); font-size: clamp(14px, 1.15vw, 19px); text-shadow: 0 1px 3px #000; }
-.user-identity span { color: var(--theme-accent); font-size: clamp(14px, 1.1vw, 18px); font-weight: 800; text-shadow: 0 1px 3px #000; }
+.user-identity span { color: var(--theme-accent-text); font-size: clamp(14px, 1.1vw, 18px); font-weight: 800; text-shadow: 0 1px 3px #000; }
 .user-identity.active { opacity: 1; }
 .user-melds { position: absolute; bottom: clamp(88px, 11.3vh, 112px); left: 1%; display: flex; gap: 8px; }
 .user-meld { display: flex; gap: 1px; padding: 2px; border-radius: 3px; background: rgba(0,0,0,.2); }
@@ -585,7 +595,7 @@ button { font: inherit; }
 }
 /* 操作按钮行 + 倒计时同行（右下角一条横排）：吃/碰/杠/胡/听、托管开关与秒表同排显示。 */
 .turn-action-row { position: absolute; z-index: 45; right: 10%; bottom: clamp(150px, 22vh, 210px); display: flex; align-items: center; gap: 10px; }
-.turn-timer { display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid color-mix(in srgb, var(--theme-border) 78%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--theme-panel) 90%, transparent); color: var(--theme-accent); box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px color-mix(in srgb, var(--theme-accent) 20%, transparent); text-shadow: 0 2px 5px #000; }
+.turn-timer { display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 86px; padding: 8px 13px 7px; border: 2px solid color-mix(in srgb, var(--theme-border) 78%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--theme-panel) 90%, transparent); color: var(--theme-accent-text); box-shadow: 0 5px 18px rgba(0,0,0,.5), 0 0 16px color-mix(in srgb, var(--theme-accent) 20%, transparent); text-shadow: 0 2px 5px #000; }
 .turn-timer span { font: 800 clamp(34px, 3.2vw, 50px) Georgia, serif; line-height: .9; }.turn-timer small { font-size: clamp(13px, 1vw, 17px); font-weight: 700; }
 .turn-timer.prompt-timer { border-color: rgba(238, 181, 90, .72); box-shadow: 0 0 18px rgba(213, 148, 52, .24); }
 .turn-timer.prompt-timer small { white-space: nowrap; }
@@ -715,7 +725,7 @@ button { font: inherit; }
 .rules-panel header button { width: 32px; height: 32px; border: 1px solid color-mix(in srgb, var(--theme-border) 32%, transparent); border-radius: 50%; background: transparent; color: var(--theme-text); font-size: 20px; cursor: pointer; }
 .rule-list { display: flex; flex-direction: column; gap: 8px; }
 .rule-list article { display: grid; grid-template-columns: 35px 1fr; gap: 11px; padding: 12px; border: 1px solid color-mix(in srgb, var(--theme-border) 18%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--theme-surface) 18%, transparent); }
-.rule-list article > b { color: var(--theme-accent); font: 700 15px Georgia, serif; }.rule-list h3 { margin: 0 0 4px; color: #f0dfba; font: 700 16px "Noto Serif SC", serif; }.rule-list p { margin: 0; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
+.rule-list article > b { color: var(--theme-accent-text); font: 700 15px Georgia, serif; }.rule-list h3 { margin: 0 0 4px; color: #f0dfba; font: 700 16px "Noto Serif SC", serif; }.rule-list p { margin: 0; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
 .rule-note { margin-top: 17px; padding: 11px; border: 1px dashed rgba(215,179,91,.25); color: #c2aa73; font-size: 13px; text-align: center; letter-spacing: .08em; }
 
 /* ── 纯娱乐声明：玩法面板声明块 / 进房前确认弹窗 ── */
@@ -876,7 +886,7 @@ button { font: inherit; }
   border: 1px solid color-mix(in srgb, var(--theme-border) 62%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--theme-panel) 90%, transparent);
-  color: var(--theme-accent);
+  color: var(--theme-accent-text);
   font-size: 14px;
   letter-spacing: .08em;
   box-shadow: 0 8px 25px rgba(0, 0, 0, .45);
@@ -897,7 +907,7 @@ button { font: inherit; }
   border: 1px solid var(--theme-border);
   border-radius: 6px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1413,7 +1423,7 @@ button { font: inherit; }
   letter-spacing: .09em;
   text-shadow: 0 4px 0 rgba(2,25,31,.55), 0 10px 28px rgba(0,0,0,.35);
 }
-.game-app[data-table-theme="happyMahjong"] .lobby h1 span { color: var(--theme-accent); }
+.game-app[data-table-theme="happyMahjong"] .lobby h1 span { color: var(--theme-accent-text); }
 .game-app[data-table-theme="happyMahjong"] .lobby-rules i { background: var(--theme-accent-secondary); }
 .game-app[data-table-theme="happyMahjong"] .waku-account,
 .game-app[data-table-theme="happyMahjong"] .game-settings,
@@ -1481,7 +1491,7 @@ button { font: inherit; }
 .game-app[data-table-theme="happyMahjong"] .table-action-cue::after { border-radius: 26%; border-color: rgba(255,249,232,.72); }
 .game-app[data-table-theme="happyMahjong"] .table-action-cue span { color: #fff9e8; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; text-shadow: 0 3px 0 #8e3e3d, 0 0 14px rgba(255,224,126,.74); }
 .game-app[data-table-theme="happyMahjong"] .announcement { border-radius: 18px; background: linear-gradient(90deg, transparent, rgba(14,59,72,.94) 14%, rgba(14,59,72,.94) 86%, transparent); }
-.game-app[data-table-theme="happyMahjong"] .announcement span { color: var(--theme-accent); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.game-app[data-table-theme="happyMahjong"] .announcement span { color: var(--theme-accent-text); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
 .game-app[data-table-theme="happyMahjong"] .result-backdrop { background: radial-gradient(circle at 50% 35%, rgba(247,202,78,.18), transparent 42%), rgba(3,27,34,.82); }
 .game-app[data-table-theme="happyMahjong"] .settlement-card,
 .game-app[data-table-theme="happyMahjong"] .final-board {
@@ -1501,7 +1511,7 @@ button { font: inherit; }
 .game-app[data-table-theme="happyMahjong"] .score-total em,
 .game-app[data-table-theme="happyMahjong"] .result-disclaimer-note,
 .game-app[data-table-theme="happyMahjong"] .final-board > p { color: var(--theme-text-muted); }
-.game-app[data-table-theme="happyMahjong"] .score-total strong { color: var(--theme-accent); text-shadow: 0 3px 0 rgba(120,68,30,.55); }
+.game-app[data-table-theme="happyMahjong"] .score-total strong { color: var(--theme-accent-text); text-shadow: 0 3px 0 rgba(120,68,30,.55); }
 .game-app[data-table-theme="happyMahjong"] .score-details span,
 .game-app[data-table-theme="happyMahjong"] .horse-area { border-color: rgba(247,202,78,.36); border-radius: 13px; background: rgba(5,35,43,.48); }
 .game-app[data-table-theme="happyMahjong"] .round-rankings article,
@@ -3068,7 +3078,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut img { width: 48px; height: 48px; flex-basis: 48px; border-color: #2d2923; border-radius: 13px 13px 5px 5px; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: #7a6454; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-chevron { color: #bd5b48; }
-.game-app[data-table-theme="llmAnime"] .start-button { border: 2px solid #2d2923; border-radius: 6px; background: var(--theme-button); color: var(--theme-text); box-shadow: 5px 5px 0 rgba(189,91,72,.58), 0 12px 28px rgba(0,0,0,.34); }
+.game-app[data-table-theme="llmAnime"] .start-button { border: 2px solid #2d2923; border-radius: 6px; background: var(--theme-button); color: var(--theme-button-text); box-shadow: 5px 5px 0 rgba(189,91,72,.58), 0 12px 28px rgba(0,0,0,.34); }
 .game-app[data-table-theme="llmAnime"] .lobby-dialog { border: 2px solid #2d2923; border-radius: 10px; background: linear-gradient(150deg, #f3e5cf, #dfcdb4); color: #2d2923; box-shadow: 8px 8px 0 rgba(189,91,72,.45), 0 26px 78px rgba(0,0,0,.66); }
 .game-app[data-table-theme="llmAnime"] .lobby-dialog h2,
 .game-app[data-table-theme="llmAnime"] .lobby-dialog .picker-options b { color: #2d2923; }
@@ -3159,7 +3169,7 @@ button { font: inherit; }
 .game-app .settlement-card[data-result-kind="dihu"] h2,
 .game-app:has(.game-table-hud[data-round-result-kind="self-draw"]) .settlement-card:not([data-result-kind]) h2,
 .game-app:has(.game-table-hud[data-round-result-kind="tianhu"]) .settlement-card:not([data-result-kind]) h2,
-.game-app:has(.game-table-hud[data-round-result-kind="dihu"]) .settlement-card:not([data-result-kind]) h2 { color: var(--theme-accent); }
+.game-app:has(.game-table-hud[data-round-result-kind="dihu"]) .settlement-card:not([data-result-kind]) h2 { color: var(--theme-accent-text); }
 .game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="draw"] h2 { color: #76503a; }
 .game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="robbed-kong"] h2 { color: #a33e31; }
 .game-app[data-table-theme="rosewood"] .settlement-card[data-result-kind="self-draw"] h2 { color: #5e2b1d; }
@@ -3439,9 +3449,9 @@ button { font: inherit; }
 .room-seat { border-color: color-mix(in srgb, var(--theme-border) 22%, transparent); background: color-mix(in srgb, var(--theme-panel) 70%, transparent); color: var(--theme-text-muted); }
 .room-seat.occupied { border-color: color-mix(in srgb, var(--theme-border) 46%, transparent); color: var(--theme-text); }
 .room-seat-no { background: color-mix(in srgb, var(--theme-accent) 16%, transparent); color: var(--theme-text); }
-.room-owner-actions button[data-action-role="primary"] { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.room-owner-actions button[data-action-role="primary"] { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-button-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
 .room-start[data-action-role="disabled"] { box-shadow: none; }
-.room-actions-row [data-action-role="danger"] { padding: 6px 11px; border: 1px solid color-mix(in srgb, var(--theme-negative) 58%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--theme-negative) 10%, transparent); color: var(--theme-negative); }
+.room-actions-row [data-action-role="danger"] { padding: 6px 11px; border: 1px solid color-mix(in srgb, var(--theme-negative) 58%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--theme-negative) 10%, var(--theme-panel)); color: var(--theme-negative); }
 .room-seat-provider { color: var(--theme-text); color-scheme: dark; }
 .room-seat-provider:focus-visible { box-shadow: 0 0 0 2px var(--theme-accent); }
 .room-seat-provider option { background: var(--theme-panel); color: var(--theme-text); }
@@ -3470,13 +3480,13 @@ button { font: inherit; }
 .lobby-dialog-backdrop[data-table-theme] .picker-options > button.active > i { border-color: var(--theme-accent); background: var(--theme-accent); }
 .lobby-dialog-backdrop[data-table-theme] .picker-options small,
 .lobby-dialog-backdrop[data-table-theme] .dialog-hint { color: var(--theme-text-muted); }
-.lobby-dialog-backdrop[data-table-theme] .picker-options b em { border-color: color-mix(in srgb, var(--theme-accent) 52%, transparent); color: var(--theme-accent); }
-.lobby-dialog-backdrop[data-table-theme] .view-rules-link { color: var(--theme-accent); }
-.lobby-dialog-backdrop[data-table-theme] .dialog-actions .primary { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.26); }
+.lobby-dialog-backdrop[data-table-theme] .picker-options b em { border-color: color-mix(in srgb, var(--theme-accent) 52%, transparent); color: var(--theme-accent-text); }
+.lobby-dialog-backdrop[data-table-theme] .view-rules-link { color: var(--theme-accent-text); }
+.lobby-dialog-backdrop[data-table-theme] .dialog-actions .primary { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-button-text); box-shadow: 0 7px 20px rgba(0,0,0,.26); }
 .lobby-dialog-backdrop[data-table-theme] .dialog-actions .secondary { border-color: color-mix(in srgb, var(--theme-border) 38%, transparent); background: color-mix(in srgb, var(--theme-panel) 88%, transparent); color: var(--theme-text-muted); }
 .lobby-dialog-backdrop[data-table-theme] .join-dialog-field span { color: var(--theme-text-muted); }
 .lobby-dialog-backdrop[data-table-theme] .join-dialog-field input { border-color: color-mix(in srgb, var(--theme-border) 44%, transparent); background: color-mix(in srgb, var(--theme-surface) 40%, var(--theme-panel)); color: var(--theme-text); }
-.lobby-dialog-backdrop[data-table-theme] .join-dialog-field input::placeholder { color: color-mix(in srgb, var(--theme-text-muted) 66%, transparent); }
+.lobby-dialog-backdrop[data-table-theme] .join-dialog-field input::placeholder { color: var(--theme-text-muted); opacity: 1; }
 .lobby-dialog-backdrop[data-table-theme] .remote-llm-create-option { border-color: color-mix(in srgb, var(--theme-border) 36%, transparent); background: color-mix(in srgb, var(--theme-surface) 28%, var(--theme-panel)); color: var(--theme-text); }
 .lobby-dialog-backdrop[data-table-theme] .remote-llm-create-option small { color: var(--theme-text-muted); }
 .lobby-dialog-backdrop[data-table-theme] input[type="checkbox"] { accent-color: var(--theme-accent); }
@@ -3500,6 +3510,8 @@ button { font: inherit; }
   --theme-positive: #39754c;
   --theme-negative: #9f4035;
   --theme-warning: #8a4b30;
+  --theme-accent-text: #9f4035;
+  --theme-button-text: #fff8ec;
   color-scheme: light;
   border: 2px solid var(--theme-border);
   border-radius: 10px;
@@ -3558,13 +3570,13 @@ button { font: inherit; }
 .remote-field { border-color: color-mix(in srgb, var(--theme-border) 30%, transparent); background: color-mix(in srgb, var(--theme-panel) 72%, transparent); }
 .remote-field span,
 .room-meta-note { color: var(--theme-text-muted); }
-.remote-entry-actions button { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.remote-entry-actions button { border-color: var(--theme-border); background: var(--theme-button); color: var(--theme-button-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
 .session-error,
 .waku-auth-error { color: var(--theme-negative); }
 .text-button,
 .repository-link { color: var(--theme-text-muted); }
 .text-button:hover,
-.repository-link:hover { color: var(--theme-accent); }
+.repository-link:hover { color: var(--theme-accent-text); }
 
 .rules-panel { border-color: var(--theme-border); background: linear-gradient(160deg, var(--theme-panel-elevated), var(--theme-panel) 65%); }
 .rules-panel h2,
@@ -3575,7 +3587,7 @@ button { font: inherit; }
 .rules-panel .eyebrow,
 .rules-panel .disclaimer-block > h3,
 .rules-panel .disclaimer-block h4,
-.rule-note { color: var(--theme-accent); }
+.rule-note { color: var(--theme-accent-text); }
 .rules-panel header,
 .rules-panel .disclaimer-block,
 .rule-note { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); }
@@ -3584,7 +3596,10 @@ button { font: inherit; }
 /* Utility surfaces share the current palette, including the states outside normal play. */
 .game-app[data-table-theme] :is(.stats-card, .replay-list-card) { border-color: var(--theme-border); background: linear-gradient(160deg, var(--theme-panel-elevated), var(--theme-panel) 65%); color: var(--theme-text); }
 .game-app[data-table-theme] :is(.stats-card, .replay-list-card) h2 { color: var(--theme-text); }
-.stats-nickname { color: var(--theme-text); }
+.game-app[data-table-theme] .stats-card .stats-nickname { color: var(--theme-text); }
+.game-app[data-table-theme] .replay-list-card .replay-list-note { color: var(--theme-text-muted); }
+.game-app[data-table-theme] :is(.stats-card, .replay-list-card) .result-actions button { background: var(--theme-button); color: var(--theme-button-text); }
+.game-app .room-panel :is(.room-character-entry em, .room-seat-provider.reserved) { color: var(--theme-accent-text); }
 .stats-grid article { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); background: var(--theme-panel-elevated); }
 .stats-grid b { color: var(--theme-text); }
 .stats-grid b.positive { color: var(--theme-positive); }
@@ -3634,7 +3649,7 @@ button { font: inherit; }
   border: 2px solid var(--anime-ink);
   border-radius: 7px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   box-shadow: 3px 3px 0 rgba(189,91,72,.32);
 }
 .game-app[data-table-theme="llmAnime"] :is(.action span, .waiting-action span) { color: var(--theme-text-muted); }
@@ -3660,7 +3675,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut { background: var(--theme-panel); color: var(--theme-text); box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
 .game-app[data-table-theme="llmAnime"] .character-shortcut:hover { background: var(--theme-panel-elevated); border-color: var(--theme-accent); }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: var(--theme-text-muted); }
-.game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button, .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-text); }
+.game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button, .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-button-text); }
 .game-app[data-table-theme="llmAnime"] .kong-picker-card {
   --theme-text: #2d2923;
   --theme-text-muted: #6f6255;

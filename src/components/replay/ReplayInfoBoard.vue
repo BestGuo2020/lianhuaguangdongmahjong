@@ -75,7 +75,7 @@ const standings = computed(() => {
   border: 1px solid color-mix(in srgb, var(--theme-border) 48%, transparent);
   border-radius: 16px;
   background: color-mix(in srgb, var(--theme-panel) 76%, transparent);
-  color: var(--theme-accent);
+  color: var(--theme-accent-text);
   font-size: 12px;
   letter-spacing: .06em;
   backdrop-filter: blur(3px);
@@ -100,7 +100,7 @@ const standings = computed(() => {
   font-size: 12px;
   letter-spacing: .06em;
 }
-.replay-info-head strong { color: var(--theme-accent); font-size: 15px; letter-spacing: .12em; }
+.replay-info-head strong { color: var(--theme-accent-text); font-size: 15px; letter-spacing: .12em; }
 .replay-info-scores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 0; padding: 0; list-style: none; }
 .replay-info-scores li {
   display: grid;
@@ -114,9 +114,9 @@ const standings = computed(() => {
   font-size: 12px;
 }
 .replay-info-scores li.active { border-color: var(--theme-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 45%, transparent) inset; }
-.replay-info-scores li.self .name { color: var(--theme-accent); }
+.replay-info-scores li.self .name { color: var(--theme-accent-text); }
 .replay-info-scores b { grid-row: span 2; align-self: center; color: var(--theme-text-muted); font-size: 13px; }
-.replay-info-scores li.rank-first b { color: var(--theme-accent); }
+.replay-info-scores li.rank-first b { color: var(--theme-accent-text); }
 .replay-info-scores .name { overflow: hidden; color: var(--theme-text); text-overflow: ellipsis; white-space: nowrap; }
-.replay-info-scores em { color: var(--theme-accent-secondary); font-size: 12px; font-style: normal; }
+.replay-info-scores em { color: var(--theme-text); font-size: 12px; font-style: normal; }
 </style>

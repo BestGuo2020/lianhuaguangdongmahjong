@@ -114,11 +114,11 @@ function shiftRound(offset: number) {
   border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
   border-radius: 8px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font-size: 14px;
 }
 .replay-step:disabled { opacity: .38; }
-.replay-play { min-width: 52px; color: var(--theme-accent); }
+.replay-play { min-width: 52px; color: var(--theme-button-text); }
 .replay-play.playing { border-color: var(--theme-accent); }
 .replay-turn {
   display: flex;
@@ -126,7 +126,7 @@ function shiftRound(offset: number) {
   gap: 6px;
   min-width: 96px;
   justify-content: center;
-  color: var(--theme-accent);
+  color: var(--theme-accent-text);
 }
 .replay-turn b { font-size: 15px; letter-spacing: .08em; }
 .replay-turn i { color: var(--theme-text-muted); font-size: 11px; font-style: normal; }
@@ -137,7 +137,7 @@ function shiftRound(offset: number) {
   border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
   border-radius: 8px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font: inherit;
   font-size: 13px;
   /* 全局声明的是 color-scheme: only light，原生下拉弹层会变成白底；

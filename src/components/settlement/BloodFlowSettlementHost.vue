@@ -96,8 +96,8 @@ defineExpose({showSummary,showDetails,showTable})
 @media(prefers-reduced-motion:reduce){.bf-settlement:not(.restored){animation:none}}
 header,footer { display:flex; align-items:center; gap:8px; padding:12px 18px; flex-shrink:0; } header { justify-content:space-between; border-bottom:1px solid #ffffff18; } header small { opacity:.7; } footer { flex-wrap:wrap; justify-content:center; border-top:1px solid #ffffff18; }
 .bf-settlement-body { padding:16px 20px; min-height:0; overflow:auto; overscroll-behavior:contain; }
-button { cursor:pointer; border:1px solid var(--theme-border,#8a947c); border-radius:8px; background:transparent; color:inherit; padding:7px 12px; min-height:36px; } button:disabled { cursor:default; opacity:.5; } .bf-primary { background:var(--theme-accent,#e6c482); color:var(--theme-panel,#142424); font-weight:700; }
-.bf-ready-status { margin:0; padding:6px 18px; text-align:center; font-size:12px; color:var(--theme-accent,#e6c482); }
+button { cursor:pointer; border:1px solid var(--theme-border,#8a947c); border-radius:8px; background:transparent; color:inherit; padding:7px 12px; min-height:36px; } button:disabled { cursor:default; opacity:.5; } .bf-primary { background:var(--theme-button); color:var(--theme-button-text); font-weight:700; }
+.bf-ready-status { margin:0; padding:6px 18px; text-align:center; font-size:12px; color:var(--theme-accent-text,#e6c482); }
 [data-theme="rosewood"] .bf-settlement { border-width:3px; border-radius:6px; } [data-theme="happyMahjong"] .bf-settlement { border-radius:26px; border-width:3px; } [data-theme="llm"] .bf-settlement { border-radius:8px; font-family:var(--theme-font,monospace); } [data-theme="llmAnime"] .bf-settlement { border-width:3px; box-shadow:8px 8px 0 #141222; }
 @container (max-height:450px) { header,footer { padding:6px 10px; gap:5px; } .bf-settlement-body { padding:8px 10px; } button { min-height:30px; padding:5px 9px; font-size:12px; } }
 </style>

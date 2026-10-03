@@ -761,7 +761,7 @@ function onAvatarError(entry: GamePlayer) {
 .blood-flow-wait-tile { display: grid; justify-items: center; align-content: start; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
 /* 牌宽先取常态 44px，超出面板可用宽度时按列数收敛，窄屏/异常字号下也不会横向裁切。 */
 .blood-flow-wait-tile .mahjong-tile.small { --tile-width: min(var(--bf-wait-tile-cap), calc((var(--bf-wait-panel) - var(--bf-wait-pad) - (var(--bf-wait-cols, 1) - 1) * var(--bf-wait-gap)) / var(--bf-wait-cols, 1))); margin-bottom: 4px; }
-.wait-multiplier { color: var(--theme-accent); font-weight: 800; }
+.wait-multiplier { color: var(--theme-accent-text); font-weight: 800; }
 .wait-remaining { color: var(--theme-text); }
 .blood-flow-wait-tile.exhausted { opacity: .5; }
 @container (max-width: 900px) or (max-height: 500px) {

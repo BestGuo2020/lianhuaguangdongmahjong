@@ -28,6 +28,8 @@ export interface ThemePresentation {
     textMuted: string
     border: string
     accent: string
+    /** Readable emphasis on panel surfaces; accent remains the decoration/fill color. */
+    accentText: string
     accentSecondary: string
     positive: string
     negative: string
@@ -42,6 +44,7 @@ export interface ThemePresentation {
     playerFrame: ThemePlayerFrame
     topBar: string
     button: string
+    buttonText: string
     tooltip: string
   }
   presentation: {
@@ -87,13 +90,14 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#163a2c', panel: '#0a231a', panelElevated: '#123327', text: '#f8f3df',
       textMuted: '#aebdb1', border: '#b99249', accent: '#dfbd68', accentSecondary: '#79a487',
-      positive: '#78c996', negative: '#e98378', warning: '#e0a94a',
+      accentText: '#dfbd68', positive: '#78c996', negative: '#f19c90', warning: '#e0a94a',
     },
     typography: { headingClass: 'theme-heading-serif', numberClass: 'theme-number-classic', actionClass: 'theme-action-seal' },
     hud: {
       playerFrame: 'jade',
       topBar: 'linear-gradient(180deg, rgba(4,14,10,.92), rgba(4,19,14,.56), transparent)',
       button: 'linear-gradient(180deg, rgba(31,71,54,.94), rgba(9,31,23,.96))',
+      buttonText: '#f8f3df',
       tooltip: 'linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%)',
     },
     presentation: {
@@ -112,14 +116,15 @@ export const THEME_PRESENTATIONS = {
     },
     palette: {
       surface: '#175566', panel: '#0e3b48', panelElevated: '#185c6c', text: '#fff9e8',
-      textMuted: '#b9d8d6', border: '#efc85b', accent: '#f7ca4e', accentSecondary: '#f07a5d',
-      positive: '#7bd6a3', negative: '#ff8478', warning: '#ffd061',
+      textMuted: '#cfeae7', border: '#efc85b', accent: '#f7ca4e', accentSecondary: '#f07a5d',
+      accentText: '#f7ca4e', positive: '#9ee8b8', negative: '#ffc6ba', warning: '#ffd061',
     },
     typography: { headingClass: 'theme-heading-rounded', numberClass: 'theme-number-rounded', actionClass: 'theme-action-pop' },
     hud: {
       playerFrame: 'playful',
       topBar: 'linear-gradient(180deg, rgba(6,40,49,.94), rgba(7,47,57,.62), transparent)',
       button: 'linear-gradient(180deg, #f8d35e, #e9a83f)',
+      buttonText: '#163640',
       tooltip: 'linear-gradient(155deg, rgba(20,82,95,.98), rgba(7,36,45,.99) 72%)',
     },
     presentation: {
@@ -139,13 +144,14 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#542417', panel: '#2b120c', panelElevated: '#4a2015', text: '#fff3dc',
       textMuted: '#d0bba3', border: '#c99a4c', accent: '#e0b45c', accentSecondary: '#b7523f',
-      positive: '#82bf8d', negative: '#e67465', warning: '#efb477',
+      accentText: '#e0b45c', positive: '#82bf8d', negative: '#f89b8b', warning: '#efb477',
     },
     typography: { headingClass: 'theme-heading-serif', numberClass: 'theme-number-ledger', actionClass: 'theme-action-paper' },
     hud: {
       playerFrame: 'wood',
       topBar: 'linear-gradient(180deg, rgba(30,10,6,.94), rgba(57,22,13,.60), transparent)',
       button: 'linear-gradient(180deg, #74402b, #3d1c12)',
+      buttonText: '#fff3dc',
       tooltip: 'linear-gradient(155deg, rgba(75,31,20,.98), rgba(32,12,8,.99) 72%)',
     },
     presentation: {
@@ -165,13 +171,14 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#101d43', panel: '#081431', panelElevated: '#102451', text: '#eef4ff',
       textMuted: '#aebce2', border: '#76d9ff', accent: '#76d9ff', accentSecondary: '#9a8af0',
-      positive: '#65d5b1', negative: '#ff7f93', warning: '#ffd48a',
+      accentText: '#76d9ff', positive: '#65d5b1', negative: '#ff7f93', warning: '#ffd48a',
     },
     typography: { headingClass: 'theme-heading-tech', numberClass: 'theme-number-mono', actionClass: 'theme-action-scan' },
     hud: {
       playerFrame: 'cosmic',
       topBar: 'linear-gradient(180deg, rgba(3,8,27,.96), rgba(8,20,54,.64), transparent)',
       button: 'linear-gradient(180deg, rgba(28,61,130,.96), rgba(8,24,62,.98))',
+      buttonText: '#eef4ff',
       tooltip: 'linear-gradient(155deg, rgba(17,38,88,.98), rgba(5,14,42,.99) 72%)',
     },
     presentation: {
@@ -191,13 +198,14 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#29372f', panel: '#18231e', panelElevated: '#29372f', text: '#fff8ec',
       textMuted: '#c8c4b9', border: '#9d9282', accent: '#bd5b48', accentSecondary: '#78d8e8',
-      positive: '#70bf89', negative: '#ed786a', warning: '#e7b684',
+      accentText: '#f2aa96', positive: '#70bf89', negative: '#ffa698', warning: '#e7b684',
     },
     typography: { headingClass: 'theme-heading-comic', numberClass: 'theme-number-comic', actionClass: 'theme-action-comic' },
     hud: {
       playerFrame: 'anime',
       topBar: 'linear-gradient(180deg, rgba(8,14,11,.96), rgba(20,31,26,.66), transparent)',
-      button: 'linear-gradient(180deg, #bd5b48, #9f4035)',
+      button: 'linear-gradient(180deg, #a8493b, #88352c)',
+      buttonText: '#fff8ec',
       tooltip: 'linear-gradient(155deg, rgba(36,48,41,.98), rgba(12,20,16,.99) 72%)',
     },
     presentation: {
@@ -227,12 +235,14 @@ export function themePresentationCssVariables(theme: ThemePresentation): ThemePr
     '--theme-text-muted': theme.palette.textMuted,
     '--theme-border': theme.palette.border,
     '--theme-accent': theme.palette.accent,
+    '--theme-accent-text': theme.palette.accentText,
     '--theme-accent-secondary': theme.palette.accentSecondary,
     '--theme-positive': theme.palette.positive,
     '--theme-negative': theme.palette.negative,
     '--theme-warning': theme.palette.warning,
     '--theme-top-bar': theme.hud.topBar,
     '--theme-button': theme.hud.button,
+    '--theme-button-text': theme.hud.buttonText,
     '--theme-tooltip': theme.hud.tooltip,
   }
 }

@@ -448,7 +448,7 @@ button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
 .llm-hint strong,
 .llm-hint b,
 .llm-provider-item.default::after,
-.llm-seat-row.chosen { color: var(--theme-accent); }
+.llm-seat-row.chosen { color: var(--theme-accent-text); }
 .llm-provider-warning { color: var(--theme-warning); }
 .llm-timeout-toggle { color: var(--theme-text) !important; }
 .llm-row input,
@@ -459,18 +459,18 @@ button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
   background: color-mix(in srgb, var(--theme-surface) 42%, var(--theme-panel));
   color: var(--theme-text);
 }
-.llm-row input::placeholder { color: color-mix(in srgb, var(--theme-text-muted) 68%, transparent); }
+.llm-row input::placeholder { color: var(--theme-text-muted); opacity: 1; }
 .llm-panel input[type="checkbox"] { accent-color: var(--theme-accent); }
 .llm-provider-item { border-color: color-mix(in srgb, var(--theme-border) 24%, transparent); color: var(--theme-text); }
 .llm-provider-item span { color: var(--theme-text-muted); }
 .llm-provider-item.active { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 10%, transparent); }
 .llm-provider-add button,
-.llm-actions button { border-color: var(--theme-border); color: var(--theme-accent); }
+.llm-actions button { border-color: var(--theme-border); color: var(--theme-accent-text); }
 .llm-seat-assign { border-color: color-mix(in srgb, var(--theme-border) 24%, transparent); }
 button.llm-seat-row { color: var(--theme-text); }
 button.llm-seat-row:hover { background: color-mix(in srgb, var(--theme-accent) 10%, transparent); }
-.llm-actions button[data-action-role="primary"] { background: var(--theme-button); color: var(--theme-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
-.llm-actions button[data-action-role="danger"] { border-color: var(--theme-negative); background: color-mix(in srgb, var(--theme-negative) 12%, transparent); color: var(--theme-negative); }
+.llm-actions button[data-action-role="primary"] { background: var(--theme-button); color: var(--theme-button-text); box-shadow: 0 7px 20px rgba(0,0,0,.28); }
+.llm-actions button[data-action-role="danger"] { border-color: var(--theme-negative); background: color-mix(in srgb, var(--theme-negative) 12%, var(--theme-panel)); color: var(--theme-negative); }
 .llm-actions button:disabled { filter: grayscale(.45); opacity: .5; box-shadow: none; }
 .llm-panel button:focus-visible,
 .llm-panel input:focus-visible,
@@ -497,5 +497,5 @@ button.llm-seat-row:hover { background: color-mix(in srgb, var(--theme-accent) 1
 .llm-panel[data-table-theme="llmAnime"] button:enabled:hover { border-color: var(--theme-accent); }
 .llm-panel[data-table-theme="llmAnime"] button:enabled:active { box-shadow: none; }
 .llm-panel[data-table-theme="llmAnime"] .llm-actions button:disabled { box-shadow: none; }
-.llm-panel[data-table-theme="llmAnime"] :is(.llm-hint strong, .llm-hint b, .llm-provider-item.default::after, .llm-seat-row.chosen, .llm-provider-add button, .llm-actions button:not([data-action-role="primary"]):not([data-action-role="danger"])) { color: #f2aa96; }
+.llm-panel[data-table-theme="llmAnime"] :is(.llm-hint strong, .llm-hint b, .llm-provider-item.default::after, .llm-seat-row.chosen, .llm-provider-add button, .llm-actions button:not([data-action-role="primary"]):not([data-action-role="danger"])) { color: var(--theme-accent-text); }
 </style>
