@@ -8,6 +8,28 @@ import { BLOOD_FLOW_CONFIG } from '../game/variants/lotus/bloodFlow/config'
 const props = defineProps<{ open: boolean; variant?: RuleVariant }>()
 defineEmits(['close'])
 
+const legacyPaymentExamples = [
+  { title: '庄家吃胡闲家', winner: '庄家',
+    payments: [{ payer: '点炮闲家', amount: 400 }, { payer: '其余两位闲家', amount: 200, each: true }], total: 800 },
+  { title: '庄家自摸', winner: '庄家',
+    payments: [{ payer: '三位闲家', amount: 400, each: true }], total: 1200 },
+  { title: '庄家抢杠胡', winner: '庄家',
+    payments: [{ payer: '三位闲家（含被抢杠者）', amount: 400, each: true }], total: 1200,
+    note: '按自摸型收付，被抢杠者不再单独双付。' },
+  { title: '闲家吃胡闲家', winner: '胡牌闲家',
+    payments: [{ payer: '庄家', amount: 200 }, { payer: '点炮闲家', amount: 200 }, { payer: '另一位闲家', amount: 100 }], total: 500 },
+  { title: '闲家吃胡庄家', winner: '胡牌闲家',
+    payments: [{ payer: '点炮庄家', amount: 400 }, { payer: '其余两位闲家', amount: 100, each: true }], total: 600 },
+  { title: '闲家自摸', winner: '胡牌闲家',
+    payments: [{ payer: '庄家', amount: 400 }, { payer: '其余两位闲家', amount: 200, each: true }], total: 800 },
+  { title: '闲家抢杠胡', winner: '胡牌闲家',
+    payments: [{ payer: '庄家', amount: 400 }, { payer: '其余两位闲家', amount: 200, each: true }], total: 800,
+    note: '抢庄家或闲家的补杠，均按此表支付；被抢杠者不再单独双付。' },
+  { title: '特殊天地胡（不计庄家）', winner: '胡家',
+    payments: [{ payer: '另外三家（不分庄闲）', amount: 1000, each: true }], total: 3000,
+    note: '天胡：三位闲家付给庄家；地胡：庄家和另外两位闲家付给胡牌闲家。固定10番，不叠加平胡、自摸、庄家或点炮者翻倍。' },
+]
+
 const rules = computed(() => {
   if (props.variant === 'lotus-blood-flow') return [
     ['血流到底', '首胡后锁定暗手和副露，可继续胡牌；摸牌不胡时只能摸切。牌墙耗尽且最后响应完成才结束本局。'],
@@ -28,8 +50,8 @@ const rules = computed(() => {
       ['面子规则', '乱风顺（任意 3 种风）、三元顺（中发白）可成面子；精牌可补缺张、做将；白板翻精时即精，可替代任意牌，否则只能替代本局精牌或白板本身；二者也可按自身牌面作为普通牌参与吃碰杠。'],
       ['碰杠规则', '精牌可以打出，并可按自身牌面参与吃、碰、明杠、暗杠、加杠和风杠（东南西北各 1 张）。'],
       ['杠分即时', '加杠 +300 / 明杠 +100 / 暗杠 +600 / 风杠 +600，开杠立即结算。'],
-      ['收付方式', '无论点炮或自摸，未胡三家都要支付；庄家为闲家 2 倍。'],
-      ['翻倍加计', '自摸 ×2、抢杠胡与杠上开花各 ×2（并加计自摸）、庄 ×2；天胡/地胡 10番，不计庄家与点炮者翻倍，三家各付 底分×10。'],
+      ['收付方式', '每次胡牌，另外三家都分别向胡家付款；普通吃胡时，点炮者把自己那一笔再付双倍。自摸、抢杠不对某一付款者单独双付，庄闲收付金额见下方例子。'],
+      ['翻倍加计', '普通吃胡按庄闲档收付，点炮者的那一笔再翻倍；自摸、抢杠胡、杠上开花按自摸档收付。天胡/地胡固定10番，三家各付1000分，不叠加庄家、自摸或点炮者翻倍。'],
       ['起始分数', '每位玩家起始 2000 分，基础结算单位 100。'],
     ]
   }
@@ -63,7 +85,22 @@ const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? '底分 1
       <div class="rule-list">
         <article v-for="(rule, index) in rules" :key="rule[0]">
           <b>{{ String(index + 1).padStart(2, '0') }}</b>
-          <div><h3>{{ rule[0] }}</h3><p>{{ rule[1] }}</p></div>
+          <div>
+            <h3>{{ rule[0] }}</h3><p>{{ rule[1] }}</p>
+            <section v-if="variant === 'lotus-legacy' && rule[0] === '收付方式'" class="legacy-payment-examples" aria-label="翻精平胡分数流向">
+              <p class="legacy-payment-intro">以下以平胡1番、底分100分为例，只列胡牌收付，杠分另算。其他普通牌型按基础番数同比增加；天地胡按第8例平收。</p>
+              <ol>
+                <li v-for="example in legacyPaymentExamples" :key="example.title">
+                  <h4>{{ example.title }}</h4>
+                  <p v-for="payment in example.payments" :key="payment.payer" class="legacy-payment-flow">
+                    {{ payment.payer }} → {{ example.winner }}：<strong>{{ payment.each ? '各' : '' }}{{ payment.amount }}分</strong>
+                  </p>
+                  <p class="legacy-payment-total">{{ example.winner }}合计收入：+{{ example.total }}分</p>
+                  <p v-if="example.note" class="legacy-payment-note">{{ example.note }}</p>
+                </li>
+              </ol>
+            </section>
+          </div>
         </article>
       </div>
       <div class="rule-note">{{ baseNote }}</div>
@@ -80,3 +117,16 @@ const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? '底分 1
     </aside>
   </Transition>
 </template>
+
+<style scoped>
+.legacy-payment-examples { margin-top: 12px; }
+.legacy-payment-examples .legacy-payment-intro { font-size: 12px; }
+.legacy-payment-examples ol { margin: 12px 0 0; padding-left: 20px; }
+.legacy-payment-examples li { padding: 10px 0; border-top: 1px solid var(--theme-border, rgba(255,255,255,.12)); }
+.legacy-payment-examples li::marker { color: var(--theme-accent, #b18c48); font-weight: 700; }
+.legacy-payment-examples h4 { margin: 0 0 6px; color: var(--theme-text, #f0dfba); font-size: 13px; }
+.legacy-payment-examples .legacy-payment-flow { overflow-wrap: anywhere; font-size: 12px; }
+.legacy-payment-flow strong { color: var(--theme-text, #f0dfba); white-space: nowrap; }
+.legacy-payment-examples .legacy-payment-total { margin-top: 5px; color: var(--theme-accent, #c2aa73); font-weight: 700; font-size: 12px; }
+.legacy-payment-examples .legacy-payment-note { margin-top: 4px; font-size: 11px; }
+</style>
