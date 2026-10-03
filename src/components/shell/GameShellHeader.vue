@@ -106,18 +106,22 @@ onBeforeUnmount(() => {
     :data-bgm-enabled="bgmOn ? 'true' : 'false'"
     :data-effects-enabled="effectsOn ? 'true' : 'false'"
   >
-    <div v-if="hasPlayers" class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba"> · {{ honba }}本场</span></div>
-    <div v-if="hasPlayers" class="base-score-badge">
-      <span v-if="gameMode === 'remote' && roomId" class="badge-room">房间 {{ roomId }}</span>
-      <span>底分{{ baseScore }}</span>
-      <img
-        v-if="gameMode === 'remote'"
-        class="signal-icon"
-        :src="`${imageBase}signal-${signalQuality}.png`"
-        :alt="signalText"
-        :title="signalQuality <= signalWarningThreshold ? `${signalText}，可能被 AI 托管` : signalText"
-      />
-      <span v-if="gameMode === 'remote' && signalQuality <= signalWarningThreshold" class="signal-warn">{{ signalText }}</span>
+    <div v-if="hasPlayers" class="table-meta" :class="{ 'has-signal': gameMode === 'remote', 'has-signal-warning': gameMode === 'remote' && signalQuality <= signalWarningThreshold }">
+      <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba" class="round-honba"> · {{ honba }}本场</span></div>
+      <div class="base-score-badge">
+        <span v-if="gameMode === 'remote' && roomId" class="badge-room"><span class="badge-room-label">房间 </span>{{ roomId }}</span>
+        <span>底分{{ baseScore }}</span>
+        <span v-if="honba" class="badge-honba">{{ honba }}本场</span>
+        <span v-if="gameMode === 'remote'" class="table-signal">
+          <img
+            class="signal-icon"
+            :src="`${imageBase}signal-${signalQuality}.png`"
+            :alt="signalText"
+            :title="signalQuality <= signalWarningThreshold ? `${signalText}，可能被 AI 托管` : signalText"
+          />
+          <span v-if="signalQuality <= signalWarningThreshold" class="signal-warn">{{ signalText }}</span>
+        </span>
+      </div>
     </div>
     <nav>
       <div ref="themePicker" class="theme-picker">

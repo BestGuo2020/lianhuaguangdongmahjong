@@ -86,6 +86,7 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const beginTableInstances = tileInstances.begin
   const addTableTile = tileInstances.add
   const finishTableInstances = tileInstances.finish
+  const handFaceInstances: { seat: number; instance: ReturnType<TileInstanceRenderer['add']> }[] = []
 
 function addConcealedHand(playerIndex) {
   if (playerIndex === 0) return
@@ -201,7 +202,8 @@ function addConcealedHand(playerIndex) {
         duration: props.dealAnimation.count === 4 ? 230 : 125,
       })
     } else {
-      addTableTile(pos, quat, face)
+      const instance = addTableTile(pos, quat, face)
+      if (import.meta.env.DEV && props.revealHands) handFaceInstances.push({ seat: playerIndex, instance })
     }
   }
 }
@@ -593,6 +595,7 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   if (props.openingStage !== 'flip') animatedFlipKey = null
   if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear();ownDrawScreens.clear()}
   drawnTransforms.clear();addedTransforms.clear();flights.length=0
+  handFaceInstances.length = 0
   if (!reuse) clearDynamicScene()
   dealTweens.length = 0
   meldTweens.length = 0
@@ -683,5 +686,21 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   }
 
   return { rebuild: rebuildTableTiles, animate, meldTransform, alignMeldBottom, sourceTileRotationOffset,
+    // 相机实验室读取真实实例几何的投影，供 HUD 遮挡验收；正式构建不采集手牌实例。
+    handFaceScreenRects(camera: THREE.Camera) {
+      camera.updateMatrixWorld()
+      return handFaceInstances.map(({ seat, instance }) => {
+        const { capMesh, capIndex } = instance
+        capMesh.geometry.computeBoundingBox()
+        const bounds = capMesh.geometry.boundingBox!, matrix = new THREE.Matrix4()
+        capMesh.getMatrixAt(capIndex, matrix)
+        const points: THREE.Vector3[] = []
+        for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
+          points.push(new THREE.Vector3(x, y, z).applyMatrix4(matrix).project(camera))
+        }
+        return { seat, left: Math.min(...points.map(p => (p.x + 1) / 2)), right: Math.max(...points.map(p => (p.x + 1) / 2)),
+          top: Math.min(...points.map(p => (1 - p.y) / 2)), bottom: Math.max(...points.map(p => (1 - p.y) / 2)) }
+      })
+    },
     flightDebug:()=>flights.map(f=>({recordId:f.recordId,sourceId:f.sourceId,kind:f.kind,level:f.level,column:f.column,source:f.source,target:f.target,current:f.current})) }
 }

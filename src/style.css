@@ -244,6 +244,9 @@ button { font: inherit; }
 .base-score-badge .badge-room { color: #d0c39e; font-weight: 600; }
 .base-score-badge .signal-icon { width: 18px; height: 18px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .base-score-badge .signal-warn { color: #e0a06a; font-size: 11px; }
+.table-meta { display: contents; }
+.table-signal { display: contents; }
+.badge-honba { display: none; }
 .round-info { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 19px; border: 1px solid color-mix(in srgb, var(--theme-border) 34%, transparent); border-radius: 99px; background: color-mix(in srgb, var(--theme-panel) 42%, transparent); letter-spacing: .12em; }
 .top-bar nav { display: flex; gap: 8px; margin-left: auto; }
 .top-bar button { width: clamp(34px, 2.8cqw, 44px); height: clamp(34px, 2.8cqw, 44px); border: 1px solid color-mix(in srgb, var(--theme-border) 42%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--theme-panel) 72%, transparent); color: var(--theme-text); font-size: clamp(15px, 1.25cqw, 20px); cursor: pointer; }
@@ -1086,6 +1089,95 @@ button { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
+}
+
+/* 结束亮牌时让出远端手牌的投影区域。跟随 HUD 的实际亮牌闸门，
+   不依赖两种联机入口装配；精牌仍从原 44px 顶栏下方开始。 */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .top-bar {
+    background: transparent;
+    pointer-events: none;
+    /* header 已用 left/right inset 避开切口，信息块只再留内边距。 */
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .top-bar nav { pointer-events: auto; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .table-meta {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    box-sizing: border-box;
+    width: min(200px, calc(36cqw - var(--safe-left) - 8px));
+    height: 40px;
+    padding: 3px 5px;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 30%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--theme-panel) 85%, transparent);
+    color: var(--theme-text);
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .table-meta .round-info {
+    position: static;
+    transform: none;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 11px;
+    line-height: 15px;
+    letter-spacing: 0;
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .has-signal .round-info { padding-right: 18px; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .has-signal-warning .round-info { padding-right: 70px; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) :is(.round-honba, .badge-room-label) { display: none; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .badge-honba { display: inline; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .base-score-badge {
+    margin: 0;
+    padding: 0;
+    gap: 6px;
+    font-size: 10px;
+    line-height: 14px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .table-signal {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 15px;
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .signal-icon { width: 14px; height: 14px; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .signal-warn { font-size: 10px; }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"] .flip-indicator) .seat-left {
+    top: max(calc(var(--side-seat-anchor) - var(--seat-card-height) / 2), calc(var(--topbar-height) + 44px + 2 * var(--hud-gap)));
+    transform: none;
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .seat-top {
+    top: max(var(--top-seat-anchor), calc(14cqh + var(--hud-gap)));
+    transform: translateX(-100%);
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .flip-open .flip-indicator-body {
+    position: absolute;
+    top: 0;
+    left: calc(100% + 6px);
+    box-sizing: border-box;
+    width: 158px;
+    padding: 6px;
+    gap: 3px;
+    border: 1px solid color-mix(in srgb, var(--theme-border) 60%, transparent);
+    border-radius: 8px;
+    background: var(--theme-panel);
+    color: var(--theme-text);
+    font-size: 10px;
+    line-height: 14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,.3);
+  }
+  .game-app:has(.game-table-hud[data-reveal-hands="1"]) .flip-indicator-body .joker-guide div { max-width: none; }
 }
 
 /* ── Phase 7 联机对战：模式切换 / 远程房间 Lobby ── */
