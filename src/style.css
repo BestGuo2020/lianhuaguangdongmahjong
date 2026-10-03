@@ -1093,7 +1093,8 @@ button { font: inherit; }
 
 /* 结束亮牌时让出远端手牌的投影区域。跟随 HUD 的实际亮牌闸门，
    不依赖两种联机入口装配；精牌仍从原 44px 顶栏下方开始。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  @container (max-height: 500px) {
   .game-app:has(.game-table-hud[data-reveal-hands="1"]) .top-bar {
     background: transparent;
     pointer-events: none;
@@ -1178,6 +1179,7 @@ button { font: inherit; }
     box-shadow: 0 3px 10px rgba(0,0,0,.3);
   }
   .game-app:has(.game-table-hud[data-reveal-hands="1"]) .flip-indicator-body .joker-guide div { max-width: none; }
+  }
 }
 
 /* ── Phase 7 联机对战：模式切换 / 远程房间 Lobby ── */
