@@ -223,11 +223,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
   border-radius: 8px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font-size: 13px;
 }
 .replay-title { display: flex; align-items: center; gap: 8px; color: var(--theme-text-muted); font-size: 13px; }
-.replay-title strong { color: var(--theme-accent); font-size: 15px; letter-spacing: .08em; }
+.replay-title strong { color: var(--theme-accent-text); font-size: 15px; letter-spacing: .08em; }
 .replay-rank {
   padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--theme-border) 40%, transparent);
@@ -236,7 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 11px;
   font-style: normal;
 }
-.replay-rank.rank-1 { border-color: var(--theme-accent); color: var(--theme-accent); }
+.replay-rank.rank-1 { border-color: var(--theme-accent); color: var(--theme-accent-text); }
 .replay-rank.aborted { opacity: .7; }
 .replay-view-mode { display: flex; align-items: center; gap: 8px; }
 .replay-theme-name { color: var(--theme-text-muted); font-size: 12px; }
@@ -245,7 +245,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
   border-radius: 8px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font-size: 12px;
 }
 .replay-user {
@@ -274,7 +274,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
   border-radius: 18px;
   background: color-mix(in srgb, var(--theme-panel) 84%, transparent);
-  color: var(--theme-accent);
+  color: var(--theme-accent-text);
   font-size: 14px;
   letter-spacing: .08em;
   transform: translateX(-50%);

@@ -8,6 +8,20 @@ import {
 } from './themePresentation'
 
 describe('主题表现合同', () => {
+  it('所有正文、提示和状态文字与三种面板底色的对比度至少4.5:1', () => {
+    const luminance = (hex: string) => [1, 3, 5].map(offset => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+      .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+      .reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i]!, 0)
+    for (const name of TABLE_THEME_NAMES) {
+      const palette = THEME_PRESENTATIONS[name].palette
+      for (const foreground of ['text', 'textMuted', 'accentText', 'positive', 'negative', 'warning'] as const) {
+        for (const background of ['panel', 'panelElevated', 'surface'] as const) {
+          const a = luminance(palette[foreground]), b = luminance(palette[background])
+          expect((Math.max(a, b) + .05) / (Math.min(a, b) + .05), `${name}: ${foreground}/${background}`).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+  })
   it('为五个保留主题提供完整且同源的身份信息', () => {
     expect(Object.keys(THEME_PRESENTATIONS)).toEqual(TABLE_THEME_NAMES)
     for (const option of TABLE_THEME_OPTIONS) {

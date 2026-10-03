@@ -13,6 +13,6 @@ defineProps<{ result: BloodFlowRoundResult; players: GamePlayer[]; localSeat: nu
   </div>
 </template>
 <style scoped>
-.bf-result-hero { text-align:center; margin:6px 0 22px; } small,p { opacity:.68; font-size:12px; } h2 { margin:8px 0; font-size:clamp(25px,4vw,42px); color:var(--theme-accent,#e6c482); letter-spacing:.1em; } p { margin:0; }
+.bf-result-hero { text-align:center; margin:6px 0 22px; } small,p { opacity:.68; font-size:12px; } h2 { margin:8px 0; font-size:clamp(25px,4vw,42px); color:var(--theme-accent-text,#e6c482); letter-spacing:.1em; } p { margin:0; }
 @container (max-height:450px) { .bf-result-hero {display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 8px} h2{margin:0;font-size:22px} small{font-size:10px} p{display:none} }
 </style>

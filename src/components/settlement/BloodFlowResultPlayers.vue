@@ -33,15 +33,15 @@ function fallback(event: Event, seat: number) { const img=event.target as HTMLIm
 .bf-result-players { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .bf-result-player { position:relative; display:flex; flex-direction:column; align-items:center; gap:9px; padding:20px 10px 16px; min-width:0; border:1px solid var(--theme-border,#758e71); border-radius:14px; background:color-mix(in srgb,var(--theme-panel,#152a25) 90%,white); }
 .bf-result-player.self { outline:2px solid var(--theme-accent,#e6c482); outline-offset:-2px; }
-.bf-result-player.champion { background:linear-gradient(160deg,color-mix(in srgb,var(--theme-accent,#e6c482) 25%,transparent),transparent 70%); }
+.bf-result-player.champion { background:linear-gradient(160deg,color-mix(in srgb,var(--theme-accent,#e6c482) 12%,var(--theme-panel,#152a25)),var(--theme-panel,#152a25) 70%); }
 img { width:74px; height:74px; border-radius:12px; object-fit:cover; border:2px solid var(--theme-accent,#e6c482); }
 .bf-player-name { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:4px; text-align:center; overflow-wrap:anywhere; }
 .bf-player-name small { font-size:10px; border:1px solid currentColor; border-radius:4px; padding:1px 4px; opacity:.8; }
 .bf-result-amount { font-size:clamp(22px,3vw,38px); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .bf-result-amount small { font-size:11px; margin-left:3px; }
 [data-score-direction="positive"] { color:var(--theme-positive,#7addae); } [data-score-direction="negative"] { color:var(--theme-negative,#ffad9b); }
-.bf-player-facts { margin:0; font-size:11px; opacity:.72; text-align:center; line-height:1.5; }
-.bf-rank { font:800 28px Georgia,serif; color:var(--theme-accent,#e6c482); } .bf-rank small { font:12px sans-serif; margin-left:3px; }
+.bf-player-facts { margin:0; font-size:11px; color:var(--theme-text-muted); text-align:center; line-height:1.5; }
+.bf-rank { font:800 28px Georgia,serif; color:var(--theme-accent-text,#e6c482); } .bf-rank small { font:12px sans-serif; margin-left:3px; }
 .bf-result-reaction { margin:2px 0 0; border-top:1px solid var(--theme-border,#758e71); padding-top:10px; font-size:13px; line-height:1.5; text-align:center; }
 @container (max-width:650px) { .bf-result-players { gap:6px; } .bf-result-player { padding:10px 5px; gap:5px; } img { width:44px; height:44px; } .bf-player-name { font-size:12px; } .bf-player-facts { font-size:10px; } .bf-result-amount { font-size:22px; } .bf-rank { font-size:20px; } }
 @container (max-height:450px) {

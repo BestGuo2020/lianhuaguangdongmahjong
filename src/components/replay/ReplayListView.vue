@@ -436,7 +436,7 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
   font-style: normal;
   vertical-align: 1px;
 }
-.replay-row-mode[data-mode="remote"] { border-color: color-mix(in srgb, var(--theme-accent) 60%, transparent); color: var(--theme-accent); }
+.replay-row-mode[data-mode="remote"] { border-color: color-mix(in srgb, var(--theme-accent) 60%, transparent); color: var(--theme-accent-text); }
 .replay-row-sub { color: var(--theme-text-muted); font-size: 12px; }
 .replay-row-meta { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .replay-row-date { color: var(--theme-text); font-size: 12px; }
@@ -445,13 +445,13 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
 .replay-row-version { color: var(--theme-warning); font-size: 11px; }
 /* 分析区状态（§9.2）：用颜色区分四态，避免"未开启"与"缺失"看起来一样 */
 .replay-row-analysis { color: var(--theme-text-muted); font-size: 11px; }
-.replay-row-analysis[data-analysis-status="complete"] { color: var(--theme-accent); }
+.replay-row-analysis[data-analysis-status="complete"] { color: var(--theme-accent-text); }
 .replay-row-analysis[data-analysis-status="partial"] { color: var(--theme-warning); }
 .replay-row-analysis[data-analysis-status="deleted"],
 .replay-row-analysis[data-analysis-status="missing"],
 .replay-row-analysis[data-analysis-status="none"] { color: var(--theme-text-muted); }
 .replay-row-rank { color: var(--theme-text-muted); font-size: 15px; text-align: center; }
-.replay-row-rank.rank-1 { color: var(--theme-accent); }
+.replay-row-rank.rank-1 { color: var(--theme-accent-text); }
 .replay-row-actions { display: flex; gap: 6px; }
 .replay-row-actions button { padding: 5px 10px; border-radius: 7px; font-size: 12px; }
 .replay-row-actions button,
@@ -478,7 +478,7 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
   border: 1px solid color-mix(in srgb, var(--theme-border) 45%, transparent);
   border-radius: 6px;
   background: var(--theme-button);
-  color: var(--theme-text);
+  color: var(--theme-button-text);
   font: inherit;
   /* 同控制条：全局 color-scheme 是 only light，需显式给深色弹层配色。 */
   color-scheme: dark;
@@ -502,7 +502,7 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
   cursor: pointer;
 }
 .replay-analysis-switch input:disabled { cursor: default; }
-.replay-list-hint { color: var(--theme-accent); }
+.replay-list-hint { color: var(--theme-accent-text); }
 /* 导入用的隐藏文件输入：不用 display:none —— 那样 .click() 与自动化都不可靠 */
 .replay-import-input {
   position: absolute;
