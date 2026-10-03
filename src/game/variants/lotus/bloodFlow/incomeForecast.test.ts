@@ -18,15 +18,17 @@ describe('canonical income and physical draw opportunities', () => {
     expect(normalOpportunities(80,8,1)).toEqual({own:8,opponent:24})
   })
   it('can predict a legal ron on a wall too short for another own draw',()=>{
-    const c=forecastSourceComponents(hand,[],jokers,hand,3,8)
+    const narrow = 'm1 m2 m3 p1 p2 p3 s1 s2 s3 m4 m5 m6 east'.split(' ') as TileType[]
+    const c=forecastSourceComponents(narrow,[],[],narrow,3,8)
     expect(c.ronPerDiscard).toBeGreaterThan(0)
     const model={drawScale:1,discardScale:1,selfYield:1,ronYield:1}
-    expect(forecastCalibratedIncome(hand,[],jokers,hand,3,8,4,model)).toBeCloseTo(c.ronPerDiscard*3)
+    expect(forecastCalibratedIncome(narrow,[],[],narrow,3,8,4,model)).toBeCloseTo(c.ronPerDiscard*3)
     expect(forecastCalibratedIncome(hand,[],jokers,hand,0,8,4,model)).toBe(0)
   })
   it('uses the canonical score for the reproduced late-game overestimate', () => {
     expect(forecastWinIncome(hand, [], jokers, 'white', 'self-draw')).toBe(360)
-    expect(forecastWinIncome(hand, [], jokers, 'white', 'discard')).toBe(50)
+    // 该历史暗手属于任意听，新规则下吃胡收入归零。
+    expect(forecastWinIncome(hand, [], jokers, 'white', 'discard')).toBe(0)
   })
   it('does not turn remaining unseen copies into guaranteed future income', () => {
     expect(forecastSelfDrawIncome(hand, [], jokers, hand, 3, 8)).toBe(0)

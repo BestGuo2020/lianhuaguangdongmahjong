@@ -1464,10 +1464,9 @@
         "opening": null
       },
       "expected": {
-        "winning": true,
-        "hardWin": true,
-        "paymentPerPayer": 40
-      }
+        "winning": false
+      },
+      "note": "精吊任意听只能自摸：即使来牌可自然成胡或按本张使用，吃胡仍禁止。"
     },
     {
       "id": "external-joker-only-one-ordinary",
@@ -1497,10 +1496,9 @@
         "opening": null
       },
       "expected": {
-        "winning": true,
-        "hardWin": false,
-        "paymentPerPayer": 20
-      }
+        "winning": false
+      },
+      "note": "精吊任意听只能自摸：即使来牌可自然成胡或按本张使用，吃胡仍禁止。"
     },
     {
       "id": "soft-orphans",
