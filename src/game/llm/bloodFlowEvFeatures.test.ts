@@ -4,7 +4,9 @@ import { BloodFlowEngine } from '../variants/lotus/bloodFlow/engine'
 import { bloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import type { BloodFlowSeatView } from '../variants/lotus/bloodFlow/seatView'
 import { seededRandom } from '../variants/lotus/bloodFlow/simulation'
-import { BLOOD_FLOW_AI } from '../variants/lotus/bloodFlow/config'
+import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from '../variants/lotus/bloodFlow/config'
+import { forecastSelfDrawIncome } from '../variants/lotus/bloodFlow/incomeForecast'
+import { visibleTiles } from '../variants/lotus/bloodFlow/seatView'
 import { BLOOD_FLOW_BIG_HAND_ROUTE } from '../variants/lotus/bloodFlow/bigHandRoute'
 import type { BloodFlowAction } from '../variants/lotus/bloodFlow/state'
 import type { SourceTileEvent, WinSource } from '../variants/lotus/bloodFlow/types'
@@ -42,6 +44,23 @@ function view(overrides: {
 }
 
 const CLEAN_MELDS: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm5', 'm5', 'p1', 'p1', 'p1']
+
+it('LLM prices both sides of an any-wait reform using the same self-draw horizon and states the rule', () => {
+  const v = view({ hand: [...CLEAN_MELDS, 's7', 'white'], jokers: ['white'], drawnTileIndex: 13,
+    ownScore: { paymentPerPayer: 20, source: 'self-draw' }, wallCount: 3 })
+  const prompt = bloodFlowDecisionPrompt(v, [], 'self-only', undefined, {}, '稳健', BLOOD_FLOW_LLM_AI)
+  const win = prompt.candidates.find(c => c.action.kind === 'win')!
+  const reform = prompt.candidates.find(c => c.action.kind === 'discard' && c.action.index === 12)!
+  expect(win.features.ev?.win?.lockedChain).toBe(0)
+  expect(reform.features.ev?.reform).toMatchObject({ anyWait: true, chain: 0 })
+  expect(win.features.ev?.income?.model).toBe('self-draw-v1')
+  expect(reform.features.ev?.income?.model).toBe('self-draw-v1')
+  expect(prompt.variables.ruleSummary).toContain('吃胡（含地胡）与抢杠均禁止，杠上开花保留')
+  v.wallCount = 8
+  const built = buildBloodFlowDecisionInput(v, 'two-draws', {}, BLOOD_FLOW_LLM_AI)
+  expect(built.candidates.find(c => c.action.kind === 'win')!.features.ev?.win?.lockedChain)
+    .toBe(Math.round(forecastSelfDrawIncome(v.players[0].hand.slice(0, 13), [], v.jokers, visibleTiles(v), 8, 8)))
+})
 
 it('injects the any-tile reform EV into the self-draw discard candidate and suggests it', () => {
   const v = view({

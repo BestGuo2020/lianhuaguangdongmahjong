@@ -41,6 +41,7 @@ export interface ReformCandidateInfo {
 
 export interface BloodFlowEvContext {
   locked: boolean
+  incomeModel: 'legacy' | 'self-draw-v1' | 'source-v2'
   wallCount: number
   drawnIndex: number
   hand: readonly TileType[]
@@ -76,23 +77,30 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   const wallCount = view.wallCount
   const sourceSeat = view.window?.source.seat ?? view.seat
   const drawOffset = ((view.seat - sourceSeat + 4) % 4) || 4
+  const drawnIndex = player.drawnTileIndex
+  const window = view.window
+  const winOffered = view.ownActions.some(action => action.kind === 'win')
+  // 自摸胡后归档摸牌；点炮/抢杠使用当前暗手。
+  const lockedHand = window?.kind === 'turn' && drawnIndex >= 0
+    ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
+  const reformHands = !locked && window?.kind === 'turn' && window.source.kind === 'draw' && drawnIndex >= 0 && winOffered
+    ? view.ownActions.flatMap(action => action.kind === 'discard' && action.index !== drawnIndex
+      ? [hand.filter((_, index) => index !== action.index)] : []) : []
+  // 旧估值比较涉及任意听时，两侧都用实际自摸机会，避免把旧张数估值与新收入相比较。
+  const incomeModel = (config.chainForecast ?? 'legacy') === 'legacy'
+    && [lockedHand, ...reformHands].some(tiles => waitingTilesCached(tiles, melds.length, jokers).length >= 34)
+    ? 'self-draw-v1' : config.chainForecast ?? 'legacy'
   const chain = (tiles: readonly TileType[], offset = drawOffset) => wallCount <= 0 ? 0 : config.chainForecast === 'source-v2' && config.opportunityCalibration
     ? config.conditionalRon
       ? forecastConditionalIncome(tiles,melds,jokers,visible,wallCount,config.chainHorizon,offset,config.opportunityCalibration,
         view.seat,view.public.seats.map(s=>s.locked),config.conditionalRon)
       : forecastCalibratedIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset, config.opportunityCalibration)
-    : config.chainForecast === 'self-draw-v1'
+    : incomeModel === 'self-draw-v1'
     ? forecastSelfDrawIncome(tiles, melds, jokers, visible, wallCount, config.chainHorizon, offset)
-    : chainEvEst(tiles, melds, jokers, visible, wallCount, config.sevenPairsModel, config)
-  const drawnIndex = player.drawnTileIndex
-  const window = view.window
-  const winOffered = view.ownActions.some(action => action.kind === 'win')
+    : chainEvEst(tiles, melds, jokers, visible, wallCount, config.sevenPairsModel, config, offset)
   const score = view.ownScore
   const payers = score && (score.source === 'self-draw' || score.source === 'kong-bloom') ? 3 : 1
   const immediateTotal = (score?.paymentPerPayer ?? 0) * payers
-  // 自摸胡后摸牌归档：锁手形态 = 手牌去掉摸牌位；点炮/抢杠形态 = 当前 13 张。
-  const lockedHand = window?.kind === 'turn' && drawnIndex >= 0
-    ? hand.filter((_, index) => index !== drawnIndex) : [...hand]
   const chainAfterWin = winOffered ? chain(lockedHand) : 0
   const winEv = immediateTotal + chainAfterWin
   const floorWaived = isLastOpportunityRon(view, config)
@@ -138,7 +146,7 @@ export function bloodFlowEvContext(view: BloodFlowSeatView, config: BloodFlowAiC
   }
 
   return {
-    locked, wallCount, drawnIndex, hand, melds, jokers, winOffered,
+    locked, incomeModel, wallCount, drawnIndex, hand, melds, jokers, winOffered,
     immediateTotal, chainAfterWin, winEv, floor, floorWaived, floorStage,
     potentialTotal, topDirections, developEv, reformCandidates, robEv,
   }

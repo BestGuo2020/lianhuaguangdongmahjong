@@ -64,7 +64,8 @@ it('advisory routes retain positive-wall wins without bypassing final discard pr
   const positive = buildBloodFlowDecisionInput({ ...v, wallCount: 1 }, 'one-left', {}, BLOOD_FLOW_LLM_AI)
   expect(positive.collapsedByRoute).toBe(false)
   expect(positive.candidates.some(c => c.action.kind === 'win')).toBe(true)
-  expect(bloodFlowEvContext({ ...v, wallCount: 1 }, BLOOD_FLOW_LLM_AI).chainAfterWin).toBeGreaterThan(0)
+  // 涉及任意听的比较只计算本家自摸；墙余一张、本家刚摸完，没有下次正常摸牌机会。
+  expect(bloodFlowEvContext({ ...v, wallCount: 1 }, BLOOD_FLOW_LLM_AI).chainAfterWin).toBe(0)
   const claim = view()
   claim.window = { ...claim.window!, kind: 'win', source: { ...claim.window!.source, kind: 'discard', seat: 0 } }
   claim.players[claim.seat].drawnTileIndex = -1

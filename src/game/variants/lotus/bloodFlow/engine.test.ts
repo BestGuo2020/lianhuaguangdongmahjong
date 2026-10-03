@@ -7,7 +7,7 @@ import { SEATS } from './state'
 import { bloodFlowSeatView } from './seatView'
 
 const waiting: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'm4', 'm5', 'm6', 'east']
-function scenario(hands: (TileType[] | null)[], melds: Meld[][] = [[], [], [], []], emptyWall = false, next?: TileType) {
+function scenario(hands: (TileType[] | null)[], melds: Meld[][] = [[], [], [], []], emptyWall = false, next?: TileType, jokers: TileType[] = ['red', 'green']) {
   const pool = createWall()
   const remove = (tile: TileType) => { const i = pool.indexOf(tile); if (i < 0) throw new Error(`Fixture exceeds four ${tile}`); pool.splice(i, 1) }
   const flipTiles: [TileType, TileType] = ['p9', 'white']
@@ -19,7 +19,7 @@ function scenario(hands: (TileType[] | null)[], melds: Meld[][] = [[], [], [], [
     melds: structuredClone(melds[seat]), discards: [], redCount: 0, drawnTileIndex: -1 }))
   if (next) { const i = pool.indexOf(next); if (i < 0) throw new Error(`Missing next tile ${next}`); pool.splice(i, 1); pool.unshift(next) }
   if (emptyWall) players[0].discards.push(...pool.splice(0))
-  const opening: BloodFlowOpeningState = { players, wall: pool, flipTiles, jokers: ['red', 'green'], headDrawn: 134 - pool.length,
+  const opening: BloodFlowOpeningState = { players, wall: pool, flipTiles, jokers, headDrawn: 134 - pool.length,
     dealerDrawnIndex: players[0].hand.length - 1, flipStack: 0, flipSeat: 0, wallBreakIndex: 2 }
   return new BloodFlowEngine({ authorityEpoch: 'test', roundId: 'round-1', opening, now: () => 0, winBeatMs: 0 })
 }
@@ -32,6 +32,39 @@ const discarder: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', '
 /** 不参与 m5/east 响应的普通手牌（用于隔离被测座位）。 */
 const noClaim: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'south', 'west', 'north']
 
+describe('精吊任意听只能自摸', () => {
+  const anyWait: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'south', 'south', 'south', 'red']
+  it.each([false, true])('锁手=%s 时不提供吃胡，并拒绝非法胡牌命令', locked => {
+    const engine = scenario([discarder, anyWait, null, null])
+    engine.seats[1] = { ...engine.seats[1], locked }
+    engine.submit(engine.command(0, { kind: 'discard', index: 13 }))
+    const view = bloodFlowSeatView(engine, 1)
+    expect(view.ownActions.some(action => action.kind === 'win')).toBe(false)
+    expect(view.ownScore).toBeNull()
+    if (engine.window) expect(engine.submit(engine.command(1, { kind: 'win' }))).toBe(false)
+    engine.assertConservation()
+  })
+  it('不提供抢杠，补杠仍可正常完成', () => {
+    const hand0: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', 's9', 'north', 'east']
+    const engine = scenario([hand0, anyWait, null, null], [[{ type: 'peng', tile: 'east', tiles: ['east', 'east', 'east'], from: 1 }], [], [], []])
+    expect(engine.submit(engine.command(0, { kind: 'added-kong', meldIndex: 0 }))).toBe(true)
+    expect(bloodFlowSeatView(engine, 1).ownActions.some(action => action.kind === 'win')).toBe(false)
+    if (engine.window?.source.kind === 'added-kong') passRemaining(engine, engine.window.id)
+    expect(engine.players[0].melds[0].type).toBe('gang')
+    expect(engine.archives).toHaveLength(0)
+    engine.assertConservation()
+  })
+  it('精吊保留杠后自摸并按杠上开花结算', () => {
+    const hand0: TileType[] = ['m1', 'm1', 'm1', 'm1', 'm2', 'm3', 'm4', 'p1', 'p2', 'p3', 'east', 'east', 'east', 'red']
+    const engine = scenario([hand0, null, null, null])
+    expect(engine.submit(engine.command(0, { kind: 'concealed-kong', tile: 'm1' }))).toBe(true)
+    expect(bloodFlowSeatView(engine, 0).ownScore?.source).toBe('kong-bloom')
+    expect(engine.submit(engine.command(0, { kind: 'win' }))).toBe(true)
+    expect(bloodFlowSeatView(engine, 0).public.batches.at(-1)?.winners[0].score.source).toBe('kong-bloom')
+    engine.assertConservation()
+  })
+})
+
 describe('锁手与杠的时机（2026-09-10 用户报错）', () => {
   it('锁手后仍可点炮继续胡，但不能过胡（胡是唯一选项）', () => {
     const hand0: TileType[] = ['m7', 'm8', 'm9', 'p4', 'p5', 'p6', 's4', 's5', 's6', 'p7', 'p8', 's7', 's8', 'east']
@@ -41,7 +74,7 @@ describe('锁手与杠的时机（2026-09-10 用户报错）', () => {
     open.submit(open.command(0, { kind: 'discard', index: index(open) }))
     expect(open.window!.options[1]).toEqual([{ kind: 'win' }, { kind: 'pass' }])
 
-    // 已锁手：点炮胡照给（任意听依然能在弃牌上胡），但不给「过」。
+    // 已锁手的普通听口：点炮胡照给，但不给「过」。
     const locked = scenario([hand0, waiting, noClaim, noClaim])
     locked.seats[1] = { ...locked.seats[1], locked: true }
     locked.submit(locked.command(0, { kind: 'discard', index: index(locked) }))
@@ -262,7 +295,7 @@ describe('E03 authority conservation and continuous rounds', () => {
       ['m1', 'm1', 'm1', 'm9', 'm9', 'm9', 'p1', 'p1', 'p1', 'p9', 'p9', 'p9', 'red'],
       ['east', 'east', 'east', 'south', 'south', 'south', 'west', 'west', 'west', 'north', 'north', 'north', 'red'],
       ['s2', 's2', 's2', 's4', 's4', 's4', 's6', 's6', 's6', 's8', 's8', 's8', 'red'],
-    ])
+    ], undefined, false, undefined, []) // 普通单骑红中；精吊任意听已禁止吃胡。
     engine.submit(engine.command(0, { kind: 'discard', index: 13 }))
     for (const seat of [1, 2, 3] as const) expect(engine.submit(engine.command(seat, { kind: 'win' }))).toBe(true)
     expect(engine.archives).toHaveLength(1)

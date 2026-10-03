@@ -20,7 +20,7 @@ it('suggests the reform discard when converting to an any-tile wait beats the wi
   const anyWait: WaitScores = Array.from({ length: 34 }, (_, index) => {
     const tile = ['m', 'p', 's'].flatMap(suit => [1, 2, 3, 4, 5, 6, 7, 8, 9].map(rank => `${suit}${rank}` as TileType))
       .concat(['east', 'south', 'west', 'north', 'red', 'green', 'white'] as TileType[])[index]
-    return { tile, selfDraw: score(40), discard: score(40, 'discard') }
+    return { tile, selfDraw: score(40), discard: null }
   })
   const hint = computeReformHint({
     hand, drawnTileIndex: 13, wallCount: 60, visible: hand,
@@ -29,6 +29,8 @@ it('suggests the reform discard when converting to an any-tile wait beats the wi
   })
   expect(hint).toEqual({ discard: 's7', reason: 'any-wait', gain: expect.any(Number) })
   expect(hint!.gain).toBeGreaterThan(0)
+  expect(computeReformHint({ hand, drawnTileIndex: 13, wallCount: 3, visible: hand,
+    ownScore: score(20), hints: { current: waitScores(20), discards: [{ discard: 's7', waits: anyWait }] } })).toBeNull()
 })
 
 it('stays silent when no discard keeps a better tenpai', () => {

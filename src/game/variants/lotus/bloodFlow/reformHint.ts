@@ -5,6 +5,7 @@ import type { WaitScores } from '../patterns/handWaits'
 import type { PublicWinScore } from './types'
 import type { BloodFlowAiConfig } from './config'
 import { BLOOD_FLOW_AI } from './config'
+import { normalOpportunities, ownDrawOpportunities, unseenCounts } from './incomeForecast'
 
 export interface ReformHint {
   readonly discard: TileType
@@ -13,13 +14,30 @@ export interface ReformHint {
   readonly gain: number
 }
 
-function chainOf(waits: WaitScores, visible: readonly TileType[], wallCount: number, config: BloodFlowAiConfig) {
+function chainOf(waits: WaitScores, visible: readonly TileType[], wallCount: number, config: BloodFlowAiConfig, selfOnly: boolean) {
+  const calibrated = config.chainForecast === 'source-v2' && config.opportunityCalibration
+  if (selfOnly || config.chainForecast === 'self-draw-v1' || calibrated) {
+    const unseen = unseenCounts(visible).reduce((sum, entry) => sum + entry.count, 0)
+    if (!unseen) return 0
+    let selfPerDraw = 0, ronPerDiscard = 0
+    for (const item of waits) {
+      const probability = Math.max(0, 4 - visible.filter(tile => tile === item.tile).length) / unseen
+      selfPerDraw += probability * (item.selfDraw?.paymentPerPayer ?? 0) * 3
+      ronPerDiscard += probability * (item.discard?.paymentPerPayer ?? 0)
+    }
+    if (calibrated) {
+      const c = normalOpportunities(wallCount, config.chainHorizon)
+      return Math.min(config.chainHorizon, wallCount, c.own * calibrated.drawScale) * selfPerDraw * calibrated.selfYield
+        + c.opponent * calibrated.discardScale * ronPerDiscard * calibrated.ronYield
+    }
+    return Math.min(ownDrawOpportunities(wallCount, config.chainHorizon), unseen) * selfPerDraw
+  }
   const chainFactor = Math.min(1, config.chainHorizon / Math.max(1, wallCount / 4))
   let total = 0
   for (const item of waits) {
     const remaining = Math.max(0, 4 - visible.filter(tile => tile === item.tile).length)
-    if (!remaining || !item.selfDraw || !item.discard) continue
-    const average = (config.selfDrawWeight * item.selfDraw.paymentPerPayer * 3 + item.discard.paymentPerPayer)
+    if (!remaining) continue
+    const average = (config.selfDrawWeight * (item.selfDraw?.paymentPerPayer ?? 0) * 3 + (item.discard?.paymentPerPayer ?? 0))
       / (config.selfDrawWeight + 1)
     total += remaining * average * chainFactor
   }
@@ -43,12 +61,14 @@ export function computeReformHint(input: {
   const config = input.config ?? BLOOD_FLOW_AI
   const payers = input.ownScore.source === 'self-draw' || input.ownScore.source === 'kong-bloom' ? 3 : 1
   const winTotal = input.ownScore.paymentPerPayer * payers
-  const winEv = winTotal + chainOf(input.hints.current, input.visible, input.wallCount, config)
+  const selfOnly = (config.chainForecast ?? 'legacy') === 'legacy'
+    && (input.hints.current.length >= 34 || input.hints.discards.some(item => item.waits.length >= 34))
+  const winEv = winTotal + chainOf(input.hints.current, input.visible, input.wallCount, config, selfOnly)
   const drawnTile = input.hand[input.drawnTileIndex]
   let best: { discard: TileType; ev: number; anyWait: boolean } | null = null
   for (const item of input.hints.discards) {
     if (item.discard === drawnTile || !item.waits.length) continue
-    const ev = chainOf(item.waits, input.visible, input.wallCount, config)
+    const ev = chainOf(item.waits, input.visible, input.wallCount, config, selfOnly)
     if (!best || ev > best.ev) best = { discard: item.discard, ev, anyWait: item.waits.length >= 34 }
   }
   if (!best || best.ev < winEv * config.reformGainRatio) return null

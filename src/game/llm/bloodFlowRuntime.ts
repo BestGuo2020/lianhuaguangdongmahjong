@@ -128,7 +128,7 @@ export function bloodFlowDecisionPrompt(view: BloodFlowSeatView, waits: Waits, r
  * 提示词模板版本（§4）：模板内容 = 系统提示 + 变量 JSON 的字段约定。
  * 风格或"是否允许台词"会改变模板正文，因此一并编进 id；改动模板正文时必须升版本号。
  */
-export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v4'
+export const BLOOD_FLOW_PROMPT_TEMPLATE_VERSION = 'bloodFlow-decision/v5'
 export function bloodFlowPromptTemplateId(decisionStyle: LlmStyle, speechAllowed: boolean): string {
   return `${BLOOD_FLOW_PROMPT_TEMPLATE_VERSION}/${decisionStyle}/${speechAllowed ? 'speech' : 'plain'}`
 }

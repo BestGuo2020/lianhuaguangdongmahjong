@@ -23,7 +23,7 @@ describe('c93b3ed8 public-seat regression',()=>{
     const view=structuredClone(early) as unknown as BloodFlowSeatView
     const built=buildBloodFlowDecisionInput(view,'early',{},BLOOD_FLOW_LLM_AI)
     const win=built.candidates.find(c=>c.action.kind==='win')!
-    expect(win.features.ev?.income).toMatchObject({scope:'fixed-hand-gross',immediate:120,excludes:['opponent-payments','future-hand-improvements']})
+    expect(win.features.ev?.income).toMatchObject({scope:'fixed-hand-gross',model:'self-draw-v1',immediate:120,excludes:['opponent-payments','future-hand-improvements','discard-wins']})
     const any=built.candidates.filter(c=>c.features.ev?.reform?.anyWait)
     expect(any.length).toBeGreaterThan(0)
     for(const c of [win,...any]){
