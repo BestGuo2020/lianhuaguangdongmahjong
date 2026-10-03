@@ -12,8 +12,11 @@ defineEmits<{ close: []; nextRound: []; returnToLobby: [] }>()
 const name = (seat: number) => props.players[(seat - (props.localSeat ?? 0) + 4) % 4]?.name ?? `玩家${seat + 1}`
 const wins = computed(() => props.state.batches.flatMap(batch => batch.winners
   .filter(record => props.filterSeat == null || record.winner === props.filterSeat)
-  .map(record => ({ record, source: batch.source }))).reverse())
+  .map(record => ({ record, source: batch.source, sequence: batch.sequence }))).reverse())
 const result = computed(() => props.state.roundResult)
+const kongEvents = computed(() => result.value
+  ? result.value.ledger.filter(entry => entry.kind === 'kong')
+  : props.state.kongEvents ?? [])
 </script>
 
 <template>
@@ -34,9 +37,9 @@ const result = computed(() => props.state.roundResult)
           </table>
           <p v-if="state.status === 'interrupted'" role="status">对局中断，以下保留最后已确认的流水。</p>
           <p v-if="!wins.length" class="empty">{{ filterSeat == null ? '本局还没有胡牌记录' : `${name(filterSeat)}还没有胡牌记录` }}</p>
-          <article v-for="{ record, source } in wins" :key="record.id" class="ledger-win" :data-win-record="record.id">
+          <article v-for="{ record, source, sequence } in wins" :key="record.id" class="ledger-win" :data-win-record="record.id">
             <div class="record-heading"><b>{{ name(record.winner) }} · 第{{ record.ordinal }}次胡</b><span>{{ tileName(source.tile) }} · {{ source.kind === 'draw' ? '自摸' : `${name(source.seat)}供牌` }}</span></div>
-            <BloodFlowWinCard :score="record.score" :amount="record.deltas[record.winner]" />
+            <BloodFlowWinCard :score="record.score" :amount="record.deltas[record.winner]" :kong-context="{ winner: record.winner, sequence, events: kongEvents }" />
             <p class="record-payments">{{ record.deltas.map((n, seat) => n ? `${name(seat)} ${n > 0 ? '+' : ''}${n}` : '').filter(Boolean).join(' · ') }}</p>
           </article>
           <details v-if="result||state.kongEvents?.length"><summary>杠分明细</summary>

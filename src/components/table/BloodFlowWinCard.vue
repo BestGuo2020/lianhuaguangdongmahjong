@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { PublicWinScore } from '../../game/variants/lotus/bloodFlow/types'
+import { bloodFlowScoreCardItems, type ScoreCardKongContext } from './bloodFlowScoreCard'
 
-const props = defineProps<{ score: PublicWinScore; amount?: number }>()
+const props = defineProps<{ score: PublicWinScore; amount?: number; kongContext?: ScoreCardKongContext }>()
 // 明细只走徽标：番型带自身权重，事件/硬胡带各自乘数，不再提供折叠的计分详情。
-const orderedItems = computed(() => [...props.score.items].sort((a, b) => b.weight - a.weight || (a.id < b.id ? -1 : 1)))
+const orderedItems = computed(() => bloodFlowScoreCardItems(props.score, props.kongContext))
 const SOURCE_LABELS = { 'self-draw': '自摸', discard: '点炮胡', 'robbed-kong': '抢杠胡', 'kong-bloom': '杠后自摸' } as const
 const amountLabel = computed(() => props.amount === undefined
   ? `单家 ${props.score.paymentPerPayer}分`

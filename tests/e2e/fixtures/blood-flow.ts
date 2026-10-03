@@ -2,10 +2,11 @@
 import { createApp, h, shallowRef } from 'vue'
 import '../../../src/style.css'
 import GameTableHud from '../../../src/components/table/GameTableHud.vue'
-import { scorePatterns } from '../../../src/game/variants/lotus/patterns/score'
+import { scorePatterns, type KongCounts } from '../../../src/game/variants/lotus/patterns/score'
+import { BLOOD_FLOW_CONFIG } from '../../../src/game/variants/lotus/bloodFlow/config'
 import { themePresentationByName, themePresentationCssVariables } from '../../../src/theme/themePresentation'
 import type { TableThemeName } from '../../../src/components/table/three/tableTheme'
-import type { BloodFlowTableState, Seat, WinBatch } from '../../../src/game/variants/lotus/bloodFlow/types'
+import type { BloodFlowTableState, KongLedgerEntry, Seat, WinBatch } from '../../../src/game/variants/lotus/bloodFlow/types'
 import { vector } from '../../../src/game/variants/lotus/bloodFlow/state'
 import { summarizeRound } from '../../../src/game/variants/lotus/bloodFlow/roundLifecycle'
 import type { GamePlayer, TileType } from '../../../src/game/core/contracts/types'
@@ -73,11 +74,12 @@ const navigation = { nextRoundCalls: 0, returnToLobbyCalls: 0 }
 ;(window as any).__settleBloodFlow = (finished = false) => {
   const state = liveState.value
   const opening = vector(() => 2000)
-  const ending = vector(s => 2000 + state.batches.reduce((sum, batch) => sum + batch.deltas[s], 0))
+  const ledger = [...state.batches.map(batch => ({ kind: 'win' as const, batch })), ...(state.kongEvents ?? [])]
+  const ending = vector(s => 2000 + ledger.reduce((sum, entry) => sum + (entry.kind === 'win' ? entry.batch.deltas[s] : entry.deltas[s]), 0))
   liveFinished.value = finished
   liveState.value = { ...state, status: 'settled',
     roundResult: summarizeRound(state.ruleVersion, state.roundId, opening, ending,
-      vector(s => state.seats[s].winCount), state.batches.map(batch => ({ kind: 'win' as const, batch }))) }
+      vector(s => state.seats[s].winCount), ledger) }
 }
 ;(window as any).__refreshBloodFlowResult = () => {
   // P2P snapshots replace objects without starting another round.
@@ -133,12 +135,14 @@ function announceBatch(batch:WinBatch){for(const record of batch.winners)actionA
     ...liveState.value.seats[s], winCount: liveState.value.seats[s].winCount + (winnerSeats.includes(s) ? 1 : 0) })) }
   announceBatch(batch)
 }
-;(window as any).__appendBloodFlowKong = (actor:Seat=0) => {
-  const event={kind:'kong' as const,authorityEpoch:'fixture',roundId:liveState.value.roundId,sequence:++serial,id:`kong-${serial}`,actor,kongKind:'concealed' as const,sourceSeat:null,
-    deltas:vector(s=>s===actor?60:-20),scoresAfter:[2000,2000,2000,2000] as [number,number,number,number]}
+;(window as any).__appendBloodFlowKong = (actor:Seat=0, kongKind:KongLedgerEntry['kongKind']='concealed') => {
+  const sourceSeat=kongKind==='discard'?((actor+1)%4) as Seat:null
+  const amount=BLOOD_FLOW_CONFIG.basePoints*BLOOD_FLOW_CONFIG.kongPayments[kongKind]
+  const event:KongLedgerEntry={kind:'kong',authorityEpoch:'fixture',roundId:liveState.value.roundId,sequence:++serial,id:`kong-${serial}`,actor,kongKind,sourceSeat,
+    deltas:vector(s=>s===actor?amount*(sourceSeat===null?3:1):sourceSeat===null||s===sourceSeat?-amount:0),scoresAfter:[2000,2000,2000,2000]}
   liveState.value={...liveState.value,kongEvents:[...(liveState.value.kongEvents??[]),event]}
 }
-;(window as any).__playBloodFlowScenario = async (kind:'draw'|'discard'|'added-kong'='draw',seat:Seat=0,winners:Seat[]=[seat],patterns:PatternId[]=['all-green'],hard=true) => {
+;(window as any).__playBloodFlowScenario = async (kind:'draw'|'discard'|'added-kong'='draw',seat:Seat=0,winners:Seat[]=[seat],patterns:PatternId[]=['all-green'],hard=true,kongs:KongCounts={exposed:0,concealed:0,wind:0}) => {
   const id=`scenario-${++serial}`,source={id:`${id}-source`,kind,seat,tile:'s2' as TileType},relative=(seat-viewer+4)%4
   livePlayers.value=livePlayers.value.map((p,i)=>i!==relative?p:{...p,
     ...(kind==='draw'?{drawnTileIndex:13,concealedTileCount:14,hand:i===0?[...p.hand.slice(0,13),'s2' as TileType]:[]}
@@ -153,7 +157,7 @@ function announceBatch(batch:WinBatch){for(const record of batch.winners)actionA
   }
   livePlayers.value=livePlayers.value.map((p,i)=>i!==relative?p:kind==='discard'?{...p,discards:p.discards.slice(0,-1)}
     :kind==='draw'?{...p,hand:i===0?p.hand.slice(0,-1):[],concealedTileCount:13,drawnTileIndex:-1}:p)
-  const winScore=scorePatterns(patterns,hard,kind==='draw'?'self-draw':kind==='added-kong'?'robbed-kong':'discard')
+  const winScore=scorePatterns(patterns,hard,kind==='draw'?'self-draw':kind==='added-kong'?'robbed-kong':'discard',null,BLOOD_FLOW_CONFIG,kongs)
   const records=winners.map(winner=>({id:`${id}-${winner}`,batchId:id,winner,ordinal:liveState.value.seats[winner].winCount+1,sourceEventId:source.id,score:winScore,
     deltas:vector(s=>s===winner?winScore.paymentPerPayer*(kind==='draw'?3:1):kind==='draw'||s===seat?-winScore.paymentPerPayer:0)}))
   const batch:WinBatch={authorityEpoch:'fixture',sequence:serial,roundId:liveState.value.roundId,ruleVersion:liveState.value.ruleVersion,batchId:id,windowId:id,source,winners:records,
