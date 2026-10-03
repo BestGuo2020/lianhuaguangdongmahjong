@@ -46,9 +46,16 @@ for (const size of [{ width: 1366, height: 768 }, { width: 667, height: 375 }]) 
       const summaryBefore = await page.locator('.game-settings').innerText()
       await page.locator('.game-settings button').nth(index).click()
       await paper(page)
+      // A compact dialog can move an unselected option under the pointer that opened it.
+      await page.mouse.move(1, 1)
       const options = page.locator('.picker-options > button')
       await expect(options.locator('i').first()).toHaveCSS('background-color', coral)
-      await expect(page.locator('.picker-options > button:not(.active)')).toHaveCSS('background-color', 'rgb(255, 248, 236)')
+      const inactive = page.locator('.picker-options > button:not(.active)')
+      const inactiveCount = await inactive.count()
+      expect(inactiveCount).toBeGreaterThan(0)
+      for (let index = 0; index < inactiveCount; index++) {
+        await expect(inactive.nth(index)).toHaveCSS('background-color', 'rgb(255, 248, 236)')
+      }
       await options.first().focus()
       await page.keyboard.press('Tab')
       await expect(options.nth(1)).toBeFocused()

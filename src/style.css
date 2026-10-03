@@ -286,8 +286,8 @@ button { font: inherit; }
 .audio-menu strong, .audio-menu small { display: block; }
 .audio-menu strong { color: var(--theme-text); font: 700 14px "Noto Serif SC", serif; }
 .audio-menu small { margin-top: 2px; color: var(--theme-text-muted); font-size: 10px; white-space: nowrap; }
-.audio-menu > button > i { position: relative; width: 31px; height: 17px; flex: 0 0 auto; margin-left: 10px; border: 1px solid #766f5e; border-radius: 99px; background: #24322d; transition: background .18s ease, border-color .18s ease; }
-.audio-menu > button > i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #9c9a8e; transition: transform .18s ease, background .18s ease; }
+.audio-menu > button > i { position: relative; width: 31px; height: 17px; flex: 0 0 auto; margin-left: 10px; border: 1px solid color-mix(in srgb, var(--theme-border) 48%, transparent); border-radius: 99px; background: var(--theme-panel-elevated); transition: background .18s ease, border-color .18s ease; }
+.audio-menu > button > i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--theme-text-muted); transition: transform .18s ease, background .18s ease; }
 .audio-menu > button > i.active { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 30%, transparent); }
 .audio-menu > button > i.active::after { background: var(--theme-accent); transform: translateX(14px); }
 .top-bar .icon-button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; }
@@ -712,10 +712,10 @@ button { font: inherit; }
 .rules-panel { position: fixed; z-index: 100; top: 0; right: 0; bottom: 0; width: min(390px, 92vw); padding: 31px 27px; overflow: auto; border-left: 1px solid #997439; background: linear-gradient(160deg, #102b23, #071510 65%); box-shadow: -22px 0 60px rgba(0,0,0,.65); }
 .rules-panel header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 25px; padding-bottom: 17px; border-bottom: 1px solid rgba(208,172,87,.18); }
 .rules-panel header span { color: #b18d48; font-size: 9px; letter-spacing: .4em; }.rules-panel h2 { margin: 5px 0 0; font: 900 28px "Noto Serif SC", serif; color: #f0e3bf; }
-.rules-panel header button { width: 32px; height: 32px; border: 1px solid rgba(223,199,136,.25); border-radius: 50%; background: transparent; color: #d9cba8; font-size: 20px; cursor: pointer; }
+.rules-panel header button { width: 32px; height: 32px; border: 1px solid color-mix(in srgb, var(--theme-border) 32%, transparent); border-radius: 50%; background: transparent; color: var(--theme-text); font-size: 20px; cursor: pointer; }
 .rule-list { display: flex; flex-direction: column; gap: 8px; }
-.rule-list article { display: grid; grid-template-columns: 35px 1fr; gap: 11px; padding: 12px; border: 1px solid rgba(255,255,255,.05); border-radius: 4px; background: rgba(255,255,255,.025); }
-.rule-list article > b { color: #b18c48; font: 700 15px Georgia, serif; }.rule-list h3 { margin: 0 0 4px; color: #f0dfba; font: 700 16px "Noto Serif SC", serif; }.rule-list p { margin: 0; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
+.rule-list article { display: grid; grid-template-columns: 35px 1fr; gap: 11px; padding: 12px; border: 1px solid color-mix(in srgb, var(--theme-border) 18%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--theme-surface) 18%, transparent); }
+.rule-list article > b { color: var(--theme-accent); font: 700 15px Georgia, serif; }.rule-list h3 { margin: 0 0 4px; color: #f0dfba; font: 700 16px "Noto Serif SC", serif; }.rule-list p { margin: 0; color: #a6b5ad; font-size: 13px; line-height: 1.65; }
 .rule-note { margin-top: 17px; padding: 11px; border: 1px dashed rgba(215,179,91,.25); color: #c2aa73; font-size: 13px; text-align: center; letter-spacing: .08em; }
 
 /* ── 纯娱乐声明：玩法面板声明块 / 进房前确认弹窗 ── */
@@ -1715,7 +1715,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llm"] .rules-panel .disclaimer-block > h3,
 .game-app[data-table-theme="llm"] .rules-panel .disclaimer-block h4 { color: #e0bc98; }
 .game-app[data-table-theme="llm"] .rules-panel h2 { color: var(--llm-text); }
-.game-app[data-table-theme="llm"] .rules-panel header button { border-color: rgba(118, 217, 255, .3); color: #d9e7ff; }
+.game-app[data-table-theme="llm"] .rules-panel header button { border-color: color-mix(in srgb, var(--theme-border) 30%, transparent); color: var(--theme-text); }
 .game-app[data-table-theme="llm"] .rules-panel .disclaimer-block {
   border-color: rgba(118, 217, 255, .24);
   background: rgba(2, 7, 27, .28);
@@ -2851,7 +2851,7 @@ button { font: inherit; }
     width: min(390px, calc(100cqw - var(--safe-left) - var(--safe-right)));
     padding: 16px max(16px, var(--safe-right)) 18px max(16px, var(--safe-left));
   }
-  .rules-panel header { position: sticky; z-index: 2; top: -16px; margin-bottom: 12px; padding-top: 4px; padding-bottom: 10px; background: #0b211a; }
+  .rules-panel header { position: sticky; z-index: 2; top: -16px; margin-bottom: 12px; padding-top: 4px; padding-bottom: 10px; background: var(--theme-panel-elevated); }
 
   .waiting-tip {
     bottom: var(--controls-bottom);
@@ -3499,6 +3499,7 @@ button { font: inherit; }
   --theme-border: #2d2923;
   --theme-positive: #39754c;
   --theme-negative: #9f4035;
+  --theme-warning: #8a4b30;
   color-scheme: light;
   border: 2px solid var(--theme-border);
   border-radius: 10px;
@@ -3579,6 +3580,18 @@ button { font: inherit; }
 .rules-panel .disclaimer-block,
 .rule-note { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); }
 .rules-panel header button:focus-visible { outline-color: var(--theme-accent); }
+
+/* Utility surfaces share the current palette, including the states outside normal play. */
+.game-app[data-table-theme] :is(.stats-card, .replay-list-card) { border-color: var(--theme-border); background: linear-gradient(160deg, var(--theme-panel-elevated), var(--theme-panel) 65%); color: var(--theme-text); }
+.game-app[data-table-theme] :is(.stats-card, .replay-list-card) h2 { color: var(--theme-text); }
+.stats-nickname { color: var(--theme-text); }
+.stats-grid article { border-color: color-mix(in srgb, var(--theme-border) 28%, transparent); background: var(--theme-panel-elevated); }
+.stats-grid b { color: var(--theme-text); }
+.stats-grid b.positive { color: var(--theme-positive); }
+.stats-grid b.negative { color: var(--theme-negative); }
+.stats-grid span, .stats-loading, .stats-empty { color: var(--theme-text-muted); }
+.game-app .room-panel .room-llm-note.on { color: var(--theme-positive); }
+.game-app .room-panel .room-llm-note.off { color: var(--theme-warning); }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .room-panel { gap: 5px; height: 100%; padding: 6px 9px; overflow: hidden; }
