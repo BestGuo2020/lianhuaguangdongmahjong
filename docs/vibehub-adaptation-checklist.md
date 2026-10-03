@@ -176,6 +176,21 @@ vibehub 使用自己的 `useVibeRemoteGame.ts` + `vibe/*` + `transport/selfHost/
 - 首跑踩坑（已修）：规则选择项的可访问名是「莲花广麻 **默认** 白板癞子 · …」（badge「默认」夹在名称与亮点之间），沿用 11V 的 `/^莲花麻将 翻精癞子/` 写法在广麻上匹配不到；而 Playwright 默认 `actionTimeout=0` 会**永久等待**（首跑挂 10 分钟无输出）。现改为 `.rule-picker-options button` + `hasText: /^莲花广麻/`，并给建房/加入/准备/开始每一步显式 60s 超时。
 - 备注：vibehub 的声明**文案**是它自己的（P2P 房主权威说明），`src/content/disclaimer.ts` 属 keep 文件；本次同步的只有共享的 `src/style.css` 布局修复，因此线上两端看到的文案不同但按钮几何同一套。
 
+### 6.7 莲花广麻红中计分调整线上验收（2026-10-03，部署 `pnpm deploy:vibehub`）
+
+经典广麻计分改动上线（master `a9e476b` → vibehub `9ef164a`；WS 权威后端 `c08ba25`）：红中逐张计分（胡牌者每张已亮红中 +1 底分，结算新增 `redPoints` 字段与「红中 N 张」明细）、四红中固定 ×1（不叠自摸/无癞子/杠上开花）、取消庄家倍率（庄家胡不 ×2、闲家胡庄家不双付）、总分 = 底分 × 倍数 + 中马数 × 底分 + 红中数 × 底分（对齐《江西莲花广麻》文档口径，2026-09 用户定案）。部署上传 6 个新 bundle（`assets/{index-CCJ9FB7t,MahjongTable3D-DENSaPGi,ReplayViewer-D5MO1qiF,RulesPanel-D1szAoOX,config-P6VEqwVg}.js` + `index.html`）、删 5 个旧包；重发自检「跳过 240 / 需要上传 0」；「线上部署包含事件驱动恢复」构建标记用例通过（全部恢复标记就位）。
+
+| 场景 | 房间 | 耗时 | 结果 |
+|---|---|---|---|
+| 莲花广麻东风场，2 真人 + 2 普通引擎 AI（两端桌面 1280×720） | `VBMUHF` | 5.9 分钟 | ✅ 东1～东4 共 5 次结算（东3 连庄至 1 本场）双端逐字一致、每局总分 4000 守恒、终局排名双端一致（西关十三姨 3600 / 东山少爷 1300 / 客人 -400 / 房主 -500）、应用异常 0；声明弹窗两端完整可点 |
+| 莲花麻将·血流东风场，2 真人 + 2 普通机器人 | `8FY6GM` | 3.8 分钟 | ✅ 逐局结算双端一致、终局总分 8000 守恒（玩家3 4770 / 玩家4 1200 / 房主 1130 / 客人 900）、联机牌谱双端 4/4 局全知、联机分析记录双端 4/4 局权威下发 |
+
+- 结算数值与新口径相符：广麻场各家分差含杠分/跟庄即时结算（如东1局 -300/-300/-400 → +1000 = 胡分 300×3 + 杠分 100），无庄家双付痕迹；血流计分未受本次改动影响，作为结算同步链路回归对照。
+- 取证：`tmp/bf-online-evidence/20261003-0855-red-bonus-classic/`（逐局双端结算截图 + `result.json`）与 `tmp/bf-online-evidence/20261003-red-bonus-bloodflow-plain/`（双端截图）；血流分析证据 `work/vibehub-theme11v/tmp/bf-online-evidence/analysis-bf-plain-ai-muroyq6c.json`。
+- 复现命令（vibehub 工作区）：`$env:E2E_SKIP_WEBSERVER='1'; $env:ONLINE_EVIDENCE_DIR='<证据目录>'; npx playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts --grep "莲花广麻东风场并验收用户声明" --project=chromium --workers=1`；血流场把 `--grep` 换成 `血流东风场（2 真人 \+ 2 普通机器人）`。
+- 后端（WS 联机权威）同口径提交 `c08ba25`，pytest 955 passed；`test_blood_flow_ws` 既有失败与 `test_opponent_pattern_risk_fixture` 收集错误经 stash/父提交 A/B 验证与本次改动无关。前端 `table-action-regressions` 9 个 e2e 在父提交上同样失败（blood-flow fixture 本机资源加载超时），非本次回归。
+
+
 ### 6.1 平台域名变更导致 TTS 断链（2026-09-14 修复）
 
 平台域名从 `*.lumigrav.space` 换到 **`gamesvibe.app`**（发布地址 `https://gamesvibe.app/play/M-USGs_ieQksAeOJYtHF4`），而两处只认旧域名的地方没有跟着改，表现为**大模型主题（`llm` / `llmAnime`）完全没有语音**：
