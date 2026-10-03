@@ -31,6 +31,7 @@ export interface ThemePresentation {
     accentSecondary: string
     positive: string
     negative: string
+    warning: string
   }
   typography: {
     headingClass: string
@@ -86,7 +87,7 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#163a2c', panel: '#0a231a', panelElevated: '#123327', text: '#f8f3df',
       textMuted: '#aebdb1', border: '#b99249', accent: '#dfbd68', accentSecondary: '#79a487',
-      positive: '#78c996', negative: '#e98378',
+      positive: '#78c996', negative: '#e98378', warning: '#e0a94a',
     },
     typography: { headingClass: 'theme-heading-serif', numberClass: 'theme-number-classic', actionClass: 'theme-action-seal' },
     hud: {
@@ -112,7 +113,7 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#175566', panel: '#0e3b48', panelElevated: '#185c6c', text: '#fff9e8',
       textMuted: '#b9d8d6', border: '#efc85b', accent: '#f7ca4e', accentSecondary: '#f07a5d',
-      positive: '#7bd6a3', negative: '#ff8478',
+      positive: '#7bd6a3', negative: '#ff8478', warning: '#ffd061',
     },
     typography: { headingClass: 'theme-heading-rounded', numberClass: 'theme-number-rounded', actionClass: 'theme-action-pop' },
     hud: {
@@ -138,7 +139,7 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#542417', panel: '#2b120c', panelElevated: '#4a2015', text: '#fff3dc',
       textMuted: '#d0bba3', border: '#c99a4c', accent: '#e0b45c', accentSecondary: '#b7523f',
-      positive: '#82bf8d', negative: '#e67465',
+      positive: '#82bf8d', negative: '#e67465', warning: '#efb477',
     },
     typography: { headingClass: 'theme-heading-serif', numberClass: 'theme-number-ledger', actionClass: 'theme-action-paper' },
     hud: {
@@ -164,7 +165,7 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#101d43', panel: '#081431', panelElevated: '#102451', text: '#eef4ff',
       textMuted: '#aebce2', border: '#76d9ff', accent: '#76d9ff', accentSecondary: '#9a8af0',
-      positive: '#65d5b1', negative: '#ff7f93',
+      positive: '#65d5b1', negative: '#ff7f93', warning: '#ffd48a',
     },
     typography: { headingClass: 'theme-heading-tech', numberClass: 'theme-number-mono', actionClass: 'theme-action-scan' },
     hud: {
@@ -190,7 +191,7 @@ export const THEME_PRESENTATIONS = {
     palette: {
       surface: '#29372f', panel: '#18231e', panelElevated: '#29372f', text: '#fff8ec',
       textMuted: '#c8c4b9', border: '#9d9282', accent: '#bd5b48', accentSecondary: '#78d8e8',
-      positive: '#70bf89', negative: '#ed786a',
+      positive: '#70bf89', negative: '#ed786a', warning: '#e7b684',
     },
     typography: { headingClass: 'theme-heading-comic', numberClass: 'theme-number-comic', actionClass: 'theme-action-comic' },
     hud: {
@@ -229,6 +230,7 @@ export function themePresentationCssVariables(theme: ThemePresentation): ThemePr
     '--theme-accent-secondary': theme.palette.accentSecondary,
     '--theme-positive': theme.palette.positive,
     '--theme-negative': theme.palette.negative,
+    '--theme-warning': theme.palette.warning,
     '--theme-top-bar': theme.hud.topBar,
     '--theme-button': theme.hud.button,
     '--theme-tooltip': theme.hud.tooltip,

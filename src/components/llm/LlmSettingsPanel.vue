@@ -449,7 +449,7 @@ button.llm-seat-row:hover { background: rgba(211, 174, 87, .08); }
 .llm-hint b,
 .llm-provider-item.default::after,
 .llm-seat-row.chosen { color: var(--theme-accent); }
-.llm-provider-warning { color: var(--theme-accent-secondary); }
+.llm-provider-warning { color: var(--theme-warning); }
 .llm-timeout-toggle { color: var(--theme-text) !important; }
 .llm-row input,
 .llm-row select,

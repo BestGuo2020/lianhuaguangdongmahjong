@@ -136,6 +136,10 @@ try {
     'tests/e2e/remote-lotus-legacy.smoke.spec.ts'
     # 预留座位的 e2e：走 REST /api/rooms/{id}/llm-seats（WS 房间管理），vibehub 无此接口。
     'tests/e2e/llm-seat-reservation.spec.ts'
+    # Utility fixture mounts WS room/account components and mocks their REST responses.
+    'tests/e2e/theme-utilities.spec.ts'
+    'tests/e2e/fixtures/theme-utilities.html'
+    'tests/e2e/fixtures/theme-utilities.ts'
     # 用户声明弹窗几何 e2e：走 WS 大厅建房入口 + 桩掉 /api/login/session 与 /api/me/disclaimer-agreement，
     # vibehub 是 P2P 大厅（登录/声明都不走 REST），沿用会直接失败。
     'tests/e2e/disclaimer-mobile.spec.ts'

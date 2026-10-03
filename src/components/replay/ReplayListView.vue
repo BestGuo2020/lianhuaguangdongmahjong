@@ -409,7 +409,7 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
 
 <style scoped>
 .replay-list-backdrop { z-index: 210; }
-.replay-list-card { width: min(820px, 95%); }
+.replay-list-card { width: min(820px, 95%); color-scheme: dark; }
 .replay-list-note { margin: 0 0 10px; color: var(--theme-text-muted); font-size: 12px; text-align: center; }
 .replay-list-empty { padding: 22px 0; color: var(--theme-text-muted); font-size: 13px; text-align: center; }
 .replay-list { display: grid; gap: 6px; max-height: min(50vh, 460px); margin: 0; padding: 2px; overflow: hidden auto; list-style: none; }
@@ -442,11 +442,11 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
 .replay-row-date { color: var(--theme-text); font-size: 12px; }
 .replay-row-theme-name { overflow: hidden; color: var(--theme-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 /* 牌谱版本提示（§9.5）：更新版本写下的记录，明确提示而不是静默按旧规则渲染 */
-.replay-row-version { color: #e0a94a; font-size: 11px; }
+.replay-row-version { color: var(--theme-warning); font-size: 11px; }
 /* 分析区状态（§9.2）：用颜色区分四态，避免"未开启"与"缺失"看起来一样 */
 .replay-row-analysis { color: var(--theme-text-muted); font-size: 11px; }
 .replay-row-analysis[data-analysis-status="complete"] { color: var(--theme-accent); }
-.replay-row-analysis[data-analysis-status="partial"] { color: #e0a94a; }
+.replay-row-analysis[data-analysis-status="partial"] { color: var(--theme-warning); }
 .replay-row-analysis[data-analysis-status="deleted"],
 .replay-row-analysis[data-analysis-status="missing"],
 .replay-row-analysis[data-analysis-status="none"] { color: var(--theme-text-muted); }
@@ -454,6 +454,15 @@ const analysisImportInput = ref<HTMLInputElement | null>(null)
 .replay-row-rank.rank-1 { color: var(--theme-accent); }
 .replay-row-actions { display: flex; gap: 6px; }
 .replay-row-actions button { padding: 5px 10px; border-radius: 7px; font-size: 12px; }
+.replay-row-actions button,
+.replay-list-settings button { border: 1px solid color-mix(in srgb, var(--theme-border) 42%, transparent); background: color-mix(in srgb, var(--theme-surface) 35%, var(--theme-panel)); color: var(--theme-text); cursor: pointer; }
+.replay-row-actions button[data-action-role="primary"] { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-panel)); }
+.replay-row-actions button:hover,
+.replay-list-settings button:hover { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-panel)); }
+.replay-row-actions button:focus-visible,
+.replay-list-settings button:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
+.replay-row-actions button:disabled,
+.replay-list-settings button:disabled { opacity: .5; cursor: not-allowed; }
 .replay-list-settings {
   display: flex;
   flex-wrap: wrap;
