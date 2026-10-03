@@ -359,6 +359,7 @@ function render(time = 0) {
         .join(',')
       canvasElement.dataset.cameraFov = camera.fov.toFixed(6)
       canvasElement.dataset.cameraDirection = camera.getWorldDirection(new THREE.Vector3()).toArray().join(',')
+      canvasElement.dataset.handFaceRects = JSON.stringify(tableTiles.handFaceScreenRects(camera))
     }
     if (outlineEffect) outlineEffect.render(scene, camera)
     else renderer.render(scene, camera)
