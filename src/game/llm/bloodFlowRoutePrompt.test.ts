@@ -17,7 +17,7 @@ it.each(fixtures)('describes retained actions consistently at $key with stable c
   expect(prompt.candidates.map(c => c.label)).toEqual(fixture.expectedLabels)
   expect(prompt.request.engineSuggestion).toBe(reachableSuggestions[fixture.key]??fixture.expectedSuggestion)
   const data = JSON.parse(prompt.messages.user)
-  expect(prompt.templateId).toContain('bloodFlow-decision/v5/')
+  expect(prompt.templateId).toContain('bloodFlow-decision/v6/')
   expect(data.ruleSummary).not.toContain('候选里不会出现')
   expect(data.ruleSummary).not.toContain('引擎已决定放弃小胡')
   expect(data.ruleSummary).not.toContain('这条十六至三十二倍级牌型')

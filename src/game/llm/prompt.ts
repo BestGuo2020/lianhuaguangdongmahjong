@@ -112,7 +112,7 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
     if (win.floorWaived) parts.push('尾巡点炮：正常轮转至多一次本家摸牌，不因首胡门槛拒胡')
     if (win.declinedReason) {
       const stage = win.floorStage === 'early' ? '早局' : win.floorStage === 'late' ? '残局' : '中局'
-      parts.push(`低于${stage}首胡门槛${win.floor}，潜力：${win.declinedReason}`)
+      parts.push(`单家支付低于${stage}首胡门槛${win.floor}，潜力：${win.declinedReason}（门槛仅作参考，不强制拒胡）`)
     }
   }
   if (features.ev?.reform) {
@@ -123,7 +123,13 @@ export function candidateLine(candidate: Candidate, ruleCode: string): string {
     if (reform.patterns.length) parts.push(`方向：${reform.patterns.join('、')}`)
   }
   if (features.ev?.rob) parts.push(`抢杠期望：胡${features.ev.rob.winEv} vs 过${features.ev.rob.passEv}`)
-  if (features.ev?.developEv !== undefined) parts.push(`过：发育期望${features.ev.developEv}`)
+  const potential=features.developmentPotential?.score??features.ev?.developEv
+  if (potential !== undefined) parts.push(`发育潜力评分${potential}（启发式，非期望收入）`)
+  if (features.ev?.income && !features.ev.win && !features.ev.reform) {
+    const income=features.ev.income
+    parts.push(`固定手牌毛收入：立即${income.immediate}+后续${income.future}=约${income.total}点${income.anyWait?'（任意听）':''}`)
+  }
+  if (features.actionEffect) parts.push(`执行：${features.actionEffect}`)
   if (features.kongValue) {
     const kong = features.kongValue
     parts.push(`开杠价值：${kong.net > 0 ? '+' : ''}${kong.net}（收益${kong.gain}−风险${kong.risk}−自损${kong.selfLoss.total}）`)

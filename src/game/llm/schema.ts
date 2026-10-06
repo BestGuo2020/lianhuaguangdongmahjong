@@ -35,6 +35,10 @@ export interface CandidateFeatures {
   /** 条件深思触发器使用的规则引擎即时收益；Prompt 仍只展示档位。 */
   scoreDelta?: number
   risks: string[]
+  /** Authoritative execution effect; passing on our draw does not choose a discard. */
+  actionEffect?: string
+  /** Pattern-ranking heuristic, not a probability-weighted forecast of income. */
+  developmentPotential?: { score:number;scope:'heuristic-pattern-potential';basis:'drawn-tile-removed'|'current-hand' }
   /**
    * 对手牌型（大牌）风险的公共信息估算（血流 / 莲花麻将；广麻无普通点炮，恒不出现）。
    * 档位版：tier 为全场最高风险档，payment 为按公开张数与档位折算的估算单次点炮赔付（点）。
@@ -57,6 +61,7 @@ export interface CandidateFeatures {
     }
     reform?: { chain: number; anyWait: boolean; waitCount: number; patterns: string[] }
     rob?: { winEv: number; passEv: number }
+    /** Legacy recordings only; new prompts use developmentPotential outside EV. */
     developEv?: number
   }
   /**

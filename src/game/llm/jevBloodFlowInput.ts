@@ -9,6 +9,7 @@
 //   buildBloodFlowDecisionInput 返回的 request 顶层**没有** decision 字段，v2 及之前响应窗口
 //   一律错发出牌 instructions（「轮到本家行动」）。v2 采集数据作废重采，v3 起 claim/turn 指令正确。
 //   升版本即换模板 id（jev-bf-{mode}-v3）；旧记录按当时落库的 promptTemplate 自包含可读。
+// - v4：发育潜力改标为启发式评分（非收入），并传递过牌执行语义；本地估值与推荐不变。
 // - engineSuggestion / bigHandRoute **绝不进入请求**（不泄漏本地推荐，保证盲判臂公平）；
 //   它们只写入 promptVariables 供分析记录计算「Jev vs 本地推荐」一致率。
 // - v2 仍只发主 choice 问题；noul/score 附加问属于后续模板版本。
@@ -18,7 +19,7 @@ import type { JevCandidate } from './jevClient'
 export type JevBloodFlowMode = 'blind' | 'hint'
 
 /** 模板版本：state/criteria/instructions 形状变更时必须递增（分析记录按 id 去重存模板）。 */
-export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 3
+export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 4
 
 export function jevBloodFlowTemplateId(mode: JevBloodFlowMode): string {
   return `jev-bf-${mode}-v${JEV_BLOOD_FLOW_TEMPLATE_VERSION}`
@@ -26,6 +27,8 @@ export function jevBloodFlowTemplateId(mode: JevBloodFlowMode): string {
 
 /** v2 紧凑渲染用到的 CandidateFeatures 结构子集（结构化类型，测试夹具无需完整 features）。 */
 export interface JevCandidateFeaturesLite {
+  actionEffect?: string
+  developmentPotential?: { score:number;scope?:string;basis?:string }
   shanten?: number | 'n/a'
   ukeire?: number | 'n/a'
   ready?: boolean | 'unknown'
@@ -62,7 +65,7 @@ export interface JevBloodFlowDecisionLike {
  * token 词表（与结案记录一致，改动即升模板版本）：
  *   向N=向听 进M=有效进张 听K口=已听K种 安高/中/低=安全度 险{档}{点数}=对手风险赔付
  *   {番型名}=特殊牌型 得N=胡牌即得 链N=锁手连锁 门N=首胡门槛 改N[任]=改张连锁(任意听)
- *   抢N/过M=抢杠两值 发N=过牌发育期望 EV±N=固定手毛收入 杠净±N=开杠价值 收{档}=收益档
+ *   抢N/过M=抢杠两值 潜N=启发式潜力评分 EV±N=固定手毛收入 杠净±N=开杠价值 收{档}=收益档
  */
 export function compactCandidateDescription(label: string, features?: JevCandidateFeaturesLite): string {
   if (!features) return label
@@ -86,7 +89,8 @@ export function compactCandidateDescription(label: string, features?: JevCandida
   }
   if (ev?.reform) tokens.push(`改${Math.round(ev.reform.chain ?? 0)}${ev.reform.anyWait ? '任' : ''}`)
   if (ev?.rob) tokens.push(`抢${Math.round(ev.rob.winEv ?? 0)}/过${Math.round(ev.rob.passEv ?? 0)}`)
-  if (typeof ev?.developEv === 'number') tokens.push(`发${Math.round(ev.developEv)}`)
+  const potential=features.developmentPotential?.score??ev?.developEv
+  if (typeof potential === 'number') tokens.push(`潜${Math.round(potential)}（非收入）`)
   if (typeof ev?.income?.total === 'number' && !ev?.win && !ev?.reform) {
     const total = Math.round(ev.income.total)
     tokens.push(`EV${total >= 0 ? '+' : ''}${total}`)
@@ -99,7 +103,8 @@ export function compactCandidateDescription(label: string, features?: JevCandida
     && features.scoreDeltaBand && features.scoreDeltaBand !== 'n/a') {
     tokens.push(`收${features.scoreDeltaBand}`)
   }
-  return tokens.length ? `${label}·${tokens.join('·')}` : label
+  const description=tokens.length ? `${label}·${tokens.join('·')}` : label
+  return features.actionEffect?`${description}·${features.actionEffect}`:description
 }
 
 export interface JevBloodFlowRequest {
