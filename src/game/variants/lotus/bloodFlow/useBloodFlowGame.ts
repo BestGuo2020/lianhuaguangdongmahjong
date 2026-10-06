@@ -44,7 +44,7 @@ import { actionSpeechMatches,type BloodFlowActionSpeech} from '../../../llm/bloo
 import { shouldSuppressLegacyAnimeSpeech } from '../../../core/presentation/animeAudioPolicy'
 import type { BloodFlowWsAudio, BloodFlowWsSpeech } from './ws/authority'
 import type {BloodFlowDiscardSpeech} from '../../../llm/bloodFlowSpeech'
-import {playDecisionSpeech} from '../../../llm/decisionSpeechPlayback'
+import {playDecisionSpeechWithStartupLimit} from '../../../llm/decisionSpeechPlayback'
 import {reasoningStatusSpeech} from '../../../llm/decisionSpeech'
 import { createBloodFlowRecordState, recordBloodFlowSettle, recordBloodFlowView, type BloodFlowRecordContext } from '../../../replay/bloodFlowRecorder'
 import type { ReplayRecorderHooks } from '../../../replay/types'
@@ -93,7 +93,7 @@ type RemoteViewMeta = { round: number; dealer: number; mode: MatchType; opening?
 /** worker 回复：座位视角，录制开启时额外带一份旁观视角（本地专用）。 */
 type BloodFlowWorkerView = BloodFlowSeatView & { replay?: BloodFlowSeatView }
 /** 单机弃牌动作不会被网络语音长期阻塞；局末只限制每句语音开口前的等待。 */
-const LOCAL_DISCARD_SPEECH_WAIT_MS = 4_000
+const LOCAL_DISCARD_SPEECH_START_WAIT_MS = 4_000
 const ROUND_SPEECH_START_WAIT_MS = 4_000
 
 export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
@@ -1025,21 +1025,12 @@ export function useBloodFlowGame(options: BloodFlowGameOptions = {}) {
       later(()=>{if(actionBubbles.value[seat]?.id===id){const copy={...actionBubbles.value};delete copy[seat];actionBubbles.value=copy}},5000)
     }
     let played=false
-    let timeout: ReturnType<typeof setTimeout> | undefined
     try {
-      const speech = playDecisionSpeech({ seat, text: line.text, voiceKey: line.voiceKey, style: line.style,
-        priority: 'normal', signal: controller.signal, isCurrent: alive, showBubble })
-      const safetyGate = new Promise<false>(resolve => {
-        timeout = setTimeout(() => {
-          showBubble()
-          controller.abort()
-          resolve(false)
-        }, LOCAL_DISCARD_SPEECH_WAIT_MS)
-      })
-      played = await Promise.race([speech, safetyGate])
+      played = await playDecisionSpeechWithStartupLimit({seat,text:line.text,voiceKey:line.voiceKey,style:line.style,
+        priority:'normal',signal:controller.signal,isCurrent:alive,showBubble,
+        startupWaitMs:LOCAL_DISCARD_SPEECH_START_WAIT_MS,abort:()=>controller.abort()})
     }
     finally{
-      if (timeout !== undefined) clearTimeout(timeout)
       pendingDiscardSpeech.delete(controller)
       // Keep successful playback cancellable through its second half, until
       // round/leave cleanup. The set is bounded by this round's action lines.

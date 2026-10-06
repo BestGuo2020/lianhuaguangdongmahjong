@@ -58,6 +58,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   resetLlmAudioBusForTests()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -143,7 +144,7 @@ describe('useAudio LLM 语音播放', () => {
     second.emit('ended')
   })
 
-  it('固定动作 important 语音会打断正在播放的普通吐槽', async () => {
+  it('已开播普通台词播完后再播放 important，动作仍在中点放行', async () => {
     const audio = useAudio()
     const normalUrl = `/api/local-tts/audio/${'1'.repeat(64)}.mp3`
     const actionUrl = `/api/local-tts/audio/${'2'.repeat(64)}.mp3`
@@ -152,8 +153,12 @@ describe('useAudio LLM 语音播放', () => {
     normalAudio.emit('playing')
 
     const action = audio.playLocalLlmAudioUntilMidpoint(actionUrl, 2, 2, 'important')
-    await expect(normal).resolves.toBe(false)
-    expect(normalAudio.pause).toHaveBeenCalledOnce()
+    expect(MockAudio.instances.some(a=>a.src===actionUrl)).toBe(false)
+    normalAudio.currentTime=2;normalAudio.emit('timeupdate')
+    await expect(normal).resolves.toBe(true)
+    expect(normalAudio.pause).not.toHaveBeenCalled()
+    expect(MockAudio.instances.some(a=>a.src===actionUrl)).toBe(false)
+    normalAudio.emit('ended')
     const actionAudio = MockAudio.instances.find((item) => item.src === actionUrl)!
     expect(actionAudio.play).toHaveBeenCalledOnce()
     actionAudio.emit('playing')
@@ -161,6 +166,46 @@ describe('useAudio LLM 语音播放', () => {
     actionAudio.emit('timeupdate')
     await expect(action).resolves.toBe(true)
     actionAudio.emit('ended')
+  })
+
+  it('晚开播不挤占朗读时间，到中点继续动作并自然播完',async()=>{
+    vi.useFakeTimers();window.setTimeout=globalThis.setTimeout;window.clearTimeout=globalThis.clearTimeout
+    const audio=useAudio(),url=`/api/local-tts/audio/${'4'.repeat(64)}.mp3`
+    const pending=audio.playLocalLlmAudioUntilMidpoint(url,1,1)
+    const voice=MockAudio.instances.find(a=>a.src===url)!
+    voice.duration=8
+    await vi.advanceTimersByTimeAsync(9000);voice.emit('playing')
+    await vi.advanceTimersByTimeAsync(3000);voice.currentTime=3;voice.emit('timeupdate')
+    expect(voice.pause).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000);voice.currentTime=4;voice.emit('timeupdate')
+    await expect(pending).resolves.toBe(true)
+    expect(voice.pause).not.toHaveBeenCalled()
+    voice.currentTime=8;voice.emit('ended')
+  })
+
+  it('持续有播放进度的长台词不被固定12秒截断',async()=>{
+    vi.useFakeTimers();window.setTimeout=globalThis.setTimeout;window.clearTimeout=globalThis.clearTimeout
+    const audio=useAudio(),url=`/api/local-tts/audio/${'5'.repeat(64)}.mp3`
+    const pending=audio.playLocalLlmAudioUntilMidpoint(url,1,1,'normal',{waitForCompletion:true})
+    const voice=MockAudio.instances.find(a=>a.src===url)!
+    voice.duration=30;voice.emit('playing')
+    for(let second=2;second<=30;second+=2){
+      await vi.advanceTimersByTimeAsync(2000);voice.currentTime=second;voice.emit('timeupdate')
+      expect(voice.pause).not.toHaveBeenCalled()
+    }
+    voice.emit('ended');await expect(pending).resolves.toBe(true)
+  })
+
+  it('开播后长时间没有进度仍结束故障音频并放行队列',async()=>{
+    vi.useFakeTimers();window.setTimeout=globalThis.setTimeout;window.clearTimeout=globalThis.clearTimeout
+    const audio=useAudio(),url=`/api/local-tts/audio/${'6'.repeat(64)}.mp3`,nextUrl=`/api/local-tts/audio/${'7'.repeat(64)}.mp3`
+    const stalled=audio.playLocalLlmAudioUntilMidpoint(url,1,1)
+    const next=audio.playLocalLlmAudioUntilMidpoint(nextUrl,2,2)
+    const voice=MockAudio.instances.find(a=>a.src===url)!
+    voice.emit('playing');await vi.advanceTimersByTimeAsync(12_000)
+    await expect(stalled).resolves.toBe(false);expect(voice.pause).toHaveBeenCalledOnce()
+    const following=MockAudio.instances.find(a=>a.src===nextUrl)!
+    following.emit('playing');following.emit('ended');await expect(next).resolves.toBe(true)
   })
 
   it('事件级 isCurrent 失效只终止自己的播放', async () => {
