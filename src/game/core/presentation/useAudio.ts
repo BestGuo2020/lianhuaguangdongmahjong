@@ -42,7 +42,8 @@ const BGM_FADE_OUT_RATIO = 0.36
 const BGM_FADE_STEP_MS = 40
 const NORMAL_LLM_AUDIO_TTL_MS = 3_000
 const IMPORTANT_LLM_AUDIO_TTL_MS = 10_000
-const LLM_AUDIO_PLAYBACK_TIMEOUT_MS = 12_000
+const LLM_AUDIO_START_TIMEOUT_MS = 12_000
+const LLM_AUDIO_STALL_TIMEOUT_MS = 12_000
 export const AUDIO_PREFERENCES_STORAGE_KEY = 'lianhua-guangma:audio-preferences:v1'
 
 interface AudioPreferences {
@@ -132,6 +133,7 @@ interface LlmAudioItem {
   isCurrent?: () => boolean
   resolveMidpoint?: (played: boolean) => void
   cancel?: () => void
+  started?: boolean
 }
 
 export function useAudio() {
@@ -289,12 +291,24 @@ export function useAudio() {
     let finished = false
     let started = false
     let fallbackTimer = 0
-    const playbackTimer = window.setTimeout(() => {
+    let lastPlaybackTime = 0
+    let playbackTimer = 0
+    const startTimer = window.setTimeout(() => {
+      if (finished) return
       audio.pause()
       finish(false)
-    }, LLM_AUDIO_PLAYBACK_TIMEOUT_MS)
+    }, LLM_AUDIO_START_TIMEOUT_MS)
+    const refreshPlaybackTimeout = () => {
+      if (playbackTimer) window.clearTimeout(playbackTimer)
+      playbackTimer = window.setTimeout(() => {
+        if (finished) return
+        audio.pause()
+        finish(false)
+      }, LLM_AUDIO_STALL_TIMEOUT_MS)
+    }
     const clearPlaybackTimers = () => {
-      window.clearTimeout(playbackTimer)
+      window.clearTimeout(startTimer)
+      if (playbackTimer) window.clearTimeout(playbackTimer)
       if (fallbackTimer) window.clearTimeout(fallbackTimer)
     }
     const finish = (played: boolean) => {
@@ -336,12 +350,16 @@ export function useAudio() {
       }
     }
     const handleStarted = () => {
-      if (started) return
+      if (finished || started) return
       if (item.isCurrent?.() === false) {
         item.cancel?.()
         return
       }
       started = true
+      item.started = true
+      window.clearTimeout(startTimer)
+      lastPlaybackTime = audio.currentTime
+      refreshPlaybackTimeout()
       try { item.onStarted?.() } catch { /* 展示失败不能阻塞语音和动作 */ }
       refreshMidpointFallback()
     }
@@ -352,8 +370,16 @@ export function useAudio() {
     }
     audio.addEventListener('playing', handleStarted, { once: true })
     audio.addEventListener('timeupdate', () => {
+      if (finished) return
       if (item.isCurrent?.() === false) item.cancel?.()
-      else maybeResolveMidpoint()
+      else {
+        // Only real media progress extends playback; buffering cannot block the queue forever.
+        if (started && audio.currentTime > lastPlaybackTime) {
+          lastPlaybackTime = audio.currentTime
+          refreshPlaybackTimeout()
+        }
+        maybeResolveMidpoint()
+      }
     })
     audio.addEventListener('durationchange', refreshMidpointFallback)
     audio.addEventListener('ended', () => finish(started), { once: true })
@@ -361,7 +387,7 @@ export function useAudio() {
     audio.play().catch(() => finish(false))
   }
 
-  /** 普通吐槽忙时直接丢弃；关键/胜利台词可打断普通语音，且只保留最新一条待播。 */
+  /** 普通吐槽忙时丢弃；关键台词可替换未开播项目，已开口的台词自然播完。 */
   function playLlmAudio(
     url: string,
     seat: number,
@@ -373,7 +399,7 @@ export function useAudio() {
     if (priority === 'important') {
       llmAudioQueue.splice(0, llmAudioQueue.length).forEach((item) => settleLlmMidpoint(item, false))
     }
-    if (activeLlmAudio && priority === 'important' && activeLlmItem?.priority === 'normal') {
+    if (activeLlmAudio && priority === 'important' && activeLlmItem?.priority === 'normal' && !activeLlmItem.started) {
       activeLlmItem.cancel?.()
     }
     llmAudioQueue.push({ url, seat, messageId, priority, enqueuedAt: Date.now() })
@@ -397,7 +423,7 @@ export function useAudio() {
           const [removed] = llmAudioQueue.splice(index, 1)
           settleLlmMidpoint(removed, false)
         }
-        if (activeLlmAudio && activeLlmItem?.priority === 'normal') activeLlmItem.cancel?.()
+        if (activeLlmAudio && activeLlmItem?.priority === 'normal' && !activeLlmItem.started) activeLlmItem.cancel?.()
       }
       const item: LlmAudioItem = {
         url, seat, messageId, priority, enqueuedAt: Date.now(),
