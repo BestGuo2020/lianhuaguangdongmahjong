@@ -104,6 +104,10 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   const candidates=offered.map((action,index)=>{
     const mapped=canonical(action)
     const features=validShape&&action.kind!=='win'?buildCandidateFeatures(input,mapped,'unknown'):unknownCandidateFeatures()
+    if(action.kind==='pass')features.actionEffect=view.window?.kind==='turn'
+      ?view.public.seats[view.seat].locked?'放弃新摸牌并摸切该牌'
+        :'仅放弃本次自摸胡，不会自动弃牌、不会摸牌或结束回合；仍由本家选择弃牌或开杠。直接选择弃牌也会放弃本次胡。'
+      :'放弃本次响应，不取得来牌；后续按窗口中其他玩家的动作推进'
     if(action.kind==='win'){
       features.ready=true
       if(view.ownScore){
@@ -125,17 +129,25 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
         const reform=evCtx.reformCandidates.find(c=>c.index===action.index)
         if(reform)features.ev={reform:{chain:Math.round(reform.ev),anyWait:reform.anyWait,waitCount:reform.waitCount,patterns:reform.patterns}}
       } else if(action.kind==='pass'&&evCtx.winOffered){
-        features.ev={developEv:Math.round(evCtx.developEv),...(evCtx.robEv?{rob:evCtx.robEv}:{})}
+        features.developmentPotential={score:Math.round(evCtx.developEv),scope:'heuristic-pattern-potential',
+          basis:view.window?.kind==='turn'&&player.drawnTileIndex>=0?'drawn-tile-removed':'current-hand'}
+        if(evCtx.robEv)features.ev={rob:evCtx.robEv}
       }
     }
+    // 摸切与自摸胡归档摸牌后的暗手完全相同，复用同源预测；不扩充本地改张候选或改动推荐。
+    const drawnDiscard=Boolean(evCtx?.winOffered&&!evCtx.locked&&view.window?.kind==='turn'
+      &&view.window.source.kind==='draw'&&action.kind==='discard'&&action.index===player.drawnTileIndex)
     // Gross fixed-hand income only: do not present unknown payments or later reforms as a net EV.
-    if(evCtx && (features.ev?.win || features.ev?.reform)){
+    if(evCtx && (features.ev?.win || features.ev?.reform || drawnDiscard)){
+      features.ev??={}
       const immediate=features.ev.win?.immediateTotal??0
-      const future=features.ev.win?.lockedChain??features.ev.reform?.chain??0
+      const future=features.ev.win?.lockedChain??features.ev.reform?.chain??Math.round(evCtx.chainAfterWin)
+      const waitCount=drawnDiscard?(features.waitsTotal??(Array.isArray(features.waits)?features.waits.length:0)):undefined
       features.ev.income={immediate,future,total:immediate+future,horizonOwnDraws:aiConfig.chainHorizon,
         model:evCtx.incomeModel,scope:'fixed-hand-gross',
         excludes:['opponent-payments','future-hand-improvements',...(evCtx.incomeModel==='self-draw-v1'?['discard-wins']:[])],
-        ...(features.ev.reform?{anyWait:features.ev.reform.anyWait,waitCount:features.ev.reform.waitCount}:{})}
+        ...(features.ev.reform?{anyWait:features.ev.reform.anyWait,waitCount:features.ev.reform.waitCount}
+          :waitCount!==undefined?{anyWait:waitCount===34,waitCount}:{})}
     }
     if(features.shanten!=='n/a'&&features.shanten>2&&features.ukeire===0){
       features.ukeire='n/a';features.effectiveTiles='n/a';delete features.effectiveTotal

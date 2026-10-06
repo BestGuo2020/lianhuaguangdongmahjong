@@ -50,7 +50,7 @@ it('zeros future income in every forecast and in the actual LLM candidate featur
   const reforms = built.candidates.flatMap(c => c.features.ev?.reform ? [c.features.ev.reform] : [])
   expect(reforms.some(c => c.anyWait)).toBe(true)
   expect(reforms.every(c => c.chain === 0)).toBe(true)
-  expect(built.candidates.find(c => c.action.kind === 'pass')?.features.ev?.developEv).toBe(0)
+  expect(built.candidates.find(c => c.action.kind === 'pass')?.features.developmentPotential?.score).toBe(0)
   const player = v.players[v.seat]
   expect(computeReformHint({ hand: player.hand, drawnTileIndex: player.drawnTileIndex,
     wallCount: 0, visible: player.hand, ownScore: v.ownScore!,

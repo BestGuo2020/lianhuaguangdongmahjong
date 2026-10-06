@@ -1,4 +1,4 @@
-// Jev 血流请求构造单测（模板 v3）：A/B 两臂的公平性约束（state 一致、推荐不泄漏）、紧凑 criteria 渲染、
+// Jev 血流请求构造单测（模板 v4）：A/B 两臂的公平性约束（state 一致、推荐不泄漏）、紧凑 criteria 渲染、
 // 以及 claim/turn 指令必须由 request.state.decision 驱动（v2 回归：request 顶层没有 decision 字段）。
 import { describe, expect, it } from 'vitest'
 import { BLOOD_FLOW_PROMPT_RULES } from './bloodFlowDecisionInput'
@@ -38,11 +38,11 @@ function decisionFixture(overrides: {
   }
 }
 
-describe('buildJevBloodFlowRequest（v3）', () => {
-  it('盲判臂：criteria 只含动作名；模板 id 升 v3；promptVariables 与 engineSuggestion 正确', () => {
+describe('buildJevBloodFlowRequest（v4）', () => {
+  it('盲判臂：criteria 只含动作名；模板 id 升 v4；promptVariables 与 engineSuggestion 正确', () => {
     const built = buildJevBloodFlowRequest({ decision: decisionFixture(), mode: 'blind', requestId: 'r1' })
-    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(3)
-    expect(built.templateId).toBe('jev-bf-blind-v3')
+    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(4)
+    expect(built.templateId).toBe('jev-bf-blind-v4')
     expect(built.candidates).toEqual([
       { id: 'A0', description: '打出3万' },
       { id: 'A1', description: '打出5筒' },
@@ -109,8 +109,9 @@ describe('compactCandidateDescription（v2 token 词表）', () => {
     expect(compactCandidateDescription('暗杠5筒', { kongValue: { net: -30 } })).toBe('暗杠5筒·杠净-30')
     expect(compactCandidateDescription('直杠', { kongValue: { net: 45 } })).toBe('直杠·杠净+45')
   })
-  it('过牌发育期望与抢杠两值', () => {
-    expect(compactCandidateDescription('过', { ev: { developEv: 180 } })).toBe('过·发180')
+  it('区分启发式潜力与抢杠收益，兼容历史特征', () => {
+    expect(compactCandidateDescription('过', { developmentPotential: {score:180} })).toBe('过·潜180（非收入）')
+    expect(compactCandidateDescription('过', { ev: { developEv: 180 } })).toBe('过·潜180（非收入）')
     expect(compactCandidateDescription('过', { ev: { rob: { winEv: 320, passEv: 180 } } })).toBe('过·抢320/过180')
   })
   it('对手风险赔付与听口', () => {

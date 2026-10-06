@@ -12,6 +12,7 @@ import type { BloodFlowAction } from '../variants/lotus/bloodFlow/state'
 import type { SourceTileEvent, WinSource } from '../variants/lotus/bloodFlow/types'
 import { buildBloodFlowDecisionInput } from './bloodFlowDecisionInput'
 import { bloodFlowDecisionPrompt } from './bloodFlowRuntime'
+import { bloodFlowEvContext } from '../variants/lotus/bloodFlow/evContext'
 
 function view(overrides: {
   hand?: TileType[]; jokers?: TileType[]; melds?: Meld[]; wallCount?: number;
@@ -44,6 +45,32 @@ function view(overrides: {
 }
 
 const CLEAN_MELDS: TileType[] = ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm5', 'm5', 'p1', 'p1', 'p1']
+
+// Reconstructed from the two Kimi responses, not an exact replay: no hidden hands/wall.
+it.each(['s2', 'p1'] as const)('gives Kimi an explicit pass effect and comparable drawn-discard income for %s', drawn => {
+  const v = view({ hand: ['s8', 's9', 'm6', 'm6', 's6', 's7', 'east', 'south', 'west', 'white', drawn],
+    melds: [{ type: 'peng', tile: 'm5', tiles: ['m5', 'm5', 'm5'], from: 3 }],
+    jokers: ['s8', 's9'], drawnTileIndex: 10, wallCount: 55,
+    ownScore: { paymentPerPayer: 10, source: 'self-draw' } })
+  const config = { ...BLOOD_FLOW_LLM_AI, chainForecast: 'legacy' as const, opportunityCalibration: undefined }
+  const before = structuredClone(v), ctx = bloodFlowEvContext(v, config)
+  const prompt = bloodFlowDecisionPrompt(v, [], 'kimi-loop', undefined, {}, '稳健', config)
+  const win = prompt.candidates.find(c => c.action.kind === 'win')!
+  const pass = prompt.candidates.find(c => c.action.kind === 'pass')!
+  const discard = prompt.candidates.find(c => c.action.kind === 'discard' && c.action.index === 10)!
+  expect(win.features.ev?.income).toMatchObject({ immediate: 30, future: 240, total: 270 })
+  expect(discard.features.ev?.income).toMatchObject({ immediate: 0, future: 240, total: 240,
+    model: 'self-draw-v1', scope: 'fixed-hand-gross', anyWait: true, waitCount: 34 })
+  expect(pass.features.actionEffect).toContain('不会自动弃牌')
+  expect(pass.features.actionEffect).toContain('仍由本家选择弃牌或开杠')
+  expect(pass.features.developmentPotential).toEqual({ score: Math.round(ctx.developEv),
+    scope: 'heuristic-pattern-potential', basis: 'drawn-tile-removed' })
+  expect(pass.features.ev?.developEv).toBeUndefined()
+  expect(pass.summary).not.toContain('发育期望')
+  expect(prompt.messages.system).toContain('不能与 income.total 直接比较')
+  expect(prompt.variables.waitsBasis).toContain('移除刚摸牌')
+  expect(v).toEqual(before)
+})
 
 it('LLM prices both sides of an any-wait reform using the same self-draw horizon and states the rule', () => {
   const v = view({ hand: [...CLEAN_MELDS, 's7', 'white'], jokers: ['white'], drawnTileIndex: 13,
