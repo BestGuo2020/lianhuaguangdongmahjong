@@ -1,0 +1,225 @@
+{
+  "kongEvents": [],
+  "authorityEpoch": "local-3",
+  "roundId": "round-3",
+  "version": 68,
+  "seat": 3,
+  "players": [
+    {
+      "seat": 0,
+      "name": "巅峰雀神",
+      "avatar": "",
+      "score": 7240,
+      "hand": [],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "m3",
+          "tiles": [
+            "m3",
+            "m4",
+            "m5"
+          ],
+          "from": 3
+        }
+      ],
+      "discards": [
+        "p3",
+        "m2",
+        "red",
+        "s1",
+        "s8"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 10
+    },
+    {
+      "seat": 1,
+      "name": "Kimi月姬",
+      "avatar": "",
+      "score": 770,
+      "hand": [],
+      "melds": [],
+      "discards": [
+        "p7",
+        "p9",
+        "m9",
+        "p8",
+        "m5"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 13
+    },
+    {
+      "seat": 2,
+      "name": "千问大小姐",
+      "avatar": "",
+      "score": -285,
+      "hand": [],
+      "melds": [],
+      "discards": [
+        "m2",
+        "p2",
+        "s8",
+        "p6"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 13
+    },
+    {
+      "seat": 3,
+      "name": "智谱狐姬",
+      "avatar": "",
+      "score": 275,
+      "hand": [
+        "p4",
+        "p5",
+        "s3",
+        "s4",
+        "s5",
+        "red",
+        "green"
+      ],
+      "melds": [
+        {
+          "type": "chi",
+          "tile": "p8",
+          "tiles": [
+            "p7",
+            "p8",
+            "p9"
+          ],
+          "from": 2
+        },
+        {
+          "type": "chi",
+          "tile": "s8",
+          "tiles": [
+            "s6",
+            "s7",
+            "s8"
+          ],
+          "from": 2
+        }
+      ],
+      "discards": [
+        "s4",
+        "p3",
+        "s9",
+        "s6"
+      ],
+      "redCount": 0,
+      "drawnTileIndex": -1,
+      "concealedTileCount": 7
+    }
+  ],
+  "currentPlayer": 2,
+  "wallCount": 64,
+  "headDrawn": 70,
+  "flipTile": "p4",
+  "jokers": [
+    "p4",
+    "p5"
+  ],
+  "flipStack": 38,
+  "flipSeat": 2,
+  "wallBreakIndex": 38,
+  "window": {
+    "id": "round-3/window/68",
+    "version": 68,
+    "kind": "meld",
+    "deadlineAt": 34050,
+    "opensAt": 19050,
+    "source": {
+      "kind": "discard",
+      "seat": 2,
+      "tile": "p6",
+      "id": "local-3/round-3/tile/42"
+    }
+  },
+  "ownActions": [
+    {
+      "kind": "chi",
+      "tiles": [
+        "p4",
+        "p5",
+        "p6"
+      ]
+    },
+    {
+      "kind": "pass"
+    }
+  ],
+  "ownScore": null,
+  "waitingSeats": [
+    3
+  ],
+  "public": {
+    "ruleVersion": "lotus-blood-flow-v1",
+    "roundId": "round-3",
+    "status": "playing",
+    "seats": [
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      },
+      {
+        "winCount": 0,
+        "locked": false,
+        "firstWinSequence": null,
+        "recordIds": []
+      }
+    ],
+    "batches": [],
+    "roundResult": null
+  },
+  "actionEvents": [
+    {
+      "id": 1,
+      "type": "chi",
+      "actorIndex": 3,
+      "sourceIndex": 2,
+      "tile": "p8",
+      "meldIndex": 0
+    },
+    {
+      "id": 2,
+      "type": "chi",
+      "actorIndex": 3,
+      "sourceIndex": 2,
+      "tile": "s8",
+      "meldIndex": 1
+    },
+    {
+      "id": 3,
+      "type": "chi",
+      "actorIndex": 0,
+      "sourceIndex": 3,
+      "tile": "m3",
+      "meldIndex": 0
+    }
+  ],
+  "lastDiscardAction": {
+    "kind": "discard",
+    "seat": 2,
+    "tile": "p6",
+    "id": "local-3/round-3/tile/42"
+  }
+}
