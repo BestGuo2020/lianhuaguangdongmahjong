@@ -1,6 +1,7 @@
 // 规范请求/动作/特征类型 —— docs/llm-ai-design.md §2.1 / §6.4。
 // 只做类型与镜像映射（无副作用）；前后端共用同一形状，差异作为 golden fixture 比对失败。
 import type { TileType } from '../core/contracts/types'
+import type { BloodFlowWaitComparison } from './bloodFlowWaitComparison'
 
 /** 线协议规则 ID：只允许这两个值（后端内部 lianhua_guangma 只能经显式映射进入协议） */
 export type RuleCode = 'lotus-classic' | 'lotus-legacy'
@@ -37,6 +38,8 @@ export interface CandidateFeatures {
   risks: string[]
   /** Authoritative execution effect; passing on our draw does not choose a discard. */
   actionEffect?: string
+  /** Blood-flow source-specific standing waits before/after pass, chi or peng. */
+  waitComparison?: BloodFlowWaitComparison
   /** Pattern-ranking heuristic, not a probability-weighted forecast of income. */
   developmentPotential?: { score:number;scope:'heuristic-pattern-potential';basis:'drawn-tile-removed'|'current-hand' }
   /**

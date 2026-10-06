@@ -9,6 +9,7 @@ import {bloodFlowEvContext, isFinalSelfDrawWin} from '../variants/lotus/bloodFlo
 import {visibleTiles, type BloodFlowSeatView} from '../variants/lotus/bloodFlow/seatView'
 import type {BloodFlowAction} from '../variants/lotus/bloodFlow/state'
 import {detectBigHandRoute, narrowActionsToRoute, type BigHandRoute} from '../variants/lotus/bloodFlow/bigHandRoute'
+import {bloodFlowReadiness,bloodFlowClaimWaitComparison} from './bloodFlowWaitComparison'
 
 export interface BloodFlowDecisionMetadata {roundIndex?:number;dealerIndex?:number;seatWind?:string;roundWind?:string}
 export const BLOOD_FLOW_PROMPT_RULES = '莲花麻将血流：非精白板按进张、番型和风险取舍，价值相近优先保留；沿用翻精、白板受限替代、数牌吃和字牌顺；支持鸡胡、七对、十三幺、十三烂、七星十三烂及清一色、混一色、碰碰胡、大小三元、大小四喜、九莲宝灯、绿一色、清幺九、混幺九、三暗刻、四暗刻、字一色、三杠、四杠、豪华七对、断幺九、全带幺、门清（1番：无副露即可，可与任何番种叠加）、平胡（1番：存在"4顺子+1将、无刻子"的拆解，可副露、字牌也可成顺，精牌只能补顺不能补刻）、一色三步高/四步高、一色三节高/四节高、清龙；没有任何计分番种时算鸡胡（0.5番、支付减半）。番型倍率按番值**相加**（清一色8 + 门清1 = 9），自然成立硬胡×2；真实倍率、封顶和收益以 currentWin 为准。可点炮、多响和抢补杠，胡后继续；首次胡锁手，之后只能处理新摸牌，已胡仍付款；牌墙耗尽才结算。精吊任意听（自摸听口覆盖全部34种牌）只能自摸，吃胡（含地胡）与抢杠均禁止，杠上开花保留；首次胡锁手后仍按此限制。任意听的连锁收益只计算剩余本家摸牌机会，不包含吃胡收入。候选 features.ev 为本地期望收益估算（自摸按 2 倍×3 家、锁手连锁、首胡门槛、改张/单吊任意听、抢杠两值），仅作依据；早局低番胡会锁手，可结合潜力考虑改张或过。点炮赔付=底分10×番型倍率×事件倍率（点炮×1、自摸/抢杠×2、杠上开花×4），单家封顶128倍；杠另有加成（明杠+1、风杠+1、暗杠+2，但已成三杠/四杠番种时不再叠加；鸡胡不与任何番型叠加——开了杠只算杠番、不加鸡胡的0.5番）。杠候选带 features.kongValue（开杠价值 = 杠收益 − 防守风险 − 自手牌型损失）：net ≤ 0 表示这一杠会拆掉自己的七对/豪华七对、破坏门清或让向听变差，默认建议不会是杠。同一张牌打给在做大牌（清一色/三元/四喜等）的对手，代价可达鸡胡的16~64倍；候选 features.opponentRisk 给出该牌按公共信息估算的赔付档与信号。对手没副露时也能读牌河：整局不打字牌与幺九＝十三幺/字一色嫌疑，整局不打某花色＝九莲/清一色嫌疑，此时字牌幺九与嫌疑花色才是贵的，中张相对便宜——必打一张时应按这个方向选损失最小的牌。对手已胡过的番型同样是公开信息（features.opponentRisk.signals 里的「已胡十三幺」等）：已公开番型限定了他的牌型，锁手后依然成立，因此比读牌河更可靠。兜/弃政策：state.defense.mode 为 fold 时，本家未听牌且可达听口过窄而对手已做成十六倍级及以上大牌（三十二倍级的十三幺/九莲宝灯也算）——此时应只打最安全的牌、不要吃碰杠；若 ownAnyWaitReachable 为真（打一张即单吊任意听，此后每巡必胡、永不弃牌）或 ownCeiling 不低于对手倍率，则应继续进攻。state.defense.restricted 为真时，候选已在本地下游收窄（吃碰杠不会出现、弃牌只留安全档），只需在给出的候选里选择，不要因为缺少选项而报错。'
@@ -101,9 +102,21 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
     roundWind:metadata.roundIndex==null?undefined:metadata.roundIndex<=4?'东':'南',...metadata}
   // EV 特征与默认推荐同源：本地贪婪决策的结果就是 engineSuggestion；llmEvFeatures 关闭时回退旧提示词。
   const evCtx=useEv?bloodFlowEvContext(view,aiConfig):null
+  const readiness=bloodFlowReadiness(view)
   const candidates=offered.map((action,index)=>{
     const mapped=canonical(action)
     const features=validShape&&action.kind!=='win'?buildCandidateFeatures(input,mapped,'unknown'):unknownCandidateFeatures()
+    const comparison=bloodFlowClaimWaitComparison(view,action,readiness.summary)
+    if(comparison){
+      features.waitComparison=comparison
+      if(action.kind==='pass'){
+        features.ready=comparison.after.ready
+        features.waitsTotal=comparison.after.selfDrawWaitCount
+        features.effectiveRemaining=comparison.after.selfDrawRemaining
+        if(comparison.after.ready)features.shanten=0
+      }
+      if(comparison.breaksAnyWait)features.risks.push(`会拆掉当前精吊任意听；再弃${comparison.bestDiscard}后的最佳自摸听口${comparison.after.selfDrawWaitCount}种，吃胡听口${comparison.after.discardWaitCount}种`)
+    }
     if(action.kind==='pass')features.actionEffect=view.window?.kind==='turn'
       ?view.public.seats[view.seat].locked?'放弃新摸牌并摸切该牌'
         :'仅放弃本次自摸胡，不会自动弃牌、不会摸牌或结束回合；仍由本家选择弃牌或开杠。直接选择弃牌也会放弃本次胡。'
@@ -166,7 +179,7 @@ export function buildBloodFlowDecisionInput(view:BloodFlowSeatView,requestId:str
   const state={...buildPublicDecisionSnapshot(input),ruleCode:'lotus-blood-flow' as const}
   const request={ruleCode:'lotus-blood-flow',state,candidates:candidates.map(c=>c.canonical),
     engineSuggestion:candidates.find(c=>JSON.stringify(c.action)===JSON.stringify(recommended))?.id??candidates[0]?.id}
-  return {candidates,request,bigHandRoute:routePlan.route,collapsedByRoute:routePlan.collapsed,
+  return {candidates,request,readiness,bigHandRoute:routePlan.route,collapsedByRoute:routePlan.collapsed,
     // 被收窄动作的清单（§3.3）：给分析记录用，让"这一手为什么只有这些选项"可解释
     collapsedActions: collapsedActionsOf(actions, routePlan.actions, 'big-hand-route')}
 }
