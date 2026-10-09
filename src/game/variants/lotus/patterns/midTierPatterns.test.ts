@@ -14,6 +14,39 @@ function score(concealed: TileType[], winningTile: TileType, source: 'discard' |
 }
 
 describe('断幺九 / 全带幺', () => {
+  it.each(['discard', 'self-draw'] as const)('七对叠加断幺九并计入支付：%s', source => {
+    const win = score(['m2', 'm2', 'm4', 'm4', 'p3', 'p3', 'p5', 'p5', 's2', 's2', 's6', 's6', 's8'], 's8', source)!
+    expect(win.decomposition.shape).toBe('sevenPairs')
+    expect(win.score.items.map(item => item.id).sort()).toEqual(['all-simples', 'concealed-hand', 'sevenPairs'])
+    expect(win.score.patternMultiplier).toBe(7)
+    expect(win.score.paymentPerPayer).toBe(source === 'discard' ? 140 : 280)
+  })
+
+  it('豪华七对同样叠加断幺九', () => {
+    const win = score(['m2', 'm2', 'm2', 'm2', 'p3', 'p3', 'p5', 'p5', 's2', 's2', 's6', 's6', 's8'], 's8')!
+    expect(win.score.items.map(item => item.id).sort()).toEqual(['all-simples', 'concealed-hand', 'luxury-seven-pairs'])
+    expect(win.score.patternMultiplier).toBe(9)
+    expect(win.score.paymentPerPayer).toBe(180)
+  })
+
+  it.each([false, true])('精牌替代中张时七对按成牌牌面计断幺九：豪华=%s', luxury => {
+    const hand: TileType[] = [luxury ? 'm2' : 'm4', 'east', 'm2', 'm2', 'p3', 'p3', 'p5', 'p5', 's2', 's2', 's6', 's6', 's8']
+    const win = score(hand, 's8', 'discard', ['east'])!
+    expect(win.decomposition.shape).toBe('sevenPairs')
+    expect(win.score.items.map(item => item.id)).toContain('all-simples')
+    expect(win.score.items.map(item => item.id)).toContain(luxury ? 'luxury-seven-pairs' : 'sevenPairs')
+    expect(win.score.hardWin).toBe(false)
+    expect(win.score.patternMultiplier).toBe(luxury ? 9 : 7)
+    expect(win.score.paymentPerPayer).toBe(luxury ? 90 : 70)
+  })
+
+  it.each(['m1', 'p9', 'east'] as const)('七对含幺九或字牌不计断幺九：%s', tile => {
+    const win = score([tile, tile, 'm4', 'm4', 'p3', 'p3', 'p5', 'p5', 's2', 's2', 's6', 's6', 's8'], 's8')!
+    expect(win.decomposition.shape).toBe('sevenPairs')
+    expect(win.score.items.map(item => item.id)).not.toContain('all-simples')
+    expect(win.score.patternMultiplier).toBe(5)
+  })
+
   it('断幺九：全 2~8 数牌成立；带幺九或字牌不成立', () => {
     // 234 567 + 234 567 + 88（万/筒混）→ 断幺九
     expect(ids(['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'], 'p8')).toContain('all-simples')

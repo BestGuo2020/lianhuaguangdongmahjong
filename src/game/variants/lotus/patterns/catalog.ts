@@ -58,6 +58,8 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   if (suits.size === 1) result.push(honors ? 'mixed-suit' : 'pure-suit')
   if (tiles.every(isHonor)) result.push('all-honors')
   if (tiles.every(t => ['s2', 's3', 's4', 's6', 's8', 'green'].includes(t))) result.push('all-green')
+  // 断幺九只看成牌牌面，标准型与七对（含豪华七对）都可叠加。
+  if (tiles.every(t => !isHonor(t) && !isTerminal(t))) result.push('all-simples')
   if (hand.shape === 'sevenPairs') return result
   const melds = hand.groups.filter(g => g.kind !== 'pair')
   const pair = hand.groups.find(g => g.kind === 'pair')!.tiles[0]
@@ -84,8 +86,6 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
     if (counts.every((n, i) => n >= (i === 0 || i === 8 ? 3 : 1))) result.push('nine-gates')
   }
   // —— 2026-09-12 第二版番种表新增 ——
-  // 断幺九：全部为 2~8 数牌。
-  if (tiles.every(t => !isHonor(t) && !isTerminal(t))) result.push('all-simples')
   // 全带幺：每副面子与将牌都含幺九或字牌（允许 123 / 789 这类含幺的顺子）。
   if (hand.groups.every(g => g.tiles.some(t => isHonor(t) || isTerminal(t)))) result.push('all-with-terminals')
   // 一色步高 / 清龙：同花色顺子的起始数字关系（步高公差 1 或 2；清龙仍是 123/456/789 的 1/4/7）。
