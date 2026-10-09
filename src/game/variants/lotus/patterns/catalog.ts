@@ -60,12 +60,16 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   if (tiles.every(t => ['s2', 's3', 's4', 's6', 's8', 'green'].includes(t))) result.push('all-green')
   // 断幺九只看成牌牌面，标准型与七对（含豪华七对）都可叠加。
   if (tiles.every(t => !isHonor(t) && !isTerminal(t))) result.push('all-simples')
-  if (hand.shape === 'sevenPairs') return result
   const melds = hand.groups.filter(g => g.kind !== 'pair')
-  const pair = hand.groups.find(g => g.kind === 'pair')!.tiles[0]
   const triplets = melds.filter(g => g.kind === 'triplet' || g.kind === 'kong')
-  const sequences = melds.filter(g => g.kind === 'sequence')
   const allTriplets = triplets.length === 4
+  // 幺九牌种属性适用于七对；标准型继续要求四副刻子/杠。
+  const terminalShape = hand.shape === 'sevenPairs' || allTriplets
+  if (terminalShape && tiles.every(isTerminal)) result.push('pure-terminals')
+  if (terminalShape && honors && suits.size > 0 && tiles.every(t => isHonor(t) || isTerminal(t))) result.push('mixed-terminals')
+  if (hand.shape === 'sevenPairs') return result
+  const pair = hand.groups.find(g => g.kind === 'pair')!.tiles[0]
+  const sequences = melds.filter(g => g.kind === 'sequence')
   if (allTriplets) result.push('all-triplets')
   const dragonCount = DRAGONS.filter(t => triplets.some(g => g.tiles[0] === t)).length
   const windCount = WINDS.filter(t => triplets.some(g => g.tiles[0] === t)).length
@@ -73,8 +77,6 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   if (dragonCount === 2 && DRAGONS.includes(pair) && !triplets.some(g => g.tiles[0] === pair)) result.push('little-three-dragons')
   if (windCount === 4) result.push('big-four-winds')
   if (windCount === 3 && WINDS.includes(pair) && !triplets.some(g => g.tiles[0] === pair)) result.push('little-four-winds')
-  if (allTriplets && tiles.every(isTerminal)) result.push('pure-terminals')
-  if (allTriplets && honors && suits.size > 0 && tiles.every(t => isHonor(t) || isTerminal(t))) result.push('mixed-terminals')
   const concealedTriplets = triplets.filter(g => g.concealed).length
   if (concealedTriplets >= 3) result.push('three-concealed-triplets')
   if (concealedTriplets === 4) result.push('four-concealed-triplets')
