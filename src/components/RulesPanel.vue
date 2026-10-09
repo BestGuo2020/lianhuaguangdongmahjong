@@ -38,8 +38,9 @@ const rules = computed(() => {
     ['翻精与硬胡', '两次掷骰、双精、白板受限替代。每次胡按完整副露和胡牌张重新判型；完全按真实牌面成立为硬胡 ×2。'],
     ['听任意仅自摸', '精吊任意听（听口覆盖全部牌张）只能自摸胡；吃胡、地胡与抢杠胡均不成立，杠上开花保留。首胡锁手后仍按此限制。'],
     ['收付规则', '底分 10，起始 2000。点炮与抢补杠由来源玩家付，自摸由其他三家付，已胡也付；允许负分和多响。'],
-    ['组合与封顶', '同一合法分解按 1 + 各番型(倍数−1) 相加；包含项不重复加分。普通点炮 ×1、自摸 ×2、抢补杠 ×2、杠后自摸 ×4，再计硬胡，单家最终 64 倍封顶。'],
-    ['番型目录', Object.values(BLOOD_FLOW_CONFIG.patterns).map(p => `${p.label} ${p.weight}倍`).join('、')],
+    ['组合与封顶', `同一合法分解按各番型番值相加，另计杠加成；包含项不重复加分。普通点炮 ×1、自摸 ×2、抢补杠 ×2、杠后自摸 ×4，再计硬胡，单家最终 ${BLOOD_FLOW_CONFIG.maxMultiplierPerPayer} 倍封顶。`],
+    ['七对叠加', '普通七对和豪华七对可叠加断幺九、清一色、混一色、混幺九、清幺九等符合条件的牌种属性，按精牌替代后的成牌牌面判定。豪华七对覆盖普通七对；清幺九七对必为豪华七对。'],
+    ['番型目录', Object.values(BLOOD_FLOW_CONFIG.patterns).map(p => `${p.label} ${p.weight}番`).join('、')],
     ['杠与场制', '直杠来源付 10；补杠其他三家各付 10；暗杠/风杠各付 20。东风 4 局、半庄 8 局，局末轮庄，无庄家倍率或买马。'],
     ['风杠', windKongDescription],
   ]
@@ -72,7 +73,7 @@ const rules = computed(() => {
 })
 
 const panelTitle = computed(() => props.variant === 'lotus-blood-flow' ? '莲花麻将·血流玩法' : props.variant === 'lotus-legacy' ? '莲花麻将玩法' : '莲花广麻玩法')
-const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? '底分 10 · 单家每次最多 640 分 · 牌墙耗尽结束本局' : props.variant === 'lotus-legacy'
+const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? `底分 ${BLOOD_FLOW_CONFIG.basePoints} · 单家每次最多 ${BLOOD_FLOW_CONFIG.basePoints * BLOOD_FLOW_CONFIG.maxMultiplierPerPayer} 分 · 牌墙耗尽结束本局` : props.variant === 'lotus-legacy'
   ? `基础单位 ${BASE_SCORE} 分 · 番数×底分，按身份收付`
   : `基础分 ${BASE_SCORE} 分 · 总分 = 底分 × 倍数 + 中马数 × 底分 + 红中数 × 底分`)
 </script>
