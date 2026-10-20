@@ -152,8 +152,8 @@ function addConcealedHand(playerIndex) {
         x = (index - (arrangedTotal - 1) / 2) * gap
       }
       // 对家固定使用远端后场，避免中后局牌河向后扩展时覆盖暗牌。
-      // 对家手牌离远墙 1.21（与上家/下家手牌离墙距离一致）；副露在手牌前方（墙侧），副露时手牌变短、x 向不重叠。
-      z = -9.53
+      // 对家手牌与副露共用同一条横线；副露增多时沿 x 轴让位。
+      z = TABLE_LAYOUT.oppositeHandZ
       rotationY = props.revealHands ? Math.PI : 0
     } else {
       rotationY = props.revealHands

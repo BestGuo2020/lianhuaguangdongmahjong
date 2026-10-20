@@ -22,7 +22,7 @@ export function windForSeat(playerIndex: number, dealerIndex: number) {
 // All positions are in the tile layer's coordinates (the renderer adds -1 to z).
 // Local right/outward axes are shared by melds, hands and winning tiles.
 export const TABLE_LAYOUT = Object.freeze({ tilePitch: .685, sourcePitch: .965,
-  groupGap: .18, handGap: 1.24, meldRetreat: 1.1, pilePitch: .685, layerHeight: .47 })
+  groupGap: .18, handGap: 1.24, meldRetreat: 1.1, pilePitch: .685, layerHeight: .47, oppositeHandZ: -9.53 })
 export function seatTableLayout(seat: number) {
   const index = seat >= 0 && seat < 4 ? seat : 0
   // 本家副露带回到近墙外侧横排（把近槽右端的角缝让给盖楼）；对家副露带沿远墙内侧横排；
@@ -30,8 +30,9 @@ export function seatTableLayout(seat: number) {
   const right = [ {x:1,z:0}, {x:0,z:-1}, {x:-1,z:0}, {x:0,z:1} ][index]
   const outward = [ {x:0,z:1}, {x:1,z:0}, {x:0,z:-1}, {x:-1,z:0} ][index]
   const rotation = [0, Math.PI/2, Math.PI, -Math.PI/2][index]
-  // 副露带锚点：本家贴右端横排；对家贴远墙外侧靠远缘（与上家/下家贴 ±10 桌缘同款）；下家贴远角（右上）；上家贴近角（左下）。
-  const start = [{x:9,z:6.79},{x:8.9,z:-8.45},{x:-9,z:-9.57},{x:-9.24,z:7.3}][index]
+  // 对家副露与手牌共用一条横线，沿画面向左移动两个牌宽；其余三家保持原轨道。
+  const start = [{x:9,z:6.79},{x:8.9,z:-8.45},
+    {x:-9 - 2*TABLE_LAYOUT.tilePitch,z:TABLE_LAYOUT.oppositeHandZ + TABLE_LAYOUT.meldRetreat},{x:-9.24,z:7.3}][index]
   const meld = {x:start.x + outward.x*TABLE_LAYOUT.meldRetreat,
     z:start.z + outward.z*TABLE_LAYOUT.meldRetreat, rotation}
   // 四角胡牌位（本家右下、下家右上、对家左上、上家左下），与各自升牌槽为"左右关系"（同高度带、在槽的外侧）。

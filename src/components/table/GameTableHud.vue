@@ -16,6 +16,7 @@ import { BloodFlowPresentationDirector } from '../../game/variants/lotus/bloodFl
 import type { BloodFlowCue } from '../../game/variants/lotus/bloodFlow/presentation'
 import { bloodFlowImpactProfile } from '../../theme/bloodFlowPresentation'
 import { useEffectPlayer } from '../../game/core/presentation/useAudio'
+import { createKongWeatherTimeline, kongWeatherSound, type KongWeatherCue } from '../../game/core/presentation/kongWeather'
 import { createTableLoadRetryController } from './tableLoadRetry'
 import { animeAvatarForPlayer } from '../../game/core/presentation/animeAvatarPresentation'
 import { displayImageSrc } from '../../game/core/presentation/imagePreload'
@@ -218,6 +219,28 @@ const presentedTableActionEvent = computed(() => {
   const event = props.tableActionEvent ?? actionCueLabEvent.value
   return props.bloodFlow && event && winActionTypes.has(event.type) ? null : event
 })
+const kongWeatherCues = shallowRef<readonly KongWeatherCue[]>([])
+const kongWeatherTimeline = createKongWeatherTimeline(cue => effectPlayer?.(kongWeatherSound(cue.kind), .28))
+watch(() => `${props.themeName}/${props.user.seat}/${props.roundLabel}/${props.bloodFlow?.roundId}/${props.bloodFlow?.presentationKey}`, () => {
+  kongWeatherTimeline.reset()
+  kongWeatherCues.value = []
+}, { immediate: true })
+watch([
+  () => presentedTableActionEvent.value,
+  () => props.players.map(player => player.melds.map(meld => `${meld.type}:${meld.added}:${meld.pending}`).join(',')).join('|'),
+  () => bloodFlowCue.value?.id,
+], () => {
+  let event = props.bloodFlow ? null : presentedTableActionEvent.value
+  // Blood-flow's director already suppresses snapshot history and sequences
+  // completed kongs with wins. Consume that cue, avoiding a second weather play.
+  const kong = props.bloodFlow && bloodFlowCue.value?.kind === 'kong' ? bloodFlowCue.value.kongEvents[0] : null
+  if (kong) event = { id: kong.sequence, actorIndex: (kong.actor - props.user.seat + 4) % 4,
+    type: ({ discard: 'discard-gang', added: 'added-gang', concealed: 'concealed-gang', wind: 'wind-kong' } as const)[kong.kongKind],
+    sourceIndex: null, tile: 'east', meldIndex: -1 }
+  // Ledger entries represent completed kongs, so there is no pending meld to gate.
+  kongWeatherCues.value = [...kongWeatherTimeline.sync(event, props.players, performance.now(),
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches, Boolean(kong))]
+}, { immediate: true })
 const presentedLlmBubbles = computed(() => props.bloodFlow
   ? ['llm','llmAnime'].includes(props.themeName)?props.bloodFlow.roundResult?(settlementVisible.value?undefined:props.bloodFlow.roundBubbles):props.bloodFlow.actionBubbles:undefined
   : bubbleLabEnabled
@@ -521,6 +544,7 @@ function onAvatarError(entry: GamePlayer) {
       :win-effect="winEffect" :win-presentation="winPresentation" :deal-animation="dealAnimation"
       :opening-stage="openingStage" :dice-values="diceValues" :dealer-index="dealer" :dice-thrower-index="diceThrowerIndex"
       :table-action-event="tableActionEvent"
+      :kong-weather="kongWeatherCues"
       :wall-break-index="wallBreakIndex"
       :flip-tile="flipTile"
       :flip-stack="flipStack"

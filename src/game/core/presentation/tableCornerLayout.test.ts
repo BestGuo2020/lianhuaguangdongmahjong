@@ -9,6 +9,11 @@ function bounds(x:number,z:number,rotation:number) {
 }
 function overlaps(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x0<b.x1&&a.x1>b.x0&&a.z0<b.z1&&a.z1>b.z0}
 describe('public corner bays',()=>{
+ it('aligns opposite melds with the hand row and shifts them two tile widths left',()=>{
+  const meld=meldTrackTransform(2,0)
+  expect(meld.z).toBeCloseTo(TABLE_LAYOUT.oppositeHandZ)
+  expect(meld.x).toBeCloseTo(-9-2*TABLE_LAYOUT.tilePitch)
+ })
  for(const seat of [0,1,2,3]) it(`seat ${seat}: wide river rows keep the original L-shaped alignment`,()=>{
   const lateral=(index:number)=>{
    const p=discardTileLayout(seat,index)

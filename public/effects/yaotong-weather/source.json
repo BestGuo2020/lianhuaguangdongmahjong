@@ -1,0 +1,86 @@
+{
+  "bundle": "inbattle_ab_v1.bundle / effect/common_ab_v1.bundle",
+  "files": [
+    {
+      "file": "wind_trail.png",
+      "source": "01_刮风\\贴图\\wind_trail.png",
+      "sha256": "88b81c9ba1d54aee50705d00ec40422ddd1d508cb8608b8dd10f3144a31d0453"
+    },
+    {
+      "file": "effect_trail_02.png",
+      "source": "01_刮风\\贴图\\effect_trail_02.png",
+      "sha256": "580eb5866c25ea5cbddf8ff660d140319546b6579d0908a181bce38933318df7"
+    },
+    {
+      "file": "effect_flash_00.png",
+      "source": "01_刮风\\贴图\\effect_flash_00.png",
+      "sha256": "0d300cf5e95c8aacdd504a61516c5c722bbdd3fd8e89bb7e2e4459310b5571d6"
+    },
+    {
+      "file": "effect_wenli_00.png",
+      "source": "01_刮风\\贴图\\effect_wenli_00.png",
+      "sha256": "a822190268bea7d65a070791d4e0f4813029f69116684aca83ef793e2677492c"
+    },
+    {
+      "file": "effect_mask_03.png",
+      "source": "01_刮风\\贴图\\effect_mask_03.png",
+      "sha256": "a6ad824344c3dba01b3d801d52c5c6b8cbb78228af5650f2ce0db652ea8f089f"
+    },
+    {
+      "file": "effect_glow_03.png",
+      "source": "01_刮风\\贴图\\effect_glow_03.png",
+      "sha256": "2491949f5bc78eb90bc67dd00d0bb5244bd0dfb7e7fa367e2eb3724f3af83802"
+    },
+    {
+      "file": "shanguang_bai.png",
+      "source": "01_刮风\\贴图\\shanguang_bai.png",
+      "sha256": "3a6beef581aabe0f9553483aa0308ee10b8806a2da750b9c594e7dc60898d645"
+    },
+    {
+      "file": "rain.png",
+      "source": "02_下雨\\贴图\\rain.png",
+      "sha256": "1469749c59989aea9e08a7c06b48e818bd50c693be4b26d90a5ef38e9914b299"
+    },
+    {
+      "file": "effect_smike_01.png",
+      "source": "02_下雨\\贴图\\effect_smike_01.png",
+      "sha256": "e8bbeb4b3ee86ba26841e0921bbad47c4cf343b95428c98f9cda592b56023703"
+    },
+    {
+      "file": "water_ripple.png",
+      "source": "02_下雨\\贴图\\water_ripple.png",
+      "sha256": "25d0e76d9aa5f28d9aaaa31a7c57f803b4a8f78aa7fa53fed86aa41ccd61271b"
+    },
+    {
+      "file": "water_splash_4x4_blue.png",
+      "source": "02_下雨\\贴图\\water_splash_4x4_blue.png",
+      "sha256": "c7f6749603f8c755ac5afb15d132cb3db0d569d83d2b2cf0e56c421a0e346e56"
+    },
+    {
+      "file": "mesh_wind.obj",
+      "source": "01_刮风\\网格\\mesh_wind.obj",
+      "sha256": "26a6dcbd4d7660a8731b881fa07bc5932eb2449759edc03b6ec2104fb1794398"
+    },
+    {
+      "file": "fx_mesh_storm.obj",
+      "source": "01_刮风\\网格\\fx_mesh_storm.obj",
+      "sha256": "7af33622001fb9eba97561f134e5f21e4fb3f745c3242664cbbeca1c45d5ab95"
+    },
+    {
+      "file": "Fx_mesh_wenli.obj",
+      "source": "01_刮风\\网格\\Fx_mesh_wenli.obj",
+      "sha256": "67270e89bca292c5731f2062e1e56713c3ef5cb136b51c45f39709d99c0cdddd"
+    },
+    {
+      "file": "effect_jinbi.png",
+      "source": "02_下雨\\贴图\\effect_jinbi.png",
+      "sha256": "d6a4631bedd0f362656e43d3673b1d5c166d8d759fd021d78ab5f880c12f94a4"
+    },
+    {
+      "file": "golden_majiangzi.png",
+      "source": "02_下雨\\贴图\\golden_majiangzi.png",
+      "sha256": "72a7c7ce2fb6cbbf2ce481644a62382d2ac5a6678cd3a13141f3a284b9e31927"
+    }
+  ],
+  "source": "用户提供：欢乐麻将 HLMJ_Data/_刮风下雨特效"
+}
