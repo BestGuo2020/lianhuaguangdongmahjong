@@ -1,0 +1,2 @@
+# Preserve the supplied OBJ bytes and source-manifest hashes on Windows checkouts.
+*.obj -text whitespace=cr-at-eol

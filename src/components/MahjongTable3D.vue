@@ -30,6 +30,8 @@ import type { TableProps } from './table/three/tableRenderTypes'
 import { bloodFlowPileAnchor } from './table/three/bloodFlowWinPile'
 import { createBloodFlowWinEffects } from './table/three/bloodFlowWinEffects'
 import { cuePhase } from '../game/variants/lotus/bloodFlow/presentation'
+import { createKongWeather } from './table/three/kongWeather'
+import { preloadWeatherAssets } from './table/three/kongWeatherAssets'
 
 const props = withDefaults(defineProps<TableProps>(), {
   players: () => [], localSeat: 0, currentPlayer: -1, lastDiscard: null, wall: () => [], wallHeadDrawn: 0, wallCount: 0, horses: () => [],
@@ -69,6 +71,7 @@ let lastPileAnchors = ''
 let dynamicGroups = []
 let winEffectPresenter: ReturnType<typeof createWinEffectPresenter> | null = null
 let bloodFlowWinEffects: ReturnType<typeof createBloodFlowWinEffects> | null = null
+let kongWeather: ReturnType<typeof createKongWeather> | null = null
 let dicePresenter: ReturnType<typeof createDicePresenter> | null = null
 let perfHud: ReturnType<typeof createPerfHud> | null = null
 const staticResources = []
@@ -317,6 +320,12 @@ function render(time = 0) {
     let exposure = renderProfile.exposure
     const diceActive = dicePresenter?.animate(time) ?? false
     const tilesActive = tableTiles.animate(time, scratchVector)
+    kongWeather?.setAspect(camera.aspect)
+    const weatherActive = kongWeather?.animate(time) ?? false
+    if (import.meta.env.DEV && canvas.value) {
+      canvas.value.dataset.kongWeather = JSON.stringify(kongWeather?.visibleCues ?? [])
+      canvas.value.dataset.kongWeatherLayout = JSON.stringify(kongWeather?.visibleLayouts ?? [])
+    }
     const winFrame = winEffectPresenter?.animate(time)
     const bloodFlowFrame = bloodFlowWinEffects?.animate(time)
     const bloodFlowActive = bloodFlowFrame?.active ?? false
@@ -363,8 +372,9 @@ function render(time = 0) {
     }
     if (outlineEffect) outlineEffect.render(scene, camera)
     else renderer.render(scene, camera)
+    kongWeather?.renderOverlay(renderer)
     renderedFrames += 1
-    keepGoing = diceActive || tilesActive || Boolean(winFrame) || bloodFlowActive || dirty
+    keepGoing = diceActive || tilesActive || weatherActive || Boolean(winFrame) || bloodFlowActive || dirty
   } finally {
     rendering = false
   }
@@ -560,8 +570,12 @@ onMounted(async () => {
   })
 
   // 所有牌面必须下载并完成图片解码，之后才能创建 3D 图集。
-  await preloadTileImages(activeThemeName)
+  const [, weatherAssets] = await Promise.all([
+    preloadTileImages(activeThemeName),
+    preloadWeatherAssets().catch(error => { console.warn('开杠特效素材加载失败', error); return null }),
+  ])
   if (destroyed) return
+  kongWeather = createKongWeather({ scene, assets: weatherAssets, cues: () => props.kongWeather ?? [], localSeat: () => props.localSeat })
   scene.userData.tileImages = preloadedTileImages(activeThemeName)
   tableScene.addTable()
   tableTiles.rebuild()
@@ -655,6 +669,7 @@ watch(() => props.openingStage, (stage) => {
 
 // 骰子值/掷骰者变化（莲花麻将二次掷骰）只影响骰子动画，单独监听并请求重绘。
 watch(() => props.diceValues.join(',') + '|' + props.diceThrowerIndex, () => invalidate())
+watch(() => props.kongWeather, () => invalidate())
 
 watch(() => props.dealerIndex, () => {
   tableScene?.updateMachineTexture()
@@ -692,6 +707,7 @@ onBeforeUnmount(() => {
    * 宁可少释放一次，也不要抛异常打断整页。
    */
   const teardown = () => {
+    kongWeather?.dispose()
     bloodFlowWinEffects?.dispose()
     if (scene) clearDynamicScene()
     staticResources.forEach((resource) => resource.dispose?.())

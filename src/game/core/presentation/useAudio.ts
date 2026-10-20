@@ -30,6 +30,8 @@ const EFFECT_AUDIO_FILES = [
   'peng.mp3',
   'zimo.mp3',
   'didu.ogg',
+  'sounds/angang_rainy.wav',
+  'sounds/mingang_windy.wav',
 ]
 const EFFECT_WAIT_TIMEOUT_MS = 4_000
 const BGM_VOLUME = 0.32
