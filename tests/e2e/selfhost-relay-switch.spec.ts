@@ -1,19 +1,21 @@
 // 公网信令 + P2P→Relay 回归（docs/vibehub-issues-and-status.md §5）：
-// 前置：前端 dev 已在 5173 跑起来；公网信令 wss://www.bestguo.top:58787 + TURN 113.45.254.130:53478 可达。
+// 前置：前端 dev 已在 5173 跑起来；通过环境变量配置公网信令和 TURN（见 docs/turn-environment.md）。
 //
 // 场景 A：加入后 25s 自动模拟一次 P2P → Relay 切换并保持（?selfHostRelayAfter），
 //   断言切换后四端对局不中断、不误报断线横幅、无未捕获异常（hostId/座位/epoch 由
 //   应用层快照门禁保证不变——见 useVibeRemoteGame/transport 单测）。
 // 场景 B：?forceRelay=1 强制所有连接走 TURN 中继（真实 relay 路径），断言四端仍能开局并发牌。
 import { expect, test, type Page } from '@playwright/test'
+import { selfHostEnvironment, selfHostEnvironmentHint } from './fixtures/selfhost-env'
 
-const SIGNALING = 'wss://www.bestguo.top:58787'
-const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
-// 云服务器 UDP 53478 已放行（2026-08-18 运维调整）；默认 turn: URL 走 UDP TURN。
+const { signalingUrl: SIGNALING, turnUrl: TURN, configured: HAS_SELF_HOST_ENV } = selfHostEnvironment
+// 运行前确保环境变量指定的 TURN UDP 端口已放行。
 const BASE = `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}`
 
 test.describe.configure({ mode: 'serial' })
 // 公网信令 + WebRTC/TURN 建连比本地慢，整体放宽。
+test.skip(() => !HAS_SELF_HOST_ENV, selfHostEnvironmentHint)
+
 test.setTimeout(420_000)
 
 async function enterRemoteLobby(page: Page, nickname: string, app: string) {

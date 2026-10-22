@@ -1,13 +1,15 @@
 // 公网 2 真人 + 2 AI：在单局结算层刷新客端，验证恢复的仍是当前结算，
 // 不误入最终排名；两端确认后必须继续到下一手。
 import { expect, test, type Page } from '@playwright/test'
+import { selfHostEnvironment, selfHostEnvironmentHint } from './fixtures/selfhost-env'
 
-const SIGNALING = 'wss://www.bestguo.top:58787'
-const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
+const { signalingUrl: SIGNALING, turnUrl: TURN, configured: HAS_SELF_HOST_ENV } = selfHostEnvironment
 const APP = `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}&manualContinue=1`
 const APP_AUTO = `${APP}&auto=1`
 
 test.describe.configure({ mode: 'serial' })
+test.skip(() => !HAS_SELF_HOST_ENV, selfHostEnvironmentHint)
+
 test.setTimeout(900_000)
 
 async function enterRemoteLobby(page: Page, nickname: string, app: string) {

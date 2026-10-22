@@ -4,9 +4,9 @@
 // 房主由页面内自动点击器驱动，客人使用 ?auto=1 的真实远端动作协议。每局结算时
 // 两端主动点「继续」，缩短等待，但仍完整经过后续局承诺洗牌与 opening barrier。
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { selfHostEnvironment, selfHostEnvironmentHint } from './fixtures/selfhost-env'
 
-const SIGNALING = 'wss://www.bestguo.top:58787'
-const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
+const { signalingUrl: SIGNALING, turnUrl: TURN, configured: HAS_SELF_HOST_ENV } = selfHostEnvironment
 const USE_LOCAL_MOCK = process.env.E2E_LOCAL_MOCK === '1'
 const USE_LOCAL_SIGNALING = process.env.E2E_LOCAL_SIGNALING === '1'
 const APP = USE_LOCAL_MOCK
@@ -26,6 +26,8 @@ interface FakeLlmStats {
 }
 
 test.describe.configure({ mode: 'serial' })
+test.skip(() => !USE_LOCAL_MOCK && !USE_LOCAL_SIGNALING && !HAS_SELF_HOST_ENV, selfHostEnvironmentHint)
+
 test.setTimeout(4_800_000)
 
 async function enterRemoteLobby(page: Page, nickname: string, app: string) {

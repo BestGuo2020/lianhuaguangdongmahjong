@@ -361,7 +361,7 @@ The RTCPeerConnection's signalingState is 'closed'.
    全程对局不中断。
 
 3. **部署发现（已解决）**：初测时云服务器 **UDP 53478 未放行**——协议层 TURN Allocate 认证
-   正常（凭据 `turn:DZxaEm35GmecFZj` 有效，realm=www.bestguo.top），但浏览器默认 `turn:`
+   正常（历史认证成功；明文凭据已移除，旧凭据应轮换），但浏览器默认 `turn:`
    URL 走 UDP，UDP 被防火墙挡 → 收集不到任何 relay 候选（TCP `?transport=tcp` 可通）。
    **运维放行 UDP 53478 后**（2026-08-18），默认 UDP TURN 的 forceRelay e2e 通过；
    `scripts/probe-turn.mjs`（浏览器侧 UDP/TCP 候选探测）与 `scripts/probe_turn_fixed.py`
@@ -646,12 +646,12 @@ WSL2/Hyper-V/Windows Sandbox/VMware 全部不可用；Docker 未安装。
    - 服务器（bestguo.top，已有 Caddy 反代 `wss://www.bestguo.top:58787 → 127.0.0.1:8787`）
      按 `signaling/Caddyfile` 把 `dist/`（已 build 好）静态托管到 `https://www.bestguo.top/`。
    - 手机浏览器（蜂窝网络 = 运营商级 NAT，多为对称 NAT）打开：
-     `https://www.bestguo.top/?selfHost=wss://www.bestguo.top/signal&turn=turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478`
+     使用私有环境变量生成测试链接，见 [TURN 环境配置](./turn-environment.md)；不要保存含凭据的链接。
    - 手机加入房间做第 4 端，本机 3 端配合开局打牌；预期：对称 NAT 打洞失败 → 走 TURN 中继
      （真实验证兜底）；锥形 NAT 可能打洞成功（验证 P2P 直连）。用 getStats 路径探测
      （`peers().relay` / `networkStats().state`）判断实际路径。
 
-2. **云服务器（113.45.254.130，公网 IP 无 NAT）跑 headless Chromium 当一端（可自动化）**：
+2. **云服务器（[服务器地址已脱敏]，公网 IP 无 NAT）跑 headless Chromium 当一端（可自动化）**：
    - 服务器装 node + Playwright Chromium，复用仓库 e2e 的建房/加入/准备流程（把 APP 指向公网 URL），
      本机 3 端 + 服务器 1 端对局，可重复多轮采集 ICE 路径证据。
    - 两端之间走真实 ICE：打洞成功则 P2P 直连，失败则 TURN 兜底。

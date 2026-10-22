@@ -1,9 +1,11 @@
 // 最小 TURN 连通性测试：两个 forceRelay 的 RTCPeerConnection 经手动信令互连。
 // 验证 TURN 服务器能否分配 relay 候选并完成 ICE（UDP 与 TCP 两种 transport）。
 import { chromium } from '@playwright/test'
+import { readTurnEnvironment } from './turn-env.mjs'
 
-const TURN_UDP = { urls: 'turn:113.45.254.130:53478', username: 'turn', credential: 'DZxaEm35GmecFZj' }
-const TURN_TCP = { urls: 'turn:113.45.254.130:53478?transport=tcp', username: 'turn', credential: 'DZxaEm35GmecFZj' }
+// Required: TURN_HOST, TURN_USERNAME, TURN_PASSWORD; optional: TURN_PORT.
+// See docs/turn-environment.md. Validate before starting a browser.
+const { udp: TURN_UDP, tcp: TURN_TCP } = readTurnEnvironment()
 
 async function probe(browser, turn, label) {
   const ctx = await browser.newContext()

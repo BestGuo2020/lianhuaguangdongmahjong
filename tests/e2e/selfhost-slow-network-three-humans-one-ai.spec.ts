@@ -1,12 +1,14 @@
 // 公网应用层边界：3 真人 + 1 AI，同时让一个客端在进入牌桌时处于慢速网络，
 // 恢复正常速率后牌山/手牌仍须出现且保持，不得被 loading 或半初始化快照清空。
 import { expect, test, type Page } from '@playwright/test'
+import { selfHostEnvironment, selfHostEnvironmentHint } from './fixtures/selfhost-env'
 
-const SIGNALING = 'wss://www.bestguo.top:58787'
-const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
+const { signalingUrl: SIGNALING, turnUrl: TURN, configured: HAS_SELF_HOST_ENV } = selfHostEnvironment
 const APP = `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}`
 
 test.describe.configure({ mode: 'serial' })
+test.skip(() => !HAS_SELF_HOST_ENV, selfHostEnvironmentHint)
+
 test.setTimeout(420_000)
 
 async function enterRemoteLobby(page: Page, nickname: string) {

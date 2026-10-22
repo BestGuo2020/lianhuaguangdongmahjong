@@ -1,11 +1,13 @@
 // 2 真人 + 2 AI 开局视觉取证：记录房主/客人在 start、一骰、翻精、二骰、发牌
 // 各阶段的完整页面截图与短视频，并输出实际 dice/flipStack/wallBreakIndex 时间线。
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { selfHostEnvironment, selfHostEnvironmentHint } from './fixtures/selfhost-env'
 
-const SIGNALING = 'wss://www.bestguo.top:58787'
-const TURN = 'turn:turn:DZxaEm35GmecFZj@113.45.254.130:53478'
+const { signalingUrl: SIGNALING, turnUrl: TURN, configured: HAS_SELF_HOST_ENV } = selfHostEnvironment
 const APP = `http://127.0.0.1:5173/?selfHost=${SIGNALING}&turn=${TURN}`
 const APP_AUTO = `${APP}&auto=1`
+
+test.skip(() => !HAS_SELF_HOST_ENV, selfHostEnvironmentHint)
 
 test.setTimeout(240_000)
 

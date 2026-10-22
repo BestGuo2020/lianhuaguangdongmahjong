@@ -3,7 +3,7 @@
 HMAC 规则（RFC 5769 2.2/2.4 验证）：输入 = 头部（length = 原 length - FINGERPRINT 8 字节，
 本请求无 FINGERPRINT 故 = 属性区+MI 长度）+ 到 MI 前所有属性（不含 MI header）。
 key = MD5(username:realm:password)。"""
-import socket, struct, hashlib, hmac
+import socket, struct, hashlib, hmac, os
 
 MAGIC = 0x2112A442
 
@@ -38,8 +38,22 @@ def parse_stun(raw):
         pos += 4 + l + ((4 - l % 4) % 4)
     return out
 
-HOST, PORT = "113.45.254.130", 53478
-USER, PASSWORD = "turn", "DZxaEm35GmecFZj"
+# Required: TURN_HOST, TURN_USERNAME, TURN_PASSWORD; optional: TURN_PORT.
+# See docs/turn-environment.md. Validate before opening a socket.
+def required_env(name):
+    value = os.environ.get(name, "")
+    if not value.strip():
+        raise SystemExit(f"Missing environment variable: {name}")
+    return value
+
+
+HOST = required_env("TURN_HOST").strip()
+USER = required_env("TURN_USERNAME")
+PASSWORD = required_env("TURN_PASSWORD")
+port_text = os.environ.get("TURN_PORT", "3478")
+if not port_text.isascii() or not port_text.isdecimal() or not 1 <= int(port_text) <= 65535:
+    raise SystemExit("TURN_PORT must be an integer from 1 to 65535")
+PORT = int(port_text)
 
 def make_allocate_with_auth(nonce, realm):
     attrs = (
