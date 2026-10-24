@@ -171,7 +171,7 @@ npm run test:e2e
 
 客户端环境变量均以 Vite 的 `VITE_` 前缀声明：
 
-- `VITE_API_BASE`（可选）：共享 TTS/LLM 网关的兼容基址，不再用于联机房间 REST/WebSocket。
+- `VITE_API_BASE`（可选）：独立站 WakuDemo 账号及共享 TTS/LLM 网关的服务基址，不再用于联机房间 REST/WebSocket。
 - `VITE_API_TARGET`（可选）：本地 Vite `/api` 代理目标，默认 `http://127.0.0.1:8000`。
 - `VITE_VIBE_REAL=1`：保留的真实 SDK 调试开关，本地默认关闭；它不能替代平台线上验收。
 - `VITE_LOCAL_TTS_BASE_URL`（可选）：单机大模型吐槽的独立 TTS 网关基址。
@@ -179,6 +179,8 @@ npm run test:e2e
   回退生产网关。该地址只传短文本与白名单音色，不包含百度 Key/Secret。
 
 代码通过 Vite 内置的 `import.meta.env.BASE_URL` 拼接音频、图片和头像资源路径。不要把密钥放入前端环境变量或提交到仓库。
+
+`guoguo-labs.online` 及其子域名保留 WakuDemo 登录/退出和账号状态恢复，配置见 [WakuDemo 接入说明](docs/wakudemo-oauth.md)。这套账号接口独立于 P2P 房间，VibeHub 平台继续使用 SDK 登录。
 
 单机大模型启用后，吐槽文字会立即显示，同时异步请求独立的
 `POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，与 BGM 同时播放

@@ -14,6 +14,8 @@ import { loginRequired } from '../../game/online/vibe/vibeClient'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
 import LoginButton from '../account/LoginButton.vue'
+import WakuDemoAccount from '../account/WakuDemoAccount.vue'
+import { isWakuDemoHost } from '../../account/wakudemo/host'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
 import type { CharacterId } from '../../game/llm/animeCharacters'
 import type { TableThemeName } from '../table/three/tableTheme'
@@ -46,6 +48,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const showWakuDemoAccount = isWakuDemoHost(window.location.hostname)
 const emit = defineEmits<{
   'update:gameMode': [value: GameMode]
   'update:selectedMatch': [value: MatchType]
@@ -138,6 +141,7 @@ function closeDialog() {
     <div class="lobby-layout" :class="{ 'room-focused': Boolean(roomId) }">
       <LobbyThemeVisual :theme-name="tableThemeName" :character-id="animeCharacterId" @select-character="dialog = 'character'" />
       <section class="lobby-actions" aria-label="对局操作">
+        <WakuDemoAccount v-if="showWakuDemoAccount" />
         <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
           <button data-action-role="secondary" :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
           <button v-if="!singlePlayerOnly" data-action-role="secondary" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>

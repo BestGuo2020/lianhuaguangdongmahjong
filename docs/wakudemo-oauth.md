@@ -6,10 +6,14 @@
 backend/app/auth/wakudemo.py       PKCE、临时授权请求、服务端 token/session 仓库
 backend/app/api/auth.py            登录、回调、会话查询、退出路由
 backend/tests/test_wakudemo_auth.py OAuth Mock 测试
-src/game/online/api/authApi.ts      前端登录 API（不读取 token）
-src/game/online/session/useWakuDemoAuth.ts  Vue 登录状态
-src/components/lobby/LobbyView.vue 大厅登录/退出入口
+src/account/wakudemo/api.ts       前端登录 API（不读取 token）
+src/account/wakudemo/useWakuDemoAuth.ts  Vue 登录状态
+src/account/wakudemo/host.ts      独立站域名判断
+src/components/account/WakuDemoAccount.vue  大厅登录/退出入口
 ```
+
+`guoguo-labs.online` 及其子域名保留 WakuDemo 账号卡片；VibeHub 平台使用自己的 SDK 登录。
+账号模块独立于房间传输，合并联机实现或调整 P2P 时不要移除这套独立站登录。
 
 浏览器 Cookie 只包含随机 session id，并设置 `HttpOnly`。`state`、PKCE
 `code_verifier` 和 `access_token` 均只保存在后端；前端不会读取或持久化 token。
@@ -77,7 +81,7 @@ WAKUDEMO_COOKIE_SECURE=false
 
 检查步骤：
 
-1. 打开 `http://localhost:5173`，点击“WakuDemo 账号 → 登录”。
+1. 在独立站域名打开页面，点击“WakuDemo 账号 → 登录”。本地 `wakudemo-account.spec.ts` 通过域名代理验证入口与回调，不向真实平台提交凭据。
 2. 授权页应包含 `response_type=code`、`scope=account.read` 和 `code_challenge_method=S256`。
 3. 同意后应返回大厅并显示 WakuDemo 昵称；取消则显示“已取消授权”。
 4. 浏览器的 localStorage/sessionStorage 中不应出现 access token 或 code verifier。

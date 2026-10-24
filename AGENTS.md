@@ -23,6 +23,7 @@
 - `vibehub` 及其现有工作树仅保留为历史参考；不要在那里继续开发或同步覆盖 master。
 - 联机入口为 `src/game/online/useVibeRemoteGame.ts`；血流 P2P 房间为 `src/game/online/vibe/bloodFlowRoom.ts`，经典玩法由 `online/host/` 驱动房主权威。
 - 旧前端 REST/WebSocket 房间入口已经移除。`backend/` 仍是独立仓库，保留 TTS/LLM 网关等用途。
+- 独立站 `guoguo-labs.online` 及其子域名的 WakuDemo 账号登录位于 `src/account/wakudemo/`，与房间传输无关，必须保留；VibeHub 平台继续使用 SDK 登录。
 - 开发、验证与部署流程见 `docs/branch-sync-workflow.md`（原链接保留，内容已更新为单主分支流程）。
 
 ## 后端仓库
