@@ -61,7 +61,7 @@
 | 测试 | Vitest（单元/契约测试）、Playwright（端到端测试） |
 | 包管理 | npm（仓库包含 `package-lock.json`） |
 
-前端为单页应用，可独立运行单机模式；联机模式使用 VibeHub P2P 房主权威。所有代码统一在 `master` 开发，不再同步 `vibehub` 分支（见 [开发工作流](docs/branch-sync-workflow.md)）。`package.json` 已通过 `engines` 声明运行环境：Node.js `^20.19.0 || >=22.12.0`，npm `>=9.0.0`。
+前端为单页应用，可独立运行单机模式；联机模式按部署环境使用原 WebSocket 后端或 VibeHub P2P 房主权威。所有代码统一在 `master` 开发，不再同步 `vibehub` 分支（见 [开发工作流](docs/branch-sync-workflow.md)）。`package.json` 已通过 `engines` 声明运行环境：Node.js `^20.19.0 || >=22.12.0`，npm `>=9.0.0`。
 
 ## 功能概览
 
@@ -98,7 +98,8 @@ Vue 页面与组件
       ▼
 activeGamePort / GamePort
       ├─ 本地：useGame → 本地回合、动作、时间线与规则模块
-      └─ 联机：useVibeRemoteGame → 房主权威 / 血流房间 → 协议层 → VibeHub P2P
+      ├─ 独立站联机：useWsOnline → useRemoteGame / 血流 WS 端口 → 原后端
+      └─ VibeHub 联机：useVibeRemoteGame → 房主权威 / 血流房间 → VibeHub P2P
 ```
 
 - `src/game/core/contracts/` 定义共享领域类型、`GamePort` 以及本地/联机端口选择器，并通过契约测试保证两种实现可以被相同 UI 消费。
@@ -140,7 +141,7 @@ http://localhost:5173
 
 进入大厅后选择“东风场”或“半庄场”开始单机对战，或在“联机对战”下创建/加入房间。移动端建议横屏使用；部分浏览器不允许网页自动锁定方向，此时请手动横置设备。
 
-**联机对战**在 VibeHub 平台部署后使用真实 SDK，登录后创建/加入房间，由房主设备运行对局引擎。本地 `npm run dev` 默认使用 `mockVibeHub`（BroadcastChannel）验证确定性流程，不需要旧 WebSocket 房间后端。真实 P2P 行为必须上线验收，详见 [验收策略](docs/vibehub-adaptation-checklist.md)。`backend/` 仍可提供 TTS/LLM 网关；Vite 的 `/api` 代理默认指向 `http://127.0.0.1:8000`，可通过 `VITE_API_TARGET` 调整。
+**联机对战**在独立站沿用原后端（`VITE_API_BASE` 与 WakuDemo Cookie）；在 VibeHub 平台部署后使用真实 SDK，登录后创建/加入房间，由房主设备运行对局引擎。本地 `npm run dev` 默认使用 `mockVibeHub`（BroadcastChannel）验证确定性流程，不需要旧 WebSocket 房间后端。真实 P2P 行为必须上线验收，详见 [验收策略](docs/vibehub-adaptation-checklist.md)。`backend/` 仍可提供 TTS/LLM 网关；Vite 的 `/api`、`/ws` 代理默认指向 `http://127.0.0.1:8000`，可通过 `VITE_API_TARGET` 调整。
 
 ## 操作方式
 
@@ -171,7 +172,8 @@ npm run test:e2e
 
 客户端环境变量均以 Vite 的 `VITE_` 前缀声明：
 
-- `VITE_API_BASE`（可选）：独立站 WakuDemo 账号及共享 TTS/LLM 网关的服务基址，不再用于联机房间 REST/WebSocket。
+- `VITE_API_BASE`（可选）：独立站 WakuDemo 账号、原 REST/WebSocket 房间及共享 TTS/LLM 网关的服务基址。
+- `VITE_ONLINE_BACKEND`（可选，`ws` 或 `vibehub`）：显式选择联机后端；默认 guoguo-labs.online 域族使用原 WS 后端，VibeHub 域族使用 SDK/P2P，本地默认使用 VibeHub mock。
 - `VITE_API_TARGET`（可选）：本地 Vite `/api` 代理目标，默认 `http://127.0.0.1:8000`。
 - `VITE_VIBE_REAL=1`：保留的真实 SDK 调试开关，本地默认关闭；它不能替代平台线上验收。
 - `VITE_LOCAL_TTS_BASE_URL`（可选）：单机大模型吐槽的独立 TTS 网关基址。
@@ -180,7 +182,7 @@ npm run test:e2e
 
 代码通过 Vite 内置的 `import.meta.env.BASE_URL` 拼接音频、图片和头像资源路径。不要把密钥放入前端环境变量或提交到仓库。
 
-`guoguo-labs.online` 及其子域名保留 WakuDemo 登录/退出和账号状态恢复，配置见 [WakuDemo 接入说明](docs/wakudemo-oauth.md)。这套账号接口独立于 P2P 房间，VibeHub 平台继续使用 SDK 登录。
+`guoguo-labs.online` 及其子域名使用 WakuDemo 登录与原后端房间，配置见 [WakuDemo 接入说明](docs/wakudemo-oauth.md)。VibeHub 平台使用 SDK 登录和 P2P 房间；两套入口共享 master 的游戏与界面代码。
 
 单机大模型启用后，吐槽文字会立即显示，同时异步请求独立的
 `POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，与 BGM 同时播放
@@ -230,6 +232,7 @@ Key 仍是用户自己的 `sk-sp-` Key，由浏览器携带、服务端不保存
 │  │  │  ├─ selectors/       # 可供本地和远程复用的派生查询
 │  │  │  └─ presentation/    # 音频、头像、牌面资源和布局/胡牌表现模型
 │  │  └─ online/
+│  │     ├─ ws/              # 独立站 HTTP/WS 房间、协议与会话
 │  │     ├─ vibe/            # VibeHub 登录、大厅、战绩与血流房间
 │  │     ├─ host/            # 经典玩法房主权威与远端控制器
 │  │     ├─ antiCheat/       # 承诺洗牌与公开状态校验
@@ -281,7 +284,7 @@ npm run build
 npm run preview
 ```
 
-单机可将 `dist/` 托管为静态站点；真实联机部署到 VibeHub 作品 `B5AJupT1`，使用真实 SDK 登录与 P2P 房间。部署入口现在统一为 master，可使用 `pnpm deploy:vibehub`（需要已登录的 CLI 和更新说明文件），见 [开发工作流](docs/branch-sync-workflow.md)。TTS/LLM 网关仍独立部署；可选自托管传输见 [signaling/README.md](signaling/README.md)。
+单机可将 `dist/` 托管为静态站点；独立站联机沿用原后端及 `VITE_API_BASE` 配置。VibeHub 联机部署到作品 `B5AJupT1`，使用真实 SDK 登录与 P2P 房间。部署入口现在统一为 master，可使用 `pnpm deploy:vibehub`（需要已登录的 CLI 和更新说明文件），见 [开发工作流](docs/branch-sync-workflow.md)。TTS/LLM 网关仍独立部署；可选自托管传输见 [signaling/README.md](signaling/README.md)。
 
 当前 `vite.config.ts` 使用相对路径 `base: './'`，可将构建产物部署到根路径或未知子目录；子目录地址应以 `/` 结尾，避免浏览器将相对资源解析到错误层级。应用当前没有前端路由，因此不需要额外配置 SPA 路由回退。
 

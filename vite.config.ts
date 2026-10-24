@@ -43,6 +43,11 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true,
       },
+      '/ws': {
+        target: apiTarget,
+        changeOrigin: true,
+        ws: true,
+      },
     },
     // 真 SDK 调试只额外允许平台域；本地默认仍用 mock。
     allowedHosts: ['gamesvibe.app', '.gamesvibe.app'],

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { getPlayerStats, type PlayerStats } from '../../game/online/vibe/vibeStats'
+import { getMyStats } from '../../game/online/ws/api/accountApi'
+import type { OnlineBackend } from '../../game/online/backend'
 
 interface Props {
+  backend?: OnlineBackend
   open: boolean
   playerId: string
   nickname: string
@@ -24,7 +27,7 @@ watch(() => props.open, async (open) => {
   loading.value = true
   stats.value = null
   try {
-    const next = await getPlayerStats()
+    const next = props.backend === 'ws' ? await getMyStats() : await getPlayerStats()
     if (serial === requestSerial) stats.value = next
   } catch {
     if (serial === requestSerial) stats.value = null

@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.E2E_PORT || 4173)
 const baseURL = `http://127.0.0.1:${port}`
+const wsAcceptance = process.env.E2E_WS === '1'
+const backendPort = Number(process.env.E2E_BACKEND_PORT || 8027)
+const backendURL = `http://127.0.0.1:${backendPort}`
+const backendPython = process.platform === 'win32' ? 'backend\\.venv\\Scripts\\python.exe' : 'backend/.venv/bin/python'
 // 线上专项用例自行打开生产 URL 并创建独立 Chromium 进程，不依赖本地 Vite。
 // Windows 上无关的 webServer 可能在测试主体完成后阻塞收尾，允许显式跳过。
 const skipWebServer = process.env.E2E_SKIP_WEBSERVER === '1' || process.env.E2E_REUSE_ONLY === '1'
@@ -45,9 +49,16 @@ export default defineConfig({
     },
   ],
   webServer: skipWebServer ? undefined : [
+    ...(wsAcceptance ? [{
+      command: `"${backendPython}" tests/e2e/fixtures/ws_backend.py ${backendPort}`,
+      url: `${backendURL}/api/health`,
+      timeout: 120_000,
+      reuseExistingServer: false,
+    }] : []),
     {
       command: `npm run dev -- --port ${port}`,
       url: baseURL,
+      ...(wsAcceptance ? { env: { ...process.env, VITE_ONLINE_BACKEND: 'ws', VITE_API_BASE: '', VITE_API_TARGET: backendURL } } : {}),
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

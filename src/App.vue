@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, shallowRef, watch } from 'vue'
 import StatsOverlay from './components/account/StatsOverlay.vue'
+import WsLobbyView from './components/lobby/ws/LobbyView.vue'
+import { useWsOnline } from './game/online/ws/useWsOnline'
+import { resolveOnlineBackend } from './game/online/backend'
 import WinEffectLab from './components/dev/WinEffectLab.vue'
 import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
 import GameShellHeader from './components/shell/GameShellHeader.vue'
@@ -64,6 +67,9 @@ const RulesPanel = defineAsyncComponent(() => import('./components/RulesPanel.vu
 const ReplayViewer = defineAsyncComponent(() => import('./components/replay/ReplayViewer.vue'))
 const robotIconUrl = `${import.meta.env.BASE_URL}img/robot.svg`
 
+const onlineBackend = resolveOnlineBackend(window.location.hostname, import.meta.env.VITE_ONLINE_BACKEND)
+const usesWsBackend = onlineBackend === 'ws'
+
 const rulesOpen = ref(false)
 const resultVisible = ref(true)
 const selectedMatch = ref<MatchType>('east')
@@ -106,10 +112,10 @@ if (initialThemeCandidate !== null && initialThemeCandidate !== initialTableThem
   window.history.replaceState(window.history.state, '', canonicalUrl)
 }
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
-const { playEffect, playEffectAndWait, startBgm } = useAudio()
+const { playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
 
 // 平台使用真实 SDK，本地开发使用 mockVibeHub。
-void initVibeHub()
+if (!usesWsBackend) void initVibeHub()
 const vibeLlmOptions = listHostLlmOptions()
 
 const gameMode = ref<GameMode>('local')
@@ -322,7 +328,7 @@ function beginOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSea
     seatControl: detail.seatControl,
   })
 }
-const vibeRemoteGame = useVibeRemoteGame({
+const vibeRemoteGame = usesWsBackend ? null : useVibeRemoteGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
@@ -337,10 +343,19 @@ const vibeRemoteGame = useVibeRemoteGame({
   animeFixedTts: remoteAnimeFixedTts,
 })
 
+const wsOnline = usesWsBackend ? useWsOnline({
+  gameMode, selectedRule, selectedMatch, startBgm,
+  playSound: playEffect, playSoundAndWait: playEffectAndWait, playLlmAudio,
+  waitForTableReady, onLlmMessage: llmHook.onLlmMessage, onLlmStatus: llmHook.onLlmStatus,
+  getCharacterId: () => animeCharacterId.value, getThemeName: () => tableThemeName.value,
+  animeFixedTts: remoteAnimeFixedTts,
+}) : null
+const onlineSession = wsOnline ?? vibeRemoteGame!
+
 // 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
 const usesLotusLocalEngine = computed(() => selectedRule.value === 'lotus-legacy')
-watch(() => vibeRemoteGame.rulesetId.value, (value) => {
+watch(() => onlineSession.rulesetId.value, (value) => {
   if (value === 'lotus-classic' || value === 'lotus-legacy' || value === 'lotus-blood-flow') selectedRule.value = value
 })
 
@@ -349,7 +364,7 @@ watch(() => vibeRemoteGame.rulesetId.value, (value) => {
 const game = createActiveGamePort(
   gameMode,
   () => selectedRule.value === 'lotus-blood-flow' ? bloodFlowGame : usesLotusLocalEngine.value ? lotusGame : localGame,
-  () => vibeRemoteGame.rulesetId.value === 'lotus-blood-flow' ? vibeRemoteGame.bloodFlowPort : vibeRemoteGame,
+  () => wsOnline ? wsOnline.port() : vibeRemoteGame!.rulesetId.value === 'lotus-blood-flow' ? vibeRemoteGame!.bloodFlowPort : vibeRemoteGame!,
 )
 
 const {
@@ -377,8 +392,9 @@ const jokerTiles = computed<TileType[]>(() => {
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
-const remoteRulesetId = computed(() => vibeRemoteGame.rulesetId.value)
-const remoteSecondDice = computed(() => vibeRemoteGame.secondDice.value)
+const remoteRulesetId = computed(() => onlineSession.rulesetId.value)
+const remoteSecondDice = computed(() => wsOnline ? wsOnline.secondDice.value
+  : vibeRemoteGame!.rulesetId.value === 'lotus-blood-flow' ? vibeRemoteGame!.bloodFlowPort.secondDice.value ?? undefined : vibeRemoteGame!.secondDice.value)
 // 单机莲花麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
 const lotusSecondDice = computed<[number, number] | undefined>(() => lotusGame.secondDice.value ?? undefined)
 
@@ -400,13 +416,14 @@ const debugPreviewDraw = () => {
   localGame.debugPreviewDraw()
 }
 
-// ── 联机模式状态（VibeHub P2P 房间）──────────────────
+// ── 联机模式状态（独立站 WS / VibeHub P2P）──────────────────
 const {
-  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, avatar, playerId, isHost, roomSeats, aiSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
+  sessionStatus, wsStatus, sessionError, roomId, mySeat, nickname, playerId, isHost, roomSeats, roomTimeLimit, remoteActions, waitingNextRound, signalQuality,
   rejoining,
   roomTableThemeName,
   autoPlay: remoteAutoPlay, toggleAutoPlay,
-} = vibeRemoteGame
+} = onlineSession
+const aiSeats = vibeRemoteGame?.aiSeats ?? ref([])
 
 watch(roomTableThemeName, (themeName) => {
   if (gameMode.value === 'remote' && roomId.value) tableThemeName.value = themeName
@@ -416,13 +433,15 @@ watch([gameMode, roomId], ([mode, currentRoomId]) => {
 })
 // 联机房间内本家角色变化 → 同步到大厅座位（房主广播 / 客户端发送 lobby_character）。
 watch(animeCharacterId, (value) => {
-  if (gameMode.value === 'remote' && roomId.value) remoteActions.updateCharacter(value)
+  if (gameMode.value !== 'remote' || !roomId.value) return
+  if (usesWsBackend && mySeat.value < 0) return
+  void Promise.resolve(remoteActions.updateCharacter(value)).catch(() => {})
 })
 
-// SDK 无服务端房间容量元数据，「剩余房间」不再展示。
-const roomMeta = ref(null)
+// WS 查询原服务器的房间容量；VibeHub 没有这份全局元数据。
+const roomMeta = wsOnline?.roomMeta ?? ref(null)
 
-const disclaimerGate = useDisclaimerGate(playerId)
+const disclaimerGate = wsOnline?.disclaimerGate ?? useDisclaimerGate(playerId)
 
 // 离开联机模式时恢复单机主题偏好。
 watch(gameMode, (mode, previousMode) => {
@@ -442,7 +461,7 @@ function startGameWithAudio() {
   startGame(selectedMatch.value, { waitForTableReady })
 }
 
-const lobbyController = createRemoteLobbyController({
+const lobbyController = wsOnline?.lobbyController ?? createRemoteLobbyController({
   gameMode,
   selectedMatch,
   selectedRule,
@@ -450,8 +469,8 @@ const lobbyController = createRemoteLobbyController({
   roomId,
   nickname,
   playerId,
-  roomSeats,
-  actions: remoteActions,
+  roomSeats: vibeRemoteGame!.roomSeats,
+  actions: vibeRemoteGame!.remoteActions,
   guardEntry: disclaimerGate.guard,
   startBgm,
 })
@@ -459,6 +478,7 @@ const lobbyController = createRemoteLobbyController({
 // 生产环境需先登录（SDK token 不落盘），未登录就 join 会失败或留下半状态（只响声音
 // 进不去游戏）；本地（mock 匿名）无需登录，立即重进。登录后的重进由 vibeUser watch 触发。
 onMounted(async () => {
+  if (!vibeRemoteGame) return
   await initVibeHub()
   // 初始化期间的登录回调也可能已开始恢复；只在空闲时发起一次自动重进。
   if (vibeRemoteGame.savedSessionExists.value && !loginRequired.value && sessionStatus.value === 'idle') lobbyController.resumeSession()
@@ -478,13 +498,13 @@ const {
 
 // 登录后以 VibeHub 账号 id 作为联机 playerId，昵称取公开资料，头像取 SDK 用户头像。
 watch(vibeUser, (user) => {
-  if (!user) return
+  if (!user || !vibeRemoteGame) return
   playerId.value = user.id
   if (user.name) {
     nickname.value = user.name
     nicknameInput.value = user.name
   }
-  if (user.image) avatar.value = user.image
+  if (user.image) vibeRemoteGame.avatar.value = user.image
   // 刷新页面后 SDK 需重新授权（token 仅驻内存）；登录完成后若存在保存的房间会话
   // 且尚未在房间中 → 自动重进（对局进行中则快照重同步 + 座位恢复）。
   // 重进后若数据通道建不起来（SDK 残留旧 RTCPeerConnection）→ 自动重试加入。
@@ -492,6 +512,10 @@ watch(vibeUser, (user) => {
     lobbyController.resumeSession()
     vibeRemoteGame.scheduleRejoinRetry()
   }
+})
+
+watch(() => wsOnline?.effectiveLlmEnabled.value, enabled => {
+  if (gameMode.value === 'remote' && enabled != null) preferLlmTableTheme(enabled)
 })
 
 const statsOpen = ref(false)
@@ -504,6 +528,13 @@ async function openReplay(matchId: string) {
   const rounds = await replay.storage.loadRounds(matchId)
   replayOpen.value = false
   replayView.value = { match, rounds }
+}
+/** 退出本场（房间面板入口）：座位保留、本场由 AI 代打，回主大厅可再「继续对局」回来。
+ *  单机下没有座位/重进码概念，若被触发则按「返回大厅」处理，避免按钮点了没反应。 */
+function leaveMatchFromPanel() {
+  if (!wsOnline || gameMode.value !== 'remote') { returnToLobby(); return }
+  if (!window.confirm('退出本场？本场将由 AI 代打（座位与重进码保留），你可以在大厅用「继续对局」回到原座位。')) return
+  void wsOnline.remoteActions.leaveMatch()
 }
 const showLobby = computed(() => (
   phase.value === 'lobby'
@@ -524,7 +555,7 @@ watch(matchFinished, (finished) => {
     rank: entry.rank,
   })))
   // 分析记录收尾：刷队列 → 返回分析区状态 → 按展示回放清单回收悬空分析区（§9.2、§9.5）。
-  void (gameMode.value === 'remote'
+  void (gameMode.value === 'remote' && vibeRemoteGame
     ? vibeRemoteGame.settleBloodFlowAnalysis()
     : Promise.resolve()
   ).then(() => analysis.finish()).then(async (result) => {
@@ -731,8 +762,8 @@ function changeTableTheme(theme: TableThemeName) {
         :theme-name="tableThemeName"
         :ruleset-id="gameMode === 'remote' ? remoteRulesetId : selectedRule"
         :blood-flow="capabilities.bloodFlow"
-        :online="false"
-        :second-dice="gameMode === 'remote' ? (capabilities.bloodFlow ? vibeRemoteGame.bloodFlowPort.secondDice.value ?? undefined : remoteSecondDice) : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
+        :online="usesWsBackend && gameMode === 'remote'"
+        :second-dice="gameMode === 'remote' ? remoteSecondDice : selectedRule === 'lotus-blood-flow' ? bloodFlowGame.secondDice.value ?? undefined : (usesLotusLocalEngine ? lotusSecondDice : undefined)"
         :flip-tile="flipTile"
         :wall-break-index="wallBreakIndex"
         :flip-stack="flipStack"
@@ -750,10 +781,11 @@ function changeTableTheme(theme: TableThemeName) {
         @ready="handleTableReady"
         @next-round="nextRound"
         @return-to-lobby="returnToLobby"
+        @leave-match="leaveMatchFromPanel"
       />
 
       <LobbyView
-        v-if="showLobby"
+        v-if="showLobby && !usesWsBackend"
         v-model:game-mode="gameMode"
         v-model:selected-match="selectedMatch"
         v-model:selected-rule="selectedRule"
@@ -767,7 +799,7 @@ function changeTableTheme(theme: TableThemeName) {
         :session-status="sessionStatus"
         :session-error="sessionError"
         :room-time-limit="roomTimeLimit"
-        :room-seats="roomSeats"
+        :room-seats="vibeRemoteGame!.roomSeats.value"
         :ai-seats="aiSeats"
         :llm-options="vibeLlmOptions"
         :my-seat="mySeat"
@@ -784,12 +816,66 @@ function changeTableTheme(theme: TableThemeName) {
         @copy-room="copyRoomCode"
         @toggle-ready="toggleReady"
         @start-remote="startRemoteMatch"
-        @configure-ai-seats="remoteActions.configureAiSeats"
+        @configure-ai-seats="vibeRemoteGame!.remoteActions.configureAiSeats"
         @leave-room="leaveRoom"
         @close-room="closeRoom"
         @open-stats="statsOpen = true"
         @open-replay="replayOpen = true"
         @open-rules="rulesOpen = true"
+      />
+
+      <WsLobbyView
+        v-if="showLobby && wsOnline"
+        :game-mode="gameMode"
+        @update:game-mode="wsOnline.onGameModeChange"
+        v-model:selected-match="selectedMatch"
+        v-model:selected-rule="selectedRule"
+        v-model:nickname-input="nicknameInput"
+        v-model:join-code="joinCode"
+        v-model:anime-character-id="animeCharacterId"
+        :table-theme-name="tableThemeName"
+        :stored-session="wsOnline.storedSession.value"
+        :room-id="roomId"
+        :match-name="matchName"
+        :room-meta="roomMeta"
+        :session-status="sessionStatus"
+        :session-error="sessionError"
+        :room-time-limit="roomTimeLimit"
+        :room-status="wsOnline.roomStatus.value"
+        :room-seats="wsOnline.roomSeats.value"
+        :reserved-seats="wsOnline.reservedSeats.value"
+        :llm-enabled="wsOnline.llmEnabled.value"
+        :effective-llm-enabled="wsOnline.effectiveLlmEnabled.value"
+        :llm-available="wsOnline.llmAvailable.value"
+        :llm-providers="roomMeta?.llmProviders ?? []"
+        :my-seat="mySeat"
+        :is-creator="isHost"
+        :single-player-only="singlePlayerOnly"
+        :all-occupied-ready="allOccupiedReady"
+        :match-starting="matchStarting"
+        :copied="copied"
+        :leaving="leaving"
+        :closing="closing"
+        :waku-authenticated="wsOnline.wakuAuth.authenticated.value"
+        :waku-account-name="wsOnline.wakuAuth.account.value?.displayName ?? ''"
+        :waku-auth-loading="wsOnline.wakuAuth.loading.value"
+        :waku-auth-error="wsOnline.wakuAuth.error.value"
+        @start-local="startGameWithAudio"
+        @create-room="(payload: { llmEnabled: boolean }) => createRemoteRoom(payload.llmEnabled)"
+        @join-room="joinRemoteRoom"
+        @resume-session="wsOnline.lobbyController.resumeSession"
+        @copy-room="copyRoomCode"
+        @toggle-ready="toggleReady"
+        @start-remote="(payload: { llmSeats?: Array<{ seat: number; providerId: string }> }) => startRemoteMatch(payload?.llmSeats)"
+        @reserve-seat="(payload: { seat: number; providerId: string | null; style: import('./game/online/ws/api/roomApi').ServerLlmStyle | null }) => wsOnline.remoteActions.reserveLlmSeat(payload)"
+        @leave-room="leaveRoom"
+        @close-room="closeRoom"
+        @leave-match="leaveMatchFromPanel"
+        @open-stats="statsOpen = true"
+        @open-replay="replayOpen = true"
+        @open-rules="rulesOpen = true"
+        @waku-login="wsOnline.wakuAuth.login"
+        @waku-logout="wsOnline.wakuAuth.logout"
       />
 
       <SettlementOverlay
@@ -813,6 +899,7 @@ function changeTableTheme(theme: TableThemeName) {
         @report="reportPlayer"
       />
       <StatsOverlay
+        :backend="onlineBackend"
         v-model:open="statsOpen"
         :player-id="playerId"
         :nickname="nickname"

@@ -15,14 +15,16 @@
 
 ## 单主分支开发（2026-10-24 起）
 
-`master` 是唯一主开发分支，已整合原 `vibehub` 的 VibeHub P2P 联机实现。
+`master` 是唯一主开发分支，同时维护独立站 WebSocket 后端和 VibeHub P2P 联机实现，按部署域名选择。
 
 - UI、规则、牌桌、AI、素材、登录、房间、传输与重连均直接在 `master` 修改、验证和提交。
 - 游戏节奏、主题、素材、默认行为和单机分析记录以合并前的 `master` 为基础；只移入联机必需扩展。
 - 不再运行 `pnpm sync:vibehub`，不再维护 keep/master-only 清单，也不再进行分支间反向移植。
 - `vibehub` 及其现有工作树仅保留为历史参考；不要在那里继续开发或同步覆盖 master。
-- 联机入口为 `src/game/online/useVibeRemoteGame.ts`；血流 P2P 房间为 `src/game/online/vibe/bloodFlowRoom.ts`，经典玩法由 `online/host/` 驱动房主权威。
-- 旧前端 REST/WebSocket 房间入口已经移除。`backend/` 仍是独立仓库，保留 TTS/LLM 网关等用途。
+- `guoguo-labs.online` 及其子域名使用 `src/game/online/ws/useWsOnline.ts`，沿用原 REST/WebSocket 房间服务；WS 协议、会话与编排隔离在 `online/ws/`，不能与 P2P 同名模块混用。
+- VibeHub 平台使用 `src/game/online/useVibeRemoteGame.ts`；血流 P2P 房间为 `src/game/online/vibe/bloodFlowRoom.ts`，经典玩法由 `online/host/` 驱动房主权威。独立站不得初始化 VibeHub，也不能把 WakuDemo 会话当成 VibeHub 登录。
+- 后端选择集中在 `src/game/online/backend.ts`。本地真实 WS 验收用 `E2E_WS=1`，对应 `VITE_ONLINE_BACKEND=ws`；默认本地仍使用 VibeHub mock。
+- `backend/` 仍是独立仓库，提供原房间服务及 TTS/LLM 网关；两套前端共用牌桌、规则、素材和本地引擎，不恢复双分支同步。
 - 独立站 `guoguo-labs.online` 及其子域名的 WakuDemo 账号登录位于 `src/account/wakudemo/`，与房间传输无关，必须保留；VibeHub 平台继续使用 SDK 登录。
 - 开发、验证与部署流程见 `docs/branch-sync-workflow.md`（原链接保留，内容已更新为单主分支流程）。
 
@@ -33,6 +35,7 @@
 ## 测试
 
 - 前端：`pnpm test`（vitest，`src` 下）
+- 原后端联机：`E2E_WS=1` 下运行 `tests/e2e/ws-online.spec.ts`；Playwright 启动仅监听本机、使用独立临时 SQLite 的测试后端，不使用开发者真实数据库。
 - 后端：`backend/.venv/Scripts/python.exe -m pytest tests -q`（在 `backend/` 目录内）
 
 ### 联机（P2P）问题一律线上验收（2026-09-10 决定）

@@ -1,9 +1,15 @@
 // 纯娱乐声明：与 README「声明」章节同步维护。
 // 游戏内声明弹窗（进房前确认）与玩法面板（RulesPanel.vue）共用此文案。
+import { resolveOnlineBackend } from '../game/online/backend'
+
+const usesWsBackend = resolveOnlineBackend(
+  typeof location === 'undefined' ? '' : location.hostname,
+  import.meta.env.VITE_ONLINE_BACKEND,
+) === 'ws'
 
 /** 声明版本号：声明文案有实质修改时 +1，已确认旧版的用户需重新确认。
- *  P2P 声明确认由 useDisclaimerGate 在本机记录。 */
-export const DISCLAIMER_VERSION = 2
+ *  WS 保留原后端的第 1 版；P2P 第 2 版增加房主权威说明。 */
+export const DISCLAIMER_VERSION = usesWsBackend ? 1 : 2
 
 export interface DisclaimerSection {
   /** 段落小标题（可选，如「免责提示」） */
@@ -17,7 +23,7 @@ export interface DisclaimerSection {
 export const DISCLAIMER_TITLE = '用户声明'
 
 export const DISCLAIMER_SECTIONS: DisclaimerSection[] = [
-  {
+  ...(usesWsBackend ? [] : [{
     title: 'P2P 房主权威对局模式说明',
     body: '本游戏联机对战采用 P2P（点对点）房主权威（host-authority）模式：创建房间的玩家设备即「房主」，承担对局引擎职责，负责洗牌、发牌、掷骰、碰杠胡判定与计分，并向其他玩家设备广播对局快照；对局数据经玩家设备之间的直连或中继通道传输，不存在中央游戏服务器。',
     list: [
@@ -25,7 +31,7 @@ export const DISCLAIMER_SECTIONS: DisclaimerSection[] = [
       '房主离开或断线时，进行中的对局将终止；对局中其他玩家掉线时，其座位将由 AI 代打，玩家可凭会话重连恢复；',
       '由于对局判定以房主设备为准，请与信任的玩家组队对局；平台无法对 P2P 对局过程进行实时审核，亦不对玩家之间私下达成的约定或行为负责。',
     ],
-  },
+  }]),
   {
     body: '本游戏为纯娱乐棋牌游戏，游戏内所有积分、道具仅为本游戏内部虚拟娱乐数值，不具备任何现金价值，不可兑换人民币、实物、有价资产，不支持任何形式回购、变现、折现、线下结算。用户确认知晓：本游戏不提供赌博相关任何功能。',
   },
