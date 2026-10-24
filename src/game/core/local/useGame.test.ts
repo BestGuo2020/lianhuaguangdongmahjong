@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { useGame } from './useGame'
 import { advanceMatchState, resolveWinTile } from './matchProgress'
 import type { GamePlayer, TileType } from '../contracts/types'
+import { registerLocalLlmVoiceSeat, resetLocalLlmVoiceRegistryForTests } from '../presentation/localLlmVoiceRegistry'
 
 describe('match progression', () => {
   it('continues the match when a player has a negative score', () => {
@@ -219,6 +220,28 @@ describe('胡牌座位提示', () => {
       type: 'robbed-kong-win', actorIndex: 1, sourceIndex: 0, tile: 'east', meldIndex: -1,
     })
     vi.unstubAllGlobals()
+  })
+
+  it('无头房主引擎不会把单机注册表中的同座位当成大模型赢家', () => {
+    vi.stubGlobal('window', {
+      clearInterval: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setTimeout: vi.fn(() => 1),
+      matchMedia: vi.fn(() => ({ matches: false })),
+    })
+    const leakedAnnouncement = vi.fn()
+    registerLocalLlmVoiceSeat(1, '高冷', leakedAnnouncement)
+    try {
+      const game = useGame({ headless: true })
+
+      game.debugPreviewWin(1)
+
+      expect(leakedAnnouncement).not.toHaveBeenCalled()
+    } finally {
+      resetLocalLlmVoiceRegistryForTests()
+      vi.unstubAllGlobals()
+    }
   })
 })
 

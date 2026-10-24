@@ -61,7 +61,7 @@
 | 测试 | Vitest（单元/契约测试）、Playwright（端到端测试） |
 | 包管理 | npm（仓库包含 `package-lock.json`） |
 
-前端为单页应用，可独立运行单机模式；联机模式需要配套的后端房间服务（见「本地运行」）。`package.json` 已通过 `engines` 声明运行环境：Node.js `^20.19.0 || >=22.12.0`，npm `>=9.0.0`。
+前端为单页应用，可独立运行单机模式；联机模式使用 VibeHub P2P 房主权威。所有代码统一在 `master` 开发，不再同步 `vibehub` 分支（见 [开发工作流](docs/branch-sync-workflow.md)）。`package.json` 已通过 `engines` 声明运行环境：Node.js `^20.19.0 || >=22.12.0`，npm `>=9.0.0`。
 
 ## 功能概览
 
@@ -72,8 +72,8 @@
 - 听牌提示、待牌剩余数量、回合倒计时、积分变化与局末排名。
 - 触屏移动设备竖屏时提示切换横屏，并尝试进入横屏全屏模式。
 - 联机对战：创建 4 人房间或输入 6 位房间码加入，房主控制准备/开始；断线可凭会话重连回原座位，空位与离席由 AI 代打。
-- 房间管理：房间限时自动解散、房主离开解散，大厅实时展示剩余房间数。
-- 个人战绩与举报：按匿名身份累计场次/胡牌/净胜分，局末可举报对局中的玩家。
+- 房间管理：房主配置 AI 座位、控制开局和解散；平台登录与房间连接通过 VibeHub SDK。
+- 个人战绩与举报：通过 VibeHub 保存个人场次/胡牌/净胜分，局末可举报对局中的玩家。
 - 牌型判断、计分、牌桌布局、比赛推进和胡牌演出等自动化测试。
 
 ### 当前实现的主要规则
@@ -98,13 +98,13 @@ Vue 页面与组件
       ▼
 activeGamePort / GamePort
       ├─ 本地：useGame → 本地回合、动作、时间线与规则模块
-      └─ 联机：useRemoteGame → 编排层 → 协议层 → REST / WebSocket
+      └─ 联机：useVibeRemoteGame → 房主权威 / 血流房间 → 协议层 → VibeHub P2P
 ```
 
 - `src/game/core/contracts/` 定义共享领域类型、`GamePort` 以及本地/联机端口选择器，并通过契约测试保证两种实现可以被相同 UI 消费。
 - 本地对局按规则、控制器、状态、回合编排、杠执行器、开局/结算时间线和瞬态表现拆分；`useGame.ts` 仅保留组合与对外适配职责。
-- 联机对局按 API、协议、传输、会话、状态、编排和表现分层。服务端数据先由 decoder 校验，再经 mapper 转换为前端领域模型，随后由消息路由和 snapshot reconciler 驱动状态。
-- 房间创建、加入、准备、开局、离开、恢复和继续对局均由独立生命周期模块处理；断线恢复使用本地会话信息重新连接并接受服务端快照。
+- 联机对局按平台接入、房主权威、协议、传输、会话、状态、编排和表现分层。房主数据先由 decoder 校验，再经 mapper 转换为前端领域模型，随后由消息路由和 snapshot reconciler 驱动状态。
+- 房间创建、加入、准备、开局、离开、恢复和继续对局均由独立生命周期模块处理；断线恢复使用本地会话信息重新连接并接受房主权威快照。
 - Three.js 场景将静态牌桌、中央机器、牌面/材质、牌墙/手牌/弃牌/副露实例渲染、骰子和胡牌特效分别封装；3D 牌桌与规则面板按需加载，避免大厅首屏加载完整渲染代码。
 
 ## 安装方式
@@ -130,17 +130,17 @@ npm ci
 npm run dev
 ```
 
-Vite 配置的默认端口为 `4173`，开发服务器监听 `0.0.0.0`。通常可在浏览器打开：
+`npm run dev` 默认端口为 `5173`（Playwright 使用 `4173`），开发服务器监听 `0.0.0.0`。通常可在浏览器打开：
 
 ```text
-http://localhost:4173
+http://localhost:5173
 ```
 
 终端输出的地址应作为最终依据。如果端口已被占用，Vite 可能选择其他可用端口。
 
 进入大厅后选择“东风场”或“半庄场”开始单机对战，或在“联机对战”下创建/加入房间。移动端建议横屏使用；部分浏览器不允许网页自动锁定方向，此时请手动横置设备。
 
-**联机对战**需要配套的后端房间服务。开发环境下，前端请求同源的 `/api` 和 `/ws`，Vite 会将它们代理到 `http://127.0.0.1:8000`；`backend/` 为独立仓库（本仓库已将其忽略），本地可用 `docker compose up --build` 启动，部署与运行方式见 [backend/DEPLOY.md](./backend/DEPLOY.md)。生产环境建议让 Web 服务器将 `/api`、`/ws` 反向代理到后端；如果后端使用独立地址，则通过 `VITE_API_BASE` 指定（见「环境变量」）。
+**联机对战**在 VibeHub 平台部署后使用真实 SDK，登录后创建/加入房间，由房主设备运行对局引擎。本地 `npm run dev` 默认使用 `mockVibeHub`（BroadcastChannel）验证确定性流程，不需要旧 WebSocket 房间后端。真实 P2P 行为必须上线验收，详见 [验收策略](docs/vibehub-adaptation-checklist.md)。`backend/` 仍可提供 TTS/LLM 网关；Vite 的 `/api` 代理默认指向 `http://127.0.0.1:8000`，可通过 `VITE_API_TARGET` 调整。
 
 ## 操作方式
 
@@ -171,7 +171,9 @@ npm run test:e2e
 
 客户端环境变量均以 Vite 的 `VITE_` 前缀声明：
 
-- `VITE_API_BASE`（可选）：联机模式 REST 与 WebSocket 的服务基址。默认使用页面当前 origin；本地开发由 Vite 代理 `/api`、`/ws` 到 `127.0.0.1:8000`。后端部署到独立域名或端口时设置，例如 `VITE_API_BASE=https://api.example.com`。该值在构建时通过 `import.meta.env` 注入。
+- `VITE_API_BASE`（可选）：共享 TTS/LLM 网关的兼容基址，不再用于联机房间 REST/WebSocket。
+- `VITE_API_TARGET`（可选）：本地 Vite `/api` 代理目标，默认 `http://127.0.0.1:8000`。
+- `VITE_VIBE_REAL=1`：保留的真实 SDK 调试开关，本地默认关闭；它不能替代平台线上验收。
 - `VITE_LOCAL_TTS_BASE_URL`（可选）：单机大模型吐槽的独立 TTS 网关基址。
   master 默认沿用 `VITE_API_BASE`/同源 `/api`；`*.lumigrav.space` 未显式配置时
   回退生产网关。该地址只传短文本与白名单音色，不包含百度 Key/Secret。
@@ -182,7 +184,7 @@ npm run test:e2e
 `POST /api/local-tts/synthesize`。音频返回后进入共享播放队列，与 BGM 同时播放
 （语音期间不压低 BGM：2026-09-11 用户决定，忽高忽低更影响对局节奏）；失败只保留气泡，不影响出牌。AI 设置中的“单机音色”可自动按模型识别 DeepSeek/千问/Kimi/豆包/MiniMax/GPT/GLM/Claude，也可
 手动指定任一网关白名单音色或策略默认音色。此链路位于共享 `game/llm` 与
-`game/core/presentation`，master 与 vibehub 使用同一实现，不依赖 WebSocket/P2P。
+`game/core/presentation`，单机与 P2P 使用共享实现。
 
 无浏览器 CORS 的供应商端点不能从网页直连：千问 Token Plan
 （`token-plan.cn-beijing.maas.aliyuncs.com`）、Coding Plan
@@ -226,14 +228,16 @@ Key 仍是用户自己的 `sk-sp-` Key，由浏览器携带、服务端不保存
 │  │  │  ├─ selectors/       # 可供本地和远程复用的派生查询
 │  │  │  └─ presentation/    # 音频、头像、牌面资源和布局/胡牌表现模型
 │  │  └─ online/
-│  │     ├─ api/             # 房间、账号、举报 REST 客户端
+│  │     ├─ vibe/            # VibeHub 登录、大厅、战绩与血流房间
+│  │     ├─ host/            # 经典玩法房主权威与远端控制器
+│  │     ├─ antiCheat/       # 承诺洗牌与公开状态校验
 │  │     ├─ protocol/        # 服务端 DTO、消息、decoder 与 mapper
-│  │     ├─ transport/       # 房间 WebSocket
+│  │     ├─ transport/       # VibeHub P2P 与可选自托管传输
 │  │     ├─ session/         # 会话持久化、房间恢复与可用性
 │  │     ├─ state/           # 远程对局状态容器
 │  │     ├─ orchestration/   # 请求协调、消息路由、快照协调与动作/生命周期
 │  │     ├─ presentation/    # 开局、结算和瞬态事件表现时间线
-│  │     └─ useRemoteGame.ts # 远程端口组合入口
+│  │     └─ useVibeRemoteGame.ts # P2P 远程端口组合入口
 │  ├─ App.vue                # 应用组合根，不承载具体对局规则
 │  ├─ main.ts               # Vue 应用入口
 │  ├─ style.css             # 全局样式
@@ -254,7 +258,7 @@ Key 仍是用户自己的 `sk-sp-` Key，由浏览器携带、服务端不保存
 
 - 使用 Vue 单文件组件和 `<script setup lang="ts">`。组件只消费 `GamePort`，不要在视图内新增本地/联机模式分支或直接解析后端 DTO。
 - 共享的牌、玩家、动作和结算类型放在 `src/game/core/contracts/`；协议原始类型只放在 `src/game/online/protocol/dto.ts`，并经过 decoder 与 mapper 后才能进入核心状态。
-- 本地与远程组合入口分别为 `src/game/core/local/useGame.ts` 和 `src/game/online/useRemoteGame.ts`。新流程优先下沉到对应的状态、编排、控制器或时间线模块，避免组合入口再次膨胀。
+- 本地与远程组合入口分别为 `src/game/core/local/useGame.ts` 和 `src/game/online/useVibeRemoteGame.ts`。新流程优先下沉到对应的状态、编排、控制器或时间线模块，避免组合入口再次膨胀。
 - 修改规则时同步更新 `src/game/core/rules/`、本地动作/结算流程、游戏内 `RulesPanel.vue` 和本 README；若后端权威计算也依赖该规则，还需要同步后端并补充协议映射测试。
 - 新增一套麻将规则时，优先把规则差异封装为规则配置或策略，复用 `GamePort`、房间生命周期、协议传输和 UI 外壳。只有服务端 DTO 新增字段时才扩展 `dto.ts`、decoder 和 mapper；只有 UI 需要新状态/动作时才扩展 `GamePort`，并同步本地、远程契约测试。
 - 修改牌桌位置、实例渲染或胡牌演出时，优先更新 `src/components/table/three/` 或 `src/game/core/presentation/` 中的独立模块，并补充纯函数/渲染器测试。
@@ -275,7 +279,7 @@ npm run build
 npm run preview
 ```
 
-部署时将 `dist/` 的内容交给能够托管静态站点的 Web 服务器即可。联机模式需同时部署后端房间服务：`backend/` 为独立仓库，部署方式见 [backend/DEPLOY.md](./backend/DEPLOY.md)。可以通过同源反向代理暴露 `/api`、`/ws`，也可以通过 `VITE_API_BASE` 指向独立服务地址。
+单机可将 `dist/` 托管为静态站点；真实联机部署到 VibeHub 作品 `B5AJupT1`，使用真实 SDK 登录与 P2P 房间。部署入口现在统一为 master，可使用 `pnpm deploy:vibehub`（需要已登录的 CLI 和更新说明文件），见 [开发工作流](docs/branch-sync-workflow.md)。TTS/LLM 网关仍独立部署；可选自托管传输见 [signaling/README.md](signaling/README.md)。
 
 当前 `vite.config.ts` 使用相对路径 `base: './'`，可将构建产物部署到根路径或未知子目录；子目录地址应以 `/` 结尾，避免浏览器将相对资源解析到错误层级。应用当前没有前端路由，因此不需要额外配置 SPA 路由回退。
 
@@ -303,7 +307,7 @@ npm run preview
 
 ### 联机模式创建 / 加入房间失败
 
-本地开发时确认后端监听 `127.0.0.1:8000`，并通过 Vite 页面访问，让 `/api`、`/ws` 使用开发代理。部署环境则检查同源反向代理或 `VITE_API_BASE`，并确认 WebSocket 升级请求未被代理层拦截。若“继续对局”不能恢复，还应检查浏览器会话存储、房间是否仍存在，以及后端返回快照能否通过协议 decoder。
+本地开发先确认运行的是 Vite dev（默认 mock）且同一浏览器窗口可通过 BroadcastChannel 通信。真实平台联机检查 VibeHub 登录状态、SDK 加载、房主在线状态及网络连接。刷新恢复还需本机保存的房间会话与有效的房主权威快照；本地 mock 测试不能证明真实传输正常。
 
 ### 修改规则后测试失败
 

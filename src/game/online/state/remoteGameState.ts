@@ -1,5 +1,4 @@
-import { reactive, ref, shallowRef } from 'vue'
-import type { LlmSeatRequest, RoomSeatState } from '../api/roomApi'
+import { reactive, ref } from 'vue'
 import type { ActionPrompt, Announcement, GamePhase, LastDiscard, OpeningStage, RoundResult, WinEffect } from '../../core/contracts/gamePort'
 import type {
   GamePlayer,
@@ -9,15 +8,13 @@ import type {
   TileType,
   WinPresentation,
 } from '../../core/contracts/types'
-import type { RemoteSessionStatus } from '../session/remoteRoomLifecycle'
-import type { StoredSession } from '../session/remoteSessionStore'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 
+export type RemoteSessionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing' | 'reconnecting'
 export type RemoteClientPhase = GamePhase
 
 export interface RemoteGameStateOptions {
   guestId?: string
-  storedSession?: StoredSession | null
   autoPlay?: boolean
 }
 
@@ -27,30 +24,19 @@ function autoPlayFromUrl(): boolean {
 }
 
 export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
-  // 房间与连接会话。
+  // 房间与连接会话（SDK 版：无 rejoinCode / 服务端座位，座位由大厅 roster 管理）。
   const sessionStatus = ref<RemoteSessionStatus>('idle')
   const sessionError = ref('')
   const roomId = ref('')
   const mySeat = ref(-1)
   const nickname = ref('')
-  const rejoinCode = ref('')
+  const avatar = ref('')
   const playerId = ref(options.guestId ?? '')
-  const creatorSeat = ref<number | null>(null)
-  const isCreator = ref(false)
-  const roomSeats = ref<Array<RoomSeatState | null>>([])
-  /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
-  const reservedSeats = ref<Array<LlmSeatRequest>>([])
   const roomTimeLimit = ref<number | null>(null)
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
-  const roomStatus = ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>('lobby')
-  const llmEnabled = ref(false)
-  const effectiveLlmEnabled = ref(false)
-  const llmAvailable = ref(false)
   const rulesetId = ref<RuleVariant>('lotus-classic')
   const autoPlay = ref(options.autoPlay ?? autoPlayFromUrl())
-  const storedSession = ref<StoredSession | null>(options.storedSession ?? null)
 
-  // 服务端权威对局状态与客户端表现状态。
+  // 对局状态与客户端表现状态（快照驱动）。
   const phase = ref<RemoteClientPhase>('lobby')
   const players = reactive<GamePlayer[]>([])
   const wallCount = ref(0)
@@ -60,8 +46,6 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const selectedIndex = ref(-1)
   const turnSeconds = ref(12)
   const lastDiscard = ref<LastDiscard | null>(null)
-  /** 最近一次弃牌的牌名播报完成信号（点炮胡要等它播完再起胡牌音效，对齐单机）。 */
-  const lastDiscardSound = shallowRef<Promise<void> | null>(null)
   const actionPrompt = ref<ActionPrompt | null>(null)
   const announcement = ref<Announcement | null>(null)
   const tableActionEvent = ref<TableActionEvent | null>(null)
@@ -93,12 +77,10 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   const turnCanWindKong = ref(false)
 
   return {
-    sessionStatus, sessionError, roomId, mySeat, nickname, rejoinCode, playerId,
-    creatorSeat, isCreator, roomSeats, reservedSeats, roomTimeLimit, roomStatus, llmEnabled,
-    effectiveLlmEnabled,
-    llmAvailable, rulesetId, autoPlay, storedSession,
+    sessionStatus, sessionError, roomId, mySeat, nickname, avatar, playerId,
+    roomTimeLimit, rulesetId, autoPlay,
     phase, players, wallCount, wall, wallHeadDrawn, currentPlayer, selectedIndex,
-    turnSeconds, lastDiscard, lastDiscardSound, actionPrompt, announcement, tableActionEvent,
+    turnSeconds, lastDiscard, actionPrompt, announcement, tableActionEvent,
     scoreFlowEvent, result, winEffect, winPresentation, revealHands,
     winningPlayerIndex, round, dealer, honba, matchType, matchFinished,
     dealAnimation, openingStage, diceValues, diceThrowerIndex, userDrewThisTurn, waitingNextRound,

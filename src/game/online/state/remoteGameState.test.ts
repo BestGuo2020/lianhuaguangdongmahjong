@@ -17,14 +17,4 @@ describe('remoteGameState', () => {
     })
     expect(second.players).toHaveLength(0)
   })
-
-  it('接收恢复会话作为状态种子', () => {
-    const storedSession = {
-      roomId: 'ABC123', rejoinCode: 'CODE', nickname: '莲花',
-      playerId: 'guest-1', mode: 'east' as const,
-    }
-    const state = createRemoteGameState({ storedSession })
-
-    expect(state.storedSession.value).toEqual(storedSession)
-  })
 })

@@ -1,61 +1,46 @@
-# 双分支同步工作流（master → vibehub）
+# master 单主分支开发工作流
 
-> 目的：前端界面（牌桌、规则、组件）只改一次，两个分支都能用。
+自 2026-10-24 起，原 `vibehub` 的联机部分合入 `master`，停止双分支同步。保留本文件路径以兼容旧文档链接。
 
-## 分支定位
+## 开发边界
 
-| 分支 | 联机方式 | 角色 |
-|---|---|---|
-| `master` | WebSocket（`roomSocket.ts` + HTTP API） | **UI 主开发分支**：牌桌/规则/组件改动只在这里做 |
-| `vibehub` | P2P（`vibeRoomTransport.ts` + vibe SDK） | 同步分支：从 master 自动同步 UI，保留自己的联机层 |
+- 所有后续改动直接在 `master` 开发、测试和提交，包括联机层。
+- 合并以 master 的素材、主题、游戏节奏、规则、结算界面、AI 与回放分析为基础；VibeHub 只提供登录、房间、P2P 传输、房主权威、恢复与联机战绩等必需能力。
+- 共享引擎保留 master 的默认行为；`headless`、`instantOpening`、远端控制器和开局确认屏障只在 P2P 权威端显式启用。
+- `vibehub` 分支及工作树保留为历史参考，不再作为开发、提交或部署入口。无需删除或重置它们。
+- `sync:vibehub`、同步脚本、领先检查与同步夹具已删除。不要重新运行旧分支里的脚本。
 
-## 日常流程
+## 当前联机实现
 
-1. 在 `master` 上改 UI → 提交
-2. 跑同步：
-   ```bash
-   pnpm sync:vibehub
-   # 或：powershell -ExecutionPolicy Bypass -File scripts/sync-master-to-vibehub.ps1
-   ```
-3. 脚本自动完成：查找已签出 vibehub 的干净工作树并在其中执行；没有独立工作树时才临时切分支。随后 merge master（冲突采用 master 版）→ 恢复 vibehub 联机文件 → 删除 WS 版死代码 → 提交。原 master 工作树保持在 master。
+- `src/game/online/useVibeRemoteGame.ts`：VibeHub 联机组合入口。
+- `src/game/online/vibe/`：平台登录、房间、大厅、战绩与血流房间。
+- `src/game/online/transport/`：VibeHub P2P 传输与可选自托管传输。
+- `src/game/online/host/`：经典玩法房主权威引擎与远端控制器。
+- `src/game/online/antiCheat/`：承诺洗牌与公开状态校验。
+- `signaling/`：可选自托管信令服务，按其 README 单独部署。
 
-## 哪些文件跟随 master（自动采用 master 版）
+原前端 REST/WebSocket 房间入口不再使用。`backend/` 仍是独立 Git 仓库，TTS/LLM 网关的运行和提交方式不变。
 
-- 牌桌/组件：`MahjongTile.vue`、`MahjongTable3D.vue`、`GameTableHud.vue`、`PlayerSeat.vue`、`RulesPanel.vue`、`SettlementOverlay.vue`、`staticTableScene.ts`、`tableTilePresenter.ts` 等
-- 游戏核心：`game/core/contracts/*`、`game/core/local/*`、`game/core/rules/*`、`game/shared/runtime/*`
-- 莲花引擎：`game/variants/lotus/*`
+## 验证与部署
 
-## 哪些文件 vibehub 永远保留自己的版本（脚本自动恢复）
+1. 在 master 运行 `pnpm test`、`pnpm build`，并运行相应单机与本地确定性 e2e。
+2. 本地 `mockVibeHub` 用于确定性流程；真实传输、房间、roster、重连、结算同步仍按 AGENTS.md 的线上验收要求执行。
+3. 从 master 构建 `dist/` 并用已登录的 VibeHub CLI 更新作品 `B5AJupT1`。`pnpm deploy:vibehub` 使用用户目录内的 CLI 和 `tmp/vibehub-update-note.txt`。
+4. 线上验收显式设置 `E2E_ONLINE=1` 和 `E2E_SKIP_WEBSERVER=1`；凭据从未跟踪的 `tmp/online_test` 读取，证据写入 `tmp/bf-online-evidence/`。
+5. 本地/CI 默认不收集 `online-*.spec.ts` 与 `selfhost-*.spec.ts`，不依赖私有账号文件或额外信令服务。自托管专项测试设置 `E2E_SELFHOST=1` 后显式运行。
 
-这些是**联机装配/本质差异**文件，两边内容必然不同，改联机时需两边分别改：
+```powershell
+$env:E2E_ONLINE = '1'
+$env:E2E_SKIP_WEBSERVER = '1'
+$env:ONLINE_EVIDENCE_DIR = 'tmp/bf-online-evidence'
+pnpm exec playwright test tests/e2e/online-two-accounts-two-east-matches.spec.ts --grep '血流东风场' --workers=1
+```
 
-- `src/App.vue`、`src/game/core/local/useGame.ts`（远程入口）
-- `src/game/core/contracts/activeGamePort*`、`gamePort*`（P2P 远端端口与权威开局参数）
-- `src/components/lobby/*`（大厅）、`src/components/account/*`
-- `src/game/online/orchestration/*`、`presentation/*`、`session/*`、`state/*`（联机编排）
-- `src/game/online/protocol/*`、
-  `src/game/shared/runtime/{matchLifecycle,timerScheduler}.ts`、
-  `src/game/variants/lotus/lotusGame.ts`（P2P 权威边界/无头房主扩展）
-- `index.html`、`vite.config.ts`、`playwright.config.ts`、`src/content/disclaimer.ts`
+## 本次迁移基线
 
-## WS 专属（master-only）文件：vibehub 上必须删除
-
-`$masterOnly`（脚本内数组）里的路径在 vibehub 上不存在，同步时会被 `git rm`；**新增 WS 专属文件后必须同步维护这个数组**，否则 master 新增的文件会以「staged add」进入 vibehub，而它 import 的 WS 模块已被删除 → vibehub 构建/测试直接挂。
-
-- `src/game/online/api/**`（REST 房间/账号/审核接口）
-- `src/game/online/session/remoteRoomLifecycle.{ts,test.ts}`、`session/useRoomAvailability.{ts,test.ts}`、`session/useWakuDemoAuth.ts`
-- `src/game/online/transport/roomSocket.{ts,test.ts}`、`src/game/online/useRemoteGame.{ts,test.ts}`
-- `src/game/variants/lotus/bloodFlow/useBloodFlowRemoteGame.ts`（+`.test.ts`）：血流 **WS** 联机入口，import 了上面这些 WS 模块；vibehub 的 P2P 血流走自己的 `src/game/online/vibe/bloodFlowRoom.ts`
-- `src/components/lobby/roomSeatLlm.{ts,test.ts}`：房间面板「预留座位」纯逻辑，import 了 `online/api/roomApi`；vibehub 的房间面板是 keep 文件，不使用它
-- `tests/e2e/remote-lotus-legacy.smoke.spec.ts`、`tests/e2e/llm-seat-reservation.spec.ts`（后者打 REST `/api/rooms/{id}/llm-seats`）
-- `tests/e2e/theme-utilities.spec.ts` 与 `fixtures/theme-utilities.{html,ts}`：装配 WS 房间/战绩组件并模拟 REST 响应，只留在 master；主题变量和公共样式修复仍同步到 vibehub。
-- `tests/e2e/disclaimer-mobile.spec.ts`：用户声明弹窗几何，走 WS 大厅建房入口并桩掉 `/api/login/session`、`/api/me/disclaimer-agreement`；vibehub 的 P2P 大厅登录与声明都不走 REST，沿用会失败（`src/style.css` 的弹窗样式仍跟随 master 同步）
-- 例外：`src/game/variants/lotus/bloodFlow/ws/authority.ts`（+test）**跟随 master**、不要排除 —— `useBloodFlowGame.ts` 里有 `import type { ... } from './ws/authority'`，删掉会破坏 vibehub 的类型检查。
-
-## 注意
-
-- 必须从 master 工作树运行；**master 和已签出 vibehub 的目标工作树都必须干净**。脏工作区直接中止，不自动 stash、清理文件或移除工作树。
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-sync-worktrees.ps1` 在系统临时目录下的 Git 仓库验证工作树同步、脏文件保护、keep 恢复与 WS 删除，不操作正式分支，也不被项目单测收集。
-- 同步完成后建议在 vibehub 上跑 `pnpm test` 验证
-- 若改动涉及联机层（大厅/登录/传输），master 和 vibehub 需各自实现——这是两套后端的本质差异，无法合并
-- 清单维护：改脚本里的 `$vibehubKeep`（保留 vibehub 版）与 `$masterOnly`（删除）数组
+- 原 master：`a8cf544`；迁入的 vibehub：`43899a6`。使用保留双亲历史的合并提交，后续不再同步。
+- `public/`、主题样式、牌桌与结算组件、规则配置保持 master 内容；本地引擎仅增加显式启用的 P2P 权威参数，并保留 master 的分析与复现接线。
+- 本地验证：全量单测 2396 项通过、2 项跳过；最终适配检查 51 项通过；类型检查和生产构建通过。
+- 浏览器验证覆盖经典/翻精开局、胡牌结算、血流权威整场、刷新恢复、手机主题恢复与倒计时。冷启动导航超时的两项倒计时测试在放宽加载窗口后通过，未修改游戏倒计时。
+- 已从 master 更新作品 `B5AJupT1`，并核对线上入口资源与本地构建一致。线上证据保存在 `tmp/bf-online-evidence/20261024-master-p2p/`，不提交账号或测试产物。
+- 线上双账号验收两场通过（普通机器人 / 大模型机器人各一场完整东风场）：双方均完成东一至东四，最终积分一致，全知回放与分析记录各有完整四局，无应用异常、决策超时或收帧停滞恢复。

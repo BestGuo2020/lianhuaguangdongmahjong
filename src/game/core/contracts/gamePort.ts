@@ -195,7 +195,7 @@ export interface GamePort {
   userHu(): void
   /** 莲花麻将：从吃候选中选择第 chiIndex 组吃面子（现行玩法为 no-op）。 */
   /** 莲花麻将：暗杠（乱风杠）东南西北各 1 张（现行玩法为 no-op）。 */
-  nextRound(): void
+  nextRound(options?: GameStartOptions): void
   returnToLobby(): void
   tileName(tile: TileType): string
 }
@@ -216,6 +216,8 @@ export interface GameStartOptions {
   initialWall?: TileType[]
   /** **固定开局骰子**（两粒）：定时器压缩 / 重跑复现用；不给则随机。 */
   openingDice?: [number, number]
+  /** P2P 承诺洗牌产生的翻精第二次骰点。 */
+  openingSecondDice?: [number, number]
   /**
    * **当局庄家**（分析区 P1 §6 的确定性子局重跑）：不给则沿用引擎当前状态（新的一场是 0）。
    *

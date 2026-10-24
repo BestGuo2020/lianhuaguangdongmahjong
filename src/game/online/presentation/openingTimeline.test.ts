@@ -16,9 +16,9 @@ function player(seat: number, count: number, hidden = false): ServerPlayerDto {
   }
 }
 
-function snapshot(): ServerSnapshot {
+function snapshot(round = 1): ServerSnapshot {
   return {
-    kind: 'state_snapshot', roomId: 'A', mode: 'east', phase: 'opening', round: 1,
+    kind: 'state_snapshot', roomId: 'A', mode: 'east', phase: 'opening', round,
     dealer: 2, honba: 0, wallCount: 83, wall: Array<TileType>(83).fill('s1'), headDrawn: 53,
     currentPlayer: 2, players: [player(0, 13, true), player(1, 13, true), player(2, 14), player(3, 13, true)],
     seat: 2, result: null, announcement: null, matchFinished: false, lastDiscard: null,
@@ -55,23 +55,50 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('openingTimeline', () => {
-  it('waits for the 3D table before entering the opening stage', async () => {
-    let releaseTableReady!: () => void
-    const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
-    const { state, timeline } = harness({ waitForTableReady: () => tableReady })
+  it('等待同轮权威快照时不提前改写本地轮次', async () => {
+    const { state, timeline } = harness({
+      waitForTableReady: () => Promise.resolve(),
+      waitForOpeningSnapshot: true,
+    })
+    timeline.start({ kind: 'round_start', matchStarted: false, round: 2, dealer: 2, honba: 0, dice: [2, 5] })
 
-    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
-    expect(state.openingStage.value).toBeNull()
-    timeline.captureSnapshot(snapshot())
-    expect(state.players).toHaveLength(4)
-
-    releaseTableReady()
-    await Promise.resolve()
-    expect(state.openingStage.value).toBe('start')
-    timeline.cancel()
+    expect(state.round.value).toBe(1)
+    timeline.captureSnapshot(snapshot(2))
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(state.round.value).toBe(2)
   })
 
-  it('waits for both the table and the first opening snapshot', async () => {
+  it('权威快照先到时只发送当前房主代次的开局确认，不改写本地牌局', () => {
+    const { state, sent, timeline } = harness({
+      waitForOpeningSnapshot: true,
+      getAuthorityEpoch: () => 'epoch-1',
+    })
+    timeline.confirm({
+      kind: 'round_start', authorityEpoch: 'epoch-1', sequence: 2,
+      matchStarted: false, round: 2, dealer: 2, honba: 1, dice: [2, 5],
+    })
+
+    expect(sent).toEqual([{ type: 'opening_done', round: 2, honba: 1, authorityEpoch: 'epoch-1' }])
+    expect(state.round.value).toBe(1)
+    expect(state.phase.value).toBe('lobby')
+  })
+
+  it('快照先到时，round_start 到达后仍播放开局并确认', async () => {
+    const { state, sent, timeline } = harness({
+      waitForTableReady: () => Promise.resolve(),
+      waitForOpeningSnapshot: true,
+    })
+    timeline.primeSnapshot(snapshot(2))
+    timeline.start({ kind: 'round_start', matchStarted: false, round: 2, dealer: 2, honba: 0, dice: [2, 5] })
+
+    expect(timeline.isWaitingForSnapshot()).toBe(false)
+    await vi.advanceTimersByTimeAsync(10000)
+
+    expect(state.round.value).toBe(2)
+    expect(sent).toContainEqual({ type: 'opening_done', round: 2, honba: 0 })
+  })
+
+  it('等待 3D 资源和合成首帧后才进入客户端开局阶段', async () => {
     let releaseTableReady!: () => void
     const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
     const { state, timeline } = harness({
@@ -79,16 +106,58 @@ describe('openingTimeline', () => {
       waitForOpeningSnapshot: true,
     })
 
+    timeline.primeSnapshot(snapshot())
     timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
-    timeline.captureSnapshot(snapshot())
-    await Promise.resolve()
+
     expect(state.openingStage.value).toBeNull()
+    expect(state.phase.value).toBe('lobby')
 
     releaseTableReady()
     await Promise.resolve()
     await Promise.resolve()
+
     expect(state.openingStage.value).toBe('start')
+
     timeline.cancel()
+  })
+
+  it('牌桌等待期间取消后不会进入开局或发送 opening_done', async () => {
+    let releaseTableReady!: () => void
+    const tableReady = new Promise<void>((resolve) => { releaseTableReady = resolve })
+    const { state, sent, timeline } = harness({
+      waitForTableReady: () => tableReady,
+      waitForOpeningSnapshot: true,
+    })
+
+    timeline.primeSnapshot(snapshot())
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+
+    timeline.cancel()
+    releaseTableReady()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(10000)
+
+    expect(state.openingStage.value).toBeNull()
+    expect(sent).toEqual([])
+  })
+
+  it('keeps the first captured snapshot and ignores later fast-host snapshots', async () => {
+    const { state, timeline } = harness()
+    timeline.start({ kind: 'round_start', matchStarted: true, round: 1, dealer: 2, honba: 0, dice: [2, 5] })
+    timeline.captureSnapshot(snapshot()) // 开局：本家(seat 2)14 张、其余 13 张
+
+    // 无头房主推进极快，发牌动画等待期间会陆续到达 drawing/checking 快照，不能覆盖开局手牌。
+    timeline.captureSnapshot({
+      ...snapshot(),
+      phase: 'checking',
+      players: [player(0, 13, true), player(1, 13, true), player(2, 13), player(3, 13, true)],
+    } as ServerSnapshot)
+
+    await vi.advanceTimersByTimeAsync(10000)
+
+    // 仍按第一份快照发牌：本家 14 张，其余 13 张（隐藏）。
+    expect(state.players.map((item) => item.hand.length)).toEqual([14, 0, 0, 0])
+    expect(state.players.map((item) => item.concealedTileCount)).toEqual([14, 13, 13, 13])
   })
 
   it('runs start, dice and authoritative deal animation before opening_done', async () => {
@@ -150,15 +219,25 @@ describe('openingTimeline', () => {
       openingStack: 18, wallBreakIndex: 36,
     })
 
-    expect(state.wallCount.value).toBe(134)
+    // 翻精前仍显示完整 136 张牌山（3D 用 flipStack 补回占位墩）。
+    expect(state.wallCount.value).toBe(136)
     expect(state.wall.value).toHaveLength(134)
     expect(state.jokerTiles.value).toEqual(['p2', 'p3'])
     expect(state.wildcardTiles.value).toEqual(['white'])
     expect(state.flipStack.value).toBe(7)
-    expect(state.openingStack.value).toBe(18)
-    expect(state.wallBreakIndex.value).toBe(36)
+    expect(state.openingStack.value).toBeNull()
+    // 二骰结束前不能提前把牌山移动到开门断点。
+    expect(state.wallBreakIndex.value).toBe(0)
     // 指示牌（flipTile）由 round_start 消息在翻精阶段才翻出；翻精墩（flipStack）开局即保留。
     expect(state.flipTile.value).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(1250 + 1900)
+    expect(state.openingStage.value).toBe('flip')
+    expect(state.wallCount.value).toBe(134)
+    await vi.advanceTimersByTimeAsync(1200 + 1900)
+    expect(state.openingStage.value).toBe('deal')
+    expect(state.openingStack.value).toBe(18)
+    expect(state.wallBreakIndex.value).toBe(36)
   })
 
   it('cancels pending animation without sending readiness', async () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import RoomPanel from './RoomPanel.vue'
+import LobbyThemeVisual from './LobbyThemeVisual.vue'
 import GameSettingsSummary from './GameSettingsSummary.vue'
 import LobbyDialog from './LobbyDialog.vue'
 import MatchTypePicker from './MatchTypePicker.vue'
@@ -9,10 +10,11 @@ import { bloodFlowEnabled } from '../../game/variants/lotus/bloodFlow/availabili
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState, ServerLlmStyle } from '../../game/online/api/roomApi'
-import type { StoredSession } from '../../game/online/session/remoteSessionStore'
+import { loginRequired } from '../../game/online/vibe/vibeClient'
+import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
+import type { HostLlmOption, HostLlmSeatSelection, PublicAiSeat } from '../../game/online/vibe/vibeLlm'
+import LoginButton from '../account/LoginButton.vue'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
-import LobbyThemeVisual from './LobbyThemeVisual.vue'
 import type { CharacterId } from '../../game/llm/animeCharacters'
 import type { TableThemeName } from '../table/three/tableTheme'
 
@@ -21,40 +23,24 @@ interface Props {
   selectedMatch: MatchType
   selectedRule: RuleVariant
   matchName: string
-  storedSession: StoredSession | null
   roomId: string
   nicknameInput: string
   joinCode: string
   animeCharacterId: CharacterId
   tableThemeName: TableThemeName
-  roomMeta: RoomMeta | null
   sessionStatus: string
   sessionError: string
   roomTimeLimit: number | null
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌。 */
-  roomStatus?: string
-  roomSeats: Array<RoomSeatState | null>
-  /** 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。 */
-  reservedSeats: Array<LlmSeatRequest>
-  /** 房主请求的空座 AI 补位是否使用大模型 */
-  llmEnabled: boolean
-  /** 实际生效（请求 && 服务端配置齐全） */
-  effectiveLlmEnabled: boolean
-  /** 服务端是否配置了大模型 */
-  llmAvailable: boolean
-  /** 服务端注册的提供商（不含 key） */
-  llmProviders: Array<LlmProviderInfo>
+  roomSeats: LobbySeat[]
+  aiSeats: PublicAiSeat[]
+  llmOptions: HostLlmOption[]
   mySeat: number
-  isCreator: boolean
+  isHost: boolean
   allOccupiedReady: boolean
   matchStarting: boolean
   copied: boolean
   leaving: boolean
   closing: boolean
-  wakuAuthenticated: boolean
-  wakuAccountName: string
-  wakuAuthLoading: boolean
-  wakuAuthError: string
   /** 可按产品策略隐藏联机入口；当前莲花旧版也支持联机。 */
   singlePlayerOnly?: boolean
 }
@@ -68,31 +54,23 @@ const emit = defineEmits<{
   'update:joinCode': [value: string]
   'update:animeCharacterId': [value: CharacterId]
   startLocal: []
-  createRoom: [payload: { llmEnabled: boolean }]
+  createRoom: []
   joinRoom: []
-  resumeSession: []
   copyRoom: []
   toggleReady: []
-  startRemote: [payload: { llmSeats: Array<LlmSeatRequest> }]
-  /** 房主改选空位模型（providerId 为空 = 取消预留，该座放开给真人）。 */
-  reserveSeat: [payload: { seat: number; providerId: string | null; style: ServerLlmStyle | null }]
+  startRemote: []
+  configureAiSeats: [selections: HostLlmSeatSelection[]]
   leaveRoom: []
   closeRoom: []
-  /** 退出本场：回主大厅但保留座位（可重新进原座位）。 */
-  leaveMatch: []
   openStats: []
   /** 打开本地对局回放列表（只存本机 IndexedDB）。 */
   openReplay: []
   openRules: []
-  wakuLogin: []
-  wakuLogout: []
 }>()
 
 type DialogName = 'create' | 'join' | 'match' | 'rule' | 'character' | null
 const dialog = ref<DialogName>(null)
 const pickerReturn = ref<'create' | null>(null)
-/** 联机房间专用开关：只控制服务端 LLM，与单机 localStorage provider 完全独立。 */
-const remoteLlmEnabled = ref(false)
 
 const matchOption = computed(() => props.selectedMatch === 'east'
   ? { name: '东风场', description: '一场 4 局' }
@@ -132,14 +110,7 @@ function selectCharacter(value: CharacterId) {
 
 function confirmCreate() {
   dialog.value = null
-  emit('createRoom', {
-    llmEnabled: remoteLlmEnabled.value && props.roomMeta?.llmAvailable === true,
-  })
-}
-
-function openCreateDialog() {
-  remoteLlmEnabled.value = false
-  dialog.value = 'create'
+  emit('createRoom')
 }
 
 function confirmJoin() {
@@ -160,41 +131,13 @@ function closeDialog() {
   }
   dialog.value = null
 }
-
-function toggleWakuDemoAuth() {
-  if (props.wakuAuthenticated) emit('wakuLogout')
-  else emit('wakuLogin')
-}
 </script>
 
 <template>
   <section class="lobby" :class="{ 'room-focused': Boolean(roomId) }">
     <div class="lobby-layout" :class="{ 'room-focused': Boolean(roomId) }">
-      <LobbyThemeVisual
-        :theme-name="tableThemeName"
-        :character-id="animeCharacterId"
-        @select-character="dialog = 'character'"
-      />
-
+      <LobbyThemeVisual :theme-name="tableThemeName" :character-id="animeCharacterId" @select-character="dialog = 'character'" />
       <section class="lobby-actions" aria-label="对局操作">
-        <div class="lobby-account-slot">
-          <div class="waku-account" :class="{ authenticated: wakuAuthenticated }">
-            <div>
-              <b>{{ wakuAuthenticated ? (wakuAccountName || 'WakuDemo 玩家') : 'WakuDemo 账号' }}</b>
-              <small>{{ wakuAuthenticated ? '已安全登录' : '登录后关联平台身份' }}</small>
-            </div>
-            <button
-              type="button"
-              data-action-role="secondary"
-              :disabled="wakuAuthLoading"
-              @click="toggleWakuDemoAuth"
-            >{{ wakuAuthLoading ? '处理中…' : (wakuAuthenticated ? '退出' : '登录') }}</button>
-          </div>
-          <p v-if="wakuAuthError" class="waku-auth-error" role="alert">{{ wakuAuthError }}</p>
-        </div>
-        <button v-if="storedSession && !roomId" class="continue-session" @click="$emit('resumeSession')">
-          ⏵ 继续对局<template v-if="storedSession.roomId">（房间 {{ storedSession.roomId }}）</template>
-        </button>
         <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
           <button data-action-role="secondary" :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
           <button v-if="!singlePlayerOnly" data-action-role="secondary" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>创建或加入房间</span></button>
@@ -212,68 +155,64 @@ function toggleWakuDemoAuth() {
         </template>
 
         <div v-else class="remote-lobby">
-          <label v-if="!roomId" class="remote-field">
-            <span>昵称</span>
-            <input
-              :value="nicknameInput"
-              maxlength="12"
-              placeholder="输入昵称"
-              @input="$emit('update:nicknameInput', ($event.target as HTMLInputElement).value)"
-              @keyup.enter="dialog = 'create'"
-            />
-          </label>
-          <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
-            剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
-            <template v-if="roomMeta.llmAvailable"> · <span class="room-meta-llm">服务器已启用大模型</span></template>
-          </p>
-          <div v-if="!roomId" class="remote-entry-actions">
-            <button class="remote-create" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="openCreateDialog">
-              {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
-            </button>
-            <button class="remote-join-btn" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
-              {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
-            </button>
+          <div v-if="loginRequired" class="remote-login-gate">
+            <p class="remote-login-hint">多人对战需要 VibeHub 账号登录</p>
+            <LoginButton />
           </div>
-          <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
+          <template v-else>
+            <label v-if="!roomId" class="remote-field">
+              <span>昵称</span>
+              <input
+                :value="nicknameInput"
+                maxlength="12"
+                placeholder="输入昵称"
+                @input="$emit('update:nicknameInput', ($event.target as HTMLInputElement).value)"
+                @keyup.enter="dialog = 'create'"
+              />
+            </label>
+            <div v-if="!roomId" class="remote-entry-actions">
+              <button class="remote-create" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="dialog = 'create'">
+                {{ sessionStatus === 'creating' ? '创建中…' : '创建房间' }}
+              </button>
+              <button class="remote-join-btn" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'joining'" @click="dialog = 'join'">
+                {{ sessionStatus === 'joining' ? '加入中…' : '加入房间' }}
+              </button>
+            </div>
+            <p v-if="sessionError" class="session-error" role="alert">{{ sessionError }}</p>
 
-          <RoomPanel
-            v-if="roomId"
-            :room-id="roomId"
-            :room-time-limit="roomTimeLimit"
-            :room-status="roomStatus"
-            :room-seats="roomSeats"
-            :reserved-seats="reservedSeats"
-            :llm-enabled="llmEnabled"
-            :effective-llm-enabled="effectiveLlmEnabled"
-            :llm-available="llmAvailable"
-            :llm-providers="llmProviders"
-            :my-seat="mySeat"
-            :is-creator="isCreator"
-            :session-status="sessionStatus"
-            :all-occupied-ready="allOccupiedReady"
-            :match-starting="matchStarting"
-            :copied="copied"
-            :leaving="leaving"
-            :closing="closing"
-            :match-name="matchName"
-            :rule-name="ruleOption.name"
-            :table-theme-name="tableThemeName"
-            :character-id="animeCharacterId"
-            @copy="$emit('copyRoom')"
-            @toggle-ready="$emit('toggleReady')"
-            @start="$emit('startRemote', $event)"
-            @reserve-seat="$emit('reserveSeat', $event)"
-            @leave="$emit('leaveRoom')"
-            @close="$emit('closeRoom')"
-            @resume="$emit('resumeSession')"
-            @leave-match="$emit('leaveMatch')"
-            @open-character="dialog = 'character'"
-            @update:character-id="$emit('update:animeCharacterId', $event)"
-          />
+            <RoomPanel
+              v-if="roomId"
+              :room-id="roomId"
+              :room-time-limit="roomTimeLimit"
+              :room-seats="roomSeats"
+              :ai-seats="aiSeats"
+              :llm-options="llmOptions"
+              :my-seat="mySeat"
+              :is-host="isHost"
+              :session-status="sessionStatus"
+              :all-occupied-ready="allOccupiedReady"
+              :match-starting="matchStarting"
+              :copied="copied"
+              :leaving="leaving"
+              :closing="closing"
+              :match-name="matchName"
+              :rule-name="ruleOption.name"
+              :table-theme-name="tableThemeName"
+              :character-id="animeCharacterId"
+              @copy="$emit('copyRoom')"
+              @toggle-ready="$emit('toggleReady')"
+              @start="$emit('startRemote')"
+              @configure-ai-seats="$emit('configureAiSeats', $event)"
+              @leave="$emit('leaveRoom')"
+              @close="$emit('closeRoom')"
+              @open-character="dialog = 'character'"
+              @update:character-id="$emit('update:animeCharacterId', $event)"
+            />
+          </template>
         </div>
 
         <div class="lobby-links">
-          <button v-if="gameMode === 'remote'" class="text-button" data-action-role="light" @click="$emit('openStats')">我的战绩 →</button>
+          <button v-if="gameMode === 'remote' && !loginRequired" class="text-button" data-action-role="light" @click="$emit('openStats')">我的战绩 →</button>
           <button class="text-button" data-action-role="light" data-testid="open-replay" @click="$emit('openReplay')">对局回放 →</button>
           <button class="text-button" data-action-role="light" @click="$emit('openRules')">游戏规则 →</button>
           <a class="repository-link" data-action-role="light" href="https://github.com/BestGuo2020/lianhuaguangdongmahjong" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 新标签页打开莲花广麻仓库">
@@ -284,14 +223,7 @@ function toggleWakuDemoAuth() {
       </section>
     </div>
 
-    <LobbyDialog
-      v-if="dialog"
-      :title="dialogTitle"
-      :wide="dialog === 'rule' || dialog === 'character'"
-      :theme-name="tableThemeName"
-      :variant="dialog"
-      @close="closeDialog"
-    >
+    <LobbyDialog v-if="dialog" :title="dialogTitle" :wide="dialog === 'rule' || dialog === 'character'" :theme-name="tableThemeName" :variant="dialog" @close="closeDialog">
       <template v-if="dialog === 'create'">
         <GameSettingsSummary
           :match-name="matchOption.name"
@@ -301,19 +233,6 @@ function toggleWakuDemoAuth() {
           @select-match="openPicker('match', true)"
           @select-rule="openPicker('rule', true)"
         />
-        <label class="remote-llm-create-option" :class="{ disabled: !roomMeta?.llmAvailable }">
-          <input
-            v-model="remoteLlmEnabled"
-            type="checkbox"
-            :disabled="!roomMeta?.llmAvailable"
-            data-testid="remote-llm-enabled"
-          >
-          <span>
-            <b>空位使用服务器大模型</b>
-            <small v-if="roomMeta?.llmAvailable">开局前可为每个空位选择后端提供商，不使用单机 Key</small>
-            <small v-else>服务器未配置联机大模型，空位将使用普通 AI</small>
-          </span>
-        </label>
         <div class="dialog-actions">
           <button class="secondary" type="button" data-action-role="light" @click="dialog = null">取消</button>
           <button class="primary" type="button" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="confirmCreate">确认创建</button>
@@ -346,7 +265,7 @@ function toggleWakuDemoAuth() {
       />
 
       <MatchTypePicker v-else-if="dialog === 'match'" :model-value="selectedMatch" @close="closePicker" @confirm="selectMatch" />
-      <RuleVariantPicker v-else :model-value="selectedRule" :allow-blood-flow="bloodFlowEnabled(gameMode === 'local' ? 'local' : 'ws')" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
+      <RuleVariantPicker v-else :model-value="selectedRule" :allow-blood-flow="bloodFlowEnabled(gameMode === 'local' ? 'local' : 'p2p')" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
 
   </section>
@@ -354,4 +273,19 @@ function toggleWakuDemoAuth() {
 
 <style scoped>
 .lobby-actions { min-width: 0; }
+.remote-login-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.remote-login-gate :deep(.vibe-auth-status) { color: var(--theme-text-muted); }
+.remote-login-gate :deep(.vibe-auth-login),
+.remote-login-gate :deep(.vibe-auth-logout) { border-color: var(--theme-border); border-radius: 7px; background: var(--theme-panel-elevated); color: var(--theme-text); }
+.remote-login-gate :deep(.vibe-auth-error) { color: var(--theme-negative); }
+.remote-login-hint {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
 </style>

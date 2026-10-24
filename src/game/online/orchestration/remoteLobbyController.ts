@@ -2,19 +2,26 @@ import { computed, ref, watch, type Ref } from 'vue'
 import type { GameMode } from '../../core/contracts/activeGamePort'
 import type { GamePhase } from '../../core/contracts/gamePort'
 import type { MatchType } from '../../core/contracts/types'
-import { reportPlayer, type ReportRequest } from '../api/moderationApi'
-import type { LlmSeatRequest, RoomSeatState } from '../api/roomApi'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import type { LobbySeat } from '../vibe/vibeLobby'
+import { login, loginRequired } from '../vibe/vibeClient'
 
 export interface RemoteLobbyActions {
-  createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant,
-    llmEnabled?: boolean): Promise<void>
+  createRoom(mode: MatchType, capacity: number, rulesetId?: RuleVariant): Promise<void>
   joinRoom(code: string): Promise<void>
   toggleReady(): Promise<void>
-  startMatch(llmSeats?: Array<LlmSeatRequest>): Promise<void>
+  startMatch(): Promise<void>
   leaveRoom(): Promise<void>
   closeRoom(): Promise<void>
   resumeSession(): Promise<void>
+}
+
+interface ReportRequest {
+  roomId: string
+  reporterPlayerId: string
+  targetPlayerId?: string
+  targetName: string
+  reason: string
 }
 
 interface RemoteLobbyEnvironment {
@@ -33,7 +40,7 @@ interface RemoteLobbyControllerOptions {
   roomId: Ref<string>
   nickname: Ref<string>
   playerId: Ref<string>
-  roomSeats: Ref<Array<RoomSeatState | null>>
+  roomSeats: Ref<LobbySeat[]>
   actions: RemoteLobbyActions
   guardEntry(action: () => void): void | Promise<void>
   startBgm(): void
@@ -43,17 +50,6 @@ interface RemoteLobbyControllerOptions {
 
 function readStoredNickname() {
   try { return localStorage.getItem('lgm_nickname') || '' } catch { return '' }
-}
-
-/** 昵称长度上限：与大厅输入框 maxlength 一致（服务端上限 20，前端统一收 12 字）。 */
-export const NICKNAME_MAX_LENGTH = 12
-
-/**
- * 登录账号昵称 → 联机昵称：去空白并截到 12 字；账号没有昵称时返回空串。
- * 联机昵称一律以登录账号为准，因此调用方只在非空时覆盖昵称框。
- */
-export function accountNickname(displayName: string | null | undefined): string {
-  return (displayName ?? '').trim().slice(0, NICKNAME_MAX_LENGTH)
 }
 
 async function copyText(text: string) {
@@ -92,7 +88,7 @@ const BROWSER_ENVIRONMENT: RemoteLobbyEnvironment = {
 
 export function createRemoteLobbyController(options: RemoteLobbyControllerOptions) {
   const environment = options.environment ?? BROWSER_ENVIRONMENT
-  const sendReport = options.report ?? reportPlayer
+  const sendReport = options.report
   const nicknameInput = ref(readStoredNickname())
   const joinCode = ref('')
   const copied = ref(false)
@@ -100,23 +96,24 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
   const leaving = ref(false)
   const closing = ref(false)
   const allOccupiedReady = computed(() => {
-    const occupied = options.roomSeats.value.filter(Boolean)
-    return occupied.length > 0 && occupied.every((seat) => seat?.ready)
+    const seats = options.roomSeats.value
+    return seats.length >= 2 && seats.every((seat) => seat.ready)
   })
 
-  function createRoom(llmEnabled = false) {
+  function createRoom() {
     if (options.roomId.value) return
+    if (loginRequired.value) { void login(); return }
     const name = nicknameInput.value.trim()
     if (!name) return
     options.nickname.value = name
     void options.guardEntry(() => void options.actions.createRoom(
       options.selectedMatch.value, 4, options.selectedRule?.value ?? 'lotus-classic',
-      llmEnabled,
     ))
   }
 
   function joinRoom() {
     if (options.roomId.value) return
+    if (loginRequired.value) { void login(); return }
     const name = nicknameInput.value.trim()
     const code = joinCode.value.trim()
     if (!name || !code) return
@@ -137,20 +134,10 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     environment.schedule(() => { copied.value = false }, 1600)
   }
 
-  /**
-   * 登录账号昵称 → 昵称框：账号给出昵称就覆盖。
-   * 「每次都以账号昵称为准」——本地旧昵称（lgm_nickname）与玩家手输内容都不再优先；
-   * 账号没有昵称时保留昵称框原值，玩家仍可自己填。
-   */
-  function applyAccountNickname(displayName: string | null | undefined) {
-    const name = accountNickname(displayName)
-    if (name) nicknameInput.value = name
-  }
-
-  async function startMatch(llmSeats?: Array<LlmSeatRequest>) {
+  async function startMatch() {
     matchStarting.value = true
     try {
-      await options.actions.startMatch(llmSeats ?? [])
+      await options.actions.startMatch()
     } catch {
       matchStarting.value = false
     }
@@ -214,7 +201,6 @@ export function createRemoteLobbyController(options: RemoteLobbyControllerOption
     allOccupiedReady,
     createRoom,
     joinRoom,
-    applyAccountNickname,
     resumeSession,
     copyRoomCode,
     startMatch,

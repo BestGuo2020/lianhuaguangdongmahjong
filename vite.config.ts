@@ -1,16 +1,14 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
-// vite.config 在 node 环境执行；typecheck 不引入 node 类型，此处窄声明即可。
 declare const process: { env: Record<string, string | undefined> }
-
-// 本地 e2e 冒烟可用 VITE_API_TARGET 指向其他后端端口（默认 8000 开发实例）。
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [vue()],
   test: {
-    // Bound this checkout's tests; dependency-store snapshots and other worktrees are not this suite.
+    // 限定测试发现根目录，避免命令行的 `src` 子串过滤误扫 tmp/.pnpm-store
+    // 中带有 src 路径的历史工作区副本。
     dir: './src',
     // 单测只跑 src 下的 *.test.ts / *.spec.ts。Playwright 的 e2e（tests/e2e）走
     // `npm run test:e2e`，不能被 vitest 收集，否则 @playwright/test 的
@@ -22,26 +20,37 @@ export default defineConfig({
   base: './',
   server: {
     port: 4173,
-    /**
-     * 开发服务器不该因为**编辑器/工具的原子写临时文件**而崩掉。
-     * 实测：Agent 的写入是"临时目录 + 改名"，Windows 上 chokidar 去 watch 那个临时文件会拿到
-     * EBUSY，而 Vite 对 watcher 的 error 事件是致命的 ⇒ 整个 dev server 退出，
-     * 正在跑的 e2e 随即 net::ERR_CONNECTION_REFUSED。这里把这类临时产物排除掉。
-     */
-    watch: {
-      ignored: ['**/*.tmpdir/**', '**/*.tmp', '**/.*.tmpdir/**'],
-    },
     proxy: {
+      // VITE_VIBE_REAL=1：本地走真实 VibeHub SDK 时，SDK 在 localhost/127.0.0.1 下用
+      // location.origin 作 apiBase，因此这些平台路径必须由本机同源提供，否则一律 404。
+      // 转发时改写 Origin/Referer 为平台来源，规避平台对本地来源的校验（浏览器发出的
+      // 同源 POST 仍会带 Origin: http://127.0.0.1:4173）。
+      ...Object.fromEntries([
+        '/api/sdk', '/api/relay', '/api/game-auth', '/connect', '/relay-worker.js',
+      ].map(path => [path, {
+        target: 'https://gamesvibe.app',
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy: { on: (event: string, handler: (req: { setHeader: (name: string, value: string) => void }) => void) => void }) => {
+          proxy.on('proxyReq', (request) => {
+            request.setHeader('Origin', 'https://gamesvibe.app')
+            request.setHeader('Referer', 'https://gamesvibe.app/')
+          })
+        },
+      }])),
+      // 单机 TTS 网关；保持与 master 本地开发一致的同源 /api 调用。
       '/api': {
         target: apiTarget,
         changeOrigin: true,
-        ws: true,
       },
-      '/ws': {
-        target: apiTarget,
-        changeOrigin: true,
-        ws: true,
-      },
-    }
+    },
+    // 真 SDK 调试只额外允许平台域；本地默认仍用 mock。
+    allowedHosts: ['gamesvibe.app', '.gamesvibe.app'],
+    watch: {
+      // 编辑器「另存为重命名」会在源码目录留下 `.xxx.ts.<pid>.tmpdir` 临时目录，
+      // 且编辑器/其他进程持有 tmp 目录下文件锁时 watcher 在 Windows 上报 EBUSY
+      // 直接崩溃 dev server。忽略这类路径与整个 tmp 目录。
+      ignored: ['**/.selfHostConfig.ts.*.tmpdir/**', '**/*.tmp', '**/*.tmpdir/**', 'tmp/**'],
+    },
   },
 })

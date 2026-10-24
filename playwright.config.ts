@@ -2,15 +2,18 @@ import { defineConfig, devices } from '@playwright/test'
 
 const port = Number(process.env.E2E_PORT || 4173)
 const baseURL = `http://127.0.0.1:${port}`
-const backendPort = Number(process.env.E2E_BACKEND_PORT || 8000)
-const backendURL = `http://127.0.0.1:${backendPort}`
-const backendPython = process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : '.venv/bin/python'
-const reuseExistingOnly = process.env.E2E_REUSE_ONLY === '1'
+// 线上专项用例自行打开生产 URL 并创建独立 Chromium 进程，不依赖本地 Vite。
+// Windows 上无关的 webServer 可能在测试主体完成后阻塞收尾，允许显式跳过。
+const skipWebServer = process.env.E2E_SKIP_WEBSERVER === '1' || process.env.E2E_REUSE_ONLY === '1'
 
 export default defineConfig({
   testDir: './tests/e2e',
-  // 响应式验收截图保存在 test-results/responsive-*；运行 E2E 时只清理自己的子目录。
   outputDir: 'test-results/playwright',
+  // 真实线上用例会读取本机账号，不进入普通本地/CI 测试发现。
+  testIgnore: [
+    ...(process.env.E2E_ONLINE === '1' ? [] : ['**/online-*.spec.ts']),
+    ...(process.env.E2E_SELFHOST === '1' ? [] : ['**/selfhost-*.spec.ts']),
+  ],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
@@ -18,12 +21,22 @@ export default defineConfig({
   reporter: process.env.CI ? 'dot' : 'list',
   use: {
     baseURL,
-    // Use full Chromium headless with hardware GPU, not headless-shell SwiftShader.
+    // User-requested hardware GPU headless verification; retain P2P background timing flags.
     channel: 'chromium',
-    launchOptions: { args: ['--enable-gpu'] },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 720 },
+    // 多 context 场景下，后台标签页的计时器/rAF 会被 Chromium 节流甚至冻结，
+    // 导致重进页面的开局动画（setTimeout 驱动）停滞。显式禁用后台节流。
+    launchOptions: {
+      args: [
+        '--enable-gpu',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=IntensiveWakeUpThrottling',
+      ],
+    },
   },
   projects: [
     {
@@ -31,18 +44,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: reuseExistingOnly ? undefined : [
-    {
-      command: `${backendPython} -m uvicorn app.main:app --host 127.0.0.1 --port ${backendPort}`,
-      cwd: 'backend',
-      url: `${backendURL}/api/health`,
-      timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
-    },
+  webServer: skipWebServer ? undefined : [
     {
       command: `npm run dev -- --port ${port}`,
       url: baseURL,
-      env: { ...process.env, VITE_API_BASE: backendURL },
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

@@ -1,0 +1,15 @@
+# 可选：Caddy 提供 HTTPS（自动证书）+ wss 信令反代 + 静态站托管。
+# 适合「跨设备真实网络」测试：不用手配 nginx + certbot，Let's Encrypt 自动签发。
+
+your.domain.example.com {
+    # 信令 wss 反代 → 前端用 ?selfHost=wss://your.domain.example.com/signal
+    handle /signal* {
+        reverse_proxy 127.0.0.1:8787
+    }
+
+    # 静态站：把 `vite build` 的 dist/ 拷到 /srv/www/lianhua
+    root * /srv/www/lianhua
+    encode gzip zstd
+    try_files {path} {path}/ /index.html
+    file_server
+}

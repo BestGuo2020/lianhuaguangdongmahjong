@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteGameState } from '../state/remoteGameState'
 import { createTransientEventPresenter } from './transientEventPresenter'
 
-function setup(options: { themeName?: string; onFixedAnimeAction?: (event: any) => void } = {}) {
+function setup() {
   const state = createRemoteGameState({ autoPlay: false })
   let opening = false
   const playSound = vi.fn()
@@ -14,8 +14,6 @@ function setup(options: { themeName?: string; onFixedAnimeAction?: (event: any) 
     showServerAnnouncement,
     playSound,
     later: (callback, delay) => { globalThis.setTimeout(callback, delay) },
-    getThemeName: () => options.themeName ?? 'jade',
-    onFixedAnimeAction: options.onFixedAnimeAction,
   })
   return {
     state, presenter, playSound, showServerAnnouncement,
@@ -50,40 +48,6 @@ describe('transientEventPresenter', () => {
     expect(playSound).toHaveBeenCalledWith('chi.mp3')
   })
 
-  it('llmAnime 将动作交给固定文案出口且不播放 legacy 人声', () => {
-    const onFixedAnimeAction = vi.fn()
-    const { state, presenter, playSound } = setup({ themeName: 'llmAnime', onFixedAnimeAction })
-    state.players.push(...[0, 1, 2, 3].map((seat) => ({
-      name: `P${seat}`, avatar: '', playerKind: 'human' as const, score: 1000, seat,
-      hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
-    })))
-    presenter.handleTableAction({
-      kind: 'table_action',
-      event: { id: 10, type: 'peng', actorIndex: 3, sourceIndex: 0, tile: 'm1', meldIndex: 0 },
-    })
-
-    expect(onFixedAnimeAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: 10, type: 'peng', actorIndex: 1,
-    }))
-    expect(playSound).not.toHaveBeenCalled()
-  })
-
-  it('大模型座位吃碰杠时保留桌面动作但不播放原始人声', () => {
-    const { state, presenter, playSound } = setup()
-    state.players.push(...[0, 1, 2, 3].map((seat) => ({
-      name: `P${seat}`, avatar: '', isLlm: seat === 1, score: 1000, seat,
-      hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
-    })))
-    presenter.handleTableAction({
-      kind: 'table_action',
-      // 本家服务端座位 2；actor 3 映射成本地座位 1。
-      event: { id: 9, type: 'discard-gang', actorIndex: 3, sourceIndex: 0, tile: 'm1', meldIndex: 0 },
-    })
-
-    expect(state.tableActionEvent.value?.actorIndex).toBe(1)
-    expect(playSound).not.toHaveBeenCalled()
-  })
-
   it('开局期间忽略桌面动作，胡牌动作不重复播放结算音效', () => {
     const { state, presenter, playSound, setOpening } = setup()
     setOpening(true)
@@ -111,7 +75,7 @@ describe('transientEventPresenter', () => {
     expect(state.scoreFlowEvent.value?.deltas).toEqual([
       { playerIndex: 0, amount: 300 }, { playerIndex: 2, amount: -100 },
     ])
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(1050)
     expect(state.scoreFlowEvent.value).toBeNull()
   })
 

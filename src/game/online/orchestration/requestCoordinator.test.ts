@@ -54,21 +54,6 @@ describe('requestCoordinator', () => {
     })
   })
 
-  it('庄家开局首回合（turnOrigin=opening）视作已摸牌：不播摸牌音、保留胡/杠能力', () => {
-    const { state, playSound, coordinator } = setup()
-    coordinator.apply({
-      kind: 'turn_request',
-      ctx: {
-        hand: ['m1'], melds: [], exposedMelds: 0, kongBloom: false,
-        skipDraw: true, afterKong: false, canHu: true, turnOrigin: 'opening',
-      },
-    })
-
-    expect(state.userDrewThisTurn.value).toBe(true)
-    expect(state.turnCanHu.value).toBe(true)
-    expect(playSound).not.toHaveBeenCalledWith('give.mp3', 0.7)
-  })
-
   it('应用出牌请求并在倒计时到期后打出末张', async () => {
     const { state, actions, playSound, coordinator } = setup()
     coordinator.apply(TURN_REQUEST)
@@ -81,6 +66,18 @@ describe('requestCoordinator', () => {
     expect(playSound).toHaveBeenCalledWith('didu.ogg')
     await vi.advanceTimersByTimeAsync(3000)
     expect(actions.discard).toHaveBeenCalledWith(3)
+  })
+
+  it('turn_request 同步本家手牌与摸牌位（快照暂停期间手牌由请求带入）', () => {
+    const { state, coordinator } = setup()
+    state.players.push({
+      name: 'me', avatar: '', score: 0, seat: 0,
+      hand: ['m1', 'm2'], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+    })
+    coordinator.apply(TURN_REQUEST)
+
+    expect(state.players[0].hand).toEqual(['m1'])
+    expect(state.players[0].drawnTileIndex).toBe(0)
   })
 
   it('自动操作时优先胡牌，否则采用选牌策略弃牌', async () => {
@@ -96,6 +93,31 @@ describe('requestCoordinator', () => {
     await vi.advanceTimersByTimeAsync(600)
     expect(first.actions.pickDiscard).toHaveBeenCalled()
     expect(first.actions.discard).toHaveBeenCalledWith(2)
+  })
+
+  it('清理当前倒计时后，旧 autoPlay 延迟任务不能再发动作', async () => {
+    const { actions, coordinator } = setup({ autoPlay: true })
+    coordinator.apply(TURN_REQUEST)
+    coordinator.clearCountdown()
+
+    await vi.advanceTimersByTimeAsync(600)
+
+    expect(actions.hu).not.toHaveBeenCalled()
+    expect(actions.discard).not.toHaveBeenCalled()
+  })
+
+  it('当前房主快照撤销旧请求时，同时清掉旧倒计时，不能在剩 3 秒自动出牌', async () => {
+    const { state, actions, coordinator } = setup({ autoPlay: false })
+    coordinator.apply(TURN_REQUEST)
+    coordinator.syncSnapshot({ round: 1, requestId: null, requestSeq: null })
+
+    await vi.advanceTimersByTimeAsync(15000)
+
+    expect(actions.discard).not.toHaveBeenCalled()
+    expect(actions.pass).not.toHaveBeenCalled()
+    expect(state.turnSeconds.value).toBe(0)
+    expect(state.userDrewThisTurn.value).toBe(false)
+    expect(state.turnCanHu.value).toBe(false)
   })
 
   it('映射声明与抢杠请求，并在受阻期间只保留最新请求', async () => {

@@ -61,6 +61,8 @@ interface UseLotusGameOptions {
   controllers?: LotusController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: LotusController[]
+  /** P2P 房主权威：远端控制器优先于本地 AI。 */
+  remoteControllers?: Array<LotusController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed | undefined>
   /** 单机本家座位 0 的展示形象。 */
@@ -69,6 +71,12 @@ interface UseLotusGameOptions {
   getThemeName?: () => string
   animeFixedTts?: AnimeFixedTtsExecutor
   countdownEnabled?: boolean
+  /** P2P 权威端即时发牌，开局表现由各客户端播放。 */
+  instantOpening?: boolean
+  /** 无头权威端跳过音效与结算动画；摸打节奏仍使用共享配置。 */
+  headless?: boolean
+  /** 第一手前等待在线客户端完成开局表现。 */
+  waitForOpeningReady?: () => Promise<void>
   ruleset?: RuleSet
   /** 对局回放录制钩子（可选；不传时零行为变化）。 */
   recorder?: ReplayRecorderHooks
@@ -91,16 +99,24 @@ export function useLotusGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  remoteControllers,
   aiPlayerSeeds,
   humanPlayerSeed,
   getThemeName = () => 'jade',
   animeFixedTts,
   countdownEnabled = true,
+  instantOpening = false,
+  headless = false,
+  waitForOpeningReady,
   ruleset = LOTUS_RULESET,
   recorder,
   analysis,
   analysisSink,
 }: UseLotusGameOptions = {}) {
+  const sound = headless ? () => {} : playSound
+  const soundAndWait = headless ? async () => {} : playSoundAndWait
+  const openingInstant = headless || instantOpening
+
   const state = createLotusGameState()
   const selectors = createLotusSelectors(state, ruleset)
 
@@ -140,14 +156,14 @@ export function useLotusGame({
   }).actionVoice === 'fixed-line'
   const playPresentationSound = (name: string, volume?: number, onFinish?: () => void) => {
     if (usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)) return
-    if (onFinish !== undefined) return playSound(name, volume, onFinish)
-    if (volume !== undefined) return playSound(name, volume)
-    return playSound(name)
+    if (onFinish !== undefined) return sound(name, volume, onFinish)
+    if (volume !== undefined) return sound(name, volume)
+    return sound(name)
   }
   const playPresentationSoundAndWait = (name: string, volume?: number) => (
     usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)
       ? Promise.resolve()
-      : playSoundAndWait(name, volume)
+      : soundAndWait(name, volume)
   )
   const playAnimeAction = (event: TableActionEvent) => {
     if (!animeFixedTts || !usesAnimeFixedActionVoice()) return
@@ -159,7 +175,7 @@ export function useLotusGame({
       characterId: actor.characterId,
       action: event.type,
     }).then((result) => {
-      if (result.fallbackAudioFile) playSound(result.fallbackAudioFile)
+      if (result.fallbackAudioFile) sound(result.fallbackAudioFile)
     }).catch(() => {})
   }
 
@@ -201,7 +217,9 @@ export function useLotusGame({
   // 复制一份：分析录制会把控制器换成观测包装，绝不能写穿调用方传进来的数组。
   const controllers: LotusController[] = suppliedControllers ? [...suppliedControllers] : [
     humanController,
-    ...(aiControllers && aiControllers.length ? aiControllers : [new LotusAiController(), new LotusAiController(), new LotusAiController()]),
+    remoteControllers?.[0] ?? aiControllers?.[0] ?? new LotusAiController(),
+    remoteControllers?.[1] ?? aiControllers?.[1] ?? new LotusAiController(),
+    remoteControllers?.[2] ?? aiControllers?.[2] ?? new LotusAiController(),
   ]
 
   // ── AI 分析记录（§3.2／§3.3／§3.4） ────────────────────────────────
@@ -495,6 +513,9 @@ export function useLotusGame({
     timer.clear()
     animeFixedTts?.cancel()
   }
+  const settlementLater = headless
+    ? (callback: () => void) => timer.later(callback, 0)
+    : timer.later
   transient = createLocalTransientEventPresenter({
     state,
     later: timer.later,
@@ -556,7 +577,7 @@ export function useLotusGame({
   settlementTimeline = createLotusSettlement({
     state,
     clearTimers: clearPresentation,
-    later: timer.later,
+    later: settlementLater,
     playSound: playPresentationSound,
     playSoundAndWait: playPresentationSoundAndWait,
     showTableAction: transient.showTableAction,
@@ -565,6 +586,9 @@ export function useLotusGame({
     ruleset,
     getThemeName,
     animeFixedTts,
+    // 无头权威端不消费单机语音队列；在线 runtime 管理房间语音。
+    isLlmVoiceSeat: headless ? () => false : undefined,
+    announceLlmRoundReactions: headless ? () => undefined : undefined,
   })
 
   countdown = createLocalCountdownController({
@@ -625,10 +649,10 @@ export function useLotusGame({
     state,
     clearTimers: clearPresentation,
     takeTile: tileFlowExecutor.takeTile,
-    wait: timer.wait,
+    wait: openingInstant ? async () => {} : timer.wait,
     later: timer.later,
     playSound: playPresentationSound,
-    playSoundAndWait: playPresentationSoundAndWait,
+    playSoundAndWait: openingInstant ? async () => {} : playPresentationSoundAndWait,
     announce: transient.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -666,7 +690,10 @@ export function useLotusGame({
     // 转交开局参数（固定牌墙/骰子）。此前第二个参数被丢掉 ⇒ 只有本引擎做不到"同一副牌重跑两次"，
     // 而"记录开/关两种设置下结束分数与动作数完全一致"这条硬护栏正需要它（§9）。
     // 现有调用方都只传一个参数，因此行为不变。
-    return openingTimeline.start(mode, startOptions)
+    return openingTimeline.start(mode, {
+      ...startOptions,
+      waitForOpeningReady: startOptions?.waitForOpeningReady ?? waitForOpeningReady,
+    })
   }
 
   const tableContext = {
@@ -909,6 +936,7 @@ export function useLotusGame({
     openingStage: state.openingStage,
     diceValues: state.diceValues,
     diceThrowerIndex: state.diceThrowerIndex,
+    firstDice: state.firstDice,
     secondDice: state.secondDice,
     userCurrentWaits: selectors.userCurrentWaits,
     userTingOptions: selectors.userTingOptions,

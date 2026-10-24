@@ -62,6 +62,8 @@ interface UseGameOptions {
   controllers?: PlayerController[]
   /** 单机人机：注入座位 1-3 的 AI 控制器（可含 LLM 控制器）；默认启发式 AI 玩家 */
   aiControllers?: PlayerController[]
+  /** P2P 房主权威：远端控制器优先于本地 AI。 */
+  remoteControllers?: Array<PlayerController | undefined>
   /** 单机人机：座位 1-3 的玩家形象（昵称/头像，LLM 人设覆盖） */
   aiPlayerSeeds?: Array<PlayerSeed | undefined>
   /** 单机本家座位 0 的展示形象。 */
@@ -71,6 +73,12 @@ interface UseGameOptions {
   animeFixedTts?: AnimeFixedTtsExecutor
   /** 单机对战是否启用回合倒计时（默认开启；模拟测试依赖倒计时自动出牌/过牌） */
   countdownEnabled?: boolean
+  /** P2P 权威端即时发牌，开局表现由各客户端播放。 */
+  instantOpening?: boolean
+  /** 无头权威端跳过音效与结算动画；摸打节奏仍使用共享配置。 */
+  headless?: boolean
+  /** 第一手前等待在线客户端完成开局表现。 */
+  waitForOpeningReady?: () => Promise<void>
   ruleset?: RuleSet
   /** 对局回放录制钩子（可选；不传时零行为变化）。 */
   recorder?: ReplayRecorderHooks
@@ -88,16 +96,24 @@ export function useGame({
   playSoundAndWait = async () => {},
   controllers: suppliedControllers,
   aiControllers,
+  remoteControllers,
   aiPlayerSeeds,
   humanPlayerSeed,
   getThemeName = () => 'jade',
   animeFixedTts,
   countdownEnabled = true,
+  instantOpening = false,
+  headless = false,
+  waitForOpeningReady,
   ruleset = DEFAULT_RULESET,
   recorder,
   analysis = null,
   analysisSink = null,
 }: UseGameOptions = {}) {
+  const sound = headless ? () => {} : playSound
+  const soundAndWait = headless ? async () => {} : playSoundAndWait
+  const openingInstant = headless || instantOpening
+
   const state = createLocalGameState()
   const selectors = createLocalGameSelectors(state, ruleset)
 
@@ -131,14 +147,14 @@ export function useGame({
   }).actionVoice === 'fixed-line'
   const playPresentationSound = (name: string, volume?: number, onFinish?: () => void) => {
     if (usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)) return
-    if (onFinish !== undefined) return playSound(name, volume, onFinish)
-    if (volume !== undefined) return playSound(name, volume)
-    return playSound(name)
+    if (onFinish !== undefined) return sound(name, volume, onFinish)
+    if (volume !== undefined) return sound(name, volume)
+    return sound(name)
   }
   const playPresentationSoundAndWait = (name: string, volume?: number) => (
     usesAnimeFixedActionVoice() && ANIME_FIXED_ACTION_AUDIO_FILES.has(name)
       ? Promise.resolve()
-      : playSoundAndWait(name, volume)
+      : soundAndWait(name, volume)
   )
   const playAnimeAction = (event: TableActionEvent) => {
     if (!animeFixedTts || !usesAnimeFixedActionVoice()) return
@@ -150,7 +166,7 @@ export function useGame({
       characterId: actor.characterId,
       action: event.type,
     }).then((result) => {
-      if (result.fallbackAudioFile) playSound(result.fallbackAudioFile)
+      if (result.fallbackAudioFile) sound(result.fallbackAudioFile)
     }).catch(() => {})
   }
 
@@ -182,7 +198,9 @@ export function useGame({
   const humanController = new HumanController(humanBridge)
   const controllers: PlayerController[] = suppliedControllers ?? [
     humanController,
-    ...(aiControllers && aiControllers.length ? aiControllers : [new AiController(), new AiController(), new AiController()]),
+    remoteControllers?.[0] ?? aiControllers?.[0] ?? new AiController(),
+    remoteControllers?.[1] ?? aiControllers?.[1] ?? new AiController(),
+    remoteControllers?.[2] ?? aiControllers?.[2] ?? new AiController(),
   ]
 
   // 设置页只在大厅开放；保存后替换内部数组，使下一次开局读取新的 AI 控制器。
@@ -566,6 +584,9 @@ export function useGame({
     scheduler.clear()
     animeFixedTts?.cancel()
   }
+  const settlementLater = headless
+    ? (callback: () => void) => scheduler.later(callback, 0)
+    : scheduler.later
   transientEvents = createLocalTransientEventPresenter({
     state,
     later: scheduler.later,
@@ -620,7 +641,7 @@ export function useGame({
   settlementTimeline = createLocalSettlementTimeline({
     state,
     clearTimers: clearPresentation,
-    later: scheduler.later,
+    later: settlementLater,
     playSound: playPresentationSound,
     playSoundAndWait: playPresentationSoundAndWait,
     showTableAction: transientEvents.showTableAction,
@@ -629,6 +650,9 @@ export function useGame({
     ruleset,
     getThemeName,
     animeFixedTts,
+    // 无头权威端不消费单机语音队列；在线 runtime 管理房间语音。
+    isLlmVoiceSeat: headless ? () => false : undefined,
+    announceLlmRoundReactions: headless ? () => undefined : undefined,
   })
 
   countdown = createLocalCountdownController({
@@ -708,10 +732,10 @@ export function useGame({
     state,
     clearTimers: clearPresentation,
     takeTile: tileFlowExecutor.takeTile,
-    wait: scheduler.wait,
+    wait: openingInstant ? async () => {} : scheduler.wait,
     later: scheduler.later,
     playSound: playPresentationSound,
-    playSoundAndWait: playPresentationSoundAndWait,
+    playSoundAndWait: openingInstant ? async () => {} : playPresentationSoundAndWait,
     announce: transientEvents.announce,
     getRoundLabel: () => selectors.roundLabel.value,
     beginTurn,
@@ -755,7 +779,10 @@ export function useGame({
     // 转交开局参数（固定牌墙/骰子）。此前第二个参数被丢掉 ⇒ 只有本引擎做不到"同一副牌重跑两次"，
     // 而 §3.3 的交叉校验（拿记录里的牌墙+骰子重新发牌、比对 `postDealHands`）正需要它。
     // 现有调用方都只传一个参数，因此行为不变。
-    return openingTimeline.start(mode, options)
+    return openingTimeline.start(mode, {
+      ...options,
+      waitForOpeningReady: options?.waitForOpeningReady ?? waitForOpeningReady,
+    })
   }
 
   const tableContext: ActionContext = {
@@ -1004,6 +1031,7 @@ export function useGame({
     openingStage: state.openingStage,
     diceValues: state.diceValues,
     diceThrowerIndex: state.diceThrowerIndex,
+    wallBreakIndex: state.wallBreakIndex,
     userCurrentWaits: selectors.userCurrentWaits,
     userTingOptions: selectors.userTingOptions,
     userDiscardWaits: selectors.userDiscardWaits,

@@ -8,7 +8,7 @@ import { resolveAnimeAudioPolicy } from '../../core/presentation/animeAudioPolic
 import type { TableActionEvent } from '../../core/contracts/types'
 
 type TransientState = Pick<RemoteGameState,
-  'players' | 'announcement' | 'tableActionEvent' | 'scoreFlowEvent'
+  'announcement' | 'tableActionEvent' | 'scoreFlowEvent' | 'players'
 >
 type TableActionMessage = Extract<ServerMessage, { kind: 'table_action' }>
 type ScoreFlowMessage = Extract<ServerMessage, { kind: 'score_flow' }>

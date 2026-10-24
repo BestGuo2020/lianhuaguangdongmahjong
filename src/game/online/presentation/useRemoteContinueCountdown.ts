@@ -15,7 +15,9 @@ interface ContinueCountdownSources {
 }
 
 export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
-  const countdown = ref(10)
+  const manualContinue = typeof window !== 'undefined'
+    && new URLSearchParams(window.location?.search ?? '').get('manualContinue') === '1'
+  const countdown = ref(manualContinue ? 0 : 10)
   let timer: number | null = null
 
   function stop() {
@@ -23,7 +25,7 @@ export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
       window.clearInterval(timer)
       timer = null
     }
-    countdown.value = 10
+    countdown.value = manualContinue ? 0 : 10
   }
 
   function start() {
@@ -47,7 +49,7 @@ export function useRemoteContinueCountdown(sources: ContinueCountdownSources) {
         && Boolean(sources.result.value)
         && !sources.waitingNextRound.value
         && !sources.matchFinished.value
-      if (active) start()
+      if (active && !manualContinue) start()
       else stop()
     },
   )

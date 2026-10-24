@@ -3,15 +3,14 @@ import { waitingTiles as lotusWaitingTiles } from '../../variants/lotus/lotusRul
 import type { GamePlayer, TileType } from '../../core/contracts/types'
 import type { RemoteGameState } from '../state/remoteGameState'
 
-type ActionState = Pick<RemoteGameState,
-  'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles' | 'turnCanHu' | 'turnCanWindKong'
->
+type ActionState = Pick<RemoteGameState, 'selectedIndex' | 'actionPrompt' | 'autoPlay' | 'rulesetId' | 'jokerTiles'>
+
 export type RemotePlayerActionMessage =
-  | { type: 'discard'; handIndex: number }
-  | { type: 'pass' }
-  | { type: 'claim'; action: 'peng' | 'gang' | 'chi'; optionIndex?: number }
-  | { type: 'gang'; kind: 'added' | 'concealed' | 'wind'; tile?: TileType }
-  | { type: 'hu' }
+  | { type: 'discard'; handIndex: number; requestId?: string }
+  | { type: 'pass'; requestId?: string }
+  | { type: 'claim'; action: 'peng' | 'gang' | 'chi'; optionIndex?: number; requestId?: string }
+  | { type: 'gang'; kind: 'added' | 'concealed' | 'wind'; tile?: TileType; requestId?: string }
+  | { type: 'hu'; requestId?: string }
 
 export interface RemoteActionControllerOptions {
   state: ActionState
@@ -26,6 +25,16 @@ export interface RemoteActionControllerOptions {
 
 function structuralMeldCount(player: GamePlayer): number {
   return player.melds.filter((meld) => meld.type !== 'flower').length
+}
+
+/**
+ * 弃牌响应提示类型：wire 客户端收到的是 'claim'（requestCoordinator 设置），
+ * 房主 viewer 的提示来自引擎桥（LotusHumanController.requestDiscardHu → 'response'）。
+ * 两者的按钮完全一致，动作守卫必须同时接受，否则房主「胡/吃/碰/杠」按钮点了没反应
+ * （只有不检查类型的「过」能用）。
+ */
+function isClaimPrompt(prompt: { type?: string } | null | undefined): boolean {
+  return prompt?.type === 'claim' || prompt?.type === 'response'
 }
 
 export function createRemoteActionController({
@@ -53,9 +62,6 @@ export function createRemoteActionController({
     if (!user || !isUserTurn() || index < 0 || index >= user.hand.length) return
     clearCountdown()
     clearUserSelection()
-    // 本家回合已结束：立刻清掉回合内能力，避免快照到达前「胡/风杠」按钮残留可点。
-    state.turnCanHu.value = false
-    state.turnCanWindKong.value = false
     send({ type: 'discard', handIndex: index })
   }
 
@@ -96,32 +102,28 @@ export function createRemoteActionController({
   function userPass() {
     const prompt = state.actionPrompt.value
     clearCountdown()
-    state.actionPrompt.value = null
     if (!prompt) return
     playSound('click.mp3', 0.65)
     send({ type: 'pass' })
   }
 
   function userPeng() {
-    if (state.actionPrompt.value?.type !== 'claim') return
+    if (!isClaimPrompt(state.actionPrompt.value)) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'peng' })
   }
 
   function userChi(optionIndex = 0) {
-    if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
+    if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.chiOptions?.[optionIndex]) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'chi', optionIndex })
   }
 
   function userGangFromDiscard() {
-    if (state.actionPrompt.value?.type !== 'claim' || !state.actionPrompt.value.canGang) return
+    if (!isClaimPrompt(state.actionPrompt.value) || !state.actionPrompt.value.canGang) return
     clearCountdown()
-    state.actionPrompt.value = null
     playSound('click.mp3', 0.65)
     send({ type: 'claim', action: 'gang' })
   }
@@ -142,16 +144,14 @@ export function createRemoteActionController({
   }
 
   function userHu() {
-    if (state.actionPrompt.value?.type === 'claim' && state.actionPrompt.value.canHu) {
+    if (isClaimPrompt(state.actionPrompt.value) && state.actionPrompt.value.canHu) {
       clearCountdown()
-      state.actionPrompt.value = null
       playSound('click.mp3', 0.65)
       send({ type: 'hu' })
       return
     }
     if (state.actionPrompt.value?.type === 'rob') {
       clearCountdown()
-      state.actionPrompt.value = null
       playSound('click.mp3', 0.65)
       send({ type: 'hu' })
       return

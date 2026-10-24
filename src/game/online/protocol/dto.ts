@@ -18,6 +18,13 @@ export interface ServerPlayerDto extends Omit<GamePlayer, 'hand' | 'concealedTil
 export interface ServerSnapshot {
   kind: 'state_snapshot'
   roomId: string
+  /** 当前房主引擎会话代次；房主刷新后必须变化。 */
+  authorityEpoch?: string
+  /** 房主快照单调序列；客户端拒绝迟到/倒序快照。 */
+  sequence?: number
+  /** 目标座位当前挂起的房主请求；无请求时为 null。 */
+  requestId?: string | null
+  requestSeq?: number | null
   mode: MatchType
   rulesetId?: RuleVariant
   phase: GamePhase
@@ -40,8 +47,6 @@ export interface ServerSnapshot {
   players: ServerPlayerDto[]
   seat: number
   result: RoundResult | null
-  /** 服务端局末 LLM 发言尚未结束；客户端可先播胡牌演出，结算面板等完成消息。 */
-  roundSpeechPending?: boolean
   announcement: Announcement | null
   matchFinished: boolean
   lastDiscard: LastDiscard | null
