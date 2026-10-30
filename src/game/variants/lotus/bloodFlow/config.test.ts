@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import golden from '../patterns/fixtures/golden.json'
+import fullyExposed from '../patterns/fixtures/fullyExposedHand.json'
 import scores from '../patterns/fixtures/scoring.json'
 import type { GoldenScoreCase, GoldenWinCase } from '../patterns/fixtures/types'
 import type { RegularPatternId } from '../patterns/types'
@@ -7,7 +8,7 @@ import { TILE_TYPES } from '../../../core/rules/tiles'
 import { LOTUS_RULESET } from '../lotusRules'
 import { BLOOD_FLOW_AVAILABILITY, BLOOD_FLOW_CONFIG } from './config'
 
-const cases = golden.cases as readonly GoldenWinCase[]
+const cases = [...golden.cases, ...fullyExposed.cases] as readonly GoldenWinCase[]
 const scoringCases = scores.cases as readonly GoldenScoreCase[]
 // 2026-09-12 第二版番种表的权重（用户定稿：梯度 1→2→4→6→8→12→16→24→32；门清已按用户决定取消）
 const requiredWeights: Record<RegularPatternId, number> = {
@@ -23,11 +24,12 @@ const requiredWeights: Record<RegularPatternId, number> = {
   'all-simples': 2, 'concealed-hand': 1, 'all-with-terminals': 4,
   'one-suit-three-steps': 4, 'one-suit-four-steps': 8, 'pure-straight': 6,
   'one-suit-three-joints': 8, 'one-suit-four-joints': 16,
+  'fully-exposed-hand': 2,
 }
 /** 这些番种的正反例由 golden fixture 覆盖（新增番种改由 midTierPatterns.test.ts 覆盖）。 */
 const ORACLE_COVERED = new Set<RegularPatternId>(['pure-suit', 'mixed-suit', 'all-triplets', 'little-three-dragons',
   'big-three-dragons', 'little-four-winds', 'big-four-winds', 'nine-gates', 'all-green', 'pure-terminals',
-  'mixed-terminals', 'three-concealed-triplets', 'four-concealed-triplets', 'all-honors', 'three-kongs', 'four-kongs'])
+  'mixed-terminals', 'three-concealed-triplets', 'four-concealed-triplets', 'all-honors', 'three-kongs', 'four-kongs', 'fully-exposed-hand'])
 
 describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => {
   it.each(Object.entries(requiredWeights))('%s has its specified weight and positive/negative oracles', (id, weight) => {
@@ -40,8 +42,8 @@ describe('E01 blood-flow acceptance contract (not evaluator acceptance)', () => 
   it('versions fixtures and keeps modifier, old rules, and rollout independent', () => {
     expect(golden.ruleVersion).toBe(BLOOD_FLOW_CONFIG.version)
     expect(scores.ruleVersion).toBe(BLOOD_FLOW_CONFIG.version)
-    // 31 = 原 30 项 + 新增兜底番种「鸡胡」（0.5 番）；门清/平胡沿用原 id（语义改写）
-    expect(Object.keys(BLOOD_FLOW_CONFIG.patterns)).toHaveLength(31)
+    // 32 = 原 31 项 + 十二落抬（2 番）。
+    expect(Object.keys(BLOOD_FLOW_CONFIG.patterns)).toHaveLength(32)
     expect(BLOOD_FLOW_CONFIG.patterns.chicken.weight).toBe(0.5)
     expect(BLOOD_FLOW_CONFIG.patterns.pinghu).toMatchObject({ label: '平胡', weight: 1 })
     expect(BLOOD_FLOW_CONFIG.patterns['concealed-hand']).toMatchObject({ label: '门清', weight: 1 })

@@ -19,7 +19,7 @@ import type { JevCandidate } from './jevClient'
 export type JevBloodFlowMode = 'blind' | 'hint'
 
 /** 模板版本：state/criteria/instructions 形状变更时必须递增（分析记录按 id 去重存模板）。 */
-export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 4
+export const JEV_BLOOD_FLOW_TEMPLATE_VERSION = 5
 
 export function jevBloodFlowTemplateId(mode: JevBloodFlowMode): string {
   return `jev-bf-${mode}-v${JEV_BLOOD_FLOW_TEMPLATE_VERSION}`

@@ -43,6 +43,9 @@ export function canDevelopPatternWithMelds(id: PatternId, melds: readonly Readon
     case 'all-simples': return fixed.every(t => !isHonor(t) && !isTerminal(t))
     case 'all-with-terminals': return melds.every(m => m.tiles.some(t => isHonor(t) || isTerminal(t)))
     case 'concealed-hand': return melds.every(m => m.type === 'angang')
+    case 'fully-exposed-hand':
+      return melds.length <= 4 && melds.every(m => !m.pending && !m.windKong
+        && (m.type === 'chi' || m.type === 'peng' || m.type === 'gang'))
     case 'pinghu': return melds.every(m => m.type === 'chi')
     default: return true
   }

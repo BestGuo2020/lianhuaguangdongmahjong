@@ -55,6 +55,8 @@ export const BLOOD_FLOW_PATTERNS = Object.freeze({
   'all-with-terminals': pattern('all-with-terminals', '全带幺', 4),
   // 低番 / 基础
   shiSanLan: pattern('shiSanLan', '十三烂', 2),
+  // 十二落抬：四组吃/碰/明杠（含补杠）落地；暗杠、风杠不算。可叠加，精吊自摸也成立。
+  'fully-exposed-hand': pattern('fully-exposed-hand', '十二落抬', 2),
   'all-simples': pattern('all-simples', '断幺九', 2, ['all-with-terminals', 'mixed-terminals', 'pure-terminals', 'all-honors']),
   // —— 2026-09-15 用户定案：拆掉「门清平胡」这个 2 番合并番种，换成两个独立番种 ——
   // 门清（1 番）：只看无副露（不排除用精牌），**与任何番种叠加**（清一色/碰碰胡/七对/四暗刻…都吃得到）；

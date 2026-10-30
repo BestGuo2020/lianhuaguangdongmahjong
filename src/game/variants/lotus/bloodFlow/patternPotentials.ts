@@ -217,6 +217,8 @@ export function patternPotentials(
   }
   const meldTiles = s.meldTiles
   const allNatural = [...s.natural, ...meldTiles]
+  // 已落地四副时计入确定的附加番，不把尚未发生的吃碰当作完成收益。
+  if (melds.length === 4) add('fully-exposed-hand', 1)
 
   // 清一色 / 混一色：数牌须同色；清一色不允许字牌与异色副露。
   const suitCounts = new Map<'m' | 'p' | 's', number>()
@@ -378,6 +380,7 @@ function certainPatterns(
   const hasChiMeld = melds.some(m => m.type === 'chi')
 
   if (honors === 0 && suits.size <= 1 && suited.length + jokerCount > 0) certain.add('pure-suit')
+  if (melds.length === 4 && canDevelopPatternWithMelds('fully-exposed-hand', melds)) certain.add('fully-exposed-hand')
   if (suits.size <= 1 && honors > 0 && suited.length + jokerCount > 0) certain.add('mixed-suit')
 
   if (!hasChiMeld) {

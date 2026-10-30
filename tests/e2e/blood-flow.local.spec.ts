@@ -75,6 +75,18 @@ test('blood-flow is available locally and in WS rooms', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
+test('blood-flow rules list twelve exposed at 2 and explain the concealed-kong boundary', async ({ page }) => {
+  await page.goto('/?bloodFlow=1')
+  await page.getByRole('button', { name: /玩法 莲花广麻/ }).click()
+  await page.getByRole('button', { name: /莲花麻将·血流/ }).click()
+  await page.getByRole('button', { name: '确定', exact: true }).click()
+  await page.getByRole('button', { name: '游戏规则 →' }).click()
+  const panel = page.locator('.rules-panel')
+  await expect(panel).toContainText('十二落抬 2番')
+  await expect(panel).toContainText('含暗杠或风杠不计')
+  await expect(panel).toContainText('精吊自摸也算，任意听仍只能自摸')
+})
+
 for (const mode of ['east', 'hanchan'] as const) {
   test(`actual worker and Vue adapter complete a fixed-seed ${mode} match`, async ({ page }) => {
     await page.goto('/?bloodFlow=1')

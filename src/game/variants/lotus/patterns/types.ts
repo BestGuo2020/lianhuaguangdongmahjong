@@ -12,6 +12,7 @@ export type RegularPatternId =
   | 'all-simples' | 'concealed-hand' | 'all-with-terminals'
   | 'one-suit-three-steps' | 'one-suit-four-steps' | 'pure-straight'
   | 'one-suit-three-joints' | 'one-suit-four-joints'
+  | 'fully-exposed-hand'
 
 export type SpecialPatternId = 'pinghu' | 'chicken' | 'sevenPairs' | 'luxury-seven-pairs' | 'shiSanLan' | 'qiXing' | 'thirteenOrphans'
 export type PatternId = RegularPatternId | SpecialPatternId

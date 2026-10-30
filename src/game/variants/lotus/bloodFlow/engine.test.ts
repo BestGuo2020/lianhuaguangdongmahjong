@@ -34,6 +34,35 @@ const discarder: TileType[] = ['m7', 'm8', 'm9', 'p7', 'p8', 'p9', 's7', 's8', '
 /** 不参与 m5/east 响应的普通手牌（用于隔离被测座位）。 */
 const noClaim: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'east', 'south', 'west', 'north']
 
+it('十二落抬精吊首胡锁手后，续胡继续计 2 番并保持实体与积分守恒', () => {
+  const melds: Meld[] = [
+    { type: 'chi', tile: 'm1', tiles: ['m1', 'm2', 'm3'] },
+    { type: 'chi', tile: 'p4', tiles: ['p4', 'p5', 'p6'] },
+    { type: 'chi', tile: 's7', tiles: ['s7', 's8', 's9'] },
+    { type: 'peng', tile: 'east', tiles: ['east', 'east', 'east'] },
+  ]
+  const engine = scenario([['red', 'p2'], null, null, null], [melds, [], [], []])
+  for (let step = 0; step < 100 && engine.seats[0].winCount < 2; step++) {
+    for (const seat of SEATS) {
+      const view = bloodFlowSeatView(engine, seat)
+      const action = (seat === 0 ? view.ownActions.find(a => a.kind === 'win') : undefined)
+        ?? view.ownActions.find(a => a.kind === 'pass')
+        ?? view.ownActions.find(a => a.kind === 'discard')
+      if (action) expect(engine.submit(engine.command(seat, action))).toBe(true)
+      if (engine.seats[0].winCount === 2) break
+    }
+    engine.assertConservation()
+  }
+  expect(engine.seats[0].winCount).toBe(2)
+  expect(engine.seats[0].locked).toBe(true)
+  expect(engine.players[0].hand).toEqual(['red'])
+  const wins = bloodFlowSeatView(engine, 0).public.batches.flatMap(b => b.winners).filter(w => w.winner === 0)
+  for (const win of wins) {
+    expect(win.score.source).toBe('self-draw')
+    expect(win.score.items).toContainEqual({ id: 'fully-exposed-hand', label: '十二落抬', weight: 2 })
+  }
+})
+
 describe('精吊任意听只能自摸', () => {
   const anyWait: TileType[] = ['m1', 'm2', 'm3', 'p1', 'p2', 'p3', 's1', 's2', 's3', 'south', 'south', 'south', 'red']
   it.each([false, true])('锁手=%s 时不提供吃胡，并拒绝非法胡牌命令', locked => {

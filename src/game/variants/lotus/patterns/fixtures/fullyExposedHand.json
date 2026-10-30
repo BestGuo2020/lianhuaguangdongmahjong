@@ -1,0 +1,1054 @@
+{
+  "cases": [
+    {
+      "id": "twelve-ordinary-discard",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 40
+      }
+    },
+    {
+      "id": "twelve-ordinary-self-draw",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "self-draw",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 80
+      }
+    },
+    {
+      "id": "twelve-robbed-kong",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "robbed-kong",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "hardWin": true,
+        "paymentPerPayer": 80
+      }
+    },
+    {
+      "id": "twelve-joker-self-draw",
+      "input": {
+        "concealed": [
+          "red"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "self-draw",
+        "jokers": [
+          "red",
+          "green"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "hardWin": false,
+        "paymentPerPayer": 40
+      }
+    },
+    {
+      "id": "twelve-joker-forbids-discard",
+      "input": {
+        "concealed": [
+          "red"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [
+          "red",
+          "green"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": false,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ]
+      }
+    },
+    {
+      "id": "twelve-joker-forbids-robbed-kong",
+      "input": {
+        "concealed": [
+          "red"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "robbed-kong",
+        "jokers": [
+          "red",
+          "green"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": false,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ]
+      }
+    },
+    {
+      "id": "twelve-stacks-pinghu",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "red",
+            "tiles": [
+              "red",
+              "green",
+              "white"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand",
+          "pinghu"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "paymentPerPayer": 60
+      }
+    },
+    {
+      "id": "twelve-stacks-triplets",
+      "input": {
+        "concealed": [
+          "p5"
+        ],
+        "melds": [
+          {
+            "type": "peng",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m1",
+              "m1"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "p2",
+            "tiles": [
+              "p2",
+              "p2",
+              "p2"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "s3",
+            "tiles": [
+              "s3",
+              "s3",
+              "s3"
+            ]
+          },
+          {
+            "type": "peng",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p5",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand",
+          "all-triplets"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "paymentPerPayer": 120
+      }
+    },
+    {
+      "id": "twelve-stacks-pure-suit-and-pinghu",
+      "input": {
+        "concealed": [
+          "m5"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "m4",
+            "tiles": [
+              "m4",
+              "m5",
+              "m6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "m7",
+            "tiles": [
+              "m7",
+              "m8",
+              "m9"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "m2",
+            "tiles": [
+              "m2",
+              "m3",
+              "m4"
+            ]
+          }
+        ],
+        "winningTile": "m5",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand",
+          "pure-suit",
+          "pinghu",
+          "pure-straight"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "paymentPerPayer": 340
+      }
+    },
+    {
+      "id": "twelve-exposed-kong",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "paymentPerPayer": 60
+      }
+    },
+    {
+      "id": "twelve-added-kong",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east",
+              "east"
+            ],
+            "added": true
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "paymentPerPayer": 60
+      }
+    },
+    {
+      "id": "twelve-joker-kong-bloom",
+      "input": {
+        "concealed": [
+          "red"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "kong-bloom",
+        "jokers": [
+          "red",
+          "green"
+        ],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ],
+        "hardWin": false,
+        "paymentPerPayer": 120
+      }
+    },
+    {
+      "id": "twelve-concealed-kong-excluded",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east",
+              "east"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "chicken"
+        ],
+        "excludes": [
+          "fully-exposed-hand"
+        ],
+        "paymentPerPayer": 40
+      }
+    },
+    {
+      "id": "twelve-wind-kong-excluded",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "angang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "south",
+              "west",
+              "north"
+            ],
+            "windKong": true
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "chicken"
+        ],
+        "excludes": [
+          "fully-exposed-hand"
+        ],
+        "paymentPerPayer": 20
+      }
+    },
+    {
+      "id": "twelve-only-three-exposed",
+      "input": {
+        "concealed": [
+          "east",
+          "east",
+          "east",
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "chicken"
+        ],
+        "excludes": [
+          "fully-exposed-hand"
+        ],
+        "paymentPerPayer": 10
+      }
+    },
+    {
+      "id": "twelve-fourth-triplet-completed-by-discard",
+      "input": {
+        "concealed": [
+          "east",
+          "east",
+          "p2",
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          }
+        ],
+        "winningTile": "east",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": true,
+        "includes": [
+          "chicken"
+        ],
+        "excludes": [
+          "fully-exposed-hand"
+        ],
+        "paymentPerPayer": 10
+      }
+    },
+    {
+      "id": "twelve-pending-added-kong-not-counted",
+      "input": {
+        "concealed": [
+          "p2"
+        ],
+        "melds": [
+          {
+            "type": "chi",
+            "tile": "m1",
+            "tiles": [
+              "m1",
+              "m2",
+              "m3"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "p4",
+            "tiles": [
+              "p4",
+              "p5",
+              "p6"
+            ]
+          },
+          {
+            "type": "chi",
+            "tile": "s7",
+            "tiles": [
+              "s7",
+              "s8",
+              "s9"
+            ]
+          },
+          {
+            "type": "gang",
+            "tile": "east",
+            "tiles": [
+              "east",
+              "east",
+              "east",
+              "east"
+            ],
+            "added": true,
+            "pending": true
+          }
+        ],
+        "winningTile": "p2",
+        "source": "discard",
+        "jokers": [],
+        "opening": null
+      },
+      "expected": {
+        "winning": false,
+        "includes": [
+          "fully-exposed-hand"
+        ],
+        "excludes": [
+          "chicken",
+          "concealed-hand"
+        ]
+      }
+    }
+  ]
+}

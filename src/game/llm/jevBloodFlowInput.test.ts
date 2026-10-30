@@ -41,8 +41,8 @@ function decisionFixture(overrides: {
 describe('buildJevBloodFlowRequest（v4）', () => {
   it('盲判臂：criteria 只含动作名；模板 id 升 v4；promptVariables 与 engineSuggestion 正确', () => {
     const built = buildJevBloodFlowRequest({ decision: decisionFixture(), mode: 'blind', requestId: 'r1' })
-    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(4)
-    expect(built.templateId).toBe('jev-bf-blind-v4')
+    expect(JEV_BLOOD_FLOW_TEMPLATE_VERSION).toBe(5)
+    expect(built.templateId).toBe('jev-bf-blind-v5')
     expect(built.candidates).toEqual([
       { id: 'A0', description: '打出3万' },
       { id: 'A1', description: '打出5筒' },

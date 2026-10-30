@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import golden from './fixtures/golden.json'
+import fullyExposed from './fixtures/fullyExposedHand.json'
 import scoring from './fixtures/scoring.json'
 import type { GoldenScoreCase, GoldenWinCase } from './fixtures/types'
 import { evaluateWin } from './evaluate'
@@ -21,7 +22,7 @@ describe('豪华七对精吊不能接炮或抢杠', () => {
 })
 
 describe('E02 actual evaluator golden acceptance', () => {
-  it.each(golden.cases as readonly GoldenWinCase[])('$id', ({ input, expected }) => {
+  it.each([...golden.cases, ...fullyExposed.cases] as readonly GoldenWinCase[])('$id', ({ input, expected }) => {
     const result = evaluateWin(input)
     expect(Boolean(result)).toBe(expected.winning)
     if (!expected.winning) return

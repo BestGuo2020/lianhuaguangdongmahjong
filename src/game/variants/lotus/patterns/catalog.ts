@@ -68,6 +68,11 @@ export function matchPatterns(hand: WinningDecomposition): PatternId[] {
   if (terminalShape && tiles.every(isTerminal)) result.push('pure-terminals')
   if (terminalShape && honors && suits.size > 0 && tiles.every(t => isHonor(t) || isTerminal(t))) result.push('mixed-terminals')
   if (hand.shape === 'sevenPairs') return result
+  // 十二落抬只认四组已声明的明面子，不能把点炮补成的手内刻子算成第四副露。
+  // 风杠在本玩法按暗杠处理；精吊的自摸/接炮合法性仍由 evaluateWin 统一把关。
+  if (melds.length === 4 && melds.every(g => g.origin.kind === 'meld' && !g.concealed && g.kind !== 'wind-kong')) {
+    result.push('fully-exposed-hand')
+  }
   const pair = hand.groups.find(g => g.kind === 'pair')!.tiles[0]
   const sequences = melds.filter(g => g.kind === 'sequence')
   if (allTriplets) result.push('all-triplets')
