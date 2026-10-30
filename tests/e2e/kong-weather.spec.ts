@@ -4,6 +4,7 @@ test.setTimeout(90_000)
 
 for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {
   test(`${theme}: supplied wind and rain render and play once, then expire`, async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') })
     const errors: string[] = [], failedAssets: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     page.on('response', response => {
@@ -21,44 +22,56 @@ for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {
     const canvas = page.locator('canvas.mahjong-scene')
     await expect(page.locator('.table-loading')).toHaveCount(0, { timeout: 30_000 })
     await page.locator('main').click({ position: { x: 8, y: 8 } })
+    await page.clock.pauseAt(new Date('2026-01-02T00:00:00Z'))
+    const played = new Map<string, number>()
     for (const [type, kind, file, layer] of [
       ['discard-gang', 'tornado', 'sounds/mingang_windy.wav', 'table'],
+      ['wind-kong', 'tornado', 'sounds/mingang_windy.wav', 'table'],
       ['concealed-gang', 'rain', 'sounds/angang_rainy.wav', 'screen'],
     ]) {
       await page.evaluate(type => (window as any).__setTableActionCueLab(type, 2), type)
+      await page.clock.runFor(64)
       await expect(canvas).toHaveAttribute('data-kong-weather', JSON.stringify([{ seat: 2, kind }]))
       expect(JSON.parse((await canvas.getAttribute('data-kong-weather-layout'))!)[0].layer).toBe(layer)
-      await page.waitForTimeout(350)
-      await page.screenshot({ path: `test-results/kong-weather/${theme}-${kind}.png` })
       // Clearing the transient text must not cut off the 2.2s weather animation.
       await page.evaluate(() => (window as any).__setTableActionCueLab(null))
       await expect(canvas).toHaveAttribute('data-kong-weather', JSON.stringify([{ seat: 2, kind }]))
+      await page.clock.runFor(350)
+      await page.screenshot({ path: `test-results/kong-weather/${theme}-${type}.png` })
+      await page.clock.fastForward(2500)
       await expect(canvas).toHaveAttribute('data-kong-weather', '[]', { timeout: 5000 })
+      played.set(file, (played.get(file) ?? 0) + 1)
       await expect.poll(() => page.evaluate(file => (window as any).__weatherAudio.filter((audio: HTMLAudioElement) =>
-        audio.dataset.effectName === file && audio.currentTime > 0 && audio.volume > 0 && !audio.error).length, file), { timeout: 10_000 }).toBe(1)
+        audio.dataset.effectName === file && audio.currentTime > 0 && audio.volume > 0 && !audio.error).length, file), { timeout: 10_000 }).toBe(played.get(file))
     }
     // Effects mute suppresses the weather sound while preserving its visual.
     await page.evaluate(() => { (window as any).__bfAudio.effectsOn.value = false })
     await page.evaluate(() => (window as any).__setTableActionCueLab('concealed-gang', 0))
+    await page.clock.runFor(64)
     await expect(canvas).toHaveAttribute('data-kong-weather', JSON.stringify([{ seat: 0, kind: 'rain' }]))
-    expect(await page.evaluate(() => (window as any).__weatherAudio.length)).toBe(2)
+    expect(await page.evaluate(() => (window as any).__weatherAudio.length)).toBe(3)
     expect(errors).toEqual([])
     expect(failedAssets).toEqual([])
   })
 }
 
 test('blood-flow uses completed ledger cues once and clears them on restore', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') })
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=0&viewer=2')
   const canvas = page.locator('canvas.mahjong-scene')
   await expect(page.locator('.table-loading')).toHaveCount(0, { timeout: 30_000 })
+  await page.clock.pauseAt(new Date('2026-01-02T00:00:00Z'))
   await page.evaluate(() => (window as any).__appendBloodFlowKong(3, 'added'))
+  await page.clock.runFor(400)
   await expect(canvas).toHaveAttribute('data-kong-weather', JSON.stringify([{ seat: 3, kind: 'tornado' }]))
   // Absolute seat 3 is the viewer's right-hand player (relative seat 1).
   const layout = JSON.parse((await canvas.getAttribute('data-kong-weather-layout'))!)[0]
   expect(layout.x).toBeGreaterThan(0)
   await page.evaluate(() => (window as any).__restoreBloodFlow())
+  await page.clock.runFor(32)
   await expect(canvas).toHaveAttribute('data-kong-weather', '[]')
   await page.evaluate(() => (window as any).__appendBloodFlowKong(1, 'concealed'))
+  await page.clock.runFor(400)
   await expect(canvas).toHaveAttribute('data-kong-weather', JSON.stringify([{ seat: 1, kind: 'rain' }]))
 })
 

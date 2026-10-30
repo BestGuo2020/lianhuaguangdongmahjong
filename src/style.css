@@ -4,6 +4,9 @@
   background: #08110e;
   color-scheme: only light;
   font-synthesis: none;
+  /* Respect OS text preferences without viewport-based text inflation. */
+  -webkit-text-size-adjust: calc(100% * env(preferred-text-scale, 1));
+  text-size-adjust: calc(100% * env(preferred-text-scale, 1));
 }
 
 * { box-sizing: border-box; }
@@ -989,7 +992,8 @@ button { font: inherit; }
 .user-identity.active::after { right: auto; bottom: -5px; left: 50%; transform: translateX(-50%); }
 .user-identity.active::after { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #f4c45b; box-shadow: 0 0 9px #ffd569; animation: pulse 1s infinite; }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .table-action-cue.win.action-from-bottom { bottom: 38%; }
   .user-score-delta { left: 58px; bottom: 52px; }
   .top-bar { height: 34px; padding: 0 10px; font-size: 12px; }
@@ -1031,6 +1035,11 @@ button { font: inherit; }
   .turn-timer span { font-size: 29px; }
   .turn-timer small { font-size: 11px; }
   .lobby { transform: scale(.9); transform-origin: center; inset: -6%; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  /* 结算/结果浮层只在触控横屏收敛；矮横屏尺寸兜底只接管牌桌与大厅几何，
+     避免把桌面小窗的结算卡压出横向滚动。 */
   .result-card { width: min(620px, 94vw); padding: 27px 31px 17px; }
   .result-seal { top: -22px; width: 52px; height: 52px; border-width: 2px; font-size: 28px; }
   .result-card > p { margin: 4px 0 2px; font-size: 13px; }
@@ -1051,9 +1060,6 @@ button { font: inherit; }
   .round-rankings article { min-height: 47px; grid-template-columns: 38px 32px minmax(0,1fr) 50px 62px; padding: 4px 6px; }
   .round-rankings img { width: 32px; height: 32px; }.rank-number { font-size: 24px; }.round-rankings article > b { font-size: 17px; }
   .final-board { width: min(620px, 92%); padding: 15px 24px 18px; }.final-board > h2 { margin: 2px 0 9px; font-size: 30px; }.final-rankings { gap: 5px; }.final-rankings article { min-width: 0; min-height: 51px; grid-template-columns: 46px 42px minmax(0,1fr) 82px; gap: 8px; padding-right: 10px; }.final-rankings img { width: 40px; height: 40px; }.final-rank b { font-size: 29px; }.final-rankings em { min-width: 0; overflow: hidden; font-size: 21px; text-overflow: ellipsis; }.final-board > button { margin-top: 10px; padding: 8px 20px; }
-}
-
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   .settlement-card { width: 96%; padding-right: 16px; padding-left: 16px; }
   .round-rankings { gap: 5px; }
   .round-rankings article { grid-template-columns: 31px 30px minmax(0,1fr) 45px 55px; gap: 4px; padding-right: 5px; padding-left: 5px; }
@@ -1103,7 +1109,8 @@ button { font: inherit; }
 
 /* 结束亮牌时让出远端手牌的投影区域。跟随 HUD 的实际亮牌闸门，
    不依赖两种联机入口装配；精牌仍从原 44px 顶栏下方开始。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   @container (max-height: 500px) {
   .game-app:has(.game-table-hud[data-reveal-hands="1"]) .top-bar {
     background: transparent;
@@ -1269,7 +1276,8 @@ button { font: inherit; }
    手机横屏 16:9 视口高度仅 ~390px，需压缩纵向空间让内容一屏可见。
    此块必须位于 Phase 7 基础规则（.mode-selector/.remote-lobby/.room-panel）之后，
    否则同优先级下后者会覆盖掉这里的移动端压缩。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .lobby { justify-content: space-around; padding: 10px 0 14px; transform: none; inset: 0; }
   .eyebrow { margin-bottom: 2px; font-size: 9px; }
   .lobby h1 { font-size: clamp(24px, 6.5vh, 34px); line-height: 1.15; }
@@ -1295,7 +1303,8 @@ button { font: inherit; }
 }
 
 /* 极矮横屏：隐藏装饰性英文标识，压缩品牌区，保证 320px 高的小屏手机也能一屏放下 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .lobby { padding-bottom: 8px; }
   .lobby .eyebrow { display: none; }
   .lobby h1 { font-size: 24px; }
@@ -1304,7 +1313,8 @@ button { font: inherit; }
 }
 
 /* 移动端主题菜单：覆盖顶栏圆形按钮的通用尺寸，避免菜单选项被压成竖排。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .theme-menu, .audio-menu {
     width: min(380px, calc(100vw - 12px));
     max-height: min(280px, calc(100vh - 14px));
@@ -1389,7 +1399,8 @@ button { font: inherit; }
 .llm-bubble-enter-from, .llm-bubble-leave-to { opacity: 0; }
 
 /* ── 移动端/窄屏适配：气泡缩小，锚点不变（仍贴头像三侧） ── */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .llm-bubble {
     max-width: min(160px, 42vw);
     padding: 4px 8px;
@@ -1998,7 +2009,8 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .result-actions button.secondary { background: #4b2d1c; color: #f4eddf; }
 .game-app[data-table-theme="llmAnime"] .final-rankings article { border-radius: 12px; }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .game-app[data-table-theme="llmAnime"] {
     --announcement-width: min(72cqw, 520px);
     --announcement-padding: 6px 27px;
@@ -2365,7 +2377,8 @@ button { font: inherit; }
   }
 }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .game-app {
     /* 部分华为浏览器横屏全屏后仍残留 portrait safe-area-top；横屏切口只使用左右 inset。 */
     --safe-top: 0px;
@@ -2570,8 +2583,10 @@ button { font: inherit; }
     transform: translateX(-50%);
     pointer-events: auto;
   }
-  /* slot 与牌面同为 40px，普通牌视觉 gap 为 0；44px 命中区由 hand-hit-area 独立承担。 */
-  .hand-rack .mahjong-tile {
+  /* slot 与牌面同为 40px，普通牌视觉 gap 为 0；44px 命中区由 hand-hit-area 独立承担。
+     选择器带上 .game-app 以压过 fine-pointer 的 .has-three-scene 手牌宽度规则：
+     mini 横屏可能上报 fine 指针，兜底进入移动端几何后手牌不能又被放大。 */
+  .game-app .hand-rack .mahjong-tile {
     position: relative;
     z-index: 1;
     --tile-width: clamp(40px, 8cqh, 68px);
@@ -2634,7 +2649,8 @@ button { font: inherit; }
 
 /* 三档宽高比（仅触控设备生效）：偏方 <1.6、基准 1.6～2.0、偏长 >2.0。
    桌面鼠标设备不右移对家——对家继续用 50%+偏移锚在牌桌顶部中央。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) and (max-aspect-ratio: 8 / 5) {
   .game-app {
     --top-seat-inline-anchor: 86%;
     --side-seat-anchor: 39%;
@@ -2649,7 +2665,8 @@ button { font: inherit; }
   }
 }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) and (min-aspect-ratio: 2 / 1) {
   .game-app {
     --top-seat-inline-anchor: 66%;
     --side-seat-anchor: 40%;
@@ -3302,7 +3319,8 @@ button { font: inherit; }
   }
 }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .lobby,
   .game-app.is-lobby .lobby { padding: calc(var(--safe-top) + var(--topbar-height) + 4px) max(7px, var(--safe-right)) max(6px, var(--safe-bottom)) max(7px, var(--safe-left)); }
   .lobby-layout {
@@ -3608,7 +3626,8 @@ button { font: inherit; }
 .game-app .room-panel .room-llm-note.on { color: var(--theme-positive); }
 .game-app .room-panel .room-llm-note.off { color: var(--theme-warning); }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .room-panel { gap: 5px; height: 100%; padding: 6px 9px; overflow: hidden; }
   .room-code strong { font-size: clamp(18px, 4.4cqh, 24px); }
   .room-limit-note,
@@ -3692,5 +3711,158 @@ button { font: inherit; }
   [data-table-theme="llmAnime"] :is(.action, .topbar-control, .dialog-actions button, .picker-options > button, .anime-character-grid button) {
     transform: none !important;
     transition: none !important;
+  }
+}
+
+/* 手机牌桌隐藏昵称占位，点头像查看完整昵称。 */
+.avatar-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.avatar-button:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
+.avatar-button .avatar { pointer-events: none; }
+.player-seat.nickname-open,
+.user-identity.nickname-open { z-index: 25; }
+.nickname-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 50%;
+  width: max-content;
+  max-width: min(200px, 62vw);
+  padding: 5px 9px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--theme-panel) 96%, #000);
+  color: var(--theme-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: 0 6px 18px #0009;
+  pointer-events: none;
+}
+.seat-left .nickname-popover { left: 0; transform: none; }
+.seat-right .nickname-popover { right: 0; left: auto; transform: none; }
+.user-identity .nickname-popover { top: auto; bottom: calc(100% + 6px); left: 0; transform: none; }
+.nickname-reveal-enter-active,
+.nickname-reveal-leave-active { transition: opacity .14s ease; }
+.nickname-reveal-enter-from,
+.nickname-reveal-leave-to { opacity: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  .game-app .game-table-hud .player-info strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+}
+/* Text can grow independently of the tile canvas and touch targets. */
+@media (hover: none) and (pointer: coarse) {
+  .lobby { overflow-y: auto; overscroll-behavior: contain; }
+  .lobby-layout { align-content: start; align-items: start; height: auto; min-height: 100%; }
+  .lobby-actions .lobby-links { flex: 0 0 auto; flex-wrap: wrap; gap: 4px 12px; }
+  .lobby-links > button { min-height: 44px; padding: 10px 12px; }
+  .game-app .game-table-hud .action-bar .action,
+  .game-app .game-table-hud .action.autoplay-action { height: auto; min-height: 44px; padding: 6px 9px; }
+  .game-app .game-table-hud .action-bar .action :is(b, span) { line-height: 1.25; }
+  .game-app .game-table-hud .player-info { flex-shrink: 0; }
+  .game-app .game-table-hud .player-info :is(strong, span) { line-height: 1.3; }
+  .game-app .game-table-hud .dealer-badge { width: auto; height: auto; min-width: 20px; padding: 1px 3px; font-size: 12px; line-height: 1.3; }
+}
+
+/* Keep seat identities compact at every touch-screen resolution, including
+   high-DPI phones that otherwise match the tablet container rules. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
+  .game-app .game-table-hud :is(.avatar-wrap, .user-identity) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 2px 6px;
+    width: max-content;
+    min-width: 0;
+    max-width: clamp(112px, 14cqw, 128px);
+    height: auto;
+    margin: 0;
+    padding: 2px 6px;
+    border-radius: 8px;
+    transform: none;
+    /* Seat labels grow gently; primary actions keep the full OS text scale. */
+    -webkit-text-size-adjust: clamp(85%, calc(100% * env(preferred-text-scale, 1)), 135%);
+    text-size-adjust: clamp(85%, calc(100% * env(preferred-text-scale, 1)), 135%);
+  }
+  .game-app .game-table-hud :is(.avatar-wrap, .user-identity) .avatar {
+    width: clamp(22px, 5cqh, 30px);
+    height: clamp(22px, 5cqh, 30px);
+  }
+  .game-app .game-table-hud :is(.avatar-wrap, .user-identity) > .player-info {
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .game-app .game-table-hud .player-info :is(strong, span) { width: auto; text-align: left; }
+  .game-app .game-table-hud .player-info strong { font-size: 11px; line-height: 1.25; }
+  /* 左右家与本家卡下方还有一行余量：长昵称折成两行，用满卡高，避免只剩三四个字。
+     对家是横向扁条（≤40px），保持单行，不把顶部牌河挤高。 */
+  .game-app .game-table-hud :is(.player-seat.seat-left, .player-seat.seat-right) .player-info strong,
+  .game-app .game-table-hud .user-identity .player-info strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+  .game-app .game-table-hud .player-info > span { font-size: 12px; line-height: 1.25; }
+
+  /* A shallow identity strip fits between the far hand and its discard river. */
+  .game-app .game-table-hud .player-seat.seat-top .avatar-wrap {
+    grid-template-columns: auto minmax(0, auto) auto;
+    max-width: min(320px, 64cqw);
+    padding: 3px 6px;
+  }
+  .game-app .game-table-hud .player-seat.seat-top .player-info {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  /* 紧凑横屏的对家是约 30px 的扁条，昵称保持单行，避免把顶部牌墙挤高。 */
+  .game-app .game-table-hud .player-seat.seat-top .player-info strong {
+    display: block;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+  }
+  .game-app .game-table-hud .player-seat.seat-left { left: calc(var(--safe-left) + 8px); }
+  .game-app .game-table-hud .player-seat.seat-right { right: calc(var(--safe-right) + 8px); }
+  .game-app .game-table-hud .user-area { left: var(--safe-left); right: var(--safe-right); }
+  .game-app .game-table-hud .user-identity {
+    left: 8px;
+    bottom: calc(var(--hand-zone-height) + 12px);
+  }
+}
+
+/* 昵称包进 span 后仍沿用 strong 的文字样式，不能被各主题的积分 span 强调色/字号覆盖。 */
+.game-app .game-table-hud .player-info .player-name { color: inherit; font: inherit; }
+
+/* 手机矮横屏的座位卡不显示昵称占位；点头像弹出完整昵称，桌面仍保留两行昵称。 */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
+  @container game (max-height: 460px) {
+    .game-app .game-table-hud .player-name { display: none; }
   }
 }

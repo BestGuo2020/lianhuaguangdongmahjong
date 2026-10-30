@@ -684,7 +684,7 @@ function changeTableTheme(theme: TableThemeName) {
 </script>
 
 <template>
-  <OrientationGate :theme-name="tableThemeName" />
+  <OrientationGate v-if="!replayOpen && !replayView" :theme-name="tableThemeName" />
   <main
     class="game-app"
     :class="[{ 'is-lobby': showLobby }, themePresentation.typography.headingClass]"

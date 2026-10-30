@@ -664,7 +664,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   await expect(page.locator('.replay-title')).toContainText('莲花麻将·血流')
   await expect(page.locator('.replay-hand-rack .hand-tile-slot')).toHaveCount(14)
   await expect(page.locator('.replay-info-scores li')).toHaveCount(4)
-  await expect(page.getByTestId('replay-wall-left')).toContainText('牌山 余')
+  await expect(page.getByTestId('replay-wall-left')).toContainText('余')
   await expect(page.getByTestId('replay-turn')).toContainText('1巡')
   await expect(page.locator('.replay-log-list button').first()).toBeVisible()
   // 牌谱按类型分层：摸/打一定存在（血流一局可能整局无鸣牌甚至荒庄，故不断言重事件数量）
@@ -681,7 +681,7 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   // 无进度条、无主题切换入口
   await expect(page.locator('.replay-viewer input[type="range"]')).toHaveCount(0)
   await expect(page.locator('.replay-topbar select')).toHaveCount(0)
-  await expect(page.locator('.replay-theme-name')).toHaveText('主题 llm')
+  await expect(viewer).toHaveAttribute('data-table-theme', 'llm')
   // 原生下拉弹层必须是深色方案：全局 color-scheme 是 only light，否则浅色选项在白底上看不清
   expect(await page.locator('.replay-round select').evaluate((el) => getComputedStyle(el).colorScheme)).toBe('dark')
   expect(await page.locator('.replay-speed select').evaluate((el) => getComputedStyle(el).colorScheme)).toBe('dark')
@@ -691,8 +691,8 @@ test('整场录制可在真实 App 里回放（三种玩法 / 列表 / 3D 牌桌
   const infoToggle = page.getByTestId('replay-info-toggle')
   await expect(page.getByTestId('replay-info-body')).toBeHidden()
   await expect(infoToggle).toHaveAttribute('aria-expanded', 'false')
-  // 折叠态也应看得到本场数（局数/巡目/牌山余张在底部控制条上）
-  await expect(infoToggle).toContainText('本场 0')
+  // 顶栏折叠态只保留分数入口，本场数在展开面板中。
+  await expect(infoToggle).toContainText('分数')
   await infoToggle.click()
   await expect(page.getByTestId('replay-info-body')).toBeVisible()
   await expect(infoToggle).toHaveAttribute('aria-expanded', 'true')

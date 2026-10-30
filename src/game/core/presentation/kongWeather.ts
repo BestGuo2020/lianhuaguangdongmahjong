@@ -14,9 +14,8 @@ export interface KongWeatherCue {
 }
 
 export function kongWeatherKind(type: TableActionType): KongWeatherCue['kind'] | null {
-  if (type === 'discard-gang' || type === 'added-gang') return 'tornado'
-  // The four-wind kong is also a concealed kong under the existing rules.
-  if (type === 'concealed-gang' || type === 'wind-kong') return 'rain'
+  if (type === 'discard-gang' || type === 'added-gang' || type === 'wind-kong') return 'tornado'
+  if (type === 'concealed-gang') return 'rain'
   return null
 }
 

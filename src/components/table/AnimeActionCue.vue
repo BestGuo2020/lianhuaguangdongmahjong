@@ -199,7 +199,8 @@ function onPortraitError(event: Event) {
   16%, 74% { opacity: 1; scale: 1; filter: blur(0) drop-shadow(3px 5px 0 rgba(45,36,28,.26)); }
   100% { opacity: 0; scale: .96; filter: blur(1px) drop-shadow(3px 5px 0 rgba(45,36,28,.18)); }
 }
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   /* 移动端只收敛视觉尺寸；座位锚点与 --action-art-scale 均由共享样式表提供（R6.19）。 */
   .anime-action-cue {
     width: clamp(84px, 13cqw, 112px);

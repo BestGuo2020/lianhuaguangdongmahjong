@@ -15,18 +15,23 @@ async function readSource(relativePath: string) {
 }
 
 describe('响应式 CSS 合同', () => {
-  it('禁止重新引入按具体宽高枚举设备的媒体查询', async () => {
+  // mini 系列等矮横屏可能上报 fine 指针（桌面小窗/内嵌 WebView），只用粗指针判断会掉回
+  // 桌面几何。允许这一条矮横屏尺寸兜底，但不得再按具体设备宽高枚举。
+  const compactLandscapeFallback = '(orientation: landscape) and (max-width: 1024px) and (max-height: 460px)'
+
+  it('禁止重新引入按具体宽高枚举设备的媒体查询（矮横屏兜底除外）', async () => {
     for (const [relativePath, name] of responsiveSources) {
-      const source = await readSource(relativePath)
+      const source = (await readSource(relativePath)).split(compactLandscapeFallback).join('')
       expect(source, name).not.toMatch(/@media[^\{]*(?:min|max)-(?:width|height)\s*:/)
     }
   })
 
-  it('共享骨架只使用偏方、偏长和触控能力三类横屏条件', async () => {
+  it('共享骨架使用触控能力三类横屏条件，并以矮横屏兜底', async () => {
     const styleSource = await readSource('./style.css')
     expect(styleSource).toContain('@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-aspect-ratio: 8 / 5)')
     expect(styleSource).toContain('@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-aspect-ratio: 2 / 1)')
     expect(styleSource).toContain('@media (hover: none) and (pointer: coarse) and (orientation: landscape)')
+    expect(styleSource).toContain(compactLandscapeFallback)
     // 主指针粗指针才进入移动端几何；any-pointer 会把带触摸屏的笔记本/台式整机误判为手机。
     expect(styleSource).not.toContain('@media (any-pointer: coarse)')
     expect(styleSource).toContain('@media (orientation: portrait) and (hover: none) and (pointer: coarse)')

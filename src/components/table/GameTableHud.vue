@@ -254,6 +254,7 @@ const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.bloo
   ? { id: -1, deltas: [{ playerIndex: 0, amount: 800 }, { playerIndex: 1, amount: -800 }] }
   : null))
 const waitsOpen = ref(false)
+const userNicknameOpen = ref(false)
 const tableReady = ref(false)
 const tableLoadError = ref('')
 const tableLoadAttempt = ref(0)
@@ -614,6 +615,7 @@ function onAvatarError(entry: GamePlayer) {
     <!-- players 已按本家视角排序，但 player.seat 保留服务器绝对座位；气泡必须按本地索引读取。 -->
     <PlayerSeat
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
+      nickname-on-tap
       :position="seatPosition[index + 1]" :active="currentPlayer === index + 1"
       :action-active="tableActionEvent?.actorIndex === index + 1" :score-delta="scoreDeltaFor(index + 1)"
       :score-flow-id="presentedScoreFlowEvent?.id" :dealer="dealer === index + 1"
@@ -641,10 +643,17 @@ function onAvatarError(entry: GamePlayer) {
     </Transition>
 
     <section class="user-area">
-      <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0 }" :style="userAnimeStyle">
+      <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0, 'nickname-open': userNicknameOpen }" :style="userAnimeStyle">
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
-        <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
-        <div class="player-info"><strong>{{ user.name }}</strong><span>{{ user.score }}</span></div>
+        <button type="button" class="avatar-button"
+          :aria-label="`查看${user.name}的昵称`" :aria-expanded="userNicknameOpen"
+          @click.stop="userNicknameOpen = !userNicknameOpen" @keydown.esc="userNicknameOpen = false" @blur="userNicknameOpen = false">
+          <img class="avatar" :src="userAvatar" :alt="`${user.name}头像`" @error="onAvatarError(user)" />
+        </button>
+        <div class="player-info"><strong><span class="player-name">{{ user.name }}</span></strong><span>{{ user.score }}</span></div>
+        <Transition name="nickname-reveal">
+          <div v-if="userNicknameOpen" class="nickname-popover user-nickname-popover" role="status" aria-live="polite">{{ user.name }}</div>
+        </Transition>
         <button v-if="bloodFlow" type="button" class="blood-flow-pile-badge win-count-bottom" :data-pile-seat="user.seat"
           :aria-label="`${user.name}，胡${bloodFlow.seats[user.seat].winCount}次，查看流水`"
           @click="settlementHost?.showDetails(user.seat)">胡 {{ bloodFlow.seats[user.seat].winCount }}次</button>
@@ -869,7 +878,8 @@ function onAvatarError(entry: GamePlayer) {
 
 /* 移动端（窄屏/矮屏）：翻精指示牌折叠为一行小徽章，不遮挡任何座位；
    点击徽章展开二骰/精牌说明（.flip-open），再点收起。 */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
   .flip-indicator {
     top: calc(var(--safe-top) + var(--topbar-height) + var(--hud-gap));
     right: auto;

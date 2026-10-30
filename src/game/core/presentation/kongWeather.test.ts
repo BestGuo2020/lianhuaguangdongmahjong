@@ -11,13 +11,12 @@ const player = (pending = false): GamePlayer => ({
 })
 
 describe('kong weather event adapter', () => {
-  it.each(['discard-gang', 'added-gang'] as const)('%s uses wind and the supplied windy audio', type => {
+  it.each(['discard-gang', 'added-gang', 'wind-kong'] as const)('%s uses wind and the supplied windy audio', type => {
     expect(kongWeatherKind(type)).toBe('tornado')
     expect(kongWeatherSound(kongWeatherKind(type)!)).toBe('sounds/mingang_windy.wav')
   })
   it('concealed kongs use rain; unrelated actions have no weather', () => {
     expect(kongWeatherKind('concealed-gang')).toBe('rain')
-    expect(kongWeatherKind('wind-kong')).toBe('rain')
     expect(kongWeatherSound('rain')).toBe('sounds/angang_rainy.wav')
     for (const type of ['peng', 'chi', 'flower-gang', 'self-draw', 'robbed-kong-win'] as const) expect(kongWeatherKind(type)).toBeNull()
   })

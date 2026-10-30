@@ -14,6 +14,8 @@ const props = withDefaults(defineProps<{
   scoreDelta?: number
   scoreFlowId?: number
   position: string
+  /** 手机上昵称不占位；点头像查看完整昵称。 */
+  nicknameOnTap?: boolean
   dealer?: boolean
   themeName?: TableThemeName
   /** 主题表现头像覆盖，不修改权威玩家 avatar。 */
@@ -24,6 +26,11 @@ const props = withDefaults(defineProps<{
 
 // 外部头像（联机真人）加载失败 → 回退到本地座位默认头像
 // 已物化的头像用本地 blob（座位会随快照重建，避免每次重建都做一次协商校验）。
+const nicknameOpen = ref(false)
+function toggleNickname() {
+  if (!props.nicknameOnTap) return
+  nicknameOpen.value = !nicknameOpen.value
+}
 const avatarSrc = ref(displayImageSrc(props.avatarOverride || props.player.avatar))
 watch(() => [props.avatarOverride, props.player.avatar, materializedImageVersion.value], () => {
   avatarSrc.value = displayImageSrc(props.avatarOverride || props.player.avatar)
@@ -39,14 +46,22 @@ const animeStyle = computed(() => props.themeName === 'llmAnime'
 </script>
 
 <template>
-  <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive }]" :style="animeStyle">
+  <section class="player-seat" :class="[`seat-${position}`, { active, 'action-active': actionActive, 'nickname-open': nicknameOpen }]" :style="animeStyle" :aria-label="player.name">
     <div class="avatar-wrap">
       <span v-if="dealer" class="dealer-badge">庄</span>
-      <img class="avatar" :src="avatarSrc" :alt="`${player.name}头像`" @error="onAvatarError" />
+      <button v-if="nicknameOnTap" type="button" class="avatar-button"
+        :aria-label="`查看${player.name}的昵称`" :aria-expanded="nicknameOpen"
+        @click.stop="toggleNickname" @keydown.esc="nicknameOpen = false" @blur="nicknameOpen = false">
+        <img class="avatar" :src="avatarSrc" :alt="`${player.name}头像`" @error="onAvatarError" />
+      </button>
+      <img v-else class="avatar" :src="avatarSrc" :alt="`${player.name}头像`" @error="onAvatarError" />
       <div class="player-info">
-        <strong>{{ player.name }}</strong>
+        <strong><span class="player-name">{{ player.name }}</span></strong>
         <span>{{ player.score }}</span>
       </div>
+      <Transition name="nickname-reveal">
+        <div v-if="nicknameOpen && nicknameOnTap" class="nickname-popover" role="status" aria-live="polite">{{ player.name }}</div>
+      </Transition>
       <slot name="footer" />
       <span v-if="active" class="turn-dot"></span>
       <Transition name="score-flow">
