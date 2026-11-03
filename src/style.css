@@ -1226,6 +1226,7 @@ button { font: inherit; }
 .remote-join input { flex: 1; padding: 11px 14px; border: 1px solid rgba(211,174,87,.27); border-radius: 5px; background: rgba(3,18,13,.72); color: #f1e7cd; font-size: 14px; letter-spacing: .2em; text-align: center; outline: none; }
 .remote-join-btn { padding: 11px 16px; border: 1px solid rgba(213,184,112,.5); border-radius: 5px; background: rgba(8,28,20,.88); color: #e5d5ad; font-weight: 800; cursor: pointer; }
 .room-meta-note { margin: 0; color: #9aa88f; font-size: 12px; letter-spacing: .05em; }
+.room-meta-current { display: block; margin-bottom: 4px; }
 .room-meta-note b { color: #ffe6a5; font-size: 13px; }
 .session-error { margin: 0; color: #e0a06a; font-size: 13px; }
 .room-panel { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; padding: 14px; border: 1px solid rgba(211,174,87,.3); border-radius: 9px; background: rgba(3,18,13,.6); }

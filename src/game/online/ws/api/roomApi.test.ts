@@ -1,8 +1,14 @@
 import { expect, it, vi } from 'vitest'
-import { createRoom, reserveLlmSeat } from './roomApi'
+import { createRoom, getRoomMeta, reserveLlmSeat } from './roomApi'
 import { request } from './httpClient'
 
 vi.mock('./httpClient', () => ({ request: vi.fn() }))
+
+it.each(['lotus-classic', 'lotus-legacy', 'lotus-blood-flow'] as const)('queries room capacity for %s', async (rulesetId) => {
+  vi.mocked(request).mockResolvedValue({ active: 1, max: 4 })
+  await getRoomMeta(rulesetId)
+  expect(request).toHaveBeenLastCalledWith(`/api/rooms/meta?rulesetId=${rulesetId}`)
+})
 
 it('forwards blood-flow rooms to the backend registry (ws path released)', async () => {
   vi.mocked(request).mockResolvedValue({ roomId: 'R', rulesetId: 'lotus-blood-flow' })

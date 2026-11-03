@@ -112,8 +112,8 @@ export function getRoom(roomId: string): Promise<RoomInfo> {
   return request<RoomInfo>(`/api/rooms/${encodeURIComponent(roomId)}`)
 }
 
-export function getRoomMeta(): Promise<RoomMeta> {
-  return request<RoomMeta>('/api/rooms/meta')
+export function getRoomMeta(rulesetId: RuleVariant): Promise<RoomMeta> {
+  return request<RoomMeta>(`/api/rooms/meta?rulesetId=${encodeURIComponent(rulesetId)}`)
 }
 
 export function joinRoom(roomId: string, nickname: string, playerId?: string, characterId?: string): Promise<JoinResult> {

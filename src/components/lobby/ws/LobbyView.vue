@@ -212,9 +212,13 @@ function closeDialog() {
               @keyup.enter="dialog = 'create'"
             />
           </label>
-          <p v-if="roomMeta && !roomId" class="room-meta-note" role="status">
-            剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
-            <template v-if="roomMeta.llmAvailable"> · <span class="room-meta-llm">服务器已启用大模型</span></template>
+          <p v-if="!roomId" class="room-meta-note" role="status">
+            <span class="room-meta-current">当前玩法：<b>{{ ruleOption.name }}</b></span>
+            <template v-if="roomMeta">
+              剩余房间 <b>{{ roomMeta.max - roomMeta.active }}</b> / {{ roomMeta.max }}
+              <template v-if="roomMeta.llmAvailable"> · <span class="room-meta-llm">服务器已启用大模型</span></template>
+            </template>
+            <span v-else>剩余房间 — / —</span>
           </p>
           <div v-if="!roomId" class="remote-entry-actions">
             <button class="remote-create" data-action-role="primary" :disabled="!nicknameInput.trim() || sessionStatus === 'creating'" @click="openCreateDialog">

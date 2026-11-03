@@ -19,6 +19,48 @@ async function enterLobby(page: Page, nickname: string, baseURL: string) {
   await page.getByPlaceholder('输入昵称').fill(nickname)
 }
 
+test('大厅显示当前玩法，并分别查询各玩法剩余房间', async ({ page, baseURL }) => {
+  await enterLobby(page, '玩法容量验收', baseURL!)
+  // 只占用经典玩法的名额，用真实后端确认其他玩法的剩余容量独立计算。
+  const created = await page.request.post('/api/rooms', {
+    data: { mode: 'east', capacity: 4, rulesetId: 'lotus-classic' },
+  })
+  expect(created.ok()).toBe(true)
+  const { roomId } = await created.json()
+  const joined = await page.request.post(`/api/rooms/${roomId}/join`, { data: { nickname: '容量占位' } })
+  expect(joined.ok()).toBe(true)
+  const { seat, rejoinCode } = await joined.json()
+  try {
+    const rules = [
+      { id: 'lotus-classic', name: '莲花广麻' },
+      { id: 'lotus-legacy', name: '莲花麻将' },
+      { id: 'lotus-blood-flow', name: '莲花麻将·血流' },
+    ]
+    for (const [index, rule] of rules.entries()) {
+      const metaResponse = page.waitForResponse(response => (
+        new URL(response.url()).pathname === '/api/rooms/meta'
+        && new URL(response.url()).searchParams.get('rulesetId') === rule.id
+        && response.request().method() === 'GET'
+      ))
+      if (index > 0) {
+        await page.getByRole('button', { name: '创建房间', exact: true }).click()
+        await page.locator('.lobby-dialog .game-settings button').filter({ hasText: '玩法' }).click()
+        await page.locator('.rule-picker-options button').nth(index).click()
+        await page.getByRole('button', { name: '确定', exact: true }).click()
+        await page.getByRole('button', { name: '取消', exact: true }).click()
+      }
+      const meta = await (await metaResponse).json()
+      // 同文件的其他整场用例也可能并行建房，不假定服务端只有本测试的房间。
+      if (index === 0) expect(meta.active).toBeGreaterThanOrEqual(1)
+      await expect(page.locator('.room-meta-current')).toHaveText(`当前玩法：${rule.name}`)
+      await expect(page.locator('.room-meta-note')).toContainText(`剩余房间 ${meta.max - meta.active} / ${meta.max}`)
+    }
+    await page.screenshot({ path: 'tmp/ws-e2e/current-rule-rooms-desktop.png' })
+  } finally {
+    await page.request.delete(`/api/rooms/${roomId}`, { data: { seat, rejoinCode } })
+  }
+})
+
 for (const rule of ['莲花广麻', '莲花麻将', '莲花麻将·血流']) {
   test(`${rule}：原后端建房、两端开局、刷新后凭会话恢复`, async ({ browser, baseURL }) => {
     const hostContext = await browser.newContext()

@@ -1,15 +1,23 @@
 import { onUnmounted, ref, watch, type Ref } from 'vue'
 import type { GameMode } from '../../../core/contracts/activeGamePort'
+import type { RuleVariant } from '../../../core/rules/ruleVariants'
 import { materializeImages } from '../../../core/presentation/imagePreload'
 import { getRoomMeta, type RoomMeta } from '../api/roomApi'
 
-export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>) {
+export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>, selectedRule: Ref<RuleVariant>) {
   const roomMeta = ref<RoomMeta | null>(null)
   let pollingTimer: number | null = null
+  let requestId = 0
 
   async function refresh() {
+    const id = ++requestId
+    const rulesetId = selectedRule.value
     try {
-      roomMeta.value = await getRoomMeta()
+      const meta = await getRoomMeta(rulesetId)
+      // 切换玩法或退出联机后，旧请求即使晚到也不能覆盖当前玩法的容量。
+      if (id === requestId && gameMode.value === 'remote' && selectedRule.value === rulesetId) {
+        roomMeta.value = meta
+      }
     } catch {
       // 网络抖动时保留上一次容量，大厅不因辅助查询失败而报错。
     }
@@ -27,17 +35,22 @@ export function useRoomAvailability(gameMode: Ref<GameMode>, roomId: Ref<string>
   watch(() => (roomMeta.value?.llmProviders ?? []).map((provider) => provider.avatar),
     (avatars) => { void materializeImages(avatars) }, { immediate: true })
 
-  watch([gameMode, roomId], ([mode]) => {
+  watch([gameMode, roomId, selectedRule], ([mode, , rulesetId], [, , previousRulesetId]) => {
+    if (rulesetId !== previousRulesetId) roomMeta.value = null
     // 房间面板同样需要提供商列表：刷新或重进房间时，不能只依赖进入大厅时的旧元数据。
     if (mode === 'remote') {
       void refresh()
       if (pollingTimer == null) pollingTimer = window.setInterval(refresh, 5000)
     } else {
+      requestId += 1
       stopPolling()
     }
   }, { immediate: true })
 
-  onUnmounted(stopPolling)
+  onUnmounted(() => {
+    requestId += 1
+    stopPolling()
+  })
 
   return { roomMeta, refresh }
 }

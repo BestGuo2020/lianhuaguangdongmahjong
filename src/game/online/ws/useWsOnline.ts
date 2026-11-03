@@ -108,7 +108,7 @@ export function useWsOnline(options: Options) {
     updateCharacter: (characterId: string) => activeRemote.value.remoteActions.updateCharacter(characterId),
   }
 
-  const { roomMeta } = useRoomAvailability(gameMode, roomId)
+  const { roomMeta } = useRoomAvailability(gameMode, roomId, selectedRule)
 
   const disclaimerGate = useDisclaimerGate()
   const wakuAuth = useWakuDemoAuth()
