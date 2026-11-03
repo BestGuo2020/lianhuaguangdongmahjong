@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-const DEFAULT_VIBEHUB_URL = 'https://vibe.lumigrav.space/works/B5AJupT1/'
+const DEFAULT_VIBEHUB_URL = 'https://apps.gamesvibe.app/B5AJupT1/'
 const DEFAULT_TIME_ZONE = 'Asia/Shanghai'
 const DEFAULT_TIMEOUT_MS = 45 * 60 * 1000
 const POLL_INTERVAL_MS = 250
@@ -102,7 +102,7 @@ async function selectMatchAndRule(page) {
 
   await settings.getByRole('button').filter({ hasText: '玩法' }).click()
   const ruleDialog = page.getByRole('dialog', { name: '选择规则玩法' })
-  await ruleDialog.getByRole('button', { name: /莲花麻将/ }).click()
+  await ruleDialog.getByRole('button', { name: /^莲花麻将\s+翻精/ }).click()
   await ruleDialog.getByRole('button', { name: '确定', exact: true }).click()
 
   await page.getByRole('button', { name: /开始半庄场/ }).click()
@@ -240,7 +240,10 @@ async function main() {
   await page.emulateMedia({ reducedMotion: 'reduce' })
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded' })
+    if (!response?.ok()) {
+      throw new Error(`游戏页面加载失败：HTTP ${response?.status() ?? '无响应'}，${page.url()}`)
+    }
     await page.getByRole('heading', { name: '莲花广麻' }).waitFor({ state: 'visible' })
     const result = await playMatch(page)
     const file = await writeLog(result)
