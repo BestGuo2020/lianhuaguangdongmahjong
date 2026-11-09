@@ -10,6 +10,7 @@ import type {
   WinPresentation,
 } from '../../../core/contracts/types'
 import type { RemoteSessionStatus } from '../session/remoteRoomLifecycle'
+import type { RoomPanelStatus } from '../session/roomPanelSync'
 import type { StoredSession } from '../session/remoteSessionStore'
 import type { RuleVariant } from '../../../core/rules/ruleVariants'
 
@@ -41,8 +42,7 @@ export function createRemoteGameState(options: RemoteGameStateOptions = {}) {
   /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
   const reservedSeats = ref<Array<LlmSeatRequest>>([])
   const roomTimeLimit = ref<number | null>(null)
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
-  const roomStatus = ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>('lobby')
+  const roomStatus = ref<RoomPanelStatus>('lobby')
   const llmEnabled = ref(false)
   const effectiveLlmEnabled = ref(false)
   const llmAvailable = ref(false)

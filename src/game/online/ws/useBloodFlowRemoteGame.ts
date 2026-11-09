@@ -8,7 +8,7 @@ import { computed, ref } from 'vue'
 import type { MatchType } from '../../core/contracts/types'
 import type { TableThemeName } from '../../../theme/themeIdentity'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
-import { API_BASE } from './api/httpClient'
+import { API_BASE, signalAuthRequired } from './api/httpClient'
 import {
   closeRoom as closeRoomApi, createRoom as createRoomApi, getRoom,
   joinRoom as joinRoomApi, leaveRoom as leaveRoomApi, readyRoom,
@@ -18,6 +18,7 @@ import {
 } from './api/roomApi'
 import { createRoomSocketTransport } from './transport/roomSocket'
 import { createRemoteSessionStore, generateGuestId, type StoredSession } from './session/remoteSessionStore'
+import { createRoomPanelRefresh, type RoomPanelStatus } from './session/roomPanelSync'
 
 const remoteSessionStore = createRemoteSessionStore()
 import type { BloodFlowGameOptions } from '../../variants/lotus/bloodFlow/useBloodFlowGame'
@@ -78,8 +79,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const reservedSeats = ref<Array<LlmSeatRequest>>([])
   // 房间限时与经典房间同口径（服务端 ROOM_LIFETIME，默认 60 分钟）；仅大厅提示用。
   const roomTimeLimit = ref(3600)
-  /** 服务端房间状态：暂离（房间进行中）时房间面板据此显示「回到牌桌」。 */
-  const roomStatus = ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>('lobby')
+  const roomStatus = ref<RoomPanelStatus>('lobby')
   const storedSession = ref<StoredSession | null>(null)
   const rulesetId = ref<RuleVariant>('lotus-blood-flow')
   const roomTableThemeName = ref<TableThemeName>('jade')
@@ -89,6 +89,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const autoPlay = ref(false)
   const waitingNextRound = ref(false)
   const signalQuality = ref(0)
+  const serverMatchFinished = ref<boolean>()
   let seenRound = -1
 
   // ── 底层对局端口：externalAuthority 桥接到 WS。 ──
@@ -106,6 +107,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
       openingDone: (round) => authority.openingDone(round),
     },
   })
+  const matchFinished = computed(() => serverMatchFinished.value ?? inner.matchFinished.value)
 
   const socket = createRoomSocketTransport({
     getUrl: () => roomId.value && rejoinCode.value
@@ -118,7 +120,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
         if (typeof payload.seat === 'number') mySeat.value = payload.seat
         if (typeof payload.nickname === 'string') nickname.value = payload.nickname
         // 首次房间回读可能在 WS 座位号到达前完成；终局不再轮询，必须在此补算房主。
-        void refreshRoom().catch(() => {})
+        void refreshRoom()
         socket.confirmSession()
         sessionStatus.value = 'lobby'
         // 重连成功即视为会话健康：清掉上一次的错误提示。
@@ -140,6 +142,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   const authority = createBloodFlowWsAuthority({
     transport: socket,
     onView: (view, meta) => {
+      serverMatchFinished.value = meta.matchFinished
       // 新一局开始（局号前进）或整场结束 → 解除「等待其他玩家」态。
       if (meta.round > seenRound || meta.matchFinished) waitingNextRound.value = false
       seenRound = meta.round
@@ -147,7 +150,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     },
     onError: (code) => {
       if (code === 'AUTH_REQUIRED') {
-        window.dispatchEvent(new Event('wakudemo-auth-required'))
+        signalAuthRequired()
         return
       }
       // 动作竞态是预期内的：窗口已被裁决/推进/超时后，客户端旧按钮上的重复或迟到提交
@@ -174,31 +177,43 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     remoteSessionStore.saveSession(storedSession.value)
   }
 
-  async function refreshRoom() {
-    if (!roomId.value) return
-    const info = await getRoom(roomId.value)
-    roomSeats.value = info.seats
-    reservedSeats.value = info.reservedSeats ?? []
-    roomStatus.value = info.status
-    roomTimeLimit.value = info.timeLimitSeconds ?? 3600
-    isCreator.value = info.creatorSeat === mySeat.value
-    llmEnabled.value = Boolean(info.llmEnabled)
-    effectiveLlmEnabled.value = Boolean(info.effectiveLlmEnabled)
-    llmAvailable.value = Boolean(info.llmAvailable)
-    if (info.status === 'finished') sessionStatus.value = 'lobby'
-  }
+  const refreshRoom = createRoomPanelRefresh({
+    roomId, phase: inner.phase, roomStatus, getRoom,
+    applyRoom(info) {
+      roomSeats.value = info.seats
+      reservedSeats.value = info.reservedSeats ?? []
+      roomTimeLimit.value = info.timeLimitSeconds ?? 3600
+      isCreator.value = info.creatorSeat === mySeat.value
+      llmEnabled.value = Boolean(info.llmEnabled)
+      effectiveLlmEnabled.value = Boolean(info.effectiveLlmEnabled)
+      llmAvailable.value = Boolean(info.llmAvailable)
+    },
+    stopPolling: stopLobbyPolling,
+    onRoomGone() {
+      resetSessionLocal()
+      sessionError.value = '房间已解散'
+    },
+  })
 
   // 大厅座位状态轮询（对齐经典房间 1.5s）：ready/加入变化无服务端推送。
   let pollTimer: number | null = null
   function startLobbyPolling() {
     stopLobbyPolling()
-    pollTimer = globalThis.setInterval(() => {
-      if (roomId.value && inner.phase.value === 'lobby') void refreshRoom()
-    }, 1500) as unknown as number
+    if (!roomId.value || roomStatus.value === 'auth-required') return
+    pollTimer = globalThis.setInterval(() => void refreshRoom(), 1500) as unknown as number
   }
   function stopLobbyPolling() {
     if (pollTimer != null) globalThis.clearInterval(pollTimer)
     pollTimer = null
+  }
+
+  async function connectToRoom() {
+    await refreshRoom()
+    if (!roomId.value) return
+    sessionStatus.value = 'lobby'
+    if (roomStatus.value === 'auth-required') return
+    socket.open()
+    startLobbyPolling()
   }
 
   /** 占座结果落地（createRoom / joinRoom 共用）：座位身份 + 会话持久化。 */
@@ -220,10 +235,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
       isCreator.value = true
       applyJoinResult(await joinRoomApi(info.roomId, nickname.value || '玩家', playerId.value,
         options.getCharacterId?.()))
-      await refreshRoom()
-      sessionStatus.value = 'lobby'
-      socket.open()  // 入房即连：非房主也能收到开局后的权威快照
-      startLobbyPolling()
+      await connectToRoom()
     } catch (error) {
       // 失败必须回 idle 并给出可读原因：否则按钮永远停在「创建中…」，且失败被静默吞掉。
       sessionStatus.value = 'idle'
@@ -239,10 +251,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     try {
       applyJoinResult(await joinRoomApi(code, nickname.value || '玩家', playerId.value,
         options.getCharacterId?.()))
-      await refreshRoom()
-      sessionStatus.value = 'lobby'
-      socket.open()
-      startLobbyPolling()
+      await connectToRoom()
     } catch (error) {
       sessionStatus.value = 'idle'
       sessionError.value = readableSessionError(error, '加入房间失败')
@@ -287,7 +296,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
       reservedSeats.value = result.reservedSeats ?? []
     } catch (error) {
       sessionError.value = readableSessionError(error, '设置大模型预留失败')
-      await refreshRoom().catch(() => {})
+      await refreshRoom()
     }
   }
 
@@ -299,10 +308,15 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     rejoinCode.value = session.rejoinCode
     nickname.value = session.nickname
     playerId.value = session.playerId
-    await refreshRoom()
-    sessionStatus.value = 'lobby'
-    startLobbyPolling()
-    socket.open()
+    await connectToRoom()
+  }
+
+  function resetTableView() {
+    inner.returnToLobby()
+    serverMatchFinished.value = undefined
+    waitingNextRound.value = false
+    seenRound = -1
+    sessionError.value = ''
   }
 
   /** 本地会话清理（不走 REST）：room_closed / 重进失效 / 主动离开共用。 */
@@ -312,7 +326,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     // 先复位对局端口（phase→lobby、清空玩家与结算态）：inner.dispose() 只清定时器/worker，
     // 不复位 phase/players，会让大厅因 App 的 showLobby 条件（phase==='lobby' || players.length===0）
     // 无法出现。
-    inner.returnToLobby()
+    resetTableView()
     remoteSessionStore.clearSession()
     storedSession.value = null
     roomId.value = ''
@@ -322,10 +336,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     roomSeats.value = []
     reservedSeats.value = []
     sessionStatus.value = 'idle'
-    sessionError.value = ''
     roomStatus.value = 'lobby'
-    waitingNextRound.value = false
-    seenRound = -1
   }
 
   async function leaveRoom() {
@@ -346,13 +357,9 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   async function stepOutToLobby() {
     stopLobbyPolling()
     socket.close()          // 意图关闭：不自动重连；服务端 on_disconnect → AI 托管
-    inner.returnToLobby()   // 复位牌桌视图 → phase 回 lobby（房间面板可见）
+    resetTableView()
     sessionStatus.value = 'lobby'
-    waitingNextRound.value = false
-    seenRound = -1
-    sessionError.value = ''
-    // 刷新座位表（本家显示未连接）；房间若已被回收（404）→ 会话整体清理回主大厅。
-    try { await refreshRoom() } catch { resetSessionLocal(); return }
+    await refreshRoom()
     startLobbyPolling()
   }
 
@@ -363,11 +370,8 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
   function leaveMatch() {
     stopLobbyPolling()
     socket.close()
-    inner.returnToLobby()
+    resetTableView()
     sessionStatus.value = 'idle'
-    waitingNextRound.value = false
-    seenRound = -1
-    sessionError.value = ''
     roomId.value = ''
     mySeat.value = -1
     isCreator.value = false
@@ -383,15 +387,11 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
    *  - 对局中途 → **暂离**（不退出房间）：座位与重进码保留，本场交服务端 AI 代打，
    *    可随时「回到牌桌」。此前这里等于 leaveRoom，等于中途退出且本场结束前无法回来。 */
   function returnToLobby() {
-    if (inner.matchFinished.value) {
-      inner.returnToLobby()
-      waitingNextRound.value = false
-      seenRound = -1
+    if (matchFinished.value) {
+      roomStatus.value = 'finished'
+      resetTableView()
       sessionStatus.value = 'lobby'
-      // 回房间大厅即视为一段流程结束：清掉上一场残留的错误提示。
-      sessionError.value = ''
-      // 刷新房间面板数据；房间若已被回收（404）则整体清理回主大厅。
-      void refreshRoom().catch(() => resetSessionLocal())
+      void refreshRoom()
       return
     }
     void stepOutToLobby()
@@ -418,7 +418,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   /** 结算页确认「下一局」：回执局间屏障（后端等所有在线真人确认后开新局）。 */
   function confirmNextRound() {
-    if (inner.matchFinished.value) return
+    if (matchFinished.value) return
     authority.continueRound()
     waitingNextRound.value = true
   }
@@ -437,6 +437,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
 
   return {
     ...inner,
+    matchFinished,
     // 远程开局/续局走 REST 房间生命周期；本地引擎不自行开桌。
     startGame: () => { /* 远程开局由 remoteActions.startMatch（REST）驱动 */ },
     nextRound: () => confirmNextRound(),

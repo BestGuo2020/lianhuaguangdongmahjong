@@ -280,24 +280,25 @@ describe('useBloodFlowRemoteGame', () => {
 
   it('整场结束「返回大厅」回房间大厅：不离开房间，房间保留可再开一场', async () => {
     api.joinRoom.mockResolvedValue({ roomId: 'R1', seat: 0, nickname: '甲', rejoinCode: 'C1', playerId: 'p1', rejoin: false })
-    api.getRoom.mockResolvedValue({
-      roomId: 'R1', status: 'finished', creatorSeat: 0, capacity: 4, mode: 'east',
-      timeLimitSeconds: 600, llmEnabled: false, effectiveLlmEnabled: false, llmAvailable: false,
-      seats: [{ seat: 0, nickname: '甲', ready: false, connected: true }, null, null, null],
-    })
+    api.getRoom.mockResolvedValue({ ...ROOM_INFO_LOBBY, status: 'playing' })
     const module = makeModule()
     await module.remoteActions.joinRoom('R1')
     expect(module.roomId.value).toBe('R1')
+    expect(module.roomStatus.value).toBe('playing')
     const result = { ruleVersion: 'lotus-blood-flow-v1', roundId: 'round-3', reason: 'wall-exhausted',
       openingScores: [2000, 2000, 2000, 2000], endingScores: [2400, 1800, 1900, 1900],
       winNet: [2400, -200, -100, -100], kongNet: [0, 0, 0, 0], winCounts: [2, 0, 1, 0],
       ranks: [1, 4, 2, 3], ledger: [] }
-    capture.onMessage!({ kind: 'bf_snapshot', matchFinished: true, round: 4, mode: 'east', dealer: 3,
+    // 服务端可以在东风场第 3 局收尾，终局应以 WS 的标记为准。
+    capture.onMessage!({ kind: 'bf_snapshot', matchFinished: true, round: 3, mode: 'east', dealer: 2,
       view: { ...VIEW, public: { ...VIEW.public, status: 'settled', roundResult: result } } })
     await vi.waitFor(() => expect(module.matchFinished.value).toBe(true))
 
+    api.getRoom.mockRejectedValue(new Error('网络暂不可用'))
     module.returnToLobby()
+    expect(module.roomStatus.value).toBe('finished')
     await vi.waitFor(() => expect(module.phase.value).toBe('lobby'))
+    await vi.waitFor(() => expect(module.roomStatus.value).toBe('unavailable'))
     // 关键：不走 REST leave（房主在非对局中离开会触发「房主离开即解散」规则），WS 保持在线等再开一场。
     expect(api.leaveRoom).not.toHaveBeenCalled()
     expect(capture.close).not.toHaveBeenCalled()

@@ -21,12 +21,12 @@ import type {
   RoomSeatState,
   ServerLlmStyle,
 } from '../../../game/online/ws/api/roomApi'
+import type { RoomPanelStatus } from '../../../game/online/ws/session/roomPanelSync'
 
 interface Props {
   roomId: string
   roomTimeLimit: number | null
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家在牌桌上「暂离」。 */
-  roomStatus?: string
+  roomStatus?: RoomPanelStatus
   roomSeats: Array<RoomSeatState | null>
   /**
    * 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。
@@ -74,6 +74,7 @@ const emit = defineEmits<{
 }>()
 /** 本场进行中且本家在房间面板 ⇒ 本家已「暂离」牌桌（座位保留，服务端 AI 代打）。 */
 const awayFromTable = computed(() => props.roomStatus === 'playing' && props.mySeat >= 0)
+const roomActionsLocked = computed(() => props.roomStatus === 'unavailable' || props.roomStatus === 'auth-required')
 const currentCharacter = computed(() => resolveAnimeCharacter(props.characterId))
 const currentCharacterAvatar = computed(() => animeCharacterAvatarUrl(props.characterId))
 
@@ -231,6 +232,9 @@ function startPayload() {
     </div>
     <!-- 暂离状态：本场进行中，本家已离开牌桌（座位保留、服务端 AI 代打），可一键回桌。 -->
     <p v-if="awayFromTable" class="room-away-note" role="status">本场进行中 · 你在暂离（AI 代打中，座位与重进码保留）</p>
+    <p v-else-if="roomStatus === 'finished'" class="room-away-note" role="status">本场已结束 · 座位与准备状态保留</p>
+    <p v-else-if="roomStatus === 'unavailable'" class="room-away-note" role="status">房间状态同步失败，正在重试…</p>
+    <p v-else-if="roomStatus === 'auth-required'" class="room-away-note" role="status">登录已过期，请重新登录</p>
     <div v-if="awayFromTable" class="room-owner-actions">
       <button class="start-button room-start" data-action-role="primary" @click="$emit('resume')">
         <b>回到牌桌</b><span>恢复原座位，继续本场</span>
@@ -238,12 +242,12 @@ function startPayload() {
       <button class="text-button" data-action-role="light" @click="$emit('leaveMatch')">退出本场（回主大厅，可再回来）</button>
     </div>
     <div v-else class="room-owner-actions">
-      <button v-if="mySeat >= 0" class="secondary" data-action-role="primary" :disabled="sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
+      <button v-if="mySeat >= 0" class="secondary" data-action-role="primary" :disabled="roomActionsLocked || sessionStatus === 'readying'" @click="$emit('toggleReady')">准备 / 取消准备</button>
       <button
         v-if="isCreator"
         class="start-button room-start"
-        :data-action-role="allOccupiedReady ? 'primary' : 'disabled'"
-        :disabled="!allOccupiedReady || matchStarting"
+        :data-action-role="allOccupiedReady && !roomActionsLocked ? 'primary' : 'disabled'"
+        :disabled="roomActionsLocked || !allOccupiedReady || matchStarting"
         @click="$emit('start', startPayload())"
       ><b>开始对局</b><span>{{ matchStarting ? '正在打扫房间' : (allOccupiedReady ? '全员已准备' : '等待全员准备') }}</span></button>
     </div>

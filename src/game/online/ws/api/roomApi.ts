@@ -16,6 +16,7 @@ export interface RoomInfo {
   rulesetId?: RuleVariant
   capacity: number
   status: 'lobby' | 'playing' | 'finished' | 'error' | 'closed'
+  matchFinished?: boolean
   creatorSeat: number | null
   timeLimitSeconds?: number
   /** 房主请求的空座 AI 补位是否使用大模型 */

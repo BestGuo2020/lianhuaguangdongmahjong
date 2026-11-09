@@ -5,6 +5,7 @@ import { useWakuDemoAuth } from '../../../account/wakudemo/useWakuDemoAuth'
 import { createRemoteLobbyController } from './orchestration/remoteLobbyController'
 import { useDisclaimerGate } from './session/useDisclaimerGate'
 import { useRoomAvailability } from './session/useRoomAvailability'
+import { AUTH_REQUIRED_EVENT } from './api/httpClient'
 import { getRoom, type LlmSeatRequest, type ServerLlmStyle } from './api/roomApi'
 import type { StoredSession } from './session/remoteSessionStore'
 import type { MatchType } from '../../core/contracts/types'
@@ -40,7 +41,7 @@ export function useWsOnline(options: Options) {
   // ── 联机模式状态（远程房间 / WS 连接）──
   // 血流联机房间走自己的会话：以下代理在联机槽切换时读取/写入对应模块的真实 ref。
   const proxyRef = <T,>(name: 'sessionStatus' | 'sessionError' | 'roomId' | 'mySeat' | 'nickname'
-    | 'playerId' | 'isCreator' | 'roomSeats' | 'reservedSeats' | 'roomTimeLimit' | 'roomStatus'
+    | 'playerId' | 'isCreator' | 'roomSeats' | 'reservedSeats' | 'roomTimeLimit'
     | 'storedSession'
     | 'llmEnabled' | 'effectiveLlmEnabled' | 'llmAvailable' | 'autoPlay'
     | 'roomTableThemeName') => computed<T>({
@@ -58,8 +59,7 @@ export function useWsOnline(options: Options) {
   /** 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。 */
   const reservedSeats = proxyRef<Array<LlmSeatRequest>>('reservedSeats')
   const roomTimeLimit = proxyRef<number>('roomTimeLimit')
-  /** 服务端房间状态：blood flow 暂离时房间面板据此显示「本场进行中 · 回到牌桌」。 */
-  const roomStatus = proxyRef<'lobby' | 'playing' | 'finished' | 'error' | 'closed' | string>('roomStatus')
+  const roomStatus = computed(() => activeRemote.value.roomStatus.value)
   const storedSession = proxyRef<StoredSession | null>('storedSession')
   const llmEnabled = proxyRef<boolean>('llmEnabled')
   const effectiveLlmEnabled = proxyRef<boolean>('effectiveLlmEnabled')
@@ -134,14 +134,17 @@ export function useWsOnline(options: Options) {
     }
   })
 
-  // 联机接口返回 401 AUTH_REQUIRED 时提示重新登录（不跳转、不弹窗）。
+  // 401 到达时，账号卡片可能还持有过期前的登录状态。
+  let lastAuthCheck = -Infinity
   function handleAuthRequired() {
-    if (!wakuAuth.authenticated.value) {
-      wakuAuth.error.value = '登录已过期，请重新登录 WakuDemo 账号'
-    }
+    wakuAuth.error.value = '登录已过期，请重新登录 WakuDemo 账号'
+    const now = Date.now()
+    if (now - lastAuthCheck < 5000) return
+    lastAuthCheck = now
+    void wakuAuth.refresh()
   }
-  onMounted(() => window.addEventListener('wakudemo-auth-required', handleAuthRequired))
-  onBeforeUnmount(() => window.removeEventListener('wakudemo-auth-required', handleAuthRequired))
+  onMounted(() => window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired))
+  onBeforeUnmount(() => window.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired))
 
   const lobbyController = createRemoteLobbyController({
     gameMode,

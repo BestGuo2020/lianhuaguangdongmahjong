@@ -12,6 +12,7 @@ import type { MatchType } from '../../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../../game/core/rules/ruleVariants'
 import type { LlmProviderInfo, LlmSeatRequest, RoomMeta, RoomSeatState, ServerLlmStyle } from '../../../game/online/ws/api/roomApi'
 import type { StoredSession } from '../../../game/online/ws/session/remoteSessionStore'
+import type { RoomPanelStatus } from '../../../game/online/ws/session/roomPanelSync'
 import AnimeCharacterPicker from '../../llm/AnimeCharacterPicker.vue'
 import LobbyThemeVisual from '../LobbyThemeVisual.vue'
 import type { CharacterId } from '../../../game/llm/animeCharacters'
@@ -32,8 +33,7 @@ interface Props {
   sessionStatus: string
   sessionError: string
   roomTimeLimit: number | null
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌。 */
-  roomStatus?: string
+  roomStatus?: RoomPanelStatus
   roomSeats: Array<RoomSeatState | null>
   /** 房主预留的空位（大模型专属，真人不可加入）；未列入的空位「自动选择」= 真人可占。 */
   reservedSeats: Array<LlmSeatRequest>

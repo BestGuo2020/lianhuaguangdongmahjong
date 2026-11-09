@@ -1075,6 +1075,7 @@ describe('useRemoteGame 房间会话（Phase 8）', () => {
 
   it('对局结束返回大厅：保留座位与连接回房间面板，不释放座位', async () => {
     const game = await connectGame()
+    game.roomStatus.value = 'playing'
     mockSocket!.receive({ kind: 'match_finished', roomId: 'ABC123', mode: 'east', finalScores: [] })
     expect(game.phase.value).toBe('finished')
     expect(game.matchFinished.value).toBe(true)
@@ -1083,6 +1084,7 @@ describe('useRemoteGame 房间会话（Phase 8）', () => {
 
     // 回房间面板：清除对局展示，但会话/座位/连接全部保留
     expect(game.phase.value).toBe('lobby')
+    expect(game.roomStatus.value).toBe('finished')
     expect(game.matchFinished.value).toBe(false)
     expect(game.players.length).toBe(0)
     expect(game.roomId.value).toBe('ABC123')

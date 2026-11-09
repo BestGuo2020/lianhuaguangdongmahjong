@@ -185,6 +185,7 @@ export function createRemoteMatchLifecycle({
     state.wallHeadDrawn.value = 0
     state.wallCount.value = 0
     state.players.splice(0, state.players.length)
+    state.roomStatus.value = 'finished'
     state.phase.value = 'lobby'
     void refreshRoom()
   }

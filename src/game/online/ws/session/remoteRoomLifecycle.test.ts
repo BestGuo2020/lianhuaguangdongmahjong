@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteRoomLifecycle, type RemoteRoomApi, type RemoteRoomState } from './remoteRoomLifecycle'
-import type { ServerLlmStyle } from '../api/roomApi'
+import type { RoomInfo, ServerLlmStyle } from '../api/roomApi'
 import type { StoredSession } from './remoteSessionStore'
 
 function createHarness(savedSession: StoredSession | null = null) {
@@ -123,6 +123,27 @@ describe('remoteRoomLifecycle', () => {
     harness.state.phase.value = 'playing'
     await harness.lifecycle.refreshRoom()
     expect(harness.api.getRoom).toHaveBeenCalledTimes(1)
+  })
+
+  it('终局后丢弃开局前的回读，并识别服务端终局标记', async () => {
+    const { state, api, lifecycle } = createHarness()
+    const room = await api.getRoom('ABC123')
+    state.roomId.value = room.roomId
+    let resolveOldRoom!: (info: RoomInfo) => void
+    vi.mocked(api.getRoom).mockReturnValueOnce(new Promise(resolve => { resolveOldRoom = resolve }))
+    const oldRefresh = lifecycle.refreshRoom()
+
+    state.phase.value = 'playing'
+    state.phase.value = 'finished'
+    state.roomStatus.value = 'finished'
+    state.phase.value = 'lobby'
+    resolveOldRoom({ ...room, status: 'playing' })
+    await oldRefresh
+    expect(state.roomStatus.value).toBe('finished')
+
+    vi.mocked(api.getRoom).mockResolvedValueOnce({ ...room, status: 'playing', matchFinished: true })
+    await lifecycle.refreshRoom()
+    expect(state.roomStatus.value).toBe('finished')
   })
 
   it('forwards per-seat provider ids to startRoom', async () => {

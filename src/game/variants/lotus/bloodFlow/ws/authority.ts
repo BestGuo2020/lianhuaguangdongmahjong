@@ -157,7 +157,8 @@ export function createBloodFlowWsAuthority(options: BloodFlowWsAuthorityOptions)
       const dealer = Number.isInteger(payload.dealer) && SEATS.includes(Number(payload.dealer) as Seat)
         ? Number(payload.dealer) as Seat : 0
       options.onView(payload.view, {
-        round, mode, dealer, matchFinished: payload.matchFinished === true,
+        round, mode, dealer,
+        ...(typeof payload.matchFinished === 'boolean' ? { matchFinished: payload.matchFinished } : {}),
         ...(isOpening(payload.opening) ? { opening: payload.opening } : {}),
         ...(isContinuation(payload.continuation) ? { continuation: payload.continuation } : {}),
       })

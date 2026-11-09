@@ -879,7 +879,7 @@ function changeTableTheme(theme: TableThemeName) {
       />
 
       <SettlementOverlay
-        v-if="!capabilities.bloodFlow"
+        v-if="!capabilities.bloodFlow || (usesWsBackend && gameMode === 'remote' && matchFinished && !result)"
         v-model:result-visible="resultVisible"
         :result="result"
         :match-finished="matchFinished"

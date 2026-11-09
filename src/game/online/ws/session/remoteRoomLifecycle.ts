@@ -17,6 +17,7 @@ import {
   type ServerLlmStyle,
 } from '../api/roomApi'
 import { generateGuestId, type StoredSession } from './remoteSessionStore'
+import { createRoomPanelRefresh, type RoomPanelStatus } from './roomPanelSync'
 
 export type RemoteSessionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'readying' | 'playing'
 
@@ -34,8 +35,7 @@ export interface RemoteRoomState {
   /** 房主预留的空位（大模型专属，真人不可加入）；其余空位「自动选择」= 真人可占。 */
   reservedSeats: Ref<Array<LlmSeatRequest>>
   roomTimeLimit: Ref<number | null>
-  /** 服务端房间状态：playing + 本家在房间面板 ⇒ 本家已暂离牌桌（可「回到牌桌」）。 */
-  roomStatus: Ref<'lobby' | 'playing' | 'finished' | 'error' | 'closed'>
+  roomStatus: Ref<RoomPanelStatus>
   /** 房主请求的空座 AI 补位是否使用大模型（llmEnabled） */
   llmEnabled: Ref<boolean>
   /** 实际生效（请求 && 服务端配置齐全） */
@@ -140,10 +140,10 @@ export function createRemoteRoomLifecycle({
     pollTimer = null
   }
 
-  async function refreshRoom() {
-    if (!state.roomId.value || state.phase.value !== 'lobby') return
-    try {
-      const info = await api.getRoom(state.roomId.value)
+  const refreshRoom = createRoomPanelRefresh({
+    roomId: state.roomId, phase: state.phase, roomStatus: state.roomStatus,
+    getRoom: (roomId) => api.getRoom(roomId),
+    applyRoom(info) {
       state.matchType.value = info.mode
       state.rulesetId.value = info.rulesetId ?? 'lotus-classic'
       state.roomSeats.value = info.seats ?? []
@@ -152,14 +152,17 @@ export function createRemoteRoomLifecycle({
       state.isCreator.value = state.creatorSeat.value != null
         && state.mySeat.value === state.creatorSeat.value
       state.roomTimeLimit.value = info.timeLimitSeconds ?? null
-      state.roomStatus.value = info.status
       state.llmEnabled.value = info.llmEnabled === true
       state.effectiveLlmEnabled.value = info.effectiveLlmEnabled === true
       state.llmAvailable.value = info.llmAvailable === true
-    } catch {
-      // 轮询失败等待下一次刷新。
-    }
-  }
+    },
+    stopPolling,
+    onRoomGone() {
+      clearSession()
+      resetGame()
+      state.sessionError.value = '房间已解散'
+    },
+  })
 
   function startPolling() {
     stopPolling()

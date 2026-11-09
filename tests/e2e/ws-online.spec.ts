@@ -19,6 +19,19 @@ async function enterLobby(page: Page, nickname: string, baseURL: string) {
   await page.getByPlaceholder('输入昵称').fill(nickname)
 }
 
+async function createLobbyRoom(page: Page, ruleIndex: number) {
+  await page.getByRole('button', { name: '创建房间', exact: true }).click()
+  if (ruleIndex > 0) {
+    await page.locator('.lobby-dialog .game-settings button').filter({ hasText: '玩法' }).click()
+    await page.locator('.rule-picker-options button').nth(ruleIndex).click()
+    await page.getByRole('button', { name: '确定', exact: true }).click()
+  }
+  await page.getByRole('button', { name: '确认创建', exact: true }).click()
+  const roomCode = page.locator('.room-code strong')
+  await expect(roomCode).toBeVisible({ timeout: 30_000 })
+  return (await roomCode.innerText()).trim()
+}
+
 test('大厅显示当前玩法，并分别查询各玩法剩余房间', async ({ page, baseURL }) => {
   await enterLobby(page, '玩法容量验收', baseURL!)
   // 只占用经典玩法的名额，用真实后端确认其他玩法的剩余容量独立计算。
@@ -61,7 +74,7 @@ test('大厅显示当前玩法，并分别查询各玩法剩余房间', async ({
   }
 })
 
-for (const rule of ['莲花广麻', '莲花麻将', '莲花麻将·血流']) {
+for (const [ruleIndex, rule] of ['莲花广麻', '莲花麻将', '莲花麻将·血流'].entries()) {
   test(`${rule}：原后端建房、两端开局、刷新后凭会话恢复`, async ({ browser, baseURL }) => {
     const hostContext = await browser.newContext()
     const guestContext = await browser.newContext()
@@ -75,15 +88,7 @@ for (const rule of ['莲花广麻', '莲花麻将', '莲花麻将·血流']) {
     }
     try {
       await enterLobby(host, 'WS房主', baseURL!)
-      await host.getByRole('button', { name: '创建房间', exact: true }).click()
-      if (rule !== '莲花广麻') {
-        await host.locator('.lobby-dialog .game-settings button').filter({ hasText: '玩法' }).click()
-        await host.locator('.rule-picker-options button').nth(rule === '莲花麻将' ? 1 : 2).click()
-        await host.getByRole('button', { name: '确定', exact: true }).click()
-      }
-      await host.getByRole('button', { name: '确认创建', exact: true }).click()
-      await expect(host.locator('.room-code strong')).toBeVisible({ timeout: 30_000 })
-      const code = (await host.locator('.room-code strong').innerText()).trim()
+      const code = await createLobbyRoom(host, ruleIndex)
       await enterLobby(guest, 'WS客人', baseURL!)
       if (rule === '莲花广麻') {
         // 本机上次选了血流也应按目标房间元数据切回经典 WS 端口。
@@ -122,3 +127,66 @@ for (const rule of ['莲花广麻', '莲花麻将', '莲花麻将·血流']) {
     }
   })
 }
+
+for (const [ruleIndex, rule] of [[0, '莲花广麻'], [2, '莲花麻将·血流']] as const) {
+  test(`${rule}：终局返回房间，房间回读失败也不会显示暂离`, async ({ page, baseURL }) => {
+    await enterLobby(page, '终局验收', baseURL!)
+    const code = await createLobbyRoom(page, ruleIndex)
+    const savedSession = await page.evaluate(() => localStorage.getItem('lgm_session'))
+    const { rejoinCode } = JSON.parse(savedSession!)
+    const finish = () => page.request.post(`/api/__e2e__/rooms/${code}/finish`)
+    const panel = page.locator('.room-panel')
+    const start = panel.getByRole('button', { name: /^开始对局/ })
+    try {
+      await panel.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
+      await start.click()
+      await expect.poll(() => page.locator('.hand-tile-slot').count(), { timeout: 45_000 }).toBeGreaterThan(0)
+      await expect(page.locator('.game-table-hud')).toHaveAttribute('data-opening-stage', '', { timeout: 45_000 })
+
+      let syncUnavailable = true
+      await page.route(`**/api/rooms/${code}`, route => {
+        if (syncUnavailable && route.request().method() === 'GET') return route.fulfill({ status: 503 })
+        return route.continue()
+      })
+      expect((await finish()).ok()).toBe(true)
+      await expect(page.getByRole('heading', { name: '最终排名' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '退出本场', exact: true })).toHaveCount(0)
+      await page.getByRole('button', { name: '返回大厅', exact: true }).click()
+      await expect(panel).toContainText('房间状态同步失败')
+      await expect(panel).not.toContainText(/你在暂离|回到牌桌/)
+      await expect(start).toBeDisabled()
+      expect(await page.evaluate(() => localStorage.getItem('lgm_session'))).toBe(savedSession)
+
+      syncUnavailable = false
+      await expect(panel).toContainText('本场已结束')
+      await expect(panel).not.toContainText(/你在暂离|回到牌桌/)
+      await expect(start).toBeEnabled()
+      await start.click()
+      await expect(page.locator('.game-table-hud')).toBeVisible({ timeout: 30_000 })
+    } finally {
+      await finish()
+      await page.request.delete(`/api/rooms/${code}`, { data: { seat: 0, rejoinCode } })
+    }
+  })
+}
+
+test('房间登录过期后隐藏暂离入口，并保留原座位会话', async ({ page, baseURL }) => {
+  await enterLobby(page, '过期验收', baseURL!)
+  const code = await createLobbyRoom(page, 0)
+  const savedSession = await page.evaluate(() => localStorage.getItem('lgm_session'))
+  const { rejoinCode } = JSON.parse(savedSession!)
+  const panel = page.locator('.room-panel')
+  const roomInfo = await (await page.request.get(`/api/rooms/${code}`)).json()
+  try {
+    await page.route(`**/api/rooms/${code}`, route => route.fulfill({ json: { ...roomInfo, status: 'playing' } }))
+    await expect(panel).toContainText('你在暂离')
+    await page.unroute(`**/api/rooms/${code}`)
+    await page.context().clearCookies()
+    await expect(panel).toContainText('登录已过期')
+    await expect(panel).not.toContainText(/你在暂离|回到牌桌/)
+    await expect(page.locator('[data-wakudemo-account]').getByRole('button', { name: '登录', exact: true })).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('lgm_session'))).toBe(savedSession)
+  } finally {
+    await page.request.delete(`/api/rooms/${code}`, { data: { seat: 0, rejoinCode } })
+  }
+})
