@@ -491,7 +491,7 @@ async function failWithEvidence(
 const fatalOnlineSignal = /先释放旧连接再重进|自动重进失败|尝试重新加入房间|房主连接中断|恢复牌局|已验证重进握手|大厅验证的新 peer 已恢复原座位|丢弃.*(?:旧|权威|代次)|旧权威|AI 代打|AI 接管|非法状态快照|\[wall-regress\]/i
 
 async function clickContinueIfAvailable(page: Page) {
-  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
   if (!await button.isVisible().catch(() => false)) return false
   if (!await button.isEnabled().catch(() => false)) return false
   await button.evaluate((element: HTMLButtonElement) => element.click()).catch(() => {})
@@ -604,7 +604,7 @@ async function runHanchan(options: {
       page.locator('.round-settlement').isVisible().catch(() => false)
     )))
     const continueVisible = await Promise.all(pages.map((page) => (
-      page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+      page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
         .isVisible().catch(() => false)
     )))
     for (let index = 0; index < settlementVisible.length; index += 1) {

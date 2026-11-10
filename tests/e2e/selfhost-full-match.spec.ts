@@ -157,9 +157,8 @@ test('四端打完东风场东1局→东4局并进入最终排名', async ({ bro
       for (const marker of ['东1局', '东2局', '东3局', '东4局']) {
         if (text.includes(marker) && !observed.includes(marker)) observed.push(marker)
       }
-      // 已出现最终排名（东4局打完）或看到东4局后仍无最终排名时继续等。
-      const finalVisible = await host.locator('.final-backdrop').count().catch(() => 0)
-      if (observed.includes('东4局') && finalVisible > 0) break
+      const finished = await host.locator('.game-table-hud[data-match-finished="1"]').count().catch(() => 0)
+      if (observed.includes('东4局') && finished > 0) break
       // 每 60s 打一条进度（诊断对局是否推进）；前 3 分钟每秒采集房主回合诊断。
       if (Date.now() - lastLogAt > 60000) {
         lastLogAt = Date.now()
@@ -208,6 +207,7 @@ test('四端打完东风场东1局→东4局并进入最终排名', async ({ bro
 
     // ── 四端都进入最终排名页 ──
     for (let i = 0; i < pages.length; i += 1) {
+      await pages[i].getByRole('button', { name: '查看最终排名', exact: true }).click({ timeout: 300_000 })
       await expect
         .poll(() => pages[i].locator('.final-backdrop').count(), {
           timeout: 300000,

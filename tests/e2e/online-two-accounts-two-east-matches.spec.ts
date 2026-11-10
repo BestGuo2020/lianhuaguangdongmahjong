@@ -758,7 +758,7 @@ async function installHostAutoPlayer(page: Page) {
       // 2026-09-14：“托管”＝把本座位交给引擎代打（blood_flow_auto）。验收里两个账号是脚本驱动的
       // 真人座位，没有这一步就只能靠读秒代打——每个回合 12 秒，一局必然顶穿“每局 5 分钟”的预算。
       // 它是**开关**（aria-pressed=autoPlay）：只在未开启时点一次，否则每 120ms 会把它来回切回去。
-      const trusteeship = [...document.querySelectorAll<HTMLButtonElement>('.turn-action-row button.autoplay-action')]
+      const trusteeship = [...document.querySelectorAll<HTMLButtonElement>('button.autoplay-action')]
         .find(button => button.getAttribute('aria-pressed') !== 'true' && !button.disabled)
       if (trusteeship) {
         state.__onlineAutoPlayerEvents?.push({ at: Date.now(), type: 'trusteeship-click' })
@@ -1625,7 +1625,7 @@ function validateOpeningCycles(history: OpeningSample[], side: string, matchInde
 }
 
 async function clickContinueIfAvailable(page: Page) {
-  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
   if (!await button.isVisible().catch(() => false)) return false
   if (!await button.isEnabled().catch(() => false)) return false
   await button.evaluate((element: HTMLButtonElement) => element.click()).catch(() => {})
@@ -1974,7 +1974,7 @@ async function runEastMatch(options: {
       page.locator('.round-settlement').isVisible().catch(() => false)
     )))
     const continueVisible = await Promise.all([host, client].map((page) => (
-      page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+      page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
         .isVisible().catch(() => false)
     )))
     for (let index = 0; index < settlementVisible.length; index += 1) {
@@ -3530,6 +3530,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
 
     expect(observed[0], '房主应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
     expect(observed[1], '客人应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
+    await Promise.all(pages.map(page => page.getByRole('button', { name: '查看最终排名', exact: true }).click({ timeout: 60_000 })))
     await Promise.all(pages.map((page) => expect(
       page.locator('.bf-settlement[data-settlement-view="final"]')).toBeVisible({ timeout: 60_000 })))
     const standings = await Promise.all(pages.map((page) => readBloodFlowScores(page, '.bf-final-ranking')))

@@ -9,6 +9,7 @@ for(const theme of ['jade','rosewood','happyMahjong','llm','llmAnime'])test(`${t
   const enabled=['llm','llmAnime'].includes(theme)
   await expect(page.locator('.llm-bubble')).toHaveCount(enabled?4:0)
   await page.evaluate(()=>{(window as any).__settleBloodFlowRanking();(window as any).__setBloodFlowBubbles('round')})
+  await page.getByRole('button',{name:'查看最终排名',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'血流最终排名'})
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.bf-result-reaction')).toHaveCount(enabled?4:0)

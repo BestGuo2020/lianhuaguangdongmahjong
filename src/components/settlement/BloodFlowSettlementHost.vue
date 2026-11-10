@@ -21,8 +21,7 @@ const pending=computed(()=>requested.value||props.state.continuation?.ready)
  *  单机没有座位/重进码/托管概念，「退出本场」与「返回大厅」是同一件事 → 只留后者，且文案按模式区分。 */
 const online = computed(() => props.online !== false)
 const presentationPending=computed(()=>Boolean(props.presentationBusy)||Boolean(props.state.roundSpeechBusy))
-const summary=()=>props.matchFinished?'final' as const:'round' as const
-function showSummary() { if(!result.value)return; view.value=summary(); filterSeat.value=null; restored.value=opened.has(result.value.roundId); opened.add(result.value.roundId) }
+function showSummary() { if(!result.value)return; view.value='round'; filterSeat.value=null; restored.value=opened.has(result.value.roundId); opened.add(result.value.roundId) }
 function showDetails(seat:number|null=null) { detailsReturn.value=view.value==='table'?'table':view.value==='final'?'final':'round'; filterSeat.value=seat; view.value='details'; restored.value=true }
 function showTable() { view.value='table' }
 function next() { if(pending.value||!result.value||props.matchFinished)return; requested.value=true; emit('nextRound') }
@@ -68,19 +67,19 @@ defineExpose({showSummary,showDetails,showTable})
         <BloodFlowFinalRanking v-else-if="view==='final'&&result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :bubbles="bubbles" />
         <BloodFlowRoundSummary v-else-if="result" :result="result" :players="players" :local-seat="localSeat" :theme-name="themeName" :round-label="roundLabel" :bubbles="bubbles" />
       </div>
-      <p v-if="pending" class="bf-ready-status" role="status">{{ state.continuation?.ready ? `已准备，等待其他玩家（${state.continuation.readySeats.length}/${state.continuation.requiredSeats.length}）` : state.continuation ? '正在确认准备状态…' : '正在进入下一局…' }}</p>
+      <p v-if="pending&&!matchFinished" class="bf-ready-status" role="status">{{ state.continuation?.ready ? `已准备，等待其他玩家（${state.continuation.readySeats.length}/${state.continuation.requiredSeats.length}）` : state.continuation ? '正在确认准备状态…' : '正在进入下一局…' }}</p>
       <p v-if="state.status==='interrupted'&&online" class="bf-ready-status" role="status">连接已中断，保留本局结果。恢复后可重新准备。</p>
       <footer>
         <button v-if="view==='details'&&detailsReturn!=='table'&&result" type="button" @click="view=detailsReturn">返回结算</button>
         <button type="button" @click="showTable">{{ view==='details'?'返回牌桌':'查看牌桌' }}</button>
         <button v-if="view!=='details'" type="button" @click="showDetails()">查看流水</button>
-        <button v-if="view==='final'" type="button" @click="view='round'">最后一局结果</button>
-        <button v-if="view==='round'&&matchFinished" type="button" @click="view='final'">最终排名</button>
+        <button v-if="view==='final'" type="button" @click="showSummary">查看本局结算</button>
+        <button v-if="view==='round'&&matchFinished" type="button" class="bf-primary" @click="view='final'">查看最终排名</button>
         <button v-if="result&&!matchFinished" type="button" class="bf-primary" :disabled="pending" @click="next">{{ pending?'已提交准备':'继续下一局'+(countdown>0?' ('+countdown+')':'') }}</button>
-        <button v-if="requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
+        <button v-if="!matchFinished&&requested&&state.continuation&&!state.continuation.ready" type="button" @click="retry">重试准备</button>
         <!-- 返回大厅：联机=暂离（不退出房间、保留座位与重进码，本场由 AI 代打，可随时「回到牌桌」）；
              单机=结束本场对局回大厅（单机没有座位/重进码，两者本就是同一件事，也没有房间可回）。 -->
-        <button v-if="result" type="button" :title="!online?'结束本场对局并返回大厅':matchFinished?'返回大厅，保留房间、座位与准备态':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">返回大厅</button>
+        <button v-if="result&&(!matchFinished||view==='final')" type="button" :title="!online?'结束本场对局并返回大厅':matchFinished?'返回大厅，保留房间、座位与准备态':'暂离牌桌：本场由 AI 代打，可随时回到牌桌'" @click="$emit('returnToLobby')">返回大厅</button>
         <!-- 退出本场：仅联机有意义（回主大厅，座位保留可重进原座位），需二次确认；单机隐藏。 -->
         <button v-if="result&&!matchFinished&&online" type="button" class="bf-quiet" @click="confirmLeaveMatch">退出本场</button>
       </footer>

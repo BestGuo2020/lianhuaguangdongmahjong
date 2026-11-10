@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, shallow
 import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import TableActionCue from './TableActionCue.vue'
+import TableControlIcon from './TableControlIcon.vue'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { tileName } from '../../game/core/rules/tiles'
@@ -192,7 +193,9 @@ function retryTableLoad() {
   tableLoadRetry.manualRetry()
 }
 
-const imageBase = `${import.meta.env.BASE_URL}img/`
+const userIdentity = ref<HTMLElement | null>(null)
+const handRack = ref<HTMLElement | null>(null)
+const identityBesideHand = ref(false)
 const seatPosition = ['bottom', 'right', 'top', 'left']
 const actionCueLabParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null
 const bubbleLabEnabled = actionCueLabParams?.get('bubbleLab') === '1'
@@ -339,7 +342,7 @@ const bloodFlowWaitColumns = computed(() => {
 const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
   && !['lobby', 'win-effect', 'revealing', 'settled', 'finished'].includes(props.phase))
 // 操作按钮行与倒计时同行：任一方可见时整行出现。
-const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn || props.userCurrentWaits) || showAutoPlay.value)
+const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn || props.userCurrentWaits))
 const tingDiscardTiles = computed(() => new Set(props.userTingOptions.map((option) => option.discard)))
 function isTingDiscard(index: number, tile: TileType) {
   return props.isUserTurn && tingDiscardTiles.value.has(tile)
@@ -399,6 +402,23 @@ const userDrawnIndex = computed(() => {
   if (rawDrawn >= 0 && rawDrawn < hand.length) return rawDrawn
   return hand.length > baseHand ? hand.length - 1 : -1
 })
+
+watch([userIdentity, handRack], ([identity, rack], _, onCleanup) => {
+  if (!identity || !rack) return
+  const measure = () => {
+    const firstTile = rack.firstElementChild
+    identityBesideHand.value = Boolean(firstTile
+      && identity.getBoundingClientRect().right + 8 <= firstTile.getBoundingClientRect().left)
+  }
+  const observer = new ResizeObserver(measure)
+  observer.observe(identity)
+  observer.observe(rack)
+  const stop = watch([() => displayedUserHand.value.length, userDrawnIndex], measure, { immediate: true, flush: 'post' })
+  onCleanup(() => {
+    observer.disconnect()
+    stop()
+  })
+}, { flush: 'post' })
 
 watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(value) })
 watch(() => props.isUserTurn, (value) => { if (!value) waitsOpen.value = false })
@@ -471,7 +491,7 @@ function handleTileActivation(index: number, event?: PointerEvent) {
 function clearMobileSelection(event: PointerEvent) {
   if (usesFinePointer() || props.selectedIndex < 0 || event.pointerType === 'mouse') return
   const target = event.target as HTMLElement
-  if (target.closest('.hand-tile-slot, .waiting-tip, .turn-action-row')) return
+  if (target.closest('.hand-tile-slot, .waiting-tip, .table-controls')) return
   emit('clearSelection')
   waitsOpen.value = false
   lastTouchTap = { index: -1, time: 0 }
@@ -643,7 +663,7 @@ function onAvatarError(entry: GamePlayer) {
     </Transition>
 
     <section class="user-area">
-      <div class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0, 'nickname-open': userNicknameOpen }" :style="userAnimeStyle">
+      <div ref="userIdentity" class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0, 'nickname-open': userNicknameOpen, 'beside-hand': identityBesideHand }" :style="userAnimeStyle">
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
         <button type="button" class="avatar-button"
           :aria-label="`查看${user.name}的昵称`" :aria-expanded="userNicknameOpen"
@@ -676,7 +696,7 @@ function onAvatarError(entry: GamePlayer) {
           :data-score-direction="scoreDirectionFor(0)"
         >{{ scoreDeltaFor(0) > 0 ? '+' : '' }}{{ scoreDeltaFor(0) }}</strong>
       </Transition>
-      <div class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
+      <div ref="handRack" class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div
           v-for="(tile, index) in displayedUserHand" :key="`${tile}-${index}`" class="hand-tile-slot"
           :class="{ drawn: userDrawnIndex === index, 'ting-discard': isTingDiscard(index, tile), 'reform-discard': isReformDiscard(index, tile) }"
@@ -692,52 +712,54 @@ function onAvatarError(entry: GamePlayer) {
       </div>
     </section>
 
-    <div v-if="showTurnRow" class="turn-action-row" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
-      <div v-if="bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
-        <b>改张</b><span>打出</span><b class="reform-tile">{{ tileName(bloodFlow.reformHint.discard) }}</b>
-        <span v-if="bloodFlow.reformHint.reason === 'any-wait'">→ 癞子单吊·任意听（此后每巡可胡）</span>
-        <span v-else>→ 听口更宽、收益更高</span>
+    <div v-if="showTurnRow || showAutoPlay" class="table-controls" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+      <div v-if="showTurnRow" class="turn-action-row">
+        <div v-if="bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
+          <b>改张</b><span>打出</span><b class="reform-tile">{{ tileName(bloodFlow.reformHint.discard) }}</b>
+          <span v-if="bloodFlow.reformHint.reason === 'any-wait'">→ 癞子单吊·任意听（此后每巡可胡）</span>
+          <span v-else>→ 听口更宽、收益更高</span>
+        </div>
+        <div class="action-bar">
+          <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
+            <TableControlIcon name="waits" />
+          </button>
+          <template v-if="actionPrompt?.type === 'claim'">
+            <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+            <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          </template>
+          <template v-else-if="actionPrompt?.type === 'response'">
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+            <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          </template>
+          <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
+            <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          </template>
+          <template v-else-if="actionPrompt?.type === 'chi'">
+            <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+          </template>
+          <template v-else>
+            <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
+            <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
+            <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+          </template>
+        </div>
+        <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
       </div>
-      <div v-if="actionPrompt || isUserTurn || userCurrentWaits" class="action-bar">
-        <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" :class="{ active: waitsOpen }" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
-          <template v-if="themeName === 'llmAnime'"><b>听</b><span>牌</span></template>
-          <img v-else class="action-icon" :src="`${imageBase}tips.png`" alt="" />
-        </button>
-        <template v-if="actionPrompt?.type === 'claim'">
-          <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
-        </template>
-        <template v-else-if="actionPrompt?.type === 'response'">
-          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-          <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-          <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
-        </template>
-        <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
-          <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
-        </template>
-        <template v-else-if="actionPrompt?.type === 'chi'">
-          <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-          <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
-        </template>
-        <template v-else>
-          <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
-          <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
-          <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-        </template>
+      <div v-if="showAutoPlay" class="table-persistent-actions">
+        <button type="button" class="action autoplay-action" data-action-role="secondary"
+          :aria-pressed="Boolean(autoPlay)" :aria-label="autoPlay ? '取消机器人托管，恢复手动操作' : '开启机器人托管，自动出牌与过牌'"
+          :title="autoPlay ? '机器人托管中：点击恢复手动' : '点击机器人托管：到您的回合自动出牌/过牌'"
+          @click="$emit('toggleAutoPlay')"
+        ><TableControlIcon name="autoplay" /></button>
       </div>
-      <button
-        v-if="showAutoPlay" class="action autoplay-action" :class="{ active: autoPlay }" data-action-role="secondary"
-        :aria-pressed="autoPlay" :aria-label="autoPlay ? '取消机器人托管，恢复手动操作' : '开启机器人托管，自动出牌与过牌'"
-        :title="autoPlay ? '机器人托管中：点击恢复手动' : '点击机器人托管：到您的回合自动出牌/过牌'"
-        @click="$emit('toggleAutoPlay')"
-      ><b>托管</b></button>
-      <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
       <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ '--bf-wait-cols': bloodFlowWaitColumns, gridTemplateColumns: `repeat(${bloodFlowWaitColumns}, minmax(0, 1fr))` }">
@@ -783,6 +805,16 @@ function onAvatarError(entry: GamePlayer) {
 @container (max-width: 900px) or (max-height: 500px) {
   .blood-flow-reform-tip { font-size: 10px; padding: 3px 7px; max-width: 62vw; }
   .reform-badge { top: -13px; min-width: 14px; font-size: 9px; line-height: 13px; }
+}
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (orientation: landscape) and (max-width: 1024px) and (max-height: 460px) {
+  .turn-action-row { position: relative; }
+  .blood-flow-reform-tip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    width: max-content;
+  }
 }
 /* .waiting-tip 用 left: 50% + translateX(-50%) 居中，绝对定位的收缩宽度上限因此是「容器的一半」：
    9 张听牌会被这个上限挤扁（30px 的牌塞进 20px 的列）。血流面板改为左右都为 0 的自动外边距居中，

@@ -26,6 +26,7 @@ import { lotusLegacyAnalysisConfig } from './game/replay/analysis/lotusLegacyCon
 import { readLlmSettings } from './game/llm/config'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
+import { advanceMatchState } from './game/core/local/matchProgress'
 import { useVibeRemoteGame } from './game/online/useVibeRemoteGame'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
@@ -641,8 +642,17 @@ const humanSeats = computed(() => (
 ))
 
 watch(result, (value) => {
-  resultVisible.value = Boolean(value)
+  // 联机场末消息可以清除 result，末局结算仍由界面保留。
+  if (value || !matchFinished.value) resultVisible.value = Boolean(value)
 })
+
+const lastRound = computed(() => Boolean(result.value && !capabilities.value.bloodFlow && advanceMatchState({
+  round: round.value,
+  dealer: dealer.value,
+  honba: honba.value,
+  matchType: game.matchType.value,
+  result: result.value,
+}).finished))
 
 const continueCountdown = useRemoteContinueCountdown({
   gameMode,
@@ -879,10 +889,11 @@ function changeTableTheme(theme: TableThemeName) {
       />
 
       <SettlementOverlay
-        v-if="!capabilities.bloodFlow || (usesWsBackend && gameMode === 'remote' && matchFinished && !result)"
+        v-if="!capabilities.bloodFlow || (usesWsBackend && gameMode === 'remote' && matchFinished && !capabilities.bloodFlow.roundResult && !result)"
         v-model:result-visible="resultVisible"
         :result="result"
         :match-finished="matchFinished"
+        :last-round="lastRound"
         :dealer="dealer"
         :waiting-next-round="waitingNextRound"
         :game-mode="gameMode"

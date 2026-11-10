@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, useId, watch } from 'vue'
 import MahjongTile from '../MahjongTile.vue'
 import { isHorseForSeat } from '../../game/core/rules/tiles'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
@@ -21,6 +21,7 @@ interface Props {
   result: RoundResult | null
   resultVisible: boolean
   matchFinished: boolean
+  lastRound?: boolean
   dealer: number
   waitingNextRound: boolean
   gameMode: GameMode
@@ -36,7 +37,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-defineEmits<{
+const emit = defineEmits<{
   'update:resultVisible': [value: boolean]
   nextRound: []
   returnToLobby: []
@@ -83,20 +84,46 @@ const resultKindLab = ref(resultKindLabCandidate && resultKindLabValues.has(resu
   ? resultKindLabCandidate
   : null)
 const finalRankingLab = ref(import.meta.env.DEV && new URLSearchParams(window.location.search).has('finalRankLab'))
+const titleId = useId()
+const settledRound = shallowRef<{ result: RoundResult; dealer: number } | null>(null)
+const roundResult = computed(() => settledRound.value?.result ?? null)
+const settledDealer = computed(() => settledRound.value?.dealer ?? props.dealer)
+const roundKey = computed(() => {
+  const result = roundResult.value
+  return result?.presentationKey ?? (result?.roundLabel ? `${result.roundLabel}:${result.honba ?? 0}` : result)
+})
+const rankingRequested = ref(false)
+const showRanking = computed(() => finalRankingLab.value
+  || (props.matchFinished && (rankingRequested.value || !roundResult.value)))
+const isLastRound = computed(() => props.lastRound || props.matchFinished)
 const restoredSettlement = ref(false)
-let trackedResult: RoundResult | null = null
 let trackedResultWasOpened = false
 
-watch([() => props.result, () => props.resultVisible], ([result, visible]) => {
-  if (result !== trackedResult) {
-    trackedResult = result
+watch([() => props.result, () => props.matchFinished], ([result, finished]) => {
+  if (result && result !== settledRound.value?.result) {
+    // 场末引擎可能已轮庄，买马和庄家标记仍使用该局的座位。
+    settledRound.value = { result, dealer: finished ? settledDealer.value : props.dealer }
+  } else if (!result && !finished) {
+    settledRound.value = null
+  }
+}, { immediate: true })
+
+watch([roundKey, () => props.resultVisible, showRanking], ([key, visible, ranking], [previousKey]) => {
+  if (key !== previousKey) {
+    rankingRequested.value = false
     trackedResultWasOpened = false
     restoredSettlement.value = false
   }
-  if (!result || !visible) return
+  if (!key || !visible || ranking) return
   restoredSettlement.value = trackedResultWasOpened
   trackedResultWasOpened = true
 }, { immediate: true })
+
+function continueFromRound() {
+  if (isLastRound.value) rankingRequested.value = true
+  if (!props.matchFinished) emit('nextRound')
+}
+
 type ResultKindLabWindow = Window & {
   __setRoundResultKindLab?: (kind: RoundResultPresentationKind | null) => void
   __setFinalRankingLab?: (active: boolean) => void
@@ -117,7 +144,7 @@ onBeforeUnmount(() => {
   }
 })
 const resultPresentation = computed(() => {
-  if (!resultKindLab.value) return resolveRoundResultPresentation(props.result)
+  if (!resultKindLab.value) return resolveRoundResultPresentation(roundResult.value)
   return resultKindLab.value === 'draw'
     ? resolveRoundResultPresentation({ draw: true })
     : resolveRoundResultPresentation({ winType: resultKindLab.value })
@@ -125,16 +152,17 @@ const resultPresentation = computed(() => {
 
 /** 胡牌者相对庄家的座位：0=庄家(A) / 1=下家(B) / 2=对家(C) / 3=上家(D)。 */
 const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
-  const winner = props.result?.winnerIndex
+  const winner = roundResult.value?.winnerIndex
   if (winner == null) return 0
-  return ((winner - props.dealer + 4) % 4) as 0 | 1 | 2 | 3
+  return ((winner - settledDealer.value + 4) % 4) as 0 | 1 | 2 | 3
 })
 </script>
 
 <template>
-  <Transition name="modal">
+  <Transition name="modal" mode="out-in">
     <div
-      v-if="result && resultVisible && !matchFinished && !finalRankingLab"
+      v-if="roundResult && resultVisible && !showRanking"
+      key="round"
       class="result-backdrop round-settlement"
       :class="[`result-${resultPresentation.kind}`, { 'is-restored': restoredSettlement }]"
       :data-result-kind="resultPresentation.kind"
@@ -144,31 +172,34 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
     >
       <section
         class="result-card settlement-card"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
         :class="`result-${resultPresentation.kind}`"
         :data-result-kind="resultPresentation.kind"
         :data-result-strength="resultPresentation.strength"
         :data-result-source="resultKindLab ? 'lab' : 'game'"
       >
-        <h2>{{ result.roundLabel }} · {{ resultPresentation.label }}</h2>
-        <div v-if="resultPresentation.kind !== 'draw'" class="score-total"><span>总倍数</span><strong>×{{ result.totalMultiplier ?? result.multiplier }}</strong><em>+{{ result.totalWon ?? result.points * 3 }} 分</em></div>
-        <div v-if="resultPresentation.kind !== 'draw' && result.details?.length" class="score-details">
-          <span v-for="detail in result.details" :key="detail.label">
+        <h2 :id="titleId">{{ roundResult.roundLabel }} · {{ resultPresentation.label }}</h2>
+        <div v-if="resultPresentation.kind !== 'draw'" class="score-total"><span>总倍数</span><strong>×{{ roundResult.totalMultiplier ?? roundResult.multiplier }}</strong><em>+{{ roundResult.totalWon ?? (roundResult.points ?? 0) * 3 }} 分</em></div>
+        <div v-if="resultPresentation.kind !== 'draw' && roundResult.details?.length" class="score-details">
+          <span v-for="detail in roundResult.details" :key="detail.label">
             {{ detail.label }} <b>{{ detail.points != null ? `+${detail.points} 分` : `×${detail.multiplier}` }}</b>
           </span>
         </div>
-        <div v-if="resultPresentation.kind !== 'draw' && result.horses?.length" class="horse-area">
+        <div v-if="resultPresentation.kind !== 'draw' && roundResult.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in result.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
+            <MahjongTile v-for="(tile, index) in roundResult.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">
-          <article v-for="entry in result.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === result.winnerIndex }" :style="animeEntryStyle(entry)">
+          <article v-for="entry in roundResult.scoreChanges" :key="entry.playerIndex" :class="{ winner: entry.playerIndex === roundResult.winnerIndex }" :style="animeEntryStyle(entry)">
             <strong class="rank-number">{{ entry.rank }}<small>位</small></strong>
             <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
             <span class="player-line">
               {{ entry.name }}
-              <i v-if="entry.playerIndex === dealer" class="mark dealer">庄</i>
-              <i v-if="result.draw && result.tenpai?.includes(entry.playerIndex)" class="mark tenpai">听</i>
+              <i v-if="entry.playerIndex === settledDealer" class="mark dealer">庄</i>
+              <i v-if="roundResult.draw && roundResult.tenpai?.includes(entry.playerIndex)" class="mark tenpai">听</i>
             </span>
             <em :class="{ positive: entry.delta > 0, negative: entry.delta < 0 }">{{ entry.delta > 0 ? '+' : '' }}{{ entry.delta }}</em>
             <b>{{ entry.score }}</b>
@@ -177,8 +208,9 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         <div class="settlement-footer">
           <div class="result-actions">
             <button class="secondary" @click="$emit('update:resultVisible', false)">查看牌桌</button>
-            <button :disabled="waitingNextRound" @click="$emit('nextRound')">
-              <template v-if="waitingNextRound">等待其他玩家确定...</template>
+            <button :disabled="waitingNextRound && !matchFinished" @click="continueFromRound">
+              <template v-if="waitingNextRound && !matchFinished">等待其他玩家确定...</template>
+              <template v-else-if="isLastRound">查看最终排名</template>
               <template v-else>继续<template v-if="gameMode === 'remote' && continueCountdown > 0"> ({{ continueCountdown }})</template></template>
             </button>
           </div>
@@ -186,39 +218,42 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         </div>
       </section>
     </div>
-  </Transition>
-
-  <Transition name="final-board">
-    <div v-if="matchFinished || finalRankingLab" class="result-backdrop final-backdrop" data-result-kind="final" data-result-strength="climax">
-      <section class="final-board" data-result-kind="final" data-result-strength="climax" :data-result-source="finalRankingLab ? 'lab' : 'game'">
+    <div v-else-if="showRanking && (resultVisible || !roundResult || finalRankingLab)" key="ranking" class="result-backdrop final-backdrop" data-result-kind="final" data-result-strength="climax">
+      <section class="final-board" role="dialog" aria-modal="true" :aria-labelledby="titleId"
+        data-result-kind="final" data-result-strength="climax" :data-result-source="finalRankingLab ? 'lab' : 'game'">
         <p>{{ matchName }} · 对局结束</p>
-        <h2>最终排名</h2>
-        <div class="final-rankings">
-          <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]" :style="animeEntryStyle(entry)">
-            <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
-            <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
-            <div class="final-name">
-              <strong>{{ entry.name }}</strong>
-              <small v-if="entry.playerIndex === 0">你</small>
-              <button
-                v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
-                class="report-link" @click="$emit('report', entry.name)"
-              >举报</button>
-            </div>
-            <em>{{ entry.score }}</em>
-          </article>
+        <h2 :id="titleId">最终排名</h2>
+        <div class="final-ranking-panel">
+          <div class="final-rankings">
+            <article v-for="entry in standings" :key="entry.playerIndex" :class="[`rank-${entry.rank}`, { self: entry.playerIndex === 0 }]" :style="animeEntryStyle(entry)">
+              <div class="final-rank"><b>{{ entry.rank }}</b><span>位</span></div>
+              <img :src="displayedAvatar(entry)" :alt="`${entry.name}头像`" @error="onAvatarError(entry)" />
+              <div class="final-name">
+                <strong>{{ entry.name }}</strong>
+                <small v-if="entry.playerIndex === 0">你</small>
+                <button
+                  v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
+                  class="report-link" @click="$emit('report', entry.name)"
+                >举报</button>
+              </div>
+              <em>{{ entry.score }}</em>
+            </article>
+          </div>
         </div>
-        <div class="settlement-footer final-footer">
-          <button @click="$emit('returnToLobby')">返回大厅</button>
+        <div class="final-footer">
+          <button v-if="roundResult && !finalRankingLab" type="button" class="secondary" @click="rankingRequested = false">查看本局结算</button>
+          <button type="button" @click="$emit('returnToLobby')">返回大厅</button>
           <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
         </div>
       </section>
     </div>
   </Transition>
 
-  <button v-if="result && !resultVisible && !matchFinished" class="result-reopen" @click="$emit('update:resultVisible', true)">查看结算</button>
+  <button v-if="roundResult && !resultVisible && !finalRankingLab" class="result-reopen" @click="$emit('update:resultVisible', true)">
+    {{ showRanking ? '查看最终排名' : '查看结算' }}
+  </button>
   <button
-    v-if="gameMode === 'remote' && result && !resultVisible && !matchFinished"
+    v-if="gameMode === 'remote' && roundResult && !resultVisible && !isLastRound"
     class="result-reopen continue"
     :disabled="waitingNextRound"
     @click="$emit('nextRound')"

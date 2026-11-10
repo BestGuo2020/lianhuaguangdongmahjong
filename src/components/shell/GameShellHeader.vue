@@ -7,6 +7,7 @@ import { useAudioControls } from '../../game/core/presentation/useAudio'
 import { TABLE_THEME_OPTIONS, type TableThemeName } from '../table/three/tableTheme'
 import { saveTableThemePreference } from '../table/three/tableThemePreference'
 import { THEME_PRESENTATIONS } from '../../theme/themePresentation'
+import TableControlIcon from '../table/TableControlIcon.vue'
 
 interface Props {
   gameMode: GameMode
@@ -126,15 +127,16 @@ onBeforeUnmount(() => {
     <nav>
       <div ref="themePicker" class="theme-picker">
         <button
+          type="button"
           class="theme-toggle topbar-control"
-          :class="{ locked: themeLocked }"
           :disabled="themeLocked"
           aria-label="切换牌桌主题"
+          aria-haspopup="menu"
           :aria-expanded="themeMenuOpen"
           :title="themeLocked ? themeLockReason : '切换牌桌主题'"
           @click.stop="toggleThemeMenu"
         >
-          <span class="theme-toggle-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <TableControlIcon name="theme" />
         </button>
         <div v-if="themeMenuOpen" class="theme-menu" role="menu" aria-label="牌桌主题">
           <p>牌桌主题</p>
@@ -156,25 +158,22 @@ onBeforeUnmount(() => {
       </div>
       <button
         v-if="gameMode === 'remote' && phase !== 'lobby'"
+        type="button"
         class="quit-match topbar-control"
         aria-label="退出对局"
         title="退出对局"
         @click="emit('quit')"
-      ><img :src="`${imageBase}door-open.svg`" alt="" /></button>
+      ><TableControlIcon name="exit" /></button>
       <div ref="audioPicker" class="audio-picker">
         <button
-          class="icon-button topbar-control"
+          type="button"
+          class="topbar-control"
           aria-label="声音设置"
           :aria-expanded="audioMenuOpen"
           title="声音设置"
           @click.stop="toggleAudioMenu"
         >
-          <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 9h4l5-4v14l-5-4H4z" />
-            <path v-if="hasAudibleAudio" d="M16 8.5c1.5 1.8 1.5 5.2 0 7M19 6c3 3.2 3 8.8 0 12" />
-            <path v-else d="m16 9 5 6m0-6-5 6" />
-          </svg>
-          <img v-else :src="`${imageBase}${hasAudibleAudio ? 'audio.png' : 'mute.png'}`" alt="" />
+          <TableControlIcon :name="hasAudibleAudio ? 'audio' : 'mute'" />
         </button>
         <div v-if="audioMenuOpen" class="audio-menu" role="group" aria-label="声音设置">
           <p>声音设置</p>
@@ -192,12 +191,8 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
-      <button class="icon-button topbar-control" aria-label="查看规则" @click="emit('openRules')">
-        <svg v-if="themeName === 'llmAnime'" class="hardware-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 5.5c2.7-.8 5.3-.3 8 1.5v12c-2.7-1.8-5.3-2.3-8-1.5zM20 5.5c-2.7-.8-5.3-.3-8 1.5v12c2.7-1.8 5.3-2.3 8-1.5z" />
-          <path d="M12 7v12" />
-        </svg>
-        <img v-else :src="`${imageBase}manual.png`" alt="" />
+      <button type="button" class="topbar-control" aria-label="查看规则" title="查看规则" @click="emit('openRules')">
+        <TableControlIcon name="rules" />
       </button>
     </nav>
   </header>

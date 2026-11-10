@@ -32,7 +32,7 @@ async def test_login(request: Request):
     payload = await request.json()
     account = {'id': uuid.uuid4().hex, 'displayName': payload['nickname'], 'avatarUrl': None}
     service = get_wakudemo_oauth_service()
-    session = service.create_session('local-e2e-token', 3600, account)
+    session = service.create_session(account)
     response = JSONResponse({'authenticated': True})
     response.set_cookie(service.config.cookie_name, session, httponly=True, samesite='lax')
     return response

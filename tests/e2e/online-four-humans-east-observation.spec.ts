@@ -465,7 +465,7 @@ async function attemptScreenshot(pages: Page[], testInfo: TestInfo, name: string
 }
 
 async function clickContinueIfAvailable(page: Page) {
-  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
   if (!await button.isVisible().catch(() => false)) return false
   if (!await button.isEnabled().catch(() => false)) return false
   await button.evaluate((element: HTMLButtonElement) => element.click()).catch(() => {})
@@ -651,7 +651,7 @@ test('三个线上账号 + 一位真人玩家：东风场莲花麻将四人联�
         page.locator('.round-settlement').isVisible().catch(() => false)
       )))
       const continueVisible = await Promise.all(scriptPages.map((page) => (
-        page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ }).first()
+        page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ }).first()
           .isVisible().catch(() => false)
       )))
       for (let index = 0; index < settlementVisible.length; index += 1) {

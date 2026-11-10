@@ -71,7 +71,7 @@ async function installHostAutoPlayer(page: Page) {
 }
 
 async function clickContinueIfAvailable(page: Page) {
-  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^继续/ })
+  const button = page.locator('.round-settlement .result-actions button').filter({ hasText: /^(继续|查看最终排名)/ })
   if (await button.count() === 0) return
   if (await button.first().isVisible().catch(() => false) && await button.first().isEnabled().catch(() => false)) {
     // 结算层可能在检查可点击性后立刻切到 opening；这里不能沿用 30s 默认

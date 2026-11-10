@@ -1,5 +1,5 @@
 // A layout fixture using the real blood-flow engine's opening projection.
-import { createApp, h } from 'vue'
+import { createApp, h, ref } from 'vue'
 import '../../../src/style.css'
 import GameTableHud from '../../../src/components/table/GameTableHud.vue'
 import { BloodFlowEngine } from '../../../src/game/variants/lotus/bloodFlow/engine'
@@ -14,6 +14,8 @@ const count = Number(query.get('count') ?? 14)
 if (![14, 11, 8, 5, 2].includes(count)) throw new Error('Unsupported fixture size')
 const blood = query.get('variant') !== 'legacy'
 const revealed = query.get('revealed') === '1'
+const showControls = query.get('controls') === '1'
+const autoPlay = ref(false)
 const pool = createWall()
 const take = (tile: TileType) => { const i = pool.indexOf(tile); if (i < 0) throw new Error('Exhausted fixture tile'); return pool.splice(i, 1)[0] }
 const flipTiles: [TileType, TileType] = [take('p9'), take('white')]
@@ -46,4 +48,10 @@ const props = { themeName: 'jade' as const, players: view.players, user: view.pl
   jokerTiles: ['red','green'] as TileType[], wildcardTiles: ['white'] as TileType[] }
 createApp({ render: () => h('main', { class: 'game-app', 'data-table-theme': 'jade',
   style: themePresentationCssVariables(themePresentationByName('jade')) },
-  [h('div', { class: 'has-three-scene' }, [h(GameTableHud, props)])]) }).mount('#app')
+  [h('div', { class: 'has-three-scene' }, [h(GameTableHud, {
+    ...props,
+    ...(showControls ? {
+      turnSeconds: 9, userHasWindKong: true, autoPlayEnabled: true, autoPlay: autoPlay.value,
+      onToggleAutoPlay: () => { autoPlay.value = !autoPlay.value },
+    } : {}),
+  })])]) }).mount('#app')

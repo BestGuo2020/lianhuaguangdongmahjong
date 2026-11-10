@@ -99,6 +99,11 @@ test('three real DeepSeek opponents complete a local blood-flow east match', asy
   while (Date.now() < deadline) {
     if (await finalDialog.isVisible().catch(() => false)) break
     if (await roundDialog.isVisible().catch(() => false)) {
+      const ranking = roundDialog.getByRole('button', { name: '查看最终排名', exact: true })
+      if (await ranking.isVisible()) {
+        await ranking.click()
+        break
+      }
       settledRounds++
       console.log(`[deepseek-live] settled=${settledRounds}, human actions=${humanActions}, model requests=${modelRequests}, ok=${modelSuccesses}, failed=${requestFailures.length}`)
       await roundDialog.getByRole('button', { name: /继续下一局/ }).click()

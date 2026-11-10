@@ -1,12 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { BASE_SCORE } from '../game/core/rules/rules'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
-import type { RuleVariant } from '../game/core/rules/ruleVariants'
+import { gameRules, windKongDescription } from '../content/gameRules'
+import { DEFAULT_RULE_VARIANT, type RuleVariant } from '../game/core/rules/ruleVariants'
 import { BLOOD_FLOW_CONFIG } from '../game/variants/lotus/bloodFlow/config'
+import TableControlIcon from './table/TableControlIcon.vue'
 
 const props = defineProps<{ open: boolean; variant?: RuleVariant }>()
 defineEmits(['close'])
+
+const fullRulesDialog = ref<HTMLDialogElement | null>(null)
+const fullRulesOpen = ref(false)
+const fullRulesId = useId()
+const chapters = computed(() => gameRules[props.variant ?? DEFAULT_RULE_VARIANT])
+
+function openFullRules() {
+  const dialog = fullRulesDialog.value
+  if (!dialog || dialog.open) return
+  dialog.showModal()
+  fullRulesOpen.value = true
+}
+
+watch(() => props.open, (open) => {
+  if (!open) fullRulesOpen.value = false
+})
 
 const legacyPaymentExamples = [
   { title: '庄家吃胡闲家', winner: '庄家',
@@ -29,8 +47,6 @@ const legacyPaymentExamples = [
     payments: [{ payer: '另外三家（不分庄闲）', amount: 1000, each: true }], total: 3000,
     note: '天胡：三位闲家付给庄家；地胡：庄家和另外两位闲家付给胡牌闲家。固定10番，不叠加平胡、自摸、庄家或点炮者翻倍。' },
 ]
-
-const windKongDescription = '东南西北各一张，须全部位于本人未副露手牌中，在本人摸牌后的回合一次声明，四张亮明并补摸。风杠本身不破门清，不可抢杠；已吃出的乱风顺不能补成风杠，也不能借他家弃牌开四风杠。'
 
 const rules = computed(() => {
   if (props.variant === 'lotus-blood-flow') return [
@@ -86,8 +102,11 @@ const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? `底分 $
         <div>
           <h2>{{ panelTitle }}</h2>
         </div>
-        <button aria-label="关闭规则" @click="$emit('close')">×</button>
+        <button type="button" aria-label="关闭规则" @click="$emit('close')">×</button>
       </header>
+      <button type="button" class="rules-source-trigger" aria-haspopup="dialog" :aria-controls="fullRulesId" @click="openFullRules">
+        查看完整规则
+      </button>
       <div class="rule-list">
         <article v-for="(rule, index) in rules" :key="rule[0]">
           <b>{{ String(index + 1).padStart(2, '0') }}</b>
@@ -122,9 +141,122 @@ const baseNote = computed(() => props.variant === 'lotus-blood-flow' ? `底分 $
       </section>
     </aside>
   </Transition>
+
+  <dialog v-if="open" :id="fullRulesId" ref="fullRulesDialog" class="rules-source-dialog"
+    :aria-labelledby="`${fullRulesId}-title`" @close="fullRulesOpen = false" @click.self="fullRulesDialog?.close()">
+    <header class="rules-source-header">
+      <h2 :id="`${fullRulesId}-title`">{{ panelTitle }} · 完整规则</h2>
+      <button type="button" aria-label="关闭完整规则" autofocus @click="fullRulesDialog?.close()">
+        <TableControlIcon name="close" />
+      </button>
+    </header>
+    <div v-if="fullRulesOpen" class="rules-source-scroll" role="region" aria-label="规则正文" tabindex="0">
+      <section v-for="chapter in chapters" :key="chapter.title">
+        <h3>{{ chapter.title }}</h3>
+        <p v-for="paragraph in chapter.paragraphs" :key="paragraph">{{ paragraph }}</p>
+        <div v-if="chapter.table" class="rules-source-table">
+          <table :aria-label="chapter.title">
+            <thead><tr><th v-for="heading in chapter.table.headings" :key="heading" scope="col">{{ heading }}</th></tr></thead>
+            <tbody>
+              <tr v-for="row in chapter.table.rows" :key="row[0]">
+                <td v-for="(cell, index) in row" :key="index">{{ cell }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </dialog>
 </template>
 
 <style scoped>
+.rules-source-trigger {
+  width: 100%;
+  min-height: var(--control-hit-target);
+  margin-bottom: 14px;
+  padding: 7px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-panel);
+  color: var(--theme-accent-text);
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rules-source-trigger:hover { background: var(--theme-panel-elevated); }
+.rules-source-dialog {
+  position: fixed;
+  inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  width: min(880px, calc(100vw - var(--safe-left) - var(--safe-right) - 24px));
+  height: min(760px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px));
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  background: var(--theme-panel);
+  color: var(--theme-text);
+  box-shadow: 0 18px 60px #0009;
+}
+.rules-source-dialog[open] { display: flex; flex-direction: column; }
+.rules-source-dialog::backdrop { background: #000a; }
+.rules-source-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px 5px 18px;
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-panel-elevated);
+}
+.rules-source-header h2 { margin: 0; font-size: 17px; line-height: 1.3; }
+.rules-source-header button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-hit-target);
+  height: var(--control-hit-target);
+  padding: 0;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-panel);
+  color: var(--theme-text);
+  cursor: pointer;
+}
+.rules-source-dialog :focus-visible { outline: 2px solid var(--theme-accent); outline-offset: -2px; }
+.rules-source-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: clamp(14px, 3vw, 28px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.rules-source-scroll section + section { margin-top: 24px; }
+.rules-source-scroll h3 {
+  margin: 0 0 .6em;
+  padding-bottom: .25em;
+  border-bottom: 1px solid var(--theme-border);
+  color: var(--theme-accent-text);
+  font-size: 1.25em;
+}
+.rules-source-scroll p { margin: .65em 0; }
+.rules-source-table { margin-top: 12px; overflow-x: auto; }
+.rules-source-table table { width: 100%; border-collapse: collapse; font-size: .94em; }
+.rules-source-table :is(th, td) {
+  min-width: 4em;
+  padding: .45em .6em;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 55%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+.rules-source-table th { background: var(--theme-panel-elevated); }
+
 .legacy-payment-examples { margin-top: 12px; }
 .legacy-payment-examples .legacy-payment-intro { font-size: 12px; }
 .legacy-payment-examples ol { margin: 12px 0 0; padding-left: 20px; }

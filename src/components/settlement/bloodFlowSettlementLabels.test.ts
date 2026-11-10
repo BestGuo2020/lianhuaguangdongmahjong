@@ -19,11 +19,12 @@ async function readSource(relativePath: string) {
 describe('血流结算页按钮合同', () => {
   it('终局只有「返回大厅」导航，房间语义由 tooltip 说明', async () => {
     const source = await readSource('./BloodFlowSettlementHost.vue')
-    const button = /<button v-if="result"[^>]*:title="([^"]*)"[^>]*@click="\$emit\('returnToLobby'\)"[^>]*>([^<]*)<\/button>/.exec(source)
+    const button = /<button v-if="([^"]+)"[^>]*:title="([^"]*)"[^>]*@click="\$emit\('returnToLobby'\)"[^>]*>([^<]*)<\/button>/.exec(source)
     expect(button, '未找到「返回大厅」按钮').not.toBeNull()
-    expect(button![1]).toContain('matchFinished')
-    expect(button![1]).not.toContain('返回房间')
-    expect(button![2]).toBe('返回大厅')
+    expect(button![1]).toContain("view==='final'")
+    expect(button![2]).toContain('matchFinished')
+    expect(button![2]).not.toContain('返回房间')
+    expect(button![3]).toBe('返回大厅')
     expect(source).not.toContain('>返回房间</button>')
   })
 

@@ -1,5 +1,75 @@
 import { expect, test } from '@playwright/test'
 
+test('横屏顶栏和完整规则按当前玩法显示', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.addInitScript(() => localStorage.setItem('lgm_disclaimer_agreed', '1'))
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  const topBar = page.locator('.top-bar')
+  await page.locator('.game-app').evaluate((app: HTMLElement) => {
+    app.style.setProperty('--safe-left', '40px')
+    app.style.setProperty('--safe-right', '26px')
+  })
+  await expect(topBar).toHaveCSS('left', '40px')
+  await expect(topBar).toHaveCSS('padding-left', '8px')
+  await expect(topBar.locator('nav').locator('.table-control-icon')).toHaveCount(3)
+  await expect(topBar.getByRole('button', { name: '声音设置' })).toHaveCSS('width', '44px')
+
+  for (const [index, title] of ['莲花广麻玩法', '莲花麻将玩法', '莲花麻将·血流玩法'].entries()) {
+    if (index > 0) {
+      await page.locator('.game-settings button').filter({ hasText: '玩法' }).click()
+      await page.locator('.rule-picker-options button').nth(index).click()
+      await page.getByRole('button', { name: '确定', exact: true }).click()
+    }
+    await topBar.getByRole('button', { name: '查看规则' }).click()
+    const trigger = page.getByRole('button', { name: '查看完整规则', exact: true })
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: `${title} · 完整规则` })
+    await expect(dialog).toBeInViewport({ ratio: 1 })
+    const table = dialog.getByRole('table', { name: ['买马与结算', '胡牌牌型', '血流番型'][index] })
+    await expect(table).toContainText(['中马牌', '十三幺', '十二落抬'][index])
+    const region = dialog.getByRole('region', { name: '规则正文' })
+    expect(await region.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await page.getByRole('button', { name: '关闭规则', exact: true }).click()
+  }
+})
+
+test('横屏托管独立显示，安全区只计一次，头像随手牌长度调整', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 })
+  for (const count of [14, 5]) {
+    await page.goto(`/tests/e2e/fixtures/common-hand-gap.html?variant=legacy&count=${count}&controls=1`)
+    await page.locator('.game-app').evaluate((app: HTMLElement) => {
+      app.style.setProperty('--safe-left', '30px')
+      app.style.setProperty('--safe-right', '20px')
+      app.style.setProperty('--safe-bottom', '18px')
+    })
+    await expect(page.locator('.table-controls')).toHaveCSS('bottom', '96px')
+    const row = page.locator('.turn-action-row')
+    const persistent = page.locator('.table-persistent-actions')
+    await expect(row.getByRole('button', { name: '风杠' })).toBeVisible()
+    await expect(row.locator('.turn-timer')).toHaveText('9')
+    const autoplay = persistent.getByRole('button')
+    await expect(autoplay).toHaveAttribute('aria-pressed', 'false')
+    const background = await autoplay.evaluate(element => getComputedStyle(element).backgroundColor)
+    await autoplay.click()
+    await expect(autoplay).toHaveAttribute('aria-pressed', 'true')
+    await expect(autoplay).toHaveCSS('background-color', background)
+    await expect(autoplay).toHaveCSS('outline-style', 'solid')
+    const identity = page.locator('.user-identity')
+    await expect(identity).not.toHaveClass(/\bbeside-hand\b/)
+    const tiles = page.locator('.hand-rack .mahjong-tile')
+    expect((await tiles.first().boundingBox())!.x).toBeGreaterThanOrEqual(30)
+    const last = (await tiles.last().boundingBox())!
+    expect(last.x + last.width).toBeLessThanOrEqual(548)
+    if (count === 5) {
+      await page.setViewportSize({ width: 915, height: 320 })
+      await expect(identity).toHaveClass(/\bbeside-hand\b/)
+    }
+  }
+})
+
 test.setTimeout(60_000)
 
 for (const theme of ['jade', 'rosewood', 'happyMahjong', 'llm', 'llmAnime']) {

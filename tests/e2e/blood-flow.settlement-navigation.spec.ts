@@ -56,9 +56,9 @@ for (const { width, height, finished, count } of [
     await expect(dialog.getByRole('button', { name: '退出本场' })).toHaveCount(0)
     if (finished) {
       await expect(dialog.getByRole('button', { name: '继续下一局' })).toHaveCount(0)
-      // 终局按钮在联机叫「返回房间」，单机（本 fixture 传 online=false）只能叫「返回大厅」：
-      // 单机没有房间可回，按钮文案不能按 matchFinished 直接取「返回房间」。
-      await expect(dialog.getByRole('button', { name: '返回房间' })).toHaveCount(0)
+      await expect(dialog).toHaveAccessibleName('血流本局结算')
+      await dialog.getByRole('button', { name: '查看最终排名' }).click()
+      await expect(dialog).toHaveAccessibleName('血流最终排名')
       await dialog.getByRole('button', { name: '返回大厅', exact: true }).click()
       expect(await page.evaluate(() => (window as any).__bloodFlowNavigation.returnToLobbyCalls)).toBe(1)
     } else {
@@ -93,15 +93,18 @@ test('closing a filtered ledger restores an explicit whole-round settlement entr
 test('final ranking uses cumulative scores and details return to their originating summary',async({page})=>{
   await page.goto('/tests/e2e/fixtures/blood-flow.html?count=0')
   await page.evaluate(()=>(window as any).__settleBloodFlowRanking())
+  const round=page.getByRole('dialog',{name:'血流本局结算'})
   const final=page.getByRole('dialog',{name:'血流最终排名'})
+  await expect(round).toBeVisible()
+  await expect(final).toHaveCount(0)
+  await round.getByRole('button',{name:'查看最终排名',exact:true}).click()
   await expect(final).toBeVisible()
   await expect(final.locator('.bf-result-player').first()).toHaveAttribute('data-result-seat','1')
   await expect(final.locator('.bf-result-player').first()).toContainText('2700')
   await final.getByRole('button',{name:'查看流水',exact:true}).click()
   await page.getByRole('button',{name:'返回结算',exact:true}).click()
   await expect(final).toBeVisible()
-  await final.getByRole('button',{name:'最后一局结果'}).click()
-  const round=page.getByRole('dialog',{name:'血流本局结算'})
+  await final.getByRole('button',{name:'查看本局结算'}).click()
   await expect(round.locator('.bf-result-player').first()).toHaveAttribute('data-result-seat','2')
   await expect(round.locator('.bf-result-player').first()).toContainText('+600')
   await expect(page.getByRole('dialog')).toHaveCount(1)
