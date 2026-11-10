@@ -994,6 +994,7 @@ export function createBloodFlowRoom(options: BloodFlowRoomOptions) {
   }
 
   return { port, attach, stop, settleAnalysis, analysisTrace: () => [...analysisTrace],
+    tableInteractionSeat: (peer: string) => authority?.bindings.get(peer),
     get activeRoom() { return room }, recover: () => { if (replica) transmit(replica.hello()) },    setAutoPlay: (enabled: boolean) => { if (latestFrame) transmit({ kind: 'blood_flow_auto', roomId: latestFrame.roomId,
       ruleVersion: version, authorityEpoch: latestFrame.authorityEpoch, enabled }) },
     interrupt: (reason: string) => { fail(reason); authority?.stop(); if (timer) clearInterval(timer); timer = null },

@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import type { MatchType } from '../../core/contracts/types'
 import type { TableThemeName } from '../../../theme/themeIdentity'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
+import type { TableInteractionEvent } from '../../shared/tableInteractions'
 import { API_BASE, signalAuthRequired } from './api/httpClient'
 import {
   closeRoom as closeRoomApi, createRoom as createRoomApi, getRoom,
@@ -54,6 +55,7 @@ const ACTION_RACE_ERRORS = new Set(['STALE_ACTION', 'INVALID_ACTION'])
 export interface BloodFlowRemoteGameOptions {
   playSound: BloodFlowGameOptions['playSound']
   playSoundAndWait: BloodFlowGameOptions['playSoundAndWait']
+  onTableInteraction?: (event: TableInteractionEvent) => void
   /** 本家二次元角色：入房时随 join 上报（此前漏传，服务端永远退回 deepseek）。 */
   getCharacterId?: () => string
   /** 服务端 TTS 音频通道（联机模型原话，与经典联机同一条队列）。 */
@@ -113,6 +115,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     getUrl: () => roomId.value && rejoinCode.value
       ? `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
       : null,
+    onTableInteraction: options.onTableInteraction,
     onMessage: (message) => {
       const kind = (message as { kind?: unknown })?.kind
       if (kind === 'rejoin_ok') {
@@ -467,5 +470,7 @@ export function useBloodFlowRemoteGame(options: BloodFlowRemoteGameOptions) {
     roomTableThemeName,
     configureTableTheme,
     updatePresentationAudioMode,
+    tableInteractionReady: socket.tableInteractionReady,
+    sendTableInteraction: socket.sendTableInteraction,
   }
 }

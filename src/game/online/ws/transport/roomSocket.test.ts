@@ -38,6 +38,31 @@ afterEach(() => {
 })
 
 describe('roomSocket', () => {
+  it('routes interaction echoes only for the current authoritative hand', () => {
+    const socket = new MockSocket()
+    const onTableInteraction = vi.fn()
+    const transport = createRoomSocketTransport({
+      getUrl: () => 'ws://server/ws/room/A', onMessage: () => {},
+      socketFactory: () => socket, onTableInteraction,
+    })
+    transport.open()
+    socket.open()
+    const action = { type: 'quick_chat', phraseId: 'think' } as const
+    expect(transport.sendTableInteraction(action)).toBe(false)
+    socket.receive({ kind: 'bf_snapshot', interactionScope: 'hand-2' })
+    expect(transport.sendTableInteraction(action)).toBe(true)
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ kind: 'table_interaction_request', scope: 'hand-2', action })
+    const event = { kind: 'table_interaction', id: 1, fromSeat: 2, action }
+    socket.receive({ ...event, scope: 'hand-1' })
+    socket.receive({ ...event, scope: 'hand-2' })
+    expect(onTableInteraction).toHaveBeenCalledExactlyOnceWith({ ...event, scope: 'hand-2' })
+    socket.receive({ kind: 'bf_snapshot', interactionScope: null })
+    expect(transport.tableInteractionReady.value).toBe(false)
+    socket.receive({ ...event, scope: 'hand-2' })
+    expect(onTableInteraction).toHaveBeenCalledTimes(1)
+    transport.close()
+  })
+
   it('opens, parses incoming messages and sends client actions', () => {
     const sockets: MockSocket[] = []
     const messages: unknown[] = []

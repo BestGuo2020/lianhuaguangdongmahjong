@@ -9,6 +9,7 @@ import DisclaimerDialog from './components/legal/DisclaimerDialog.vue'
 import GameShellHeader from './components/shell/GameShellHeader.vue'
 import OrientationGate from './components/shell/OrientationGate.vue'
 import GameTableHud from './components/table/GameTableHud.vue'
+import { useTableInteractions } from './components/table/useTableInteractions'
 import LobbyView from './components/lobby/LobbyView.vue'
 import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
@@ -27,6 +28,7 @@ import { readLlmSettings } from './game/llm/config'
 import type { LlmControllerStats } from './game/llm/llmController'
 import { createActiveGamePort, type GameMode } from './game/core/contracts/activeGamePort'
 import { advanceMatchState } from './game/core/local/matchProgress'
+import { tableHandScope, tableInteractionsActive, type TableInteraction, type TableInteractionEvent } from './game/shared/tableInteractions'
 import { useVibeRemoteGame } from './game/online/useVibeRemoteGame'
 import { initVibeHub, loginRequired, vibeUser } from './game/online/vibe/vibeClient'
 import { listHostLlmOptions } from './game/online/vibe/vibeLlm'
@@ -114,6 +116,8 @@ if (initialThemeCandidate !== null && initialThemeCandidate !== initialTableThem
 }
 const winEffectLab = import.meta.env.DEV && new URLSearchParams(window.location.search).has('winEffectLab')
 const { playEffect, playEffectAndWait, playLlmAudio, startBgm } = useAudio()
+const tableInteractions = useTableInteractions(playEffect)
+const { bubbles: chatBubbles, cues: emoteCues } = tableInteractions
 
 // 平台使用真实 SDK，本地开发使用 mockVibeHub。
 if (!usesWsBackend) void initVibeHub()
@@ -330,6 +334,7 @@ function beginOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSea
   })
 }
 const vibeRemoteGame = usesWsBackend ? null : useVibeRemoteGame({
+  onTableInteraction: receiveTableInteraction,
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
   waitForTableReady,
@@ -345,6 +350,7 @@ const vibeRemoteGame = usesWsBackend ? null : useVibeRemoteGame({
 })
 
 const wsOnline = usesWsBackend ? useWsOnline({
+  onTableInteraction: receiveTableInteraction,
   gameMode, selectedRule, selectedMatch, startBgm,
   playSound: playEffect, playSoundAndWait: playEffectAndWait, playLlmAudio,
   waitForTableReady, onLlmMessage: llmHook.onLlmMessage, onLlmStatus: llmHook.onLlmStatus,
@@ -523,6 +529,27 @@ const statsOpen = ref(false)
 // ── 对局回放：列表与查看（只读本机 IndexedDB）──
 const replayOpen = ref(false)
 const replayView = ref<{ match: ReplayMatch; rounds: ReplayRound[] } | null>(null)
+const interactionHand = computed(() => {
+  const bloodFlow = capabilities.value.bloodFlow
+  if (!gameTableReady.value || !user.value || !tableInteractionsActive(phase.value)
+    || matchFinished.value || bloodFlow?.roundResult || (bloodFlow && bloodFlow.status !== 'playing')
+    || replayOpen.value || replayView.value) return
+  if (gameMode.value === 'remote' && !onlineSession.tableInteractionReady.value) return
+  const session = gameMode.value === 'remote' ? roomId.value : selectedRule.value
+  return `${gameMode.value}:${session}:${bloodFlow?.roundId ?? tableHandScope('', round.value, honba.value)}`
+})
+watch(interactionHand, tableInteractions.clear, { flush: 'sync' })
+
+function sendTableInteraction(action: TableInteraction) {
+  if (!interactionHand.value || !user.value) return false
+  return tableInteractions.send(user.value.seat, action, gameMode.value === 'remote'
+    ? onlineSession.sendTableInteraction : undefined)
+}
+
+function receiveTableInteraction(event: TableInteractionEvent) {
+  if (gameMode.value === 'remote' && interactionHand.value) tableInteractions.receive(event)
+}
+
 async function openReplay(matchId: string) {
   const match = await replay.storage.loadMatch(matchId)
   if (!match) return
@@ -767,6 +794,9 @@ function changeTableTheme(theme: TableThemeName) {
         :auto-play-enabled="gameMode === 'remote'"
         :auto-play="remoteAutoPlay"
         :llm-bubbles="llmBubbles"
+        :chat-bubbles="chatBubbles"
+        :emote-cues="emoteCues"
+        :send-interaction="interactionHand ? sendTableInteraction : undefined"
         :joker-tiles="jokerTiles"
         :wildcard-tiles="wildcardTiles"
         :theme-name="tableThemeName"

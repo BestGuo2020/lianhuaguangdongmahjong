@@ -4,6 +4,10 @@ import MahjongTile from '../MahjongTile.vue'
 import PlayerSeat from '../PlayerSeat.vue'
 import TableActionCue from './TableActionCue.vue'
 import TableControlIcon from './TableControlIcon.vue'
+import TableInteractionControls from './TableInteractionControls.vue'
+import TableEmoteEffects from './TableEmoteEffects.vue'
+import type { TableChatBubble, TableEmoteCue } from './useTableInteractions'
+import type { TableInteraction } from '../../game/shared/tableInteractions'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
 import { tileName } from '../../game/core/rules/tiles'
@@ -89,6 +93,9 @@ interface Props {
   flipStack?: number
   /** AI 大模型吐槽气泡：key=座位绝对索引，value=最近一条（展示层自管理过期） */
   llmBubbles?: Record<number, { text: string; id: number; persistent?: boolean }>
+  chatBubbles?: Record<number, TableChatBubble>
+  emoteCues?: readonly TableEmoteCue[]
+  sendInteraction?: (action: TableInteraction) => boolean
 }
 
 const props = defineProps<Props>()
@@ -259,6 +266,12 @@ const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.bloo
 const waitsOpen = ref(false)
 const userNicknameOpen = ref(false)
 const tableReady = ref(false)
+const canInteract = computed(() => tableReady.value && Boolean(props.sendInteraction))
+const emoteTargetSeat = ref<number | null>(null)
+const emoteTarget = computed(() => props.players.find(player => player.seat === emoteTargetSeat.value) ?? null)
+const userChat = computed(() => props.chatBubbles?.[props.user.seat])
+const userBubble = computed(() => userChat.value ?? presentedLlmBubbles.value?.[0])
+watch(canInteract, enabled => { if (!enabled) emoteTargetSeat.value = null })
 const tableLoadError = ref('')
 const tableLoadAttempt = ref(0)
 const tableLoadRetry = createTableLoadRetryController({
@@ -632,7 +645,7 @@ function onAvatarError(entry: GamePlayer) {
         </div>
       </div>
     </Transition>
-    <!-- players 已按本家视角排序，但 player.seat 保留服务器绝对座位；气泡必须按本地索引读取。 -->
+    <!-- 快捷语和道具使用绝对座位，大模型气泡继续按本家视角索引。 -->
     <PlayerSeat
       v-for="(player, index) in players.slice(1)" :key="player.seat" :player="player"
       nickname-on-tap
@@ -641,7 +654,9 @@ function onAvatarError(entry: GamePlayer) {
       :score-flow-id="presentedScoreFlowEvent?.id" :dealer="dealer === index + 1"
       :avatar-override="themeName === 'llmAnime' ? animeAvatarForPlayer(player) : undefined"
       :theme-name="themeName"
-      :bubble="presentedLlmBubbles?.[index + 1]"
+      :bubble="chatBubbles?.[player.seat] ?? presentedLlmBubbles?.[index + 1]"
+      :quick-chat-bubble="Boolean(chatBubbles?.[player.seat])"
+      :emote-enabled="canInteract" @emote="emoteTargetSeat = player.seat"
     >
       <template v-if="bloodFlow" #footer>
         <button type="button" class="blood-flow-pile-badge" :class="`win-count-${seatPosition[index + 1]}`" :data-pile-seat="player.seat"
@@ -649,6 +664,7 @@ function onAvatarError(entry: GamePlayer) {
           @click="settlementHost?.showDetails(player.seat)">胡 {{ bloodFlow.seats[player.seat].winCount }}次</button>
       </template>
     </PlayerSeat>
+    <TableEmoteEffects v-if="tableReady && emoteCues?.length" :cues="emoteCues" />
 
     <Transition name="table-action" mode="out-in">
       <TableActionCue v-if="presentedTableActionEvent" :key="presentedTableActionEvent.id"
@@ -663,7 +679,7 @@ function onAvatarError(entry: GamePlayer) {
     </Transition>
 
     <section class="user-area">
-      <div ref="userIdentity" class="user-identity" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0, 'nickname-open': userNicknameOpen, 'beside-hand': identityBesideHand }" :style="userAnimeStyle">
+      <div ref="userIdentity" class="user-identity" :data-table-seat="user.seat" :class="{ active: currentPlayer === 0, 'action-active': tableActionEvent?.actorIndex === 0, 'nickname-open': userNicknameOpen, 'beside-hand': identityBesideHand }" :style="userAnimeStyle">
         <span v-if="dealer === 0" class="dealer-badge">庄</span>
         <button type="button" class="avatar-button"
           :aria-label="`查看${user.name}的昵称`" :aria-expanded="userNicknameOpen"
@@ -679,12 +695,14 @@ function onAvatarError(entry: GamePlayer) {
           @click="settlementHost?.showDetails(user.seat)">胡 {{ bloodFlow.seats[user.seat].winCount }}次</button>
         <Transition name="llm-bubble">
           <div
-            v-if="presentedLlmBubbles?.[0]"
-            :key="presentedLlmBubbles[0].id"
+            v-if="userBubble"
+            :key="`${userChat ? 'chat' : 'llm'}:${userBubble.id}`"
             class="llm-bubble user-llm-bubble"
+            :class="{ 'quick-chat-bubble': userChat }"
+            :data-quick-chat-seat="userChat ? user.seat : undefined"
             role="status"
             aria-live="polite"
-          >{{ presentedLlmBubbles[0].text }}</div>
+          >{{ userBubble.text }}</div>
         </Transition>
       </div>
       <Transition name="score-flow">
@@ -712,7 +730,7 @@ function onAvatarError(entry: GamePlayer) {
       </div>
     </section>
 
-    <div v-if="showTurnRow || showAutoPlay" class="table-controls" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
+    <div v-if="showTurnRow || showAutoPlay || canInteract" class="table-controls" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="showTurnRow" class="turn-action-row">
         <div v-if="bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
           <b>改张</b><span>打出</span><b class="reform-tile">{{ tileName(bloodFlow.reformHint.discard) }}</b>
@@ -753,12 +771,14 @@ function onAvatarError(entry: GamePlayer) {
         </div>
         <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
       </div>
-      <div v-if="showAutoPlay" class="table-persistent-actions">
-        <button type="button" class="action autoplay-action" data-action-role="secondary"
+      <div v-if="showAutoPlay || canInteract" class="table-persistent-actions">
+        <button v-if="showAutoPlay" type="button" class="action autoplay-action" data-action-role="secondary"
           :aria-pressed="Boolean(autoPlay)" :aria-label="autoPlay ? '取消机器人托管，恢复手动操作' : '开启机器人托管，自动出牌与过牌'"
           :title="autoPlay ? '机器人托管中：点击恢复手动' : '点击机器人托管：到您的回合自动出牌/过牌'"
           @click="$emit('toggleAutoPlay')"
         ><TableControlIcon name="autoplay" /></button>
+        <TableInteractionControls v-if="canInteract && sendInteraction" :target="emoteTarget"
+          :send="sendInteraction" @close-target="emoteTargetSeat = null" />
       </div>
     </div>
     <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">

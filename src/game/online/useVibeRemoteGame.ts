@@ -23,6 +23,9 @@ import { generateGuestId } from './session/remoteSessionStore'
 import { createBloodFlowSessionStore } from './vibe/bloodFlowSessionStore'
 import { createVibeRoomSession } from './vibe/vibeRoomSession'
 import { createBloodFlowRoom } from './vibe/bloodFlowRoom'
+import { createVibeTableInteractionChannel } from './vibe/tableInteractionChannel'
+import { isTableInteractionPacket, isTableSeat, tableHandScope, tableInteractionsActive,
+  type TableInteractionEvent } from '../shared/tableInteractions'
 import { decodeBloodFlowPacket } from '../variants/lotus/bloodFlow/network/protocol'
 import { getMockPeerId } from './vibe/mockVibeHub'
 import { createMatchStatsRecorder } from './vibe/matchStatsRecorder'
@@ -270,6 +273,7 @@ export function allLiveSeatsConfirmed(
 }
 
 interface UseVibeRemoteGameOptions {
+  onTableInteraction?: (event: TableInteractionEvent) => void
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
   playSoundAndWait?: (name: string, volume?: number) => Promise<void>
   waitForTableReady?: () => Promise<void>
@@ -302,6 +306,7 @@ export function useVibeRemoteGame({
   playSoundAndWait = async () => {},
   waitForTableReady,
   onLlmMessage = () => {},
+  onTableInteraction,
   getTableThemeName = () => 'jade',
   getCharacterId = () => 'deepseek',
   animeFixedTts,
@@ -1017,8 +1022,21 @@ export function useVibeRemoteGame({
     },
   })
 
+  const tableInteractionChannel = createVibeTableInteractionChannel({
+    getRoom: () => roomSession.getRoom(),
+    getScope: tableInteractionScope,
+    getSeat: () => mySeat.value,
+    getPeerSeat: peer => rulesetId.value === 'lotus-blood-flow'
+      ? bloodFlowRoom.tableInteractionSeat(peer)
+      : hostGame.value?.getLivePeerSeats().get(peer),
+    isHost: () => isHost.value,
+    acceptHost: (room, peer) => acceptPinnedHostMessage(room, peer, 'table_interaction'),
+    onEvent: onTableInteraction,
+  })
+
   watch([roomId, mySeat, rulesetId, lobbySeats], () => {
     const active = roomSession.getRoom()
+    if (active) tableInteractionChannel.attach(active)
     if (rulesetId.value === 'lotus-blood-flow' && active && mySeat.value >= 0) bloodFlowRoom.attach(active)
   })
 
@@ -1036,6 +1054,22 @@ export function useVibeRemoteGame({
   })
   const wsStatus = transport.status
   const signalQuality = transport.signalQuality
+  const tableInteractionReady = computed(() => Boolean(tableInteractionScope()))
+
+  function tableInteractionScope() {
+    if (!roomId.value || !isTableSeat(mySeat.value) || (!isHost.value && wsStatus.value !== 'connected')) return
+    if (rulesetId.value === 'lotus-blood-flow') {
+      const port = bloodFlowRoom.port
+      const table = port.capabilities.value.bloodFlow
+      if (table?.status === 'playing' && !table.roundResult && !port.matchFinished.value
+        && tableInteractionsActive(port.phase.value)) return table.roundId
+      return
+    }
+    const active = isHost.value ? hostGame.value?.game : state
+    if (!active || active.players.length !== 4 || active.matchFinished.value || !tableInteractionsActive(active.phase.value)) return
+    const epoch = isHost.value ? hostGame.value?.authorityEpoch : requestCoordinator.getAuthorityEpoch()
+    if (epoch) return tableHandScope(epoch, active.round.value, active.honba.value)
+  }
 
   // 动作发送：客户端走传输层；房主在 onStart 后改道本地引擎（房主自己就是权威）。
   let sendAction: (message: RemotePlayerActionMessage) => void = (message) => transport.send(message)
@@ -2041,6 +2075,7 @@ export function useVibeRemoteGame({
   }
 
   function handleMessage(raw: unknown, fromPeerId?: string) {
+    if (isTableInteractionPacket(raw)) return // 独立监听器验证座位与房主，互动消息不进入游戏路由。
   // 联机牌谱协议先处理：回执/补局请求来自远端客机，必须在下面的「房主忽略远端消息」之前，
   // 但它只驱动回放中继（不写对局状态），房主引擎仍是唯一事实来源。
   if (handleRemoteReplayMessage(raw)) return
@@ -2338,6 +2373,7 @@ export function useVibeRemoteGame({
     rejoining,
     secondDice, flipTile, jokerTiles, wildcardTiles, flipStack, openingStack, wallBreakIndex,
     signalQuality, autoPlay, toggleAutoPlay,
+    tableInteractionReady, sendTableInteraction: tableInteractionChannel.send,
     remoteActions,
     // 游戏状态（useGame 兼容接口）
     phase, players, wall, wallHeadDrawn, wallCount, currentPlayer, selectedIndex, turnSeconds, lastDiscard,

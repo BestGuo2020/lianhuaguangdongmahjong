@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ name: 'theme' | 'exit' | 'audio' | 'mute' | 'rules' | 'autoplay' | 'waits' | 'close' }>()
+defineProps<{ name: 'theme' | 'exit' | 'audio' | 'mute' | 'rules' | 'autoplay' | 'waits' | 'chat' | 'close' }>()
 </script>
 
 <template>
@@ -35,6 +35,14 @@ defineProps<{ name: 'theme' | 'exit' | 'audio' | 'mute' | 'rules' | 'autoplay' |
         <circle cx="8.1" cy="8" r="1.15" />
         <circle cx="8.1" cy="12" r="1.15" />
         <circle cx="8.1" cy="16" r="1.15" />
+      </g>
+    </g>
+    <g v-else-if="name === 'chat'">
+      <path d="M21 11.2c0 4-4 7.2-9 7.2a11 11 0 0 1-3.4-.5L4 20l1.3-4.1A6.4 6.4 0 0 1 3 11.2C3 7.2 7 4 12 4s9 3.2 9 7.2Z" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="8" cy="11.2" r="1.15" />
+        <circle cx="12" cy="11.2" r="1.15" />
+        <circle cx="16" cy="11.2" r="1.15" />
       </g>
     </g>
     <path v-else d="m6 6 12 12M18 6 6 18" />

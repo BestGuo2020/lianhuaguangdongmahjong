@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { expectTableInteractionEcho } from './fixtures/table-interaction'
 
 test.setTimeout(300_000)
 test.skip(process.env.E2E_WS !== '1', '真实 WS 后端验收通过 E2E_WS=1 显式运行')
@@ -112,6 +113,7 @@ for (const [ruleIndex, rule] of ['莲花广麻', '莲花麻将', '莲花麻将·
         await expect(page.locator('.game-table-hud')).toHaveAttribute('data-opening-stage', '', { timeout: 45_000 })
         expect(await page.evaluate(() => (window as any).__unexpectedVibeInit)).toBe(0)
       }
+      await expectTableInteractionEcho(host, guest)
       await guest.reload({ waitUntil: 'domcontentloaded' })
       await expect(guest.locator('[data-wakudemo-account]')).toContainText('已安全登录')
       await guest.locator('.continue-session').click()

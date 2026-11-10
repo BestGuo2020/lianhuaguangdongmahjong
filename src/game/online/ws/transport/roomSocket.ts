@@ -1,4 +1,6 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { isTableInteractionPacket, readTableInteractionEvent,
+  type TableInteraction, type TableInteractionEvent } from '../../../shared/tableInteractions'
 
 export type RoomSocketStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'
 
@@ -15,6 +17,7 @@ export interface SocketLike {
 export interface RoomSocketTransportOptions {
   getUrl: () => string | null
   onMessage: (message: unknown) => void
+  onTableInteraction?: (event: TableInteractionEvent) => void
   socketFactory?: (url: string) => SocketLike
   pingInterval?: number
   stallTimeout?: number
@@ -27,6 +30,7 @@ const RTT_EWMA_ALPHA = 0.3
 export function createRoomSocketTransport({
   getUrl,
   onMessage,
+  onTableInteraction,
   socketFactory = (url) => new WebSocket(url),
   pingInterval = 5000,
   stallTimeout = 15000,
@@ -34,6 +38,8 @@ export function createRoomSocketTransport({
 }: RoomSocketTransportOptions) {
   const status = ref<RoomSocketStatus>('idle')
   const signalQuality = ref(0)
+  const interactionScope = ref<string>()
+  const tableInteractionReady = computed(() => status.value === 'connected' && Boolean(interactionScope.value))
   let socket: SocketLike | null = null
   let intentionallyClosed = true
   let reconnectTimer: number | null = null
@@ -98,6 +104,18 @@ export function createRoomSocketTransport({
       return
     }
     lastServerMessageAt = Date.now()
+    const packet = message as { kind?: unknown; interactionScope?: unknown } | null
+    if (packet?.kind === 'state_snapshot' || packet?.kind === 'bf_snapshot') {
+      const scope = packet.interactionScope
+      interactionScope.value = typeof scope === 'string' && scope.length <= 80 ? scope : undefined
+    } else if (packet?.kind === 'round_start' || packet?.kind === 'match_finished' || packet?.kind === 'rejoin_ok') {
+      interactionScope.value = undefined
+    }
+    if (isTableInteractionPacket(message)) {
+      const event = readTableInteractionEvent(message, interactionScope.value)
+      if (event && tableInteractionReady.value) onTableInteraction?.(event)
+      return
+    }
     if (typeof message === 'object' && message !== null && 'kind' in message && message.kind === 'pong') {
       if (lastPingAt) {
         const rtt = Date.now() - lastPingAt
@@ -128,6 +146,7 @@ export function createRoomSocketTransport({
     const url = getUrl()
     if (!url || intentionallyClosed) return
     status.value = 'connecting'
+    interactionScope.value = undefined
     let nextSocket: SocketLike
     try {
       nextSocket = socketFactory(url)
@@ -142,7 +161,7 @@ export function createRoomSocketTransport({
       startPing()
       startStallCheck()
     }
-    nextSocket.onmessage = (event) => handleIncoming(event.data)
+    nextSocket.onmessage = (event) => { if (socket === nextSocket) handleIncoming(event.data) }
     nextSocket.onclose = () => {
       if (socket === nextSocket) socket = null
       status.value = 'closed'
@@ -172,6 +191,12 @@ export function createRoomSocketTransport({
     return true
   }
 
+  function sendTableInteraction(action: TableInteraction) {
+    return tableInteractionReady.value && send({
+      kind: 'table_interaction_request', scope: interactionScope.value, action,
+    })
+  }
+
   function close() {
     intentionallyClosed = true
     globalThis.clearTimeout(reconnectTimer as number)
@@ -188,6 +213,7 @@ export function createRoomSocketTransport({
       socket = null
     }
     status.value = 'idle'
+    interactionScope.value = undefined
     signalQuality.value = 0
     reconnectAttempts = 0
     lastPingAt = 0
@@ -196,5 +222,5 @@ export function createRoomSocketTransport({
     postReconnectPongs = 2
   }
 
-  return { status, signalQuality, open, confirmSession, send, close }
+  return { status, signalQuality, open, confirmSession, send, close, tableInteractionReady, sendTableInteraction }
 }

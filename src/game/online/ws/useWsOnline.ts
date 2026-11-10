@@ -13,6 +13,7 @@ import type { GamePort } from '../../core/contracts/gamePort'
 import type { GameMode } from '../../core/contracts/activeGamePort'
 import type { RuleVariant } from '../../core/rules/ruleVariants'
 import type { TableThemeName } from '../../../components/table/three/tableTheme'
+import type { TableInteraction } from '../../shared/tableInteractions'
 
 type Options = Parameters<typeof useRemoteGame>[0] & {
   gameMode: Ref<GameMode>
@@ -24,7 +25,12 @@ type Options = Parameters<typeof useRemoteGame>[0] & {
 /** 独立站适配层：保持原 HTTP/WS 会话语义，向共享 App 暴露统一牌桌端口。 */
 export function useWsOnline(options: Options) {
   const { gameMode, selectedRule, selectedMatch, startBgm } = options
-  const remoteGame = useRemoteGame(options)
+  const remoteGame = useRemoteGame({
+    ...options,
+    onTableInteraction: event => {
+      if (gameMode.value === 'remote' && selectedRule.value !== 'lotus-blood-flow') options.onTableInteraction?.(event)
+    },
+  })
   const bloodFlowRemoteGame = useBloodFlowRemoteGame({
     playSound: options.playSound,
     playSoundAndWait: options.playSoundAndWait,
@@ -32,6 +38,9 @@ export function useWsOnline(options: Options) {
     getCharacterId: options.getCharacterId,
     getThemeName: options.getThemeName,
     animeFixedTts: options.animeFixedTts,
+    onTableInteraction: event => {
+      if (gameMode.value === 'remote' && selectedRule.value === 'lotus-blood-flow') options.onTableInteraction?.(event)
+    },
   })
   const activeRemote = computed(() => (
     gameMode.value === 'remote' && selectedRule.value === 'lotus-blood-flow'
@@ -176,6 +185,8 @@ export function useWsOnline(options: Options) {
     reservedSeats, llmEnabled, effectiveLlmEnabled, llmAvailable, roomMeta,
     waitingNextRound, signalQuality, roomTableThemeName,
     autoPlay: remoteAutoPlay, toggleAutoPlay,
+    tableInteractionReady: computed(() => activeRemote.value.tableInteractionReady.value),
+    sendTableInteraction: (action: TableInteraction) => activeRemote.value.sendTableInteraction(action),
     rejoining: ref(false),
     remoteActions: {
       ...remoteActions,

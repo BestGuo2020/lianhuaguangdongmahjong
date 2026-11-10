@@ -42,6 +42,7 @@ import {
 import type { AnimeFixedTtsExecutor, AnimeSeat } from '../../llm/animeFixedTtsExecutor'
 import type { TableThemeName } from '../../../components/table/three/tableTheme'
 import { resolveAnimeAudioPolicy, shouldSuppressLegacyAnimeSpeech } from '../../core/presentation/animeAudioPolicy'
+import type { TableInteractionEvent } from '../../shared/tableInteractions'
 
 const WS_BASE = API_BASE.replace(/^http/, 'ws')
 const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
@@ -54,6 +55,7 @@ interface UseRemoteGameOptions {
   waitForTableReady?: () => Promise<void>
   onLlmMessage?: (seat: number, text: string) => void
   onLlmStatus?: (seat: number, active: boolean, text?: string) => void
+  onTableInteraction?: (event: TableInteractionEvent) => void
   playLlmAudio?: (url: string, seat: number, messageId: number, priority?: 'normal' | 'important') => void
   getCharacterId?: () => string
   getThemeName?: () => string
@@ -66,6 +68,7 @@ export function useRemoteGame({
   waitForTableReady,
   onLlmMessage = () => {},
   onLlmStatus = () => {},
+  onTableInteraction,
   playLlmAudio = () => {},
   getCharacterId = () => 'deepseek',
   getThemeName = () => 'jade',
@@ -123,6 +126,7 @@ export function useRemoteGame({
       ? `${WS_BASE}/ws/room/${encodeURIComponent(roomId.value)}?rejoin_code=${encodeURIComponent(rejoinCode.value)}`
       : null,
     onMessage: handleMessage,
+    onTableInteraction,
   })
   const wsStatus = roomSocket.status
   const signalQuality = roomSocket.signalQuality
@@ -643,6 +647,8 @@ export function useRemoteGame({
     userGangFromDiscard, userGang, userChi, userWindKong, userHu,
     nextRound, returnToLobby, tileName, debugPreviewWin,
     updatePresentationAudioMode,
+    tableInteractionReady: roomSocket.tableInteractionReady,
+    sendTableInteraction: roomSocket.sendTableInteraction,
     roomTableThemeName,
     configureTableTheme,
   })

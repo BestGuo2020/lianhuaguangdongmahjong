@@ -2,6 +2,7 @@
 // 两个 VibeHub 账号分别作为房主、客人；空余两席由引擎 AI 补齐，连续完成两个东风场。
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { chromium, expect, test, type Browser, type BrowserContext, type CDPSession, type Page, type TestInfo } from '@playwright/test'
+import { expectTableInteractionEcho } from './fixtures/table-interaction'
 
 interface Account { email: string; password: string }
 interface OnlineConfig { url: string; accounts: [Account, Account]; deepseekApiKey: string }
@@ -3437,6 +3438,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
     await client.getByRole('button', { name: '准备 / 取消准备', exact: true }).click()
     await expect(host.locator('.room-start')).toBeEnabled({ timeout: 30_000 })
     await host.locator('.room-start').click()
+    await expectTableInteractionEcho(host, client)
     await Promise.all(pages.map((page) => installHostAutoPlayer(page)))
 
     const deadline = Date.now() + 2_100_000
@@ -3506,7 +3508,7 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
           } else if (rounds[0] !== rounds[1]) {
             console.log(`[BF-ONLINE] ${label} ${hand} 结算面板单边可见（房主=${rounds[0]} 客人=${rounds[1]}），继续等待`)
           }
-          // 局间屏障：主机等所有在线真人回执；哪端可见就在哪端点「继续下一局」。
+          // 局间确认推进到下一局，末局则通过同一个主按钮进入终榜。
           await Promise.all(pages.map((page, index) => (
             rounds[index]
               ? page.locator('.bf-primary').click({ timeout: 5_000 }).catch(() => {})
@@ -3530,7 +3532,6 @@ async function runBloodFlowEastMatch(options: { llm: boolean; testInfo: TestInfo
 
     expect(observed[0], '房主应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
     expect(observed[1], '客人应看到东1～东4').toEqual(['东1局', '东2局', '东3局', '东4局'])
-    await Promise.all(pages.map(page => page.getByRole('button', { name: '查看最终排名', exact: true }).click({ timeout: 60_000 })))
     await Promise.all(pages.map((page) => expect(
       page.locator('.bf-settlement[data-settlement-view="final"]')).toBeVisible({ timeout: 60_000 })))
     const standings = await Promise.all(pages.map((page) => readBloodFlowScores(page, '.bf-final-ranking')))
