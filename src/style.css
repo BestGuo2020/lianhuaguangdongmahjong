@@ -1512,6 +1512,9 @@ button { font: inherit; }
 .game-app[data-table-theme="happyMahjong"] .table-action-cue {
   border-radius: 28%;
   background: radial-gradient(circle at 42% 35%, rgba(247,202,78,.94) 0 24%, rgba(240,122,93,.78) 46%, transparent 72%);
+}
+/* Meld cues animate through the shared transition classes. */
+.game-app[data-table-theme="happyMahjong"] .table-action-cue.win {
   animation: happy-action-pop .58s cubic-bezier(.18,.92,.24,1.25) both;
 }
 .game-app[data-table-theme="happyMahjong"] .table-action-cue::before,
@@ -1548,7 +1551,7 @@ button { font: inherit; }
 .game-app[data-table-theme="happyMahjong"] .round-rankings img,
 .game-app[data-table-theme="happyMahjong"] .final-rankings img { border-color: var(--theme-accent); border-radius: 50%; }
 .game-app[data-table-theme="happyMahjong"] .result-actions button,
-.game-app[data-table-theme="happyMahjong"] .final-footer > button:not(.secondary),
+.game-app[data-table-theme="happyMahjong"] .final-footer > button,
 .game-app[data-table-theme="happyMahjong"] .result-reopen { border: 2px solid #ffe39a; border-radius: 16px; background: var(--theme-button); color: #163640; box-shadow: 0 4px 0 rgba(189,107,69,.72); }
 .game-app[data-table-theme="happyMahjong"] .result-actions button.secondary { border-color: rgba(185,216,214,.48); background: var(--theme-panel); color: var(--theme-text); box-shadow: none; }
 
@@ -1743,7 +1746,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llm"] .result-card > p { color: #d8b99a; }
 .game-app[data-table-theme="llm"] .result-card h2 { color: #f5f7ff; }
 .game-app[data-table-theme="llm"] .result-actions button,
-.game-app[data-table-theme="llm"] .final-board > button {
+.game-app[data-table-theme="llm"] .final-footer > button {
   border-color: #a5c4ff;
   background: linear-gradient(180deg, #75a9ff, #426dca);
   color: #071431;
@@ -2235,7 +2238,7 @@ button { font: inherit; }
   background: linear-gradient(105deg, rgba(112,55,47,.88), rgba(35,42,36,.97));
 }
 .game-app[data-table-theme="llmAnime"] .result-actions button,
-.game-app[data-table-theme="llmAnime"] .final-board > button {
+.game-app[data-table-theme="llmAnime"] .final-footer > button {
   border: 1px solid var(--anime-control-edge);
   border-radius: 7px;
   background: linear-gradient(180deg, #3b5046, #1b2822);
@@ -2677,23 +2680,6 @@ button { font: inherit; }
   gap: 0 10px;
 }
 .final-footer > .result-disclaimer-note { flex-basis: 100%; }
-.game-app .final-footer > button.secondary {
-  border-color: var(--theme-border);
-  background: transparent;
-  color: inherit;
-}
-.game-app[data-table-theme="llm"] .final-footer > button:not(.secondary) {
-  border-color: #a5c4ff;
-  background: linear-gradient(180deg, #75a9ff, #426dca);
-  color: #071431;
-}
-.game-app[data-table-theme="llmAnime"] .final-footer > button:not(.secondary) {
-  border: 1px solid var(--anime-control-edge);
-  border-radius: 7px;
-  background: linear-gradient(180deg, #3b5046, #1b2822);
-  color: var(--anime-control-label);
-  box-shadow: inset 0 1px rgba(255,255,255,.12), 0 5px 12px rgba(5,9,7,.55);
-}
 
 .rules-panel {
   top: var(--safe-top);
@@ -2905,7 +2891,7 @@ button { font: inherit; }
 .game-app[data-table-theme="rosewood"] .final-rankings article.rank-1 { border-color: #f0c570; background: linear-gradient(105deg, #8a4930, #4c2014); box-shadow: inset 4px 0 #e0b45c; }
 .game-app[data-table-theme="rosewood"] .settlement-footer { background: linear-gradient(180deg, transparent, rgba(220,195,155,.98) 20%); }
 .game-app[data-table-theme="rosewood"] .result-actions button,
-.game-app[data-table-theme="rosewood"] .final-footer > button:not(.secondary),
+.game-app[data-table-theme="rosewood"] .final-footer > button,
 .game-app[data-table-theme="rosewood"] .result-reopen { border-color: #8d4a2d; border-radius: 4px; background: linear-gradient(180deg, #91432d, #5c2418); color: #fff0d2; }
 .game-app[data-table-theme="rosewood"] .result-actions button.secondary { background: #ead8b8; color: #52261a; }
 
@@ -3579,7 +3565,7 @@ button { font: inherit; }
 .game-app[data-table-theme="llmAnime"] .character-shortcut { background: var(--theme-panel); color: var(--theme-text); box-shadow: 3px 3px 0 rgba(189,91,72,.32); }
 .game-app[data-table-theme="llmAnime"] .character-shortcut:hover { background: var(--theme-panel-elevated); border-color: var(--theme-accent); }
 .game-app[data-table-theme="llmAnime"] .character-shortcut-label { color: var(--theme-text-muted); }
-.game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button:not(.secondary), .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-button-text); }
+.game-app[data-table-theme="llmAnime"] :is(.result-actions button:not(.secondary), .final-footer > button, .result-reopen) { border-color: var(--anime-ink); background: var(--theme-button); color: var(--theme-button-text); }
 .game-app[data-table-theme="llmAnime"] .kong-picker-card {
   --theme-text: #2d2923;
   --theme-text-muted: #6f6255;

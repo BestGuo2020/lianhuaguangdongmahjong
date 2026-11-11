@@ -3,9 +3,15 @@ import SettlementOverlay from '../../../src/components/settlement/SettlementOver
 import type { RoundResult } from '../../../src/game/core/contracts/gamePort'
 import type { GamePlayer } from '../../../src/game/core/contracts/types'
 import { defaultAvatarForSeat } from '../../../src/game/core/presentation/avatar'
+import { isTableThemeName } from '../../../src/theme/themeIdentity'
+import { themePresentationByName, themePresentationCssVariables } from '../../../src/theme/themePresentation'
 import '../../../src/style.css'
 
-const remote = new URLSearchParams(location.search).has('remote')
+const query = new URLSearchParams(location.search)
+const remote = query.has('remote')
+const requestedTheme = query.get('theme')
+const themeName = isTableThemeName(requestedTheme) ? requestedTheme : 'jade'
+const themeStyle = themePresentationCssVariables(themePresentationByName(themeName))
 const standings = [0, 1, 2, 3].map(seat => ({
   seat, name: `玩家${seat + 1}`, avatar: defaultAvatarForSeat(seat), score: 1300 - seat * 200,
   hand: [], melds: [], discards: [], redCount: 0, drawnTileIndex: -1, playerIndex: seat, rank: seat + 1,
@@ -28,11 +34,11 @@ function finishMatch() {
 
 Object.assign(window, { finishSettlementFixture: finishMatch })
 createApp({
-  render: () => h('main', { class: 'game-app', 'data-table-theme': 'jade' }, [
+  render: () => h('main', { class: 'game-app', 'data-table-theme': themeName, style: themeStyle }, [
     h(SettlementOverlay, {
       result: result.value, resultVisible: resultVisible.value, matchFinished: matchFinished.value,
       dealer: dealer.value, lastRound: true, waitingNextRound: false, continueCountdown: 0,
-      gameMode: remote ? 'remote' : 'local', matchName: '东风场', standings, playerId: '',
+      gameMode: remote ? 'remote' : 'local', matchName: '东风场', standings, playerId: '', themeName,
       'onUpdate:resultVisible': visible => { resultVisible.value = visible },
       onNextRound: finishMatch,
     }),

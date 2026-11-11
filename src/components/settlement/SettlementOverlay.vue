@@ -241,7 +241,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
           </div>
         </div>
         <div class="final-footer">
-          <button v-if="roundResult && !finalRankingLab" type="button" class="secondary" @click="rankingRequested = false">查看本局结算</button>
+          <button v-if="roundResult && !finalRankingLab" type="button" @click="rankingRequested = false">查看本局结算</button>
           <button type="button" @click="$emit('returnToLobby')">返回大厅</button>
           <p class="result-disclaimer-note">游戏结果禁止用于赌博行为</p>
         </div>

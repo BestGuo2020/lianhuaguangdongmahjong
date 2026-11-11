@@ -1,6 +1,33 @@
 import { expect, test } from '@playwright/test'
+import { TABLE_THEME_NAMES } from '../../src/theme/themeIdentity'
 
 const ordinaryThemes = ['jade', 'happyMahjong', 'rosewood', 'llm']
+
+for (const theme of TABLE_THEME_NAMES) {
+  test(`${theme}: each meld cue plays one entrance animation`, async ({ page }) => {
+    await page.goto(`/tests/e2e/fixtures/blood-flow.html?common=1&count=0&theme=${theme}`)
+    await expect(page.locator('.table-loading')).toHaveCount(0)
+    await page.evaluate(() => {
+      const starts: { type: string; animation: string }[] = []
+      document.addEventListener('animationstart', event => {
+        const type = (event.target as Element).getAttribute('data-action-type')
+        if (type && !event.pseudoElement) starts.push({ type, animation: event.animationName })
+      })
+      Object.assign(window, { meldCueStarts: starts })
+    })
+    const actionTypes = ['chi', 'peng', 'discard-gang']
+    for (const type of actionTypes) {
+      await page.evaluate(type => (window as any).__setTableActionCueLab(type, 1), type)
+      const cue = page.locator(`[data-action-type="${type}"]`)
+      await expect(cue).toHaveCount(1)
+      await expect(cue).not.toHaveClass(/table-action-enter-active/)
+      // A fallback animation can start on the next paint after Vue clears the enter class.
+      await cue.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    }
+    const starts = await page.evaluate(() => (window as any).meldCueStarts as { type: string; animation: string }[])
+    expect(starts.map(start => start.type), JSON.stringify(starts)).toEqual(actionTypes)
+  })
+}
 
 for (const theme of ordinaryThemes) {
   test(`${theme}: each terminal win plays one text animation`, async ({ page }) => {
