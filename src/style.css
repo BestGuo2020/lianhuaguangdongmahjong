@@ -1,4 +1,8 @@
 :root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   color: #f8f3df;
   background: #08110e;
@@ -57,7 +61,8 @@ button { font: inherit; }
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: max(24px, var(--safe-top)) max(24px, var(--safe-right))
+    max(24px, var(--safe-bottom)) max(24px, var(--safe-left));
   color: var(--theme-text, #f8f3df);
   background: var(--theme-page-background, radial-gradient(circle at 50% 38%, rgba(38, 117, 82, .34), transparent 38%) #030706);
   text-align: center;
@@ -130,10 +135,6 @@ button { font: inherit; }
   --theme-button: linear-gradient(180deg, rgba(31,71,54,.94), rgba(9,31,23,.96));
   --theme-button-text: var(--theme-text);
   --theme-tooltip: linear-gradient(155deg, rgba(18,48,36,.98), rgba(5,19,14,.99) 70%);
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
   --game-cqw: 1cqw;
   --game-cqh: 1cqh;
   --game-unit: min(var(--game-cqw), calc(var(--game-cqh) * 16 / 9));

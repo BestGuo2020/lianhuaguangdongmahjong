@@ -16,7 +16,7 @@ test('横屏门禁五主题按钮对比度、焦点、失败提示和旋转恢�
   const page = await context.newPage()
   // 仅模拟浏览器拒绝全屏；门禁仍依据真实视口方向和触控条件显示/退出。
   await page.addInitScript(() => {
-    document.documentElement.requestFullscreen = async () => { throw new Error('Fullscreen unavailable') }
+    Element.prototype.requestFullscreen = async () => { throw new Error('Fullscreen unavailable') }
   })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const theme of themes) {
@@ -58,4 +58,42 @@ test('横屏门禁五主题按钮对比度、焦点、失败提示和旋转恢�
     await expect(page.locator('.lobby')).toBeVisible()
   }
   await context.close()
+})
+
+test('手机全屏横屏时背景铺到边缘，控件留在安全区内', async ({ browser }) => {
+  const landscape = { width: 844, height: 390 }
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  })
+  try {
+    const page = await context.newPage()
+    await page.goto('/?theme=jade')
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /\bviewport-fit=cover\b/)
+
+    const cdp = await context.newCDPSession(page)
+    const gate = page.locator('.orientation-gate')
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, bottom: 34 } })
+    await expect(gate).toHaveCSS('padding-top', '47px')
+    await expect(gate).toHaveCSS('padding-bottom', '34px')
+
+    await gate.getByRole('button', { name: '进入全屏横屏' }).click()
+    await expect(page.locator('html:fullscreen')).toHaveCount(1)
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      ...landscape,
+      deviceScaleFactor: 1,
+      mobile: true,
+      screenOrientation: { type: 'landscapePrimary', angle: 90 },
+    })
+    await expect(gate).toHaveCount(0)
+
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: 44, right: 44, bottom: 21 } })
+    expect(await page.locator('html:fullscreen .game-app').boundingBox()).toEqual({ x: 0, y: 0, ...landscape })
+    await expect(page.locator('.top-bar')).toHaveCSS('left', '44px')
+    await expect(page.locator('.top-bar')).toHaveCSS('right', '44px')
+    await expect(page.locator('.lobby')).toHaveCSS('padding-bottom', '21px')
+  } finally {
+    await context.close()
+  }
 })
