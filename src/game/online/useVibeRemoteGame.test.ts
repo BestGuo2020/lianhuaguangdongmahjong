@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mapPlayersToLocal } from './protocol/mapper'
 import {
   allLiveSeatsConfirmed,
   isFutureShuffleHand,
@@ -10,7 +11,33 @@ import {
   shouldArmAuthoritySilenceTimer,
   isShuffleStartMessage,
   liveContinuePeers,
+  rankVibeMatchStandings,
 } from './useVibeRemoteGame'
+
+describe('VibeHub 终局排名', () => {
+  it('房主与客人同分时所有视角的名次一致，本家仍用视角内索引标记', () => {
+    const players = [1200, 1200, 1300, 4300].map((score, seat) => ({
+      name: `玩家${seat + 1}`,
+      seat,
+      score,
+      avatar: '',
+      hand: [],
+      discards: [],
+      melds: [],
+      redCount: 0,
+      drawnTileIndex: -1,
+    }))
+    const expectedRanks = rankVibeMatchStandings(players).map(({ seat, rank }) => [seat, rank])
+    expect(expectedRanks).toEqual([[3, 1], [2, 2], [0, 3], [1, 4]])
+
+    for (const viewerSeat of [0, 1, 2, 3]) {
+      const localPlayers = mapPlayersToLocal(players, viewerSeat)
+      const standings = rankVibeMatchStandings(localPlayers.map((player, playerIndex) => ({ ...player, playerIndex })))
+      expect(standings.map(({ seat, rank }) => [seat, rank])).toEqual(expectedRanks)
+      expect(standings.find(({ playerIndex }) => playerIndex === 0)?.seat).toBe(viewerSeat)
+    }
+  })
+})
 
 describe('liveContinuePeers（下一局确认关卡）', () => {
   it('掉线被 AI 接管的座位不再要求确认，避免卡在「等待其他玩家」', () => {

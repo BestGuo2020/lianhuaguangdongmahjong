@@ -272,6 +272,13 @@ export function allLiveSeatsConfirmed(
   return [...seatByPeer.values()].every((seat) => aiControlledSeats.has(seat) || confirmedSeats.has(seat))
 }
 
+export function rankVibeMatchStandings<T extends { seat: number; score: number }>(players: readonly T[]) {
+  // 同分按房间座位号排序，所有玩家看到相同的名次。
+  return [...players]
+    .sort((a, b) => b.score - a.score || a.seat - b.seat)
+    .map((player, index) => ({ ...player, rank: index + 1 }))
+}
+
 interface UseVibeRemoteGameOptions {
   onTableInteraction?: (event: TableInteractionEvent) => void
   playSound?: (name: string, volume?: number, onFinish?: () => void) => unknown
@@ -477,13 +484,10 @@ export function useVibeRemoteGame({
   /** 场末收尾：广播场次记录（很小），客机据此补齐缺失的局。 */
   function maybeFinishHostReplay(raw: unknown) {
     if (!isHost.value || !hostReplayRecorder || hostReplayFinalized) return
-    const snapshot = raw as { matchFinished?: boolean; players?: Array<{ playerIndex?: number; name: string; score: number }> }
+    const snapshot = raw as Partial<Pick<ServerSnapshot, 'matchFinished' | 'players'>>
     if (!snapshot.matchFinished) return
     hostReplayFinalized = true
-    const standings = (snapshot.players ?? [])
-      .map((player, index) => ({ seat: player.playerIndex ?? index, name: player.name, score: player.score, rank: 0 }))
-      .sort((a, b) => b.score - a.score)
-      .map((entry, index) => ({ ...entry, rank: index + 1 }))
+    const standings = rankVibeMatchStandings((snapshot.players ?? []).map(({ seat, name, score }) => ({ seat, name, score })))
     hostReplayRecorder.finishAuto(standings.length ? standings : undefined)
   }
   const playAnimeAction = (event: TableActionEvent) => {
@@ -1360,10 +1364,8 @@ export function useVibeRemoteGame({
   const handNumber = computed(() => ((round.value - 1) % 4) + 1)
   const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
   const matchName = computed(() => MATCH_NAMES[matchType.value])
-  const standings = computed(() => players
-    .map((player, index) => ({ ...player, playerIndex: index }))
-    .sort((a, b) => b.score - a.score || a.playerIndex - b.playerIndex)
-    .map((player, index) => ({ ...player, rank: index + 1 })))
+  const standings = computed(() => rankVibeMatchStandings(players
+    .map((player, playerIndex) => ({ ...player, playerIndex }))))
   const remoteActionController = createRemoteActionController({
     state,
     isUserTurn: () => isUserTurn.value,
